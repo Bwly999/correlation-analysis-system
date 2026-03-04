@@ -1,0 +1,283 @@
+import { defineStore } from 'pinia'
+import { ref } from 'vue'
+import { type Node, type Edge } from '@vue-flow/core'
+import { getNodeDefinition } from '@/nodes/registry'
+
+export interface WorkflowNode extends Node {
+  data: {
+    label: string
+    type: string 
+    category: 'trigger' | 'action' | 'model'
+    config: any
+    status: 'idle' | 'running' | 'success' | 'error'
+    output?: any 
+    logs: string[]
+  }
+}
+
+export interface SavedWorkflow {
+  id: string
+  name: string
+  nodes: WorkflowNode[]
+  edges: Edge[]
+  updatedAt: number
+}
+
+export const CONNECTION_RULES: Record<string, string[]> = {
+  'trigger': ['action', 'model'],
+  'action': ['action', 'model'],
+  'model': []
+}
+
+export const useWorkflowStore = defineStore('workflow', () => {
+  const nodes = ref<WorkflowNode[]>([])
+  const edges = ref<Edge[]>([])
+  const logs = ref<{ time: string, level: string, message: string, nodeId?: string }[]>([])
+  const workflowName = ref('未命名工作流')
+  const currentWorkflowId = ref<string | null>(null)
+  
+  // 运行状态控制
+  const isRunning = ref(false)
+  const isStopping = ref(false)
+  
+  const pendingConnection = ref<{
+    sourceNodeId: string;
+    sourceHandleId?: string;
+    edgeId?: string;
+  } | null>(null)
+
+  const activeConfigNodeId = ref<string | null>(null)
+  const pendingExecution = ref<{ nodeId: string, forceUpdate: boolean } | null>(null)
+
+  const addLog = (message: string, level: 'info' | 'error' | 'warn' = 'info', nodeId?: string) => {
+    logs.value.push({
+      time: new Date().toLocaleTimeString(),
+      level,
+      message,
+      nodeId
+    })
+  }
+
+  const stopExecution = () => {
+    if (isRunning.value) {
+      isStopping.value = true
+      addLog('正在停止工作流...', 'warn')
+    }
+  }
+
+  const getCategoryByType = (type: string): 'trigger' | 'action' | 'model' => {
+    const definition = getNodeDefinition(type)
+    return definition ? definition.category : 'action'
+  }
+
+  const validateConnection = (sourceNodeId: string, targetNodeId: string) => {
+    const sourceNode = nodes.value.find(n => n.id === sourceNodeId)
+    const targetNode = nodes.value.find(n => n.id === targetNodeId)
+    if (!sourceNode || !targetNode) return { valid: false, message: '节点不存在' }
+    const sourceCat = sourceNode.data.category
+    const targetCat = targetNode.data.category
+    if (!CONNECTION_RULES[sourceCat]?.includes(targetCat)) {
+      const msg = `流程规范限制: ${sourceCat} 无法连接到 ${targetCat}`
+      addLog(msg, 'error')
+      return { valid: false, message: msg }
+    }
+    return { valid: true }
+  }
+
+  const checkTriggerExists = () => {
+    return nodes.value.some(n => n.data.category === 'trigger')
+  }
+
+  const addAndConnectNode = (type: string, label: string, position: { x: number, y: number }) => {
+    const category = getCategoryByType(type)
+    if (category === 'trigger' && checkTriggerExists()) {
+      addLog('流程规范限制: 工作流只能包含一个数据获取节点', 'error')
+      return null
+    }
+    const newNodeId = `node_${Date.now()}`
+    const newNode: WorkflowNode = {
+      id: newNodeId,
+      type: 'custom',
+      position,
+      label,
+      data: { 
+        label, type, category, status: 'idle', config: {}, logs: []
+      },
+    }
+    nodes.value.push(newNode)
+    if (pendingConnection.value) {
+      const { sourceNodeId, sourceHandleId, edgeId } = pendingConnection.value
+      if (edgeId) {
+        const oldEdge = edges.value.find(e => e.id === edgeId)
+        if (oldEdge) {
+          const targetNodeId = oldEdge.target
+          edges.value = edges.value.filter(e => e.id !== edgeId)
+          edges.value.push({ id: `e_${Date.now()}_1`, source: sourceNodeId, target: newNodeId, type: 'n8n', animated: true })
+          edges.value.push({ id: `e_${Date.now()}_2`, source: newNodeId, target: targetNodeId, type: 'n8n', animated: true })
+        }
+      } else {
+        edges.value.push({ id: `e_${Date.now()}`, source: sourceNodeId, target: newNodeId, sourceHandle: sourceHandleId, type: 'n8n', animated: true })
+      }
+      pendingConnection.value = null
+    }
+    return newNode
+  }
+
+  const executeNode = async (nodeId: string, forceUpdate = false, isEntryPoint = true): Promise<any> => {
+    if (isEntryPoint) {
+      isRunning.value = true
+      isStopping.value = false
+    }
+
+    try {
+      // 检查停止信号
+      if (isStopping.value) {
+        throw new Error('User Aborted')
+      }
+
+      const node = nodes.value.find(n => n.id === nodeId)
+      if (!node) return
+
+      const definition = getNodeDefinition(node.data.type)
+      if (!definition) {
+        addLog(`未找到定义: ${node.data.type}`, 'error', nodeId)
+        return
+      }
+
+      // 运行时参数拦截
+      if (definition.category === 'trigger') {
+        const missingRuntimeProps = definition.properties.filter(p => 
+          p.isRuntimeInput && (node.data.config[p.name] === undefined || node.data.config[p.name] === null)
+        )
+        if (missingRuntimeProps.length > 0) {
+          addLog(`节点 ${node.data.label} 等待输入运行参数...`, 'info', nodeId)
+          pendingExecution.value = { nodeId, forceUpdate }
+          isRunning.value = false // 暂停时不算正在运行
+          return 'WAIT_INPUT'
+        }
+      }
+
+      if (!forceUpdate && node.data.output) return node.data.output
+
+      node.data.status = 'running'
+      
+      const incomingEdges = edges.value.filter(e => e.target === nodeId)
+      const inputs = []
+      for (const edge of incomingEdges) {
+        // 递归调用时标记非入口点
+        const result = await executeNode(edge.source, forceUpdate, false)
+        if (result === 'WAIT_INPUT') return 'WAIT_INPUT'
+        inputs.push(result)
+      }
+
+      if (isStopping.value) throw new Error('User Aborted')
+
+      // 模拟计算延迟（让动画更明显）
+      await new Promise(resolve => setTimeout(resolve, 500))
+
+      const result = await definition.execute(inputs[0] || null, node.data.config)
+      node.data.output = result
+      node.data.status = 'success'
+      addLog(`执行成功: ${node.data.label}`, 'info', nodeId)
+      return result
+    } catch (error: any) {
+      node.data.status = error.message === 'User Aborted' ? 'idle' : 'error'
+      if (error.message !== 'User Aborted') {
+        addLog(`执行失败: ${error.message}`, 'error', nodeId)
+      }
+      throw error
+    } finally {
+      if (isEntryPoint) {
+        isRunning.value = false
+        isStopping.value = false
+      }
+    }
+  }
+
+  const runGlobal = async () => {
+    addLog('开始全局运行...', 'info')
+    const terminalNodes = nodes.value.filter(n => n.data.category === 'model')
+    
+    // 如果没有末端节点，说明流程不完整
+    if (terminalNodes.length === 0) {
+      addLog('运行失败: 未找到算法模型节点', 'error')
+      return
+    }
+
+    try {
+      for (const node of terminalNodes) {
+        const result = await executeNode(node.id, true, true)
+        if (result === 'WAIT_INPUT') break 
+      }
+      if (!isStopping.value) {
+        // 只有非手动停止才打印完成日志（手动停止逻辑在 executeNode catch 中）
+      }
+    } catch (err) {
+      // 捕获停止信号或执行错误
+    }
+  }
+
+  const saveWorkflow = (name?: string) => {
+    if (name) workflowName.value = name
+    const id = currentWorkflowId.value || `wf_${Date.now()}`
+    currentWorkflowId.value = id
+    const workflow: SavedWorkflow = {
+      id, name: workflowName.value, nodes: nodes.value, edges: edges.value, updatedAt: Date.now()
+    }
+    const saved = JSON.parse(localStorage.getItem('saved_workflows') || '[]')
+    const index = saved.findIndex((w: any) => w.id === id)
+    if (index > -1) saved[index] = workflow
+    else saved.push(workflow)
+    localStorage.setItem('saved_workflows', JSON.stringify(saved))
+    addLog(`工作流 "${workflow.name}" 已保存`, 'info')
+    return workflow
+  }
+
+  const loadWorkflow = (id: string) => {
+    const saved = JSON.parse(localStorage.getItem('saved_workflows') || '[]')
+    const workflow = saved.find((w: any) => w.id === id)
+    if (workflow) {
+      nodes.value = workflow.nodes
+      edges.value = workflow.edges
+      workflowName.value = workflow.name
+      currentWorkflowId.value = workflow.id
+      addLog(`已加载工作流: ${workflow.name}`, 'info')
+    }
+  }
+
+  const exportWorkflow = () => {
+    const workflow = { name: workflowName.value, nodes: nodes.value, edges: edges.value }
+    const blob = new Blob([JSON.stringify(workflow, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${workflowName.value}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+    addLog(`工作流已导出`, 'info')
+  }
+
+  const importWorkflow = (file: File) => {
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      try {
+        const workflow = JSON.parse(e.target?.result as string)
+        nodes.value = workflow.nodes || []
+        edges.value = workflow.edges || []
+        workflowName.value = workflow.name || '未命名导入工作流'
+        currentWorkflowId.value = null
+        addLog(`成功导入工作流: ${workflowName.value}`, 'info')
+      } catch (err) {
+        addLog(`导入失败: 文件格式错误`, 'error')
+      }
+    }
+    reader.readAsText(file)
+  }
+
+  return {
+    nodes, edges, logs, workflowName, currentWorkflowId, isRunning, isStopping,
+    pendingConnection, activeConfigNodeId, pendingExecution,
+    addLog, stopExecution, getCategoryByType, validateConnection, addAndConnectNode, executeNode, runGlobal,
+    saveWorkflow, loadWorkflow, exportWorkflow, importWorkflow
+  }
+})
