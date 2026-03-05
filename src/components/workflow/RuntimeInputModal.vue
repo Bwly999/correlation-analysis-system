@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { X, Play, FileType, Info, HelpCircle } from 'lucide-vue-next'
+import { X, Play, FileType, Info, HelpCircle, RefreshCw } from 'lucide-vue-next'
 import Dialog from 'primevue/dialog'
 import Button from 'primevue/button'
 import DatePicker from 'primevue/datepicker'
@@ -15,6 +15,7 @@ const props = defineProps<{
 const emit = defineEmits(['close', 'confirm'])
 const store = useWorkflowStore()
 const config = ref<any>({})
+const isDragging = ref<Record<string, boolean>>({})
 
 const nodeDefinition = computed(() => props.node ? getNodeDefinition(props.node.data.type) : null)
 const runtimeProperties = computed(() => nodeDefinition.value?.properties.filter(p => p.isRuntimeInput) || [])
@@ -31,14 +32,36 @@ watch(() => props.node, (newNode) => {
   }
 }, { immediate: true })
 
+const handleFile = (file: File, propName: string) => {
+  if (file) {
+    config.value[propName] = file
+  }
+}
+
 const onFileSelect = (event: any, propName: string) => {
   const file = event.target.files[0]
-  if (file) config.value[propName] = file
+  handleFile(file, propName)
+  event.target.value = ''
+}
+
+const onDrop = (event: DragEvent, propName: string) => {
+  event.preventDefault()
+  isDragging.value[propName] = false
+  const file = event.dataTransfer?.files[0]
+  if (file) handleFile(file, propName)
+}
+
+const onDragOver = (event: DragEvent, propName: string) => {
+  event.preventDefault()
+  isDragging.value[propName] = true
+}
+
+const onDragLeave = (event: DragEvent, propName: string) => {
+  isDragging.value[propName] = false
 }
 
 const handleConfirm = () => {
   if (props.node) {
-    // 将运行时参数写回节点配置
     props.node.data.config = { ...props.node.data.config, ...config.value }
   }
   emit('confirm', config.value)
@@ -55,7 +78,7 @@ const handleConfirm = () => {
     class="runtime-input-dialog"
   >
     <div class="flex flex-col gap-6 py-4">
-      <div class="p-4 bg-indigo-50 border border-indigo-100 rounded-xl flex gap-3">
+      <div class="p-4 bg-indigo-50 border border-indigo-100 rounded-xl flex gap-3 shadow-sm">
          <Info class="text-indigo-500 shrink-0" size="18" />
          <p class="text-xs text-indigo-700 leading-relaxed font-medium">
            节点 <b>{{ node?.data.label }}</b> 需要您提供即时输入参数以启动分析流程。
@@ -72,14 +95,32 @@ const handleConfirm = () => {
         <DatePicker v-if="prop.type === 'datetime-range'" v-model="config[prop.name]" selectionMode="range" showTime class="w-full" />
         
         <div v-else-if="prop.type === 'file'" class="space-y-2">
-           <div v-if="config[prop.name]" class="p-3 bg-emerald-50 border border-emerald-100 rounded-lg flex items-center justify-between">
-              <span class="text-xs font-bold text-emerald-800 truncate">{{ config[prop.name].name }}</span>
-              <Button icon="pi pi-times" severity="danger" text size="small" @click="config[prop.name] = null" />
-           </div>
-           <label v-else class="flex flex-col items-center justify-center p-6 border-2 border-dashed border-slate-200 rounded-xl hover:border-indigo-400 cursor-pointer transition-all">
+           <label 
+             class="flex flex-col items-center justify-center border-2 border-dashed rounded-xl transition-all cursor-pointer group relative overflow-hidden"
+             :class="[
+               isDragging[prop.name] ? 'bg-indigo-100 border-indigo-500 scale-[1.02]' : 
+               (config[prop.name] ? 'bg-emerald-50 border-emerald-200 hover:border-emerald-400 py-6' : 'bg-slate-50 border-slate-200 hover:border-indigo-400 p-8')
+             ]"
+             @dragover="onDragOver($event, prop.name)"
+             @dragleave="onDragLeave($event, prop.name)"
+             @drop="onDrop($event, prop.name)"
+           >
               <input type="file" class="hidden" @change="onFileSelect($event, prop.name)" />
-              <FileType size="24" class="text-slate-300 mb-2" />
-              <span class="text-[10px] font-bold text-slate-400 uppercase">选择文件</span>
+              
+              <template v-if="config[prop.name] && !isDragging[prop.name]">
+                 <FileType size="24" class="text-emerald-600 mb-2" />
+                 <span class="text-[11px] font-bold text-emerald-800 truncate px-4 w-full text-center">{{ config[prop.name].name }}</span>
+                 <span class="mt-2 text-[9px] font-black text-emerald-500 uppercase flex items-center gap-1 opacity-60 group-hover:opacity-100">
+                    <RefreshCw size="10" /> Click to replace
+                 </span>
+              </template>
+
+              <template v-else>
+                 <FileType size="24" :class="[isDragging[prop.name] ? 'text-indigo-600' : 'text-slate-300 group-hover:text-indigo-400']" class="mb-2" />
+                 <span class="text-[10px] font-bold uppercase" :class="[isDragging[prop.name] ? 'text-indigo-700' : 'text-slate-400 group-hover:text-indigo-500']">
+                   {{ isDragging[prop.name] ? 'Drop file' : 'Select file or drop' }}
+                 </span>
+              </template>
            </label>
         </div>
       </div>

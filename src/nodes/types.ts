@@ -1,21 +1,20 @@
 export type NodeCategory = 'trigger' | 'action' | 'model';
+
 export interface NodeProperty {
   name: string;
   displayName: string;
-  type: 'string' | 'number' | 'options' | 'boolean' | 'collection' | 'tree' | 'file' | 'datetime-range';
+  type: 'string' | 'number' | 'options' | 'multi-options' | 'boolean' | 'collection' | 'tree' | 'file' | 'datetime-range';
   default?: any;
   description?: string;
   placeholder?: string;
-  options?: { name: string; value: any }[]; // 仅用于 type: 'options'
+  options?: any[]; // 用于 options 类型、multi-options 或 tree 类型的静态选项
+  properties?: NodeProperty[]; // 用于 collection 类型定义每一项的结构
   required?: boolean;
-  isRuntimeInput?: boolean; // 新增：标记是否为运行时输入参数
-}
-
-  required?: boolean;
+  isRuntimeInput?: boolean; 
 }
 
 export interface NodeDefinition {
-  name: string; // 唯一标识，如 'file-import'
+  name: string; 
   displayName: string;
   icon: string;
   category: NodeCategory;

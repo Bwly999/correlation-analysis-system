@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, markRaw } from 'vue'
 import { type Node, type Edge } from '@vue-flow/core'
 import { getNodeDefinition } from '@/nodes/registry'
 
@@ -11,6 +11,8 @@ export interface WorkflowNode extends Node {
     config: any
     status: 'idle' | 'running' | 'success' | 'error'
     output?: any 
+    manualInput?: any // 新增：手动模拟的输入数据
+    useManualInput?: boolean // 新增：是否启用模拟输入
     logs: string[]
   }
 }
@@ -36,7 +38,6 @@ export const useWorkflowStore = defineStore('workflow', () => {
   const workflowName = ref('未命名工作流')
   const currentWorkflowId = ref<string | null>(null)
   
-  // 运行状态控制
   const isRunning = ref(false)
   const isStopping = ref(false)
   
@@ -89,19 +90,25 @@ export const useWorkflowStore = defineStore('workflow', () => {
   }
 
   const addAndConnectNode = (type: string, label: string, position: { x: number, y: number }) => {
+    const definition = getNodeDefinition(type)
     const category = getCategoryByType(type)
     if (category === 'trigger' && checkTriggerExists()) {
       addLog('流程规范限制: 工作流只能包含一个数据获取节点', 'error')
       return null
     }
-    const newNodeId = `node_${Date.now()}`
+    const defaultConfig: any = {}
+    definition?.properties.forEach(p => {
+      if (p.default !== undefined) defaultConfig[p.name] = p.default
+    })
     const newNode: WorkflowNode = {
-      id: newNodeId,
+      id: `node_${Date.now()}`,
       type: 'custom',
       position,
       label,
       data: { 
-        label, type, category, status: 'idle', config: {}, logs: []
+        label, type, category, status: 'idle', 
+        config: defaultConfig, 
+        logs: []
       },
     }
     nodes.value.push(newNode)
@@ -123,20 +130,25 @@ export const useWorkflowStore = defineStore('workflow', () => {
     return newNode
   }
 
+  const isValueValid = (value: any, type: string) => {
+    if (value === undefined || value === null) return false
+    if (type === 'file') {
+      return value instanceof File || (typeof value === 'object' && value.name)
+    }
+    return true
+  }
+
   const executeNode = async (nodeId: string, forceUpdate = false, isEntryPoint = true): Promise<any> => {
     if (isEntryPoint) {
       isRunning.value = true
       isStopping.value = false
     }
 
-    try {
-      // 检查停止信号
-      if (isStopping.value) {
-        throw new Error('User Aborted')
-      }
+    const node = nodes.value.find(n => n.id === nodeId)
+    if (!node) return
 
-      const node = nodes.value.find(n => n.id === nodeId)
-      if (!node) return
+    try {
+      if (isStopping.value) throw new Error('User Aborted')
 
       const definition = getNodeDefinition(node.data.type)
       if (!definition) {
@@ -144,17 +156,25 @@ export const useWorkflowStore = defineStore('workflow', () => {
         return
       }
 
-      // 运行时参数拦截
       if (definition.category === 'trigger') {
         const missingRuntimeProps = definition.properties.filter(p => 
-          p.isRuntimeInput && (node.data.config[p.name] === undefined || node.data.config[p.name] === null)
+          p.isRuntimeInput && !isValueValid(node.data.config[p.name], p.type)
         )
         if (missingRuntimeProps.length > 0) {
-          addLog(`节点 ${node.data.label} 等待输入运行参数...`, 'info', nodeId)
+          addLog(`节点 ${node.data.label} 缺少运行时输入`, 'info', nodeId)
           pendingExecution.value = { nodeId, forceUpdate }
-          isRunning.value = false // 暂停时不算正在运行
+          isRunning.value = false
           return 'WAIT_INPUT'
         }
+      }
+
+      // 调试模式优化：如果启用了模拟输入且处于单节点调试（非全局运行），则直接使用模拟数据
+      if (node.data.useManualInput && node.data.manualInput && !forceUpdate) {
+        addLog(`节点 ${node.data.label} 使用手动模拟输入运行`, 'info', nodeId)
+        const result = await definition.execute(node.data.manualInput, node.data.config)
+        node.data.output = markRaw(result)
+        node.data.status = 'success'
+        return result
       }
 
       if (!forceUpdate && node.data.output) return node.data.output
@@ -164,7 +184,6 @@ export const useWorkflowStore = defineStore('workflow', () => {
       const incomingEdges = edges.value.filter(e => e.target === nodeId)
       const inputs = []
       for (const edge of incomingEdges) {
-        // 递归调用时标记非入口点
         const result = await executeNode(edge.source, forceUpdate, false)
         if (result === 'WAIT_INPUT') return 'WAIT_INPUT'
         inputs.push(result)
@@ -172,19 +191,17 @@ export const useWorkflowStore = defineStore('workflow', () => {
 
       if (isStopping.value) throw new Error('User Aborted')
 
-      // 模拟计算延迟（让动画更明显）
       await new Promise(resolve => setTimeout(resolve, 500))
 
       const result = await definition.execute(inputs[0] || null, node.data.config)
-      node.data.output = result
+      
+      node.data.output = markRaw(result) 
       node.data.status = 'success'
       addLog(`执行成功: ${node.data.label}`, 'info', nodeId)
-      return result
+      return node.data.output
     } catch (error: any) {
-      node.data.status = error.message === 'User Aborted' ? 'idle' : 'error'
-      if (error.message !== 'User Aborted') {
-        addLog(`执行失败: ${error.message}`, 'error', nodeId)
-      }
+      if (node) node.data.status = error.message === 'User Aborted' ? 'idle' : 'error'
+      if (error.message !== 'User Aborted') addLog(`执行失败: ${error.message}`, 'error', nodeId)
       throw error
     } finally {
       if (isEntryPoint) {
@@ -197,24 +214,16 @@ export const useWorkflowStore = defineStore('workflow', () => {
   const runGlobal = async () => {
     addLog('开始全局运行...', 'info')
     const terminalNodes = nodes.value.filter(n => n.data.category === 'model')
-    
-    // 如果没有末端节点，说明流程不完整
     if (terminalNodes.length === 0) {
-      addLog('运行失败: 未找到算法模型节点', 'error')
+      addLog('运行失败: 未找到分析模型', 'error')
       return
     }
-
     try {
       for (const node of terminalNodes) {
         const result = await executeNode(node.id, true, true)
         if (result === 'WAIT_INPUT') break 
       }
-      if (!isStopping.value) {
-        // 只有非手动停止才打印完成日志（手动停止逻辑在 executeNode catch 中）
-      }
-    } catch (err) {
-      // 捕获停止信号或执行错误
-    }
+    } catch (err) {}
   }
 
   const saveWorkflow = (name?: string) => {
@@ -224,11 +233,9 @@ export const useWorkflowStore = defineStore('workflow', () => {
     const workflow: SavedWorkflow = {
       id, name: workflowName.value, nodes: nodes.value, edges: edges.value, updatedAt: Date.now()
     }
-    const saved = JSON.parse(localStorage.getItem('saved_workflows') || '[]')
-    const index = saved.findIndex((w: any) => w.id === id)
-    if (index > -1) saved[index] = workflow
-    else saved.push(workflow)
-    localStorage.setItem('saved_workflows', JSON.stringify(saved))
+    localStorage.setItem('saved_workflows', JSON.stringify(
+      JSON.parse(localStorage.getItem('saved_workflows') || '[]').filter((w: any) => w.id !== id).concat(workflow)
+    ))
     addLog(`工作流 "${workflow.name}" 已保存`, 'info')
     return workflow
   }
@@ -250,10 +257,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     const blob = new Blob([JSON.stringify(workflow, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
-    a.href = url
-    a.download = `${workflowName.value}.json`
-    a.click()
-    URL.revokeObjectURL(url)
+    a.href = url; a.download = `${workflowName.value}.json`; a.click(); URL.revokeObjectURL(url)
     addLog(`工作流已导出`, 'info')
   }
 
@@ -262,14 +266,10 @@ export const useWorkflowStore = defineStore('workflow', () => {
     reader.onload = (e) => {
       try {
         const workflow = JSON.parse(e.target?.result as string)
-        nodes.value = workflow.nodes || []
-        edges.value = workflow.edges || []
-        workflowName.value = workflow.name || '未命名导入工作流'
-        currentWorkflowId.value = null
+        nodes.value = workflow.nodes || []; edges.value = workflow.edges || []
+        workflowName.value = workflow.name || '导入的工作流'; currentWorkflowId.value = null
         addLog(`成功导入工作流: ${workflowName.value}`, 'info')
-      } catch (err) {
-        addLog(`导入失败: 文件格式错误`, 'error')
-      }
+      } catch (err) { addLog(`导入失败: 格式错误`, 'error') }
     }
     reader.readAsText(file)
   }

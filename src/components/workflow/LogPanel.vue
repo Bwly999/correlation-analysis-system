@@ -20,29 +20,27 @@ const clearLogs = () => {
 
 <template>
   <div class="h-full flex flex-col bg-white text-slate-600 font-sans border-t border-slate-200 shadow-2xl">
-    <!-- Header Toolbar like n8n execution list -->
     <div class="flex items-center justify-between px-4 py-2 border-b border-slate-100 bg-slate-50/50">
       <div class="flex items-center gap-6">
         <div class="flex items-center gap-2">
           <List size="14" class="text-indigo-600" />
-          <span class="font-bold text-slate-800 text-xs uppercase tracking-wider">Executions Log</span>
+          <span class="font-bold text-slate-800 text-xs uppercase tracking-wider">执行日志</span>
         </div>
         <div class="h-4 w-[1px] bg-slate-200"></div>
         <div class="flex items-center gap-4 text-[11px] font-medium text-slate-400">
-           <button class="hover:text-indigo-600 flex items-center gap-1.5"><Filter size="12" /> Filter</button>
-           <button class="hover:text-indigo-600 flex items-center gap-1.5"><Download size="12" /> Export</button>
+           <button class="hover:text-indigo-600 flex items-center gap-1.5"><Filter size="12" /> 过滤</button>
+           <button class="hover:text-indigo-600 flex items-center gap-1.5"><Download size="12" /> 导出</button>
         </div>
       </div>
       <button @click="clearLogs" class="text-[11px] font-bold text-slate-400 hover:text-rose-500 flex items-center gap-1.5 transition-colors uppercase">
-        <Trash2 size="12" /> Clear All
+        <Trash2 size="12" /> 清空全部
       </button>
     </div>
     
-    <!-- Log Content Area -->
     <div ref="logContainer" class="flex-1 overflow-y-auto custom-scrollbar">
       <div v-if="store.logs.length === 0" class="h-full flex flex-col items-center justify-center text-slate-300 py-10">
          <Terminal size="32" class="mb-2 opacity-20" />
-         <span class="text-xs font-medium italic">No execution data available yet</span>
+         <span class="text-xs font-medium italic">暂无执行数据</span>
       </div>
       
       <div v-else class="divide-y divide-slate-50">
@@ -66,7 +64,7 @@ const clearLogs = () => {
               'text-emerald-600': log.level === 'info',
               'text-rose-600': log.level === 'error',
               'text-amber-600': log.level === 'warn'
-            }">{{ log.level }}</span>
+            }">{{ log.level === 'info' ? '信息' : log.level === 'error' ? '错误' : '警告' }}</span>
           </div>
 
           <span v-if="log.nodeId" class="px-1.5 py-0.5 bg-slate-100 rounded text-[9px] font-mono text-slate-500 border border-slate-200 shrink-0">
@@ -85,33 +83,8 @@ const clearLogs = () => {
 </template>
 
 <style scoped>
-.custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
-}
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #e2e8f0;
-  border-radius: 10px;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #cbd5e1;
-}
-</style>
-
-<style scoped>
-.custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
-}
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: #0f172a;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #334155;
-  border-radius: 10px;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #475569;
-}
+.custom-scrollbar::-webkit-scrollbar { width: 6px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #cbd5e1; }
 </style>
