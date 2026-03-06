@@ -16,7 +16,7 @@ import {
 import Select from 'primevue/select'
 import MultiSelect from 'primevue/multiselect'
 import InputNumber from 'primevue/inputnumber'
-import { Settings2, Filter, ListChecks } from 'lucide-vue-next'
+import { Settings2, Filter, ListChecks, LineChart as LineChartIcon, BoxSelect } from 'lucide-vue-next'
 
 use([
   CanvasRenderer,
@@ -43,8 +43,8 @@ const selectedKeys = ref<string[]>([])
 const chartRef = shallowRef<any>(null)
 
 const chartTypes = [
-  { label: '折线图', value: 'line' },
-  { label: '箱线图', value: 'boxplot' }
+  { label: '折线云图', value: 'line', icon: LineChartIcon },
+  { label: '箱线分布', value: 'boxplot', icon: BoxSelect }
 ]
 
 const availableKeys = computed(() => {
@@ -141,8 +141,9 @@ const chartOption = computed(() => {
     },
     yAxis: {
       type: 'value',
-      min: isBoxplot ? undefined : yExtent[0],
-      max: isBoxplot ? undefined : yExtent[1],
+      // 让箱线图也共享折线图的 20% 上下文留白（Padding），避免图形顶天立地
+      min: yExtent[0],
+      max: yExtent[1],
       scale: false,
       axisLabel: { fontSize: 10, color: '#94a3b8' },
       splitLine: { lineStyle: { color: '#f1f5f9', type: 'dashed' } },
