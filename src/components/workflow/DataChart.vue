@@ -43,8 +43,8 @@ const selectedKeys = ref<string[]>([])
 const chartRef = shallowRef<any>(null)
 
 const chartTypes = [
-  { label: '折线云图', value: 'line', icon: LineChartIcon },
-  { label: '箱线分布', value: 'boxplot', icon: BoxSelect }
+  { label: '折线云图', value: 'line', icon: markRaw(LineChartIcon) },
+  { label: '箱线分布', value: 'boxplot', icon: markRaw(BoxSelect) }
 ]
 
 const availableKeys = computed(() => {
@@ -213,7 +213,20 @@ const chartOption = computed(() => {
           <InputNumber v-model="maxPoints" :min="100" :max="50000" class="filter-input w-20" :useGrouping="false" />
         </div>
       </div>
-      <Select v-model="chartType" :options="chartTypes" optionLabel="label" optionValue="value" class="chart-type-select" />
+      <Select v-model="chartType" :options="chartTypes" optionLabel="label" optionValue="value" class="chart-type-select">
+        <template #value="slotProps">
+          <div v-if="slotProps.value" class="flex items-center gap-2 text-slate-800">
+            <component :is="chartTypes.find(c => c.value === slotProps.value)?.icon" size="14" stroke-width="2.5" />
+            <span>{{ chartTypes.find(c => c.value === slotProps.value)?.label }}</span>
+          </div>
+        </template>
+        <template #option="slotProps">
+          <div class="flex items-center gap-2 font-bold text-[11px] uppercase tracking-widest text-slate-500 w-full">
+            <component :is="slotProps.option.icon" size="14" class="text-slate-700" />
+            <span>{{ slotProps.option.label }}</span>
+          </div>
+        </template>
+      </Select>
     </div>
 
     <!-- Chart -->
@@ -231,9 +244,32 @@ const chartOption = computed(() => {
 
 <style scoped>
 :deep(.filter-input .p-inputnumber-input) { padding: 2px 8px; font-size: 11px; width: 60px; border: none; background: #f8fafc; border-radius: 4px; font-family: monospace; }
-:deep(.chart-type-select) { height: 32px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; border-color: #f1f5f9; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
-:deep(.p-select-label) { padding: 4px 12px; }
+:deep(.chart-type-select) { 
+  height: 32px; 
+  font-size: 11px; 
+  font-weight: 800; 
+  text-transform: uppercase; 
+  letter-spacing: 0.05em; 
+  border: 1px solid #e2e8f0; 
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05); 
+  border-radius: 8px;
+  background: #fdfdfe;
+  transition: all 0.2s ease;
+}
+:deep(.chart-type-select:hover) {
+  border-color: #94a3b8;
+  background: #f8fafc;
+}
+:deep(.chart-type-select .p-select-label) { 
+  padding: 4px 12px; 
+  display: flex;
+  align-items: center;
+}
+:deep(.chart-type-select .p-select-dropdown) {
+  width: 28px;
+  color: #94a3b8;
+}
 :deep(.property-select) { height: 28px; min-width: 140px; max-width: 240px; font-size: 11px; font-weight: 700; border-color: #f1f5f9; background: #f8fafc; }
 :deep(.property-select .p-multiselect-label) { padding: 2px 8px; display: flex; align-items: center; }
-:deep(.property-select .p-multiselect-chip) { padding: 1px 6px; font-size: 10px; background: #eef2ff; color: #6366f1; }
+:deep(.property-select .p-multiselect-chip) { padding: 1px 6px; font-size: 10px; background: #f1f5f9; color: #334155; border: 1px solid #e2e8f0; }
 </style>
