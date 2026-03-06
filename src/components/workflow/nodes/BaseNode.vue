@@ -76,7 +76,11 @@ const statusColors = computed(() => {
 })
 
 const isTrigger = computed(() => {
-  return props.data.type === 'file-import' || props.data.type === 'neighbor-system'
+  return props.data.category === 'trigger'
+})
+
+const isTerminal = computed(() => {
+  return props.data.category === 'terminal'
 })
 
 const nodeShape = computed(() => {
@@ -133,11 +137,11 @@ const nodeShape = computed(() => {
 
     <!-- 连接点 -->
     <Handle v-if="!isTrigger" type="target" :position="Position.Left" class="n8n-handle !-left-2" style="z-index: 50;" />
-    <Handle v-if="props.data.type !== 'algorithm'" type="source" :position="Position.Right" class="n8n-handle !-right-2" style="z-index: 50;" />
+    <Handle v-if="!isTerminal" type="source" :position="Position.Right" class="n8n-handle !-right-2" style="z-index: 50;" />
 
     <!-- 快速添加按钮 -->
     <div 
-      v-if="props.data.type !== 'algorithm'"
+      v-if="!isTerminal"
       class="absolute left-full top-1/2 -translate-y-1/2 flex items-center transition-all z-0 pointer-events-none"
       :class="isHovered ? 'opacity-100' : 'opacity-0'"
       style="padding-left: 0px;"

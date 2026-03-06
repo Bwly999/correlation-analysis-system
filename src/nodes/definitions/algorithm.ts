@@ -4,8 +4,8 @@ export const algorithmNode: NodeDefinition = {
   name: 'algorithm',
   displayName: '算法模型',
   icon: 'bar-chart-3',
-  category: 'model',
-  description: '对处理后的多因子数据进行建模分析。',
+  category: 'terminal',
+  description: '对处理后的多因子数据进行建模分析，生成数据报告。',
   properties: [
     {
       name: 'modelType',
@@ -30,35 +30,88 @@ export const algorithmNode: NodeDefinition = {
     if (!input || !input.data) return { message: "无输入数据" };
     console.log('Running algorithm:', config.modelType, 'on target:', config.targetLabel);
     
-    // 模拟算法结果
+    // 模拟算法结果并构建报告
     if (config.modelType === 'xgboost_shap') {
       return {
-        model: 'Xgboost + SHAP',
-        featureImportance: [
-          { name: '因子A', value: 0.85 },
-          { name: '因子B', value: 0.62 },
-          { name: '因子C', value: 0.45 }
-        ],
-        impactCurves: {
-          '因子A': [ { x: 0, y: 10 }, { x: 50, y: 25 }, { x: 100, y: 60 } ]
-        },
-        summary: "因子A对目标变量具有显著的正向线性影响。"
+        viewType: 'report',
+        report: {
+          title: 'Xgboost + SHAP 因子贡献度分析报告',
+          sections: [
+            {
+              type: 'text',
+              content: '该报告使用 Xgboost 结合 SHAP 值方法分析各个因子对目标变量的贡献程度和影响趋势。\n模型评估结果：R² = 0.82，RMSE = 1.25，模型拟合良好。'
+            },
+            {
+              title: '特征重要性排行',
+              type: 'chart',
+              option: {
+                tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+                grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+                xAxis: { type: 'value', name: 'SHAP 值' },
+                yAxis: { type: 'category', data: ['因子C', '因子B', '因子A'] },
+                series: [
+                  {
+                    name: '重要性',
+                    type: 'bar',
+                    data: [0.45, 0.62, 0.85],
+                    itemStyle: { color: '#6366f1' }
+                  }
+                ]
+              }
+            },
+            {
+              type: 'text',
+              content: '根据上方特征重要性图表，因子A对目标变量具有最显著的贡献。'
+            },
+            {
+              title: '因子A影响趋势',
+              type: 'chart',
+              option: {
+                tooltip: { trigger: 'axis' },
+                xAxis: { type: 'category', data: ['低', '中', '高'] },
+                yAxis: { type: 'value' },
+                series: [{ data: [10, 25, 60], type: 'line', smooth: true, itemStyle: { color: '#ec4899' } }]
+              }
+            }
+          ]
+        }
       };
     } else if (config.modelType === 'pearson') {
       return {
-        model: 'Pearson Correlation',
-        matrix: [
-          [1.0, 0.8, 0.2],
-          [0.8, 1.0, 0.1],
-          [0.2, 0.1, 1.0]
-        ],
-        labels: ['因子A', '因子B', '目标']
+        viewType: 'report',
+        report: {
+          title: 'Pearson 相关系数矩阵分析',
+          sections: [
+            {
+              type: 'text',
+              content: '展示各因子之间以及因子与目标变量之间的线性相关性。'
+            },
+            {
+              title: '相关性热力图',
+              type: 'chart',
+              option: {
+                tooltip: { position: 'top' },
+                grid: { height: '50%', top: '10%' },
+                xAxis: { type: 'category', data: ['因子A', '因子B', '目标'] },
+                yAxis: { type: 'category', data: ['因子A', '因子B', '目标'] },
+                visualMap: { min: -1, max: 1, calculable: true, orient: 'horizontal', left: 'center', bottom: '15%' },
+                series: [{
+                  name: 'Pearson Correlation',
+                  type: 'heatmap',
+                  data: [
+                    [0, 0, 1.0], [0, 1, 0.8], [0, 2, 0.2],
+                    [1, 0, 0.8], [1, 1, 1.0], [1, 2, 0.1],
+                    [2, 0, 0.2], [2, 1, 0.1], [2, 2, 1.0]
+                  ],
+                  label: { show: true }
+                }]
+              }
+            }
+          ]
+        }
       };
     }
 
-    return { 
-      result: "Analysis completed",
-      model: config.modelType
-    };
+    return { viewType: 'report', report: { title: '分析完成', sections: [] } };
   }
 };

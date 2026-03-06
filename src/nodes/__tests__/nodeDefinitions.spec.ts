@@ -105,9 +105,10 @@ describe('Node Definitions Execution Logic', () => {
       
       const result = await algorithmNode.execute(input, config)
       
-      expect(result.model).toBe('Xgboost + SHAP')
-      expect(result.featureImportance).toBeDefined()
-      expect(result.featureImportance.length).toBeGreaterThan(0)
+      expect(result.viewType).toBe('report')
+      expect(result.report).toBeDefined()
+      expect(result.report.title).toContain('Xgboost')
+      expect(result.report.sections.length).toBeGreaterThan(0)
     })
   })
 })

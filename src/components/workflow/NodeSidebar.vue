@@ -14,7 +14,7 @@ const emit = defineEmits(['close'])
 const categoryMetadata = [
   { name: '数据获取 (Triggers)', category: 'trigger', label: '数据源' },
   { name: '数据处理 (Actions)', category: 'action', label: '数据转换' },
-  { name: '算法运行 (Models)', category: 'model', label: '算法模型' }
+  { name: '终止节点 (Terminal)', category: 'terminal', label: '终止与分析' }
 ]
 
 const filteredCategories = computed(() => {
@@ -22,7 +22,7 @@ const filteredCategories = computed(() => {
   const sourceCat = pendingSourceNode?.data?.category
   const allowedCategories = sourceCat 
     ? (CONNECTION_RULES[sourceCat] || []) 
-    : ['trigger', 'action', 'model']
+    : ['trigger', 'action', 'terminal']
 
   return categoryMetadata.map(catMeta => {
     const nodes = nodeDefinitions

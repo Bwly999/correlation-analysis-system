@@ -1,4 +1,4 @@
-export type NodeCategory = 'trigger' | 'action' | 'model';
+export type NodeCategory = 'trigger' | 'action' | 'terminal';
 
 export interface NodeProperty {
   name: string;

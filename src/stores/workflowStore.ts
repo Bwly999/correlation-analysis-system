@@ -7,7 +7,7 @@ export interface WorkflowNode extends Node {
   data: {
     label: string
     type: string 
-    category: 'trigger' | 'action' | 'model'
+    category: 'trigger' | 'action' | 'terminal'
     config: any
     status: 'idle' | 'running' | 'success' | 'error'
     output?: any 
@@ -26,9 +26,9 @@ export interface SavedWorkflow {
 }
 
 export const CONNECTION_RULES: Record<string, string[]> = {
-  'trigger': ['action', 'model'],
-  'action': ['action', 'model'],
-  'model': []
+  'trigger': ['action', 'terminal'],
+  'action': ['action', 'terminal'],
+  'terminal': []
 }
 
 export const useWorkflowStore = defineStore('workflow', () => {
@@ -66,7 +66,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     }
   }
 
-  const getCategoryByType = (type: string): 'trigger' | 'action' | 'model' => {
+  const getCategoryByType = (type: string): 'trigger' | 'action' | 'terminal' => {
     const definition = getNodeDefinition(type)
     return definition ? definition.category : 'action'
   }
@@ -119,11 +119,11 @@ export const useWorkflowStore = defineStore('workflow', () => {
         if (oldEdge) {
           const targetNodeId = oldEdge.target
           edges.value = edges.value.filter(e => e.id !== edgeId)
-          edges.value.push({ id: `e_${Date.now()}_1`, source: sourceNodeId, target: newNodeId, type: 'n8n', animated: true })
-          edges.value.push({ id: `e_${Date.now()}_2`, source: newNodeId, target: targetNodeId, type: 'n8n', animated: true })
+          edges.value.push({ id: `e_${Date.now()}_1`, source: sourceNodeId, target: newNode.id, type: 'n8n', animated: true })
+          edges.value.push({ id: `e_${Date.now()}_2`, source: newNode.id, target: targetNodeId, type: 'n8n', animated: true })
         }
       } else {
-        edges.value.push({ id: `e_${Date.now()}`, source: sourceNodeId, target: newNodeId, sourceHandle: sourceHandleId, type: 'n8n', animated: true })
+        edges.value.push({ id: `e_${Date.now()}`, source: sourceNodeId, target: newNode.id, sourceHandle: sourceHandleId, type: 'n8n', animated: true })
       }
       pendingConnection.value = null
     }
@@ -213,7 +213,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
 
   const runGlobal = async () => {
     addLog('开始全局运行...', 'info')
-    const terminalNodes = nodes.value.filter(n => n.data.category === 'model')
+    const terminalNodes = nodes.value.filter(n => n.data.category === 'terminal')
     if (terminalNodes.length === 0) {
       addLog('运行失败: 未找到分析模型', 'error')
       return

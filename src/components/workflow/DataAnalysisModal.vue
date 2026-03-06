@@ -5,6 +5,9 @@ import Button from 'primevue/button'
 import InputNumber from 'primevue/inputnumber'
 import { X, BarChart3, Database, Download, FileJson, Layers, ChevronRight } from 'lucide-vue-next'
 import DataChart from './DataChart.vue'
+import ReportViewer from './viewers/ReportViewer.vue'
+import ChartViewer from './viewers/ChartViewer.vue'
+import ExportViewer from './viewers/ExportViewer.vue'
 
 const props = defineProps<{
   visible: boolean
@@ -27,6 +30,7 @@ const normalizedData = computed(() => {
 // 截断用于预览的 JSON
 const previewJson = computed(() => {
   const data = normalizedData.value
+  if (!data || data.length === 0) return props.data // Fallback to raw data if not a dataset
   const displayData = data.slice(0, previewLimit.value ?? 10)
   
   // 构造展示对象，保留原有的非 data 属性（如果是对象的话）
@@ -65,7 +69,6 @@ const exportData = () => {
       <div class="flex items-center justify-between w-full px-4 py-2">
         <div class="flex items-center gap-4">
           <div class="flex -space-x-2">
-             <!-- 改为高级克制的黑色/深石板色 -->
              <div class="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center text-white shadow-lg shadow-slate-200/50 border-2 border-white relative z-10">
                 <BarChart3 size="20" />
              </div>
@@ -77,7 +80,7 @@ const exportData = () => {
             <div class="flex items-center gap-2 text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] mb-0.5">
                <span>工作流节点</span>
                <ChevronRight size="10" />
-               <span class="text-slate-800">数据深度分析</span>
+               <span class="text-slate-800">{{ props.data?.viewType === 'report' ? '分析报告' : (props.data?.viewType === 'export' ? '数据导出' : '数据深度分析') }}</span>
             </div>
             <h2 class="text-xl font-black text-slate-800 tracking-tight">{{ title }}</h2>
           </div>
@@ -105,7 +108,7 @@ const exportData = () => {
                   <FileJson size="14" class="text-slate-500" />
                   <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">数据预览</span>
                </div>
-               <div class="flex items-center gap-2">
+               <div class="flex items-center gap-2" v-if="normalizedData.length > 0">
                   <span class="text-[9px] font-bold text-slate-400 uppercase">显示数量</span>
                   <InputNumber v-model="previewLimit" :min="1" :max="100" class="preview-limit-input" :useGrouping="false" />
                </div>
@@ -113,20 +116,19 @@ const exportData = () => {
             <div class="flex-1 overflow-auto p-5 font-mono text-[11px] leading-relaxed text-slate-600 custom-scrollbar bg-[#fafafa]">
                <pre>{{ JSON.stringify(previewJson, null, 2) }}</pre>
             </div>
-            <div class="px-5 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+            <div v-if="normalizedData.length > 0" class="px-5 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
                <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Total: {{ normalizedData.length }} Records</span>
                <Layers size="12" class="text-slate-400" />
             </div>
          </div>
          
-         <!-- 提示卡片改为极简黑灰色系 -->
          <div class="bg-slate-900 rounded-2xl p-5 text-slate-100 shadow-xl shadow-slate-200/50 relative overflow-hidden group border border-slate-800">
             <div class="relative z-10">
                <div class="flex items-center gap-2 mb-2 opacity-80">
                   <BarChart3 size="12" class="text-slate-300" />
                   <h4 class="text-[10px] font-black uppercase tracking-widest text-slate-300">系统提示</h4>
                </div>
-               <p class="text-[11px] leading-relaxed font-medium text-slate-300">当前图表已开启 GPU 加速，支持万级数据流畅交互。您可以设置过滤条件来精准定位异常因子。</p>
+               <p class="text-[11px] leading-relaxed font-medium text-slate-300">根据节点输出类型，系统已自动匹配最佳可视化视图。</p>
             </div>
             <div class="absolute -right-4 -bottom-4 opacity-[0.03] group-hover:scale-110 transition-transform duration-700 pointer-events-none">
                <BarChart3 size="80" class="text-white" />
@@ -136,7 +138,18 @@ const exportData = () => {
 
       <!-- Right: Main Analysis Area -->
       <div class="flex-1 flex flex-col min-w-0 bg-white rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden">
-         <DataChart :data="normalizedData" />
+         <template v-if="props.data?.viewType === 'report'">
+           <ReportViewer :data="props.data" />
+         </template>
+         <template v-else-if="props.data?.viewType === 'chart'">
+           <ChartViewer :data="props.data" />
+         </template>
+         <template v-else-if="props.data?.viewType === 'export'">
+           <ExportViewer :data="props.data" />
+         </template>
+         <template v-else>
+           <DataChart :data="normalizedData" />
+         </template>
       </div>
     </div>
   </Dialog>
