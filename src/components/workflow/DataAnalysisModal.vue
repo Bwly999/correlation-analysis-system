@@ -1,15 +1,10 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed } from 'vue'
 import Dialog from 'primevue/dialog'
 import Button from 'primevue/button'
-import { X, BarChart3, PieChart, Table as TableIcon, FileJson, Download } from 'lucide-vue-next'
-import VChart from 'vue-echarts'
-import { use } from 'echarts/core'
-import { CanvasRenderer } from 'echarts/renderers'
-import { BarChart, LineChart, ScatterChart } from 'echarts/charts'
-import { GridComponent, TooltipComponent, TitleComponent, LegendComponent } from 'echarts/components'
-
-use([CanvasRenderer, BarChart, LineChart, ScatterChart, GridComponent, TooltipComponent, TitleComponent, LegendComponent])
+import InputNumber from 'primevue/inputnumber'
+import { X, BarChart3, Database, Download, FileJson, Layers, ChevronRight } from 'lucide-vue-next'
+import DataChart from './DataChart.vue'
 
 const props = defineProps<{
   visible: boolean
@@ -19,38 +14,32 @@ const props = defineProps<{
 
 const emit = defineEmits(['close'])
 
-const activeView = ref<'json' | 'chart'>('json')
+const previewLimit = ref(10)
 
-// 提取数据用于图表
-const chartOption = computed(() => {
-  if (!props.data) return {}
-  
-  let rows = []
-  if (Array.isArray(props.data)) rows = props.data
-  else if (props.data.data && Array.isArray(props.data.data)) rows = props.data.data
-  
-  if (rows.length === 0) return {}
+// 提取实际的数据数组
+const normalizedData = computed(() => {
+  if (!props.data) return []
+  if (Array.isArray(props.data)) return props.data
+  if (props.data.data && Array.isArray(props.data.data)) return props.data.data
+  return []
+})
 
-  // 提取数值型字段作为 X 轴
-  const firstRow = rows[0]
-  const numericKeys = Object.keys(firstRow).filter(k => typeof firstRow[k] === 'number')
+// 截断用于预览的 JSON
+const previewJson = computed(() => {
+  const data = normalizedData.value
+  const displayData = data.slice(0, previewLimit.value ?? 10)
   
-  if (numericKeys.length === 0) return {}
-
-  return {
-    title: { text: '数据因子分布预览', left: 'center', textStyle: { fontSize: 14 } },
-    tooltip: { trigger: 'axis' },
-    legend: { bottom: 0 },
-    grid: { left: '3%', right: '4%', bottom: '10%', containLabel: true },
-    xAxis: { type: 'category', data: rows.map((_, i) => `Row ${i + 1}`) },
-    yAxis: { type: 'value' },
-    series: numericKeys.slice(0, 5).map(key => ({
-      name: key,
-      type: 'line',
-      smooth: true,
-      data: rows.map(r => r[key])
-    }))
+  // 构造展示对象，保留原有的非 data 属性（如果是对象的话）
+  if (!Array.isArray(props.data) && props.data) {
+    const { data: _, ...rest } = props.data
+    return {
+      ...rest,
+      data: displayData,
+      _previewInfo: `Showing ${displayData.length} of ${data.length} records`
+    }
   }
+  
+  return displayData
 })
 
 const exportData = () => {
@@ -58,7 +47,7 @@ const exportData = () => {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `data_export_${Date.now()}.json`
+  a.download = `data_analysis_${props.title.replace(/\s+/g, '_')}_${Date.now()}.json`
   a.click()
 }
 </script>
@@ -69,67 +58,107 @@ const exportData = () => {
     modal 
     @update:visible="emit('close')"
     class="analysis-dialog"
-    :style="{ width: '85vw', height: '85vh' }"
+    :style="{ width: '90vw', height: '90vh' }"
     :closable="false"
   >
     <template #header>
-      <div class="flex items-center justify-between w-full px-2">
-        <div class="flex items-center gap-3">
-          <div class="p-2 bg-indigo-50 rounded-xl text-indigo-600"><BarChart3 size="20" /></div>
+      <div class="flex items-center justify-between w-full px-4 py-2">
+        <div class="flex items-center gap-4">
+          <div class="flex -space-x-2">
+             <div class="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-200 border-2 border-white relative z-10">
+                <BarChart3 size="20" />
+             </div>
+             <div class="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-slate-400 border-2 border-white">
+                <Database size="18" />
+             </div>
+          </div>
           <div>
-            <h2 class="text-lg font-bold text-slate-800">深度数据分析 - {{ title }}</h2>
-            <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Data Insight Explorer</p>
+            <div class="flex items-center gap-2 text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] mb-0.5">
+               <span>工作流节点</span>
+               <ChevronRight size="10" />
+               <span class="text-indigo-600">数据深度分析</span>
+            </div>
+            <h2 class="text-xl font-black text-slate-800 tracking-tight">{{ title }}</h2>
           </div>
         </div>
-        <div class="flex items-center gap-2">
-          <Button @click="exportData" severity="secondary" text class="flex gap-2 items-center text-xs font-bold">
-            <Download size="16" /> 导出数据
-          </Button>
-          <div class="w-[1px] h-6 bg-slate-200 mx-2"></div>
-          <Button severity="secondary" text @click="emit('close')"><X size="24"/></Button>
+        
+        <div class="flex items-center gap-3">
+          <button @click="exportData" class="group flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 transition-all active:scale-95">
+             <Download size="16" class="text-slate-500 group-hover:text-indigo-600 transition-colors" />
+             <span class="text-xs font-bold text-slate-600 group-hover:text-slate-900">导出原始数据</span>
+          </button>
+          <div class="w-[1px] h-8 bg-slate-100 mx-2"></div>
+          <button @click="emit('close')" class="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-red-50 text-slate-400 hover:text-red-500 transition-all">
+             <X size="24" />
+          </button>
         </div>
       </div>
     </template>
 
-    <div class="flex flex-col h-full overflow-hidden border-t -mx-6 -mb-6 bg-slate-50">
-      <!-- Top Navigation -->
-      <div class="flex bg-white px-6 border-b">
-        <button 
-          @click="activeView = 'json'"
-          :class="['px-6 py-4 text-xs font-black uppercase tracking-widest flex items-center gap-2 border-b-2 transition-all', activeView === 'json' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400']"
-        >
-          <FileJson size="14" /> 完整 JSON
-        </button>
-        <button 
-          @click="activeView = 'chart'"
-          :class="['px-6 py-4 text-xs font-black uppercase tracking-widest flex items-center gap-2 border-b-2 transition-all', activeView === 'chart' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400']"
-        >
-          <BarChart3 size="14" /> 可视化图表
-        </button>
+    <div class="flex h-full overflow-hidden bg-slate-50/50 p-4 gap-4">
+      <!-- Left: Data Preview Panel -->
+      <div class="w-80 flex flex-col gap-4">
+         <div class="flex-1 bg-white rounded-2xl border border-slate-100 shadow-sm flex flex-col overflow-hidden">
+            <div class="px-5 py-4 border-b border-slate-50 flex items-center justify-between">
+               <div class="flex items-center gap-2">
+                  <FileJson size="14" class="text-amber-500" />
+                  <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">数据预览</span>
+               </div>
+               <div class="flex items-center gap-2">
+                  <span class="text-[9px] font-bold text-slate-300 uppercase">显示数量</span>
+                  <InputNumber v-model="previewLimit" :min="1" :max="100" class="preview-limit-input" :useGrouping="false" />
+               </div>
+            </div>
+            <div class="flex-1 overflow-auto p-5 font-mono text-[11px] leading-relaxed text-slate-600 custom-scrollbar bg-[#fdfdfe]">
+               <pre>{{ JSON.stringify(previewJson, null, 2) }}</pre>
+            </div>
+            <div class="px-5 py-3 bg-slate-50/50 border-t border-slate-50 flex items-center justify-between">
+               <span class="text-[9px] font-bold text-slate-400">Total: {{ normalizedData.length }} Records</span>
+               <Layers size="12" class="text-slate-300" />
+            </div>
+         </div>
+         
+         <div class="bg-indigo-600 rounded-2xl p-5 text-white shadow-xl shadow-indigo-100 relative overflow-hidden group">
+            <div class="relative z-10">
+               <h4 class="text-xs font-black uppercase tracking-widest opacity-60 mb-1">系统提示</h4>
+               <p class="text-[11px] leading-normal font-medium opacity-90">当前图表已开启 GPU 加速，支持万级数据流畅交互。您可以设置过滤条件来精准定位异常因子。</p>
+            </div>
+            <div class="absolute -right-4 -bottom-4 opacity-10 group-hover:scale-110 transition-transform duration-700">
+               <BarChart3 size="80" />
+            </div>
+         </div>
       </div>
 
-      <!-- Main Content Area -->
-      <div class="flex-1 overflow-hidden p-6">
-        <div v-if="activeView === 'json'" class="h-full bg-slate-900 rounded-2xl shadow-2xl p-6 overflow-auto custom-scrollbar font-mono text-[12px] text-indigo-300">
-           <pre>{{ JSON.stringify(data, null, 2) }}</pre>
-        </div>
-        
-        <div v-else-if="activeView === 'chart'" class="h-full bg-white rounded-2xl shadow-xl p-8 flex flex-col gap-6 overflow-auto custom-scrollbar">
-           <div v-if="Object.keys(chartOption).length > 0" class="flex-1 min-h-[400px]">
-              <VChart :option="chartOption" autoresize />
-           </div>
-           <div v-else class="h-full flex flex-col items-center justify-center text-slate-300 italic">
-              <BarChart3 size="64" class="opacity-10 mb-4" />
-              <p>当前数据结构不支持自动生成预览图表</p>
-           </div>
-        </div>
+      <!-- Right: Main Analysis Area -->
+      <div class="flex-1 flex flex-col min-w-0">
+         <DataChart :data="normalizedData" />
       </div>
     </div>
   </Dialog>
 </template>
 
 <style scoped>
-.analysis-dialog .p-dialog-content { padding: 0; display: flex; flex-direction: column; overflow: hidden; }
-.custom-scrollbar::-webkit-scrollbar { width: 6px; }
-.custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+.analysis-dialog :deep(.p-dialog-content) { 
+  padding: 0; 
+  display: flex; 
+  flex-direction: column; 
+  overflow: hidden; 
+  background: #f8fafc;
+}
+
+.custom-scrollbar::-webkit-scrollbar { width: 5px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #cbd5e1; }
+
+:deep(.preview-limit-input .p-inputnumber-input) {
+  padding: 2px 6px;
+  font-size: 10px;
+  width: 40px;
+  border: 1px solid #f1f5f9;
+  background: #fff;
+  border-radius: 6px;
+  text-align: center;
+  font-family: monospace;
+}
 </style>
