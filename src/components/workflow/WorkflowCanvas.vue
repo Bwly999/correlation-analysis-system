@@ -166,43 +166,47 @@ onMounted(() => {
   <div class="flex h-screen w-full bg-[#fafafa] text-[#1a1f36] overflow-hidden relative font-sans text-[13px] selection:bg-indigo-100">
     <input type="file" ref="fileInput" class="hidden" accept=".json" @change="handleImport" />
     
-    <!-- 顶部菜单栏 -->
-    <header class="absolute top-0 left-0 right-0 h-[60px] bg-white border-b border-[#efefef] z-[100] flex items-center justify-between px-6 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+    <!-- 顶部菜单栏 (Clean SaaS Style) -->
+    <header class="absolute top-0 left-0 right-0 h-[56px] bg-white border-b border-slate-200 z-[100] flex items-center justify-between px-6">
        <div class="flex items-center gap-4">
+          <!-- 导航/面包屑 -->
           <div 
             @click="openWorkflowList"
-            class="flex items-center gap-2 text-[#a3acb9] font-bold hover:text-indigo-600 transition-colors cursor-pointer group px-2 py-1 rounded-lg hover:bg-slate-50"
+            class="flex items-center gap-2 text-slate-500 hover:text-slate-900 transition-colors cursor-pointer group px-2 py-1.5 rounded-md hover:bg-slate-100"
           >
-             <FolderOpen size="16" class="group-hover:scale-110 transition-transform" />
-             <span>我的项目</span>
-             <ChevronRight size="14" class="opacity-50" />
+             <LayoutGrid size="16" class="opacity-70 group-hover:opacity-100" />
+             <span class="text-[13px] font-medium">Projects</span>
+             <ChevronRight size="14" class="opacity-40" />
           </div>
           
-          <div class="flex items-center gap-2 group">
-            <InputText 
+          <!-- 项目名称编辑 -->
+          <div class="flex items-center gap-2 group relative">
+            <input 
               v-model="store.workflowName" 
-              class="n8n-header-input font-bold text-[15px] text-[#1a1f36] border-none bg-transparent hover:bg-[#f7f9fc] focus:bg-white rounded-lg px-2.5 py-1.5 transition-all w-auto min-w-[140px]" 
+              class="font-semibold text-[14px] text-slate-900 border border-transparent hover:border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 bg-transparent focus:bg-white rounded-md px-2.5 py-1 transition-all w-[200px] outline-none" 
+              placeholder="Untitled Workflow"
             />
-            <Edit2 size="12" class="text-[#a3acb9] opacity-0 group-hover:opacity-100 transition-opacity" />
-          </div>
-          
-          <div class="h-4 w-[1px] bg-[#f1f4f8] mx-2"></div>
-          
-          <div class="flex items-center gap-2 px-3 py-1 bg-[#f0fdf4] text-[#166534] text-[10px] font-black rounded-full border border-[#dcfce7]">
-             <Activity size="12" class="animate-pulse" />
-             在线
+            <Edit2 size="12" class="text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity absolute right-2 pointer-events-none" />
           </div>
        </div>
 
        <div class="flex items-center gap-3">
-         <Button @click="store.saveWorkflow()" severity="secondary" text class="n8n-header-btn h-9 px-4 text-[11px] font-black uppercase tracking-wider flex gap-2 items-center rounded-xl border border-[#f1f4f8] hover:border-indigo-200 hover:bg-indigo-50/30">
-           <Save size="16" class="text-indigo-600" />
-           保存工作流
+         <!-- 在线状态 -->
+         <div class="flex items-center gap-2 px-3 py-1 bg-slate-50 rounded-md border border-slate-200">
+            <div class="w-2 h-2 bg-emerald-500 rounded-full"></div>
+            <span class="text-[11px] font-medium text-slate-600">Connected</span>
+         </div>
+
+         <div class="h-4 w-[1px] bg-slate-200 mx-1"></div>
+
+         <!-- 操作按钮 -->
+         <Button @click="store.saveWorkflow()" severity="secondary" text class="h-8 px-4 text-[12px] font-medium flex gap-2 items-center rounded-md bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 transition-colors shadow-sm">
+           <Save size="14" class="text-slate-500" />
+           Save
          </Button>
 
-         <Button @click="toggleMenu" severity="secondary" text class="n8n-header-btn h-9 px-4 text-[11px] font-bold uppercase tracking-wider flex gap-2 items-center rounded-xl border border-transparent hover:bg-[#f7f9fc]">
-           <FileDown size="16" class="opacity-70" />
-           导入/导出
+         <Button @click="toggleMenu" severity="secondary" text class="w-8 h-8 p-0 flex items-center justify-center rounded-md border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-600 transition-colors shadow-sm bg-white">
+           <FileUp size="14" />
          </Button>
          <Menu ref="menu" :model="menuItems" :popup="true" class="n8n-popup-menu" />
        </div>

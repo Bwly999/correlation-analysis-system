@@ -22,13 +22,38 @@ const onDeleteEdge = () => {
   store.edges = store.edges.filter(e => e.id !== props.id)
   store.addLog('Edge deleted', 'info')
 }
+
+const sourceNode = computed(() => store.nodes.find(n => n.id === props.source))
 </script>
 
 <template>
-  <!-- Render the actual edge line -->
-  <BaseEdge :id="id" :style="style" :path="path[0]" :marker-end="markerEnd" />
+  <!-- 基础连线 (Crisp Modern Line) -->
+  <path
+    :id="id"
+    :d="path[0]"
+    fill="none"
+    class="n8n-edge-path transition-colors duration-300"
+    :class="{ 
+      'stroke-slate-200': sourceNode?.data?.status === 'idle' || !sourceNode?.data?.status,
+      'stroke-indigo-500 is-running': sourceNode?.data?.status === 'running',
+      'stroke-emerald-500': sourceNode?.data?.status === 'success',
+      'stroke-rose-500': sourceNode?.data?.status === 'error'
+    }"
+    stroke-width="1.5"
+    stroke-linecap="round"
+  />
 
-  <!-- Render interactive buttons in the middle -->
+  <!-- 交互辅助线 (透明，增大点击区域) -->
+  <path
+    :d="path[0]"
+    fill="none"
+    stroke="transparent"
+    stroke-width="20"
+    class="cursor-pointer"
+    @mouseenter="isHovered = true"
+    @mouseleave="isHovered = false"
+  />
+
   <EdgeLabelRenderer>
     <div
       :style="{
@@ -36,25 +61,25 @@ const onDeleteEdge = () => {
         transform: `translate(-50%, -50%) translate(${path[1]}px, ${path[2]}px)`,
         pointerEvents: 'all',
       }"
-      class="edge-toolbar flex items-center justify-center p-2 rounded-full cursor-pointer"
+      class="edge-toolbar flex items-center justify-center p-2 rounded-full cursor-pointer z-50"
       @mouseenter="isHovered = true"
       @mouseleave="isHovered = false"
     >
       <div 
-        class="flex items-center gap-1 bg-white border border-slate-200 shadow-md rounded-full p-0.5 transition-all duration-300"
-        :class="isHovered ? 'opacity-100 scale-100' : 'opacity-0 scale-75 pointer-events-none'"
+        class="flex items-center gap-1 bg-white border border-slate-200 shadow-sm rounded-full p-0.5 transition-all duration-200"
+        :class="isHovered ? 'opacity-100 scale-100' : 'opacity-0 scale-90 pointer-events-none'"
       >
         <button 
           @click.stop="onAddNode"
-          class="w-6 h-6 flex items-center justify-center rounded-full hover:bg-slate-100 text-slate-500 hover:text-indigo-600 transition-colors"
+          class="w-6 h-6 flex items-center justify-center rounded-full hover:bg-slate-50 text-slate-400 hover:text-indigo-600 transition-colors"
           title="在中间插入节点"
         >
           <Plus size="14" />
         </button>
-        <div class="w-[1px] h-3 bg-slate-200"></div>
+        <div class="w-[1px] h-3 bg-slate-100"></div>
         <button 
           @click.stop="onDeleteEdge"
-          class="w-6 h-6 flex items-center justify-center rounded-full hover:bg-slate-100 text-slate-500 hover:text-rose-600 transition-colors"
+          class="w-6 h-6 flex items-center justify-center rounded-full hover:bg-slate-50 text-slate-400 hover:text-rose-600 transition-colors"
           title="删除连线"
         >
           <Trash2 size="14" />
@@ -64,14 +89,29 @@ const onDeleteEdge = () => {
       <!-- Default small dot indicator when not hovered -->
       <div 
         v-if="!isHovered" 
-        class="absolute w-2 h-2 bg-slate-300 border-2 border-white rounded-full transition-all duration-300 shadow-sm"
+        class="absolute w-1.5 h-1.5 bg-white border-[1.5px] border-slate-300 rounded-full transition-all duration-200"
+        :class="{
+          '!border-indigo-500 bg-indigo-50': sourceNode?.data?.status === 'running',
+          '!border-emerald-500 bg-emerald-50': sourceNode?.data?.status === 'success',
+          '!border-rose-500 bg-rose-50': sourceNode?.data?.status === 'error'
+        }"
       ></div>
     </div>
   </EdgeLabelRenderer>
 </template>
 
 <style scoped>
-.edge-toolbar {
-  z-index: 1000;
+.n8n-edge-path.is-running {
+  stroke-dasharray: 8, 8;
+  animation: n8n-flow 0.8s linear infinite;
+}
+
+@keyframes n8n-flow {
+  from {
+    stroke-dashoffset: 16;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
 }
 </style>
