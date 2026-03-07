@@ -11,9 +11,9 @@ const searchQuery = ref('')
 const emit = defineEmits(['close'])
 
 const categoryMetadata = [
-  { name: '数据获取 (Triggers)', category: 'trigger', label: '数据源', icon: Box },
-  { name: '数据处理 (Actions)', category: 'action', label: '数据转换', icon: Layout },
-  { name: '终止节点 (Terminal)', category: 'terminal', label: '终止与分析', icon: Box }
+  { name: '数据源 (Data Sources)', category: 'trigger', label: '数据源', icon: Box },
+  { name: '算子 (Operators)', category: 'action', label: '数据转换', icon: Layout },
+  { name: '分析 (Analysis)', category: 'terminal', label: '终止与分析', icon: Box }
 ]
 
 const filteredCategories = computed(() => {
@@ -50,7 +50,6 @@ const onNodeClick = (node: any) => {
       : { x: 100, y: 100 }
     store.addAndConnectNode(node.type, node.label, position)
   } else {
-    // 非连接模式下点击，直接在画布中心或默认位置添加节点
     store.addAndConnectNode(node.type, node.label, { x: 200, y: 200 })
   }
 }
@@ -70,7 +69,7 @@ const onDragStart = (event: DragEvent, node: any) => {
     <div class="p-5 pb-3 bg-white sticky top-0 z-20">
       <div class="flex items-center justify-between mb-5">
         <div class="flex items-center gap-2">
-          <div class="w-1.5 h-4 bg-indigo-500 rounded-full"></div>
+          <div class="w-1.5 h-4 bg-slate-900 rounded-full"></div>
           <h2 class="text-[13px] font-bold text-[#1a1f36] tracking-tight">节点库</h2>
         </div>
         <button @click="emit('close')" class="p-1.5 text-[#a3acb9] hover:text-[#ef4444] hover:bg-red-50 rounded-lg transition-all duration-200">
@@ -80,13 +79,13 @@ const onDragStart = (event: DragEvent, node: any) => {
       
       <div class="relative group">
         <div class="absolute left-3.5 top-1/2 -translate-y-1/2 z-10 pointer-events-none">
-          <Search size="16" class="text-[#94a3b8] group-focus-within:text-indigo-500 transition-colors duration-200" stroke-width="2.5" />
+          <Search size="16" class="text-[#94a3b8] group-focus-within:text-slate-900 transition-colors duration-200" stroke-width="2.5" />
         </div>
         <input 
           v-model="searchQuery" 
           type="text"
           placeholder="搜索分析算子或数据源..." 
-          class="w-full pl-10 pr-4 py-2.5 bg-[#f8fafc] border border-[#e2e8f0] focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-500/10 rounded-xl text-[13px] text-[#1e293b] placeholder:text-[#94a3b8] outline-none transition-all duration-200"
+          class="w-full pl-10 pr-4 py-2.5 bg-[#f8fafc] border border-[#e2e8f0] focus:border-slate-400 focus:bg-white focus:ring-4 focus:ring-slate-900/5 rounded-xl text-[13px] text-[#1e293b] placeholder:text-[#94a3b8] outline-none transition-all duration-200"
         />
         <div v-if="searchQuery" @click="searchQuery = ''" class="absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer text-[#94a3b8] hover:text-[#64748b]">
           <X size="14" />
@@ -96,22 +95,22 @@ const onDragStart = (event: DragEvent, node: any) => {
 
     <!-- Node List -->
     <div class="flex-1 overflow-y-auto custom-scrollbar px-4 space-y-8 pb-10 pt-2">
-      <!-- Quick Add Prompt like n8n -->
-      <div v-if="store.pendingConnection" class="mt-2 p-4 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-2xl shadow-lg shadow-indigo-100 animate-in zoom-in-95 duration-300 relative overflow-hidden">
+      <!-- Quick Add Prompt (Modern Slate Style) -->
+      <div v-if="store.pendingConnection" class="mt-2 p-4 bg-slate-900 text-white rounded-2xl shadow-lg shadow-slate-200 animate-in zoom-in-95 duration-300 relative overflow-hidden">
          <div class="relative z-10 flex items-start gap-3">
-            <div class="p-1.5 bg-white/20 rounded-lg text-white ring-1 ring-white/30"><Info size="14" /></div>
+            <div class="p-1.5 bg-white/10 rounded-lg text-white ring-1 ring-white/20"><Info size="14" /></div>
             <div class="flex-1">
                <p class="text-[12px] font-bold text-white leading-tight">选择连接目标</p>
-               <p class="text-[10px] text-white/80 mt-1 leading-relaxed">已为您智能推荐可用的下游节点</p>
+               <p class="text-[10px] text-white/60 mt-1 leading-relaxed">已为您智能推荐可用的下游节点</p>
             </div>
-            <button @click="store.pendingConnection = null" class="text-white/60 hover:text-white transition-colors"><X size="14" /></button>
+            <button @click="store.pendingConnection = null" class="text-white/40 hover:text-white transition-colors"><X size="14" /></button>
          </div>
-         <div class="absolute -right-4 -bottom-4 opacity-10 rotate-12"><Box size="80" /></div>
+         <div class="absolute -right-4 -bottom-4 opacity-5 rotate-12 text-white"><Box size="80" /></div>
       </div>
 
       <div v-for="cat in filteredCategories" :key="cat.name">
         <div class="px-2 mb-4 flex items-center gap-3">
-          <component :is="cat.icon" size="14" class="text-indigo-500/60" />
+          <component :is="cat.icon" size="14" class="text-slate-400" />
           <span class="text-[11px] font-bold text-[#64748b] tracking-wider">{{ cat.label }}</span>
           <div class="h-[1px] flex-1 bg-gradient-to-r from-[#f1f5f9] to-transparent"></div>
         </div>
@@ -131,14 +130,14 @@ const onDragStart = (event: DragEvent, node: any) => {
             ]"
           >
             <div class="n8n-node-item-inner flex items-center gap-4 p-3.5 rounded-2xl transition-all border border-transparent">
-              <div class="n8n-icon-box p-3 bg-white rounded-xl shadow-[0_2px_8px_rgba(0,0,0,0.03)] border border-[#f1f4f8] group-hover:scale-105 transition-transform duration-300">
+              <div class="n8n-icon-box p-3 bg-white rounded-xl shadow-sm border border-[#f1f4f8] group-hover:scale-105 transition-transform duration-300">
                 <NodeIcon :type="node.type" :size="24" />
               </div>
               <div class="flex flex-col flex-1 min-w-0">
-                <span class="text-[13px] font-bold text-[#1a1f36] truncate tracking-tight group-hover:text-indigo-600 transition-colors">{{ node.label }}</span>
+                <span class="text-[13px] font-bold text-[#1a1f36] truncate tracking-tight group-hover:text-blue-600 transition-colors">{{ node.label }}</span>
                 <span class="text-[10px] text-[#8792a2] font-medium truncate mt-0.5 opacity-80">{{ node.desc }}</span>
               </div>
-              <ChevronRight size="14" class="text-indigo-200 opacity-0 group-hover:opacity-100 -translate-x-2 group-hover:translate-x-0 transition-all duration-300" />
+              <ChevronRight size="14" class="text-slate-300 opacity-0 group-hover:opacity-100 -translate-x-2 group-hover:translate-x-0 transition-all duration-300" />
             </div>
           </div>
         </div>
@@ -148,11 +147,6 @@ const onDragStart = (event: DragEvent, node: any) => {
 </template>
 
 <style scoped>
-.n8n-search-input:focus {
-  background: #ffffff;
-  box-shadow: 0 4px 20px -2px rgba(99, 102, 241, 0.08);
-}
-
 .n8n-node-item { cursor: grab; }
 .n8n-node-item:active { cursor: grabbing; }
 
@@ -162,14 +156,14 @@ const onDragStart = (event: DragEvent, node: any) => {
 }
 
 .n8n-node-item.is-connectable .n8n-node-item-inner { 
-  background: rgba(99, 102, 241, 0.02); 
-  border: 1.5px dashed rgba(99, 102, 241, 0.15); 
+  background: rgba(30, 41, 59, 0.02); 
+  border: 1.5px dashed rgba(30, 41, 59, 0.15); 
   cursor: pointer; 
 }
 
 .n8n-node-item.is-connectable:hover .n8n-node-item-inner { 
-  background: rgba(99, 102, 241, 0.05); 
-  border-color: rgba(99, 102, 241, 0.4); 
+  background: rgba(30, 41, 59, 0.05); 
+  border-color: rgba(30, 41, 59, 0.4); 
   border-style: solid;
 }
 
