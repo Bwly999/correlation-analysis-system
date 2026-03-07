@@ -13,6 +13,7 @@ export interface WorkflowNode extends Node {
     output?: any 
     manualInput?: any 
     useManualInput?: boolean 
+    isPinned?: boolean
     logs: string[]
   }
 }
@@ -123,7 +124,8 @@ export const useWorkflowStore = defineStore('workflow', () => {
         config: defaultConfig, 
         logs: [],
         useManualInput: false,
-        manualInput: ''
+        manualInput: '',
+        isPinned: false
       },
     }
     nodes.value.push(newNode)
@@ -165,6 +167,13 @@ export const useWorkflowStore = defineStore('workflow', () => {
 
     try {
       if (isStopping.value) throw new Error('User Aborted')
+
+      // Pin 逻辑：如果节点被冻结且有输出，直接返回
+      if (node.data.isPinned && node.data.output) {
+        addLog(`节点 ${node.data.label} 已冻结，使用历史输出数据`, 'info', nodeId)
+        node.data.status = 'success'
+        return node.data.output
+      }
 
       const definition = getNodeDefinition(node.data.type)
       if (!definition) {

@@ -140,4 +140,27 @@ describe('Workflow Store', () => {
     expect(store.executionHistory[0].status).toBe('success')
     expect(store.executionHistory[0].workflowName).toBe('未命名工作流')
   })
+
+  it('should skip execution and return cached output when node is pinned', async () => {
+    const store = useWorkflowStore()
+    const node = store.addAndConnectNode('file-import', 'Trigger', { x: 0, y: 0 })!
+    
+    // 1. 第一次运行获取结果
+    node.data.config.fileData = new File(['col,val\na,1'], 'test1.csv')
+    const firstResult = await store.executeNode(node.id, true)
+    const firstOutput = JSON.parse(JSON.stringify(firstResult)) // 深拷贝一份
+
+    // 2. 开启 Pin
+    node.data.isPinned = true
+    
+    // 3. 改变输入数据（理论上如果重新运行，结果会变）
+    node.data.config.fileData = new File(['col,val\nb,2'], 'test2.csv')
+    
+    // 4. 再次强制运行
+    const secondResult = await store.executeNode(node.id, true)
+    
+    // 验证：即使强制运行且数据变了，输出依然是第一次的结果
+    expect(secondResult).toEqual(firstOutput)
+    expect(store.logs.some(l => l.message.includes('已冻结，使用历史输出数据'))).toBe(true)
+  })
 })

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { Database, Maximize, Zap, Edit3, FileJson } from 'lucide-vue-next'
+import { Database, Maximize, Zap, Edit3, FileJson, Pin } from 'lucide-vue-next'
 import ToggleSwitch from 'primevue/toggleswitch'
 import Textarea from 'primevue/textarea'
 
@@ -9,6 +9,7 @@ const props = defineProps<{
   data: any
   type: 'input' | 'output'
   allowMock?: boolean
+  isPinned?: boolean
 }>()
 
 const useManualInput = defineModel<boolean>('useManualInput')
@@ -32,6 +33,9 @@ const getSmartPreview = (data: any) => {
       <div class="flex items-center gap-2">
         <FileJson size="12" class="text-slate-400" />
         <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest">{{ title }}</span>
+        <div v-if="isPinned" class="flex items-center gap-1 px-1.5 py-0.5 bg-amber-100 border border-amber-200 rounded text-[9px] text-amber-600 font-bold ml-1 animate-pulse">
+           <Pin size="8" fill="currentColor" /> 冻结
+        </div>
       </div>
       <div class="flex items-center gap-3">
         <!-- 模拟开关 -->

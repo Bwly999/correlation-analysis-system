@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { 
-  X, Save, Play, Info, HelpCircle, FileType, LayoutGrid, List, Database, Clock, RefreshCw, ChevronDown, ChevronRight, Plus, Trash2, Settings, Zap, Bug
+  X, Save, Play, Info, HelpCircle, FileType, LayoutGrid, List, Database, Clock, RefreshCw, ChevronDown, ChevronRight, Plus, Trash2, Settings, Zap, Bug, Pin
 } from 'lucide-vue-next'
 import { useWorkflowStore, type WorkflowNode } from '@/stores/workflowStore'
 import { getNodeDefinition } from '@/nodes/registry'
@@ -35,6 +35,7 @@ const node = computed(() => store.nodes.find(n => n.id === props.nodeId) || null
 const config = ref<any>({})
 const activeTab = ref('parameters')
 const editedName = ref('')
+const localIsPinned = ref(false)
 const localUseManualInput = ref(false)
 const localManualInput = ref('')
 const isDragging = ref<Record<string, boolean>>({})
@@ -53,6 +54,7 @@ const staticProperties = computed(() => nodeDefinition.value?.properties.filter(
 watch(() => node.value, (newNode) => {
   if (newNode) {
     editedName.value = newNode.data.label
+    localIsPinned.value = newNode.data.isPinned || false
     localUseManualInput.value = newNode.data.useManualInput || false
     localManualInput.value = newNode.data.manualInput || ''
     const baseConfig = { ...newNode.data.config }
@@ -64,6 +66,7 @@ watch(() => node.value, (newNode) => {
 }, { immediate: true })
 
 // 同步回 Store (实时同步)
+watch(localIsPinned, (val) => { if (node.value) node.value.data.isPinned = val })
 watch(localUseManualInput, (val) => { if (node.value) node.value.data.useManualInput = val })
 watch(localManualInput, (val) => { if (node.value) node.value.data.manualInput = val })
 
@@ -148,7 +151,14 @@ const saveAndClose = () => {
             <span class="text-[10px] uppercase font-bold text-slate-400 px-2 tracking-widest">{{ node?.data.type }}</span>
           </div>
         </div>
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-4">
+          <div class="flex items-center gap-2 px-3 py-1.5 bg-slate-100 rounded-lg border border-slate-200" v-tooltip.bottom="'开启后，该节点在运行流程时将跳过计算，直接使用上次生成的输出数据'">
+             <Pin size="14" :class="localIsPinned ? 'text-amber-500' : 'text-slate-400'" :fill="localIsPinned ? 'currentColor' : 'none'" />
+             <span class="text-[11px] font-bold uppercase tracking-wider" :class="localIsPinned ? 'text-amber-600' : 'text-slate-500'">
+               {{ localIsPinned ? '数据已冻结' : '冻结数据' }}
+             </span>
+             <ToggleSwitch v-model="localIsPinned" class="scale-75 origin-right" />
+          </div>
           <Button severity="secondary" text @click="emit('close')"><X size="20"/></Button>
         </div>
       </div>
@@ -275,6 +285,7 @@ const saveAndClose = () => {
              title="节点输出 (OUTPUT)"
              :data="node?.data.output"
              type="output"
+             :is-pinned="node?.data.isPinned"
              @open-detail="openAnalysis('输出数据', node?.data.output)"
            />
         </div>

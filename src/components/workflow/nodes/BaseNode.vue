@@ -2,7 +2,7 @@
 import { ref, computed, nextTick } from 'vue'
 import { Handle, Position, type NodeProps } from '@vue-flow/core'
 import { NodeToolbar } from '@vue-flow/node-toolbar'
-import { Play, Bug, Settings, CheckCircle, AlertTriangle, Loader2, Plus, Trash2, Pencil } from 'lucide-vue-next'
+import { Play, Bug, Settings, CheckCircle, AlertTriangle, Loader2, Plus, Trash2, Pencil, Pin, PinOff } from 'lucide-vue-next'
 import { useWorkflowStore } from '@/stores/workflowStore'
 import NodeIcon from './NodeIcon.vue'
 
@@ -22,6 +22,11 @@ const currentLabel = computed(() => {
   return nodeInStore?.data.label || props.data.label
 })
 
+const isPinned = computed(() => {
+  const nodeInStore = store.nodes.find(n => n.id === props.id)
+  return nodeInStore?.data.isPinned || false
+})
+
 const onMouseEnter = () => {
   if (hoverTimeout) clearTimeout(hoverTimeout)
   isHovered.value = true
@@ -31,6 +36,18 @@ const onMouseLeave = () => {
   hoverTimeout = setTimeout(() => {
     isHovered.value = false
   }, 150)
+}
+
+const togglePin = () => {
+  const nodeInStore = store.nodes.find(n => n.id === props.id)
+  if (nodeInStore) {
+    nodeInStore.data.isPinned = !nodeInStore.data.isPinned
+    store.addLog(
+      `节点 ${currentLabel.value} 数据已${nodeInStore.data.isPinned ? '冻结 (Pin)' : '解除冻结'}`, 
+      nodeInStore.data.isPinned ? 'warn' : 'info', 
+      props.id
+    )
+  }
 }
 
 const startEditing = async () => {
@@ -109,6 +126,12 @@ const nodeShape = computed(() => {
          <div class="absolute inset-[2px] bg-white rounded-[inherit]"></div>
       </div>
       <NodeIcon :type="props.data.type" :size="80" class="bg-transparent" />
+      
+      <!-- Pin 状态图标 -->
+      <div v-if="isPinned" class="absolute -top-2 -right-2 bg-amber-500 text-white rounded-full p-1 shadow-md z-20 border-2 border-white">
+        <Pin size="14" fill="currentColor" />
+      </div>
+
       <div v-if="props.data.status !== 'idle'" class="absolute -bottom-2 -right-2 bg-white rounded-full p-1 shadow-md z-20">
         <Loader2 v-if="props.data.status === 'running'" size="22" class="text-indigo-600 animate-spin" />
         <CheckCircle v-else-if="props.data.status === 'success'" size="22" class="text-emerald-500" />
@@ -169,6 +192,15 @@ const nodeShape = computed(() => {
     >
       <button v-tooltip.top="'调试运行'" class="p-1.5 hover:bg-slate-100 rounded text-indigo-600" @click.stop="runNode(true)">
         <Play size="14" fill="currentColor" />
+      </button>
+      <button 
+        v-tooltip.top="isPinned ? '取消冻结数据' : '冻结当前数据 (Pin)'" 
+        class="p-1.5 hover:bg-slate-100 rounded transition-colors" 
+        :class="isPinned ? 'text-amber-600' : 'text-slate-400'"
+        @click.stop="togglePin"
+      >
+        <Pin v-if="!isPinned" size="14" />
+        <PinOff v-else size="14" />
       </button>
       <div class="w-[1px] h-4 bg-slate-200 self-center mx-0.5"></div>
       <button v-tooltip.top="'重命名'" class="p-1.5 hover:bg-slate-100 rounded text-slate-600" @click.stop="startEditing">
