@@ -268,8 +268,16 @@ onMounted(() => {
       </div>
     </footer>
 
-    <!-- 工作流管理弹窗 -->
-    <Dialog v-model:visible="isWorkflowListVisible" modal header="工作流管理中心" :style="{ width: '640px' }" class="n8n-modern-dialog" :closable="store.nodes.length > 0">
+    <!-- 工作流管理弹窗 (SaaS Style) -->
+    <Dialog v-model:visible="isWorkflowListVisible" modal :style="{ width: '640px' }" class="n8n-modern-dialog" :closable="store.nodes.length > 0">
+        <template #header>
+            <div class="flex items-center gap-3">
+                <div class="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
+                    <History size="20" stroke-width="2.5" />
+                </div>
+                <span class="font-bold text-[16px] text-slate-800 tracking-tight">工作流管理中心</span>
+            </div>
+        </template>
         <div class="py-2">
             <Tabs v-model:value="activeTab">
                 <TabList>
