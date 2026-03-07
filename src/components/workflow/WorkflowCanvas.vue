@@ -299,6 +299,10 @@ onMounted(() => {
                         </div>
                     </TabPanel>
                     <TabPanel value="1">
+                        <div class="flex items-center justify-between px-2 pb-2 border-b border-slate-100">
+                           <span class="text-[11px] font-bold text-slate-500">保留最近 20 条记录</span>
+                           <Button v-if="store.executionHistory.length > 0" @click="store.clearHistory()" label="清空历史" size="small" severity="danger" text class="text-xs py-1 px-2 h-auto" />
+                        </div>
                         <div class="flex flex-col gap-3 py-4 max-h-[400px] overflow-y-auto custom-scrollbar px-1">
                             <div v-if="store.executionHistory.length === 0" class="text-center py-20 text-[#a3acb9] italic">
                                 <History size="48" class="mx-auto mb-4 opacity-10" /> 暂无执行历史记录。
@@ -325,7 +329,7 @@ onMounted(() => {
         </div>
     </Dialog>
 
-    <NodeConfigModal :visible="isConfigVisible" :node="selectedNode" @close="isConfigVisible = false" />
+    <NodeConfigModal :visible="isConfigVisible" :nodeId="store.activeConfigNodeId" @close="isConfigVisible = false" />
     <RuntimeInputModal :visible="!!store.pendingExecution" :node="store.nodes.find(n => n.id === store.pendingExecution?.nodeId) || null" @close="store.pendingExecution = null" @confirm="resumeExecution" />
     <DataAnalysisModal :visible="analysisModal.visible" :title="analysisModal.title" :data="analysisModal.data" @close="analysisModal.visible = false" />
   </div>

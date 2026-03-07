@@ -21,33 +21,40 @@ import DatePicker from 'primevue/datepicker'
 import Tree from 'primevue/tree'
 
 const props = defineProps<{
-  node: WorkflowNode | null
+  nodeId: string | null
   visible: boolean
 }>()
 
 const emit = defineEmits(['close'])
 const store = useWorkflowStore()
 
+// 直接从 Store 中获取响应式节点对象，确保修改立即可见
+const node = computed(() => store.nodes.find(n => n.id === props.nodeId) || null)
+
 // 状态管理
 const config = ref<any>({})
 const activeTab = ref('parameters')
 const editedName = ref('')
+const localUseManualInput = ref(false)
+const localManualInput = ref('')
 const isDragging = ref<Record<string, boolean>>({})
 
 // 深度分析弹窗状态
 const analysisModal = ref({ visible: false, title: '', data: null })
 
 // 获取当前节点的定义
-const nodeDefinition = computed(() => props.node ? getNodeDefinition(props.node.data.type) : null)
+const nodeDefinition = computed(() => node.value ? getNodeDefinition(node.value.data.type) : null)
 
 // 区分静态参数和运行时输入
 const runtimeProperties = computed(() => nodeDefinition.value?.properties.filter(p => p.isRuntimeInput) || [])
 const staticProperties = computed(() => nodeDefinition.value?.properties.filter(p => !p.isRuntimeInput) || [])
 
 // 同步初始数据
-watch(() => props.node, (newNode) => {
+watch(() => node.value, (newNode) => {
   if (newNode) {
     editedName.value = newNode.data.label
+    localUseManualInput.value = newNode.data.useManualInput || false
+    localManualInput.value = newNode.data.manualInput || ''
     const baseConfig = { ...newNode.data.config }
     nodeDefinition.value?.properties.forEach(p => {
       if (baseConfig[p.name] === undefined) baseConfig[p.name] = p.default
@@ -56,22 +63,28 @@ watch(() => props.node, (newNode) => {
   }
 }, { immediate: true })
 
+// 同步回 Store (实时同步)
+watch(localUseManualInput, (val) => { if (node.value) node.value.data.useManualInput = val })
+watch(localManualInput, (val) => { if (node.value) node.value.data.manualInput = val })
+
 const inputData = computed(() => {
-  if (!props.node) return null
-  const incomingEdges = store.edges.filter(e => e.target === props.node?.id)
+  if (!node.value) return null
+  const incomingEdges = store.edges.filter(e => e.target === node.value?.id)
   return incomingEdges.length > 0 ? store.nodes.find(n => n.id === incomingEdges[0].source)?.data.output : null
 })
 
 // 提取上游因子
 const upstreamFactors = computed(() => {
-  let data = props.node?.data.useManualInput ? props.node.data.manualInput : inputData.value
+  let data = localUseManualInput.value ? localManualInput.value : inputData.value
   if (!data) return []
+  if (typeof data === 'string') {
+    try { data = JSON.parse(data) } catch(e) { return [] }
+  }
   if (data.data && Array.isArray(data.data)) data = data.data[0]
   else if (Array.isArray(data)) data = data[0]
   return (data && typeof data === 'object') ? Object.keys(data).map(key => ({ name: key, value: key })) : []
 })
 
-// 集合处理
 const addCollectionItem = (parent: any, propName: string, subProps: any[]) => {
   if (!parent[propName]) parent[propName] = []
   const newItem: any = {}
@@ -83,7 +96,6 @@ const removeCollectionItem = (parent: any, propName: string, index: number) => {
   parent[propName].splice(index, 1)
 }
 
-// 文件处理
 const onFileSelect = (event: any, propName: string) => {
   const file = event.target.files[0]
   if (file) {
@@ -98,17 +110,21 @@ const openAnalysis = (title: string, data: any) => {
 }
 
 const runCurrentNode = async () => {
-  if (props.node) {
-    props.node.data.config = { ...config.value }
-    props.node.data.useManualInput = props.node.data.useManualInput // Ensure synced
-    await store.executeNode(props.node.id, true)
+  if (node.value) {
+    node.value.data.config = { ...config.value }
+    node.value.data.label = editedName.value
+    node.value.data.useManualInput = localUseManualInput.value
+    node.value.data.manualInput = localManualInput.value
+    await store.executeNode(node.value.id, true)
   }
 }
 
 const saveAndClose = () => {
-  if (props.node) {
-    props.node.data.label = editedName.value
-    props.node.data.config = { ...config.value }
+  if (node.value) {
+    node.value.data.label = editedName.value
+    node.value.data.config = { ...config.value }
+    node.value.data.useManualInput = localUseManualInput.value
+    node.value.data.manualInput = localManualInput.value
   }
   emit('close')
 }
@@ -139,24 +155,20 @@ const saveAndClose = () => {
     </template>
 
     <div class="ndv-body grid grid-cols-12 h-full bg-white border-t -mx-6 -mb-6 overflow-hidden">
-      
-      <!-- COLUMN 1: DYNAMIC INPUTS & RUNTIME CONFIG (Grey Background) -->
       <div class="col-span-3 bg-[#f1f5f9] border-r flex flex-col overflow-hidden">
-        <!-- Input Display Panel -->
         <div class="flex-[3] min-h-0 p-4 pb-2">
            <DataDisplayPanel 
              title="输入数据 (INPUT)"
              :data="inputData"
              type="input"
              allow-mock
-             v-model:use-manual-input="node!.data.useManualInput"
-             v-model:manual-input-str="node!.data.manualInput"
-             @open-detail="openAnalysis('输入数据', node!.data.useManualInput ? node!.data.manualInput : inputData)"
-             @generate-mock="() => { node!.data.manualInput = JSON.stringify({data:[{f1:10,f2:20,target:1}]}, null, 2) }"
+             v-model:useManualInput="localUseManualInput"
+             v-model:manualInputStr="localManualInput"
+             @open-detail="openAnalysis('输入数据', localUseManualInput ? localManualInput : inputData)"
+             @generate-mock="() => { localManualInput = JSON.stringify({data:[{f1:10,f2:20,target:1}]}, null, 2) }"
            />
         </div>
 
-        <!-- Runtime Configuration -->
         <div class="flex-[2] min-h-0 flex flex-col border-t border-slate-200 bg-[#f1f5f9] overflow-hidden">
            <div class="px-4 py-3 flex items-center justify-between">
               <span class="text-[10px] font-black text-slate-500 uppercase tracking-[0.1em] flex items-center gap-2">
@@ -168,7 +180,7 @@ const saveAndClose = () => {
                  无需额外输入参数
               </div>
               <div v-else class="space-y-6">
-                 <div v-for="prop in runtimeProperties" :key="prop.name" class="flex flex-col gap-2">
+                 <div v-for="prop in runtimeProperties" :key="prop.name" v-show="!prop.displayIf || prop.displayIf(config)" class="flex flex-col gap-2">
                     <label class="text-[11px] font-bold text-slate-500 uppercase">{{ prop.displayName }}</label>
                     <div v-if="prop.type === 'file'" class="space-y-2">
                        <label 
@@ -189,15 +201,12 @@ const saveAndClose = () => {
         </div>
       </div>
 
-      <!-- COLUMN 2: PARAMETERS (Pure White Background) -->
       <div class="col-span-6 flex flex-col bg-white border-r relative">
-        <!-- Parameters Header -->
         <div class="flex items-center justify-between border-b px-4 bg-white sticky top-0 z-10">
           <div class="flex">
             <button @click="activeTab = 'parameters'" :class="['px-8 py-4 text-xs font-bold uppercase border-b-2 transition-all', activeTab === 'parameters' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400']">参数设置</button>
             <button @click="activeTab = 'settings'" :class="['px-6 py-4 text-xs font-bold uppercase border-b-2 transition-all', activeTab === 'settings' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400']">系统选项</button>
           </div>
-          
           <Button 
             @click="runCurrentNode"
             class="n8n-debug-btn h-9 px-5 rounded-lg border-none shadow-sm hover:shadow-md active:scale-95 transition-all flex items-center gap-2"
@@ -210,7 +219,7 @@ const saveAndClose = () => {
 
         <div class="flex-1 p-8 overflow-y-auto custom-scrollbar bg-white">
           <div v-if="activeTab === 'parameters'" class="space-y-10 max-w-2xl mx-auto py-4">
-            <div v-for="prop in staticProperties" :key="prop.name" class="flex flex-col gap-3">
+            <div v-for="prop in staticProperties" :key="prop.name" v-show="!prop.displayIf || prop.displayIf(config)" class="flex flex-col gap-3">
               <label class="ndv-label">{{ prop.displayName }} <HelpCircle v-if="prop.description" size="12" class="text-slate-300 ml-1" /></label>
               
               <div v-if="prop.type === 'collection'" class="space-y-6">
@@ -222,8 +231,6 @@ const saveAndClose = () => {
                     <div class="space-y-6">
                        <div v-for="subProp in prop.properties" :key="subProp.name" class="flex flex-col gap-2">
                           <span class="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">{{ subProp.displayName }}</span>
-                          
-                          <!-- 嵌套集合 (Nested Collection) -->
                           <div v-if="subProp.type === 'collection'" class="p-4 bg-white rounded-xl space-y-3 border border-slate-100">
                              <div v-for="(subItem, subIdx) in item[subProp.name]" :key="subIdx" class="flex items-center gap-3 p-2 bg-slate-50/50 rounded-lg">
                                 <div class="flex-1 grid grid-cols-12 gap-2">
@@ -238,8 +245,6 @@ const saveAndClose = () => {
                              </div>
                              <Button @click="addCollectionItem(item, subProp.name, subProp.properties || [])" :label="`添加 ${subProp.displayName}`" icon="pi pi-plus" size="small" text class="w-full text-[10px] font-bold" />
                           </div>
-                          
-                          <!-- 普通子属性 -->
                           <Select v-else-if="subProp.type === 'options' && subProp.name === 'factorName'" v-model="item[subProp.name]" :options="upstreamFactors" optionLabel="name" optionValue="value" placeholder="选择因子" class="w-full text-xs ndv-input" />
                           <Select v-else-if="subProp.type === 'options'" v-model="item[subProp.name]" :options="subProp.options" optionLabel="name" optionValue="value" class="w-full text-xs ndv-input" />
                           <MultiSelect v-else-if="subProp.type === 'multi-options'" v-model="item[subProp.name]" :options="upstreamFactors" optionLabel="name" optionValue="value" display="chip" class="w-full text-xs ndv-input" />
@@ -264,7 +269,6 @@ const saveAndClose = () => {
         </div>
       </div>
 
-      <!-- COLUMN 3: OUTPUT DATA (Grey Background) -->
       <div class="col-span-3 bg-[#f1f5f9] flex flex-col overflow-hidden">
         <div class="flex-1 p-4 flex flex-col">
            <DataDisplayPanel 
@@ -277,7 +281,6 @@ const saveAndClose = () => {
       </div>
     </div>
 
-    <!-- 深度分析弹窗 -->
     <DataAnalysisModal 
       :visible="analysisModal.visible"
       :title="analysisModal.title"
@@ -288,31 +291,14 @@ const saveAndClose = () => {
 </template>
 
 <style scoped>
-.ndv-title-input { 
-  background: transparent; 
-  border: 1px solid transparent; 
-  box-shadow: none !important;
-  outline: none !important;
-}
-.ndv-title-input:hover {
-  border-color: #e2e8f0;
-}
-.ndv-title-input:focus {
-  border-color: #6366f1;
-  background: white;
-}
-
+.ndv-title-input { background: transparent; border: 1px solid transparent; box-shadow: none !important; outline: none !important; }
+.ndv-title-input:hover { border-color: #e2e8f0; }
+.ndv-title-input:focus { border-color: #6366f1; background: white; }
 .ndv-label { font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; }
 .ndv-input { border-color: #e2e8f0 !important; background-color: #ffffff !important; border-radius: 8px !important; }
 .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
 .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
 .ndv-tree { background: transparent !important; border: none !important; font-size: 12px; }
-
-.n8n-debug-btn {
-  background: #ff6d5a !important; /* n8n standard orange */
-}
-.n8n-debug-btn:hover {
-  background: #ff523d !important;
-}
+.n8n-debug-btn { background: #ff6d5a !important; }
+.n8n-debug-btn:hover { background: #ff523d !important; }
 </style>

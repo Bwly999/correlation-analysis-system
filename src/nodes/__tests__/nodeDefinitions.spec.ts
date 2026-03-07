@@ -3,8 +3,16 @@ import { fileImportNode } from '../definitions/fileImport'
 import { dataCleaningNode } from '../definitions/dataCleaning'
 import { dataAggregationNode } from '../definitions/dataAggregation'
 import { xgboostShapNode } from '../definitions/xgboostShap'
+import { neighborSystemNode } from '../definitions/neighborSystem'
+import { chartDisplayNode } from '../definitions/chartDisplay'
+import { dataExportNode } from '../definitions/dataExport'
+import { lassoNode } from '../definitions/lasso'
+import { pearsonNode } from '../definitions/pearson'
 import * as fs from 'fs'
 import * as path from 'path'
+
+// Mock URL for data-export
+global.URL.createObjectURL = vi.fn(() => 'blob:mock-url')
 
 describe('Node Definitions Execution Logic', () => {
   
@@ -89,6 +97,26 @@ describe('Node Definitions Execution Logic', () => {
       expect(result.report).toBeDefined()
       expect(result.report.title).toContain('Xgboost')
     })
+
+    it('should simulate lasso result', async () => {
+      const input = { data: [{ target: 1, f1: 2 }] }
+      const config = { targetLabel: 'target' }
+      
+      const result = await lassoNode.execute(input, config)
+      
+      expect(result.viewType).toBe('report')
+      expect(result.report.title).toBe('Lasso 回归分析')
+    })
+
+    it('should simulate pearson result', async () => {
+      const input = { data: [{ target: 1, f1: 2 }] }
+      const config = { targetLabel: 'target' }
+      
+      const result = await pearsonNode.execute(input, config)
+      
+      expect(result.viewType).toBe('report')
+      expect(result.report.title).toBe('Pearson 相关系数矩阵分析')
+    })
   })
 
   describe('neighbor-system', () => {
@@ -106,4 +134,50 @@ describe('Node Definitions Execution Logic', () => {
       expect(result.factors).toContain('f_temp')
     })
   })
+
+  describe('chart-display', () => {
+    it('should generate scatter chart option', async () => {
+      const input = { data: [{ x: 1, y: 2 }, { x: 3, y: 4 }] }
+      const config = { chartType: 'scatter', xAxis: 'x', yAxis: 'y' }
+      
+      const result = await chartDisplayNode.execute(input, config)
+      
+      expect(result.viewType).toBe('chart')
+      expect(result.chartOption.series[0].type).toBe('scatter')
+    })
+
+    it('should generate bar chart option', async () => {
+      const input = { data: [{ x: 'A', y: 10 }, { x: 'B', y: 20 }] }
+      const config = { chartType: 'bar', xAxis: 'x', yAxis: 'y' }
+      
+      const result = await chartDisplayNode.execute(input, config)
+      
+      expect(result.viewType).toBe('chart')
+      expect(result.chartOption.series[0].type).toBe('bar')
+    })
+  })
+
+  describe('data-export', () => {
+    it('should generate export info for CSV', async () => {
+      const input = { data: [{ a: 1, b: 2 }] }
+      const config = { format: 'csv', filename: 'test_export' }
+      
+      const result = await dataExportNode.execute(input, config)
+      
+      expect(result.viewType).toBe('export')
+      expect(result.exportInfo.filename).toBe('test_export.csv')
+      expect(result.exportInfo.url).toBe('blob:mock-url')
+    })
+
+    it('should generate export info for JSON', async () => {
+      const input = { data: [{ a: 1, b: 2 }] }
+      const config = { format: 'json', filename: 'test_export' }
+      
+      const result = await dataExportNode.execute(input, config)
+      
+      expect(result.viewType).toBe('export')
+      expect(result.exportInfo.filename).toBe('test_export.json')
+    })
+  })
 })
+

@@ -23,7 +23,8 @@ export const neighborSystemNode: NodeDefinition = {
       displayName: '时间范围',
       type: 'datetime-range',
       isRuntimeInput: true,
-      description: '仅在模式为“按时间范围”时生效'
+      description: '仅在模式为“按时间范围”时生效',
+      displayIf: (config) => config.fetchMode === 'time'
     },
     {
       name: 'schemeId',
@@ -33,7 +34,8 @@ export const neighborSystemNode: NodeDefinition = {
       options: [
         { name: '方案 A (高精度)', value: 'sch_a' },
         { name: '方案 B (快速扫描)', value: 'sch_b' }
-      ]
+      ],
+      displayIf: (config) => config.fetchMode === 'scheme'
     },
     {
       name: 'snList',
@@ -41,7 +43,8 @@ export const neighborSystemNode: NodeDefinition = {
       type: 'string',
       default: '',
       placeholder: '请输入 SN，多个以逗号分隔',
-      description: '仅在模式为“按 SN 集合”时生效'
+      description: '仅在模式为“按 SN 集合”时生效',
+      displayIf: (config) => config.fetchMode === 'sn'
     },
     {
       name: 'selectedFactors',

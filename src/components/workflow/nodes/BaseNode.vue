@@ -16,6 +16,12 @@ const editedLabel = ref(props.data.label)
 const nameInputRef = ref<HTMLInputElement | null>(null)
 let hoverTimeout: any = null
 
+// 从 Store 获取最新的 Label 确保同步
+const currentLabel = computed(() => {
+  const nodeInStore = store.nodes.find(n => n.id === props.id)
+  return nodeInStore?.data.label || props.data.label
+})
+
 const onMouseEnter = () => {
   if (hoverTimeout) clearTimeout(hoverTimeout)
   isHovered.value = true
@@ -29,7 +35,7 @@ const onMouseLeave = () => {
 
 const startEditing = async () => {
   isEditingName.value = true
-  editedLabel.value = props.data.label
+  editedLabel.value = currentLabel.value
   await nextTick()
   nameInputRef.value?.focus()
   nameInputRef.value?.select()
@@ -40,12 +46,9 @@ const saveName = () => {
   isEditingName.value = false
   const newName = editedLabel.value.trim()
   if (newName) {
-    // 关键修复：查找到 store 中的对应节点并更新其 label，确保响应式同步到全局
     const nodeInStore = store.nodes.find(n => n.id === props.id)
     if (nodeInStore) {
       nodeInStore.data.label = newName
-      // 同时也同步 props 以维持当前节点的显示
-      props.data.label = newName 
       store.addLog(`节点重命名为: ${newName}`, 'info', props.id)
     }
   }
@@ -57,13 +60,13 @@ const runNode = (force: boolean) => {
 
 const openConfig = () => {
   store.activeConfigNodeId = props.id
-  store.addLog(`打开配置: ${props.data.label}`, 'info', props.id)
+  store.addLog(`打开配置: ${currentLabel.value}`, 'info', props.id)
 }
 
 const deleteNode = () => {
   store.nodes = store.nodes.filter(n => n.id !== props.id)
   store.edges = store.edges.filter(e => e.source !== props.id && e.target !== props.id)
-  store.addLog(`已删除节点: ${props.data.label}`, 'warn')
+  store.addLog(`已删除节点: ${currentLabel.value}`, 'warn')
 }
 
 const statusColors = computed(() => {
@@ -113,14 +116,14 @@ const nodeShape = computed(() => {
       </div>
     </div>
 
-    <!-- 自定义命名标题 (双击可编辑) -->
+    <!-- 自定义命名标题 -->
     <div class="absolute top-[100%] left-1/2 -translate-x-1/2 mt-4 w-[240px] flex flex-col items-center z-20 text-center font-sans">
       <div v-if="!isEditingName" 
         @dblclick.stop="startEditing"
         class="text-[15px] font-bold text-slate-800 leading-tight drop-shadow-sm truncate w-full cursor-text hover:text-indigo-600 transition-colors"
         title="双击重命名"
       >
-        {{ props.data.label }}
+        {{ currentLabel }}
       </div>
       <input 
         v-else
@@ -156,7 +159,7 @@ const nodeShape = computed(() => {
       </button>
     </div>
 
-    <!-- 悬浮工具栏 (类似 n8n) -->
+    <!-- 悬浮工具栏 -->
     <NodeToolbar 
       :is-visible="isHovered"
       class="flex gap-0.5 bg-white p-1 rounded-lg border shadow-xl z-30"

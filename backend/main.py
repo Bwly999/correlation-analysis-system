@@ -4,12 +4,11 @@ import pandas as pd
 import numpy as np
 import os
 import sys
-import json
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 
 # 添加当前目录到路径，以便导入算法工具
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from algorithm.robust_insight_tool import RobustAnalyzerTool
+from algorithm.robust_insight_tool import DataEngine, ModelCore, InsightEngine
 
 app = FastAPI(title="Correlation Analysis Backend")
 
@@ -42,33 +41,49 @@ async def analyze_xgboost_shap(
         if target not in df.columns:
             raise HTTPException(status_code=400, detail=f"Target column '{target}' not found in data")
             
-        # 实例化工具并运行分析
-        # 注意：为了让工具能处理 DataFrame 而不是文件，我们可能需要对 tool.run_analysis 做些微调
-        # 或者直接在 FastAPI 中调用工具的内部逻辑
+        # 使用算法工具内部的核心层来进行计算
         
-        # 暂时模拟返回结果，后续根据需要调用真实的 RobustAnalyzerTool 内部类
-        # 为了演示对接，我们先返回一个结构化的结果
+        # 1. 数据处理
+        engine = DataEngine(target_col=target)
+        df_clean = engine.load_data(df)
+        X, y = engine.get_X_y(df_clean)
         
-        # 这里可以使用 RobustAnalyzerTool 的逻辑
-        analyzer = RobustAnalyzerTool()
+        if len(X) < 10:
+             raise HTTPException(status_code=400, detail="有效数据过少，无法训练模型")
+
+        # 2. 训练模型
+        model_core = ModelCore()
+        model_core.train(X, y, metric='r2')
         
-        # 模拟执行 (因为 run_analysis 默认写文件，我们可能需要捕获其输出或修改它)
-        # 建议在实际对接时，将工具类的方法重构为返回数据对象而非仅生成图表
+        # 3. 计算 SHAP
+        insight_engine = InsightEngine(model_core.model, X)
+        X_sample, y_sample, shap_values = insight_engine.compute(y)
+        
+        # 提取 SHAP 重要性 (Mean Absolute SHAP Value)
+        # shap_values.values shape: (n_samples, n_features)
+        mean_abs_shap = np.abs(shap_values.values).mean(axis=0)
+        feature_names = X_sample.columns.tolist()
+        
+        importance_list = [
+            {"name": name, "value": float(val)} 
+            for name, val in zip(feature_names, mean_abs_shap)
+        ]
+        
+        # 排序
+        importance_list.sort(key=lambda x: x["value"], reverse=True)
         
         return {
             "status": "success",
             "results": {
-                "r2": 0.85,
-                "mae": 1.12,
-                "importance": [
-                    {"name": "因子A", "value": 0.85},
-                    {"name": "因子B", "value": 0.62},
-                    {"name": "因子C", "value": 0.45}
-                ],
+                "r2": round(model_core.r2_score, 4),
+                "mae": round(model_core.mae, 4),
+                "importance": importance_list,
                 "message": "分析完成"
             }
         }
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":

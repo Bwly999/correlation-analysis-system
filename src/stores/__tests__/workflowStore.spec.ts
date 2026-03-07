@@ -87,14 +87,52 @@ describe('Workflow Store', () => {
     expect(store.workflowName).toBe('Test Workflow')
   })
 
+  it('should stop execution when stopExecution is called', async () => {
+    const store = useWorkflowStore()
+    const node = store.addAndConnectNode('file-import', 'Trigger', { x: 0, y: 0 })!
+    node.data.config.fileData = new File(['a,b\n1,2'], 'test.csv')
+    
+    // Start execution
+    const execPromise = store.executeNode(node.id, true)
+    
+    // Immediately stop
+    store.stopExecution()
+    
+    const result = await execPromise
+    expect(result).toBe('STOPPED')
+    expect(node.data.status).toBe('idle')
+  })
+
+  it('should return WAIT_INPUT if trigger node lacks runtime input', async () => {
+    const store = useWorkflowStore()
+    // neighbor-system has runtime input (timeRange etc) if not provided? 
+    // Wait, let's check file-import, it has fileData as runtime input
+    const node = store.addAndConnectNode('file-import', 'Trigger', { x: 0, y: 0 })!
+    // No fileData provided
+    
+    const result = await store.executeNode(node.id)
+    
+    expect(result).toBe('WAIT_INPUT')
+    expect(store.isRunning).toBe(false)
+    expect(store.pendingExecution?.nodeId).toBe(node.id)
+  })
+
   it('should record execution history after a global run', async () => {
     const store = useWorkflowStore()
-    store.addAndConnectNode('file-import', 'Trigger', { x: 0, y: 0 })!
-    const model = store.addAndConnectNode('xgboost-shap', 'Model', { x: 300, y: 0 })!
+    const triggerNode = store.addAndConnectNode('file-import', 'Trigger', { x: 0, y: 0 })!
+    const modelNode = store.addAndConnectNode('xgboost-shap', 'Model', { x: 300, y: 0 })!
+    
+    // 手动连接节点以确保执行链完整
+    store.edges.push({
+      id: 'e_trigger_model',
+      source: triggerNode.id,
+      target: modelNode.id,
+      type: 'n8n',
+      animated: true
+    })
     
     // Mock the file input to allow execution
-    const trigger = store.nodes.find(n => n.data.type === 'file-import')!
-    trigger.data.config.fileData = new File(['a,b\n1,2'], 'test.csv')
+    triggerNode.data.config.fileData = new File(['a,b\n1,2'], 'test.csv')
     
     await store.runGlobal()
     

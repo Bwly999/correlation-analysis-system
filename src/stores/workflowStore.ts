@@ -114,14 +114,16 @@ export const useWorkflowStore = defineStore('workflow', () => {
       if (p.default !== undefined) defaultConfig[p.name] = p.default
     })
     const newNode: WorkflowNode = {
-      id: `node_${Date.now()}`,
+      id: `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       type: 'custom',
       position,
       label,
       data: { 
         label, type, category, status: 'idle', 
         config: defaultConfig, 
-        logs: []
+        logs: [],
+        useManualInput: false,
+        manualInput: ''
       },
     }
     nodes.value.push(newNode)
@@ -155,6 +157,12 @@ export const useWorkflowStore = defineStore('workflow', () => {
     const node = nodes.value.find(n => n.id === nodeId)
     if (!node) return
 
+    const wasRunning = isRunning.value
+    if (!wasRunning) {
+      isRunning.value = true
+      isStopping.value = false
+    }
+
     try {
       if (isStopping.value) throw new Error('User Aborted')
 
@@ -176,9 +184,20 @@ export const useWorkflowStore = defineStore('workflow', () => {
         }
       }
 
-      if (node.data.useManualInput && node.data.manualInput && !forceUpdate) {
+      if (node.data.useManualInput) {
         addLog(`节点 ${node.data.label} 使用手动模拟输入运行`, 'info', nodeId)
-        const result = await definition.execute(node.data.manualInput, node.data.config)
+        let parsedInput = node.data.manualInput
+        console.log('Original manualInput:', parsedInput);
+        if (typeof parsedInput === 'string' && parsedInput.trim()) {
+          try {
+            parsedInput = JSON.parse(parsedInput)
+          } catch (e) {
+            console.error('JSON Parse Error:', e);
+            throw new Error('手动输入 JSON 格式错误')
+          }
+        }
+        console.log('Parsed manualInput:', parsedInput);
+        const result = await definition.execute(parsedInput, node.data.config)
         node.data.output = markRaw(result)
         node.data.status = 'success'
         return result
@@ -214,6 +233,8 @@ export const useWorkflowStore = defineStore('workflow', () => {
         throw error
       }
       return 'STOPPED'
+    } finally {
+      if (!wasRunning) isRunning.value = false
     }
   }
 
@@ -268,7 +289,14 @@ export const useWorkflowStore = defineStore('workflow', () => {
         startTime,
         duration,
         status: finalStatus,
-        nodes: JSON.parse(JSON.stringify(nodes.value)),
+        nodes: nodes.value.map(n => {
+          const snapshot = JSON.parse(JSON.stringify(n))
+          if (snapshot.data?.output?.data && Array.isArray(snapshot.data.output.data) && snapshot.data.output.data.length > 5) {
+            snapshot.data.output.data = snapshot.data.output.data.slice(0, 5)
+            snapshot.data.output._truncated = true
+          }
+          return snapshot
+        }),
         edges: JSON.parse(JSON.stringify(edges.value))
       }
       saveExecution(record)
@@ -278,13 +306,23 @@ export const useWorkflowStore = defineStore('workflow', () => {
   const saveExecution = (record: ExecutionRecord) => {
     const history = JSON.parse(localStorage.getItem('execution_history') || '[]')
     history.unshift(record)
-    const limitedHistory = history.slice(0, 50)
-    localStorage.setItem('execution_history', JSON.stringify(limitedHistory))
-    executionHistory.value = limitedHistory
+    const limitedHistory = history.slice(0, 20)
+    try {
+      localStorage.setItem('execution_history', JSON.stringify(limitedHistory))
+      executionHistory.value = limitedHistory
+    } catch (e) {
+      addLog('保存历史记录失败：存储空间不足', 'error')
+    }
   }
 
   const loadHistory = () => {
     executionHistory.value = JSON.parse(localStorage.getItem('execution_history') || '[]')
+  }
+
+  const clearHistory = () => {
+    localStorage.removeItem('execution_history')
+    executionHistory.value = []
+    addLog('运行历史记录已清空', 'info')
   }
 
   const saveWorkflow = (name?: string) => {
@@ -340,6 +378,6 @@ export const useWorkflowStore = defineStore('workflow', () => {
     pendingConnection, activeConfigNodeId, pendingExecution, lastExecutedTerminalNodeId,
     executionHistory,
     addLog, stopExecution, getCategoryByType, validateConnection, addAndConnectNode, executeNode, runGlobal,
-    saveWorkflow, loadWorkflow, exportWorkflow, importWorkflow, loadHistory
+    saveWorkflow, loadWorkflow, exportWorkflow, importWorkflow, loadHistory, clearHistory
   }
 })

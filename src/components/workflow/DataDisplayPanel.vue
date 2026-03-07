@@ -9,11 +9,12 @@ const props = defineProps<{
   data: any
   type: 'input' | 'output'
   allowMock?: boolean
-  useManualInput?: boolean
-  manualInputStr?: string
 }>()
 
-const emit = defineEmits(['update:useManualInput', 'update:manualInputStr', 'openDetail', 'generateMock'])
+const useManualInput = defineModel<boolean>('useManualInput')
+const manualInputStr = defineModel<string>('manualInputStr')
+
+const emit = defineEmits(['openDetail', 'generateMock'])
 
 const getSmartPreview = (data: any) => {
   if (!data) return "暂无数据可用。"
@@ -36,7 +37,7 @@ const getSmartPreview = (data: any) => {
         <!-- 模拟开关 -->
         <div v-if="allowMock" class="flex items-center gap-2 border-r border-slate-200 pr-3 mr-1">
            <span class="text-[9px] font-bold text-slate-400 uppercase">模拟输入</span>
-           <ToggleSwitch :modelValue="useManualInput" @update:modelValue="emit('update:useManualInput', $event)" class="!scale-[0.6]" />
+           <ToggleSwitch v-model="useManualInput" class="!scale-[0.6]" />
         </div>
         <button @click="emit('openDetail')" class="p-1.5 hover:bg-slate-200 rounded-lg transition-all text-slate-400 hover:text-slate-600" title="打开深度分析窗口">
           <Maximize size="12" />
@@ -54,8 +55,7 @@ const getSmartPreview = (data: any) => {
       <!-- 编辑模式 -->
       <div v-else class="h-full flex flex-col p-2">
         <Textarea 
-          :modelValue="manualInputStr" 
-          @update:modelValue="emit('update:manualInputStr', $event)"
+          v-model="manualInputStr" 
           placeholder="输入 JSON 数据..." 
           class="flex-1 font-mono text-[11px] p-3 rounded-lg border border-indigo-100 focus:border-indigo-400 focus:ring-0 bg-indigo-50/10 text-indigo-900 custom-scrollbar resize-none" 
         />

@@ -11,6 +11,7 @@ export interface NodeProperty {
   properties?: NodeProperty[]; // 用于 collection 类型定义每一项的结构
   required?: boolean;
   isRuntimeInput?: boolean; 
+  displayIf?: (config: any) => boolean;
 }
 
 export interface NodeDefinition {

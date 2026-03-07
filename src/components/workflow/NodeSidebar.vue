@@ -50,6 +50,9 @@ const onNodeClick = (node: any) => {
       ? { x: pendingSourceNode.position.x + 300, y: pendingSourceNode.position.y }
       : { x: 100, y: 100 }
     store.addAndConnectNode(node.type, node.label, position)
+  } else {
+    // 非连接模式下点击，直接在画布中心或默认位置添加节点
+    store.addAndConnectNode(node.type, node.label, { x: 200, y: 200 })
   }
 }
 

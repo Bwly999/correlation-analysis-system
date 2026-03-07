@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, computed } from 'vue'
 import { BaseEdge, EdgeLabelRenderer, getSmoothStepPath, type EdgeProps } from '@vue-flow/core'
 import { Plus, Trash2 } from 'lucide-vue-next'
 import { useWorkflowStore } from '@/stores/workflowStore'
@@ -7,6 +7,7 @@ import { useWorkflowStore } from '@/stores/workflowStore'
 const props = defineProps<EdgeProps>()
 const store = useWorkflowStore()
 
+const isHovered = ref(false)
 const path = computed(() => getSmoothStepPath(props))
 
 const onAddNode = () => {
@@ -35,13 +36,18 @@ const onDeleteEdge = () => {
         transform: `translate(-50%, -50%) translate(${path[1]}px, ${path[2]}px)`,
         pointerEvents: 'all',
       }"
-      class="edge-toolbar group"
+      class="edge-toolbar flex items-center justify-center p-2 rounded-full cursor-pointer"
+      @mouseenter="isHovered = true"
+      @mouseleave="isHovered = false"
     >
-      <div class="flex items-center gap-1 bg-white border border-slate-200 shadow-sm rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div 
+        class="flex items-center gap-1 bg-white border border-slate-200 shadow-md rounded-full p-0.5 transition-all duration-300"
+        :class="isHovered ? 'opacity-100 scale-100' : 'opacity-0 scale-75 pointer-events-none'"
+      >
         <button 
           @click.stop="onAddNode"
           class="w-6 h-6 flex items-center justify-center rounded-full hover:bg-slate-100 text-slate-500 hover:text-indigo-600 transition-colors"
-          title="Add node here"
+          title="在中间插入节点"
         >
           <Plus size="14" />
         </button>
@@ -49,11 +55,17 @@ const onDeleteEdge = () => {
         <button 
           @click.stop="onDeleteEdge"
           class="w-6 h-6 flex items-center justify-center rounded-full hover:bg-slate-100 text-slate-500 hover:text-rose-600 transition-colors"
-          title="Delete connection"
+          title="删除连线"
         >
           <Trash2 size="14" />
         </button>
       </div>
+      
+      <!-- Default small dot indicator when not hovered -->
+      <div 
+        v-if="!isHovered" 
+        class="absolute w-2 h-2 bg-slate-300 border-2 border-white rounded-full transition-all duration-300 shadow-sm"
+      ></div>
     </div>
   </EdgeLabelRenderer>
 </template>
