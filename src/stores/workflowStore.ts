@@ -11,8 +11,8 @@ export interface WorkflowNode extends Node {
     config: any
     status: 'idle' | 'running' | 'success' | 'error'
     output?: any 
-    manualInput?: any // 新增：手动模拟的输入数据
-    useManualInput?: boolean // 新增：是否启用模拟输入
+    manualInput?: any 
+    useManualInput?: boolean 
     logs: string[]
   }
 }
@@ -23,6 +23,17 @@ export interface SavedWorkflow {
   nodes: WorkflowNode[]
   edges: Edge[]
   updatedAt: number
+}
+
+export interface ExecutionRecord {
+  id: string
+  workflowId: string
+  workflowName: string
+  startTime: number
+  duration: number
+  status: 'success' | 'error' | 'stopped'
+  nodes: any[]
+  edges: any[]
 }
 
 export const CONNECTION_RULES: Record<string, string[]> = {
@@ -49,6 +60,8 @@ export const useWorkflowStore = defineStore('workflow', () => {
 
   const activeConfigNodeId = ref<string | null>(null)
   const pendingExecution = ref<{ nodeId: string, forceUpdate: boolean } | null>(null)
+  const lastExecutedTerminalNodeId = ref<string | null>(null)
+  const executionHistory = ref<ExecutionRecord[]>([])
 
   const addLog = (message: string, level: 'info' | 'error' | 'warn' = 'info', nodeId?: string) => {
     logs.value.push({
@@ -138,12 +151,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     return true
   }
 
-  const executeNode = async (nodeId: string, forceUpdate = false, isEntryPoint = true): Promise<any> => {
-    if (isEntryPoint) {
-      isRunning.value = true
-      isStopping.value = false
-    }
-
+  const executeNode = async (nodeId: string, forceUpdate = false): Promise<any> => {
     const node = nodes.value.find(n => n.id === nodeId)
     if (!node) return
 
@@ -168,7 +176,6 @@ export const useWorkflowStore = defineStore('workflow', () => {
         }
       }
 
-      // 调试模式优化：如果启用了模拟输入且处于单节点调试（非全局运行），则直接使用模拟数据
       if (node.data.useManualInput && node.data.manualInput && !forceUpdate) {
         addLog(`节点 ${node.data.label} 使用手动模拟输入运行`, 'info', nodeId)
         const result = await definition.execute(node.data.manualInput, node.data.config)
@@ -184,14 +191,15 @@ export const useWorkflowStore = defineStore('workflow', () => {
       const incomingEdges = edges.value.filter(e => e.target === nodeId)
       const inputs = []
       for (const edge of incomingEdges) {
-        const result = await executeNode(edge.source, forceUpdate, false)
-        if (result === 'WAIT_INPUT') return 'WAIT_INPUT'
+        if (isStopping.value) throw new Error('User Aborted')
+        const result = await executeNode(edge.source, forceUpdate)
+        if (result === 'WAIT_INPUT' || result === 'STOPPED') return result
         inputs.push(result)
       }
 
       if (isStopping.value) throw new Error('User Aborted')
-
-      await new Promise(resolve => setTimeout(resolve, 500))
+      await new Promise(resolve => setTimeout(resolve, 300))
+      if (isStopping.value) throw new Error('User Aborted')
 
       const result = await definition.execute(inputs[0] || null, node.data.config)
       
@@ -201,29 +209,82 @@ export const useWorkflowStore = defineStore('workflow', () => {
       return node.data.output
     } catch (error: any) {
       if (node) node.data.status = error.message === 'User Aborted' ? 'idle' : 'error'
-      if (error.message !== 'User Aborted') addLog(`执行失败: ${error.message}`, 'error', nodeId)
-      throw error
-    } finally {
-      if (isEntryPoint) {
-        isRunning.value = false
-        isStopping.value = false
+      if (error.message !== 'User Aborted') {
+        addLog(`执行失败: ${error.message}`, 'error', nodeId)
+        throw error
       }
+      return 'STOPPED'
     }
   }
 
   const runGlobal = async () => {
+    if (isRunning.value) return
+    
+    isRunning.value = true
+    isStopping.value = false
+    const startTime = Date.now()
     addLog('开始全局运行...', 'info')
+    
     const terminalNodes = nodes.value.filter(n => n.data.category === 'terminal')
     if (terminalNodes.length === 0) {
       addLog('运行失败: 未找到分析模型', 'error')
+      isRunning.value = false
       return
     }
+    
+    let finalStatus: 'success' | 'error' | 'stopped' = 'success'
     try {
+      let lastResultId = null
       for (const node of terminalNodes) {
-        const result = await executeNode(node.id, true, true)
-        if (result === 'WAIT_INPUT') break 
+        if (isStopping.value) {
+          finalStatus = 'stopped'
+          break
+        }
+        const result = await executeNode(node.id, true)
+        if (result === 'WAIT_INPUT') {
+           isRunning.value = false
+           return 
+        }
+        if (result === 'STOPPED') {
+          finalStatus = 'stopped'
+          break 
+        }
+        lastResultId = node.id
       }
-    } catch (err) {}
+      lastExecutedTerminalNodeId.value = lastResultId
+    } catch (err) {
+      finalStatus = 'error'
+      addLog(`全局运行中断: ${err}`, 'error')
+    } finally {
+      isRunning.value = false
+      isStopping.value = false
+      const duration = Date.now() - startTime
+      addLog('工作流运行结束', finalStatus === 'stopped' ? 'warn' : (finalStatus === 'error' ? 'error' : 'info'))
+      
+      const record: ExecutionRecord = {
+        id: `exec_${Date.now()}`,
+        workflowId: currentWorkflowId.value || 'temp',
+        workflowName: workflowName.value,
+        startTime,
+        duration,
+        status: finalStatus,
+        nodes: JSON.parse(JSON.stringify(nodes.value)),
+        edges: JSON.parse(JSON.stringify(edges.value))
+      }
+      saveExecution(record)
+    }
+  }
+
+  const saveExecution = (record: ExecutionRecord) => {
+    const history = JSON.parse(localStorage.getItem('execution_history') || '[]')
+    history.unshift(record)
+    const limitedHistory = history.slice(0, 50)
+    localStorage.setItem('execution_history', JSON.stringify(limitedHistory))
+    executionHistory.value = limitedHistory
+  }
+
+  const loadHistory = () => {
+    executionHistory.value = JSON.parse(localStorage.getItem('execution_history') || '[]')
   }
 
   const saveWorkflow = (name?: string) => {
@@ -276,8 +337,9 @@ export const useWorkflowStore = defineStore('workflow', () => {
 
   return {
     nodes, edges, logs, workflowName, currentWorkflowId, isRunning, isStopping,
-    pendingConnection, activeConfigNodeId, pendingExecution,
+    pendingConnection, activeConfigNodeId, pendingExecution, lastExecutedTerminalNodeId,
+    executionHistory,
     addLog, stopExecution, getCategoryByType, validateConnection, addAndConnectNode, executeNode, runGlobal,
-    saveWorkflow, loadWorkflow, exportWorkflow, importWorkflow
+    saveWorkflow, loadWorkflow, exportWorkflow, importWorkflow, loadHistory
   }
 })

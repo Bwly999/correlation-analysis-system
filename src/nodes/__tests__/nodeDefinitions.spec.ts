@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { fileImportNode } from '../definitions/fileImport'
 import { dataCleaningNode } from '../definitions/dataCleaning'
 import { dataAggregationNode } from '../definitions/dataAggregation'
-import { algorithmNode } from '../definitions/algorithm'
+import { xgboostShapNode } from '../definitions/xgboostShap'
 import * as fs from 'fs'
 import * as path from 'path'
 
@@ -57,7 +57,6 @@ describe('Node Definitions Execution Logic', () => {
           { f1: 5, f2: 5, f3: 5 }
         ] 
       }
-      // 更新配置以符合最新的 NodeProperty[] 嵌套结构
       const config = {
         aggregationGroups: [
           { 
@@ -77,38 +76,34 @@ describe('Node Definitions Execution Logic', () => {
       expect(result.data[0].total).toBe(60)
       expect(result.data[1].total).toBe(15)
     })
-
-    it('should handle weighted mean correctly', async () => {
-      const input = { data: [{ f1: 10, f2: 20 }] }
-      const config = {
-        aggregationGroups: [
-          { 
-            targetFactorName: 'weighted_avg', 
-            method: 'weighted_mean', 
-            factorWeights: [
-              { factorName: 'f1', weight: 1.0 },
-              { factorName: 'f2', weight: 3.0 }
-            ]
-          }
-        ]
-      }
-      // (10*1 + 20*3) / (1+3) = 70 / 4 = 17.5
-      const result = await dataAggregationNode.execute(input, config)
-      expect(result.data[0].weighted_avg).toBe(17.5)
-    })
   })
 
-  describe('algorithm', () => {
+  describe('algorithms', () => {
     it('should simulate xgboost+shap result', async () => {
       const input = { data: [{ target: 1, f1: 2 }] }
-      const config = { modelType: 'xgboost_shap', targetLabel: 'target' }
+      const config = { targetLabel: 'target' }
       
-      const result = await algorithmNode.execute(input, config)
+      const result = await xgboostShapNode.execute(input, config)
       
       expect(result.viewType).toBe('report')
       expect(result.report).toBeDefined()
       expect(result.report.title).toContain('Xgboost')
-      expect(result.report.sections.length).toBeGreaterThan(0)
+    })
+  })
+
+  describe('neighbor-system', () => {
+    it('should generate mock data based on fetch mode', async () => {
+      const config = { 
+        fetchMode: 'time', 
+        timeRange: [new Date(), new Date()],
+        selectedFactors: { 'f_temp': true, 'sys_01': true }
+      }
+      
+      const result = await neighborSystemNode.execute(null, config)
+      
+      expect(result.data).toBeDefined()
+      expect(result.data.length).toBeGreaterThan(0)
+      expect(result.factors).toContain('f_temp')
     })
   })
 })

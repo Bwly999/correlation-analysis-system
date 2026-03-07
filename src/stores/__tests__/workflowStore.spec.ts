@@ -40,10 +40,13 @@ describe('Workflow Store', () => {
     await new Promise(r => setTimeout(r, 10))
     const action = store.addAndConnectNode('data-cleaning', 'Action', { x: 300, y: 0 })!
     await new Promise(r => setTimeout(r, 10))
-    const model = store.addAndConnectNode('algorithm', 'Model', { x: 600, y: 0 })!
+    const model = store.addAndConnectNode('xgboost-shap', 'Xgboost Model', { x: 600, y: 0 })!
 
     // Trigger -> Action: Valid
     expect(store.validateConnection(trigger.id, action.id).valid).toBe(true)
+    
+    // Trigger -> Model: Valid (Repair check for Item 11)
+    expect(store.validateConnection(trigger.id, model.id).valid).toBe(true)
     
     // Action -> Model: Valid
     expect(store.validateConnection(action.id, model.id).valid).toBe(true)
@@ -82,5 +85,21 @@ describe('Workflow Store', () => {
     
     expect(store.nodes.length).toBe(1)
     expect(store.workflowName).toBe('Test Workflow')
+  })
+
+  it('should record execution history after a global run', async () => {
+    const store = useWorkflowStore()
+    store.addAndConnectNode('file-import', 'Trigger', { x: 0, y: 0 })!
+    const model = store.addAndConnectNode('xgboost-shap', 'Model', { x: 300, y: 0 })!
+    
+    // Mock the file input to allow execution
+    const trigger = store.nodes.find(n => n.data.type === 'file-import')!
+    trigger.data.config.fileData = new File(['a,b\n1,2'], 'test.csv')
+    
+    await store.runGlobal()
+    
+    expect(store.executionHistory.length).toBe(1)
+    expect(store.executionHistory[0].status).toBe('success')
+    expect(store.executionHistory[0].workflowName).toBe('未命名工作流')
   })
 })

@@ -3,7 +3,9 @@ import { fileImportNode } from './definitions/fileImport';
 import { neighborSystemNode } from './definitions/neighborSystem';
 import { dataCleaningNode } from './definitions/dataCleaning';
 import { dataAggregationNode } from './definitions/dataAggregation';
-import { algorithmNode } from './definitions/algorithm';
+import { xgboostShapNode } from './definitions/xgboostShap';
+import { lassoNode } from './definitions/lasso';
+import { pearsonNode } from './definitions/pearson';
 import { dataExportNode } from './definitions/dataExport';
 import { chartDisplayNode } from './definitions/chartDisplay';
 
@@ -12,7 +14,9 @@ export const nodeDefinitions: NodeDefinition[] = [
   neighborSystemNode,
   dataCleaningNode,
   dataAggregationNode,
-  algorithmNode,
+  xgboostShapNode,
+  lassoNode,
+  pearsonNode,
   dataExportNode,
   chartDisplayNode
 ];

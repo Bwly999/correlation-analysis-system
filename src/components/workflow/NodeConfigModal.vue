@@ -222,14 +222,25 @@ const saveAndClose = () => {
                     <div class="space-y-6">
                        <div v-for="subProp in prop.properties" :key="subProp.name" class="flex flex-col gap-2">
                           <span class="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">{{ subProp.displayName }}</span>
+                          
+                          <!-- 嵌套集合 (Nested Collection) -->
                           <div v-if="subProp.type === 'collection'" class="p-4 bg-white rounded-xl space-y-3 border border-slate-100">
-                             <div v-for="(subItem, subIdx) in item[subProp.name]" :key="subIdx" class="flex items-center gap-3">
-                                <Select v-model="subItem.factorName" :options="upstreamFactors" optionLabel="name" optionValue="value" placeholder="选择因子" class="flex-1 text-xs" />
-                                <InputNumber v-model="subItem.weight" placeholder="权重" class="w-24" :minFractionDigits="1" />
+                             <div v-for="(subItem, subIdx) in item[subProp.name]" :key="subIdx" class="flex items-center gap-3 p-2 bg-slate-50/50 rounded-lg">
+                                <div class="flex-1 grid grid-cols-12 gap-2">
+                                   <div v-for="ssProp in subProp.properties" :key="ssProp.name" :class="ssProp.type === 'number' ? 'col-span-4' : 'col-span-8'">
+                                      <Select v-if="ssProp.type === 'options' && ssProp.name === 'factorName'" v-model="subItem[ssProp.name]" :options="upstreamFactors" optionLabel="name" optionValue="value" placeholder="选择因子" class="w-full text-xs" />
+                                      <Select v-else-if="ssProp.type === 'options'" v-model="subItem[ssProp.name]" :options="ssProp.options" optionLabel="name" optionValue="value" class="w-full text-xs" />
+                                      <InputNumber v-else-if="ssProp.type === 'number'" v-model="subItem[ssProp.name]" :placeholder="ssProp.displayName" class="w-full text-xs" :minFractionDigits="1" />
+                                      <InputText v-else v-model="subItem[ssProp.name]" class="w-full text-xs" :placeholder="ssProp.placeholder || ssProp.displayName" />
+                                   </div>
+                                </div>
                                 <button @click="removeCollectionItem(item, subProp.name, subIdx)" class="text-slate-300 hover:text-rose-500"><X size="14" /></button>
                              </div>
-                             <Button @click="addCollectionItem(item, subProp.name, subProp.properties || [])" label="添加参与因子" icon="pi pi-plus" size="small" text class="w-full text-[10px] font-bold" />
+                             <Button @click="addCollectionItem(item, subProp.name, subProp.properties || [])" :label="`添加 ${subProp.displayName}`" icon="pi pi-plus" size="small" text class="w-full text-[10px] font-bold" />
                           </div>
+                          
+                          <!-- 普通子属性 -->
+                          <Select v-else-if="subProp.type === 'options' && subProp.name === 'factorName'" v-model="item[subProp.name]" :options="upstreamFactors" optionLabel="name" optionValue="value" placeholder="选择因子" class="w-full text-xs ndv-input" />
                           <Select v-else-if="subProp.type === 'options'" v-model="item[subProp.name]" :options="subProp.options" optionLabel="name" optionValue="value" class="w-full text-xs ndv-input" />
                           <MultiSelect v-else-if="subProp.type === 'multi-options'" v-model="item[subProp.name]" :options="upstreamFactors" optionLabel="name" optionValue="value" display="chip" class="w-full text-xs ndv-input" />
                           <InputText v-else v-model="item[subProp.name]" class="w-full text-xs ndv-input" :placeholder="subProp.placeholder" />
