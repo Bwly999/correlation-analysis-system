@@ -5,6 +5,7 @@ import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
 import { useWorkflowStore, type WorkflowNode } from '@/stores/workflowStore'
 import NodeSidebar from './NodeSidebar.vue'
+import WorkflowHeader from './WorkflowHeader.vue'
 import BaseNode from './nodes/BaseNode.vue'
 import LogPanel from './LogPanel.vue'
 import NodeConfigModal from './NodeConfigModal.vue'
@@ -12,12 +13,10 @@ import RuntimeInputModal from './RuntimeInputModal.vue'
 import DataAnalysisModal from './DataAnalysisModal.vue'
 import Button from 'primevue/button'
 import N8nEdge from './edges/N8nEdge.vue'
-import { Plus, X, ChevronUp, ChevronDown, Play, Terminal, FolderOpen, Trash2, Edit2, Square, Focus, ChevronRight, Save, FileUp, FileDown, Activity, LayoutGrid, Clock, History, CheckCircle2, AlertCircle, StopCircle, Layers2 } from 'lucide-vue-next'
+import { Plus, X, ChevronUp, ChevronDown, Play, Terminal, FolderOpen, Trash2, Square, Focus, Clock, History, CheckCircle2, AlertCircle, StopCircle, Layers2 } from 'lucide-vue-next'
 import Dialog from 'primevue/dialog'
 import ConfirmDialog from 'primevue/confirmdialog'
 import { useConfirm } from 'primevue/useconfirm'
-import InputText from 'primevue/inputtext'
-import Menu from 'primevue/menu'
 import Tabs from 'primevue/tabs';
 import TabList from 'primevue/tablist';
 import Tab from 'primevue/tab';
@@ -39,18 +38,6 @@ const activeTab = ref('0')
 // 深度分析弹窗状态
 const analysisModal = ref({ visible: false, title: '', data: null })
 
-const menu = ref()
-const menuItems = ref([
-    {
-        label: '文件操作',
-        items: [
-            { label: '导出 JSON 文件', icon: 'pi pi-download', command: () => store.exportWorkflow() },
-            { label: '从 JSON 导入', icon: 'pi pi-upload', command: () => triggerImport() }
-        ]
-    }
-])
-
-const toggleMenu = (event: any) => menu.value.toggle(event)
 const openWorkflowList = () => {
     savedWorkflows.value = JSON.parse(localStorage.getItem('saved_workflows') || '[]')
     store.loadHistory()
@@ -90,16 +77,6 @@ const deleteWorkflow = (id: string) => {
             store.addLog('工作流已删除', 'warn')
         }
     })
-}
-
-const fileInput = ref<HTMLInputElement | null>(null)
-const triggerImport = () => fileInput.value?.click()
-const handleImport = (event: any) => {
-    const file = event.target.files[0]
-    if (file) {
-        store.importWorkflow(file)
-        setTimeout(() => resetView(), 100)
-    }
 }
 
 const resumeExecution = async () => {
@@ -183,53 +160,8 @@ onMounted(() => {
 
 <template>
   <div class="flex h-screen w-full bg-[#fafafa] text-[#1a1f36] overflow-hidden relative font-sans text-[13px] selection:bg-indigo-100">
-    <input type="file" ref="fileInput" class="hidden" accept=".json" @change="handleImport" />
-    
-    <!-- 顶部菜单栏 (Clean SaaS Style) -->
-    <header class="absolute top-0 left-0 right-0 h-[56px] bg-white border-b border-slate-200 z-[100] flex items-center justify-between px-6">
-       <div class="flex items-center gap-4">
-          <!-- 导航/面包屑 -->
-          <div 
-            @click="openWorkflowList"
-            class="flex items-center gap-2 text-slate-500 hover:text-slate-900 transition-colors cursor-pointer group px-2 py-1.5 rounded-md hover:bg-slate-100"
-          >
-             <LayoutGrid size="16" class="opacity-70 group-hover:opacity-100" />
-             <span class="text-[13px] font-medium">Projects</span>
-             <ChevronRight size="14" class="opacity-40" />
-          </div>
-          
-          <!-- 项目名称编辑 -->
-          <div class="flex items-center gap-2 group relative">
-            <input 
-              v-model="store.workflowName" 
-              class="font-semibold text-[14px] text-slate-900 border border-transparent hover:border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 bg-transparent focus:bg-white rounded-md px-2.5 py-1 transition-all w-[200px] outline-none" 
-              placeholder="Untitled Workflow"
-            />
-            <Edit2 size="12" class="text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity absolute right-2 pointer-events-none" />
-          </div>
-       </div>
-
-       <div class="flex items-center gap-3">
-         <!-- 在线状态 -->
-         <div class="flex items-center gap-2 px-3 py-1 bg-slate-50 rounded-md border border-slate-200">
-            <div class="w-2 h-2 bg-emerald-500 rounded-full"></div>
-            <span class="text-[11px] font-medium text-slate-600">Connected</span>
-         </div>
-
-         <div class="h-4 w-[1px] bg-slate-200 mx-1"></div>
-
-         <!-- 操作按钮 -->
-         <Button @click="store.saveWorkflow()" severity="secondary" text class="h-8 px-4 text-[12px] font-medium flex gap-2 items-center rounded-md bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 transition-colors shadow-sm">
-           <Save size="14" class="text-slate-500" />
-           Save
-         </Button>
-
-         <Button @click="toggleMenu" severity="secondary" text class="w-8 h-8 p-0 flex items-center justify-center rounded-md border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-600 transition-colors shadow-sm bg-white">
-           <FileUp size="14" />
-         </Button>
-         <Menu ref="menu" :model="menuItems" :popup="true" class="n8n-popup-menu" />
-       </div>
-    </header>
+    <!-- 独立出的顶部菜单栏 -->
+    <WorkflowHeader @open-projects="openWorkflowList" />
 
     <!-- 主画布区 -->
     <main class="absolute inset-0 top-[60px] bottom-0">
@@ -351,7 +283,7 @@ onMounted(() => {
                                 <div class="flex flex-col gap-1">
                                     <div class="flex items-center gap-2">
                                         <CheckCircle2 v-if="record.status === 'success'" size="14" class="text-emerald-500" />
-                                        <AlertCircle v-else-if="record.status === 'error'" size="14" class="text-rose-500" />
+                                        <Pick v-else-if="record.status === 'error'" size="14" class="text-rose-500" />
                                         <StopCircle v-else size="14" class="text-amber-500" />
                                         <span class="font-bold text-[13px] text-[#3c4257]">{{ record.workflowName }}</span>
                                     </div>
