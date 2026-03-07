@@ -261,6 +261,15 @@ export const useWorkflowStore = defineStore('workflow', () => {
       isRunning.value = false
       return
     }
+
+    // 1. 准备运行环境：重置非冻结节点的状态
+    // 清除 output 是为了确保在 forceUpdate=false 模式下，非冻结节点能重新触发计算
+    nodes.value.forEach(n => {
+      if (!n.data.isPinned) {
+        n.data.status = 'idle'
+        n.data.output = null
+      }
+    })
     
     let finalStatus: 'success' | 'error' | 'stopped' = 'success'
     try {
@@ -270,7 +279,8 @@ export const useWorkflowStore = defineStore('workflow', () => {
           finalStatus = 'stopped'
           break
         }
-        const result = await executeNode(node.id, true)
+        // 2. 以非强制模式运行，利用刚刚清除 output 后的机制实现“单次刷新”
+        const result = await executeNode(node.id, false)
         if (result === 'WAIT_INPUT') {
            isRunning.value = false
            return 
