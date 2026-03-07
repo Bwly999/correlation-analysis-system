@@ -2,7 +2,6 @@
 import { ref, computed } from 'vue'
 import { Search, ChevronRight, X, Info, Box, Layout } from 'lucide-vue-next'
 import NodeIcon from './nodes/NodeIcon.vue'
-import InputText from 'primevue/inputtext'
 import { useWorkflowStore, CONNECTION_RULES } from '@/stores/workflowStore'
 import { nodeDefinitions } from '@/nodes/registry'
 
@@ -68,42 +67,53 @@ const onDragStart = (event: DragEvent, node: any) => {
 <template>
   <div class="flex flex-col h-full bg-[#ffffff] border-l border-[#efefef] shadow-[-10px_0_30px_rgba(0,0,0,0.02)] overflow-hidden">
     <!-- Header -->
-    <div class="p-6 pb-4 bg-white sticky top-0 z-20">
-      <div class="flex items-center justify-between mb-6">
-        <h2 class="text-[11px] font-black text-[#1a1f36] uppercase tracking-[0.2em] opacity-50">Node Library</h2>
-        <button @click="emit('close')" class="p-1.5 text-[#a3acb9] hover:text-[#1a1f36] hover:bg-slate-50 rounded-lg transition-all"><X size="16" /></button>
+    <div class="p-5 pb-3 bg-white sticky top-0 z-20">
+      <div class="flex items-center justify-between mb-5">
+        <div class="flex items-center gap-2">
+          <div class="w-1.5 h-4 bg-indigo-500 rounded-full"></div>
+          <h2 class="text-[13px] font-bold text-[#1a1f36] tracking-tight">节点库</h2>
+        </div>
+        <button @click="emit('close')" class="p-1.5 text-[#a3acb9] hover:text-[#ef4444] hover:bg-red-50 rounded-lg transition-all duration-200">
+          <X size="18" stroke-width="2.5" />
+        </button>
       </div>
       
       <div class="relative group">
-        <Search size="14" class="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#a3acb9] group-focus-within:text-indigo-500 transition-colors" />
-        <InputText 
+        <div class="absolute left-3.5 top-1/2 -translate-y-1/2 z-10 pointer-events-none">
+          <Search size="16" class="text-[#94a3b8] group-focus-within:text-indigo-500 transition-colors duration-200" stroke-width="2.5" />
+        </div>
+        <input 
           v-model="searchQuery" 
-          placeholder="搜索分析算子..." 
-          class="n8n-search-input w-full pl-10 pr-4 py-2.5 bg-[#f7f9fc] border border-transparent focus:border-indigo-200 rounded-xl text-[13px] placeholder:text-[#a3acb9] transition-all"
+          type="text"
+          placeholder="搜索分析算子或数据源..." 
+          class="w-full pl-10 pr-4 py-2.5 bg-[#f8fafc] border border-[#e2e8f0] focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-500/10 rounded-xl text-[13px] text-[#1e293b] placeholder:text-[#94a3b8] outline-none transition-all duration-200"
         />
+        <div v-if="searchQuery" @click="searchQuery = ''" class="absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer text-[#94a3b8] hover:text-[#64748b]">
+          <X size="14" />
+        </div>
       </div>
     </div>
 
     <!-- Node List -->
-    <div class="flex-1 overflow-y-auto custom-scrollbar px-4 space-y-10 pb-12 pt-2">
+    <div class="flex-1 overflow-y-auto custom-scrollbar px-4 space-y-8 pb-10 pt-2">
       <!-- Quick Add Prompt like n8n -->
-      <div v-if="store.pendingConnection" class="mt-2 p-4 bg-[#6366f1] rounded-2xl shadow-xl shadow-indigo-100 animate-in zoom-in-95 duration-200 relative overflow-hidden">
+      <div v-if="store.pendingConnection" class="mt-2 p-4 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-2xl shadow-lg shadow-indigo-100 animate-in zoom-in-95 duration-300 relative overflow-hidden">
          <div class="relative z-10 flex items-start gap-3">
-            <div class="p-1.5 bg-white/20 rounded-lg text-white"><Info size="14" /></div>
+            <div class="p-1.5 bg-white/20 rounded-lg text-white ring-1 ring-white/30"><Info size="14" /></div>
             <div class="flex-1">
                <p class="text-[12px] font-bold text-white leading-tight">选择连接目标</p>
-               <p class="text-[10px] text-white/70 mt-1 leading-relaxed">系统已根据逻辑为您过滤了可用节点。</p>
+               <p class="text-[10px] text-white/80 mt-1 leading-relaxed">已为您智能推荐可用的下游节点</p>
             </div>
-            <button @click="store.pendingConnection = null" class="text-white/50 hover:text-white"><X size="14" /></button>
+            <button @click="store.pendingConnection = null" class="text-white/60 hover:text-white transition-colors"><X size="14" /></button>
          </div>
-         <div class="absolute -right-4 -bottom-4 opacity-10"><Box size="60" /></div>
+         <div class="absolute -right-4 -bottom-4 opacity-10 rotate-12"><Box size="80" /></div>
       </div>
 
       <div v-for="cat in filteredCategories" :key="cat.name">
         <div class="px-2 mb-4 flex items-center gap-3">
-          <component :is="cat.icon" size="12" class="text-indigo-500 opacity-70" />
-          <span class="text-[10px] font-black text-[#a3acb9] uppercase tracking-[0.15em] whitespace-nowrap">{{ cat.label }}</span>
-          <div class="h-[1px] flex-1 bg-gradient-to-r from-[#f1f4f8] to-transparent"></div>
+          <component :is="cat.icon" size="14" class="text-indigo-500/60" />
+          <span class="text-[11px] font-bold text-[#64748b] tracking-wider">{{ cat.label }}</span>
+          <div class="h-[1px] flex-1 bg-gradient-to-r from-[#f1f5f9] to-transparent"></div>
         </div>
         
         <div class="space-y-2">
