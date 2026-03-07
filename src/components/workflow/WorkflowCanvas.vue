@@ -159,16 +159,27 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="flex h-screen w-full bg-[#fafafa] text-[#1a1f36] overflow-hidden relative font-sans text-[13px] selection:bg-indigo-100">
+  <div class="flex h-screen w-full bg-[#f1f5f9] text-[#1a1f36] overflow-hidden relative font-sans text-[13px] selection:bg-indigo-100">
     <!-- 独立出的顶部菜单栏 -->
     <WorkflowHeader @open-projects="openWorkflowList" />
 
-    <!-- 主画布区 -->
-    <main class="absolute inset-0 top-[60px] bottom-0">
-      <VueFlow v-model:nodes="store.nodes" v-model:edges="store.edges" :default-edge-options="{ animated: true, style: { stroke: '#cbd5e1', strokeWidth: 2.5 }, type: 'n8n' }" @dragover="onDragOverLocal" @drop="onDropLocal">
+    <!-- 主画布区 (Sunken Effect) -->
+    <main class="absolute inset-0 top-[56px] bottom-0 overflow-hidden shadow-[inset_0_2px_10px_rgba(0,0,0,0.05)] border-t border-slate-200">
+      <VueFlow 
+        v-model:nodes="store.nodes" 
+        v-model:edges="store.edges" 
+        :default-edge-options="{ animated: true, style: { stroke: '#cbd5e1', strokeWidth: 2.5 }, type: 'n8n' }" 
+        @dragover="onDragOverLocal" 
+        @drop="onDropLocal"
+        class="bg-[#f4f7fa]"
+      >
         <template #node-custom="props"><BaseNode v-bind="props" /></template>
         <template #edge-n8n="props"><N8nEdge v-bind="props" /></template>
-        <Background pattern-color="#e2e8f0" pattern-type="dots" :gap="20" :size="1.2" />
+        
+        <!-- 双层交叉线网格系统 -->
+        <Background :gap="20" pattern-type="lines" :size="1" pattern-color="#e2e8f0" />
+        <Background :gap="100" pattern-type="lines" :size="1" pattern-color="#cbd5e1" />
+
         <Controls position="bottom-left" class="ml-6 transition-all duration-300 !bg-white !border-[#efefef] !shadow-xl !rounded-2xl !p-1" :style="{ marginBottom: isLogExpanded ? '350px' : '90px' }">
           <template #control-button-reset></template>
         </Controls>
