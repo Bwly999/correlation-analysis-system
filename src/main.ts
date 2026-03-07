@@ -1,6 +1,8 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import PrimeVue from 'primevue/config'
+import ConfirmationService from 'primevue/confirmationservice'
+import ToastService from 'primevue/toastservice'
 import Aura from '@primevue/themes/aura'
 import App from './App.vue'
 import './style/main.css'
@@ -22,5 +24,7 @@ app.use(PrimeVue, {
         }
     }
 })
+app.use(ConfirmationService)
+app.use(ToastService)
 
 app.mount('#app')

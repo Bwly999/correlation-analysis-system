@@ -12,8 +12,10 @@ import RuntimeInputModal from './RuntimeInputModal.vue'
 import DataAnalysisModal from './DataAnalysisModal.vue'
 import Button from 'primevue/button'
 import N8nEdge from './edges/N8nEdge.vue'
-import { Plus, X, ChevronUp, ChevronDown, Play, Terminal, FolderOpen, Trash2, Edit2, Square, Focus, ChevronRight, Save, FileUp, FileDown, Activity, LayoutGrid, Clock, History, CheckCircle2, AlertCircle, StopCircle } from 'lucide-vue-next'
+import { Plus, X, ChevronUp, ChevronDown, Play, Terminal, FolderOpen, Trash2, Edit2, Square, Focus, ChevronRight, Save, FileUp, FileDown, Activity, LayoutGrid, Clock, History, CheckCircle2, AlertCircle, StopCircle, Layers2 } from 'lucide-vue-next'
 import Dialog from 'primevue/dialog'
+import ConfirmDialog from 'primevue/confirmdialog'
+import { useConfirm } from 'primevue/useconfirm'
 import InputText from 'primevue/inputtext'
 import Menu from 'primevue/menu'
 import Tabs from 'primevue/tabs';
@@ -24,6 +26,7 @@ import TabPanel from 'primevue/tabpanel';
 
 const { onConnect, addEdges, onDragOver, onDrop, project, findNode, onNodeClick, fitView } = useVueFlow()
 const store = useWorkflowStore()
+const confirm = useConfirm()
 
 const selectedNode = ref<WorkflowNode | null>(null)
 const isConfigVisible = ref(false)
@@ -66,11 +69,27 @@ const loadWorkflow = async (id: string) => {
 }
 
 const deleteWorkflow = (id: string) => {
-    const saved = JSON.parse(localStorage.getItem('saved_workflows') || '[]')
-    const filtered = saved.filter((w: any) => w.id !== id)
-    localStorage.setItem('saved_workflows', JSON.stringify(filtered))
-    savedWorkflows.value = filtered
-    store.addLog('工作流已删除', 'warn')
+    confirm.require({
+        message: '确定要删除这个工作流吗？此操作不可撤销。',
+        header: '确认删除',
+        icon: 'pi pi-exclamation-triangle',
+        rejectProps: {
+            label: '取消',
+            severity: 'secondary',
+            outlined: true
+        },
+        acceptProps: {
+            label: '确认删除',
+            severity: 'danger'
+        },
+        accept: () => {
+            const saved = JSON.parse(localStorage.getItem('saved_workflows') || '[]')
+            const filtered = saved.filter((w: any) => w.id !== id)
+            localStorage.setItem('saved_workflows', JSON.stringify(filtered))
+            savedWorkflows.value = filtered
+            store.addLog('工作流已删除', 'warn')
+        }
+    })
 }
 
 const fileInput = ref<HTMLInputElement | null>(null)
@@ -269,13 +288,22 @@ onMounted(() => {
     </footer>
 
     <!-- 工作流管理弹窗 (SaaS Style) -->
-    <Dialog v-model:visible="isWorkflowListVisible" modal :style="{ width: '640px' }" class="n8n-modern-dialog" :closable="store.nodes.length > 0">
+    <Dialog v-model:visible="isWorkflowListVisible" modal :style="{ width: '640px' }" class="n8n-modern-dialog" :closable="false">
         <template #header>
-            <div class="flex items-center gap-3">
-                <div class="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
-                    <History size="20" stroke-width="2.5" />
+            <div class="flex items-center justify-between w-full pr-4">
+                <div class="flex items-center gap-3">
+                    <div class="p-2 bg-slate-100 text-slate-600 rounded-lg">
+                        <Layers2 size="20" :stroke-width="2.5" />
+                    </div>
+                    <span class="font-bold text-[16px] text-slate-900 tracking-tight">工作流管理中心</span>
                 </div>
-                <span class="font-bold text-[16px] text-slate-800 tracking-tight">工作流管理中心</span>
+                <button 
+                    @click="isWorkflowListVisible = false" 
+                    class="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-all flex items-center justify-center"
+                    aria-label="Close"
+                >
+                    <X size="20" :stroke-width="2.5" />
+                </button>
             </div>
         </template>
         <div class="py-2">
@@ -287,11 +315,11 @@ onMounted(() => {
                 <TabPanels>
                     <TabPanel value="0">
                         <div class="flex flex-col gap-3 py-4">
-                            <div @click="() => { store.nodes = []; store.edges = []; store.workflowName = '新建工作流'; isWorkflowListVisible = false }" class="flex items-center gap-4 p-5 bg-indigo-600 text-white rounded-2xl cursor-pointer hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200">
-                                <div class="p-3 bg-white/20 rounded-xl"><Plus size="24" /></div>
+                            <div @click="() => { store.nodes = []; store.edges = []; store.workflowName = '新建工作流'; isWorkflowListVisible = false }" class="flex items-center gap-4 p-5 bg-slate-900 text-white rounded-2xl cursor-pointer hover:bg-slate-800 transition-all shadow-lg shadow-slate-200/50 group/new">
+                                <div class="p-3 bg-white/10 rounded-xl group-hover/new:bg-white/20 transition-colors"><Plus size="24" stroke-width="2.5" /></div>
                                 <div>
-                                    <div class="font-bold text-[16px]">创建新工作流</div>
-                                    <div class="text-[11px] opacity-70">从零开始构建您的分析流程</div>
+                                    <div class="font-bold text-[16px] tracking-tight">创建新工作流</div>
+                                    <div class="text-[11px] text-slate-400">从零开始构建您的分析流程</div>
                                 </div>
                             </div>
                             <div class="h-2"></div>
@@ -344,6 +372,7 @@ onMounted(() => {
     <NodeConfigModal :visible="isConfigVisible" :nodeId="store.activeConfigNodeId" @close="isConfigVisible = false" />
     <RuntimeInputModal :visible="!!store.pendingExecution" :node="store.nodes.find(n => n.id === store.pendingExecution?.nodeId) || null" @close="store.pendingExecution = null" @confirm="resumeExecution" />
     <DataAnalysisModal :visible="analysisModal.visible" :title="analysisModal.title" :data="analysisModal.data" @close="analysisModal.visible = false" />
+    <ConfirmDialog />
   </div>
 </template>
 
