@@ -81,7 +81,7 @@ const selectNode = (nodeId: string) => {
                 ? `${level.activeBg} ${level.activeText} shadow-sm border border-slate-200/50` 
                 : 'text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 border border-transparent'"
             >
-              <component :is="level.icon" size="10" :class="selectedLevel === level.value ? level.color : 'text-slate-300'" />
+              <component :is="level.icon" size="10" :class="level.color" />
               {{ level.label }}
             </button>
           </div>
@@ -147,11 +147,11 @@ const selectNode = (nodeId: string) => {
           <span class="text-[10px] font-mono text-slate-400 w-16 shrink-0">{{ log.time }}</span>
           
           <div class="flex items-center gap-2 w-20 shrink-0">
-            <div class="w-1.5 h-1.5 rounded-full" :class="{
-              'bg-emerald-500': log.level === 'info',
-              'bg-rose-500': log.level === 'error',
-              'bg-amber-500': log.level === 'warn'
-            }"></div>
+            <component :is="levels.find(l => l.value === log.level)?.icon || CircleDot" size="12" :class="{
+              'text-emerald-500': log.level === 'info',
+              'text-rose-500': log.level === 'error',
+              'text-amber-500': log.level === 'warn'
+            }" />
             <span class="text-[10px] font-bold uppercase tracking-tighter" :class="{
               'text-emerald-600': log.level === 'info',
               'text-rose-600': log.level === 'error',
