@@ -221,7 +221,7 @@ const saveAndClose = () => {
           </div>
           <Button 
             @click="runCurrentNode"
-            class="n8n-debug-btn h-9 px-5 rounded-lg border-none shadow-sm hover:shadow-md active:scale-95 transition-all flex items-center gap-2 cursor-pointer"
+            class="n8n-debug-btn h-9 px-5 rounded-lg border-none shadow-sm hover:shadow-md active:scale-95 transition-all flex items-center gap-2 cursor-pointer !ring-0 !outline-none"
             :loading="node?.data.status === 'running'"
           >
             <Bug size="16" class="text-white" />
