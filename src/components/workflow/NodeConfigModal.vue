@@ -219,14 +219,17 @@ const saveAndClose = () => {
             <button @click="activeTab = 'parameters'" :class="['px-8 py-4 text-xs font-bold uppercase border-b-2 transition-all cursor-pointer', activeTab === 'parameters' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400']">参数设置</button>
             <button @click="activeTab = 'settings'" :class="['px-6 py-4 text-xs font-bold uppercase border-b-2 transition-all cursor-pointer', activeTab === 'settings' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400']">系统选项</button>
           </div>
-          <Button 
+          <button 
             @click="runCurrentNode"
-            class="n8n-debug-btn h-9 px-5 rounded-lg border-none shadow-sm hover:shadow-md active:scale-95 transition-all flex items-center gap-2 cursor-pointer !ring-0 !outline-none"
-            :loading="node?.data.status === 'running'"
+            :disabled="node?.data.status === 'running'"
+            class="n8n-debug-btn h-9 px-5 rounded-lg border-none shadow-sm hover:shadow-md active:scale-95 transition-all flex items-center gap-2 cursor-pointer outline-none focus:outline-none focus:ring-0 ring-0 disabled:opacity-70 disabled:cursor-not-allowed"
           >
-            <Bug size="16" class="text-white" />
-            <span class="text-[12px] font-bold text-white uppercase tracking-wider">调试节点</span>
-          </Button>
+            <Loader2 v-if="node?.data.status === 'running'" size="16" class="text-white animate-spin" />
+            <Bug v-else size="16" class="text-white" />
+            <span class="text-[12px] font-bold text-white uppercase tracking-wider">
+              {{ node?.data.status === 'running' ? '正在调试...' : '调试节点' }}
+            </span>
+          </button>
         </div>
 
         <div class="flex-1 p-8 overflow-y-auto custom-scrollbar bg-white">
