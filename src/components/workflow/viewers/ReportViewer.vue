@@ -12,7 +12,8 @@ import {
 } from 'echarts/components'
 import html2pdf from 'html2pdf.js'
 import html2canvas from 'html2canvas'
-import { FileText, Image as ImageIcon } from 'lucide-vue-next'
+import { FileText, Image as ImageIcon, Loader2 } from 'lucide-vue-next'
+import { useToast } from 'primevue/usetoast'
 
 use([
   CanvasRenderer,
@@ -30,7 +31,11 @@ const props = defineProps<{
   data: any
 }>()
 
+const toast = useToast()
 const activeTab = ref(0)
+const isExporting = ref(false)
+const chartRefs = ref<any[]>([])
+const sectionRefs = ref<HTMLElement[]>([])
 
 const isTabsMode = computed(() => {
   return props.data.report?.tabs && props.data.report.tabs.length > 0
@@ -46,96 +51,158 @@ const currentSections = computed(() => {
 const reportRef = ref<HTMLElement | null>(null)
 
 /**
- * 修复 html2canvas 不支持 oklch 颜色的问题
- * 遍历元素并将计算出的 oklch 样式转换为 rgb
+ * 修复颜色
  */
-const fixOklchColors = (container: HTMLElement) => {
-  const elements = [container, ...Array.from(container.getElementsByTagName('*'))]
-  const colorProps = ['color', 'backgroundColor', 'borderColor', 'fill', 'stroke', 'stopColor']
-  
-  // 创建一个辅助元素用于将任何颜色字符串转换为 rgb 格式
-  const helper = document.createElement('div')
-  helper.style.display = 'none'
-  document.body.appendChild(helper)
+const colorToRgba = (color: string): string => {
+  if (!color || color === 'transparent' || color === 'none') return color
+  if (!color.includes('oklch') && !color.includes('var(')) return color
+  try {
+    const canvas = document.createElement('canvas')
+    canvas.width = 1; canvas.height = 1
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return color
+    ctx.fillStyle = color
+    ctx.fillRect(0, 0, 1, 1)
+    const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data
+    return `rgba(${r}, ${g}, ${b}, ${a / 255})`
+  } catch (e) { return color }
+}
 
+const fixOklchColors = (container: HTMLElement, restore = false) => {
+  const elements = [container, ...Array.from(container.getElementsByTagName('*'))]
+  const colorProps = ['color', 'background-color', 'border-color', 'fill', 'stroke']
+  
   elements.forEach((el: any) => {
+    if (restore) {
+      // 恢复原始样式
+      if (el._originalStyles) {
+        Object.keys(el._originalStyles).forEach(prop => {
+          el.style.setProperty(prop, el._originalStyles[prop])
+        })
+        delete el._originalStyles
+      }
+      return
+    }
+
     const style = window.getComputedStyle(el)
-    
     colorProps.forEach(prop => {
       const val = style.getPropertyValue(prop)
-      // 如果颜色包含 oklch 或者是现代 CSS 变量颜色，强制转换为 RGB
       if (val && (val.includes('oklch') || val.includes('var('))) {
-        try {
-          // 浏览器会自动将计算后的样式转换为 rgb/rgba
-          // 但有时 html2canvas 依然会读取到原始定义的变量
-          helper.style.setProperty('color', val, 'important')
-          const rgb = window.getComputedStyle(helper).color
-          if (rgb && !rgb.includes('oklch')) {
-            el.style.setProperty(prop, rgb, 'important')
-          } else {
-            // 极端兜底：如果是黑色或白色文字/背景，给个硬编码值
-            if (prop === 'color') el.style.setProperty(prop, '#1e293b', 'important')
-            if (prop === 'backgroundColor' && val.includes('white')) el.style.setProperty(prop, '#ffffff', 'important')
-          }
-        } catch (e) {
-          // ignore
+        const rgba = colorToRgba(val)
+        if (rgba && !rgba.includes('oklch')) {
+          // 记录原始样式以便后续恢复
+          el._originalStyles = el._originalStyles || {}
+          el._originalStyles[prop] = el.style.getPropertyValue(prop)
+          el.style.setProperty(prop, rgba, 'important')
         }
       }
     })
   })
-  document.body.removeChild(helper)
 }
 
-const exportToPDF = () => {
-  if (!reportRef.value) return
+const exportToPDF = async () => {
+  if (!reportRef.value || isExporting.value) return
+  isExporting.value = true
   
-  // 导出前修复颜色
+  toast.add({ severity: 'info', summary: '正在生成 PDF', detail: '正在优化图表与排版...', life: 2000 })
+
+  // 1. 原地修复颜色，防止 html2canvas 内部解析 oklch 报错
   fixOklchColors(reportRef.value)
-  
-  const element = reportRef.value
+
+  const filename = `分析报告_${Date.now()}.pdf`
   const opt = {
     margin: 10,
-    filename: `分析报告_${Date.now()}.pdf`,
-    image: { type: 'jpeg', quality: 0.98 },
-    html2canvas: { scale: 2, useCORS: true, logging: false },
-    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    filename,
+    image: { type: 'jpeg', quality: 0.8 },
+    html2canvas: { 
+      scale: 1.2, // 1.2 倍率足以打印，且体积小、速度快
+      useCORS: true, 
+      logging: false,
+      backgroundColor: '#ffffff',
+      // 修复截断：指定完整高度
+      height: reportRef.value.scrollHeight,
+      windowHeight: reportRef.value.scrollHeight,
+      onclone: (clonedDoc: Document) => {
+        // 在克隆的文档中，将所有图表容器替换为静态图片
+        // 这样 html2canvas 就不需要去解析 Canvas 或图表内部的复杂样式了
+        const chartElements = clonedDoc.querySelectorAll('[data-chart-index]')
+        chartElements.forEach((el: any) => {
+          const idx = parseInt(el.getAttribute('data-chart-index'))
+          const chartInstance = chartRefs.value[idx]
+          if (chartInstance) {
+            const imgData = chartInstance.getDataURL({ pixelRatio: 2, backgroundColor: '#fff' })
+            const img = clonedDoc.createElement('img')
+            img.src = imgData
+            img.style.width = '100%'
+            img.style.height = 'auto'
+            el.innerHTML = ''
+            el.appendChild(img)
+          }
+        })
+      }
+    },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait', compress: true }
   }
-  html2pdf().set(opt).from(element).save()
+
+  try {
+    // 2. 执行 html2pdf 转换
+    await html2pdf().set(opt).from(reportRef.value).save()
+    toast.add({ severity: 'success', summary: '导出成功', detail: 'PDF 已保存', life: 3000 })
+  } catch (err) {
+    console.error('PDF 导出失败:', err)
+    toast.add({ severity: 'error', summary: '导出失败', detail: '生成 PDF 时出现错误', life: 5000 })
+  } finally {
+    // 3. 恢复原始样式
+    fixOklchColors(reportRef.value, true)
+    isExporting.value = false
+  }
 }
 
+
 const exportToImage = async () => {
+  if (isExporting.value) return
+  
   if (isTabsMode.value && activeTab.value === 1) {
-    // 全量视图：如果只有一张大图，直接下载
     const imgSection = currentSections.value.find((s: any) => s.type === 'image')
     if (imgSection) {
       const a = document.createElement('a')
-      a.href = imgSection.url
-      a.download = `分析大图_${Date.now()}.png`
-      a.click()
+      a.href = imgSection.url; a.download = `分析大图_${Date.now()}.png`; a.click()
       return
     }
   }
   
-  // 否则使用 html2canvas 捕获整个区域
   if (!reportRef.value) return
-  
-  // 导出前修复颜色
-  fixOklchColors(reportRef.value)
-  
+  isExporting.value = true
+  toast.add({ severity: 'info', summary: '正在生成图片', detail: '正在准备高清截图...', life: 2000 })
+
+  const tempContainer = document.createElement('div')
+  tempContainer.style.position = 'fixed'; tempContainer.style.left = '-9999px'
+  tempContainer.style.top = '0'; tempContainer.style.width = reportRef.value.offsetWidth + 'px'
+  document.body.appendChild(tempContainer)
+
   try {
-    const canvas = await html2canvas(reportRef.value, {
-      scale: 2,
+    const clone = reportRef.value.cloneNode(true) as HTMLElement
+    tempContainer.appendChild(clone)
+    fixOklchColors(clone)
+
+    const canvas = await html2canvas(clone, {
+      scale: 1.5,
       useCORS: true,
       backgroundColor: '#ffffff',
-      logging: false
+      logging: false,
+      height: clone.offsetHeight,
+      windowHeight: clone.offsetHeight
     })
-    const url = canvas.toDataURL('image/png')
+    const url = canvas.toDataURL('image/jpeg', 0.9)
     const a = document.createElement('a')
-    a.href = url
-    a.download = `分析视图_${Date.now()}.png`
-    a.click()
+    a.href = url; a.download = `分析视图_${Date.now()}.jpg`; a.click()
+    toast.add({ severity: 'success', summary: '导出成功', detail: '图片已下载', life: 3000 })
   } catch (err) {
     console.error('导出图片失败:', err)
+    toast.add({ severity: 'error', summary: '导出失败', detail: '生成图片失败', life: 5000 })
+  } finally {
+    if (tempContainer.parentElement) document.body.removeChild(tempContainer)
+    isExporting.value = false
   }
 }
 </script>
@@ -150,18 +217,22 @@ const exportToImage = async () => {
         <div class="flex gap-2">
           <button
             @click="exportToPDF"
-            class="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 text-sm font-bold rounded-xl hover:bg-slate-200 transition-all border border-slate-200"
+            :disabled="isExporting"
+            class="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 text-sm font-bold rounded-xl hover:bg-slate-200 transition-all border border-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"
             title="导出为 PDF"
           >
-            <FileText size="16" />
+            <Loader2 v-if="isExporting" class="animate-spin" size="16" />
+            <FileText v-else size="16" />
             PDF 导出
           </button>
           <button
             @click="exportToImage"
-            class="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white text-sm font-bold rounded-xl hover:bg-slate-800 transition-all shadow-md"
+            :disabled="isExporting"
+            class="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white text-sm font-bold rounded-xl hover:bg-slate-800 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
             title="导出为图片"
           >
-            <ImageIcon size="16" />
+            <Loader2 v-if="isExporting" class="animate-spin" size="16" />
+            <ImageIcon v-else size="16" />
             图片导出
           </button>
         </div>
@@ -184,7 +255,12 @@ const exportToImage = async () => {
       </div>
 
       <div ref="reportRef" class="pdf-container">
-        <div v-for="(section, idx) in currentSections" :key="idx" class="mb-8">
+        <div 
+          v-for="(section, idx) in currentSections" 
+          :key="idx" 
+          ref="sectionRefs"
+          class="mb-8"
+        >
           <h2 v-if="section.title" class="text-lg font-bold text-slate-700 mb-4">
             {{ section.title }}
           </h2>
@@ -207,7 +283,11 @@ const exportToImage = async () => {
             v-else-if="section.type === 'chart'"
             class="h-[400px] w-full my-4 bg-white border border-slate-100 rounded-xl p-4 shadow-sm"
           >
-            <VChart :option="section.option" autoresize />
+            <VChart 
+              ref="chartRefs"
+              :option="section.option" 
+              autoresize 
+            />
           </div>
         </div>
       </div>
