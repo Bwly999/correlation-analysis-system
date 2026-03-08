@@ -32,14 +32,15 @@ const sourceNode = computed(() => store.nodes.find(n => n.id === props.source))
     :id="id"
     :d="path[0]"
     fill="none"
-    class="n8n-edge-path transition-colors duration-300"
+    class="n8n-edge-path transition-all duration-300"
     :class="{ 
-      'stroke-slate-200': sourceNode?.data?.status === 'idle' || !sourceNode?.data?.status,
+      'stroke-slate-400': sourceNode?.data?.status === 'idle' || !sourceNode?.data?.status,
       'stroke-indigo-500 is-running': sourceNode?.data?.status === 'running',
       'stroke-emerald-500': sourceNode?.data?.status === 'success',
-      'stroke-rose-500': sourceNode?.data?.status === 'error'
+      'stroke-rose-500': sourceNode?.data?.status === 'error',
+      'is-hovered': isHovered
     }"
-    stroke-width="1.5"
+    :stroke-width="isHovered ? 2.5 : 1.5"
     stroke-linecap="round"
   />
 
@@ -104,6 +105,11 @@ const sourceNode = computed(() => store.nodes.find(n => n.id === props.source))
 .n8n-edge-path.is-running {
   stroke-dasharray: 8, 8;
   animation: n8n-flow 0.8s linear infinite;
+}
+
+.n8n-edge-path.is-hovered {
+  stroke: #6366f1 !important; /* 悬浮时统一变为靛蓝色 */
+  filter: drop-shadow(0 0 3px rgba(99, 102, 241, 0.3));
 }
 
 @keyframes n8n-flow {
