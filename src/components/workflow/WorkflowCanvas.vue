@@ -13,7 +13,7 @@ import RuntimeInputModal from './RuntimeInputModal.vue'
 import DataAnalysisModal from './DataAnalysisModal.vue'
 import Button from 'primevue/button'
 import N8nEdge from './edges/N8nEdge.vue'
-import { Plus, X, ChevronUp, ChevronDown, Play, Terminal, FolderOpen, Trash2, Copy, Square, Focus, Clock, History, CheckCircle2, AlertCircle, StopCircle, Layers2 } from 'lucide-vue-next'
+import { Plus, X, ChevronUp, ChevronDown, Play, Terminal, FolderOpen, Trash2, Copy, Square, Focus, Clock, History, CheckCircle2, AlertCircle, StopCircle, Layers2, AlertTriangle, Undo2 } from 'lucide-vue-next'
 import Dialog from 'primevue/dialog'
 import ConfirmDialog from 'primevue/confirmdialog'
 import { useConfirm } from 'primevue/useconfirm'
@@ -94,11 +94,8 @@ const resumeExecution = async () => {
 }
 
 const restoreExecution = (record: any) => {
-    store.nodes = record.nodes
-    store.edges = record.edges
-    store.workflowName = record.workflowName
+    store.enterHistoryMode(record.id)
     isWorkflowListVisible.value = false
-    store.addLog(`已恢复运行历史快照: ${record.id}`, 'info')
     setTimeout(() => resetView(), 100)
 }
 
@@ -171,20 +168,61 @@ onMounted(() => {
 
     <!-- 主画布区 (Sunken Effect) -->
     <main class="absolute inset-0 top-[56px] bottom-0 overflow-hidden shadow-[inset_0_2px_10px_rgba(0,0,0,0.05)] border-t border-slate-200">
+      <!-- 历史模式提示条 -->
+      <div 
+        v-if="store.isHistoryMode" 
+        class="absolute top-0 left-0 right-0 z-[110] bg-amber-500 text-white px-6 py-2.5 flex items-center justify-between shadow-lg animate-in slide-in-from-top duration-300"
+      >
+        <div class="flex items-center gap-3">
+          <div class="p-1.5 bg-white/20 rounded-lg">
+            <AlertTriangle size="18" class="text-white" />
+          </div>
+          <div class="flex flex-col">
+            <span class="font-bold text-[13px] tracking-tight">历史记录查看模式</span>
+            <span class="text-[11px] opacity-90">当前工作流处于只读状态，编辑与运行功能已禁用</span>
+          </div>
+        </div>
+        <Button 
+          @click="store.exitHistoryMode()" 
+          severity="secondary" 
+          class="h-8 px-4 text-[11px] font-bold bg-white/20 hover:bg-white/30 border-none text-white rounded-lg flex items-center gap-2 transition-all active:scale-95"
+        >
+          <Undo2 size="14" />
+          返回编辑模式
+        </Button>
+      </div>
+
       <VueFlow 
         v-model:nodes="store.nodes" 
         v-model:edges="store.edges" 
         :default-edge-options="{ animated: true, style: { stroke: '#cbd5e1', strokeWidth: 2.5 }, type: 'n8n' }" 
         @dragover="onDragOverLocal" 
         @drop="onDropLocal"
-        class="bg-[#f4f7fa]"
+        :nodes-draggable="!store.isHistoryMode"
+        :nodes-connectable="!store.isHistoryMode"
+        :elements-selectable="!store.isHistoryMode"
+        :select-nodes-on-drag="!store.isHistoryMode"
+        :pan-on-drag="true"
+        :zoom-on-scroll="true"
+        class="bg-[#f4f7fa] transition-colors duration-500"
+        :class="{'grayscale-[0.2] sepia-[0.1]': store.isHistoryMode}"
       >
         <template #node-custom="props"><BaseNode v-bind="props" /></template>
         <template #edge-n8n="props"><N8nEdge v-bind="props" /></template>
         
         <!-- 双层交叉线网格系统 -->
-        <Background :gap="20" pattern-type="lines" :size="1" pattern-color="#e2e8f0" />
-        <Background :gap="100" pattern-type="lines" :size="1" pattern-color="#cbd5e1" />
+        <Background 
+          :gap="20" 
+          pattern-type="lines" 
+          :size="1" 
+          :pattern-color="store.isHistoryMode ? '#e5e7eb' : '#e2e8f0'" 
+        />
+        <Background 
+          :gap="100" 
+          pattern-type="lines" 
+          :size="1" 
+          :pattern-color="store.isHistoryMode ? '#d1d5db' : '#cbd5e1'" 
+        />
 
         <Controls position="bottom-left" class="ml-6 transition-all duration-300 !bg-white !border-[#efefef] !shadow-xl !rounded-2xl !p-1" :style="{ marginBottom: isLogExpanded ? '350px' : '90px' }">
           <template #control-button-reset></template>
@@ -198,12 +236,21 @@ onMounted(() => {
     </main>
 
     <!-- 节点侧边栏 -->
-    <aside class="absolute right-0 top-[60px] bottom-0 z-[80] transition-transform duration-500 ease-in-out shadow-[-20px_0_50px_rgba(0,0,0,0.03)]" :class="isSidebarVisible ? 'translate-x-0' : 'translate-x-full'" style="width: 340px;">
+    <aside 
+      v-if="!store.isHistoryMode"
+      class="absolute right-0 top-[60px] bottom-0 z-[80] transition-transform duration-500 ease-in-out shadow-[-20px_0_50px_rgba(0,0,0,0.03)]" 
+      :class="isSidebarVisible ? 'translate-x-0' : 'translate-x-full'" 
+      style="width: 340px;"
+    >
       <NodeSidebar @close="isSidebarVisible = false" />
     </aside>
 
     <!-- 开始/停止运行按钮 -->
-    <div class="absolute left-1/2 -translate-x-1/2 z-[90] transition-all duration-500 flex gap-3" :style="{ bottom: isLogExpanded ? '320px' : '64px' }">
+    <div 
+      v-if="!store.isHistoryMode"
+      class="absolute left-1/2 -translate-x-1/2 z-[90] transition-all duration-500 flex gap-3" 
+      :style="{ bottom: isLogExpanded ? '320px' : '64px' }"
+    >
        <Button @click="store.runGlobal" :disabled="store.isRunning || !!store.pendingExecution" class="n8n-execute-bar w-[280px] h-[52px] rounded-2xl shadow-[0_20px_50px_-10px_rgba(16,185,129,0.4)] hover:shadow-emerald-400/60 transform hover:-translate-y-1 transition-all active:scale-[0.97] border-none flex items-center justify-center text-white">
          <Play size="20" fill="currentColor" class="mr-3" />
          <span class="text-[14px] font-black tracking-widest uppercase">开始运行工作流</span>
@@ -282,8 +329,8 @@ onMounted(() => {
                                 </div>
                                 <div class="flex gap-2">
                                     <Button @click="loadWorkflow(wf.id)" label="打开" size="small" text class="font-black text-indigo-600 px-3" />
-                                    <Button @click="duplicateWorkflow(wf.id)" severity="secondary" text size="small" class="opacity-0 group-hover:opacity-100" v-tooltip.top="'复制工作流'"><Copy size="16" /></Button>
-                                    <Button @click="deleteWorkflow(wf.id)" severity="danger" text size="small" class="opacity-0 group-hover:opacity-100" v-tooltip.top="'删除工作流'"><Trash2 size="16" /></Button>
+                                    <Button @click="duplicateWorkflow(wf.id)" severity="secondary" text size="small" class="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50" v-tooltip.top="'复制工作流'"><Copy size="16" /></Button>
+                                    <Button @click="deleteWorkflow(wf.id)" severity="danger" text size="small" class="text-slate-400 hover:text-rose-600 hover:bg-rose-50" v-tooltip.top="'删除工作流'"><Trash2 size="16" /></Button>
                                 </div>
                             </div>
                         </div>

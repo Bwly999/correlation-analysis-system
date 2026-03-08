@@ -64,6 +64,49 @@ export const useWorkflowStore = defineStore('workflow', () => {
   const lastExecutedTerminalNodeId = ref<string | null>(null)
   const executionHistory = ref<ExecutionRecord[]>([])
 
+  // 历史模式相关状态
+  const isHistoryMode = ref(false)
+  const originalWorkflowState = ref<{
+    nodes: WorkflowNode[],
+    edges: Edge[],
+    name: string,
+    id: string | null
+  } | null>(null)
+
+  const enterHistoryMode = (recordId: string) => {
+    const record = executionHistory.value.find(r => r.id === recordId)
+    if (!record) return
+
+    // 如果当前不在历史模式，先保存原始状态
+    if (!isHistoryMode.value) {
+      originalWorkflowState.value = {
+        nodes: JSON.parse(JSON.stringify(nodes.value)),
+        edges: JSON.parse(JSON.stringify(edges.value)),
+        name: workflowName.value,
+        id: currentWorkflowId.value
+      }
+    }
+
+    isHistoryMode.value = true
+    nodes.value = JSON.parse(JSON.stringify(record.nodes))
+    edges.value = JSON.parse(JSON.stringify(record.edges))
+    workflowName.value = `${record.workflowName} (历史记录: ${new Date(record.startTime).toLocaleString()})`
+    addLog(`正在查看历史运行记录: ${new Date(record.startTime).toLocaleString()}`, 'info')
+  }
+
+  const exitHistoryMode = () => {
+    if (!isHistoryMode.value || !originalWorkflowState.value) return
+
+    nodes.value = originalWorkflowState.value.nodes
+    edges.value = originalWorkflowState.value.edges
+    workflowName.value = originalWorkflowState.value.name
+    currentWorkflowId.value = originalWorkflowState.value.id
+    
+    isHistoryMode.value = false
+    originalWorkflowState.value = null
+    addLog('已返回工作流编辑模式', 'info')
+  }
+
   const addLog = (message: string, level: 'info' | 'error' | 'warn' = 'info', nodeId?: string) => {
     logs.value.push({
       time: new Date().toLocaleTimeString(),
@@ -419,8 +462,9 @@ export const useWorkflowStore = defineStore('workflow', () => {
   return {
     nodes, edges, logs, workflowName, currentWorkflowId, isRunning, isStopping,
     pendingConnection, activeConfigNodeId, pendingExecution, lastExecutedTerminalNodeId,
-    executionHistory,
+    executionHistory, isHistoryMode,
     addLog, stopExecution, getCategoryByType, validateConnection, addAndConnectNode, executeNode, runGlobal,
-    saveWorkflow, loadWorkflow, duplicateWorkflow, exportWorkflow, importWorkflow, loadHistory, clearHistory
+    saveWorkflow, loadWorkflow, duplicateWorkflow, exportWorkflow, importWorkflow, loadHistory, clearHistory,
+    enterHistoryMode, exitHistoryMode
   }
 })
