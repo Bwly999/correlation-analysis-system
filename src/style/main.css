@@ -15,3 +15,24 @@
     cursor: pointer !important;
   }
 }
+
+/* Tooltip 定制 */
+.p-tooltip {
+  max-width: 250px;
+}
+.p-tooltip-text {
+  background: #1e293b !important; /* Slate-800 */
+  color: #f8fafc !important; /* Slate-50 */
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  padding: 6px 10px !important;
+  border-radius: 8px !important;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1) !important;
+}
+.p-tooltip-arrow {
+  border-top-color: #1e293b !important;
+  border-bottom-color: #1e293b !important;
+  border-left-color: #1e293b !important;
+  border-right-color: #1e293b !important;
+}
+

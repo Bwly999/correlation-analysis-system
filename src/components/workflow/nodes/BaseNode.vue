@@ -130,9 +130,9 @@ const nodeShape = computed(() => {
 
       <!-- 状态指示器 -->
       <div v-if="props.data.status !== 'idle'" class="absolute -bottom-2 -right-2 bg-white rounded-full p-1 border border-slate-100 shadow-sm z-20">
-        <Loader2 v-if="props.data.status === 'running'" size="18" class="text-indigo-600 animate-spin" />
-        <CheckCircle v-else-if="props.data.status === 'success'" size="18" class="text-emerald-500" />
-        <AlertTriangle v-else-if="props.data.status === 'error'" size="18" class="text-rose-500" />
+        <Loader2 v-if="props.data.status === 'running'" v-tooltip.bottom="'正在执行...'" size="18" class="text-indigo-600 animate-spin" />
+        <CheckCircle v-else-if="props.data.status === 'success'" v-tooltip.bottom="'执行成功'" size="18" class="text-emerald-500" />
+        <AlertTriangle v-else-if="props.data.status === 'error'" v-tooltip.bottom="props.data.error || '执行失败'" size="18" class="text-rose-500" />
       </div>
     </div>
 

@@ -90,7 +90,7 @@ const handleConfirm = () => {
       <div v-for="prop in runtimeProperties" :key="prop.name" class="flex flex-col gap-2">
         <label class="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center">
           {{ prop.displayName }}
-          <HelpCircle v-if="prop.description" size="12" class="ml-1 opacity-50" />
+          <HelpCircle v-if="prop.description" v-tooltip.top="prop.description" size="12" class="ml-1 opacity-50 cursor-help" />
         </label>
 
         <!-- 根据类型渲染 -->

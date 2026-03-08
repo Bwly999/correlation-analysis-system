@@ -232,7 +232,7 @@ const saveAndClose = () => {
         <div class="flex-1 p-8 overflow-y-auto custom-scrollbar bg-white">
           <div v-if="activeTab === 'parameters'" class="space-y-10 max-w-2xl mx-auto py-4">
             <div v-for="prop in staticProperties" :key="prop.name" v-show="!prop.displayIf || prop.displayIf(config)" class="flex flex-col gap-3">
-              <label class="ndv-label">{{ prop.displayName }} <HelpCircle v-if="prop.description" size="12" class="text-slate-300 ml-1" /></label>
+              <label class="ndv-label">{{ prop.displayName }} <HelpCircle v-if="prop.description" v-tooltip.top="prop.description" size="12" class="text-slate-300 ml-1 cursor-help" /></label>
               
               <div v-if="prop.type === 'collection'" class="space-y-6">
                  <div v-for="(item, idx) in config[prop.name]" :key="idx" class="p-6 bg-[#fcfcfd] border border-slate-200 rounded-2xl shadow-sm relative group/item hover:border-indigo-300 transition-all">
@@ -242,15 +242,18 @@ const saveAndClose = () => {
                     </div>
                     <div class="space-y-6">
                        <div v-for="subProp in prop.properties" :key="subProp.name" class="flex flex-col gap-2">
-                          <span class="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">{{ subProp.displayName }}</span>
+                          <span class="text-[9px] font-bold text-slate-400 uppercase tracking-tighter flex items-center">
+                            {{ subProp.displayName }}
+                            <HelpCircle v-if="subProp.description" v-tooltip.top="subProp.description" size="10" class="text-slate-300 ml-1 cursor-help" />
+                          </span>
                           <div v-if="subProp.type === 'collection'" class="p-4 bg-white rounded-xl space-y-3 border border-slate-100">
                              <div v-for="(subItem, subIdx) in item[subProp.name]" :key="subIdx" class="flex items-center gap-3 p-2 bg-slate-50/50 rounded-lg">
                                 <div class="flex-1 grid grid-cols-12 gap-2">
                                    <div v-for="ssProp in subProp.properties" :key="ssProp.name" :class="ssProp.type === 'number' ? 'col-span-4' : 'col-span-8'">
-                                      <Select v-if="ssProp.type === 'options' && ssProp.name === 'factorName'" v-model="subItem[ssProp.name]" :options="upstreamFactors" optionLabel="name" optionValue="value" placeholder="选择因子" class="w-full text-xs" />
-                                      <Select v-else-if="ssProp.type === 'options'" v-model="subItem[ssProp.name]" :options="ssProp.options" optionLabel="name" optionValue="value" class="w-full text-xs" />
-                                      <InputNumber v-else-if="ssProp.type === 'number'" v-model="subItem[ssProp.name]" :placeholder="ssProp.displayName" class="w-full text-xs" :minFractionDigits="1" />
-                                      <InputText v-else v-model="subItem[ssProp.name]" class="w-full text-xs" :placeholder="ssProp.placeholder || ssProp.displayName" />
+                                      <Select v-if="ssProp.type === 'options' && ssProp.name === 'factorName'" v-model="subItem[ssProp.name]" :options="upstreamFactors" optionLabel="name" optionValue="value" placeholder="选择因子" class="w-full text-xs" v-tooltip.top="ssProp.description" />
+                                      <Select v-else-if="ssProp.type === 'options'" v-model="subItem[ssProp.name]" :options="ssProp.options" optionLabel="name" optionValue="value" class="w-full text-xs" v-tooltip.top="ssProp.description" />
+                                      <InputNumber v-else-if="ssProp.type === 'number'" v-model="subItem[ssProp.name]" :placeholder="ssProp.displayName" class="w-full text-xs" :minFractionDigits="1" v-tooltip.top="ssProp.description" />
+                                      <InputText v-else v-model="subItem[ssProp.name]" class="w-full text-xs" :placeholder="ssProp.placeholder || ssProp.displayName" v-tooltip.top="ssProp.description" />
                                    </div>
                                 </div>
                                 <button @click="removeCollectionItem(item, subProp.name, subIdx)" class="text-slate-300 hover:text-rose-500 cursor-pointer"><X size="14" /></button>
