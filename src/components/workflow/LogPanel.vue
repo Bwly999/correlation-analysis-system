@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useWorkflowStore } from '@/stores/workflowStore'
-import { Terminal, Trash2, List, Filter, Download, Search, X } from 'lucide-vue-next'
+import { Terminal, Trash2, List, Filter, Download, Search, X, Info, AlertTriangle, AlertCircle, CircleDot } from 'lucide-vue-next'
 import { ref, watch, nextTick, computed } from 'vue'
 
 const store = useWorkflowStore()
@@ -10,10 +10,10 @@ const selectedLevel = ref<'all' | 'info' | 'warn' | 'error'>('all')
 const isSearchVisible = ref(false)
 
 const levels = [
-  { value: 'all', label: '全部', color: 'bg-slate-400' },
-  { value: 'info', label: '信息', color: 'bg-emerald-500' },
-  { value: 'warn', label: '警告', color: 'bg-amber-500' },
-  { value: 'error', label: '错误', color: 'bg-rose-500' }
+  { value: 'all', label: '全部', icon: CircleDot, color: 'text-slate-400', activeBg: 'bg-slate-100', activeText: 'text-slate-700' },
+  { value: 'info', label: '信息', icon: Info, color: 'text-emerald-500', activeBg: 'bg-emerald-50', activeText: 'text-emerald-700' },
+  { value: 'warn', label: '警告', icon: AlertTriangle, color: 'text-amber-500', activeBg: 'bg-amber-50', activeText: 'text-amber-700' },
+  { value: 'error', label: '错误', icon: AlertCircle, color: 'text-rose-500', activeBg: 'bg-rose-50', activeText: 'text-rose-700' }
 ] as const
 
 const filteredLogs = computed(() => {
@@ -76,11 +76,12 @@ const selectNode = (nodeId: string) => {
               v-for="level in levels" 
               :key="level.value"
               @click="selectedLevel = level.value"
-              class="px-2 py-0.5 rounded-md text-[10px] font-bold transition-all cursor-pointer whitespace-nowrap"
+              class="px-2.5 py-1 rounded-md text-[10px] font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5"
               :class="selectedLevel === level.value 
-                ? 'bg-white text-slate-800 shadow-sm border border-slate-200/50' 
-                : 'text-slate-400 hover:text-slate-600 hover:bg-slate-200/50'"
+                ? `${level.activeBg} ${level.activeText} shadow-sm border border-slate-200/50` 
+                : 'text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 border border-transparent'"
             >
+              <component :is="level.icon" size="10" :class="selectedLevel === level.value ? level.color : 'text-slate-300'" />
               {{ level.label }}
             </button>
           </div>
