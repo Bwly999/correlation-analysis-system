@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, watch, nextTick } from 'vue'
+import { ref, onMounted, watch, nextTick, computed } from 'vue'
 import { VueFlow, useVueFlow, type Connection } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
@@ -54,6 +54,19 @@ const isWorkflowListVisible = ref(false)
 const isSidebarVisible = ref(true)
 const savedWorkflows = ref<any[]>([])
 const activeTab = ref('0')
+
+// 排序后的工作流列表 (按更新时间倒序)
+const sortedWorkflows = computed(() => {
+  return [...savedWorkflows.value].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+})
+
+// 当前工作流的运行历史
+const currentWorkflowHistory = computed(() => {
+  if (store.currentWorkflowId) {
+    return store.executionHistory.filter((r) => r.workflowId === store.currentWorkflowId)
+  }
+  return store.executionHistory.filter((r) => !r.workflowId || r.workflowId === 'temp')
+})
 
 // 深度分析弹窗状态
 const analysisModal = ref({ visible: false, title: '', data: null })
@@ -392,11 +405,10 @@ onMounted(() => {
           </TabList>
           <TabPanels>
             <TabPanel value="0">
-              <div
-                class="flex flex-col gap-3 py-4 max-h-[420px] overflow-y-auto custom-scrollbar px-1"
-              >
+              <div class="flex flex-col py-4 px-1 gap-5">
+                <!-- 创建入口 (静态布局，不随列表滚动) -->
                 <div
-                  class="flex items-center gap-4 p-5 bg-slate-900 text-white rounded-2xl cursor-pointer hover:bg-slate-800 transition-all shadow-lg shadow-slate-200/50 group/new sticky top-0 z-10 mb-2"
+                  class="flex items-center gap-4 p-5 bg-slate-900 text-white rounded-2xl cursor-pointer hover:bg-slate-800 transition-all shadow-lg shadow-slate-200/50 group/new shrink-0"
                   @click="
                     () => {
                       store.createNewWorkflow()
@@ -414,60 +426,68 @@ onMounted(() => {
                     <div class="text-[11px] text-slate-400">从零开始构建您的分析流程</div>
                   </div>
                 </div>
+
+                <!-- 列表展示区域 (带滚动条) -->
                 <div
-                  v-if="savedWorkflows.length === 0"
-                  class="text-center py-10 text-[#a3acb9] italic border-2 border-dashed rounded-2xl flex flex-col items-center gap-2"
+                  class="flex flex-col gap-3 max-h-[360px] overflow-y-auto custom-scrollbar pr-1"
                 >
-                  <FolderOpen size="32" class="opacity-20" /> 还没有保存过任何工作流。
-                </div>
-                <div
-                  v-for="wf in savedWorkflows"
-                  :key="wf.id"
-                  class="flex items-center justify-between p-4 bg-[#fcfcfd] border border-[#f1f4f8] rounded-xl hover:border-indigo-200 hover:bg-white transition-all group"
-                >
-                  <div class="flex flex-col gap-1">
-                    <span class="font-bold text-[13px] text-[#3c4257]">{{ wf.name }}</span>
-                    <span
-                      class="text-[10px] text-[#a3acb9] flex items-center gap-1.5 font-medium uppercase tracking-tight"
-                      ><Clock size="12" /> 更新于
-                      {{ new Date(wf.updatedAt).toLocaleString() }}</span
-                    >
+                  <div
+                    v-if="sortedWorkflows.length === 0"
+                    class="text-center py-10 text-[#a3acb9] italic border-2 border-dashed rounded-2xl flex flex-col items-center gap-2"
+                  >
+                    <FolderOpen size="32" class="opacity-20" /> 还没有保存过任何工作流。
                   </div>
-                  <div class="flex gap-2">
-                    <Button
-                      label="打开"
-                      size="small"
-                      text
-                      class="font-black text-indigo-600 px-3"
-                      @click="loadWorkflow(wf.id)"
-                    />
-                    <Button
-                      v-tooltip.top="'复制工作流'"
-                      severity="secondary"
-                      text
-                      size="small"
-                      class="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50"
-                      @click="duplicateWorkflow(wf.id)"
-                      ><Copy size="16"
-                    /></Button>
-                    <Button
-                      v-tooltip.top="'删除工作流'"
-                      severity="danger"
-                      text
-                      size="small"
-                      class="text-slate-400 hover:text-rose-600 hover:bg-rose-50"
-                      @click="deleteWorkflow(wf.id)"
-                      ><Trash2 size="16"
-                    /></Button>
+                  <div
+                    v-for="wf in sortedWorkflows"
+                    :key="wf.id"
+                    class="flex items-center justify-between p-4 bg-[#fcfcfd] border border-[#f1f4f8] rounded-xl hover:border-indigo-200 hover:bg-white transition-all group"
+                  >
+                    <div class="flex flex-col gap-1">
+                      <span class="font-bold text-[13px] text-[#3c4257]">{{ wf.name }}</span>
+                      <span
+                        class="text-[10px] text-[#a3acb9] flex items-center gap-1.5 font-medium uppercase tracking-tight"
+                        ><Clock size="12" /> 更新于
+                        {{ new Date(wf.updatedAt).toLocaleString() }}</span
+                      >
+                    </div>
+                    <div class="flex gap-2">
+                      <Button
+                        label="打开"
+                        size="small"
+                        text
+                        class="font-black text-indigo-600 px-3"
+                        @click="loadWorkflow(wf.id)"
+                      />
+                      <Button
+                        v-tooltip.top="'复制工作流'"
+                        severity="secondary"
+                        text
+                        size="small"
+                        class="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50"
+                        @click="duplicateWorkflow(wf.id)"
+                        ><Copy size="16"
+                      /></Button>
+                      <Button
+                        v-tooltip.top="'删除工作流'"
+                        severity="danger"
+                        text
+                        size="small"
+                        class="text-slate-400 hover:text-rose-600 hover:bg-rose-50"
+                        @click="deleteWorkflow(wf.id)"
+                        ><Trash2 size="16"
+                      /></Button>
+                    </div>
                   </div>
                 </div>
               </div>
             </TabPanel>
             <TabPanel value="1">
               <div class="flex items-center justify-between px-2 pb-2 border-b border-slate-100">
-                <span class="text-[11px] font-bold text-slate-500">保留最近 20 条记录</span>
+                <span class="text-[11px] font-bold text-slate-500">
+                  当前工作流的历史记录 (最近 20 条)
+                </span>
                 <Button
-                  v-if="store.executionHistory.length > 0"
+                  v-if="currentWorkflowHistory.length > 0"
                   label="清空历史"
                   size="small"
                   severity="danger"
@@ -480,13 +500,13 @@ onMounted(() => {
                 class="flex flex-col gap-3 py-4 max-h-[420px] overflow-y-auto custom-scrollbar px-1"
               >
                 <div
-                  v-if="store.executionHistory.length === 0"
+                  v-if="currentWorkflowHistory.length === 0"
                   class="text-center py-20 text-[#a3acb9] italic"
                 >
-                  <History size="48" class="mx-auto mb-4 opacity-10" /> 暂无执行历史记录。
+                  <History size="48" class="mx-auto mb-4 opacity-10" /> 暂无当前工作流的运行记录。
                 </div>
                 <div
-                  v-for="record in store.executionHistory"
+                  v-for="record in currentWorkflowHistory"
                   :key="record.id"
                   class="flex items-center justify-between p-4 bg-[#fcfcfd] border border-[#f1f4f8] rounded-xl hover:bg-white transition-all group border-l-4"
                   :class="

@@ -69,8 +69,41 @@ async def analyze_xgboost_shap(
             for name, val in zip(feature_names, mean_abs_shap)
         ]
         
-        # 排序
+        # 排序重要性
         importance_list.sort(key=lambda x: x["value"], reverse=True)
+        top_features = [item["name"] for item in importance_list[:6]] # 取前6个重要特征做依赖分析
+
+        # 构建蜂群图数据 (Beeswarm)
+        # 我们需要：每个点的 (特征值, SHAP值, 特征索引)
+        # 为了前端展示方便，我们对特征值进行归一化(0-1)用于颜色映射
+        beeswarm_data = {}
+        for i, col in enumerate(feature_names):
+            f_vals = X_sample[col].values
+            s_vals = shap_values.values[:, i]
+            
+            # 归一化特征值用于颜色映射 (0: Blue, 1: Red)
+            f_min, f_max = f_vals.min(), f_vals.max()
+            if f_max > f_min:
+                f_norm = (f_vals - f_min) / (f_max - f_min)
+            else:
+                f_norm = np.zeros_like(f_vals)
+                
+            beeswarm_data[col] = {
+                "values": f_vals.tolist(),
+                "shap_values": s_vals.tolist(),
+                "norm_values": f_norm.tolist()
+            }
+
+        # 构建依赖图数据 (Dependence)
+        dependence_plots = []
+        for feat in top_features:
+            feat_idx = feature_names.index(feat)
+            dependence_plots.append({
+                "feature": feat,
+                "x": X_sample[feat].tolist(),
+                "shap": shap_values.values[:, feat_idx].tolist(),
+                "actual_y": y_sample.tolist() if y_sample is not None else []
+            })
         
         return {
             "status": "success",
@@ -78,13 +111,17 @@ async def analyze_xgboost_shap(
                 "r2": round(model_core.r2_score, 4),
                 "mae": round(model_core.mae, 4),
                 "importance": importance_list,
+                "beeswarm": beeswarm_data,
+                "dependence": dependence_plots,
                 "message": "分析完成"
             }
         }
+    except HTTPException as e:
+        raise e
     except Exception as e:
         import traceback
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"算法执行失败: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

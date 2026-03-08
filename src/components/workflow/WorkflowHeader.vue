@@ -21,6 +21,15 @@ import Popover from 'primevue/popover'
 const emit = defineEmits(['open-projects'])
 const store = useWorkflowStore()
 
+// 过滤当前工作流的历史记录
+const filteredHistory = computed(() => {
+  if (store.currentWorkflowId) {
+    return store.executionHistory.filter((r) => r.workflowId === store.currentWorkflowId)
+  }
+  // 如果是新建未保存的工作流，显示 temp 或 null 的记录
+  return store.executionHistory.filter((r) => !r.workflowId || r.workflowId === 'temp')
+})
+
 const menu = ref()
 const historyPopover = ref()
 const menuItems = ref([
@@ -116,12 +125,12 @@ const formatDuration = (ms: number) => {
             <Clock :size="14" class="text-slate-400" />
           </div>
           <div class="max-h-[400px] overflow-y-auto scrollbar-thin">
-            <div v-if="store.executionHistory.length === 0" class="p-8 text-center">
+            <div v-if="filteredHistory.length === 0" class="p-8 text-center">
               <Activity :size="24" class="mx-auto text-slate-200 mb-2" />
               <p class="text-[12px] text-slate-400">暂无运行记录</p>
             </div>
             <div
-              v-for="record in store.executionHistory"
+              v-for="record in filteredHistory"
               :key="record.id"
               class="p-3 border-b border-slate-100 hover:bg-indigo-50 cursor-pointer transition-colors group"
               @click="selectHistory(record)"

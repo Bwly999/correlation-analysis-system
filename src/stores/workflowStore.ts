@@ -439,7 +439,15 @@ export const useWorkflowStore = defineStore('workflow', () => {
     const workflow: SavedWorkflow = {
       id,
       name: workflowName.value,
-      nodes: nodes.value,
+      // 保存时清理运行时状态 (除非被冻结)
+      nodes: nodes.value.map((n) => ({
+        ...n,
+        data: {
+          ...n.data,
+          status: 'idle',
+          output: n.data.isPinned ? n.data.output : null,
+        },
+      })),
       edges: edges.value,
       updatedAt: Date.now(),
     }
@@ -459,7 +467,15 @@ export const useWorkflowStore = defineStore('workflow', () => {
     const saved = JSON.parse(localStorage.getItem('saved_workflows') || '[]')
     const workflow = saved.find((w: any) => w.id === id)
     if (workflow) {
-      nodes.value = workflow.nodes
+      // 加载时重置所有非冻结节点的状态
+      nodes.value = workflow.nodes.map((n: WorkflowNode) => ({
+        ...n,
+        data: {
+          ...n.data,
+          status: 'idle',
+          output: n.data.isPinned ? n.data.output : null,
+        },
+      }))
       edges.value = workflow.edges
       workflowName.value = workflow.name
       currentWorkflowId.value = workflow.id
@@ -472,10 +488,19 @@ export const useWorkflowStore = defineStore('workflow', () => {
     const original = saved.find((w: any) => w.id === id)
     if (original) {
       const newId = `wf_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`
+      // 复制时也重置状态
       const duplicated: SavedWorkflow = {
         ...original,
         id: newId,
         name: `${original.name} (副本)`,
+        nodes: original.nodes.map((n: WorkflowNode) => ({
+          ...n,
+          data: {
+            ...n.data,
+            status: 'idle',
+            output: n.data.isPinned ? n.data.output : null,
+          },
+        })),
         updatedAt: Date.now(),
       }
       const updatedList = [...saved, duplicated]
@@ -487,7 +512,16 @@ export const useWorkflowStore = defineStore('workflow', () => {
   }
 
   const exportWorkflow = () => {
-    const workflow = { name: workflowName.value, nodes: nodes.value, edges: edges.value }
+    // 导出前清理运行时状态
+    const cleanNodes = nodes.value.map((n) => ({
+      ...n,
+      data: {
+        ...n.data,
+        status: 'idle',
+        output: n.data.isPinned ? n.data.output : null,
+      },
+    }))
+    const workflow = { name: workflowName.value, nodes: cleanNodes, edges: edges.value }
     const blob = new Blob([JSON.stringify(workflow, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -503,7 +537,16 @@ export const useWorkflowStore = defineStore('workflow', () => {
     reader.onload = (e) => {
       try {
         const workflow = JSON.parse(e.target?.result as string)
-        nodes.value = workflow.nodes || []
+        // 导入时强制重置状态
+        const importedNodes = (workflow.nodes || []).map((n: WorkflowNode) => ({
+          ...n,
+          data: {
+            ...n.data,
+            status: 'idle',
+            output: n.data.isPinned ? n.data.output : null,
+          },
+        }))
+        nodes.value = importedNodes
         edges.value = workflow.edges || []
         workflowName.value = workflow.name || '导入的工作流'
         currentWorkflowId.value = null
