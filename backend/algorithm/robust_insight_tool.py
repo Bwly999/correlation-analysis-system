@@ -5,6 +5,8 @@ import platform
 import warnings
 import re
 import math
+import io
+import base64
 from typing import Optional, List, Tuple, Union, Dict, Any
 from dataclasses import dataclass
 from datetime import datetime
@@ -48,11 +50,10 @@ class AppConfig:
     OUTLIER_CONTAMINATION: float = 0.05 # 孤立森林认为异常数据的比例 (默认 5%)
     IQR_THRESHOLD: float = 1.5 # IQR 倍数
     
-    # [绘图参数] 
+    # [绘图参数]
     BASE_FIGURE_WIDTH: int = 24
     DPI: int = 150
     FONT_SCALE: float = 0.8
-    
     # 默认输出目录 (可覆盖)
     DEFAULT_OUTPUT_DIR: str = "analysis_output"
 
@@ -461,45 +462,36 @@ class VisualStudio:
     2. 在标题中显示 R2 和 MAE。
     """
     @staticmethod
-    def generate_report(shap_values, X_sample, y_sample, feature_names, output_dir: str, filename: str, 
-                        show_actual_y: bool, full_report_mode: bool, 
-                        model_r2: float, model_mae: float):
-        logger.info(f"正在渲染分析报表 (全量模式: {full_report_mode})...")
-        
+    def _draw_report(shap_values, X_sample, y_sample, feature_names, 
+                     show_actual_y: bool, full_report_mode: bool, 
+                     model_r2: float, model_mae: float,
+                     target_name: str = "Target"):
+        """内部绘图核心逻辑 (共享于文件保存与 Base64 生成)"""
         n_features = len(feature_names)
         
         # 1. 动态计算画布尺寸
         if full_report_mode:
-            # 顶部 Summary 区域：
-            # 蜂群图 (高度随特征数增加) + 柱状图 (高度随特征数增加)
-            # 在全量模式下，将它们垂直排列，避免并排挤压
-            summary_unit_height = max(6, n_features * 0.4) 
-            summary_section_height = summary_unit_height * 2 # 两个图垂直放
-            
-            # 底部 Detail 区域：
+            summary_unit_height = max(7, n_features * 0.4) 
+            summary_section_height = summary_unit_height * 2
             plots_per_row = 3
             n_rows = math.ceil(n_features / plots_per_row)
-            detail_height = n_rows * 4.5
-            
-            total_height = summary_section_height + detail_height + 3 # +3 for title
-            
+            detail_height = n_rows * 5.0
+            total_height = summary_section_height + detail_height + 3
             fig_size = (AppConfig.BASE_FIGURE_WIDTH, int(total_height))
             beeswarm_max_display = n_features 
         else:
-            # 标准模式：固定尺寸，3行2列
-            # 顶部 Summary 1行2列
             fig_size = (24, 16)
             beeswarm_max_display = 15
             n_rows = 1 
+            detail_height = 4.5 # dummy
 
         # 2. 初始化绘图
-        with plt.style.context('seaborn-v0_8-whitegrid'), sns.plotting_context("notebook", font_scale=AppConfig.FONT_SCALE):
+        with sns.plotting_context("notebook", font_scale=AppConfig.FONT_SCALE):
             SystemContext._fix_matplotlib_chinese()
             
             fig = plt.figure(figsize=fig_size, dpi=AppConfig.DPI, layout='constrained')
             
             # 3. 构造增强标题
-            target_name = y_sample.name if hasattr(y_sample, 'name') else "Target"
             if len(feature_names) > 5 and not full_report_mode:
                 x_desc = ", ".join(feature_names[:5]) + f", ... (共{len(feature_names)}个)"
             else:
@@ -515,77 +507,52 @@ class VisualStudio:
 
             # 4. 定义 GridSpec
             if full_report_mode:
-                # 全量模式布局：3 个部分垂直排列
-                # Part 1: Beeswarm (Full height)
-                # Part 2: Bar Chart (Full height)
-                # Part 3: Detail Grid
                 height_ratios = [summary_unit_height, summary_unit_height, detail_height]
                 gs = fig.add_gridspec(3, 1, height_ratios=height_ratios)
-                
-                # Axes for Summary
                 ax_beeswarm = fig.add_subplot(gs[0, 0])
                 ax_bar = fig.add_subplot(gs[1, 0])
-                
-                # Sub-Grid for Detail
                 gs_bottom = gs[2].subgridspec(n_rows, 3)
-                
             else:
-                # 标准模式布局: 3行，上部1行2列，下部2行2列
                 gs = fig.add_gridspec(3, 2)
                 ax_beeswarm = fig.add_subplot(gs[0, 0])
                 ax_bar = fig.add_subplot(gs[0, 1])
 
             # --- 绘制 Summary ---
-            # 1. 蜂群图
-            plt.sca(ax_beeswarm) # Set current axis specifically for shap
+            plt.sca(ax_beeswarm)
             ax_beeswarm.set_title("【全局概览】关键因子影响力度与方向 (Beeswarm)", fontsize=20, fontweight='bold', pad=10)
             shap.plots.beeswarm(shap_values, max_display=beeswarm_max_display, show=False)
             ax_beeswarm.set_xlabel("SHAP Value (对结果的影响值)", fontsize=16)
 
-            # 2. 柱状图
             plt.sca(ax_bar)
             ax_bar.set_title("【量化排名】特征平均绝对贡献度 (Importance Bar)", fontsize=20, fontweight='bold', pad=10)
             shap.plots.bar(shap_values, max_display=beeswarm_max_display, show=False)
             ax_bar.set_xlabel("Mean |SHAP Value| (平均影响幅度)", fontsize=16)
 
-            # --- 绘制 Details (Bottom Part) ---
+            # --- 绘制 Details ---
             mean_shap = np.abs(shap_values.values).mean(axis=0)
             top_indices = np.argsort(-mean_shap)
-            
-            if full_report_mode:
-                features_to_plot_indices = top_indices # 画所有
-            else:
-                features_to_plot_indices = top_indices[:4] # 只画 Top 4
+            features_to_plot_indices = top_indices if full_report_mode else top_indices[:4]
 
-            # 辅助绘图函数
             def plot_dependence(ax, rank, feat_idx):
                 feat_name = feature_names[feat_idx]
-                
-                # 模式 A: 显示 实际测试值 (工程视角)
                 if show_actual_y and y_sample is not None:
                     ax.set_title(f"【No.{rank}】{feat_name} vs 实际值", fontsize=16, fontweight='bold', pad=10)
                     x_data = X_sample[feat_name]
                     y_data = y_sample
                     c_data = shap_values[:, feat_name].values 
-                    
                     try:
                         sc = ax.scatter(x_data, y_data, c=c_data, cmap='coolwarm', alpha=0.7, edgecolors='w', linewidth=0.5, s=60)
-                        cbar = plt.colorbar(sc, ax=ax, fraction=0.046, pad=0.04)
-                        
+                        plt.colorbar(sc, ax=ax, fraction=0.046, pad=0.04)
                         mask = ~np.isnan(x_data) & ~np.isnan(y_data)
                         if np.sum(mask) > 5:
                             z = np.polyfit(x_data[mask], y_data[mask], 2)
                             p = np.poly1d(z)
                             x_range = np.linspace(x_data.min(), x_data.max(), 100)
                             ax.plot(x_range, p(x_range), "r--", linewidth=2, alpha=0.8)
-                        
                         ax.set_xlabel(feat_name, fontsize=12)
                         ax.set_ylabel("Actual Y", fontsize=12)
                     except Exception as e:
                         ax.text(0.5, 0.5, "Error", ha='center')
-                        logger.warning(f"绘图错误 {feat_name}: {e}")
-                
-                # 模式 B: 显示 SHAP 值 (模型视角)
                 else:
                     ax.set_title(f"【No.{rank}】{feat_name} vs SHAP", fontsize=16, fontweight='bold', pad=10)
                     try:
@@ -595,29 +562,85 @@ class VisualStudio:
                     except Exception as e:
                         ax.text(0.5, 0.5, "N/A", ha='center')
 
-            # 循环绘制 Detail Grid
             for i, feat_idx in enumerate(features_to_plot_indices):
                 rank = i + 1
-                
                 if full_report_mode:
-                    r = i // 3
-                    c = i % 3
-                    ax = fig.add_subplot(gs_bottom[r, c])
-                    plot_dependence(ax, rank, feat_idx)
+                    ax = fig.add_subplot(gs_bottom[i // 3, i % 3])
                 else:
-                    # 标准模式 2x2 (映射到 gs[1,0], gs[1,1], gs[2,0], gs[2,1])
                     plot_locs = [(1, 0), (1, 1), (2, 0), (2, 1)]
-                    if i < 4:
-                        r, c = plot_locs[i]
-                        ax = fig.add_subplot(gs[r, c])
-                        plot_dependence(ax, rank, feat_idx)
-
-            fig.set_size_inches(fig_size)
+                    if i < 4: ax = fig.add_subplot(gs[plot_locs[i][0], plot_locs[i][1]])
+                    else: continue
+                plot_dependence(ax, rank, feat_idx)
             
+            return fig
+
+    @staticmethod
+    def generate_report(shap_values, X_sample, y_sample, feature_names, output_dir: str, filename: str, 
+                        show_actual_y: bool, full_report_mode: bool, 
+                        model_r2: float, model_mae: float):
+        logger.info(f"正在渲染分析报表 (全量模式: {full_report_mode})...")
+        target_name = y_sample.name if hasattr(y_sample, 'name') else "Target"
+        
+        with plt.style.context('seaborn-v0_8-whitegrid'):
+            fig = VisualStudio._draw_report(
+                shap_values, X_sample, y_sample, feature_names,
+                show_actual_y, full_report_mode, model_r2, model_mae, target_name
+            )
             save_path = os.path.join(output_dir, filename)
-            plt.savefig(save_path, dpi=AppConfig.DPI) 
-            logger.info(f"报表已保存至: {save_path} (尺寸: {fig_size})")
+            fig.savefig(save_path, dpi=AppConfig.DPI) 
+            logger.info(f"报表已保存至: {save_path}")
             plt.close(fig)
+
+    @staticmethod
+    def get_beeswarm_base64(shap_values, X, max_display=15):
+        """生成蜂群图并返回 base64 字符串"""
+        with plt.style.context('seaborn-v0_8-whitegrid'):
+            SystemContext._fix_matplotlib_chinese()
+            fig = plt.figure(figsize=(10, 6), dpi=100)
+            ax = fig.add_subplot(111)
+            shap.summary_plot(shap_values.values, X, plot_type="dot", show=False, max_display=max_display)
+            plt.tight_layout()
+            
+            buf = io.BytesIO()
+            fig.savefig(buf, format='png', bbox_inches='tight')
+            buf.seek(0)
+            img_base64 = base64.b64encode(buf.read()).decode('utf-8')
+            plt.close(fig)
+            return img_base64
+
+    @staticmethod
+    def get_dependence_plot_base64(shap_values, X, feature_name):
+        """生成指定特征的依赖图并返回 base64 字符串"""
+        with plt.style.context('seaborn-v0_8-whitegrid'):
+            SystemContext._fix_matplotlib_chinese()
+            fig = plt.figure(figsize=(8, 5), dpi=100)
+            ax = fig.add_subplot(111)
+            shap.dependence_plot(feature_name, shap_values.values, X, ax=ax, show=False)
+            plt.tight_layout()
+            
+            buf = io.BytesIO()
+            fig.savefig(buf, format='png', bbox_inches='tight')
+            buf.seek(0)
+            img_base64 = base64.b64encode(buf.read()).decode('utf-8')
+            plt.close(fig)
+            return img_base64
+
+    @staticmethod
+    def get_full_report_base64(shap_values, X, y, model_r2: float, model_mae: float, target_col: str = "Target"):
+        """生成整合好的完整报表并返回 base64 字符串"""
+        feature_names = X.columns.tolist()
+        with plt.style.context('seaborn-v0_8-whitegrid'):
+            fig = VisualStudio._draw_report(
+                shap_values, X, y, feature_names,
+                show_actual_y=False, full_report_mode=True, 
+                model_r2=model_r2, model_mae=model_mae, target_name=target_col
+            )
+            buf = io.BytesIO()
+            fig.savefig(buf, format='png', dpi=AppConfig.DPI)
+            buf.seek(0)
+            img_base64 = base64.b64encode(buf.read()).decode('utf-8')
+            plt.close(fig)
+            return img_base64
 
 # ==========================================
 # 6. 演示生成器 (Demo Generator)

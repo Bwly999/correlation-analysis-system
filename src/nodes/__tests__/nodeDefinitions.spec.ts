@@ -92,11 +92,35 @@ describe('Node Definitions Execution Logic', () => {
       const input = { data: [{ target: 1, f1: 2 }] }
       const config = { targetLabel: 'target' }
 
+      // Mock fetch response
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          results: {
+            r2: 0.85,
+            mae: 0.1,
+            importance: [{ name: 'f1', value: 0.5 }],
+            beeswarm_image: 'base64_beeswarm',
+            dependence_images: [{ feature: 'f1', image: 'base64_f1' }],
+            raw_dependence_data: [{ feature: 'f1', x: [1, 2], shap: [0.1, 0.2] }],
+            full_report_image: 'base64_full',
+          },
+        }),
+      })
+
       const result = await xgboostShapNode.execute(input, config)
 
       expect(result.viewType).toBe('report')
       expect(result.report).toBeDefined()
       expect(result.report.title).toContain('Xgboost')
+      expect(result.report.tabs).toHaveLength(2)
+      expect(result.report.tabs[0].name).toContain('前端分图')
+      expect(result.report.tabs[1].name).toContain('后端全量')
+      
+      // Verify sections
+      const sections = result.report.tabs[0].sections
+      expect(sections.some((s: any) => s.title?.includes('特征重要性'))).toBe(true)
+      expect(sections.some((s: any) => s.title?.includes('因子影响趋势 (前端渲染)'))).toBe(true)
     })
 
     it('should simulate lasso result', async () => {

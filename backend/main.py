@@ -8,7 +8,7 @@ from typing import List, Dict, Any
 
 # 添加当前目录到路径，以便导入算法工具
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from algorithm.robust_insight_tool import DataEngine, ModelCore, InsightEngine
+from algorithm.robust_insight_tool import DataEngine, ModelCore, InsightEngine, VisualStudio, SystemContext
 
 app = FastAPI(title="Correlation Analysis Backend")
 
@@ -31,6 +31,7 @@ async def analyze_xgboost_shap(
     target: str = Body(...),
     config: Dict[str, Any] = Body({})
 ):
+    print(">>> CALLING XGBOOST-SHAP V2 <<<")
     try:
         if not data:
             raise HTTPException(status_code=400, detail="No data provided")
@@ -105,14 +106,50 @@ async def analyze_xgboost_shap(
                 "actual_y": y_sample.tolist() if y_sample is not None else []
             })
         
+        # 生成图像 (Base64)
+        SystemContext._fix_matplotlib_chinese()
+        import matplotlib.pyplot as plt
+        plt.close('all')
+
+        # 1. 蜂群图
+        beeswarm_img = VisualStudio.get_beeswarm_base64(shap_values, X_sample)
+        
+        # 2. 所有特征的依赖图 (包含图片和原始数据)
+        dependence_images = []
+        raw_dependence_data = []
+        for feat in feature_names: # 为所有特征生成
+            img = VisualStudio.get_dependence_plot_base64(shap_values, X_sample, feat)
+            dependence_images.append({
+                "feature": feat,
+                "image": img
+            })
+            
+            # 提取散点数据供前端 ECharts 使用
+            feat_idx = feature_names.index(feat)
+            raw_dependence_data.append({
+                "feature": feat,
+                "x": X_sample[feat].values.tolist(),
+                "shap": shap_values.values[:, feat_idx].tolist()
+            })
+            
+        # 3. 完整报表大图
+        full_report_img = VisualStudio.get_full_report_base64(
+            shap_values, X_sample, y_sample, 
+            model_r2=model_core.r2_score, 
+            model_mae=model_core.mae, 
+            target_col=target
+        )
+        
         return {
             "status": "success",
             "results": {
                 "r2": round(model_core.r2_score, 4),
                 "mae": round(model_core.mae, 4),
                 "importance": importance_list,
-                "beeswarm": beeswarm_data,
-                "dependence": dependence_plots,
+                "beeswarm_image": beeswarm_img,
+                "dependence_images": dependence_images,
+                "raw_dependence_data": raw_dependence_data,
+                "full_report_image": full_report_img,
                 "message": "分析完成"
             }
         }
