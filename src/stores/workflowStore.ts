@@ -74,8 +74,10 @@ export const useWorkflowStore = defineStore('workflow', () => {
   }
 
   const stopExecution = () => {
-    if (isRunning.value) {
+    if (isRunning.value || pendingExecution.value) {
       isStopping.value = true
+      pendingExecution.value = null
+      isRunning.value = false
       addLog('正在停止工作流...', 'warn')
     }
   }
@@ -221,7 +223,10 @@ export const useWorkflowStore = defineStore('workflow', () => {
       for (const edge of incomingEdges) {
         if (isStopping.value) throw new Error('User Aborted')
         const result = await executeNode(edge.source, forceUpdate)
-        if (result === 'WAIT_INPUT' || result === 'STOPPED') return result
+        if (result === 'WAIT_INPUT' || result === 'STOPPED') {
+          node.data.status = 'idle'
+          return result
+        }
         inputs.push(result)
       }
 
@@ -370,6 +375,25 @@ export const useWorkflowStore = defineStore('workflow', () => {
     }
   }
 
+  const duplicateWorkflow = (id: string) => {
+    const saved = JSON.parse(localStorage.getItem('saved_workflows') || '[]')
+    const original = saved.find((w: any) => w.id === id)
+    if (original) {
+      const newId = `wf_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`
+      const duplicated: SavedWorkflow = {
+        ...original,
+        id: newId,
+        name: `${original.name} (副本)`,
+        updatedAt: Date.now()
+      }
+      const updatedList = [...saved, duplicated]
+      localStorage.setItem('saved_workflows', JSON.stringify(updatedList))
+      addLog(`工作流 "${original.name}" 已复制为 "${duplicated.name}"`, 'info')
+      return updatedList
+    }
+    return null
+  }
+
   const exportWorkflow = () => {
     const workflow = { name: workflowName.value, nodes: nodes.value, edges: edges.value }
     const blob = new Blob([JSON.stringify(workflow, null, 2)], { type: 'application/json' })
@@ -397,6 +421,6 @@ export const useWorkflowStore = defineStore('workflow', () => {
     pendingConnection, activeConfigNodeId, pendingExecution, lastExecutedTerminalNodeId,
     executionHistory,
     addLog, stopExecution, getCategoryByType, validateConnection, addAndConnectNode, executeNode, runGlobal,
-    saveWorkflow, loadWorkflow, exportWorkflow, importWorkflow, loadHistory, clearHistory
+    saveWorkflow, loadWorkflow, duplicateWorkflow, exportWorkflow, importWorkflow, loadHistory, clearHistory
   }
 })

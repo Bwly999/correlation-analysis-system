@@ -13,7 +13,7 @@ import RuntimeInputModal from './RuntimeInputModal.vue'
 import DataAnalysisModal from './DataAnalysisModal.vue'
 import Button from 'primevue/button'
 import N8nEdge from './edges/N8nEdge.vue'
-import { Plus, X, ChevronUp, ChevronDown, Play, Terminal, FolderOpen, Trash2, Square, Focus, Clock, History, CheckCircle2, AlertCircle, StopCircle, Layers2 } from 'lucide-vue-next'
+import { Plus, X, ChevronUp, ChevronDown, Play, Terminal, FolderOpen, Trash2, Copy, Square, Focus, Clock, History, CheckCircle2, AlertCircle, StopCircle, Layers2 } from 'lucide-vue-next'
 import Dialog from 'primevue/dialog'
 import ConfirmDialog from 'primevue/confirmdialog'
 import { useConfirm } from 'primevue/useconfirm'
@@ -55,6 +55,13 @@ const loadWorkflow = async (id: string) => {
     setTimeout(() => resetView(), 100)
 }
 
+const duplicateWorkflow = (id: string) => {
+    const newList = store.duplicateWorkflow(id)
+    if (newList) {
+        savedWorkflows.value = newList
+    }
+}
+
 const deleteWorkflow = (id: string) => {
     confirm.require({
         message: '确定要删除这个工作流吗？此操作不可撤销。',
@@ -81,9 +88,8 @@ const deleteWorkflow = (id: string) => {
 
 const resumeExecution = async () => {
   if (store.pendingExecution) {
-    const { nodeId, forceUpdate } = store.pendingExecution
     store.pendingExecution = null
-    await store.executeNode(nodeId, forceUpdate)
+    await store.runGlobal()
   }
 }
 
@@ -198,11 +204,11 @@ onMounted(() => {
 
     <!-- 开始/停止运行按钮 -->
     <div class="absolute left-1/2 -translate-x-1/2 z-[90] transition-all duration-500 flex gap-3" :style="{ bottom: isLogExpanded ? '320px' : '64px' }">
-       <Button @click="store.runGlobal" :disabled="store.isRunning" class="n8n-execute-bar w-[280px] h-[52px] rounded-2xl shadow-[0_20px_50px_-10px_rgba(16,185,129,0.4)] hover:shadow-emerald-400/60 transform hover:-translate-y-1 transition-all active:scale-[0.97] border-none flex items-center justify-center text-white">
+       <Button @click="store.runGlobal" :disabled="store.isRunning || !!store.pendingExecution" class="n8n-execute-bar w-[280px] h-[52px] rounded-2xl shadow-[0_20px_50px_-10px_rgba(16,185,129,0.4)] hover:shadow-emerald-400/60 transform hover:-translate-y-1 transition-all active:scale-[0.97] border-none flex items-center justify-center text-white">
          <Play size="20" fill="currentColor" class="mr-3" />
          <span class="text-[14px] font-black tracking-widest uppercase">开始运行工作流</span>
        </Button>
-       <Button v-if="store.isRunning" @click="store.stopExecution" severity="danger" class="w-[52px] h-[52px] rounded-2xl shadow-xl flex items-center justify-center animate-in fade-in zoom-in-75 duration-300" v-tooltip.top="'停止执行'">
+       <Button v-if="store.isRunning || !!store.pendingExecution" @click="store.stopExecution" severity="danger" class="w-[52px] h-[52px] rounded-2xl shadow-xl flex items-center justify-center animate-in fade-in zoom-in-75 duration-300" v-tooltip.top="'停止执行'">
          <Square size="20" fill="currentColor" />
        </Button>
     </div>
@@ -276,7 +282,8 @@ onMounted(() => {
                                 </div>
                                 <div class="flex gap-2">
                                     <Button @click="loadWorkflow(wf.id)" label="打开" size="small" text class="font-black text-indigo-600 px-3" />
-                                    <Button @click="deleteWorkflow(wf.id)" severity="danger" text size="small" class="opacity-0 group-hover:opacity-100"><Trash2 size="16" /></Button>
+                                    <Button @click="duplicateWorkflow(wf.id)" severity="secondary" text size="small" class="opacity-0 group-hover:opacity-100" v-tooltip.top="'复制工作流'"><Copy size="16" /></Button>
+                                    <Button @click="deleteWorkflow(wf.id)" severity="danger" text size="small" class="opacity-0 group-hover:opacity-100" v-tooltip.top="'删除工作流'"><Trash2 size="16" /></Button>
                                 </div>
                             </div>
                         </div>
