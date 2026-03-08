@@ -392,6 +392,17 @@ export const useWorkflowStore = defineStore('workflow', () => {
     addLog('运行历史记录已清空', 'info')
   }
 
+  const createNewWorkflow = () => {
+    nodes.value = []
+    edges.value = []
+    logs.value = []
+    workflowName.value = '未命名工作流'
+    currentWorkflowId.value = null
+    isHistoryMode.value = false
+    originalWorkflowState.value = null
+    addLog('已创建新工作流', 'info')
+  }
+
   const saveWorkflow = (name?: string) => {
     if (name) workflowName.value = name
     const id = currentWorkflowId.value || `wf_${Date.now()}`
@@ -465,6 +476,6 @@ export const useWorkflowStore = defineStore('workflow', () => {
     executionHistory, isHistoryMode,
     addLog, stopExecution, getCategoryByType, validateConnection, addAndConnectNode, executeNode, runGlobal,
     saveWorkflow, loadWorkflow, duplicateWorkflow, exportWorkflow, importWorkflow, loadHistory, clearHistory,
-    enterHistoryMode, exitHistoryMode
+    enterHistoryMode, exitHistoryMode, createNewWorkflow
   }
 })

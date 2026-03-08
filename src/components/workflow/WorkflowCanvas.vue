@@ -311,7 +311,7 @@ onMounted(() => {
                 <TabPanels>
                     <TabPanel value="0">
                         <div class="flex flex-col gap-3 py-4 max-h-[420px] overflow-y-auto custom-scrollbar px-1">
-                            <div @click="() => { store.nodes = []; store.edges = []; store.workflowName = '新建工作流'; isWorkflowListVisible = false }" class="flex items-center gap-4 p-5 bg-slate-900 text-white rounded-2xl cursor-pointer hover:bg-slate-800 transition-all shadow-lg shadow-slate-200/50 group/new sticky top-0 z-10 mb-2">
+                            <div @click="() => { store.createNewWorkflow(); isWorkflowListVisible = false }" class="flex items-center gap-4 p-5 bg-slate-900 text-white rounded-2xl cursor-pointer hover:bg-slate-800 transition-all shadow-lg shadow-slate-200/50 group/new sticky top-0 z-10 mb-2">
                                 <div class="p-3 bg-white/10 rounded-xl group-hover/new:bg-white/20 transition-colors"><Plus size="24" stroke-width="2.5" /></div>
                                 <div>
                                     <div class="font-bold text-[16px] tracking-tight">创建新工作流</div>
