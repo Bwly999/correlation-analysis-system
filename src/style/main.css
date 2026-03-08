@@ -1,8 +1,8 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 @layer base {
-  button, 
-  [role="button"] {
+  button,
+  [role='button'] {
     cursor: pointer;
   }
 
@@ -17,9 +17,9 @@
 }
 
 /* 彻底禁用 PrimeVue 组件的聚焦阴影/光圈，防止出现奇怪的绿色/蓝色边缘 */
-:focus, 
+:focus,
 :focus-visible,
-[data-p-focused="true"],
+[data-p-focused='true'],
 .p-focus-ring {
   outline: none !important;
   box-shadow: none !important;
@@ -35,7 +35,7 @@
 .p-button:focus-visible,
 .p-button:hover,
 .p-button:active,
-.p-button[data-p-focused="true"] {
+.p-button[data-p-focused='true'] {
   box-shadow: none !important;
   outline: none !important;
   ring: 0 !important;
@@ -78,4 +78,3 @@
   border-left-color: #1e293b !important;
   border-right-color: #1e293b !important;
 }
-

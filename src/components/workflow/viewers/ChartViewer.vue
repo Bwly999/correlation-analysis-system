@@ -1,21 +1,43 @@
 <script setup lang="ts">
-import { markRaw } from 'vue'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
-import { LineChart, BarChart, PieChart, ScatterChart, BoxplotChart, HeatmapChart } from 'echarts/charts'
 import {
-  GridComponent, TooltipComponent, TitleComponent, LegendComponent, 
-  DataZoomComponent, TransformComponent, VisualMapComponent
+  LineChart,
+  BarChart,
+  PieChart,
+  ScatterChart,
+  BoxplotChart,
+  HeatmapChart,
+} from 'echarts/charts'
+import {
+  GridComponent,
+  TooltipComponent,
+  TitleComponent,
+  LegendComponent,
+  DataZoomComponent,
+  TransformComponent,
+  VisualMapComponent,
 } from 'echarts/components'
 
 use([
-  CanvasRenderer, LineChart, BarChart, PieChart, ScatterChart, BoxplotChart, HeatmapChart,
-  GridComponent, TooltipComponent, TitleComponent, LegendComponent, DataZoomComponent, 
-  TransformComponent, VisualMapComponent
+  CanvasRenderer,
+  LineChart,
+  BarChart,
+  PieChart,
+  ScatterChart,
+  BoxplotChart,
+  HeatmapChart,
+  GridComponent,
+  TooltipComponent,
+  TitleComponent,
+  LegendComponent,
+  DataZoomComponent,
+  TransformComponent,
+  VisualMapComponent,
 ])
 
-const props = defineProps<{
+const _props = defineProps<{
   data: any
 }>()
 </script>

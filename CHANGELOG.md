@@ -1,5 +1,18 @@
 # 更新日志 (Changelog)
 
+## [1.3.9] - 2026-03-08
+
+### 🏗 基础设施升级
+- **引入 ESLint 体系**: 
+  - 集成了 ESLint 10.x 并采用最新的 **Flat Config** (eslint.config.js) 格式。
+  - 配套安装了 Vue 3、TypeScript 及 Prettier 的官方插件，实现了代码质量校验与格式化的一体化。
+  - 新增 `pnpm lint` 和 `pnpm lint:fix` 命令，支持一键整改代码问题。
+- **全量代码清理与修复**:
+  - 修复了 30 余处 `no-undef` 浏览器全局变量引用错误。
+  - 清理了全项目 50 余处未使用的 import 导入及变量，显著提升了代码简洁度。
+  - 修正了 `no-useless-assignment` 冗余赋值及 `preserve-caught-error` 异常处理不规范的问题。
+  - 对 `NodeConfigModal`, `WorkflowCanvas`, `workflowStore` 等核心组件进行了深度的代码扫描与合规化调整。
+
 ## [1.3.8] - 2026-03-08
 
 ### 🔧 修复与优化

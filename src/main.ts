@@ -15,14 +15,14 @@ app.use(pinia)
 if (window) (window as any).pinia = pinia
 app.directive('tooltip', Tooltip)
 app.use(PrimeVue, {
-    theme: {
-        preset: Aura,
-        options: {
-            prefix: 'p',
-            darkModeSelector: 'none',
-            cssLayer: false
-        }
-    }
+  theme: {
+    preset: Aura,
+    options: {
+      prefix: 'p',
+      darkModeSelector: 'none',
+      cssLayer: false,
+    },
+  },
 })
 app.use(ConfirmationService)
 app.use(ToastService)

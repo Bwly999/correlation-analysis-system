@@ -7,9 +7,9 @@ import App from '../App.vue'
 
 // Mock ResizeObserver for Vue Flow
 global.ResizeObserver = class {
-    observe = vi.fn()
-    unobserve = vi.fn()
-    disconnect = vi.fn()
+  observe = vi.fn()
+  unobserve = vi.fn()
+  disconnect = vi.fn()
 } as any
 
 describe('App', () => {
@@ -23,16 +23,16 @@ describe('App', () => {
       global: {
         plugins: [PrimeVue],
         directives: {
-          'tooltip': Tooltip
+          tooltip: Tooltip,
         },
         stubs: {
           // Stub out complex canvas to avoid deep DOM issues in unit tests
           VueFlow: true,
           NodeSidebar: true,
-          LogPanel: true
-        }
+          LogPanel: true,
+        },
       },
-      attachTo: document.getElementById('app') as HTMLElement
+      attachTo: document.getElementById('app') as HTMLElement,
     })
     expect(wrapper.exists()).toBe(true)
   })

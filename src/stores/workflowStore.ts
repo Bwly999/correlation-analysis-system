@@ -6,13 +6,13 @@ import { getNodeDefinition } from '@/nodes/registry'
 export interface WorkflowNode extends Node {
   data: {
     label: string
-    type: string 
+    type: string
     category: 'trigger' | 'action' | 'terminal'
     config: any
     status: 'idle' | 'running' | 'success' | 'error'
-    output?: any 
-    manualInput?: any 
-    useManualInput?: boolean 
+    output?: any
+    manualInput?: any
+    useManualInput?: boolean
     isPinned?: boolean
     logs: string[]
   }
@@ -38,43 +38,43 @@ export interface ExecutionRecord {
 }
 
 export const CONNECTION_RULES: Record<string, string[]> = {
-  'trigger': ['action', 'terminal'],
-  'action': ['action', 'terminal'],
-  'terminal': []
+  trigger: ['action', 'terminal'],
+  action: ['action', 'terminal'],
+  terminal: [],
 }
 
 export const useWorkflowStore = defineStore('workflow', () => {
   const nodes = ref<WorkflowNode[]>([])
   const edges = ref<Edge[]>([])
-  const logs = ref<{ time: string, level: string, message: string, nodeId?: string }[]>([])
+  const logs = ref<{ time: string; level: string; message: string; nodeId?: string }[]>([])
   const workflowName = ref('未命名工作流')
   const currentWorkflowId = ref<string | null>(null)
-  
+
   const isRunning = ref(false)
   const isStopping = ref(false)
-  
+
   const pendingConnection = ref<{
-    sourceNodeId: string;
-    sourceHandleId?: string;
-    edgeId?: string;
+    sourceNodeId: string
+    sourceHandleId?: string
+    edgeId?: string
   } | null>(null)
 
   const activeConfigNodeId = ref<string | null>(null)
-  const pendingExecution = ref<{ nodeId: string, forceUpdate: boolean } | null>(null)
+  const pendingExecution = ref<{ nodeId: string; forceUpdate: boolean } | null>(null)
   const lastExecutedTerminalNodeId = ref<string | null>(null)
   const executionHistory = ref<ExecutionRecord[]>([])
 
   // 历史模式相关状态
   const isHistoryMode = ref(false)
   const originalWorkflowState = ref<{
-    nodes: WorkflowNode[],
-    edges: Edge[],
-    name: string,
+    nodes: WorkflowNode[]
+    edges: Edge[]
+    name: string
     id: string | null
   } | null>(null)
 
   const enterHistoryMode = (recordId: string) => {
-    const record = executionHistory.value.find(r => r.id === recordId)
+    const record = executionHistory.value.find((r) => r.id === recordId)
     if (!record) return
 
     // 如果当前不在历史模式，先保存原始状态
@@ -83,7 +83,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
         nodes: JSON.parse(JSON.stringify(nodes.value)),
         edges: JSON.parse(JSON.stringify(edges.value)),
         name: workflowName.value,
-        id: currentWorkflowId.value
+        id: currentWorkflowId.value,
       }
     }
 
@@ -101,7 +101,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     edges.value = originalWorkflowState.value.edges
     workflowName.value = originalWorkflowState.value.name
     currentWorkflowId.value = originalWorkflowState.value.id
-    
+
     isHistoryMode.value = false
     originalWorkflowState.value = null
     addLog('已返回工作流编辑模式', 'info')
@@ -112,7 +112,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
       time: new Date().toLocaleTimeString(),
       level,
       message,
-      nodeId
+      nodeId,
     })
   }
 
@@ -131,8 +131,8 @@ export const useWorkflowStore = defineStore('workflow', () => {
   }
 
   const validateConnection = (sourceNodeId: string, targetNodeId: string) => {
-    const sourceNode = nodes.value.find(n => n.id === sourceNodeId)
-    const targetNode = nodes.value.find(n => n.id === targetNodeId)
+    const sourceNode = nodes.value.find((n) => n.id === sourceNodeId)
+    const targetNode = nodes.value.find((n) => n.id === targetNodeId)
     if (!sourceNode || !targetNode) return { valid: false, message: '节点不存在' }
     const sourceCat = sourceNode.data.category
     const targetCat = targetNode.data.category
@@ -145,10 +145,10 @@ export const useWorkflowStore = defineStore('workflow', () => {
   }
 
   const checkTriggerExists = () => {
-    return nodes.value.some(n => n.data.category === 'trigger')
+    return nodes.value.some((n) => n.data.category === 'trigger')
   }
 
-  const addAndConnectNode = (type: string, label: string, position: { x: number, y: number }) => {
+  const addAndConnectNode = (type: string, label: string, position: { x: number; y: number }) => {
     const definition = getNodeDefinition(type)
     const category = getCategoryByType(type)
     if (category === 'trigger' && checkTriggerExists()) {
@@ -156,7 +156,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
       return null
     }
     const defaultConfig: any = {}
-    definition?.properties.forEach(p => {
+    definition?.properties.forEach((p) => {
       if (p.default !== undefined) defaultConfig[p.name] = p.default
     })
     const newNode: WorkflowNode = {
@@ -164,28 +164,50 @@ export const useWorkflowStore = defineStore('workflow', () => {
       type: 'custom',
       position,
       label,
-      data: { 
-        label, type, category, status: 'idle', 
-        config: defaultConfig, 
+      data: {
+        label,
+        type,
+        category,
+        status: 'idle',
+        config: defaultConfig,
         logs: [],
         useManualInput: false,
         manualInput: '',
-        isPinned: false
+        isPinned: false,
       },
     }
     nodes.value.push(newNode)
     if (pendingConnection.value) {
       const { sourceNodeId, sourceHandleId, edgeId } = pendingConnection.value
       if (edgeId) {
-        const oldEdge = edges.value.find(e => e.id === edgeId)
+        const oldEdge = edges.value.find((e) => e.id === edgeId)
         if (oldEdge) {
           const targetNodeId = oldEdge.target
-          edges.value = edges.value.filter(e => e.id !== edgeId)
-          edges.value.push({ id: `e_${Date.now()}_1`, source: sourceNodeId, target: newNode.id, type: 'n8n', animated: true })
-          edges.value.push({ id: `e_${Date.now()}_2`, source: newNode.id, target: targetNodeId, type: 'n8n', animated: true })
+          edges.value = edges.value.filter((e) => e.id !== edgeId)
+          edges.value.push({
+            id: `e_${Date.now()}_1`,
+            source: sourceNodeId,
+            target: newNode.id,
+            type: 'n8n',
+            animated: true,
+          })
+          edges.value.push({
+            id: `e_${Date.now()}_2`,
+            source: newNode.id,
+            target: targetNodeId,
+            type: 'n8n',
+            animated: true,
+          })
         }
       } else {
-        edges.value.push({ id: `e_${Date.now()}`, source: sourceNodeId, target: newNode.id, sourceHandle: sourceHandleId, type: 'n8n', animated: true })
+        edges.value.push({
+          id: `e_${Date.now()}`,
+          source: sourceNodeId,
+          target: newNode.id,
+          sourceHandle: sourceHandleId,
+          type: 'n8n',
+          animated: true,
+        })
       }
       pendingConnection.value = null
     }
@@ -201,7 +223,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
   }
 
   const executeNode = async (nodeId: string, forceUpdate = false): Promise<any> => {
-    const node = nodes.value.find(n => n.id === nodeId)
+    const node = nodes.value.find((n) => n.id === nodeId)
     if (!node) return
 
     const wasRunning = isRunning.value
@@ -227,8 +249,8 @@ export const useWorkflowStore = defineStore('workflow', () => {
       }
 
       if (definition.category === 'trigger') {
-        const missingRuntimeProps = definition.properties.filter(p => 
-          p.isRuntimeInput && !isValueValid(node.data.config[p.name], p.type)
+        const missingRuntimeProps = definition.properties.filter(
+          (p) => p.isRuntimeInput && !isValueValid(node.data.config[p.name], p.type),
         )
         if (missingRuntimeProps.length > 0) {
           addLog(`节点 ${node.data.label} 缺少运行时输入`, 'info', nodeId)
@@ -241,16 +263,16 @@ export const useWorkflowStore = defineStore('workflow', () => {
       if (node.data.useManualInput) {
         addLog(`节点 ${node.data.label} 使用手动模拟输入运行`, 'info', nodeId)
         let parsedInput = node.data.manualInput
-        console.log('Original manualInput:', parsedInput);
+        console.log('Original manualInput:', parsedInput)
         if (typeof parsedInput === 'string' && parsedInput.trim()) {
           try {
             parsedInput = JSON.parse(parsedInput)
           } catch (e) {
-            console.error('JSON Parse Error:', e);
-            throw new Error('手动输入 JSON 格式错误')
+            console.error('JSON Parse Error:', e)
+            throw new Error('手动输入 JSON 格式错误', { cause: e })
           }
         }
-        console.log('Parsed manualInput:', parsedInput);
+        console.log('Parsed manualInput:', parsedInput)
         const result = await definition.execute(parsedInput, node.data.config)
         node.data.output = markRaw(result)
         node.data.status = 'success'
@@ -260,8 +282,8 @@ export const useWorkflowStore = defineStore('workflow', () => {
       if (!forceUpdate && node.data.output) return node.data.output
 
       node.data.status = 'running'
-      
-      const incomingEdges = edges.value.filter(e => e.target === nodeId)
+
+      const incomingEdges = edges.value.filter((e) => e.target === nodeId)
       const inputs = []
       for (const edge of incomingEdges) {
         if (isStopping.value) throw new Error('User Aborted')
@@ -274,12 +296,12 @@ export const useWorkflowStore = defineStore('workflow', () => {
       }
 
       if (isStopping.value) throw new Error('User Aborted')
-      await new Promise(resolve => setTimeout(resolve, 300))
+      await new Promise((resolve) => setTimeout(resolve, 300))
       if (isStopping.value) throw new Error('User Aborted')
 
       const result = await definition.execute(inputs[0] || null, node.data.config)
-      
-      node.data.output = markRaw(result) 
+
+      node.data.output = markRaw(result)
       node.data.status = 'success'
       addLog(`执行成功: ${node.data.label}`, 'info', nodeId)
       return node.data.output
@@ -297,13 +319,13 @@ export const useWorkflowStore = defineStore('workflow', () => {
 
   const runGlobal = async () => {
     if (isRunning.value) return
-    
+
     isRunning.value = true
     isStopping.value = false
     const startTime = Date.now()
     addLog('开始全局运行...', 'info')
-    
-    const terminalNodes = nodes.value.filter(n => n.data.category === 'terminal')
+
+    const terminalNodes = nodes.value.filter((n) => n.data.category === 'terminal')
     if (terminalNodes.length === 0) {
       addLog('运行失败: 未找到分析模型', 'error')
       isRunning.value = false
@@ -312,13 +334,13 @@ export const useWorkflowStore = defineStore('workflow', () => {
 
     // 1. 准备运行环境：重置非冻结节点的状态
     // 清除 output 是为了确保在 forceUpdate=false 模式下，非冻结节点能重新触发计算
-    nodes.value.forEach(n => {
+    nodes.value.forEach((n) => {
       if (!n.data.isPinned) {
         n.data.status = 'idle'
         n.data.output = null
       }
     })
-    
+
     let finalStatus: 'success' | 'error' | 'stopped' = 'success'
     try {
       let lastResultId = null
@@ -330,12 +352,12 @@ export const useWorkflowStore = defineStore('workflow', () => {
         // 2. 以非强制模式运行，利用刚刚清除 output 后的机制实现“单次刷新”
         const result = await executeNode(node.id, false)
         if (result === 'WAIT_INPUT') {
-           isRunning.value = false
-           return 
+          isRunning.value = false
+          return
         }
         if (result === 'STOPPED') {
           finalStatus = 'stopped'
-          break 
+          break
         }
         lastResultId = node.id
       }
@@ -347,8 +369,11 @@ export const useWorkflowStore = defineStore('workflow', () => {
       isRunning.value = false
       isStopping.value = false
       const duration = Date.now() - startTime
-      addLog('工作流运行结束', finalStatus === 'stopped' ? 'warn' : (finalStatus === 'error' ? 'error' : 'info'))
-      
+      addLog(
+        '工作流运行结束',
+        finalStatus === 'stopped' ? 'warn' : finalStatus === 'error' ? 'error' : 'info',
+      )
+
       const record: ExecutionRecord = {
         id: `exec_${Date.now()}`,
         workflowId: currentWorkflowId.value || 'temp',
@@ -356,15 +381,19 @@ export const useWorkflowStore = defineStore('workflow', () => {
         startTime,
         duration,
         status: finalStatus,
-        nodes: nodes.value.map(n => {
+        nodes: nodes.value.map((n) => {
           const snapshot = JSON.parse(JSON.stringify(n))
-          if (snapshot.data?.output?.data && Array.isArray(snapshot.data.output.data) && snapshot.data.output.data.length > 5) {
+          if (
+            snapshot.data?.output?.data &&
+            Array.isArray(snapshot.data.output.data) &&
+            snapshot.data.output.data.length > 5
+          ) {
             snapshot.data.output.data = snapshot.data.output.data.slice(0, 5)
             snapshot.data.output._truncated = true
           }
           return snapshot
         }),
-        edges: JSON.parse(JSON.stringify(edges.value))
+        edges: JSON.parse(JSON.stringify(edges.value)),
       }
       saveExecution(record)
     }
@@ -377,7 +406,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     try {
       localStorage.setItem('execution_history', JSON.stringify(limitedHistory))
       executionHistory.value = limitedHistory
-    } catch (e) {
+    } catch (_e) {
       addLog('保存历史记录失败：存储空间不足', 'error')
     }
   }
@@ -408,11 +437,20 @@ export const useWorkflowStore = defineStore('workflow', () => {
     const id = currentWorkflowId.value || `wf_${Date.now()}`
     currentWorkflowId.value = id
     const workflow: SavedWorkflow = {
-      id, name: workflowName.value, nodes: nodes.value, edges: edges.value, updatedAt: Date.now()
+      id,
+      name: workflowName.value,
+      nodes: nodes.value,
+      edges: edges.value,
+      updatedAt: Date.now(),
     }
-    localStorage.setItem('saved_workflows', JSON.stringify(
-      JSON.parse(localStorage.getItem('saved_workflows') || '[]').filter((w: any) => w.id !== id).concat(workflow)
-    ))
+    localStorage.setItem(
+      'saved_workflows',
+      JSON.stringify(
+        JSON.parse(localStorage.getItem('saved_workflows') || '[]')
+          .filter((w: any) => w.id !== id)
+          .concat(workflow),
+      ),
+    )
     addLog(`工作流 "${workflow.name}" 已保存`, 'info')
     return workflow
   }
@@ -438,7 +476,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
         ...original,
         id: newId,
         name: `${original.name} (副本)`,
-        updatedAt: Date.now()
+        updatedAt: Date.now(),
       }
       const updatedList = [...saved, duplicated]
       localStorage.setItem('saved_workflows', JSON.stringify(updatedList))
@@ -453,7 +491,10 @@ export const useWorkflowStore = defineStore('workflow', () => {
     const blob = new Blob([JSON.stringify(workflow, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
-    a.href = url; a.download = `${workflowName.value}.json`; a.click(); URL.revokeObjectURL(url)
+    a.href = url
+    a.download = `${workflowName.value}.json`
+    a.click()
+    URL.revokeObjectURL(url)
     addLog(`工作流已导出`, 'info')
   }
 
@@ -462,20 +503,48 @@ export const useWorkflowStore = defineStore('workflow', () => {
     reader.onload = (e) => {
       try {
         const workflow = JSON.parse(e.target?.result as string)
-        nodes.value = workflow.nodes || []; edges.value = workflow.edges || []
-        workflowName.value = workflow.name || '导入的工作流'; currentWorkflowId.value = null
+        nodes.value = workflow.nodes || []
+        edges.value = workflow.edges || []
+        workflowName.value = workflow.name || '导入的工作流'
+        currentWorkflowId.value = null
         addLog(`成功导入工作流: ${workflowName.value}`, 'info')
-      } catch (err) { addLog(`导入失败: 格式错误`, 'error') }
+      } catch (_err) {
+        addLog(`导入失败: 格式错误`, 'error')
+      }
     }
     reader.readAsText(file)
   }
 
   return {
-    nodes, edges, logs, workflowName, currentWorkflowId, isRunning, isStopping,
-    pendingConnection, activeConfigNodeId, pendingExecution, lastExecutedTerminalNodeId,
-    executionHistory, isHistoryMode,
-    addLog, stopExecution, getCategoryByType, validateConnection, addAndConnectNode, executeNode, runGlobal,
-    saveWorkflow, loadWorkflow, duplicateWorkflow, exportWorkflow, importWorkflow, loadHistory, clearHistory,
-    enterHistoryMode, exitHistoryMode, createNewWorkflow
+    nodes,
+    edges,
+    logs,
+    workflowName,
+    currentWorkflowId,
+    isRunning,
+    isStopping,
+    pendingConnection,
+    activeConfigNodeId,
+    pendingExecution,
+    lastExecutedTerminalNodeId,
+    executionHistory,
+    isHistoryMode,
+    addLog,
+    stopExecution,
+    getCategoryByType,
+    validateConnection,
+    addAndConnectNode,
+    executeNode,
+    runGlobal,
+    saveWorkflow,
+    loadWorkflow,
+    duplicateWorkflow,
+    exportWorkflow,
+    importWorkflow,
+    loadHistory,
+    clearHistory,
+    enterHistoryMode,
+    exitHistoryMode,
+    createNewWorkflow,
   }
 })

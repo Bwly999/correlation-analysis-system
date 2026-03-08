@@ -1,4 +1,4 @@
-import type { NodeDefinition } from '../types';
+import type { NodeDefinition } from '../types'
 
 export const dataCleaningNode: NodeDefinition = {
   name: 'data-cleaning',
@@ -16,8 +16,8 @@ export const dataCleaningNode: NodeDefinition = {
         { name: '均值填充', value: 'mean' },
         { name: '中位数填充', value: 'median' },
         { name: '零值填充', value: 'zero' },
-        { name: '直接删除', value: 'drop' }
-      ]
+        { name: '直接删除', value: 'drop' },
+      ],
     },
     {
       name: 'outlierMethod',
@@ -27,84 +27,89 @@ export const dataCleaningNode: NodeDefinition = {
       options: [
         { name: 'IQR 四分位距', value: 'iqr' },
         { name: '百分比剔除', value: 'percentile' },
-        { name: '无', value: 'none' }
-      ]
+        { name: '无', value: 'none' },
+      ],
     },
     {
       name: 'iqrK',
       displayName: 'IQR 系数 (k)',
       type: 'number',
-      default: 1.5
-    }
+      default: 1.5,
+    },
   ],
   execute: async (input, config) => {
     if (!input || !input.data || !Array.isArray(input.data)) {
-      throw new Error("输入数据格式不正确");
+      throw new Error('输入数据格式不正确')
     }
 
-    let data = [...input.data];
-    const originalCount = data.length;
-    const fields = Object.keys(data[0] || {});
+    let data = [...input.data]
+    const originalCount = data.length
+    const fields = Object.keys(data[0] || {})
 
     // 1. 处理缺失值
     if (config.missingValueStrategy === 'drop') {
-      data = data.filter(row => fields.every(f => row[f] !== null && row[f] !== undefined && row[f] !== ''));
+      data = data.filter((row) =>
+        fields.every((f) => row[f] !== null && row[f] !== undefined && row[f] !== ''),
+      )
     } else {
       // 计算填充值
-      const fillValues: Record<string, number> = {};
-      fields.forEach(f => {
-        const values = data.map(r => Number(r[f])).filter(v => !isNaN(v));
-        if (values.length === 0) return;
+      const fillValues: Record<string, number> = {}
+      fields.forEach((f) => {
+        const values = data.map((r) => Number(r[f])).filter((v) => !isNaN(v))
+        if (values.length === 0) return
 
         if (config.missingValueStrategy === 'mean') {
-          fillValues[f] = values.reduce((a, b) => a + b, 0) / values.length;
+          fillValues[f] = values.reduce((a, b) => a + b, 0) / values.length
         } else if (config.missingValueStrategy === 'median') {
-          const sorted = [...values].sort((a, b) => a - b);
-          fillValues[f] = sorted[Math.floor(sorted.length / 2)];
+          const sorted = [...values].sort((a, b) => a - b)
+          fillValues[f] = sorted[Math.floor(sorted.length / 2)]
         } else if (config.missingValueStrategy === 'zero') {
-          fillValues[f] = 0;
+          fillValues[f] = 0
         }
-      });
+      })
 
-      data = data.map(row => {
-        const newRow = { ...row };
-        fields.forEach(f => {
+      data = data.map((row) => {
+        const newRow = { ...row }
+        fields.forEach((f) => {
           if (newRow[f] === null || newRow[f] === undefined || newRow[f] === '') {
-            newRow[f] = fillValues[f] ?? 0;
+            newRow[f] = fillValues[f] ?? 0
           }
-        });
-        return newRow;
-      });
+        })
+        return newRow
+      })
     }
 
     // 2. 处理异常值
     if (config.outlierMethod === 'iqr') {
-      const k = config.iqrK || 1.5;
-      fields.forEach(f => {
-        const values = data.map(r => Number(r[f])).filter(v => !isNaN(v)).sort((a, b) => a - b);
-        if (values.length < 4) return;
-        
-        const q1 = values[Math.floor(values.length * 0.25)];
-        const q3 = values[Math.floor(values.length * 0.75)];
-        const iqr = q3 - q1;
-        const lower = q1 - k * iqr;
-        const upper = q3 + k * iqr;
-        
-        data = data.filter(row => {
-          const val = Number(row[f]);
-          return isNaN(val) || (val >= lower && val <= upper);
-        });
-      });
+      const k = config.iqrK || 1.5
+      fields.forEach((f) => {
+        const values = data
+          .map((r) => Number(r[f]))
+          .filter((v) => !isNaN(v))
+          .sort((a, b) => a - b)
+        if (values.length < 4) return
+
+        const q1 = values[Math.floor(values.length * 0.25)]
+        const q3 = values[Math.floor(values.length * 0.75)]
+        const iqr = q3 - q1
+        const lower = q1 - k * iqr
+        const upper = q3 + k * iqr
+
+        data = data.filter((row) => {
+          const val = Number(row[f])
+          return isNaN(val) || (val >= lower && val <= upper)
+        })
+      })
     }
 
-    return { 
-      data, 
+    return {
+      data,
       originalCount,
       cleanedCount: data.length,
       removedCount: originalCount - data.length,
       strategy: config.missingValueStrategy,
       outlierMethod: config.outlierMethod,
-      method: config.outlierMethod
-    };
-  }
-};
+      method: config.outlierMethod,
+    }
+  },
+}

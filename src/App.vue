@@ -7,7 +7,9 @@ import WorkflowCanvas from './components/workflow/WorkflowCanvas.vue'
 </template>
 
 <style>
-body, html, #app {
+body,
+html,
+#app {
   margin: 0;
   padding: 0;
   height: 100%;

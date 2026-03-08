@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref } from 'vue'
 import { VueMonacoEditor, loader } from '@guolao/vue-monaco-editor'
 import * as monaco from 'monaco-editor'
 
 // 配置本地异步加载，不走 CDN
 loader.config({ monaco })
 
-const props = defineProps<{
+const _props = defineProps<{
   modelValue: string
   language?: string
   height?: string
@@ -29,14 +29,14 @@ const MONACO_OPTIONS: monaco.editor.IStandaloneEditorConstructionOptions = {
   padding: { top: 8, bottom: 8 },
   renderLineHighlight: 'all',
   theme: 'vs',
-  readOnly: props.readOnly || false,
+  readOnly: _props.readOnly || false,
   folding: true,
   tabSize: 2,
   wordWrap: 'on',
   scrollbar: {
     verticalScrollbarSize: 8,
     horizontalScrollbarSize: 8,
-  }
+  },
 }
 
 const handleMount = (editor: any) => {
@@ -50,7 +50,10 @@ const onChange = (value: string | undefined) => {
 </script>
 
 <template>
-  <div class="monaco-wrapper border border-slate-200 rounded-xl overflow-hidden bg-white shadow-inner" :style="{ height: height || '300px' }">
+  <div
+    class="monaco-wrapper border border-slate-200 rounded-xl overflow-hidden bg-white shadow-inner"
+    :style="{ height: height || '300px' }"
+  >
     <VueMonacoEditor
       :value="modelValue"
       :language="language || 'json'"
@@ -59,8 +62,12 @@ const onChange = (value: string | undefined) => {
       @change="onChange"
     >
       <template #default>
-        <div class="flex items-center justify-center h-full text-slate-400 gap-3 text-xs bg-slate-50">
-          <div class="w-4 h-4 border-2 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin"></div>
+        <div
+          class="flex items-center justify-center h-full text-slate-400 gap-3 text-xs bg-slate-50"
+        >
+          <div
+            class="w-4 h-4 border-2 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin"
+          ></div>
           正在加载本地分析算子编辑器...
         </div>
       </template>

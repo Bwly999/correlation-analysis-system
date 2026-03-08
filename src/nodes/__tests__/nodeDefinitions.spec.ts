@@ -15,16 +15,15 @@ import * as path from 'path'
 global.URL.createObjectURL = vi.fn(() => 'blob:mock-url')
 
 describe('Node Definitions Execution Logic', () => {
-  
   describe('file-import', () => {
     it('should parse a CSV file correctly', async () => {
       const csvPath = path.resolve(__dirname, '../../../test/resource/test_data.csv')
       const csvBuffer = fs.readFileSync(csvPath)
       const file = new File([csvBuffer], 'test_data.csv', { type: 'text/csv' })
-      
+
       const config = { fileData: file, format: 'auto' }
       const result = await fileImportNode.execute(null, config)
-      
+
       expect(result.data).toBeDefined()
       expect(result.data.length).toBeGreaterThan(0)
       expect(result.type).toBe('csv')
@@ -33,11 +32,13 @@ describe('Node Definitions Execution Logic', () => {
     it('should parse an XLSX file correctly', async () => {
       const xlsxPath = path.resolve(__dirname, '../../../test/resource/test_data.xlsx')
       const xlsxBuffer = fs.readFileSync(xlsxPath)
-      const file = new File([xlsxBuffer], 'test_data.xlsx', { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
-      
+      const file = new File([xlsxBuffer], 'test_data.xlsx', {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      })
+
       const config = { fileData: file, format: 'auto' }
       const result = await fileImportNode.execute(null, config)
-      
+
       expect(result.data).toBeDefined()
       expect(result.data.length).toBeGreaterThan(0)
       expect(result.type).toBe('excel')
@@ -48,9 +49,9 @@ describe('Node Definitions Execution Logic', () => {
     it('should pass through data and record count', async () => {
       const input = { data: [{ a: 1 }, { a: null }, { a: 2 }] }
       const config = { missingValueStrategy: 'mean', outlierMethod: 'iqr' }
-      
+
       const result = await dataCleaningNode.execute(input, config)
-      
+
       expect(result.data).toBeDefined()
       expect(result.originalCount).toBe(3)
       expect(result.method).toBe('iqr')
@@ -59,28 +60,28 @@ describe('Node Definitions Execution Logic', () => {
 
   describe('data-aggregation', () => {
     it('should aggregate multiple columns into one using the new nested schema', async () => {
-      const input = { 
+      const input = {
         data: [
           { f1: 10, f2: 20, f3: 30 },
-          { f1: 5, f2: 5, f3: 5 }
-        ] 
+          { f1: 5, f2: 5, f3: 5 },
+        ],
       }
       const config = {
         aggregationGroups: [
-          { 
-            targetFactorName: 'total', 
-            method: 'sum', 
+          {
+            targetFactorName: 'total',
+            method: 'sum',
             factorWeights: [
               { factorName: 'f1', weight: 1.0 },
               { factorName: 'f2', weight: 1.0 },
-              { factorName: 'f3', weight: 1.0 }
-            ]
-          }
-        ]
+              { factorName: 'f3', weight: 1.0 },
+            ],
+          },
+        ],
       }
-      
+
       const result = await dataAggregationNode.execute(input, config)
-      
+
       expect(result.data[0].total).toBe(60)
       expect(result.data[1].total).toBe(15)
     })
@@ -90,9 +91,9 @@ describe('Node Definitions Execution Logic', () => {
     it('should simulate xgboost+shap result', async () => {
       const input = { data: [{ target: 1, f1: 2 }] }
       const config = { targetLabel: 'target' }
-      
+
       const result = await xgboostShapNode.execute(input, config)
-      
+
       expect(result.viewType).toBe('report')
       expect(result.report).toBeDefined()
       expect(result.report.title).toContain('Xgboost')
@@ -101,9 +102,9 @@ describe('Node Definitions Execution Logic', () => {
     it('should simulate lasso result', async () => {
       const input = { data: [{ target: 1, f1: 2 }] }
       const config = { targetLabel: 'target' }
-      
+
       const result = await lassoNode.execute(input, config)
-      
+
       expect(result.viewType).toBe('report')
       expect(result.report.title).toBe('Lasso 回归分析')
     })
@@ -111,9 +112,9 @@ describe('Node Definitions Execution Logic', () => {
     it('should simulate pearson result', async () => {
       const input = { data: [{ target: 1, f1: 2 }] }
       const config = { targetLabel: 'target' }
-      
+
       const result = await pearsonNode.execute(input, config)
-      
+
       expect(result.viewType).toBe('report')
       expect(result.report.title).toBe('Pearson 相关系数矩阵分析')
     })
@@ -121,14 +122,14 @@ describe('Node Definitions Execution Logic', () => {
 
   describe('neighbor-system', () => {
     it('should generate mock data based on fetch mode', async () => {
-      const config = { 
-        fetchMode: 'time', 
+      const config = {
+        fetchMode: 'time',
         timeRange: [new Date(), new Date()],
-        selectedFactors: { 'f_temp': true, 'sys_01': true }
+        selectedFactors: { f_temp: true, sys_01: true },
       }
-      
+
       const result = await neighborSystemNode.execute(null, config)
-      
+
       expect(result.data).toBeDefined()
       expect(result.data.length).toBeGreaterThan(0)
       expect(result.factors).toContain('f_temp')
@@ -137,21 +138,31 @@ describe('Node Definitions Execution Logic', () => {
 
   describe('chart-display', () => {
     it('should generate scatter chart option', async () => {
-      const input = { data: [{ x: 1, y: 2 }, { x: 3, y: 4 }] }
+      const input = {
+        data: [
+          { x: 1, y: 2 },
+          { x: 3, y: 4 },
+        ],
+      }
       const config = { chartType: 'scatter', xAxis: 'x', yAxis: 'y' }
-      
+
       const result = await chartDisplayNode.execute(input, config)
-      
+
       expect(result.viewType).toBe('chart')
       expect(result.chartOption.series[0].type).toBe('scatter')
     })
 
     it('should generate bar chart option', async () => {
-      const input = { data: [{ x: 'A', y: 10 }, { x: 'B', y: 20 }] }
+      const input = {
+        data: [
+          { x: 'A', y: 10 },
+          { x: 'B', y: 20 },
+        ],
+      }
       const config = { chartType: 'bar', xAxis: 'x', yAxis: 'y' }
-      
+
       const result = await chartDisplayNode.execute(input, config)
-      
+
       expect(result.viewType).toBe('chart')
       expect(result.chartOption.series[0].type).toBe('bar')
     })
@@ -161,9 +172,9 @@ describe('Node Definitions Execution Logic', () => {
     it('should generate export info for CSV', async () => {
       const input = { data: [{ a: 1, b: 2 }] }
       const config = { format: 'csv', filename: 'test_export' }
-      
+
       const result = await dataExportNode.execute(input, config)
-      
+
       expect(result.viewType).toBe('export')
       expect(result.exportInfo.filename).toBe('test_export.csv')
       expect(result.exportInfo.url).toBe('blob:mock-url')
@@ -172,12 +183,11 @@ describe('Node Definitions Execution Logic', () => {
     it('should generate export info for JSON', async () => {
       const input = { data: [{ a: 1, b: 2 }] }
       const config = { format: 'json', filename: 'test_export' }
-      
+
       const result = await dataExportNode.execute(input, config)
-      
+
       expect(result.viewType).toBe('export')
       expect(result.exportInfo.filename).toBe('test_export.json')
     })
   })
 })
-

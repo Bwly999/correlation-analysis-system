@@ -1,14 +1,14 @@
-import type { NodeDefinition } from './types';
-import { fileImportNode } from './definitions/fileImport';
-import { manualJsonImportNode } from './definitions/manualJsonImport';
-import { neighborSystemNode } from './definitions/neighborSystem';
-import { dataCleaningNode } from './definitions/dataCleaning';
-import { dataAggregationNode } from './definitions/dataAggregation';
-import { xgboostShapNode } from './definitions/xgboostShap';
-import { lassoNode } from './definitions/lasso';
-import { pearsonNode } from './definitions/pearson';
-import { dataExportNode } from './definitions/dataExport';
-import { chartDisplayNode } from './definitions/chartDisplay';
+import type { NodeDefinition } from './types'
+import { fileImportNode } from './definitions/fileImport'
+import { manualJsonImportNode } from './definitions/manualJsonImport'
+import { neighborSystemNode } from './definitions/neighborSystem'
+import { dataCleaningNode } from './definitions/dataCleaning'
+import { dataAggregationNode } from './definitions/dataAggregation'
+import { xgboostShapNode } from './definitions/xgboostShap'
+import { lassoNode } from './definitions/lasso'
+import { pearsonNode } from './definitions/pearson'
+import { dataExportNode } from './definitions/dataExport'
+import { chartDisplayNode } from './definitions/chartDisplay'
 
 export const nodeDefinitions: NodeDefinition[] = [
   fileImportNode,
@@ -20,9 +20,9 @@ export const nodeDefinitions: NodeDefinition[] = [
   lassoNode,
   pearsonNode,
   dataExportNode,
-  chartDisplayNode
-];
+  chartDisplayNode,
+]
 
 export const getNodeDefinition = (name: string) => {
-  return nodeDefinitions.find(d => d.name === name);
-};
+  return nodeDefinitions.find((d) => d.name === name)
+}

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { BaseEdge, EdgeLabelRenderer, getSmoothStepPath, type EdgeProps } from '@vue-flow/core'
+import { EdgeLabelRenderer, getSmoothStepPath, type EdgeProps } from '@vue-flow/core'
 import { Plus, Trash2 } from 'lucide-vue-next'
 import { useWorkflowStore } from '@/stores/workflowStore'
 
@@ -11,19 +11,19 @@ const isHovered = ref(false)
 const path = computed(() => getSmoothStepPath(props))
 
 const onAddNode = () => {
-  store.pendingConnection = { 
+  store.pendingConnection = {
     sourceNodeId: props.source,
-    edgeId: props.id 
+    edgeId: props.id,
   }
   store.addLog('Select a node to insert between', 'info')
 }
 
 const onDeleteEdge = () => {
-  store.edges = store.edges.filter(e => e.id !== props.id)
+  store.edges = store.edges.filter((e) => e.id !== props.id)
   store.addLog('Edge deleted', 'info')
 }
 
-const sourceNode = computed(() => store.nodes.find(n => n.id === props.source))
+const sourceNode = computed(() => store.nodes.find((n) => n.id === props.source))
 </script>
 
 <template>
@@ -33,12 +33,12 @@ const sourceNode = computed(() => store.nodes.find(n => n.id === props.source))
     :d="path[0]"
     fill="none"
     class="n8n-edge-path transition-all duration-300"
-    :class="{ 
+    :class="{
       'stroke-slate-400': sourceNode?.data?.status === 'idle' || !sourceNode?.data?.status,
       'stroke-indigo-500 is-running': sourceNode?.data?.status === 'running',
       'stroke-emerald-500': sourceNode?.data?.status === 'success',
       'stroke-rose-500': sourceNode?.data?.status === 'error',
-      'is-hovered': isHovered
+      'is-hovered': isHovered,
     }"
     :stroke-width="isHovered ? 2.5 : 1.5"
     stroke-linecap="round"
@@ -66,35 +66,35 @@ const sourceNode = computed(() => store.nodes.find(n => n.id === props.source))
       @mouseenter="isHovered = true"
       @mouseleave="isHovered = false"
     >
-      <div 
+      <div
         class="flex items-center gap-1 bg-white border border-slate-200 shadow-sm rounded-full p-0.5 transition-all duration-200"
         :class="isHovered ? 'opacity-100 scale-100' : 'opacity-0 scale-90 pointer-events-none'"
       >
-        <button 
-          @click.stop="onAddNode"
+        <button
           class="w-6 h-6 flex items-center justify-center rounded-full hover:bg-slate-50 text-slate-400 hover:text-indigo-600 transition-colors"
           title="在中间插入节点"
+          @click.stop="onAddNode"
         >
           <Plus size="14" />
         </button>
         <div class="w-[1px] h-3 bg-slate-100"></div>
-        <button 
-          @click.stop="onDeleteEdge"
+        <button
           class="w-6 h-6 flex items-center justify-center rounded-full hover:bg-slate-50 text-slate-400 hover:text-rose-600 transition-colors"
           title="删除连线"
+          @click.stop="onDeleteEdge"
         >
           <Trash2 size="14" />
         </button>
       </div>
-      
+
       <!-- Default small dot indicator when not hovered -->
-      <div 
-        v-if="!isHovered" 
+      <div
+        v-if="!isHovered"
         class="absolute w-1.5 h-1.5 bg-white border-[1.5px] border-slate-300 rounded-full transition-all duration-200"
         :class="{
           '!border-indigo-500 bg-indigo-50': sourceNode?.data?.status === 'running',
           '!border-emerald-500 bg-emerald-50': sourceNode?.data?.status === 'success',
-          '!border-rose-500 bg-rose-50': sourceNode?.data?.status === 'error'
+          '!border-rose-500 bg-rose-50': sourceNode?.data?.status === 'error',
         }"
       ></div>
     </div>

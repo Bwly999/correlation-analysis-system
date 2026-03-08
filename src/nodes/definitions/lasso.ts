@@ -1,4 +1,4 @@
-import type { NodeDefinition } from '../types';
+import type { NodeDefinition } from '../types'
 
 export const lassoNode: NodeDefinition = {
   name: 'lasso',
@@ -11,12 +11,12 @@ export const lassoNode: NodeDefinition = {
       name: 'targetLabel',
       displayName: '目标变量 (Y)',
       type: 'string',
-      default: 'target'
-    }
+      default: 'target',
+    },
   ],
-  execute: async (input, config) => {
-    if (!input || !input.data) throw new Error("无输入数据");
-    
+  execute: async (input, _config) => {
+    if (!input || !input.data) throw new Error('无输入数据')
+
     return {
       viewType: 'report',
       report: {
@@ -24,7 +24,7 @@ export const lassoNode: NodeDefinition = {
         sections: [
           {
             type: 'text',
-            content: '该报告展示 Lasso 回归特征筛选的结果。'
+            content: '该报告展示 Lasso 回归特征筛选的结果。',
           },
           {
             title: '特征系数',
@@ -33,11 +33,11 @@ export const lassoNode: NodeDefinition = {
               tooltip: { trigger: 'axis' },
               xAxis: { type: 'value' },
               yAxis: { type: 'category', data: ['因子D', '因子E'] },
-              series: [{ data: [0.32, -0.15], type: 'bar' }]
-            }
-          }
-        ]
-      }
-    };
-  }
-};
+              series: [{ data: [0.32, -0.15], type: 'bar' }],
+            },
+          },
+        ],
+      },
+    }
+  },
+}
