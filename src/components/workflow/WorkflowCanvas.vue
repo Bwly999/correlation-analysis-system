@@ -310,15 +310,14 @@ onMounted(() => {
                 </TabList>
                 <TabPanels>
                     <TabPanel value="0">
-                        <div class="flex flex-col gap-3 py-4">
-                            <div @click="() => { store.nodes = []; store.edges = []; store.workflowName = '新建工作流'; isWorkflowListVisible = false }" class="flex items-center gap-4 p-5 bg-slate-900 text-white rounded-2xl cursor-pointer hover:bg-slate-800 transition-all shadow-lg shadow-slate-200/50 group/new">
+                        <div class="flex flex-col gap-3 py-4 max-h-[420px] overflow-y-auto custom-scrollbar px-1">
+                            <div @click="() => { store.nodes = []; store.edges = []; store.workflowName = '新建工作流'; isWorkflowListVisible = false }" class="flex items-center gap-4 p-5 bg-slate-900 text-white rounded-2xl cursor-pointer hover:bg-slate-800 transition-all shadow-lg shadow-slate-200/50 group/new sticky top-0 z-10 mb-2">
                                 <div class="p-3 bg-white/10 rounded-xl group-hover/new:bg-white/20 transition-colors"><Plus size="24" stroke-width="2.5" /></div>
                                 <div>
                                     <div class="font-bold text-[16px] tracking-tight">创建新工作流</div>
                                     <div class="text-[11px] text-slate-400">从零开始构建您的分析流程</div>
                                 </div>
                             </div>
-                            <div class="h-2"></div>
                             <div v-if="savedWorkflows.length === 0" class="text-center py-10 text-[#a3acb9] italic border-2 border-dashed rounded-2xl flex flex-col items-center gap-2">
                                 <FolderOpen size="32" class="opacity-20" /> 还没有保存过任何工作流。
                             </div>
@@ -340,7 +339,7 @@ onMounted(() => {
                            <span class="text-[11px] font-bold text-slate-500">保留最近 20 条记录</span>
                            <Button v-if="store.executionHistory.length > 0" @click="store.clearHistory()" label="清空历史" size="small" severity="danger" text class="text-xs py-1 px-2 h-auto" />
                         </div>
-                        <div class="flex flex-col gap-3 py-4 max-h-[400px] overflow-y-auto custom-scrollbar px-1">
+                        <div class="flex flex-col gap-3 py-4 max-h-[420px] overflow-y-auto custom-scrollbar px-1">
                             <div v-if="store.executionHistory.length === 0" class="text-center py-20 text-[#a3acb9] italic">
                                 <History size="48" class="mx-auto mb-4 opacity-10" /> 暂无执行历史记录。
                             </div>
@@ -348,7 +347,7 @@ onMounted(() => {
                                 <div class="flex flex-col gap-1">
                                     <div class="flex items-center gap-2">
                                         <CheckCircle2 v-if="record.status === 'success'" size="14" class="text-emerald-500" />
-                                        <Pick v-else-if="record.status === 'error'" size="14" class="text-rose-500" />
+                                        <AlertCircle v-else-if="record.status === 'error'" size="14" class="text-rose-500" />
                                         <StopCircle v-else size="14" class="text-amber-500" />
                                         <span class="font-bold text-[13px] text-[#3c4257]">{{ record.workflowName }}</span>
                                     </div>
