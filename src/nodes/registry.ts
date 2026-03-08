@@ -1,5 +1,6 @@
 import type { NodeDefinition } from './types';
 import { fileImportNode } from './definitions/fileImport';
+import { manualJsonImportNode } from './definitions/manualJsonImport';
 import { neighborSystemNode } from './definitions/neighborSystem';
 import { dataCleaningNode } from './definitions/dataCleaning';
 import { dataAggregationNode } from './definitions/dataAggregation';
@@ -11,6 +12,7 @@ import { chartDisplayNode } from './definitions/chartDisplay';
 
 export const nodeDefinitions: NodeDefinition[] = [
   fileImportNode,
+  manualJsonImportNode,
   neighborSystemNode,
   dataCleaningNode,
   dataAggregationNode,

@@ -87,12 +87,12 @@ const exportData = () => {
         </div>
         
         <div class="flex items-center gap-3">
-          <button @click="exportData" class="group flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 transition-all active:scale-95">
+          <button @click="exportData" class="group flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 transition-all active:scale-95 cursor-pointer">
              <Download size="16" class="text-slate-500 group-hover:text-slate-900 transition-colors" />
              <span class="text-xs font-bold text-slate-600 group-hover:text-slate-900">导出原始数据</span>
           </button>
           <div class="w-[1px] h-8 bg-slate-100 mx-2"></div>
-          <button @click="emit('close')" class="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-red-50 text-slate-400 hover:text-red-500 transition-all">
+          <button @click="emit('close')" class="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-red-50 text-slate-400 hover:text-red-500 transition-all cursor-pointer">
              <X size="24" />
           </button>
         </div>

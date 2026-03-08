@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {
-  FileType, Database, Settings2, Sigma, BarChart3, HelpCircle, Download, PieChart
+  FileType, Database, Settings2, Sigma, BarChart3, HelpCircle, Download, PieChart, Edit3
 } from 'lucide-vue-next'
 
 const props = defineProps<{
@@ -10,6 +10,7 @@ const props = defineProps<{
 
 const iconMap: Record<string, any> = {
   'file-import': { icon: FileType, color: 'text-emerald-500', bg: 'bg-emerald-50' },
+  'manual-json-import': { icon: Edit3, color: 'text-orange-500', bg: 'bg-orange-50' },
   'neighbor-system': { icon: Database, color: 'text-emerald-600', bg: 'bg-emerald-50' },
   'data-cleaning': { icon: Settings2, color: 'text-blue-500', bg: 'bg-blue-50' },
   'data-aggregation': { icon: Sigma, color: 'text-blue-600', bg: 'bg-blue-50' },

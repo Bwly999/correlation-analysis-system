@@ -93,7 +93,7 @@ const formatDuration = (ms: number) => {
         <!-- 历史记录触发图标 -->
         <button 
           @click="toggleHistory"
-          class="p-1.5 rounded-md hover:bg-slate-100 text-slate-400 hover:text-indigo-600 transition-all ml-1 outline-none"
+          class="p-1.5 rounded-md hover:bg-slate-100 text-slate-400 hover:text-indigo-600 transition-all ml-1 outline-none cursor-pointer"
           title="查看运行历史"
         >
           <History :size="18" :class="{'text-indigo-600': store.isHistoryMode}" />
@@ -166,7 +166,7 @@ const formatDuration = (ms: number) => {
       <button 
         v-if="!store.isHistoryMode"
         @click="toggleMenu" 
-        class="w-8 h-8 flex items-center justify-center rounded-md border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-600 transition-colors shadow-sm bg-white outline-none"
+        class="w-8 h-8 flex items-center justify-center rounded-md border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-600 transition-colors shadow-sm bg-white outline-none cursor-pointer"
       >
         <FileUp :size="16" />
       </button>

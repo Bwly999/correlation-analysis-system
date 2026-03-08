@@ -28,11 +28,11 @@ const clearLogs = () => {
         </div>
         <div class="h-4 w-[1px] bg-slate-200"></div>
         <div class="flex items-center gap-4 text-[11px] font-medium text-slate-400">
-           <button class="hover:text-indigo-600 flex items-center gap-1.5"><Filter size="12" /> 过滤</button>
-           <button class="hover:text-indigo-600 flex items-center gap-1.5"><Download size="12" /> 导出</button>
+           <button class="hover:text-indigo-600 flex items-center gap-1.5 cursor-pointer"><Filter size="12" /> 过滤</button>
+           <button class="hover:text-indigo-600 flex items-center gap-1.5 cursor-pointer"><Download size="12" /> 导出</button>
         </div>
       </div>
-      <button @click="clearLogs" class="text-[11px] font-bold text-slate-400 hover:text-rose-500 flex items-center gap-1.5 transition-colors uppercase">
+      <button @click="clearLogs" class="text-[11px] font-bold text-slate-400 hover:text-rose-500 flex items-center gap-1.5 transition-colors uppercase cursor-pointer">
         <Trash2 size="12" /> 清空全部
       </button>
     </div>
@@ -73,7 +73,7 @@ const clearLogs = () => {
 
           <span class="text-xs font-medium text-slate-700 break-all leading-normal flex-1">{{ log.message }}</span>
           
-          <button class="opacity-0 group-hover:opacity-100 p-1 hover:bg-white border border-transparent hover:border-slate-200 rounded shadow-sm transition-all">
+          <button class="opacity-0 group-hover:opacity-100 p-1 hover:bg-white border border-transparent hover:border-slate-200 rounded shadow-sm transition-all cursor-pointer">
              <List size="12" class="text-slate-400" />
           </button>
         </div>

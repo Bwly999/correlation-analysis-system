@@ -3,7 +3,7 @@ export type NodeCategory = 'trigger' | 'action' | 'terminal';
 export interface NodeProperty {
   name: string;
   displayName: string;
-  type: 'string' | 'number' | 'options' | 'multi-options' | 'boolean' | 'collection' | 'tree' | 'file' | 'datetime-range';
+  type: 'string' | 'number' | 'options' | 'multi-options' | 'boolean' | 'collection' | 'tree' | 'file' | 'datetime-range' | 'json';
   default?: any;
   description?: string;
   placeholder?: string;

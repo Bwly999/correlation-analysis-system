@@ -72,7 +72,7 @@ const onDragStart = (event: DragEvent, node: any) => {
           <div class="w-1.5 h-4 bg-slate-900 rounded-full"></div>
           <h2 class="text-[13px] font-bold text-[#1a1f36] tracking-tight">节点库</h2>
         </div>
-        <button @click="emit('close')" class="p-1.5 text-[#a3acb9] hover:text-[#ef4444] hover:bg-red-50 rounded-lg transition-all duration-200">
+        <button @click="emit('close')" class="p-1.5 text-[#a3acb9] hover:text-[#ef4444] hover:bg-red-50 rounded-lg transition-all duration-200 cursor-pointer">
           <X size="18" stroke-width="2.5" />
         </button>
       </div>
@@ -103,7 +103,7 @@ const onDragStart = (event: DragEvent, node: any) => {
                <p class="text-[12px] font-bold text-white leading-tight">选择连接目标</p>
                <p class="text-[10px] text-white/60 mt-1 leading-relaxed">已为您智能推荐可用的下游节点</p>
             </div>
-            <button @click="store.pendingConnection = null" class="text-white/40 hover:text-white transition-colors"><X size="14" /></button>
+            <button @click="store.pendingConnection = null" class="text-white/40 hover:text-white transition-colors cursor-pointer"><X size="14" /></button>
          </div>
          <div class="absolute -right-4 -bottom-4 opacity-5 rotate-12 text-white"><Box size="80" /></div>
       </div>

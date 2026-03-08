@@ -228,7 +228,7 @@ onMounted(() => {
           <template #control-button-reset></template>
         </Controls>
         <div class="absolute left-6 z-[100] transition-all duration-300" :style="{ bottom: isLogExpanded ? '310px' : '50px' }">
-            <button @click="resetView" class="w-10 h-10 bg-white border border-[#efefef] rounded-xl shadow-xl flex items-center justify-center text-[#3c4257] hover:text-indigo-600 transition-all active:scale-90 group" v-tooltip.right="'复位视图'">
+            <button @click="resetView" class="w-10 h-10 bg-white border border-[#efefef] rounded-xl shadow-xl flex items-center justify-center text-[#3c4257] hover:text-indigo-600 transition-all active:scale-90 group cursor-pointer" v-tooltip.right="'复位视图'">
                 <Focus size="18" />
             </button>
         </div>
@@ -264,7 +264,7 @@ onMounted(() => {
     <footer class="absolute bottom-0 left-0 right-0 z-[120] transition-all duration-300 ease-in-out flex flex-col" :style="{ height: isLogExpanded ? '300px' : '44px' }">
       <div class="h-11 min-h-[44px] bg-white border-t border-[#efefef] flex items-center justify-between px-6 shadow-[0_-1px_3px_rgba(0,0,0,0.02)] relative z-10">
          <div class="flex items-center gap-4 h-full">
-            <button @click="isLogExpanded = !isLogExpanded" class="flex items-center gap-3 h-full px-4 -ml-6 hover:bg-[#f7f9fc] transition-colors group border-r border-[#f1f4f8]">
+            <button @click="isLogExpanded = !isLogExpanded" class="flex items-center gap-3 h-full px-4 -ml-6 hover:bg-[#f7f9fc] transition-colors group border-r border-[#f1f4f8] cursor-pointer">
                <component :is="isLogExpanded ? ChevronDown : ChevronUp" size="16" class="text-indigo-600 transition-transform duration-300" />
                <div class="flex items-center gap-2.5">
                  <Terminal size="14" :class="isLogExpanded ? 'text-indigo-600' : 'text-[#a3acb9]'" />
@@ -295,7 +295,7 @@ onMounted(() => {
                 </div>
                 <button 
                     @click="isWorkflowListVisible = false" 
-                    class="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-all flex items-center justify-center"
+                    class="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-all flex items-center justify-center cursor-pointer"
                     aria-label="Close"
                 >
                     <X size="20" :stroke-width="2.5" />

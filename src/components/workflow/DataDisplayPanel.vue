@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { Database, Maximize, Zap, Edit3, FileJson, Pin } from 'lucide-vue-next'
 import ToggleSwitch from 'primevue/toggleswitch'
 import Textarea from 'primevue/textarea'
+import MonacoEditor from './MonacoEditor.vue'
 
 const props = defineProps<{
   title: string
@@ -43,7 +44,7 @@ const getSmartPreview = (data: any) => {
            <span class="text-[9px] font-bold text-slate-400 uppercase">模拟输入</span>
            <ToggleSwitch v-model="useManualInput" class="!scale-[0.6]" />
         </div>
-        <button @click="emit('openDetail')" class="p-1.5 hover:bg-slate-200 rounded-lg transition-all text-slate-400 hover:text-slate-600" title="打开深度分析窗口">
+        <button @click="emit('openDetail')" class="p-1.5 hover:bg-slate-200 rounded-lg transition-all text-slate-400 hover:text-slate-600 cursor-pointer" title="打开深度分析窗口">
           <Maximize size="12" />
         </button>
       </div>
@@ -58,13 +59,13 @@ const getSmartPreview = (data: any) => {
 
       <!-- 编辑模式 -->
       <div v-else class="h-full flex flex-col p-2">
-        <Textarea 
+        <MonacoEditor 
           v-model="manualInputStr" 
-          placeholder="输入 JSON 数据..." 
-          class="flex-1 font-mono text-[11px] p-3 rounded-lg border border-indigo-100 focus:border-indigo-400 focus:ring-0 bg-indigo-50/10 text-indigo-900 custom-scrollbar resize-none" 
+          height="100%"
+          class="flex-1"
         />
         <div class="flex justify-end p-2 border-t border-indigo-50/50 mt-1">
-           <button @click="emit('generateMock')" class="text-[9px] font-black text-indigo-500 hover:text-indigo-700 flex items-center gap-1 uppercase tracking-tighter">
+           <button @click="emit('generateMock')" class="text-[9px] font-black text-indigo-500 hover:text-indigo-700 flex items-center gap-1 uppercase tracking-tighter cursor-pointer">
               <Zap size="10" /> 生成模板
            </button>
         </div>

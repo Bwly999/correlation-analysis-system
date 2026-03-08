@@ -8,6 +8,7 @@ import { getNodeDefinition } from '@/nodes/registry'
 import NodeIcon from './nodes/NodeIcon.vue'
 import DataDisplayPanel from './DataDisplayPanel.vue'
 import DataAnalysisModal from './DataAnalysisModal.vue'
+import MonacoEditor from './MonacoEditor.vue'
 
 // PrimeVue Components
 import Dialog from 'primevue/dialog'
@@ -16,6 +17,7 @@ import Select from 'primevue/select'
 import MultiSelect from 'primevue/multiselect'
 import InputText from 'primevue/inputtext'
 import InputNumber from 'primevue/inputnumber'
+import Textarea from 'primevue/textarea'
 import ToggleSwitch from 'primevue/toggleswitch'
 import DatePicker from 'primevue/datepicker'
 import Tree from 'primevue/tree'
@@ -159,7 +161,7 @@ const saveAndClose = () => {
              </span>
              <ToggleSwitch v-model="localIsPinned" class="scale-75 origin-right" />
           </div>
-          <Button severity="secondary" text @click="emit('close')"><X size="20"/></Button>
+          <Button severity="secondary" text @click="emit('close')" class="cursor-pointer"><X size="20"/></Button>
         </div>
       </div>
     </template>
@@ -214,12 +216,12 @@ const saveAndClose = () => {
       <div class="col-span-6 flex flex-col bg-white border-r relative">
         <div class="flex items-center justify-between border-b px-4 bg-white sticky top-0 z-10">
           <div class="flex">
-            <button @click="activeTab = 'parameters'" :class="['px-8 py-4 text-xs font-bold uppercase border-b-2 transition-all', activeTab === 'parameters' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400']">参数设置</button>
-            <button @click="activeTab = 'settings'" :class="['px-6 py-4 text-xs font-bold uppercase border-b-2 transition-all', activeTab === 'settings' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400']">系统选项</button>
+            <button @click="activeTab = 'parameters'" :class="['px-8 py-4 text-xs font-bold uppercase border-b-2 transition-all cursor-pointer', activeTab === 'parameters' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400']">参数设置</button>
+            <button @click="activeTab = 'settings'" :class="['px-6 py-4 text-xs font-bold uppercase border-b-2 transition-all cursor-pointer', activeTab === 'settings' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400']">系统选项</button>
           </div>
           <Button 
             @click="runCurrentNode"
-            class="n8n-debug-btn h-9 px-5 rounded-lg border-none shadow-sm hover:shadow-md active:scale-95 transition-all flex items-center gap-2"
+            class="n8n-debug-btn h-9 px-5 rounded-lg border-none shadow-sm hover:shadow-md active:scale-95 transition-all flex items-center gap-2 cursor-pointer"
             :loading="node?.data.status === 'running'"
           >
             <Bug size="16" class="text-white" />
@@ -236,7 +238,7 @@ const saveAndClose = () => {
                  <div v-for="(item, idx) in config[prop.name]" :key="idx" class="p-6 bg-[#fcfcfd] border border-slate-200 rounded-2xl shadow-sm relative group/item hover:border-indigo-300 transition-all">
                     <div class="flex items-center justify-between mb-6 pb-4 border-b border-slate-100">
                        <span class="flex items-center gap-2 text-[10px] font-black text-indigo-500 uppercase tracking-widest"><Settings size="12" /> 配置组 #{{ idx + 1 }}</span>
-                       <button @click="removeCollectionItem(config, prop.name, idx)" class="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all"><Trash2 size="14" /></button>
+                       <button @click="removeCollectionItem(config, prop.name, idx)" class="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all cursor-pointer"><Trash2 size="14" /></button>
                     </div>
                     <div class="space-y-6">
                        <div v-for="subProp in prop.properties" :key="subProp.name" class="flex flex-col gap-2">
@@ -251,9 +253,9 @@ const saveAndClose = () => {
                                       <InputText v-else v-model="subItem[ssProp.name]" class="w-full text-xs" :placeholder="ssProp.placeholder || ssProp.displayName" />
                                    </div>
                                 </div>
-                                <button @click="removeCollectionItem(item, subProp.name, subIdx)" class="text-slate-300 hover:text-rose-500"><X size="14" /></button>
+                                <button @click="removeCollectionItem(item, subProp.name, subIdx)" class="text-slate-300 hover:text-rose-500 cursor-pointer"><X size="14" /></button>
                              </div>
-                             <Button @click="addCollectionItem(item, subProp.name, subProp.properties || [])" :label="`添加 ${subProp.displayName}`" icon="pi pi-plus" size="small" text class="w-full text-[10px] font-bold" />
+                             <Button @click="addCollectionItem(item, subProp.name, subProp.properties || [])" :label="`添加 ${subProp.displayName}`" icon="pi pi-plus" size="small" text class="w-full text-[10px] font-bold cursor-pointer" />
                           </div>
                           <Select v-else-if="subProp.type === 'options' && subProp.name === 'factorName'" v-model="item[subProp.name]" :options="upstreamFactors" optionLabel="name" optionValue="value" placeholder="选择因子" class="w-full text-xs ndv-input" />
                           <Select v-else-if="subProp.type === 'options'" v-model="item[subProp.name]" :options="subProp.options" optionLabel="name" optionValue="value" class="w-full text-xs ndv-input" />
@@ -262,20 +264,21 @@ const saveAndClose = () => {
                        </div>
                     </div>
                  </div>
-                 <Button @click="addCollectionItem(config, prop.name, prop.properties || [])" label="添加新聚合配置组" icon="pi pi-plus" text class="w-full border-2 border-dashed border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/30 rounded-2xl py-5 transition-all font-bold text-xs" />
+                 <Button @click="addCollectionItem(config, prop.name, prop.properties || [])" label="添加新聚合配置组" icon="pi pi-plus" text class="w-full border-2 border-dashed border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/30 rounded-2xl py-5 transition-all font-bold text-xs cursor-pointer" />
               </div>
 
               <Select v-else-if="prop.type === 'options'" v-model="config[prop.name]" :options="prop.options" optionLabel="name" optionValue="value" class="w-full ndv-input" />
               <InputNumber v-else-if="prop.type === 'number'" v-model="config[prop.name]" class="w-full ndv-input" />
               <InputText v-else-if="prop.type === 'string'" v-model="config[prop.name]" class="w-full ndv-input" />
+              <MonacoEditor v-else-if="prop.type === 'json'" v-model="config[prop.name]" height="400px" />
               <ToggleSwitch v-else-if="prop.type === 'boolean'" v-model="config[prop.name]" />
               <div v-else-if="prop.type === 'tree'" class="border rounded-lg bg-[#f8fafc] p-2 max-h-[300px] overflow-auto shadow-inner"><Tree v-model:selectionKeys="config[prop.name]" :value="prop.options" selectionMode="checkbox" class="ndv-tree" /></div>
             </div>
           </div>
         </div>
         <div class="h-16 border-t flex items-center justify-end px-8 gap-3 bg-white">
-           <Button label="取消" severity="secondary" text @click="emit('close')" />
-           <Button label="应用并保存" @click="saveAndClose" />
+           <Button label="取消" severity="secondary" text @click="emit('close')" class="cursor-pointer" />
+           <Button label="应用并保存" @click="saveAndClose" class="cursor-pointer" />
         </div>
       </div>
 

@@ -172,7 +172,7 @@ const nodeShape = computed(() => {
       <div class="w-6 h-[1.5px] bg-slate-200"></div>
       <button 
         @click.stop="store.pendingConnection = { sourceNodeId: props.id }"
-        class="w-6 h-6 bg-white border border-slate-200 rounded-full flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:border-indigo-400 hover:bg-indigo-50 shadow-sm transition-all -ml-0.5 pointer-events-auto active:scale-90"
+        class="w-6 h-6 bg-white border border-slate-200 rounded-full flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:border-indigo-400 hover:bg-indigo-50 shadow-sm transition-all -ml-0.5 pointer-events-auto active:scale-90 cursor-pointer"
         :class="{'ring-2 ring-indigo-100 border-indigo-500 text-indigo-600 opacity-100 bg-indigo-50': store.pendingConnection?.sourceNodeId === props.id}"
       >
         <Plus size="14" stroke-width="2.5" />
@@ -187,12 +187,12 @@ const nodeShape = computed(() => {
       :offset="16"
       @mouseenter="onMouseEnter"
     >
-      <button v-tooltip.top="'调试运行'" class="p-1.5 hover:bg-slate-50 rounded-lg text-indigo-600 transition-colors" @click.stop="runNode(true)">
+      <button v-tooltip.top="'调试运行'" class="p-1.5 hover:bg-slate-50 rounded-lg text-indigo-600 transition-colors cursor-pointer" @click.stop="runNode(true)">
         <Play size="14" fill="currentColor" />
       </button>
       <button 
         v-tooltip.top="isPinned ? '取消冻结数据' : '冻结当前数据 (Pin)'" 
-        class="p-1.5 hover:bg-slate-50 rounded-lg transition-colors" 
+        class="p-1.5 hover:bg-slate-50 rounded-lg transition-colors cursor-pointer" 
         :class="isPinned ? 'text-amber-500' : 'text-slate-400'"
         @click.stop="togglePin"
       >
@@ -200,13 +200,13 @@ const nodeShape = computed(() => {
         <PinOff v-else size="14" />
       </button>
       <div class="w-[1px] h-4 bg-slate-200 self-center mx-1"></div>
-      <button v-tooltip.top="'重命名'" class="p-1.5 hover:bg-slate-50 rounded-lg text-slate-500 transition-colors" @click.stop="startEditing">
+      <button v-tooltip.top="'重命名'" class="p-1.5 hover:bg-slate-50 rounded-lg text-slate-500 transition-colors cursor-pointer" @click.stop="startEditing">
         <Pencil size="14" />
       </button>
-      <button v-tooltip.top="'节点设置'" class="p-1.5 hover:bg-slate-50 rounded-lg text-slate-500 transition-colors" @click.stop="openConfig">
+      <button v-tooltip.top="'节点设置'" class="p-1.5 hover:bg-slate-50 rounded-lg text-slate-500 transition-colors cursor-pointer" @click.stop="openConfig">
         <Settings size="14" />
       </button>
-      <button v-tooltip.top="'删除节点'" class="p-1.5 hover:bg-rose-50 rounded-lg text-rose-500 transition-colors" @click.stop="deleteNode">
+      <button v-tooltip.top="'删除节点'" class="p-1.5 hover:bg-rose-50 rounded-lg text-rose-500 transition-colors cursor-pointer" @click.stop="deleteNode">
         <Trash2 size="14" />
       </button>
     </NodeToolbar>

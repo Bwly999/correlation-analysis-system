@@ -3,7 +3,9 @@ import { ref, computed, watch } from 'vue'
 import { X, Play, FileType, Info, HelpCircle, RefreshCw } from 'lucide-vue-next'
 import Dialog from 'primevue/dialog'
 import Button from 'primevue/button'
+import Textarea from 'primevue/textarea'
 import DatePicker from 'primevue/datepicker'
+import MonacoEditor from './MonacoEditor.vue'
 import { useWorkflowStore, type WorkflowNode } from '@/stores/workflowStore'
 import { getNodeDefinition } from '@/nodes/registry'
 
@@ -93,6 +95,7 @@ const handleConfirm = () => {
 
         <!-- 根据类型渲染 -->
         <DatePicker v-if="prop.type === 'datetime-range'" v-model="config[prop.name]" selectionMode="range" showTime class="w-full" />
+        <MonacoEditor v-else-if="prop.type === 'json'" v-model="config[prop.name]" height="200px" />
         
         <div v-else-if="prop.type === 'file'" class="space-y-2">
            <label 
@@ -128,8 +131,8 @@ const handleConfirm = () => {
 
     <template #footer>
       <div class="flex gap-2 w-full">
-        <Button label="取消" severity="secondary" text @click="emit('close')" class="flex-1" />
-        <Button label="确认并启动" severity="primary" @click="handleConfirm" class="flex-1" />
+        <Button label="取消" severity="secondary" text @click="emit('close')" class="flex-1 cursor-pointer" />
+        <Button label="确认并启动" severity="primary" @click="handleConfirm" class="flex-1 cursor-pointer" />
       </div>
     </template>
   </Dialog>

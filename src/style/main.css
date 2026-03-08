@@ -1,1 +1,17 @@
 @import "tailwindcss";
+
+@layer base {
+  button, 
+  [role="button"] {
+    cursor: pointer;
+  }
+
+  /* 针对 PrimeVue 的一些特定组件确保有 pointer */
+  .p-button,
+  .p-select,
+  .p-multiselect,
+  .p-datepicker-trigger,
+  .p-menuitem-link {
+    cursor: pointer !important;
+  }
+}
