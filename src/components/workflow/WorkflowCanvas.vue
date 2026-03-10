@@ -71,9 +71,9 @@ const currentWorkflowHistory = computed(() => {
 // 深度分析弹窗状态
 const analysisModal = ref({ visible: false, title: '', data: null })
 
-const openWorkflowList = () => {
+const openWorkflowList = async () => {
   savedWorkflows.value = JSON.parse(localStorage.getItem('saved_workflows') || '[]')
-  store.loadHistory()
+  await store.loadHistory()
   isWorkflowListVisible.value = true
 }
 

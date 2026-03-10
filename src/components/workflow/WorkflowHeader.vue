@@ -49,8 +49,8 @@ const menuItems = ref([
 ])
 
 const toggleMenu = (event: any) => menu.value.toggle(event)
-const toggleHistory = (event: any) => {
-  store.loadHistory()
+const toggleHistory = async (event: any) => {
+  await store.loadHistory()
   historyPopover.value.toggle(event)
 }
 

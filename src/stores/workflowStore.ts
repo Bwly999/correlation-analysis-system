@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, markRaw } from 'vue'
 import { type Node, type Edge } from '@vue-flow/core'
 import { getNodeDefinition } from '@/nodes/registry'
+import { historyDB } from '@/utils/storage'
 
 export interface WorkflowNode extends Node {
   data: {
@@ -383,12 +384,13 @@ export const useWorkflowStore = defineStore('workflow', () => {
         status: finalStatus,
         nodes: nodes.value.map((n) => {
           const snapshot = JSON.parse(JSON.stringify(n))
+          // 仅对超长原始数据数组进行轻微截断，保留报告和图片
           if (
             snapshot.data?.output?.data &&
             Array.isArray(snapshot.data.output.data) &&
-            snapshot.data.output.data.length > 5
+            snapshot.data.output.data.length > 100
           ) {
-            snapshot.data.output.data = snapshot.data.output.data.slice(0, 5)
+            snapshot.data.output.data = snapshot.data.output.data.slice(0, 10)
             snapshot.data.output._truncated = true
           }
           return snapshot
@@ -399,26 +401,31 @@ export const useWorkflowStore = defineStore('workflow', () => {
     }
   }
 
-  const saveExecution = (record: ExecutionRecord) => {
-    const history = JSON.parse(localStorage.getItem('execution_history') || '[]')
-    history.unshift(record)
-    const limitedHistory = history.slice(0, 20)
+  const saveExecution = async (record: ExecutionRecord) => {
     try {
-      localStorage.setItem('execution_history', JSON.stringify(limitedHistory))
+      const limitedHistory = await historyDB.saveHistory(record, 20)
       executionHistory.value = limitedHistory
-    } catch (_e) {
-      addLog('保存历史记录失败：存储空间不足', 'error')
+    } catch (e) {
+      addLog(`保存历史记录失败: ${e}`, 'error')
     }
   }
 
-  const loadHistory = () => {
-    executionHistory.value = JSON.parse(localStorage.getItem('execution_history') || '[]')
+  const loadHistory = async () => {
+    try {
+      executionHistory.value = await historyDB.getAllHistory()
+    } catch (e) {
+      console.error('Failed to load history:', e)
+    }
   }
 
-  const clearHistory = () => {
-    localStorage.removeItem('execution_history')
-    executionHistory.value = []
-    addLog('运行历史记录已清空', 'info')
+  const clearHistory = async () => {
+    try {
+      await historyDB.clearAll()
+      executionHistory.value = []
+      addLog('运行历史记录已清空', 'info')
+    } catch (e) {
+      addLog(`清空历史记录失败: ${e}`, 'error')
+    }
   }
 
   const createNewWorkflow = () => {
