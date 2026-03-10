@@ -160,7 +160,6 @@ const onFileSelect = (event: any) => {
       option-label="name"
       option-value="value"
       class="w-full ndv-input"
-      @keydown.enter="emit('save')"
     />
 
     <MultiSelect
@@ -171,14 +170,12 @@ const onFileSelect = (event: any) => {
       option-value="value"
       display="chip"
       class="w-full text-xs ndv-input"
-      @keydown.enter="emit('save')"
     />
 
     <InputNumber
       v-else-if="prop.type === 'number'"
       v-model="configValue"
       class="w-full ndv-input"
-      @keydown.enter="emit('save')"
     />
 
     <InputText
@@ -186,7 +183,6 @@ const onFileSelect = (event: any) => {
       v-model="configValue"
       class="w-full ndv-input"
       :placeholder="prop.placeholder"
-      @keydown.enter="emit('save')"
     />
 
     <AutoComplete
@@ -215,8 +211,6 @@ const onFileSelect = (event: any) => {
           }
           e.target.value = '';
           e.preventDefault();
-        } else {
-          emit('save');
         }
       }"
       :pt="{

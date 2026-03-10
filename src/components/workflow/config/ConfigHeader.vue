@@ -23,7 +23,6 @@ const emit = defineEmits(['update:nodeLabel', 'update:isPinned', 'close', 'save'
           class="ndv-title-input h-8 font-bold text-lg p-0 px-2 text-[#1a1f36] rounded transition-all"
           placeholder="输入节点名称..."
           @input="(e) => emit('update:nodeLabel', (e.target as HTMLInputElement).value)"
-          @keydown.enter="emit('save')"
         />
         <span class="text-[10px] uppercase font-bold text-slate-400 px-2 tracking-widest">{{
           nodeType

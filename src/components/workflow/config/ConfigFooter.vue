@@ -10,7 +10,7 @@ const emit = defineEmits(['close', 'save'])
       <kbd class="px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded text-[10px] font-mono font-bold">
         Enter
       </kbd>
-      <span class="text-[11px] font-medium tracking-tight">确认标签 / 快速保存</span>
+      <span class="text-[11px] font-medium tracking-tight">确认添加标签</span>
     </div>
     <Button
       label="取消"
