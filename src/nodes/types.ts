@@ -14,6 +14,7 @@ export interface NodeProperty {
     | 'file'
     | 'datetime-range'
     | 'json'
+    | 'tags'
   default?: any
   description?: string
   placeholder?: string

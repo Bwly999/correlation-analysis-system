@@ -29,10 +29,63 @@ export const fileImportNode: NodeDefinition = {
         { name: 'JSON', value: 'json' },
       ],
     },
+    {
+      name: 'autoClean',
+      displayName: '自动转换数字',
+      type: 'boolean',
+      default: true,
+      description: '自动将数字字符串转换为数值，并处理 N/A、null 等特殊空值字符串',
+    },
+    {
+      name: 'excludeFields',
+      displayName: '排除字段',
+      type: 'tags', // 使用标签类型，更适合多选操作
+      default: [],
+      placeholder: '输入字段名并按回车确认',
+      displayIf: (config) => !!config.autoClean,
+      description: '这些字段的内容将保持原始字符串格式，不进行数值转换',
+    },
   ],
   execute: async (input, config) => {
     const file = config.fileData as File
     if (!file) throw new Error('未选择任何文件')
+
+    // 数据清洗工具函数
+    const cleanData = (data: any[]) => {
+      if (!config.autoClean || !Array.isArray(data)) return data
+      
+      const excludes = Array.isArray(config.excludeFields) 
+        ? config.excludeFields 
+        : (config.excludeFields || '').split(',').map((s: string) => s.trim()).filter(Boolean)
+      
+      return data.map((row: any) => {
+        if (typeof row !== 'object' || row === null) return row
+        const newRow: any = { ...row }
+        for (const key in newRow) {
+          if (excludes.includes(key)) continue
+          
+          let val = newRow[key]
+          if (typeof val === 'string') {
+            const trimmed = val.trim()
+            // 1. 处理特殊空值占位符
+            const nullStrings = ['n/a', 'null', 'nan', '-', '', 'undefined', 'none']
+            if (nullStrings.includes(trimmed.toLowerCase())) {
+              newRow[key] = null
+              continue
+            }
+            
+            // 2. 尝试转换为数字 (仅当转换后不是 NaN 且转换前后一致，或者本身就是合法的数字格式)
+            if (/^-?\d+(\.\d+)?$/.test(trimmed)) {
+              const num = Number(trimmed)
+              if (!isNaN(num)) {
+                newRow[key] = num
+              }
+            }
+          }
+        }
+        return newRow
+      })
+    }
 
     // 增加校验：确保 file 是一个真实的文件对象
     if (!file.name || typeof file.name !== 'string') {
@@ -55,7 +108,10 @@ export const fileImportNode: NodeDefinition = {
           header: true,
           dynamicTyping: true,
           skipEmptyLines: true,
-          complete: (results) => resolve({ data: results.data, filename: file.name, type: 'csv' }),
+          complete: (results) => {
+            const cleaned = cleanData(results.data)
+            resolve({ data: cleaned, filename: file.name, type: 'csv' })
+          },
           error: (err) => reject(err),
         })
       })
@@ -69,7 +125,8 @@ export const fileImportNode: NodeDefinition = {
             const firstSheetName = workbook.SheetNames[0]
             const worksheet = workbook.Sheets[firstSheetName]
             const jsonData = XLSX.utils.sheet_to_json(worksheet)
-            resolve({ data: jsonData, filename: file.name, type: 'excel' })
+            const cleaned = cleanData(jsonData as any[])
+            resolve({ data: cleaned, filename: file.name, type: 'excel' })
           } catch (err) {
             reject(err)
           }
@@ -83,8 +140,10 @@ export const fileImportNode: NodeDefinition = {
         reader.onload = (e) => {
           try {
             const jsonData = JSON.parse(e.target?.result as string)
+            const arrayData = Array.isArray(jsonData) ? jsonData : [jsonData]
+            const cleaned = cleanData(arrayData)
             resolve({
-              data: Array.isArray(jsonData) ? jsonData : [jsonData],
+              data: cleaned,
               filename: file.name,
               type: 'json',
             })

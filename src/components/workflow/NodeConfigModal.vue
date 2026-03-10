@@ -18,6 +18,8 @@ import InputNumber from 'primevue/inputnumber'
 import ToggleSwitch from 'primevue/toggleswitch'
 import DatePicker from 'primevue/datepicker'
 import Tree from 'primevue/tree'
+import Chips from 'primevue/chips'
+import AutoComplete from 'primevue/autocomplete'
 
 const props = defineProps<{
   nodeId: string | null
@@ -91,9 +93,15 @@ const inputData = computed(() => {
     : null
 })
 
-// 提取上游因子
+// 提取上游因子（对于数据源节点，则提取自身输出的因子）
 const upstreamFactors = computed(() => {
   let data = localUseManualInput.value ? localManualInput.value : inputData.value
+  
+  // 如果是数据源节点且没有外部输入，尝试使用节点自身的输出数据
+  if (!data && node.value?.data.output) {
+    data = node.value.data.output
+  }
+
   if (!data) return []
   if (typeof data === 'string') {
     try {
@@ -108,6 +116,15 @@ const upstreamFactors = computed(() => {
     ? Object.keys(data).map((key) => ({ name: key, value: key }))
     : []
 })
+
+// 用于 AutoComplete 的过滤因子列表
+const filteredFactors = ref<string[]>([])
+const searchFactors = (event: any) => {
+  const query = event.query.toLowerCase()
+  filteredFactors.value = upstreamFactors.value
+    .filter((f) => f.name.toLowerCase().includes(query))
+    .map((f) => f.name)
+}
 
 const addCollectionItem = (parent: any, propName: string, subProps: any[]) => {
   if (!parent[propName]) parent[propName] = []
@@ -172,6 +189,7 @@ const saveAndClose = () => {
               v-model="editedName"
               class="ndv-title-input h-8 font-bold text-lg p-0 px-2 text-[#1a1f36] rounded transition-all"
               placeholder="输入节点名称..."
+              @keydown.enter="saveAndClose"
             />
             <span class="text-[10px] uppercase font-bold text-slate-400 px-2 tracking-widest">{{
               node?.data.type
@@ -507,16 +525,55 @@ const saveAndClose = () => {
                 option-label="name"
                 option-value="value"
                 class="w-full ndv-input"
+                @keydown.enter="saveAndClose"
               />
               <InputNumber
                 v-else-if="prop.type === 'number'"
                 v-model="config[prop.name]"
                 class="w-full ndv-input"
+                @keydown.enter="saveAndClose"
               />
               <InputText
                 v-else-if="prop.type === 'string'"
                 v-model="config[prop.name]"
                 class="w-full ndv-input"
+                @keydown.enter="saveAndClose"
+              />
+              <AutoComplete
+                v-else-if="prop.type === 'tags'"
+                v-model="config[prop.name]"
+                multiple
+                :suggestions="filteredFactors"
+                class="w-full"
+                :placeholder="prop.placeholder"
+                :dropdown="!!upstreamFactors.length"
+                :min-query-length="0"
+                @complete="searchFactors"
+                @focus="(e: any) => {
+                  if (upstreamFactors.length > 0) {
+                    searchFactors({ query: e.target.value || '' })
+                  }
+                }"
+                :empty-message="null"
+                @keydown.enter="(e: any) => {
+                  const val = e.target.value?.trim();
+                  if (val) {
+                    // 强制作为新标签添加
+                    if (!Array.isArray(config[prop.name])) config[prop.name] = [];
+                    if (!config[prop.name].includes(val)) {
+                      config[prop.name].push(val);
+                    }
+                    e.target.value = '';
+                    e.preventDefault();
+                  } else {
+                    saveAndClose();
+                  }
+                }"
+                :pt="{
+                  root: { class: 'w-full' },
+                  input: { class: 'w-full ndv-input text-xs min-h-[42px] p-autocomplete-input' },
+                  token: { class: 'bg-indigo-50 text-indigo-700 font-bold border border-indigo-100 rounded-lg py-0.5 px-2' }
+                }"
               />
               <MonacoEditor
                 v-else-if="prop.type === 'json'"
@@ -539,6 +596,13 @@ const saveAndClose = () => {
           </div>
         </div>
         <div class="h-16 border-t flex items-center justify-end px-8 gap-3 bg-white">
+          <div class="mr-auto flex items-center gap-2 text-slate-400">
+            <kbd
+              class="px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded text-[10px] font-mono font-bold"
+              >Enter</kbd
+            >
+            <span class="text-[11px] font-medium tracking-tight">确认标签 / 快速保存</span>
+          </div>
           <Button
             label="取消"
             severity="secondary"
