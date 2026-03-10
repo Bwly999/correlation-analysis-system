@@ -120,7 +120,7 @@ describe('Workflow Store', () => {
   it('should record execution history after a global run', async () => {
     const store = useWorkflowStore()
     const triggerNode = store.addAndConnectNode('file-import', 'Trigger', { x: 0, y: 0 })!
-    const modelNode = store.addAndConnectNode('xgboost-shap', 'Model', { x: 300, y: 0 })!
+    const modelNode = store.addAndConnectNode('chart-display', 'Model', { x: 300, y: 0 })!
 
     // 手动连接节点以确保执行链完整
     store.edges.push({

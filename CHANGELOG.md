@@ -45,6 +45,18 @@
 - **导出逻辑优化**: 优化了 `ReportViewer` 对后端大图的导出处理。
 
 
+## [1.4.2] - 2026-03-11
+
+### 优化 (Refactor)
+- **WorkflowCanvas**: 深度重构核心画布组件，将工作流管理逻辑解耦至独立组件 `WorkflowManagerModal`。
+- **Store 层**: 封装所有持久化操作 (`localStorage`) 到 `workflowStore`，严格遵循依赖倒置原则。
+- **稳定性**: 引入 `needsViewReset` 信号机制替代硬编码的 `setTimeout` 定时器，解决视图复位的竞态问题。
+- **类型安全**: 完善 `WorkflowMetadata` 与 `SavedWorkflow` 接口定义，移除多处 `any` 类型。
+
+### 测试 (Test)
+- 增强单元测试鲁棒性，修复了测试环境下 IndexedDB 缺失导致的失败问题。
+- Mock 掉 Monaco Editor 与网络请求，确保测试在 JSDOM 环境下的稳定性。
+
 ## [1.4.1] - 2026-03-09
 
 ### 🎨 UI/UX 体验优化
