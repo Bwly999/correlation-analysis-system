@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### 🔧 基础设施与测试优化
+- **Vitest 脚本优化**: 
+  - 将默认的 `test:unit` 脚本修改为 `vitest run`（非监听模式），避免在自动化环境或 Agent 执行时需要手动确认。
+  - 新增 `test:watch` 脚本，保留开发过程中的实时监听测试能力。
+
 ### 🏗️ 架构重构
 - **解耦 NodeConfigModal 组件**: 针对原本过于臃肿的节点配置弹窗进行了深度重构，将其拆分为多个功能单一的原子组件，显著提升了代码的可维护性与扩展性。
   - **核心渲染引擎 `PropertyField.vue`**: 支持递归渲染 `collection` 类型，统一处理 `file`, `json`, `tags`, `datetime-range` 等 10 余种字段类型。
