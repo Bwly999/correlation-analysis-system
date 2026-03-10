@@ -26,6 +26,7 @@ import {
   Square,
   Focus,
   Clock,
+  Activity,
   History,
   CheckCircle2,
   AlertCircle,
