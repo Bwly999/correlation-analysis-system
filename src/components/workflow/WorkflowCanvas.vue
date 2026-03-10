@@ -33,6 +33,8 @@ import {
   Layers2,
   AlertTriangle,
   Undo2,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-vue-next'
 import Dialog from 'primevue/dialog'
 import ConfirmDialog from 'primevue/confirmdialog'
@@ -292,22 +294,29 @@ onMounted(() => {
         >
           <template #control-button-reset></template>
         </Controls>
+        <!-- 右侧节点库开关 (垂直居中，箭头风格) -->
+        <div
+          v-if="!store.isHistoryMode"
+          class="absolute right-0 top-1/2 -translate-y-1/2 z-[100] transition-all duration-500 ease-in-out"
+          :style="{ right: isSidebarVisible ? '340px' : '0' }"
+        >
+          <button
+            v-tooltip.left="isSidebarVisible ? '关闭节点库' : '打开节点库'"
+            class="w-6 h-14 bg-white border border-[#efefef] border-r-0 rounded-l-xl shadow-[-5px_0_15px_rgba(0,0,0,0.05)] flex items-center justify-center text-[#3c4257] hover:text-indigo-600 hover:bg-indigo-50 transition-all cursor-pointer group"
+            @click="toggleSidebar"
+          >
+            <component
+              :is="isSidebarVisible ? ChevronRight : ChevronLeft"
+              size="16"
+              stroke-width="3"
+            />
+          </button>
+        </div>
+
         <div
           class="absolute left-6 z-[100] transition-all duration-300 flex flex-col gap-2"
           :style="{ bottom: isLogExpanded ? '310px' : '50px' }"
         >
-          <button
-            v-tooltip.right="'节点库'"
-            class="w-10 h-10 bg-white border border-[#efefef] rounded-xl shadow-xl flex items-center justify-center text-[#3c4257] hover:text-indigo-600 transition-all active:scale-90 group cursor-pointer"
-            @click="toggleSidebar"
-          >
-            <Plus
-              size="20"
-              stroke-width="2.5"
-              :class="{ 'rotate-45 text-indigo-600': isSidebarVisible }"
-              class="transition-transform duration-300"
-            />
-          </button>
           <button
             v-tooltip.right="'复位视图'"
             class="w-10 h-10 bg-white border border-[#efefef] rounded-xl shadow-xl flex items-center justify-center text-[#3c4257] hover:text-indigo-600 transition-all active:scale-90 group cursor-pointer"
