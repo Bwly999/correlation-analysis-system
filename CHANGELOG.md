@@ -44,10 +44,19 @@
 - **Base64 接口增强**: 统一了文件保存与内存生成的绘图入口，确保两种模式下的视觉产出完全同步。
 - **导出逻辑优化**: 优化了 `ReportViewer` 对后端大图的导出处理。
 
+## [1.4.3] - 2026-03-11
 
-## [1.4.2] - 2026-03-11
+### 新增 (Added)
+- **Data Cleaning 节点增强**: 
+  - 支持指定目标字段进行清洗。
+  - 新增 **特征缩放 (Scaling)** 功能，支持 Min-Max 归一化与 Z-Score 标准化。
+  - 新增 **分类变量编码 (Encoding)** 功能，支持自动 Label Encoding。
+  - 增强异常值处理，新增百分比剔除法。
+  - 优化执行结果返回，提供详细的清洗统计数据。
 
 ### 优化 (Refactor)
+...
+
 - **WorkflowCanvas**: 深度重构核心画布组件，将工作流管理逻辑解耦至独立组件 `WorkflowManagerModal`。
 - **Store 层**: 封装所有持久化操作 (`localStorage`) 到 `workflowStore`，严格遵循依赖倒置原则。
 - **稳定性**: 引入 `needsViewReset` 信号机制替代硬编码的 `setTimeout` 定时器，解决视图复位的竞态问题。

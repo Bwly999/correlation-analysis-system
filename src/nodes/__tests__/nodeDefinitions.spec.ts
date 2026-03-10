@@ -46,15 +46,50 @@ describe('Node Definitions Execution Logic', () => {
   })
 
   describe('data-cleaning', () => {
-    it('should pass through data and record count', async () => {
+    it('should handle missing values and record stats', async () => {
       const input = { data: [{ a: 1 }, { a: null }, { a: 2 }] }
-      const config = { missingValueStrategy: 'mean', outlierMethod: 'iqr' }
+      const config = { missingValueStrategy: 'mean', outlierMethod: 'none' }
 
       const result = await dataCleaningNode.execute(input, config)
 
       expect(result.data).toBeDefined()
-      expect(result.originalCount).toBe(3)
-      expect(result.method).toBe('iqr')
+      expect(result.stats.originalCount).toBe(3)
+      expect(result.stats.missingFilled).toBe(1)
+      expect(result.data[1].a).toBe(1.5) // (1+2)/2
+    })
+
+    it('should perform min-max scaling', async () => {
+      const input = {
+        data: [
+          { a: 0 },
+          { a: 5 },
+          { a: 10 },
+        ],
+      }
+      const config = { scaling: 'minmax', targetColumns: ['a'] }
+
+      const result = await dataCleaningNode.execute(input, config)
+
+      expect(result.data[0].a).toBe(0)
+      expect(result.data[1].a).toBe(0.5)
+      expect(result.data[2].a).toBe(1)
+    })
+
+    it('should perform label encoding for string fields', async () => {
+      const input = {
+        data: [
+          { category: 'A', value: 10 },
+          { category: 'B', value: 20 },
+          { category: 'A', value: 30 },
+        ],
+      }
+      const config = { encoding: 'label', targetColumns: ['category'] }
+
+      const result = await dataCleaningNode.execute(input, config)
+
+      expect(typeof result.data[0].category).toBe('number')
+      expect(result.data[0].category).toBe(result.data[2].category)
+      expect(result.data[0].category).not.toBe(result.data[1].category)
     })
   })
 
