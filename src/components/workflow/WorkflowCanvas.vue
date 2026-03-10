@@ -115,11 +115,6 @@ watch(isConfigVisible, (visible) => {
   if (!visible) store.activeConfigNodeId = null
 })
 
-onNodeClick(({ node }) => {
-  selectedNode.value = node as WorkflowNode
-  isConfigVisible.value = true
-})
-
 onConnect((params: Connection) => {
   const { valid } = store.validateConnection(params.source, params.target)
   if (valid) addEdges(params)

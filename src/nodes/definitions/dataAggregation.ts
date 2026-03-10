@@ -43,21 +43,17 @@ export const dataAggregationNode: NodeDefinition = {
           default: 'mean',
           options: [
             { name: '算术平均 (Mean)', value: 'mean' },
-            { name: '加权平均 (Weighted)', value: 'weighted_mean' },
             { name: '总和 (Sum)', value: 'sum' },
             { name: '最大值 (Max)', value: 'max' },
             { name: '最小值 (Min)', value: 'min' },
           ],
         },
         {
-          name: 'factorWeights',
-          displayName: '参与因子与权重',
-          type: 'collection',
+          name: 'inputColumns',
+          displayName: '参与字段',
+          type: 'tags',
           default: [],
-          properties: [
-            { name: 'factorName', displayName: '因子字段', type: 'string' },
-            { name: 'weight', displayName: '权重值', type: 'number', default: 1.0 },
-          ],
+          description: '输入或选择要参与合并的字段名。',
         },
       ],
     },
@@ -131,26 +127,18 @@ export const dataAggregationNode: NodeDefinition = {
       const resultData = rawData.map((row: any) => {
         const newRow = { ...row }
         groups.forEach((group: any) => {
-          const factorConfigs = group.factorWeights || []
-          const entries = factorConfigs
-            .map((fw: any) => ({
-              val: Number(row[fw.factorName]),
-              weight: Number(fw.weight || 1),
-            }))
-            .filter((e: any) => !isNaN(e.val))
+          const inputCols = group.inputColumns || []
+          const vals = inputCols
+            .map((col: string) => Number(row[col]))
+            .filter((v: number) => !isNaN(v))
 
-          if (entries.length === 0) {
+          if (vals.length === 0) {
             newRow[group.targetFactorName] = null
             return
           }
 
-          const vals = entries.map((e: any) => e.val)
           if (group.method === 'mean') {
             newRow[group.targetFactorName] = vals.reduce((a, b) => a + b, 0) / vals.length
-          } else if (group.method === 'weighted_mean') {
-            const weightedSum = entries.reduce((acc: number, e: any) => acc + e.val * e.weight, 0)
-            const totalWeight = entries.reduce((acc: number, e: any) => acc + e.weight, 0)
-            newRow[group.targetFactorName] = totalWeight !== 0 ? weightedSum / totalWeight : 0
           } else if (group.method === 'sum') {
             newRow[group.targetFactorName] = vals.reduce((a, b) => a + b, 0)
           } else if (group.method === 'max') {

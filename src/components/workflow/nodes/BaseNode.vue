@@ -175,6 +175,7 @@ const nodeShape = computed(() => {
     <!-- 自定义命名标题 -->
     <div
       class="absolute top-[100%] left-1/2 -translate-x-1/2 mt-3 w-[200px] flex flex-col items-center z-20 text-center font-sans"
+      @click.stop
     >
       <div
         v-if="!isEditingName"

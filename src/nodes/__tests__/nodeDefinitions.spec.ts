@@ -102,15 +102,12 @@ describe('Node Definitions Execution Logic', () => {
         ],
       }
       const config = {
+        mode: 'row_combine',
         aggregationGroups: [
           {
             targetFactorName: 'total',
             method: 'sum',
-            factorWeights: [
-              { factorName: 'f1', weight: 1.0 },
-              { factorName: 'f2', weight: 1.0 },
-              { factorName: 'f3', weight: 1.0 },
-            ],
+            inputColumns: ['f1', 'f2', 'f3'],
           },
         ],
       }
