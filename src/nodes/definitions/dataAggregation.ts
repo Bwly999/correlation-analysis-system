@@ -1,144 +1,243 @@
 import type { NodeDefinition } from '../types'
+import { markRaw } from 'vue'
 
 export const dataAggregationNode: NodeDefinition = {
   name: 'data-aggregation',
   displayName: '数据聚合',
   icon: 'sigma',
   category: 'action',
-  description: '将多个因子（X）按指定规则聚合为新的因子。支持多组并行聚合。',
+  description: '提供多列合并、Group By 分组统计及移动窗口计算，是特征工程的核心算子。',
   properties: [
     {
+      name: 'mode',
+      displayName: '聚合模式',
+      type: 'options',
+      default: 'row_combine',
+      options: [
+        { name: '行内多列合并 (Row-wise)', value: 'row_combine' },
+        { name: '维度分组统计 (Group By)', value: 'group_by' },
+        { name: '移动窗口计算 (Rolling)', value: 'rolling' },
+      ],
+      description: '行内合并用于构建综合指标；分组统计用于分析维度特征；移动窗口用于捕捉时序趋势。',
+    },
+    // --- 模式 1: 行内多列合并 ---
+    {
       name: 'aggregationGroups',
-      displayName: '聚合任务配置',
+      displayName: '任务配置',
       type: 'collection',
       default: [],
-      description: '每一组配置将生成一个新的聚合因子',
+      displayIf: (config) => config.mode === 'row_combine',
+      description: '定义如何将当前行内的多个字段合并为一个新字段。',
       properties: [
         {
           name: 'targetFactorName',
-          displayName: '新生成的因子名称',
+          displayName: '新字段名称',
           type: 'string',
           default: 'factor_combined',
-          placeholder: '输入新因子的 Key',
+          placeholder: '例如: factor_index',
         },
         {
           name: 'method',
-          displayName: '数学聚合算法',
+          displayName: '聚合算法',
           type: 'options',
-          default: 'arithmetic_mean',
+          default: 'mean',
           options: [
-            { name: '算术平均 (Mean)', value: 'arithmetic_mean' },
-            { name: '加权平均 (Weighted Mean)', value: 'weighted_mean' },
-            { name: '几何平均 (Geometric Mean)', value: 'geometric_mean' },
+            { name: '算术平均 (Mean)', value: 'mean' },
+            { name: '加权平均 (Weighted)', value: 'weighted_mean' },
+            { name: '总和 (Sum)', value: 'sum' },
             { name: '最大值 (Max)', value: 'max' },
             { name: '最小值 (Min)', value: 'min' },
-            { name: '总和 (Sum)', value: 'sum' },
           ],
         },
         {
           name: 'factorWeights',
-          displayName: '参与因子及权重配置',
+          displayName: '参与因子与权重',
           type: 'collection',
           default: [],
-          description: '添加参与本次聚合的因子，并指定权重（仅加权平均有效）',
           properties: [
-            {
-              name: 'factorName',
-              displayName: '选择因子',
-              type: 'options', // 选一个因子
-              options: [], // 动态获取
-            },
-            {
-              name: 'weight',
-              displayName: '权重',
-              type: 'number',
-              default: 1.0,
-            },
+            { name: 'factorName', displayName: '因子字段', type: 'string' },
+            { name: 'weight', displayName: '权重值', type: 'number', default: 1.0 },
           ],
         },
       ],
     },
+    // --- 模式 2: 分组聚合 ---
     {
-      name: 'keepOriginalFactors',
-      displayName: '保留原始输入因子',
-      type: 'boolean',
-      default: true,
+      name: 'groupByField',
+      displayName: '分组基准字段',
+      type: 'string',
+      displayIf: (config) => config.mode === 'group_by',
+      placeholder: '例如: 行业, 日期, 分类',
+      description: '数据将根据此字段的唯一值进行拆分并分别统计。',
+    },
+    {
+      name: 'groupByMethods',
+      displayName: '统计指标',
+      type: 'multi-options',
+      default: ['mean'],
+      displayIf: (config) => config.mode === 'group_by',
+      options: [
+        { name: '均值 (Mean)', value: 'mean' },
+        { name: '总和 (Sum)', value: 'sum' },
+        { name: '数据量 (Count)', value: 'count' },
+        { name: '标准差 (Std)', value: 'std' },
+        { name: '中位数 (Median)', value: 'median' },
+      ],
+    },
+    // --- 模式 3: 移动窗口 ---
+    {
+      name: 'windowSize',
+      displayName: '窗口长度 (N)',
+      type: 'number',
+      default: 5,
+      displayIf: (config) => config.mode === 'rolling',
+      description: '计算包含当前行在内的前 N 行数据的移动统计量。',
+    },
+    {
+      name: 'rollingMethod',
+      displayName: '窗口算法',
+      type: 'options',
+      default: 'mean',
+      displayIf: (config) => config.mode === 'rolling',
+      options: [
+        { name: '移动平均 (MA)', value: 'mean' },
+        { name: '窗口求和 (Sum)', value: 'sum' },
+        { name: '窗口最大值 (Max)', value: 'max' },
+        { name: '窗口最小值 (Min)', value: 'min' },
+      ],
+    },
+    {
+      name: 'targetColumns',
+      displayName: '目标处理字段',
+      type: 'tags',
+      default: [],
+      description: '指定要参与聚合计算的字段。留空则尝试处理所有数值型字段。',
     },
   ],
   execute: async (input, config) => {
-    if (!input || !input.data) return { message: '无有效输入数据' }
+    if (!input || !input.data || !Array.isArray(input.data)) {
+      throw new Error('输入数据格式不正确')
+    }
 
-    const data = input.data
-    const groups = config.aggregationGroups || []
-    const keepOriginal = config.keepOriginalFactors
+    const rawData = input.data
+    const allFields = Object.keys(rawData[0] || {})
+    const targetFields =
+      config.targetColumns && config.targetColumns.length > 0
+        ? config.targetColumns.filter((f: string) => allFields.includes(f))
+        : allFields.filter((f: string) => typeof rawData[0][f] === 'number')
 
-    const usedFactors = new Set<string>()
-    groups.forEach((g: any) => {
-      ;(g.factorWeights || []).forEach((fw: any) => usedFactors.add(fw.factorName))
-    })
+    if (config.mode === 'row_combine') {
+      const groups = config.aggregationGroups || []
+      const resultData = rawData.map((row: any) => {
+        const newRow = { ...row }
+        groups.forEach((group: any) => {
+          const factorConfigs = group.factorWeights || []
+          const entries = factorConfigs
+            .map((fw: any) => ({
+              val: Number(row[fw.factorName]),
+              weight: Number(fw.weight || 1),
+            }))
+            .filter((e: any) => !isNaN(e.val))
 
-    const processedData = data.map((row: any) => {
-      const newRow = { ...row }
+          if (entries.length === 0) {
+            newRow[group.targetFactorName] = null
+            return
+          }
 
-      groups.forEach((group: any) => {
-        const factorConfigs = group.factorWeights || []
-        if (factorConfigs.length === 0) return
-
-        const entries = factorConfigs
-          .map((fw: any) => ({
-            val: Number(row[fw.factorName]),
-            weight: Number(fw.weight || 1),
-          }))
-          .filter((e: any) => !isNaN(e.val))
-
-        if (entries.length === 0) {
-          newRow[group.targetFactorName] = null
-          return
-        }
-
-        let result: number
-        const vals = entries.map((e: any) => e.val)
-        const weights = entries.map((e: any) => e.weight)
-
-        switch (group.method) {
-          case 'sum':
-            result = vals.reduce((a, b) => a + b, 0)
-            break
-          case 'max':
-            result = Math.max(...vals)
-            break
-          case 'min':
-            result = Math.min(...vals)
-            break
-          case 'arithmetic_mean':
-            result = vals.reduce((a, b) => a + b, 0) / vals.length
-            break
-          case 'weighted_mean':
+          const vals = entries.map((e: any) => e.val)
+          if (group.method === 'mean') {
+            newRow[group.targetFactorName] = vals.reduce((a, b) => a + b, 0) / vals.length
+          } else if (group.method === 'weighted_mean') {
             const weightedSum = entries.reduce((acc: number, e: any) => acc + e.val * e.weight, 0)
-            const totalWeight = weights.reduce((a, b) => a + b, 0)
-            result = totalWeight !== 0 ? weightedSum / totalWeight : 0
-            break
-          case 'geometric_mean':
-            const prod = vals.reduce((a, b) => a * b, 1)
-            result = Math.pow(Math.abs(prod), 1 / vals.length) * (prod < 0 ? -1 : 1)
-            break
-          default:
-            result = vals.reduce((a, b) => a + b, 0) / vals.length
-        }
+            const totalWeight = entries.reduce((acc: number, e: any) => acc + e.weight, 0)
+            newRow[group.targetFactorName] = totalWeight !== 0 ? weightedSum / totalWeight : 0
+          } else if (group.method === 'sum') {
+            newRow[group.targetFactorName] = vals.reduce((a, b) => a + b, 0)
+          } else if (group.method === 'max') {
+            newRow[group.targetFactorName] = Math.max(...vals)
+          } else if (group.method === 'min') {
+            newRow[group.targetFactorName] = Math.min(...vals)
+          }
+        })
+        return newRow
+      })
+      return { data: markRaw(resultData), count: resultData.length }
+    } 
+    
+    if (config.mode === 'group_by') {
+      const groupKey = config.groupByField
+      if (!groupKey || !allFields.includes(groupKey)) {
+        throw new Error(`分组字段 "${groupKey}" 不存在`)
+      }
 
-        newRow[group.targetFactorName] = result
+      const groups: Record<string, any[]> = {}
+      rawData.forEach((row: any) => {
+        const val = String(row[groupKey])
+        if (!groups[val]) groups[val] = []
+        groups[val].push(row)
       })
 
-      if (!keepOriginal) {
-        usedFactors.forEach((f) => delete newRow[f])
-      }
-      return newRow
-    })
+      const methods = config.groupByMethods || ['mean']
+      const resultData = Object.entries(groups).map(([groupVal, rows]) => {
+        const result: any = { [groupKey]: groupVal, row_count: rows.length }
+        targetFields.forEach((f: string) => {
+          if (f === groupKey) return
+          const values = rows.map((r) => Number(r[f])).filter((v) => !isNaN(v))
+          if (values.length === 0) return
 
-    return {
-      data: processedData,
-      count: processedData.length,
-      groups: groups.map((g: any) => g.targetFactorName),
+          methods.forEach((m: string) => {
+            const key = `${f}_${m}`
+            if (m === 'mean') {
+              result[key] = values.reduce((a, b) => a + b, 0) / values.length
+            } else if (m === 'sum') {
+              result[key] = values.reduce((a, b) => a + b, 0)
+            } else if (m === 'count') {
+              result[key] = values.length
+            } else if (m === 'std') {
+              const mean = values.reduce((a, b) => a + b, 0) / values.length
+              result[key] = Math.sqrt(
+                values.reduce((s, v) => s + Math.pow(v - mean, 2), 0) / values.length,
+              )
+            } else if (m === 'median') {
+              const sorted = [...values].sort((a, b) => a - b)
+              result[key] = sorted[Math.floor(sorted.length / 2)]
+            }
+          })
+        })
+        return result
+      })
+      return { data: markRaw(resultData), count: resultData.length }
     }
+
+    if (config.mode === 'rolling') {
+      const windowSize = Number(config.windowSize || 5)
+      const method = config.rollingMethod || 'mean'
+
+      const resultData = rawData.map((row: any, idx: number) => {
+        const newRow = { ...row }
+        targetFields.forEach((f: string) => {
+          const start = Math.max(0, idx - windowSize + 1)
+          const windowRows = rawData.slice(start, idx + 1)
+          const values = windowRows.map((r: any) => Number(r[f])).filter((v: number) => !isNaN(v))
+
+          const key = `${f}_rolling_${windowSize}`
+          if (values.length === 0) {
+            newRow[key] = null
+          } else if (method === 'mean') {
+            newRow[key] = values.reduce((a, b) => a + b, 0) / values.length
+          } else if (method === 'sum') {
+            newRow[key] = values.reduce((a, b) => a + b, 0)
+          } else if (method === 'max') {
+            newRow[key] = Math.max(...values)
+          } else if (method === 'min') {
+            newRow[key] = Math.min(...values)
+          }
+        })
+        return newRow
+      })
+      return { data: markRaw(resultData), count: resultData.length }
+    }
+
+    return { data: markRaw(rawData), count: rawData.length }
   },
 }
