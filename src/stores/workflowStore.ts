@@ -565,6 +565,9 @@ export const useWorkflowStore = defineStore('workflow', () => {
     reader.readAsText(file)
   }
 
+  // 初始化时自动加载历史记录
+  loadHistory()
+
   return {
     nodes,
     edges,

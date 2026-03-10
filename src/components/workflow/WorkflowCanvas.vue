@@ -65,7 +65,8 @@ const currentWorkflowHistory = computed(() => {
   if (store.currentWorkflowId) {
     return store.executionHistory.filter((r) => r.workflowId === store.currentWorkflowId)
   }
-  return store.executionHistory.filter((r) => !r.workflowId || r.workflowId === 'temp')
+  // 如果当前没有选中的工作流（在管理中心查看时），展示所有历史
+  return store.executionHistory
 })
 
 // 深度分析弹窗状态

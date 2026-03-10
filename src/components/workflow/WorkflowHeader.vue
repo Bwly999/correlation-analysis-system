@@ -26,8 +26,8 @@ const filteredHistory = computed(() => {
   if (store.currentWorkflowId) {
     return store.executionHistory.filter((r) => r.workflowId === store.currentWorkflowId)
   }
-  // 如果是新建未保存的工作流，显示 temp 或 null 的记录
-  return store.executionHistory.filter((r) => !r.workflowId || r.workflowId === 'temp')
+  // 如果当前没有选中的工作流（如新建工作流时），展示所有历史以方便回溯
+  return store.executionHistory
 })
 
 const menu = ref()
@@ -50,8 +50,10 @@ const menuItems = ref([
 
 const toggleMenu = (event: any) => menu.value.toggle(event)
 const toggleHistory = async (event: any) => {
+  // 必须在异步操作前记录事件或目标，否则 await 后 event 可能会失效导致定位到 (0,0)
+  const target = event.currentTarget || event.target
   await store.loadHistory()
-  historyPopover.value.toggle(event)
+  historyPopover.value.toggle({ currentTarget: target })
 }
 
 const fileInput = ref<HTMLInputElement | null>(null)
@@ -107,16 +109,17 @@ const formatDuration = (ms: number) => {
 
         <!-- 历史记录触发图标 -->
         <button
-          class="p-1.5 rounded-md hover:bg-slate-100 text-slate-400 hover:text-indigo-600 transition-all ml-1 outline-none cursor-pointer"
+          class="p-1.5 rounded-md hover:bg-slate-100 text-slate-400 hover:text-indigo-600 transition-all ml-1 outline-none cursor-pointer relative z-20"
           title="查看运行历史"
-          @click="toggleHistory"
+          @click.stop="toggleHistory"
         >
           <History :size="18" :class="{ 'text-indigo-600': store.isHistoryMode }" />
         </button>
 
         <Popover
           ref="historyPopover"
-          class="w-[320px] shadow-2xl border border-slate-200 rounded-xl overflow-hidden mt-2"
+          append-to="body"
+          class="w-[320px] shadow-2xl border border-slate-200 rounded-xl overflow-hidden mt-2 z-[9999]"
         >
           <div class="p-3 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
             <span class="text-[12px] font-bold text-slate-700 uppercase tracking-wider"
