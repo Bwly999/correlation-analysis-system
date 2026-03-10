@@ -138,9 +138,9 @@ const openAnalysis = (title: string, data: any) => {
       />
     </template>
 
-    <div v-if="node" class="ndv-body grid grid-cols-12 h-full bg-white border-t -mx-6 -mb-6 overflow-hidden">
+    <div v-if="node" class="ndv-body flex h-full bg-white border-t -mx-6 overflow-hidden">
       <!-- 左侧边栏 -->
-      <div class="col-span-3 bg-[#f1f5f9] border-r flex flex-col overflow-hidden">
+      <div class="w-[320px] bg-[#f1f5f9] border-r flex flex-col overflow-hidden shrink-0">
         <div class="flex-[3] min-h-0 p-4 pb-2 flex flex-col">
           <DataDisplayPanel
             v-model:use-manual-input="localUseManualInput"
@@ -153,16 +153,18 @@ const openAnalysis = (title: string, data: any) => {
             @generate-mock="localManualInput = JSON.stringify({ data: [{ f1: 10, f2: 20, target: 1 }] }, null, 2)"
           />
         </div>
-        <RuntimeInputs
-          :properties="runtimeProperties"
-          v-model:config="config"
-          :upstream-factors="upstreamFactors"
-        />
+        <div class="flex-none">
+          <RuntimeInputs
+            :properties="runtimeProperties"
+            v-model:config="config"
+            :upstream-factors="upstreamFactors"
+          />
+        </div>
       </div>
 
       <!-- 中心配置区域 -->
-      <div class="col-span-6 flex flex-col bg-white border-r relative">
-        <div class="flex items-center justify-between border-b px-4 bg-white sticky top-0 z-10">
+      <div class="flex-1 flex flex-col bg-white border-r relative min-w-0">
+        <div class="flex items-center justify-between border-b px-4 bg-white sticky top-0 z-10 shrink-0">
           <div class="flex">
             <button
               v-for="tab in [{id: 'parameters', label: '参数设置'}, {id: 'settings', label: '系统选项'}]"
@@ -187,7 +189,7 @@ const openAnalysis = (title: string, data: any) => {
           </button>
         </div>
 
-        <div class="flex-1 p-8 overflow-y-auto custom-scrollbar bg-white">
+        <div class="flex-1 p-8 overflow-y-auto custom-scrollbar bg-white min-h-0">
           <ConfigForm
             v-if="activeTab === 'parameters'"
             :properties="staticProperties"
@@ -200,11 +202,11 @@ const openAnalysis = (title: string, data: any) => {
           </div>
         </div>
 
-        <ConfigFooter @close="emit('close')" @save="saveAndClose" />
+        <ConfigFooter @close="emit('close')" @save="saveAndClose" class="shrink-0" />
       </div>
 
       <!-- 右侧边栏 -->
-      <div class="col-span-3 bg-[#f1f5f9] flex flex-col overflow-hidden">
+      <div class="w-[320px] bg-[#f1f5f9] flex flex-col overflow-hidden shrink-0">
         <div class="flex-1 p-4 flex flex-col min-h-0">
           <DataDisplayPanel
             title="节点输出 (OUTPUT)"
