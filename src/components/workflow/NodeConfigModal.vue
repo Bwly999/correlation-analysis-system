@@ -141,7 +141,7 @@ const openAnalysis = (title: string, data: any) => {
     <div v-if="node" class="ndv-body grid grid-cols-12 h-full bg-white border-t -mx-6 -mb-6 overflow-hidden">
       <!-- 左侧边栏 -->
       <div class="col-span-3 bg-[#f1f5f9] border-r flex flex-col overflow-hidden">
-        <div class="flex-[3] min-h-0 p-4 pb-2">
+        <div class="flex-[3] min-h-0 p-4 pb-2 flex flex-col">
           <DataDisplayPanel
             v-model:use-manual-input="localUseManualInput"
             v-model:manual-input-str="localManualInput"
@@ -205,7 +205,7 @@ const openAnalysis = (title: string, data: any) => {
 
       <!-- 右侧边栏 -->
       <div class="col-span-3 bg-[#f1f5f9] flex flex-col overflow-hidden">
-        <div class="flex-1 p-4 flex flex-col">
+        <div class="flex-1 p-4 flex flex-col min-h-0">
           <DataDisplayPanel
             title="节点输出 (OUTPUT)"
             :data="node.data.output"

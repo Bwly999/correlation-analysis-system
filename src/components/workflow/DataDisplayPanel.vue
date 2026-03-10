@@ -62,19 +62,19 @@ const getSmartPreview = (data: any) => {
     </div>
 
     <!-- Content (Light Theme) -->
-    <div class="flex-1 overflow-hidden relative bg-[#fcfcfd]">
+    <div class="flex-1 overflow-hidden relative bg-[#fcfcfd] min-h-0">
       <!-- 预览模式 -->
       <div
         v-if="!useManualInput"
-        class="h-full overflow-auto p-4 font-mono text-[11px] text-slate-600 custom-scrollbar"
+        class="h-full overflow-y-auto p-4 font-mono text-[11px] text-slate-600 custom-scrollbar"
       >
         <pre class="whitespace-pre-wrap break-all leading-relaxed">{{ getSmartPreview(data) }}</pre>
       </div>
 
       <!-- 编辑模式 -->
-      <div v-else class="h-full flex flex-col p-2">
+      <div v-else class="h-full flex flex-col p-2 min-h-0">
         <MonacoEditor v-model="manualInputStr" height="100%" class="flex-1" />
-        <div class="flex justify-end p-2 border-t border-indigo-50/50 mt-1">
+        <div class="flex justify-end p-2 border-t border-indigo-50/50 mt-1 shrink-0">
           <button
             class="text-[9px] font-black text-indigo-500 hover:text-indigo-700 flex items-center gap-1 uppercase tracking-tighter cursor-pointer"
             @click="emit('generateMock')"

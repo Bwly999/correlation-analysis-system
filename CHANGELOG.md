@@ -50,9 +50,14 @@
 - **导出逻辑优化**: 优化了 `ReportViewer` 对后端大图的导出处理。
 
 ## [1.4.3] - 2026-03-11
+### 🎨 UI/UX 体验优化
+- **预览面板滚动修复 (DataDisplayPanel)**:
+  - 通过在 `NodeConfigModal` 和 `DataDisplayPanel` 中引入 `min-h-0` 约束和 `flex` 布局调整，彻底解决了在小屏幕或低高度界面下节点输入/输出预览区域内容被截断且无法滚动的问题。
+  - 确保了 Monaco Editor 在手动输入模式下也能正确占据剩余空间并支持内部滚动。
 
-### 新增 (Added)
 - **Data Cleaning 节点增强**: 
+...
+
   - 支持指定目标字段进行清洗。
   - 新增 **特征缩放 (Scaling)** 功能，支持 Min-Max 归一化与 Z-Score 标准化。
   - 新增 **分类变量编码 (Encoding)** 功能，支持自动 Label Encoding。
