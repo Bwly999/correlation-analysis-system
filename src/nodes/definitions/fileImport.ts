@@ -53,18 +53,21 @@ export const fileImportNode: NodeDefinition = {
     // 数据清洗工具函数
     const cleanData = (data: any[]) => {
       if (!config.autoClean || !Array.isArray(data)) return data
-      
-      const excludes = Array.isArray(config.excludeFields) 
-        ? config.excludeFields 
-        : (config.excludeFields || '').split(',').map((s: string) => s.trim()).filter(Boolean)
-      
+
+      const excludes = Array.isArray(config.excludeFields)
+        ? config.excludeFields
+        : (config.excludeFields || '')
+            .split(',')
+            .map((s: string) => s.trim())
+            .filter(Boolean)
+
       return data.map((row: any) => {
         if (typeof row !== 'object' || row === null) return row
         const newRow: any = { ...row }
         for (const key in newRow) {
           if (excludes.includes(key)) continue
-          
-          let val = newRow[key]
+
+          const val = newRow[key]
           if (typeof val === 'string') {
             const trimmed = val.trim()
             // 1. 处理特殊空值占位符
@@ -73,7 +76,7 @@ export const fileImportNode: NodeDefinition = {
               newRow[key] = null
               continue
             }
-            
+
             // 2. 尝试转换为数字 (仅当转换后不是 NaN 且转换前后一致，或者本身就是合法的数字格式)
             if (/^-?\d+(\.\d+)?$/.test(trimmed)) {
               const num = Number(trimmed)

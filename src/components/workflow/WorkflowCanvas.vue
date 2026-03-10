@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { ref, onMounted, watch, nextTick } from 'vue'
 import { VueFlow, useVueFlow, type Connection } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
@@ -15,7 +14,6 @@ import WorkflowManagerModal from './WorkflowManagerModal.vue'
 import Button from 'primevue/button'
 import N8nEdge from './edges/N8nEdge.vue'
 import {
-  Plus,
   ChevronUp,
   ChevronDown,
   Play,
@@ -29,7 +27,7 @@ import {
 } from 'lucide-vue-next'
 import ConfirmDialog from 'primevue/confirmdialog'
 
-const { onConnect, addEdges, project, findNode, onNodeClick, fitView } = useVueFlow()
+const { onConnect, addEdges, project, findNode, fitView } = useVueFlow()
 const store = useWorkflowStore()
 
 const selectedNode = ref<WorkflowNode | null>(null)
@@ -329,10 +327,7 @@ onMounted(() => {
       </div>
     </footer>
 
-    <WorkflowManagerModal
-      :visible="isWorkflowListVisible"
-      @close="isWorkflowListVisible = false"
-    />
+    <WorkflowManagerModal :visible="isWorkflowListVisible" @close="isWorkflowListVisible = false" />
     <NodeConfigModal
       :visible="isConfigVisible"
       :node-id="store.activeConfigNodeId"

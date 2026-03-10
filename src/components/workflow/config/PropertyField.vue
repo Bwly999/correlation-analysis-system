@@ -27,7 +27,7 @@ const store = useWorkflowStore()
 
 const configValue = computed({
   get: () => props.modelValue,
-  set: (val) => emit('update:modelValue', val)
+  set: (val) => emit('update:modelValue', val),
 })
 
 // AutoComplete 逻辑
@@ -91,7 +91,9 @@ const onFileSelect = (event: any) => {
         class="p-6 bg-[#fcfcfd] border border-slate-200 rounded-2xl shadow-sm relative group/item hover:border-indigo-300 transition-all"
       >
         <div class="flex items-center justify-between mb-6 pb-4 border-b border-slate-100">
-          <span class="flex items-center gap-2 text-[10px] font-black text-indigo-500 uppercase tracking-widest">
+          <span
+            class="flex items-center gap-2 text-[10px] font-black text-indigo-500 uppercase tracking-widest"
+          >
             <Settings size="12" /> 配置组 #{{ idx + 1 }}
           </span>
           <button
@@ -101,7 +103,7 @@ const onFileSelect = (event: any) => {
             <Trash2 size="14" />
           </button>
         </div>
-        
+
         <div class="space-y-6">
           <PropertyField
             v-for="subProp in prop.properties"
@@ -114,7 +116,7 @@ const onFileSelect = (event: any) => {
           />
         </div>
       </div>
-      
+
       <Button
         :label="`添加${prop.displayName}`"
         icon="pi pi-plus"
@@ -156,7 +158,11 @@ const onFileSelect = (event: any) => {
     <Select
       v-else-if="prop.type === 'options'"
       v-model="configValue"
-      :options="(prop.name === 'factorName' || prop.name === 'targetField' || !prop.options) ? upstreamFactors : prop.options"
+      :options="
+        prop.name === 'factorName' || prop.name === 'targetField' || !prop.options
+          ? upstreamFactors
+          : prop.options
+      "
       option-label="name"
       option-value="value"
       class="w-full ndv-input"
@@ -165,7 +171,11 @@ const onFileSelect = (event: any) => {
     <MultiSelect
       v-else-if="prop.type === 'multi-options'"
       v-model="configValue"
-      :options="(prop.name === 'factorName' || prop.name === 'targetField' || !prop.options) ? upstreamFactors : prop.options"
+      :options="
+        prop.name === 'factorName' || prop.name === 'targetField' || !prop.options
+          ? upstreamFactors
+          : prop.options
+      "
       option-label="name"
       option-value="value"
       display="chip"
@@ -194,37 +204,40 @@ const onFileSelect = (event: any) => {
       :placeholder="prop.placeholder"
       :dropdown="!!upstreamFactors.length"
       :min-query-length="0"
-      @complete="searchFactors"
-      @focus="(e: any) => {
-        if (upstreamFactors.length > 0) {
-          searchFactors({ query: e.target.value || '' })
-        }
-      }"
       :empty-message="null"
-      @keydown.enter="(e: any) => {
-        const val = e.target.value?.trim();
-        if (val) {
-          let currentTags = Array.isArray(configValue) ? [...configValue] : [];
-          if (!currentTags.includes(val)) {
-            currentTags.push(val);
-            configValue = currentTags;
-          }
-          e.target.value = '';
-          e.preventDefault();
-        }
-      }"
       :pt="{
         root: { class: 'w-full' },
         input: { class: 'w-full ndv-input text-xs min-h-[42px] p-autocomplete-input' },
-        token: { class: 'bg-indigo-50 text-indigo-700 font-bold border border-indigo-100 rounded-lg py-0.5 px-2' }
+        token: {
+          class:
+            'bg-indigo-50 text-indigo-700 font-bold border border-indigo-100 rounded-lg py-0.5 px-2',
+        },
       }"
+      @complete="searchFactors"
+      @focus="
+        (e: any) => {
+          if (upstreamFactors.length > 0) {
+            searchFactors({ query: e.target.value || '' })
+          }
+        }
+      "
+      @keydown.enter="
+        (e: any) => {
+          const val = e.target.value?.trim()
+          if (val) {
+            let currentTags = Array.isArray(configValue) ? [...configValue] : []
+            if (!currentTags.includes(val)) {
+              currentTags.push(val)
+              configValue = currentTags
+            }
+            e.target.value = ''
+            e.preventDefault()
+          }
+        }
+      "
     />
 
-    <MonacoEditor
-      v-else-if="prop.type === 'json'"
-      v-model="configValue"
-      height="400px"
-    />
+    <MonacoEditor v-else-if="prop.type === 'json'" v-model="configValue" height="400px" />
 
     <ToggleSwitch v-else-if="prop.type === 'boolean'" v-model="configValue" />
 

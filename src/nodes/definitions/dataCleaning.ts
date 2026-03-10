@@ -13,7 +13,8 @@ export const dataCleaningNode: NodeDefinition = {
       displayName: '目标字段',
       type: 'tags',
       default: [],
-      description: '选择或输入要执行清洗操作的字段名。留空则自动处理所有数值型字段，排除 ID 或日期类字段。',
+      description:
+        '选择或输入要执行清洗操作的字段名。留空则自动处理所有数值型字段，排除 ID 或日期类字段。',
     },
     {
       name: 'missingValueStrategy',
@@ -27,7 +28,8 @@ export const dataCleaningNode: NodeDefinition = {
         { name: '直接删除', value: 'drop' },
         { name: '不处理', value: 'none' },
       ],
-      description: '当数据存在空值（null/undefined/空字符串）时的填充方案。均值/中位数填充仅适用于数值字段。',
+      description:
+        '当数据存在空值（null/undefined/空字符串）时的填充方案。均值/中位数填充仅适用于数值字段。',
     },
     {
       name: 'outlierMethod',
@@ -39,7 +41,8 @@ export const dataCleaningNode: NodeDefinition = {
         { name: '百分比剔除', value: 'percentile' },
         { name: '无', value: 'none' },
       ],
-      description: '识别并处理偏离正常范围的极端值。IQR 适用于近似正态分布的数据，百分比法适用于强制剔除两端极值。',
+      description:
+        '识别并处理偏离正常范围的极端值。IQR 适用于近似正态分布的数据，百分比法适用于强制剔除两端极值。',
     },
     {
       name: 'iqrK',
@@ -47,7 +50,8 @@ export const dataCleaningNode: NodeDefinition = {
       type: 'number',
       default: 1.5,
       displayIf: (config) => config.outlierMethod === 'iqr',
-      description: 'IQR 方法的系数。通常 1.5 用于检测中度异常，3.0 用于检测极端异常。值越大，保留的数据越多。',
+      description:
+        'IQR 方法的系数。通常 1.5 用于检测中度异常，3.0 用于检测极端异常。值越大，保留的数据越多。',
     },
     {
       name: 'percentile',
@@ -55,7 +59,8 @@ export const dataCleaningNode: NodeDefinition = {
       type: 'number',
       default: 1,
       displayIf: (config) => config.outlierMethod === 'percentile',
-      description: '从数据两端剔除的比例。例如输入 1 表示剔除最小的 1% 和最大的 1% 数据。范围建议 0.5 - 5。',
+      description:
+        '从数据两端剔除的比例。例如输入 1 表示剔除最小的 1% 和最大的 1% 数据。范围建议 0.5 - 5。',
     },
     {
       name: 'scaling',
@@ -67,7 +72,8 @@ export const dataCleaningNode: NodeDefinition = {
         { name: 'Min-Max 归一化 (0-1)', value: 'minmax' },
         { name: 'Z-Score 标准化', value: 'zscore' },
       ],
-      description: '将数据缩放到统一量纲。相关性分析（特别是回归类算法）通常需要标准化或归一化以消除量级偏差。',
+      description:
+        '将数据缩放到统一量纲。相关性分析（特别是回归类算法）通常需要标准化或归一化以消除量级偏差。',
     },
     {
       name: 'encoding',
@@ -78,7 +84,8 @@ export const dataCleaningNode: NodeDefinition = {
         { name: '无', value: 'none' },
         { name: 'Label Encoding (标签编码)', value: 'label' },
       ],
-      description: '将非数值字段（如“行业”、“类型”）转换为整数。Pearson 相关性分析和 XGBoost 训练必须将特征转为数值。',
+      description:
+        '将非数值字段（如“行业”、“类型”）转换为整数。Pearson 相关性分析和 XGBoost 训练必须将特征转为数值。',
     },
   ],
   execute: async (input, config) => {

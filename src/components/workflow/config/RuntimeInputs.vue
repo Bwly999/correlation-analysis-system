@@ -20,7 +20,9 @@ const updateConfig = (propName: string, value: any) => {
 <template>
   <div class="flex-1 min-h-0 flex flex-col border-t border-slate-200 bg-[#f1f5f9] overflow-hidden">
     <div class="px-4 py-3 flex items-center justify-between">
-      <span class="text-[10px] font-black text-slate-500 uppercase tracking-[0.1em] flex items-center gap-2">
+      <span
+        class="text-[10px] font-black text-slate-500 uppercase tracking-[0.1em] flex items-center gap-2"
+      >
         <Zap size="12" class="text-amber-500" /> 节点启动输入
       </span>
     </div>

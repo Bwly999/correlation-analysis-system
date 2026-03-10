@@ -35,12 +35,14 @@ export const xgboostShapNode: NodeDefinition = {
     }
 
     const result = await response.json()
-    const { 
-      r2, mae, importance, 
-      beeswarm_image, 
-      dependence_images, 
-      raw_dependence_data, 
-      full_report_image 
+    const {
+      r2,
+      mae,
+      importance,
+      beeswarm_image,
+      dependence_images,
+      raw_dependence_data,
+      full_report_image,
     } = result.results
 
     const barChartOption = {
@@ -99,19 +101,21 @@ export const xgboostShapNode: NodeDefinition = {
           tooltip: { trigger: 'item', formatter: '{b}: ({c})' },
           xAxis: { type: 'value', name: dep.feature, nameLocation: 'middle', nameGap: 25 },
           yAxis: { type: 'value', name: 'SHAP Value' },
-          series: [{
-            symbolSize: 6,
-            data: dep.x.map((xVal: number, i: number) => [xVal, dep.shap[i]]),
-            type: 'scatter',
-            itemStyle: { color: '#2563eb', opacity: 0.6 }
-          }]
-        };
+          series: [
+            {
+              symbolSize: 6,
+              data: dep.x.map((xVal: number, i: number) => [xVal, dep.shap[i]]),
+              type: 'scatter',
+              itemStyle: { color: '#2563eb', opacity: 0.6 },
+            },
+          ],
+        }
         separatedSections.push({
           title: `因子影响趋势 (前端渲染): ${dep.feature}`,
           type: 'chart',
           option: scatterOption,
-        });
-      });
+        })
+      })
     } else if (dependence_images && dependence_images.length > 0) {
       // 兜底使用后端生成的图片
       dependence_images.forEach((dep: any) => {
@@ -145,7 +149,7 @@ export const xgboostShapNode: NodeDefinition = {
           {
             name: '归因分析大图 (后端全量)',
             sections: integratedSections,
-          }
+          },
         ],
       },
     }

@@ -60,11 +60,7 @@ describe('Node Definitions Execution Logic', () => {
 
     it('should perform min-max scaling', async () => {
       const input = {
-        data: [
-          { a: 0 },
-          { a: 5 },
-          { a: 10 },
-        ],
+        data: [{ a: 0 }, { a: 5 }, { a: 10 }],
       }
       const config = { scaling: 'minmax', targetColumns: ['a'] }
 
@@ -148,7 +144,7 @@ describe('Node Definitions Execution Logic', () => {
       expect(result.report.tabs).toHaveLength(2)
       expect(result.report.tabs[0].name).toContain('前端分图')
       expect(result.report.tabs[1].name).toContain('后端全量')
-      
+
       // Verify sections
       const sections = result.report.tabs[0].sections
       expect(sections.some((s: any) => s.title?.includes('特征重要性'))).toBe(true)

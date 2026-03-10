@@ -4,7 +4,7 @@ import NodeIcon from '../nodes/NodeIcon.vue'
 import ToggleSwitch from 'primevue/toggleswitch'
 import Button from 'primevue/button'
 
-const props = defineProps<{
+const _props = defineProps<{
   nodeType: string
   nodeLabel: string
   isPinned: boolean

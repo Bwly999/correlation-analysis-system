@@ -32,11 +32,11 @@ export class HistoryDB {
   async saveHistory(record: any, limit = 20): Promise<any[]> {
     const db = await this.getDB()
     const history = await this.getAllHistory()
-    
+
     // 添加新记录到开头
     history.unshift(record)
     const limitedHistory = history.slice(0, limit)
-    const idsToKeep = new Set(limitedHistory.map(r => r.id))
+    const idsToKeep = new Set(limitedHistory.map((r) => r.id))
 
     return new Promise((resolve, reject) => {
       const transaction = db.transaction([this.storeName], 'readwrite')

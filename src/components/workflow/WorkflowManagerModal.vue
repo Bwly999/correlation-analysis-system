@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
 import { useWorkflowStore, type SavedWorkflow, type ExecutionRecord } from '@/stores/workflowStore'
 import Dialog from 'primevue/dialog'
 import Button from 'primevue/button'
@@ -24,7 +23,7 @@ import {
   Activity,
 } from 'lucide-vue-next'
 
-const props = defineProps<{
+const _props = defineProps<{
   visible: boolean
 }>()
 

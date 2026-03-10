@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
 import { FileType, Info, HelpCircle, RefreshCw } from 'lucide-vue-next'
 import Dialog from 'primevue/dialog'
 import Button from 'primevue/button'

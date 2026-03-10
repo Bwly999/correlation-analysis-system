@@ -40,8 +40,12 @@ const analysisModal = ref({ visible: false, title: '', data: null })
 // 获取当前节点的定义
 const nodeDefinition = computed(() => (node.value ? getNodeDefinition(node.value.data.type) : null))
 
-const runtimeProperties = computed(() => nodeDefinition.value?.properties.filter((p) => p.isRuntimeInput) || [])
-const staticProperties = computed(() => nodeDefinition.value?.properties.filter((p) => !p.isRuntimeInput) || [])
+const runtimeProperties = computed(
+  () => nodeDefinition.value?.properties.filter((p) => p.isRuntimeInput) || [],
+)
+const staticProperties = computed(
+  () => nodeDefinition.value?.properties.filter((p) => !p.isRuntimeInput) || [],
+)
 
 // 数据同步逻辑
 watch(
@@ -53,7 +57,7 @@ watch(
       localUseManualInput.value = node.value.data.useManualInput || false
       localManualInput.value = node.value.data.manualInput || ''
       activeTab.value = 'parameters'
-      
+
       const baseConfig = { ...node.value.data.config }
       nodeDefinition.value?.properties.forEach((p) => {
         if (baseConfig[p.name] === undefined) baseConfig[p.name] = p.default
@@ -67,9 +71,15 @@ watch(
 )
 
 // 同步回 Store
-watch(localIsPinned, (val) => { if (node.value) node.value.data.isPinned = val })
-watch(localUseManualInput, (val) => { if (node.value) node.value.data.useManualInput = val })
-watch(localManualInput, (val) => { if (node.value) node.value.data.manualInput = val })
+watch(localIsPinned, (val) => {
+  if (node.value) node.value.data.isPinned = val
+})
+watch(localUseManualInput, (val) => {
+  if (node.value) node.value.data.useManualInput = val
+})
+watch(localManualInput, (val) => {
+  if (node.value) node.value.data.manualInput = val
+})
 
 const inputData = computed(() => {
   if (!node.value) return null
@@ -84,7 +94,11 @@ const upstreamFactors = computed(() => {
   if (!data && node.value?.data.output) data = node.value.data.output
   if (!data) return []
   if (typeof data === 'string') {
-    try { data = JSON.parse(data) } catch { return [] }
+    try {
+      data = JSON.parse(data)
+    } catch {
+      return []
+    }
   }
   if (data.data && Array.isArray(data.data)) data = data.data[0]
   else if (Array.isArray(data)) data = data[0]
@@ -130,9 +144,9 @@ const openAnalysis = (title: string, data: any) => {
     <template #header>
       <ConfigHeader
         v-if="node"
-        :node-type="node.data.type"
         v-model:node-label="editedName"
         v-model:is-pinned="localIsPinned"
+        :node-type="node.data.type"
         @close="emit('close')"
         @save="saveAndClose"
       />
@@ -149,14 +163,18 @@ const openAnalysis = (title: string, data: any) => {
             :data="inputData"
             type="input"
             allow-mock
-            @open-detail="openAnalysis('输入数据', localUseManualInput ? localManualInput : inputData)"
-            @generate-mock="localManualInput = JSON.stringify({ data: [{ f1: 10, f2: 20, target: 1 }] }, null, 2)"
+            @open-detail="
+              openAnalysis('输入数据', localUseManualInput ? localManualInput : inputData)
+            "
+            @generate-mock="
+              localManualInput = JSON.stringify({ data: [{ f1: 10, f2: 20, target: 1 }] }, null, 2)
+            "
           />
         </div>
         <div class="flex-none">
           <RuntimeInputs
-            :properties="runtimeProperties"
             v-model:config="config"
+            :properties="runtimeProperties"
             :upstream-factors="upstreamFactors"
           />
         </div>
@@ -164,13 +182,22 @@ const openAnalysis = (title: string, data: any) => {
 
       <!-- 中心配置区域 -->
       <div class="flex-1 flex flex-col bg-white border-r relative min-w-0">
-        <div class="flex items-center justify-between border-b px-4 bg-white sticky top-0 z-10 shrink-0">
+        <div
+          class="flex items-center justify-between border-b px-4 bg-white sticky top-0 z-10 shrink-0"
+        >
           <div class="flex">
             <button
-              v-for="tab in [{id: 'parameters', label: '参数设置'}, {id: 'settings', label: '系统选项'}]"
+              v-for="tab in [
+                { id: 'parameters', label: '参数设置' },
+                { id: 'settings', label: '系统选项' },
+              ]"
               :key="tab.id"
-              :class="['px-8 py-4 text-xs font-bold uppercase border-b-2 transition-all cursor-pointer', 
-                activeTab === tab.id ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400']"
+              :class="[
+                'px-8 py-4 text-xs font-bold uppercase border-b-2 transition-all cursor-pointer',
+                activeTab === tab.id
+                  ? 'border-indigo-600 text-indigo-600'
+                  : 'border-transparent text-slate-400',
+              ]"
               @click="activeTab = tab.id"
             >
               {{ tab.label }}
@@ -181,7 +208,11 @@ const openAnalysis = (title: string, data: any) => {
             class="n8n-debug-btn h-9 px-5 rounded-lg border-none shadow-sm hover:shadow-md active:scale-95 transition-all flex items-center gap-2 cursor-pointer outline-none disabled:opacity-70"
             @click="runCurrentNode"
           >
-            <Loader2 v-if="node.data.status === 'running'" size="16" class="text-white animate-spin" />
+            <Loader2
+              v-if="node.data.status === 'running'"
+              size="16"
+              class="text-white animate-spin"
+            />
             <Bug v-else size="16" class="text-white" />
             <span class="text-[12px] font-bold text-white uppercase tracking-wider">
               {{ node.data.status === 'running' ? '正在调试...' : '调试节点' }}
@@ -192,17 +223,20 @@ const openAnalysis = (title: string, data: any) => {
         <div class="flex-1 p-8 overflow-y-auto custom-scrollbar bg-white min-h-0">
           <ConfigForm
             v-if="activeTab === 'parameters'"
-            :properties="staticProperties"
             v-model:config="config"
+            :properties="staticProperties"
             :upstream-factors="upstreamFactors"
             @save="saveAndClose"
           />
-          <div v-else class="flex flex-col items-center justify-center h-full text-slate-400 italic">
+          <div
+            v-else
+            class="flex flex-col items-center justify-center h-full text-slate-400 italic"
+          >
             暂无系统选项配置
           </div>
         </div>
 
-        <ConfigFooter @close="emit('close')" @save="saveAndClose" class="shrink-0" />
+        <ConfigFooter class="shrink-0" @close="emit('close')" @save="saveAndClose" />
       </div>
 
       <!-- 右侧边栏 -->
@@ -229,8 +263,17 @@ const openAnalysis = (title: string, data: any) => {
 </template>
 
 <style scoped>
-.custom-scrollbar::-webkit-scrollbar { width: 4px; }
-.custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-.n8n-debug-btn { background: #ff6d5a !important; }
-.n8n-debug-btn:hover { background: #ff523d !important; }
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 10px;
+}
+.n8n-debug-btn {
+  background: #ff6d5a !important;
+}
+.n8n-debug-btn:hover {
+  background: #ff523d !important;
+}
 </style>

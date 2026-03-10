@@ -58,25 +58,28 @@ const colorToRgba = (color: string): string => {
   if (!color.includes('oklch') && !color.includes('var(')) return color
   try {
     const canvas = document.createElement('canvas')
-    canvas.width = 1; canvas.height = 1
+    canvas.width = 1
+    canvas.height = 1
     const ctx = canvas.getContext('2d')
     if (!ctx) return color
     ctx.fillStyle = color
     ctx.fillRect(0, 0, 1, 1)
     const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data
     return `rgba(${r}, ${g}, ${b}, ${a / 255})`
-  } catch (e) { return color }
+  } catch (_e) {
+    return color
+  }
 }
 
 const fixOklchColors = (container: HTMLElement, restore = false) => {
   const elements = [container, ...Array.from(container.getElementsByTagName('*'))]
   const colorProps = ['color', 'background-color', 'border-color', 'fill', 'stroke']
-  
+
   elements.forEach((el: any) => {
     if (restore) {
       // 恢复原始样式
       if (el._originalStyles) {
-        Object.keys(el._originalStyles).forEach(prop => {
+        Object.keys(el._originalStyles).forEach((prop) => {
           el.style.setProperty(prop, el._originalStyles[prop])
         })
         delete el._originalStyles
@@ -85,7 +88,7 @@ const fixOklchColors = (container: HTMLElement, restore = false) => {
     }
 
     const style = window.getComputedStyle(el)
-    colorProps.forEach(prop => {
+    colorProps.forEach((prop) => {
       const val = style.getPropertyValue(prop)
       if (val && (val.includes('oklch') || val.includes('var('))) {
         const rgba = colorToRgba(val)
@@ -103,8 +106,13 @@ const fixOklchColors = (container: HTMLElement, restore = false) => {
 const exportToPDF = async () => {
   if (!reportRef.value || isExporting.value) return
   isExporting.value = true
-  
-  toast.add({ severity: 'info', summary: '正在生成 PDF', detail: '正在优化图表与排版...', life: 2000 })
+
+  toast.add({
+    severity: 'info',
+    summary: '正在生成 PDF',
+    detail: '正在优化图表与排版...',
+    life: 2000,
+  })
 
   // 1. 原地修复颜色，防止 html2canvas 内部解析 oklch 报错
   fixOklchColors(reportRef.value)
@@ -114,9 +122,9 @@ const exportToPDF = async () => {
     margin: 10,
     filename,
     image: { type: 'jpeg', quality: 0.8 },
-    html2canvas: { 
+    html2canvas: {
       scale: 1.2, // 1.2 倍率足以打印，且体积小、速度快
-      useCORS: true, 
+      useCORS: true,
       logging: false,
       backgroundColor: '#ffffff',
       // 修复截断：指定完整高度
@@ -139,9 +147,9 @@ const exportToPDF = async () => {
             el.appendChild(img)
           }
         })
-      }
+      },
     },
-    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait', compress: true }
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait', compress: true },
   }
 
   try {
@@ -158,26 +166,34 @@ const exportToPDF = async () => {
   }
 }
 
-
 const exportToImage = async () => {
   if (isExporting.value) return
-  
+
   if (isTabsMode.value && activeTab.value === 1) {
     const imgSection = currentSections.value.find((s: any) => s.type === 'image')
     if (imgSection) {
       const a = document.createElement('a')
-      a.href = imgSection.url; a.download = `分析大图_${Date.now()}.png`; a.click()
+      a.href = imgSection.url
+      a.download = `分析大图_${Date.now()}.png`
+      a.click()
       return
     }
   }
-  
+
   if (!reportRef.value) return
   isExporting.value = true
-  toast.add({ severity: 'info', summary: '正在生成图片', detail: '正在准备高清截图...', life: 2000 })
+  toast.add({
+    severity: 'info',
+    summary: '正在生成图片',
+    detail: '正在准备高清截图...',
+    life: 2000,
+  })
 
   const tempContainer = document.createElement('div')
-  tempContainer.style.position = 'fixed'; tempContainer.style.left = '-9999px'
-  tempContainer.style.top = '0'; tempContainer.style.width = reportRef.value.offsetWidth + 'px'
+  tempContainer.style.position = 'fixed'
+  tempContainer.style.left = '-9999px'
+  tempContainer.style.top = '0'
+  tempContainer.style.width = reportRef.value.offsetWidth + 'px'
   document.body.appendChild(tempContainer)
 
   try {
@@ -191,11 +207,13 @@ const exportToImage = async () => {
       backgroundColor: '#ffffff',
       logging: false,
       height: clone.offsetHeight,
-      windowHeight: clone.offsetHeight
+      windowHeight: clone.offsetHeight,
     })
     const url = canvas.toDataURL('image/jpeg', 0.9)
     const a = document.createElement('a')
-    a.href = url; a.download = `分析视图_${Date.now()}.jpg`; a.click()
+    a.href = url
+    a.download = `分析视图_${Date.now()}.jpg`
+    a.click()
     toast.add({ severity: 'success', summary: '导出成功', detail: '图片已下载', life: 3000 })
   } catch (err) {
     console.error('导出图片失败:', err)
@@ -209,27 +227,29 @@ const exportToImage = async () => {
 
 <template>
   <div class="report-viewer h-full overflow-y-auto p-6 bg-slate-50 custom-scrollbar relative">
-    <div class="max-w-4xl mx-auto bg-white p-8 rounded-2xl shadow-sm border border-slate-100 relative">
+    <div
+      class="max-w-4xl mx-auto bg-white p-8 rounded-2xl shadow-sm border border-slate-100 relative"
+    >
       <div class="flex justify-between items-center mb-6 pb-4 border-b border-slate-100">
         <h1 class="text-2xl font-black text-slate-800">
           {{ data.report?.title || '分析报告' }}
         </h1>
         <div class="flex gap-2">
           <button
-            @click="exportToPDF"
             :disabled="isExporting"
             class="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 text-sm font-bold rounded-xl hover:bg-slate-200 transition-all border border-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"
             title="导出为 PDF"
+            @click="exportToPDF"
           >
             <Loader2 v-if="isExporting" class="animate-spin" size="16" />
             <FileText v-else size="16" />
             PDF 导出
           </button>
           <button
-            @click="exportToImage"
             :disabled="isExporting"
             class="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white text-sm font-bold rounded-xl hover:bg-slate-800 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
             title="导出为图片"
+            @click="exportToImage"
           >
             <Loader2 v-if="isExporting" class="animate-spin" size="16" />
             <ImageIcon v-else size="16" />
@@ -242,25 +262,20 @@ const exportToImage = async () => {
         <button
           v-for="(tab, index) in data.report.tabs"
           :key="index"
-          @click="activeTab = index"
           :class="[
             'pb-3 px-2 text-sm font-bold transition-all border-b-2 -mb-[2px]',
-            activeTab === index 
-              ? 'border-blue-600 text-blue-600' 
-              : 'border-transparent text-slate-400 hover:text-slate-600'
+            activeTab === index
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-slate-400 hover:text-slate-600',
           ]"
+          @click="activeTab = index"
         >
           {{ tab.name }}
         </button>
       </div>
 
       <div ref="reportRef" class="pdf-container">
-        <div 
-          v-for="(section, idx) in currentSections" 
-          :key="idx" 
-          ref="sectionRefs"
-          class="mb-8"
-        >
+        <div v-for="(section, idx) in currentSections" :key="idx" ref="sectionRefs" class="mb-8">
           <h2 v-if="section.title" class="text-lg font-bold text-slate-700 mb-4">
             {{ section.title }}
           </h2>
@@ -283,11 +298,7 @@ const exportToImage = async () => {
             v-else-if="section.type === 'chart'"
             class="h-[400px] w-full my-4 bg-white border border-slate-100 rounded-xl p-4 shadow-sm"
           >
-            <VChart 
-              ref="chartRefs"
-              :option="section.option" 
-              autoresize 
-            />
+            <VChart ref="chartRefs" :option="section.option" autoresize />
           </div>
         </div>
       </div>

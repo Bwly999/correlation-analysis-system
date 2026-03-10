@@ -5,6 +5,9 @@ import prettierConfig from 'eslint-config-prettier';
 import prettierPlugin from 'eslint-plugin-prettier';
 import vueParser from 'vue-eslint-parser';
 import globals from 'globals';
+import fs from 'node:fs';
+
+const autoImportGlobals = JSON.parse(fs.readFileSync('./.eslintrc-auto-import.json', 'utf-8')).globals;
 
 export default tseslint.config(
   // 全局忽略
@@ -37,6 +40,7 @@ export default tseslint.config(
       globals: {
         ...globals.browser,
         ...globals.node,
+        ...autoImportGlobals,
         process: 'readonly',
       },
       parser: vueParser,

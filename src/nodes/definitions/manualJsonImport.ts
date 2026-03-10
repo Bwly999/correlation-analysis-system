@@ -39,18 +39,21 @@ export const manualJsonImportNode: NodeDefinition = {
     // 数据清洗工具函数
     const cleanData = (data: any[]) => {
       if (!config.autoClean || !Array.isArray(data)) return data
-      
-      const excludes = Array.isArray(config.excludeFields) 
-        ? config.excludeFields 
-        : (config.excludeFields || '').split(',').map((s: string) => s.trim()).filter(Boolean)
-      
+
+      const excludes = Array.isArray(config.excludeFields)
+        ? config.excludeFields
+        : (config.excludeFields || '')
+            .split(',')
+            .map((s: string) => s.trim())
+            .filter(Boolean)
+
       return data.map((row: any) => {
         if (typeof row !== 'object' || row === null) return row
         const newRow: any = { ...row }
         for (const key in newRow) {
           if (excludes.includes(key)) continue
-          
-          let val = newRow[key]
+
+          const val = newRow[key]
           if (typeof val === 'string') {
             const trimmed = val.trim()
             const nullStrings = ['n/a', 'null', 'nan', '-', '', 'undefined', 'none']
@@ -73,7 +76,7 @@ export const manualJsonImportNode: NodeDefinition = {
     try {
       const parsedData = JSON.parse(rawData)
       let finalData: any[] = []
-      
+
       if (Array.isArray(parsedData)) {
         finalData = parsedData
       } else if (parsedData && typeof parsedData === 'object') {

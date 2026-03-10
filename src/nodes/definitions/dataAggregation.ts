@@ -150,8 +150,8 @@ export const dataAggregationNode: NodeDefinition = {
         return newRow
       })
       return { data: markRaw(resultData), count: resultData.length }
-    } 
-    
+    }
+
     if (config.mode === 'group_by') {
       const groupKey = config.groupByField
       if (!groupKey || !allFields.includes(groupKey)) {
