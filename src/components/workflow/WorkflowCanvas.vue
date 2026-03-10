@@ -163,6 +163,19 @@ watch(
   },
 )
 
+watch(
+  () => store.pendingConnection,
+  (pending) => {
+    if (pending) {
+      isSidebarVisible.value = true
+    }
+  },
+)
+
+const toggleSidebar = () => {
+  isSidebarVisible.value = !isSidebarVisible.value
+}
+
 watch(isConfigVisible, (visible) => {
   if (!visible) store.activeConfigNodeId = null
 })
@@ -280,9 +293,21 @@ onMounted(() => {
           <template #control-button-reset></template>
         </Controls>
         <div
-          class="absolute left-6 z-[100] transition-all duration-300"
+          class="absolute left-6 z-[100] transition-all duration-300 flex flex-col gap-2"
           :style="{ bottom: isLogExpanded ? '310px' : '50px' }"
         >
+          <button
+            v-tooltip.right="'节点库'"
+            class="w-10 h-10 bg-white border border-[#efefef] rounded-xl shadow-xl flex items-center justify-center text-[#3c4257] hover:text-indigo-600 transition-all active:scale-90 group cursor-pointer"
+            @click="toggleSidebar"
+          >
+            <Plus
+              size="20"
+              stroke-width="2.5"
+              :class="{ 'rotate-45 text-indigo-600': isSidebarVisible }"
+              class="transition-transform duration-300"
+            />
+          </button>
           <button
             v-tooltip.right="'复位视图'"
             class="w-10 h-10 bg-white border border-[#efefef] rounded-xl shadow-xl flex items-center justify-center text-[#3c4257] hover:text-indigo-600 transition-all active:scale-90 group cursor-pointer"
