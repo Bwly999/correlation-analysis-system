@@ -36,7 +36,7 @@ export const dataCleaningNode: NodeDefinition = {
       default: 'none',
       options: [
         { name: 'IQR 四分位距', value: 'iqr' },
-        { name: '百分比剔除 (1% - 99%)', value: 'percentile' },
+        { name: '百分比剔除', value: 'percentile' },
         { name: '无', value: 'none' },
       ],
       description: '识别并处理偏离正常范围的极端值。IQR 适用于近似正态分布的数据，百分比法适用于强制剔除两端极值。',
@@ -48,6 +48,14 @@ export const dataCleaningNode: NodeDefinition = {
       default: 1.5,
       displayIf: (config) => config.outlierMethod === 'iqr',
       description: 'IQR 方法的系数。通常 1.5 用于检测中度异常，3.0 用于检测极端异常。值越大，保留的数据越多。',
+    },
+    {
+      name: 'percentile',
+      displayName: '剔除比例 (%)',
+      type: 'number',
+      default: 1,
+      displayIf: (config) => config.outlierMethod === 'percentile',
+      description: '从数据两端剔除的比例。例如输入 1 表示剔除最小的 1% 和最大的 1% 数据。范围建议 0.5 - 5。',
     },
     {
       name: 'scaling',
@@ -157,8 +165,9 @@ export const dataCleaningNode: NodeDefinition = {
           lower = q1 - k * iqr
           upper = q3 + k * iqr
         } else if (config.outlierMethod === 'percentile') {
-          lower = values[Math.floor(values.length * 0.01)]
-          upper = values[Math.floor(values.length * 0.99)]
+          const p = (config.percentile || 1) / 100
+          lower = values[Math.floor(values.length * p)]
+          upper = values[Math.floor(values.length * (1 - p))]
         }
 
         data = data.filter((row: any) => {
