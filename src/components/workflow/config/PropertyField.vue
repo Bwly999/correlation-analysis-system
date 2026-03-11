@@ -121,8 +121,7 @@ const onFileSelect = (event: any) => {
       <Button
         :label="`添加${prop.displayName}`"
         icon="pi pi-plus"
-        text
-        class="w-full border-2 border-dashed border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/30 rounded-2xl py-5 transition-all font-bold text-xs cursor-pointer"
+        class="w-full bg-slate-900 hover:bg-slate-800 border-none rounded-xl py-3.5 transition-all font-bold text-[11px] uppercase tracking-widest text-white shadow-lg shadow-slate-200 hover:shadow-slate-300 active:scale-[0.98] cursor-pointer"
         @click="addCollectionItem"
       />
     </div>
