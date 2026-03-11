@@ -250,9 +250,9 @@ onMounted(() => {
 
     <aside
       v-if="!store.isHistoryMode"
-      class="absolute right-0 top-[60px] bottom-0 z-[130] transition-transform duration-500 ease-in-out shadow-[-20px_0_50px_rgba(0,0,0,0.03)]"
+      class="absolute right-0 top-[60px] z-[130] transition-all duration-500 ease-in-out shadow-[-20px_0_50px_rgba(0,0,0,0.03)]"
       :class="isSidebarVisible ? 'translate-x-0' : 'translate-x-full'"
-      style="width: 340px"
+      :style="{ width: '340px', bottom: isLogExpanded ? '300px' : '44px' }"
     >
       <NodeSidebar @close="isSidebarVisible = false" />
     </aside>
