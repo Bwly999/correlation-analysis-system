@@ -149,7 +149,8 @@ onMounted(() => {
     <WorkflowHeader @open-projects="openWorkflowList" />
 
     <main
-      class="absolute inset-0 top-[56px] bottom-0 overflow-hidden shadow-[inset_0_2px_10px_rgba(0,0,0,0.05)] border-t border-slate-200"
+      :style="{ bottom: isLogExpanded ? '300px' : '44px' }"
+      class="absolute inset-0 top-[56px] overflow-hidden shadow-[inset_0_2px_10px_rgba(0,0,0,0.05)] border-t border-slate-200 transition-all duration-300 ease-in-out"
     >
       <!-- 历史模式提示条 -->
       <div
@@ -212,8 +213,7 @@ onMounted(() => {
 
         <Controls
           position="bottom-left"
-          class="ml-6 transition-all duration-300 !bg-white !border-[#efefef] !shadow-xl !rounded-2xl !p-1"
-          :style="{ marginBottom: isLogExpanded ? '350px' : '90px' }"
+          class="ml-6 mb-6 transition-all duration-300 !bg-white !border-[#efefef] !shadow-xl !rounded-2xl !p-1"
         >
           <template #control-button-reset></template>
         </Controls>
@@ -236,10 +236,7 @@ onMounted(() => {
           </button>
         </div>
 
-        <div
-          class="absolute left-6 z-[100] transition-all duration-300 flex flex-col gap-2"
-          :style="{ bottom: isLogExpanded ? '310px' : '50px' }"
-        >
+        <div class="absolute left-6 bottom-6 z-[100] flex flex-col gap-2">
           <button
             v-tooltip.right="'复位视图'"
             class="w-10 h-10 bg-white border border-[#efefef] rounded-xl shadow-xl flex items-center justify-center text-[#3c4257] hover:text-indigo-600 transition-all active:scale-90 group cursor-pointer"
@@ -253,7 +250,7 @@ onMounted(() => {
 
     <aside
       v-if="!store.isHistoryMode"
-      class="absolute right-0 top-[60px] bottom-0 z-[80] transition-transform duration-500 ease-in-out shadow-[-20px_0_50px_rgba(0,0,0,0.03)]"
+      class="absolute right-0 top-[60px] bottom-0 z-[130] transition-transform duration-500 ease-in-out shadow-[-20px_0_50px_rgba(0,0,0,0.03)]"
       :class="isSidebarVisible ? 'translate-x-0' : 'translate-x-full'"
       style="width: 340px"
     >
