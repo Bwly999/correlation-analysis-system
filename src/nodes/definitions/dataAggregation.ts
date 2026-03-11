@@ -107,7 +107,8 @@ export const dataAggregationNode: NodeDefinition = {
       displayName: '目标处理字段',
       type: 'tags',
       default: [],
-      description: '指定要参与聚合计算的字段。留空则尝试处理所有数值型字段。',
+      displayIf: (config) => config.mode === 'group_by' || config.mode === 'rolling',
+      description: '指定要参与聚合计算的字段。留空则尝试自动处理所有数值型字段。',
     },
   ],
   execute: async (input, config) => {
