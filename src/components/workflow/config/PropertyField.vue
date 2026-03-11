@@ -15,6 +15,7 @@ import AutoComplete from 'primevue/autocomplete'
 import Tree from 'primevue/tree'
 import DatePicker from 'primevue/datepicker'
 import Button from 'primevue/button'
+import SelectButton from 'primevue/selectbutton'
 
 const props = defineProps<{
   prop: NodeProperty
@@ -260,6 +261,15 @@ const onFileSelect = (event: any) => {
       show-time
       class="w-full text-xs"
     />
+
+    <SelectButton
+      v-else-if="prop.type === 'select-button'"
+      v-model="configValue"
+      :options="prop.options"
+      option-label="name"
+      option-value="value"
+      class="w-full select-button-custom"
+    />
   </div>
 </template>
 
@@ -282,5 +292,38 @@ const onFileSelect = (event: any) => {
   background: transparent !important;
   border: none !important;
   font-size: 12px;
+}
+
+:deep(.select-button-custom) {
+  display: flex;
+  gap: 2px;
+  background: #f1f5f9;
+  padding: 3px;
+  border-radius: 10px;
+}
+:deep(.select-button-custom .p-togglebutton) {
+  flex: 1;
+  border: none !important;
+  background: transparent !important;
+  color: #64748b !important;
+  font-size: 10px !important;
+  font-weight: 800 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  border-radius: 7px !important;
+  padding: 8px 4px !important;
+  transition: all 0.2s ease !important;
+}
+:deep(.select-button-custom .p-togglebutton.p-togglebutton-selected) {
+  background: white !important;
+  color: #1e293b !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05) !important;
+}
+:deep(.select-button-custom .p-togglebutton::before) {
+  display: none !important;
+}
+:deep(.select-button-custom .p-togglebutton:not(.p-togglebutton-selected):hover) {
+  background: rgba(255, 255, 255, 0.5) !important;
+  color: #475569 !important;
 }
 </style>
