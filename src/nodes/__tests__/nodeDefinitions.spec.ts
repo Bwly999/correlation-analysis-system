@@ -173,18 +173,37 @@ describe('Node Definitions Execution Logic', () => {
   })
 
   describe('neighbor-system', () => {
-    it('should generate mock data based on fetch mode', async () => {
+    it('should generate mock data based on fetch mode and factor selection', async () => {
       const config = {
+        productId: 'p_01',
         fetchMode: 'time',
         timeRange: [new Date(), new Date()],
-        selectedFactors: { f_temp: true, sys_01: true },
+        selectedFactors: {
+          f_bat_volt: { checked: true },
+          f_bat_curr: { checked: true },
+          sys_power: { checked: true }, // 非因子节点，应被忽略
+        },
       }
 
       const result = await neighborSystemNode.execute(null, config)
 
       expect(result.data).toBeDefined()
       expect(result.data.length).toBeGreaterThan(0)
-      expect(result.factors).toContain('f_temp')
+      expect(result.metadata.factors_count).toBe(2)
+      expect(result.metadata.product).toBe('p_01')
+      expect(result.data[0].f_bat_volt).toBeDefined()
+      expect(result.data[0].f_bat_curr).toBeDefined()
+      expect(result.data[0].sn).toMatch(/^SN_TIME_/)
+    })
+
+    it('should throw error if no factors are selected', async () => {
+      const config = {
+        fetchMode: 'sn',
+        snList: 'SN001',
+        selectedFactors: {},
+      }
+
+      await expect(neighborSystemNode.execute(null, config)).rejects.toThrow('请至少选择一个因子进行获取')
     })
   })
 
