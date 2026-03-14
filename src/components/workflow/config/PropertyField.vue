@@ -25,6 +25,7 @@ const props = defineProps<{
 
 const emit = defineEmits(['update:modelValue', 'save'])
 const store = useWorkflowStore()
+const autoCompleteRef = ref<any>(null)
 
 const configValue = computed({
   get: () => props.modelValue,
@@ -196,6 +197,7 @@ const onFileSelect = (event: any) => {
     />
 
     <AutoComplete
+      ref="autoCompleteRef"
       v-else-if="prop.type === 'tags'"
       v-model="configValue"
       multiple
@@ -218,7 +220,19 @@ const onFileSelect = (event: any) => {
         (e: any) => {
           if (upstreamFactors.length > 0) {
             searchFactors({ query: e.target.value || '' })
+            // 延迟一丁点时间确保 overlay 能够显示
+            setTimeout(() => {
+              autoCompleteRef?.show()
+            }, 50)
           }
+        }
+      "
+      @item-select="
+        () => {
+          // 选择项后强制保持下拉框开启
+          setTimeout(() => {
+            autoCompleteRef?.show()
+          }, 0)
         }
       "
       @keydown.enter="
@@ -232,6 +246,8 @@ const onFileSelect = (event: any) => {
             }
             e.target.value = ''
             e.preventDefault()
+            // 手动触发搜索以维持下拉框内容
+            searchFactors({ query: '' })
           }
         }
       "
