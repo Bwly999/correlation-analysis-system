@@ -159,24 +159,17 @@ const onFileSelect = (event: any) => {
     <Select
       v-else-if="prop.type === 'options'"
       v-model="configValue"
-      :options="
-        prop.name === 'factorName' || prop.name === 'targetField' || !prop.options
-          ? upstreamFactors
-          : prop.options
-      "
+      :options="prop.useUpstreamFactors || !prop.options ? upstreamFactors : prop.options"
       option-label="name"
       option-value="value"
+      :editable="prop.editable"
       class="w-full ndv-input"
     />
 
     <MultiSelect
       v-else-if="prop.type === 'multi-options'"
       v-model="configValue"
-      :options="
-        prop.name === 'factorName' || prop.name === 'targetField' || !prop.options
-          ? upstreamFactors
-          : prop.options
-      "
+      :options="prop.useUpstreamFactors || !prop.options ? upstreamFactors : prop.options"
       option-label="name"
       option-value="value"
       display="chip"
@@ -204,7 +197,7 @@ const onFileSelect = (event: any) => {
       :suggestions="filteredFactors"
       class="w-full"
       :placeholder="prop.placeholder"
-      :dropdown="!!upstreamFactors.length"
+      :dropdown="prop.useUpstreamFactors && !!upstreamFactors.length"
       :min-query-length="0"
       :empty-message="null"
       :pt="{
@@ -218,7 +211,7 @@ const onFileSelect = (event: any) => {
       @complete="searchFactors"
       @focus="
         (e: any) => {
-          if (upstreamFactors.length > 0) {
+          if (prop.useUpstreamFactors && upstreamFactors.length > 0) {
             searchFactors({ query: e.target.value || '' })
             // 延迟一丁点时间确保 overlay 能够显示
             setTimeout(() => {

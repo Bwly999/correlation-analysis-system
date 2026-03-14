@@ -9,6 +9,7 @@ import {
   Download,
   PieChart,
   Edit3,
+  Brain,
 } from 'lucide-vue-next'
 
 const props = defineProps<{
@@ -22,6 +23,7 @@ const iconMap: Record<string, any> = {
   'neighbor-system': { icon: Database, color: 'text-emerald-600', bg: 'bg-emerald-50' },
   'data-cleaning': { icon: Settings2, color: 'text-blue-500', bg: 'bg-blue-50' },
   'data-aggregation': { icon: Sigma, color: 'text-blue-600', bg: 'bg-blue-50' },
+  'xgboost-shap': { icon: Brain, color: 'text-rose-500', bg: 'bg-rose-50' },
   algorithm: { icon: BarChart3, color: 'text-orange-500', bg: 'bg-orange-50' },
   'data-export': { icon: Download, color: 'text-indigo-500', bg: 'bg-indigo-50' },
   'chart-display': { icon: PieChart, color: 'text-purple-500', bg: 'bg-purple-50' },

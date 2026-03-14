@@ -13,6 +13,7 @@ export const dataCleaningNode: NodeDefinition = {
       displayName: '目标字段',
       type: 'tags',
       default: [],
+      useUpstreamFactors: true,
       description:
         '选择或输入要执行清洗操作的字段名。留空则自动处理所有数值型字段，排除 ID 或日期类字段。',
     },

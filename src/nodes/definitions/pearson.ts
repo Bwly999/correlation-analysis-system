@@ -8,13 +8,15 @@ export const pearsonNode: NodeDefinition = {
   description: '展示各因子之间以及因子与目标变量之间的线性相关性矩阵。',
   properties: [
     {
-      name: 'targetLabel',
+      name: 'targetField',
       displayName: '目标变量 (Y)',
-      type: 'string',
+      type: 'options',
       default: 'target',
+      useUpstreamFactors: true,
+      editable: true,
     },
   ],
-  execute: async (input, _config) => {
+  execute: async (input, config) => {
     if (!input || !input.data) throw new Error('无输入数据')
 
     return {
@@ -24,7 +26,7 @@ export const pearsonNode: NodeDefinition = {
         sections: [
           {
             type: 'text',
-            content: '展示各因子之间以及因子与目标变量之间的线性相关性。',
+            content: `展示各因子之间以及因子与目标变量之间的线性相关性。(目标: ${config.targetField || 'target'})`,
           },
           {
             title: '相关性热力图',

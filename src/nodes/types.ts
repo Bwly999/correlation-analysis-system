@@ -22,6 +22,8 @@ export interface NodeProperty {
   properties?: NodeProperty[] // 用于 collection 类型定义每一项的结构
   required?: boolean
   isRuntimeInput?: boolean
+  useUpstreamFactors?: boolean // [新增] 是否自动拉取上游字段作为选项
+  editable?: boolean // [新增] Select 选项是否允许手动编辑输入
   displayIf?: (config: any) => boolean
 }
 

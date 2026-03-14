@@ -3,16 +3,25 @@ import type { NodeDefinition } from '../types'
 export const xgboostShapNode: NodeDefinition = {
   name: 'xgboost-shap',
   displayName: 'Xgboost + SHAP',
-  icon: 'bar-chart-3',
+  icon: 'brain',
   category: 'terminal',
   description: '使用 Xgboost 结合 SHAP 值方法分析各个因子对目标变量的贡献程度和影响趋势。',
   properties: [
     {
-      name: 'targetLabel',
+      name: 'targetField',
       displayName: '目标变量 (Y)',
-      type: 'string',
+      type: 'options',
       default: 'target',
-      placeholder: '请输入回归/分类的目标字段名',
+      useUpstreamFactors: true,
+      editable: true,
+      description: '选择回归/分类的目标字段名（支持从上游自动获取或手动输入）',
+    },
+    {
+      name: 'factorNames',
+      displayName: '影响因子 (X)',
+      type: 'tags',
+      useUpstreamFactors: true,
+      description: '选择参与分析的因子列表。留空则默认使用除目标变量外的所有数值字段。',
     },
   ],
   execute: async (input, config) => {
@@ -24,7 +33,7 @@ export const xgboostShapNode: NodeDefinition = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         data: input.data,
-        target: config.targetLabel,
+        target: config.targetField || 'target',
         config: config,
       }),
     })

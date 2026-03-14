@@ -8,13 +8,15 @@ export const lassoNode: NodeDefinition = {
   description: '使用 Lasso 回归进行特征筛选和模型拟合。',
   properties: [
     {
-      name: 'targetLabel',
+      name: 'targetField',
       displayName: '目标变量 (Y)',
-      type: 'string',
+      type: 'options',
       default: 'target',
+      useUpstreamFactors: true,
+      editable: true,
     },
   ],
-  execute: async (input, _config) => {
+  execute: async (input, config) => {
     if (!input || !input.data) throw new Error('无输入数据')
 
     return {
@@ -24,7 +26,7 @@ export const lassoNode: NodeDefinition = {
         sections: [
           {
             type: 'text',
-            content: '该报告展示 Lasso 回归特征筛选的结果。',
+            content: `该报告展示 Lasso 回归特征筛选的结果。 (目标: ${config.targetField || 'target'})`,
           },
           {
             title: '特征系数',
