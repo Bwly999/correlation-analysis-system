@@ -34,10 +34,9 @@ const store = useWorkflowStore()
 const confirm = useConfirm()
 
 const activeTab = ref('0')
-const savedWorkflows = ref<SavedWorkflow[]>([])
 
 const loadData = async () => {
-  savedWorkflows.value = await store.getSavedWorkflows()
+  await store.getSavedWorkflows()
   await store.loadHistory()
 }
 
@@ -45,7 +44,7 @@ onMounted(loadData)
 
 // 排序后的工作流列表 (按更新时间倒序)
 const sortedWorkflows = computed(() => {
-  return [...savedWorkflows.value].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+  return [...store.savedWorkflows].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
 })
 
 // 当前工作流的运行历史
@@ -62,10 +61,7 @@ const handleLoadWorkflow = async (id: string) => {
 }
 
 const handleDuplicateWorkflow = async (id: string) => {
-  const newList = await store.duplicateWorkflow(id)
-  if (newList) {
-    savedWorkflows.value = newList
-  }
+  await store.duplicateWorkflow(id)
 }
 
 const handleDeleteWorkflow = (id: string) => {
@@ -83,7 +79,7 @@ const handleDeleteWorkflow = (id: string) => {
       severity: 'danger',
     },
     accept: async () => {
-      savedWorkflows.value = await store.deleteWorkflow(id)
+      await store.deleteWorkflow(id)
     },
   })
 }

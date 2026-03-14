@@ -36,6 +36,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
   const pendingExecution = ref<{ nodeId: string; forceUpdate: boolean } | null>(null)
   const lastExecutedTerminalNodeId = ref<string | null>(null)
   const executionHistory = ref<ExecutionRecord[]>([])
+  const savedWorkflows = ref<SavedWorkflow[]>([])
 
   // 历史模式相关状态
   const isHistoryMode = ref(false)
@@ -48,13 +49,18 @@ export const useWorkflowStore = defineStore('workflow', () => {
 
   // --- 持久化操作封装 ---
 
+  const refreshWorkflows = async () => {
+    savedWorkflows.value = await storageProvider.getWorkflows()
+    return savedWorkflows.value
+  }
+
   const getSavedWorkflows = async (): Promise<SavedWorkflow[]> => {
-    return storageProvider.getWorkflows()
+    return refreshWorkflows()
   }
 
   const deleteWorkflow = async (id: string) => {
     await storageProvider.deleteWorkflow(id)
-    const updated = await getSavedWorkflows()
+    const updated = await refreshWorkflows()
     addLog('工作流已删除', 'warn')
     return updated
   }
@@ -89,6 +95,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
       updatedAt: Date.now(),
     }
     await storageProvider.saveWorkflow(workflow)
+    await refreshWorkflows()
     addLog(`工作流 "${workflow.name}" 已保存`, 'info')
     return workflow
   }
@@ -131,7 +138,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
         updatedAt: Date.now(),
       }
       await storageProvider.saveWorkflow(duplicated)
-      const updatedList = await getSavedWorkflows()
+      const updatedList = await refreshWorkflows()
       addLog(`工作流 "${original.name}" 已复制为 "${duplicated.name}"`, 'info')
       return updatedList
     }
@@ -549,6 +556,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     pendingExecution,
     lastExecutedTerminalNodeId,
     executionHistory,
+    savedWorkflows,
     isHistoryMode,
     addLog,
     stopExecution,

@@ -36,6 +36,15 @@ const isLogExpanded = ref(true)
 const isWorkflowListVisible = ref(false)
 const isSidebarVisible = ref(true)
 
+// 初始化加载
+onMounted(async () => {
+  const workflows = await store.getSavedWorkflows()
+  // 如果没有工作流，自动打开管理中心
+  if (workflows.length === 0) {
+    isWorkflowListVisible.value = true
+  }
+})
+
 // 深度分析弹窗状态
 const analysisModal = ref({ visible: false, title: '', data: null as any })
 
