@@ -1,5 +1,17 @@
 # 更新日志 (Changelog)
 
+## [2026-03-14]
+
+### 重构 (Refactor)
+- **存储层抽象化**: 彻底解耦了工作流与执行历史的存储逻辑。
+  - 引入 `IStorageProvider` 接口，支持未来扩展多种存储介质（如 S3, Server API）。
+  - 将所有持久化操作从 `workflowStore` 同步模式重构为 **Promise 异步模式**。
+  - 建立 `src/utils/storage/` 模块化目录结构，统一管理 `LocalStorage` 与 `IndexedDB` 实现。
+- **Store 瘦身**: 移除了 `workflowStore.ts` 中冗余的持久化具体实现代码，使其专注于状态管理。
+
+### 优化 (Optimization)
+- **健壮性增强**: 在存储层引入了环境自动检测与降级机制（如在测试环境自动回退至内存存储），提升了系统的稳定性。
+
 ## [Unreleased]
 
 ### 完善

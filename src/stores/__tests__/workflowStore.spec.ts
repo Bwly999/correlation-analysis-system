@@ -72,16 +72,16 @@ describe('Workflow Store', () => {
     expect(result.data.length).toBeGreaterThan(0)
   })
 
-  it('should support workflow persistence (save/load)', () => {
+  it('should support workflow persistence (save/load)', async () => {
     const store = useWorkflowStore()
     store.workflowName = 'Test Workflow'
     store.addAndConnectNode('file-import', 'Node 1', { x: 0, y: 0 })
 
-    const saved = store.saveWorkflow()
+    const saved = await store.saveWorkflow()
 
     // Reset store
     store.nodes = []
-    store.loadWorkflow(saved.id)
+    await store.loadWorkflow(saved.id)
 
     expect(store.nodes.length).toBe(1)
     expect(store.workflowName).toBe('Test Workflow')

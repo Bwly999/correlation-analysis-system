@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { useWorkflowStore, type SavedWorkflow, type ExecutionRecord } from '@/stores/workflowStore'
+import { useWorkflowStore } from '@/stores/workflowStore'
+import { type SavedWorkflow, type ExecutionRecord } from '@/utils/storage'
 import Dialog from 'primevue/dialog'
 import Button from 'primevue/button'
 import Tabs from 'primevue/tabs'
@@ -36,7 +37,7 @@ const activeTab = ref('0')
 const savedWorkflows = ref<SavedWorkflow[]>([])
 
 const loadData = async () => {
-  savedWorkflows.value = store.getSavedWorkflows()
+  savedWorkflows.value = await store.getSavedWorkflows()
   await store.loadHistory()
 }
 
@@ -55,13 +56,13 @@ const currentWorkflowHistory = computed(() => {
   return store.executionHistory
 })
 
-const handleLoadWorkflow = (id: string) => {
-  store.loadWorkflow(id)
+const handleLoadWorkflow = async (id: string) => {
+  await store.loadWorkflow(id)
   emit('close')
 }
 
-const handleDuplicateWorkflow = (id: string) => {
-  const newList = store.duplicateWorkflow(id)
+const handleDuplicateWorkflow = async (id: string) => {
+  const newList = await store.duplicateWorkflow(id)
   if (newList) {
     savedWorkflows.value = newList
   }
@@ -81,8 +82,8 @@ const handleDeleteWorkflow = (id: string) => {
       label: '确认删除',
       severity: 'danger',
     },
-    accept: () => {
-      savedWorkflows.value = store.deleteWorkflow(id)
+    accept: async () => {
+      savedWorkflows.value = await store.deleteWorkflow(id)
     },
   })
 }
@@ -95,6 +96,10 @@ const handleRestoreExecution = (record: ExecutionRecord) => {
 const handleCreateNew = () => {
   store.createNewWorkflow()
   emit('close')
+}
+
+const handleClearHistory = async () => {
+  await store.clearHistory()
 }
 </script>
 
@@ -214,7 +219,7 @@ const handleCreateNew = () => {
                 severity="danger"
                 text
                 class="text-xs py-1 px-2 h-auto"
-                @click="store.clearHistory()"
+                @click="handleClearHistory"
               />
             </div>
             <div

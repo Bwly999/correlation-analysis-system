@@ -41,7 +41,7 @@ const menuItems = ref([
         label: '清空运行历史',
         icon: 'pi pi-trash',
         class: 'text-red-500',
-        command: () => store.clearHistory(),
+        command: async () => await store.clearHistory(),
       },
     ],
   },
@@ -201,7 +201,7 @@ const formatDuration = (ms: number) => {
         severity="secondary"
         text
         class="h-8 px-4 text-[12px] font-medium flex gap-2 items-center rounded-md bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 transition-colors shadow-sm outline-none"
-        @click="store.saveWorkflow()"
+        @click="async () => await store.saveWorkflow()"
       >
         <Save :size="15" class="text-slate-500" />
         Save

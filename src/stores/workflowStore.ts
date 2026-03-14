@@ -2,50 +2,12 @@ import { defineStore } from 'pinia'
 import { ref, markRaw } from 'vue'
 import { type Node, type Edge } from '@vue-flow/core'
 import { getNodeDefinition } from '@/nodes/registry'
-import { historyDB } from '@/utils/storage'
-
-export interface WorkflowNode extends Node {
-  data: {
-    label: string
-    type: string
-    category: 'trigger' | 'action' | 'terminal'
-    config: any
-    status: 'idle' | 'running' | 'success' | 'error'
-    output?: any
-    manualInput?: any
-    useManualInput?: boolean
-    isPinned?: boolean
-    logs: string[]
-  }
-}
-
-/**
- * 工作流元数据，用于列表展示
- */
-export interface WorkflowMetadata {
-  id: string
-  name: string
-  updatedAt: number
-}
-
-/**
- * 完整保存的工作流数据
- */
-export interface SavedWorkflow extends WorkflowMetadata {
-  nodes: WorkflowNode[]
-  edges: Edge[]
-}
-
-export interface ExecutionRecord {
-  id: string
-  workflowId: string
-  workflowName: string
-  startTime: number
-  duration: number
-  status: 'success' | 'error' | 'stopped'
-  nodes: any[]
-  edges: any[]
-}
+import {
+  storageProvider,
+  type WorkflowNode,
+  type SavedWorkflow,
+  type ExecutionRecord,
+} from '@/utils/storage'
 
 export const CONNECTION_RULES: Record<string, string[]> = {
   trigger: ['action', 'terminal'],
@@ -86,16 +48,15 @@ export const useWorkflowStore = defineStore('workflow', () => {
 
   // --- 持久化操作封装 ---
 
-  const getSavedWorkflows = (): SavedWorkflow[] => {
-    return JSON.parse(localStorage.getItem('saved_workflows') || '[]')
+  const getSavedWorkflows = async (): Promise<SavedWorkflow[]> => {
+    return storageProvider.getWorkflows()
   }
 
-  const deleteWorkflow = (id: string) => {
-    const saved = getSavedWorkflows()
-    const filtered = saved.filter((w) => w.id !== id)
-    localStorage.setItem('saved_workflows', JSON.stringify(filtered))
+  const deleteWorkflow = async (id: string) => {
+    await storageProvider.deleteWorkflow(id)
+    const updated = await getSavedWorkflows()
     addLog('工作流已删除', 'warn')
-    return filtered
+    return updated
   }
 
   const createNewWorkflow = () => {
@@ -109,7 +70,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     addLog('已创建新工作流', 'info')
   }
 
-  const saveWorkflow = (name?: string) => {
+  const saveWorkflow = async (name?: string) => {
     if (name) workflowName.value = name
     const id = currentWorkflowId.value || `wf_${Date.now()}`
     currentWorkflowId.value = id
@@ -127,16 +88,13 @@ export const useWorkflowStore = defineStore('workflow', () => {
       edges: edges.value,
       updatedAt: Date.now(),
     }
-    const saved = getSavedWorkflows()
-    const updated = saved.filter((w) => w.id !== id).concat(workflow)
-    localStorage.setItem('saved_workflows', JSON.stringify(updated))
+    await storageProvider.saveWorkflow(workflow)
     addLog(`工作流 "${workflow.name}" 已保存`, 'info')
     return workflow
   }
 
-  const loadWorkflow = (id: string) => {
-    const saved = getSavedWorkflows()
-    const workflow = saved.find((w) => w.id === id)
+  const loadWorkflow = async (id: string) => {
+    const workflow = await storageProvider.getWorkflow(id)
     if (workflow) {
       nodes.value = workflow.nodes.map((n: any) => ({
         ...n,
@@ -154,9 +112,8 @@ export const useWorkflowStore = defineStore('workflow', () => {
     }
   }
 
-  const duplicateWorkflow = (id: string) => {
-    const saved = getSavedWorkflows()
-    const original = saved.find((w) => w.id === id)
+  const duplicateWorkflow = async (id: string) => {
+    const original = await storageProvider.getWorkflow(id)
     if (original) {
       const newId = `wf_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`
       const duplicated: SavedWorkflow = {
@@ -173,8 +130,8 @@ export const useWorkflowStore = defineStore('workflow', () => {
         })),
         updatedAt: Date.now(),
       }
-      const updatedList = [...saved, duplicated]
-      localStorage.setItem('saved_workflows', JSON.stringify(updatedList))
+      await storageProvider.saveWorkflow(duplicated)
+      const updatedList = await getSavedWorkflows()
       addLog(`工作流 "${original.name}" 已复制为 "${duplicated.name}"`, 'info')
       return updatedList
     }
@@ -548,20 +505,19 @@ export const useWorkflowStore = defineStore('workflow', () => {
 
   const saveExecution = async (record: ExecutionRecord) => {
     try {
-      const limitedHistory = await historyDB.saveHistory(record, 20)
+      const limitedHistory = await storageProvider.saveHistory(record, 20)
       executionHistory.value = limitedHistory
     } catch (e) {
-      console.warn('Failed to save history to IndexedDB, falling back to memory:', e)
-      // 如果 IndexedDB 失败 (如在测试环境下)，回退到内存更新
+      console.warn('Failed to save history, falling back to memory:', e)
       const newHistory = [record, ...executionHistory.value].slice(0, 20)
       executionHistory.value = newHistory
-      addLog(`保存历史记录到数据库失败，已保存至内存`, 'warn')
+      addLog(`保存历史记录到存储失败，已保存至内存`, 'warn')
     }
   }
 
   const loadHistory = async () => {
     try {
-      executionHistory.value = await historyDB.getAllHistory()
+      executionHistory.value = await storageProvider.getAllHistory()
     } catch (e) {
       console.error('Failed to load history:', e)
     }
@@ -569,7 +525,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
 
   const clearHistory = async () => {
     try {
-      await historyDB.clearAll()
+      await storageProvider.clearAllHistory()
       executionHistory.value = []
       addLog('运行历史记录已清空', 'info')
     } catch (e) {

@@ -1,11 +1,44 @@
+import type {
+  IStorageProvider,
+  SavedWorkflow,
+  ExecutionRecord,
+} from './types'
+
 /**
- * 基于 IndexedDB 的异步存储工具类，用于存储大型数据对象 (如包含 Base64 图片的工作流历史记录)
+ * 默认的本地存储提供者，结合了 localStorage (工作流) 和 IndexedDB (执行历史)
  */
-export class HistoryDB {
+export class LocalStorageProvider implements IStorageProvider {
+  private workflowKey = 'saved_workflows'
   private dbName = 'WorkflowSystemDB'
   private storeName = 'execution_history'
   private version = 1
   private db: IDBDatabase | null = null
+
+  // --- 工作流 (localStorage) 实现 ---
+
+  async getWorkflows(): Promise<SavedWorkflow[]> {
+    const raw = localStorage.getItem(this.workflowKey)
+    return raw ? JSON.parse(raw) : []
+  }
+
+  async getWorkflow(id: string): Promise<SavedWorkflow | null> {
+    const workflows = await this.getWorkflows()
+    return workflows.find((w) => w.id === id) || null
+  }
+
+  async saveWorkflow(workflow: SavedWorkflow): Promise<void> {
+    const workflows = await this.getWorkflows()
+    const updated = workflows.filter((w) => w.id !== workflow.id).concat(workflow)
+    localStorage.setItem(this.workflowKey, JSON.stringify(updated))
+  }
+
+  async deleteWorkflow(id: string): Promise<void> {
+    const workflows = await this.getWorkflows()
+    const filtered = workflows.filter((w) => w.id !== id)
+    localStorage.setItem(this.workflowKey, JSON.stringify(filtered))
+  }
+
+  // --- 执行历史 (IndexedDB) 实现 ---
 
   private async getDB(): Promise<IDBDatabase> {
     if (this.db) return this.db
@@ -29,11 +62,10 @@ export class HistoryDB {
     })
   }
 
-  async saveHistory(record: any, limit = 20): Promise<any[]> {
+  async saveHistory(record: ExecutionRecord, limit = 20): Promise<ExecutionRecord[]> {
     const db = await this.getDB()
     const history = await this.getAllHistory()
 
-    // 添加新记录到开头
     history.unshift(record)
     const limitedHistory = history.slice(0, limit)
     const idsToKeep = new Set(limitedHistory.map((r) => r.id))
@@ -42,10 +74,8 @@ export class HistoryDB {
       const transaction = db.transaction([this.storeName], 'readwrite')
       const store = transaction.objectStore(this.storeName)
 
-      // 写入新记录
       store.put(record)
 
-      // 清理超过限制的老记录
       const cursorRequest = store.openCursor()
       cursorRequest.onsuccess = (event: any) => {
         const cursor = event.target.result
@@ -62,7 +92,7 @@ export class HistoryDB {
     })
   }
 
-  async getAllHistory(): Promise<any[]> {
+  async getAllHistory(): Promise<ExecutionRecord[]> {
     const db = await this.getDB()
     return new Promise((resolve, reject) => {
       const transaction = db.transaction([this.storeName], 'readonly')
@@ -70,15 +100,16 @@ export class HistoryDB {
       const request = store.getAll()
 
       request.onsuccess = () => {
-        // 按 startTime 倒序排序
-        const result = request.result.sort((a, b) => (b.startTime || 0) - (a.startTime || 0))
+        const result = (request.result as ExecutionRecord[]).sort(
+          (a, b) => (b.startTime || 0) - (a.startTime || 0),
+        )
         resolve(result)
       }
       request.onerror = () => reject(request.error)
     })
   }
 
-  async clearAll(): Promise<void> {
+  async clearAllHistory(): Promise<void> {
     const db = await this.getDB()
     return new Promise((resolve, reject) => {
       const transaction = db.transaction([this.storeName], 'readwrite')
@@ -89,5 +120,3 @@ export class HistoryDB {
     })
   }
 }
-
-export const historyDB = new HistoryDB()
