@@ -42,10 +42,15 @@ async def analyze_xgboost_shap(
         if target not in df.columns:
             raise HTTPException(status_code=400, detail=f"Target column '{target}' not found in data")
             
+        # 提取筛选因子 (X)
+        include_cols = config.get('factorNames', [])
+        if not isinstance(include_cols, list):
+            include_cols = []
+            
         # 使用算法工具内部的核心层来进行计算
         
         # 1. 数据处理
-        engine = DataEngine(target_col=target)
+        engine = DataEngine(target_col=target, include_cols=include_cols if include_cols else None, use_regex=False)
         df_clean = engine.load_data(df)
         X, y = engine.get_X_y(df_clean)
         
