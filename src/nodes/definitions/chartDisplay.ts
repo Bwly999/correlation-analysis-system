@@ -67,8 +67,9 @@ export const chartDisplayNode: NodeDefinition = {
           title: { text: '多组数据分布对比', left: 'center' },
           tooltip: { trigger: 'item', axisPointer: { type: 'shadow' } },
           legend: { show: true, top: 25 },
+          grid: { top: '15%', bottom: '15%', left: '5%', right: '5%', containLabel: true },
           xAxis: { type: 'category', data: targetKeys, boundaryGap: true },
-          yAxis: { type: 'value', scale: true, splitArea: { show: true } },
+          yAxis: { type: 'value', scale: true, boundaryGap: ['15%', '15%'], splitArea: { show: true } },
           series: validGroups.map((group) => ({
             name: group.name,
             type: 'boxplot',
@@ -92,8 +93,9 @@ export const chartDisplayNode: NodeDefinition = {
       option = {
         title: { text: `${xKey} vs ${targetYKey} 散点分布`, left: 'center' },
         tooltip: { trigger: 'item' },
-        xAxis: { type: 'value', name: xKey },
-        yAxis: { type: 'value', name: targetYKey },
+        grid: { top: '15%', bottom: '15%', left: '10%', right: '10%', containLabel: true },
+        xAxis: { type: 'value', name: xKey, boundaryGap: ['5%', '5%'] },
+        yAxis: { type: 'value', name: targetYKey, scale: true, boundaryGap: ['15%', '15%'] },
         series: [
           {
             symbolSize: 8,
@@ -107,15 +109,17 @@ export const chartDisplayNode: NodeDefinition = {
       option = {
         title: { text: `${targetYKey} 分布`, left: 'center' },
         tooltip: { trigger: 'axis' },
-        xAxis: { type: 'category', data: rows.map((r: any) => r[xKey]) },
-        yAxis: { type: 'value' },
+        grid: { top: '15%', bottom: '15%', left: '10%', right: '10%', containLabel: true },
+        xAxis: { type: 'category', data: rows.map((r: any) => r[xKey]), boundaryGap: true },
+        yAxis: { type: 'value', boundaryGap: ['0%', '15%'] },
         series: [{ data: rows.map((r: any) => r[targetYKey]), type: 'bar' }],
       }
     } else if (config.chartType === 'boxplot') {
       option = {
         title: { text: `${targetYKey} 分布`, left: 'center' },
+        grid: { top: '15%', bottom: '15%', left: '10%', right: '10%', containLabel: true },
         xAxis: { type: 'category', data: [targetYKey] },
-        yAxis: { type: 'value', scale: true },
+        yAxis: { type: 'value', scale: true, boundaryGap: ['15%', '15%'] },
         series: [
           {
             name: '分布',

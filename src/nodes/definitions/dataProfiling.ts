@@ -333,11 +333,12 @@ export const dataProfilingNode: NodeDefinition = {
 
     const missingRateOption = {
       tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-      grid: { top: 20, left: 100, right: 20, bottom: 20, containLabel: true },
+      grid: { top: '15%', left: 100, right: '10%', bottom: '15%', containLabel: true },
       xAxis: {
         type: 'value',
         min: 0,
         max: 1,
+        boundaryGap: ['0%', '15%'],
         axisLabel: {
           formatter: (value: number) => `${Math.round(value * 100)}%`,
         },
@@ -372,11 +373,12 @@ export const dataProfilingNode: NodeDefinition = {
 
     const typeDistributionOption = {
       tooltip: { trigger: 'item' },
-      legend: { bottom: 0 },
+      legend: { bottom: '5%' },
       series: [
         {
           type: 'pie',
           radius: ['40%', '68%'],
+          center: ['50%', '45%'],
           data: [
             { name: '数值字段', value: numericFields.length, itemStyle: { color: '#2563eb' } },
             { name: '类别字段', value: categoricalFields.length, itemStyle: { color: '#0f766e' } },

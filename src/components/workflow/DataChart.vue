@@ -130,7 +130,21 @@ const chartOption = computed(() => {
       icon: 'roundRect',
       textStyle: { color: '#64748b', fontSize: 11, fontWeight: '600' },
     },
-    grid: { left: '3%', right: '3%', top: '60', bottom: '10%', containLabel: true },
+    grid: { left: '3%', right: '3%', top: '15%', bottom: '20%', containLabel: true },
+    dataZoom: [
+      { type: 'inside', xAxisIndex: [0] },
+      {
+        type: 'slider',
+        xAxisIndex: [0],
+        bottom: 10,
+        height: 20,
+        borderColor: 'transparent',
+        backgroundColor: '#f8fafc',
+        fillerColor: 'rgba(79, 70, 229, 0.1)',
+        handleStyle: { color: '#4f46e5' },
+        textStyle: { color: '#94a3b8', fontSize: 10 },
+      },
+    ],
     xAxis: {
       type: 'category',
       data: keys, // X轴显示选中的因子
@@ -140,6 +154,7 @@ const chartOption = computed(() => {
     yAxis: {
       type: 'value',
       scale: true,
+      boundaryGap: ['15%', '15%'],
       axisLabel: { fontSize: 10, color: '#94a3b8' },
       splitLine: { lineStyle: { color: '#f1f5f9', type: 'dashed' } },
     },
@@ -184,7 +199,7 @@ const chartOption = computed(() => {
         type: 'line',
         data: rows.map((r) => (typeof r[key] === 'number' ? r[key] : 0)),
         showSymbol: false,
-        lineStyle: { width: 1 },
+        lineStyle: { width: 2.5 },
         sampling: 'lttb',
         large: true,
       }))
@@ -268,7 +283,7 @@ const chartOption = computed(() => {
 
     <!-- Chart -->
     <div class="flex-1 p-4 relative">
-      <div v-if="isGroupedData || (sourceData && sourceData.length > 0) || true" class="h-full w-full">
+      <div v-if="isGroupedData || (props.data && props.data.length > 0)" class="h-full w-full">
         <VChart ref="chartRef" :option="chartOption" autoresize />
       </div>
     </div>
