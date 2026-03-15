@@ -195,7 +195,7 @@ onMounted(() => {
         }"
         :nodes-draggable="!store.isHistoryMode"
         :nodes-connectable="!store.isHistoryMode"
-        :elements-selectable="!store.isHistoryMode"
+        :elements-selectable="true"
         :select-nodes-on-drag="!store.isHistoryMode"
         :pan-on-drag="true"
         :zoom-on-scroll="true"
