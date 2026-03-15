@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { Search, ChevronRight, X, Info, Box, Layout } from 'lucide-vue-next'
+
 import NodeIcon from './nodes/NodeIcon.vue'
 import { useWorkflowStore, CONNECTION_RULES } from '@/stores/workflowStore'
 import { nodeDefinitions } from '@/nodes/registry'
@@ -11,9 +12,9 @@ const searchQuery = ref('')
 const emit = defineEmits(['close'])
 
 const categoryMetadata = [
-  { name: '数据源 (Data Sources)', category: 'trigger', label: '数据源', icon: Box },
-  { name: '算子 (Operators)', category: 'action', label: '数据转换', icon: Layout },
-  { name: '分析 (Analysis)', category: 'terminal', label: '终止与分析', icon: Box },
+  { name: '数据接入', category: 'trigger', label: '数据接入', icon: Box },
+  { name: '数据准备', category: 'action', label: '数据准备', icon: Layout },
+  { name: '分析输出', category: 'terminal', label: '分析输出', icon: Box },
 ]
 
 const filteredCategories = computed(() => {
@@ -26,45 +27,46 @@ const filteredCategories = computed(() => {
   return categoryMetadata
     .map((catMeta) => {
       const nodes = nodeDefinitions
-        .filter((d) => d.category === catMeta.category)
-        .map((d) => ({
-          type: d.name,
-          label: d.displayName,
-          desc: d.description,
+        .filter((definition) => definition.category === catMeta.category)
+        .map((definition) => ({
+          type: definition.name,
+          label: definition.displayName,
+          desc: definition.description,
           isClickable: allowedCategories.includes(catMeta.category),
         }))
         .filter(
-          (n) =>
+          (node) =>
             !searchQuery.value ||
-            n.label.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-            n.desc.toLowerCase().includes(searchQuery.value.toLowerCase()),
+            node.label.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
+            node.desc.toLowerCase().includes(searchQuery.value.toLowerCase()),
         )
 
       return { ...catMeta, nodes }
     })
-    .filter((cat) => cat.nodes.length > 0)
+    .filter((category) => category.nodes.length > 0)
 })
 
-const onNodeClick = (node: any) => {
+const onNodeClick = (node: { type: string; label: string }) => {
   if (store.pendingConnection) {
     const pendingSourceNode = store.nodes.find(
-      (n) => n.id === store.pendingConnection?.sourceNodeId,
+      (currentNode) => currentNode.id === store.pendingConnection?.sourceNodeId,
     )
     const position = pendingSourceNode
       ? { x: pendingSourceNode.position.x + 300, y: pendingSourceNode.position.y }
       : { x: 100, y: 100 }
     store.addAndConnectNode(node.type, node.label, position)
-  } else {
-    store.addAndConnectNode(node.type, node.label, { x: 200, y: 200 })
+    return
   }
+
+  store.addAndConnectNode(node.type, node.label, { x: 200, y: 200 })
 }
 
-const onDragStart = (event: DragEvent, node: any) => {
-  if (event.dataTransfer) {
-    event.dataTransfer.setData('application/vueflow', node.type)
-    event.dataTransfer.setData('application/label', node.label)
-    event.dataTransfer.effectAllowed = 'move'
-  }
+const onDragStart = (event: DragEvent, node: { type: string; label: string }) => {
+  if (!event.dataTransfer) return
+
+  event.dataTransfer.setData('application/vueflow', node.type)
+  event.dataTransfer.setData('application/label', node.label)
+  event.dataTransfer.effectAllowed = 'move'
 }
 </script>
 
@@ -72,7 +74,6 @@ const onDragStart = (event: DragEvent, node: any) => {
   <div
     class="flex flex-col h-full bg-[#ffffff] border-l border-[#efefef] shadow-[-10px_0_30px_rgba(0,0,0,0.02)] overflow-hidden"
   >
-    <!-- Header -->
     <div class="p-5 pb-3 bg-white sticky top-0 z-20">
       <div class="flex items-center justify-between mb-5">
         <div class="flex items-center gap-2">
@@ -98,7 +99,7 @@ const onDragStart = (event: DragEvent, node: any) => {
         <input
           v-model="searchQuery"
           type="text"
-          placeholder="搜索分析算子或数据源..."
+          placeholder="搜索节点名称或用途..."
           class="w-full pl-10 pr-4 py-2.5 bg-[#f8fafc] border border-[#e2e8f0] focus:border-slate-400 focus:bg-white focus:ring-4 focus:ring-slate-900/5 rounded-xl text-[13px] text-[#1e293b] placeholder:text-[#94a3b8] outline-none transition-all duration-200"
         />
         <div
@@ -111,9 +112,7 @@ const onDragStart = (event: DragEvent, node: any) => {
       </div>
     </div>
 
-    <!-- Node List -->
     <div class="flex-1 overflow-y-auto custom-scrollbar px-4 space-y-8 pb-10 pt-2">
-      <!-- Quick Add Prompt (Modern Slate Style) -->
       <div
         v-if="store.pendingConnection"
         class="mt-2 p-4 bg-slate-900 text-white rounded-2xl shadow-lg shadow-slate-200 animate-in zoom-in-95 duration-300 relative overflow-hidden"
@@ -125,7 +124,7 @@ const onDragStart = (event: DragEvent, node: any) => {
           <div class="flex-1">
             <p class="text-[12px] font-bold text-white leading-tight">选择连接目标</p>
             <p class="text-[10px] text-white/60 mt-1 leading-relaxed">
-              已为您智能推荐可用的下游节点
+              已为你筛出当前可连接的下游节点
             </p>
           </div>
           <button
@@ -140,16 +139,18 @@ const onDragStart = (event: DragEvent, node: any) => {
         </div>
       </div>
 
-      <div v-for="cat in filteredCategories" :key="cat.name">
+      <div v-for="category in filteredCategories" :key="category.name">
         <div class="px-2 mb-4 flex items-center gap-3">
-          <component :is="cat.icon" size="14" class="text-slate-400" />
-          <span class="text-[11px] font-bold text-[#64748b] tracking-wider">{{ cat.label }}</span>
+          <component :is="category.icon" size="14" class="text-slate-400" />
+          <span class="text-[11px] font-bold text-[#64748b] tracking-wider">
+            {{ category.label }}
+          </span>
           <div class="h-[1px] flex-1 bg-gradient-to-r from-[#f1f5f9] to-transparent"></div>
         </div>
 
         <div class="space-y-2">
           <div
-            v-for="node in cat.nodes"
+            v-for="node in category.nodes"
             :key="node.type"
             draggable="true"
             class="n8n-node-item group"
@@ -174,11 +175,12 @@ const onDragStart = (event: DragEvent, node: any) => {
               <div class="flex flex-col flex-1 min-w-0">
                 <span
                   class="text-[13px] font-bold text-[#1a1f36] truncate tracking-tight group-hover:text-blue-600 transition-colors"
-                  >{{ node.label }}</span
                 >
-                <span class="text-[10px] text-[#8792a2] font-medium truncate mt-0.5 opacity-80">{{
-                  node.desc
-                }}</span>
+                  {{ node.label }}
+                </span>
+                <span class="text-[10px] text-[#8792a2] font-medium truncate mt-0.5 opacity-80">
+                  {{ node.desc }}
+                </span>
               </div>
               <ChevronRight
                 size="14"
@@ -196,6 +198,7 @@ const onDragStart = (event: DragEvent, node: any) => {
 .n8n-node-item {
   cursor: grab;
 }
+
 .n8n-node-item:active {
   cursor: grabbing;
 }
@@ -226,10 +229,12 @@ const onDragStart = (event: DragEvent, node: any) => {
 .custom-scrollbar::-webkit-scrollbar {
   width: 4px;
 }
+
 .custom-scrollbar::-webkit-scrollbar-thumb {
   background: #e2e8f0;
   border-radius: 10px;
 }
+
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: #cbd5e1;
 }

@@ -1,9 +1,14 @@
-import type { NodeDefinition } from '../types'
 import { markRaw } from 'vue'
+import type { NodeDefinition } from '../types'
+
+type FieldType = 'numeric' | 'categorical' | 'datetime' | 'empty'
+type RiskLevel = 'high' | 'medium' | 'low'
+type TargetFieldUsability = 'regression' | 'classification' | 'unusable' | 'unknown'
 
 type FieldProfile = {
   field: string
-  type: 'numeric' | 'categorical' | 'datetime' | 'empty'
+  type: FieldType
+  riskLevel: RiskLevel
   nonNullCount: number
   missingCount: number
   missingRate: number
@@ -15,6 +20,8 @@ type FieldProfile = {
   mean?: number
   std?: number
   zeroRate?: number
+  outlierCount?: number
+  outlierRate?: number
   suggestions: string[]
 }
 
@@ -33,11 +40,10 @@ const toNumber = (value: unknown) => {
 
 const isDateLike = (value: unknown) => {
   if (typeof value !== 'string' || value.trim() === '') return false
-  const timestamp = Date.parse(value)
-  return Number.isFinite(timestamp)
+  return Number.isFinite(Date.parse(value))
 }
 
-const classifyField = (values: unknown[]): FieldProfile['type'] => {
+const classifyField = (values: unknown[]): FieldType => {
   const presentValues = values.filter((value) => value !== null && value !== undefined && value !== '')
   if (presentValues.length === 0) return 'empty'
 
@@ -58,10 +64,91 @@ const std = (values: number[], avg: number) => {
   return Math.sqrt(variance)
 }
 
+const quantile = (sortedValues: number[], ratio: number) => {
+  if (sortedValues.length === 0) return 0
+  const index = (sortedValues.length - 1) * ratio
+  const lower = Math.floor(index)
+  const upper = Math.ceil(index)
+  const lowerValue = sortedValues[lower] ?? sortedValues[sortedValues.length - 1] ?? 0
+  const upperValue = sortedValues[upper] ?? sortedValues[sortedValues.length - 1] ?? 0
+  if (lower === upper) return lowerValue
+  return lowerValue + (upperValue - lowerValue) * (index - lower)
+}
+
+const calculateOutlierStats = (values: number[]) => {
+  if (values.length < 4) return { outlierCount: 0, outlierRate: 0 }
+
+  const sorted = [...values].sort((a, b) => a - b)
+  const q1 = quantile(sorted, 0.25)
+  const q3 = quantile(sorted, 0.75)
+  const iqr = q3 - q1
+  if (iqr === 0) return { outlierCount: 0, outlierRate: 0 }
+
+  const lowerBound = q1 - 1.5 * iqr
+  const upperBound = q3 + 1.5 * iqr
+  const outlierCount = values.filter((value) => value < lowerBound || value > upperBound).length
+
+  return {
+    outlierCount,
+    outlierRate: values.length === 0 ? 0 : outlierCount / values.length,
+  }
+}
+
+const getTargetFieldUsability = (
+  targetField: string,
+  fieldProfiles: FieldProfile[],
+): TargetFieldUsability => {
+  if (!targetField) return 'unknown'
+  const profile = fieldProfiles.find((item) => item.field === targetField)
+  if (!profile || profile.nonNullCount === 0) return 'unusable'
+
+  if (profile.type === 'numeric') return 'regression'
+  if (profile.type === 'categorical') return 'classification'
+  return 'unusable'
+}
+
+const riskLevelLabelMap: Record<RiskLevel, string> = {
+  high: '高',
+  medium: '中',
+  low: '低',
+}
+
+const targetFieldUsabilityText: Record<Exclude<TargetFieldUsability, 'unknown'>, string> = {
+  regression: '适合回归任务',
+  classification: '适合分类任务',
+  unusable: '暂不适合直接建模',
+}
+
+const getRiskLevel = (profile: Omit<FieldProfile, 'riskLevel' | 'suggestions'>) => {
+  const isIdLike =
+    profile.field.toLowerCase().includes('id') ||
+    /(^|_)(sn|code|编号|序列号)/i.test(profile.field)
+
+  if (
+    profile.missingRate >= 0.3 ||
+    profile.uniqueCount === 1 ||
+    (profile.outlierRate ?? 0) >= 0.2 ||
+    isIdLike
+  ) {
+    return 'high' satisfies RiskLevel
+  }
+
+  if (
+    profile.missingRate >= 0.1 ||
+    (profile.outlierRate ?? 0) >= 0.05 ||
+    (profile.zeroRate ?? 0) >= 0.8 ||
+    profile.type === 'datetime'
+  ) {
+    return 'medium' satisfies RiskLevel
+  }
+
+  return 'low' satisfies RiskLevel
+}
+
 const buildSuggestions = (
-  profile: Omit<FieldProfile, 'suggestions'>,
+  profile: Omit<FieldProfile, 'suggestions' | 'riskLevel'>,
   totalRows: number,
-  targetField?: string,
+  targetField: string,
 ) => {
   const suggestions: string[] = []
 
@@ -85,11 +172,18 @@ const buildSuggestions = (
     suggestions.push('时间字段建议先派生窗口、周期或滞后特征，再进入相关分析。')
   }
 
-  if (profile.type === 'numeric' && (profile.zeroRate || 0) >= 0.8) {
-    suggestions.push('零值占比过高，建议确认业务含义，避免稀疏列误导结果。')
+  if ((profile.outlierRate ?? 0) >= 0.05) {
+    suggestions.push('字段存在异常值，建议在建模前确认业务含义或执行异常值处理。')
   }
 
-  if (profile.field.toLowerCase().includes('id') || /(^|_)(sn|code|编号|序列号)/i.test(profile.field)) {
+  if ((profile.zeroRate ?? 0) >= 0.8) {
+    suggestions.push('零值占比较高，建议确认业务含义，避免稀疏列误导结果。')
+  }
+
+  if (
+    profile.field.toLowerCase().includes('id') ||
+    /(^|_)(sn|code|编号|序列号)/i.test(profile.field)
+  ) {
     suggestions.push('字段名称疑似标识符，通常应排除在因子分析之外。')
   }
 
@@ -98,6 +192,12 @@ const buildSuggestions = (
   }
 
   return suggestions
+}
+
+const stableSerializeRow = (row: Record<string, unknown>) => {
+  const keys = Object.keys(row).sort()
+  const normalized = keys.map((key) => [key, row[key] ?? null])
+  return JSON.stringify(normalized)
 }
 
 export const dataProfilingNode: NodeDefinition = {
@@ -150,8 +250,9 @@ export const dataProfilingNode: NodeDefinition = {
       const missingCount = totalRows - nonNullValues.length
       const uniqueValues = Array.from(new Set(nonNullValues.map((value) => String(value))))
       const numericValues = nonNullValues.map(toNumber).filter((value): value is number => value !== null)
+      const outlierStats = type === 'numeric' ? calculateOutlierStats(numericValues) : { outlierCount: 0, outlierRate: 0 }
 
-      const baseProfile: Omit<FieldProfile, 'suggestions'> = {
+      const baseProfile: Omit<FieldProfile, 'suggestions' | 'riskLevel'> = {
         field,
         type,
         nonNullCount: nonNullValues.length,
@@ -160,6 +261,8 @@ export const dataProfilingNode: NodeDefinition = {
         uniqueCount: uniqueValues.length,
         uniqueRate: nonNullValues.length === 0 ? 0 : uniqueValues.length / nonNullValues.length,
         sampleValues: uniqueValues.slice(0, 3),
+        outlierCount: outlierStats.outlierCount,
+        outlierRate: outlierStats.outlierRate,
       }
 
       if (type === 'numeric' && numericValues.length > 0) {
@@ -173,18 +276,10 @@ export const dataProfilingNode: NodeDefinition = {
 
       return {
         ...baseProfile,
+        riskLevel: getRiskLevel(baseProfile),
         suggestions: buildSuggestions(baseProfile, totalRows, targetField),
       }
     })
-
-    const riskFields = fieldProfiles
-      .filter(
-        (profile) =>
-          profile.missingRate >= 0.3 ||
-          profile.uniqueCount === 1 ||
-          profile.suggestions.some((item) => item.includes('ID') || item.includes('标识符')),
-      )
-      .sort((a, b) => b.missingRate - a.missingRate)
 
     const numericFields = fieldProfiles.filter((profile) => profile.type === 'numeric')
     const categoricalFields = fieldProfiles.filter((profile) => profile.type === 'categorical')
@@ -193,6 +288,21 @@ export const dataProfilingNode: NodeDefinition = {
     const constantFields = fieldProfiles.filter(
       (profile) => profile.nonNullCount > 0 && profile.uniqueCount === 1,
     )
+    const riskFields = fieldProfiles
+      .filter((profile) => profile.riskLevel !== 'low')
+      .sort((left, right) => {
+        const riskWeight = { high: 2, medium: 1, low: 0 }
+        return (
+          riskWeight[right.riskLevel] - riskWeight[left.riskLevel] ||
+          right.missingRate - left.missingRate ||
+          (right.outlierRate ?? 0) - (left.outlierRate ?? 0)
+        )
+      })
+
+    const rowSnapshots = rows.map(stableSerializeRow)
+    const duplicateRowCount = Math.max(0, rowSnapshots.length - new Set(rowSnapshots).size)
+    const duplicateRowRate = totalRows === 0 ? 0 : duplicateRowCount / totalRows
+    const targetFieldUsability = getTargetFieldUsability(targetField, fieldProfiles)
 
     const topFields = Math.max(5, Number(config.topFields || 10))
     const focusFields = [...riskFields, ...fieldProfiles]
@@ -202,12 +312,22 @@ export const dataProfilingNode: NodeDefinition = {
     const summaryLines = [
       `本次体检覆盖 ${fields.length} 个字段、${totalRows} 行数据。`,
       `字段类型识别结果：数值字段 ${numericFields.length} 个，类别字段 ${categoricalFields.length} 个，时间字段 ${datetimeFields.length} 个，空字段 ${emptyFields.length} 个。`,
-      `高风险字段 ${riskFields.length} 个，常量列 ${constantFields.length} 个。${targetField ? `目标字段为 "${targetField}"。` : '当前未指定目标字段。'}`,
+      `高风险字段 ${fieldProfiles.filter((item) => item.riskLevel === 'high').length} 个，中风险字段 ${fieldProfiles.filter((item) => item.riskLevel === 'medium').length} 个，常量列 ${constantFields.length} 个，重复样本 ${duplicateRowCount} 行（${(duplicateRowRate * 100).toFixed(1)}%）。`,
     ]
+
+    if (targetField) {
+      const usabilityText =
+        targetFieldUsability === 'unknown'
+          ? '暂未识别'
+          : targetFieldUsabilityText[targetFieldUsability]
+      summaryLines.push(`目标字段“${targetField}”${usabilityText}。`)
+    } else {
+      summaryLines.push('当前未指定目标字段。')
+    }
 
     if (riskFields[0]) {
       summaryLines.push(
-        `当前最优先处理的字段是 "${riskFields[0].field}"，主要问题：${riskFields[0].suggestions[0]}`,
+        `当前最优先处理的字段是“${riskFields[0].field}”，主要原因：${riskFields[0].suggestions[0]}`,
       )
     }
 
@@ -232,7 +352,12 @@ export const dataProfilingNode: NodeDefinition = {
           data: focusFields.map((profile) => ({
             value: Number(profile.missingRate.toFixed(4)),
             itemStyle: {
-              color: profile.missingRate >= 0.3 ? '#ef4444' : '#2563eb',
+              color:
+                profile.riskLevel === 'high'
+                  ? '#ef4444'
+                  : profile.riskLevel === 'medium'
+                    ? '#f59e0b'
+                    : '#2563eb',
             },
           })),
           label: {
@@ -275,7 +400,9 @@ export const dataProfilingNode: NodeDefinition = {
             : profile.type === 'datetime'
               ? '时间'
               : '空字段',
+      风险等级: riskLevelLabelMap[profile.riskLevel],
       缺失率: `${(profile.missingRate * 100).toFixed(1)}%`,
+      异常值占比: `${((profile.outlierRate ?? 0) * 100).toFixed(1)}%`,
       唯一值数: profile.uniqueCount,
       示例值: profile.sampleValues.join(', ') || '-',
       建议: profile.suggestions.join('；'),
@@ -293,6 +420,9 @@ export const dataProfilingNode: NodeDefinition = {
         datetimeFieldCount: datetimeFields.length,
         riskFieldCount: riskFields.length,
         constantFieldCount: constantFields.length,
+        duplicateRowCount,
+        duplicateRowRate,
+        targetFieldUsability,
       },
       viewType: 'report',
       report: {

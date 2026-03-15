@@ -1,3 +1,3 @@
 import { createCorrelationNode } from './correlation/shared'
 
-export const pearsonNode = createCorrelationNode('pearson')
+export const kendallNode = createCorrelationNode('kendall')

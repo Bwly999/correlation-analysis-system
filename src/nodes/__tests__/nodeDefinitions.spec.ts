@@ -1,18 +1,21 @@
 import { describe, it, expect, vi } from 'vitest'
+import * as fs from 'fs'
+import * as path from 'path'
+
 import { fileImportNode } from '../definitions/fileImport'
 import { dataCleaningNode } from '../definitions/dataCleaning'
 import { dataProfilingNode } from '../definitions/dataProfiling'
 import { dataAggregationNode } from '../definitions/dataAggregation'
+import { dataFilterNode } from '../definitions/dataFilter'
 import { xgboostShapNode } from '../definitions/xgboostShap'
 import { neighborSystemNode } from '../definitions/neighborSystem'
 import { chartDisplayNode } from '../definitions/chartDisplay'
 import { dataExportNode } from '../definitions/dataExport'
 import { lassoNode } from '../definitions/lasso'
 import { pearsonNode } from '../definitions/pearson'
-import * as fs from 'fs'
-import * as path from 'path'
+import { spearmanNode } from '../definitions/spearman'
+import { kendallNode } from '../definitions/kendall'
 
-// Mock URL for data-export
 global.URL.createObjectURL = vi.fn(() => 'blob:mock-url')
 
 describe('Node Definitions Execution Logic', () => {
@@ -56,7 +59,7 @@ describe('Node Definitions Execution Logic', () => {
       expect(result.data).toBeDefined()
       expect(result.stats.originalCount).toBe(3)
       expect(result.stats.missingFilled).toBe(1)
-      expect(result.data[1].a).toBe(1.5) // (1+2)/2
+      expect(result.data[1].a).toBe(1.5)
     })
 
     it('should perform min-max scaling', async () => {
@@ -115,6 +118,36 @@ describe('Node Definitions Execution Logic', () => {
       expect(result.report.sections[2].option.series[0].type).toBe('pie')
       expect(result.report.sections[3].content).toContain('"字段": "sensor_b"')
     })
+
+    it('should report target usability, duplicate ratio, outlier ratio and risk level', async () => {
+      const input = {
+        data: [
+          { target: 'A', sensor_a: 1, sensor_b: 10, batch_id: 'B1' },
+          { target: 'A', sensor_a: 1, sensor_b: 10, batch_id: 'B1' },
+          { target: 'B', sensor_a: 2, sensor_b: 11, batch_id: 'B2' },
+          { target: 'C', sensor_a: 3, sensor_b: 12, batch_id: 'B3' },
+          { target: 'D', sensor_a: 4, sensor_b: 200, batch_id: 'B4' },
+        ],
+      }
+
+      const result = await dataProfilingNode.execute(input, {
+        targetField: 'target',
+        topFields: 10,
+      })
+
+      expect(result.metrics.duplicateRowCount).toBe(1)
+      expect(result.metrics.duplicateRowRate).toBeCloseTo(0.2)
+      expect(result.metrics.targetFieldUsability).toBe('classification')
+      expect(result.report.sections[0].content).toContain('目标字段“target”适合分类任务')
+      expect(result.report.sections[0].content).toContain('重复样本 1 行')
+      expect(result.report.sections[3].content).toContain('"字段": "sensor_b"')
+      expect(result.report.sections[3].content).toContain('"异常值占比": "20.0%"')
+      expect(result.report.sections[3].content).toContain('"风险等级": "高"')
+
+      const sensorProfile = result.profile.find((item: any) => item.field === 'sensor_b')
+      expect(sensorProfile.outlierRate).toBeCloseTo(0.2)
+      expect(sensorProfile.riskLevel).toBe('high')
+    })
   })
 
   describe('data-aggregation', () => {
@@ -143,12 +176,59 @@ describe('Node Definitions Execution Logic', () => {
     })
   })
 
+  describe('data-filter', () => {
+    it('should filter rows by multiple conditions with all-match mode', async () => {
+      const input = {
+        data: [
+          { city: '上海', score: 91, tag: 'A-1' },
+          { city: '北京', score: 77, tag: 'B-2' },
+          { city: '上海', score: 82, tag: 'A-2' },
+          { city: '深圳', score: 95, tag: 'C-1' },
+        ],
+      }
+
+      const result = await dataFilterNode.execute(input, {
+        matchMode: 'all',
+        conditions: [
+          { field: 'city', operator: 'equals', value: '上海' },
+          { field: 'score', operator: 'gte', value: 85 },
+        ],
+      })
+
+      expect(result.data).toHaveLength(1)
+      expect(result.data[0]).toEqual({ city: '上海', score: 91, tag: 'A-1' })
+      expect(result.stats.originalCount).toBe(4)
+      expect(result.stats.filteredCount).toBe(1)
+    })
+
+    it('should filter rows by any-match mode with contains operator', async () => {
+      const input = {
+        data: [
+          { city: '上海', score: 91, tag: 'A-1' },
+          { city: '北京', score: 77, tag: 'B-2' },
+          { city: '上海', score: 82, tag: 'A-2' },
+          { city: '深圳', score: 95, tag: 'C-1' },
+        ],
+      }
+
+      const result = await dataFilterNode.execute(input, {
+        matchMode: 'any',
+        conditions: [
+          { field: 'tag', operator: 'contains', value: 'B-' },
+          { field: 'score', operator: 'gte', value: 95 },
+        ],
+      })
+
+      expect(result.data).toHaveLength(2)
+      expect(result.data.map((row: any) => row.city)).toEqual(['北京', '深圳'])
+    })
+  })
+
   describe('algorithms', () => {
     it('should simulate xgboost+shap result', async () => {
       const input = { data: [{ target: 1, f1: 2 }] }
       const config = { targetLabel: 'target' }
 
-      // Mock fetch response
       global.fetch = vi.fn().mockResolvedValue({
         ok: true,
         json: async () => ({
@@ -162,7 +242,7 @@ describe('Node Definitions Execution Logic', () => {
             full_report_image: 'base64_full',
           },
         }),
-      })
+      }) as any
 
       const result = await xgboostShapNode.execute(input, config)
 
@@ -173,7 +253,6 @@ describe('Node Definitions Execution Logic', () => {
       expect(result.report.tabs[0].name).toContain('前端分图')
       expect(result.report.tabs[1].name).toContain('后端全量')
 
-      // Verify sections
       const sections = result.report.tabs[0].sections
       expect(sections.some((s: any) => s.title?.includes('特征重要性'))).toBe(true)
       expect(sections.some((s: any) => s.title?.includes('因子影响趋势 (前端渲染)'))).toBe(true)
@@ -199,9 +278,8 @@ describe('Node Definitions Execution Logic', () => {
           { target: 5, f1: 5, f2: 2 },
         ],
       }
-      const config = { targetField: 'target', topN: 5 }
 
-      const result = await pearsonNode.execute(input, config)
+      const result = await pearsonNode.execute(input, { targetField: 'target', topN: 5 })
 
       expect(result.viewType).toBe('report')
       expect(result.report.title).toBe('Pearson 相关系数矩阵分析')
@@ -210,6 +288,52 @@ describe('Node Definitions Execution Logic', () => {
       expect(result.report.sections).toHaveLength(4)
       expect(result.report.sections[1].option.series[0].type).toBe('heatmap')
       expect(result.report.sections[2].option.series[0].data[0].value).toBe(1)
+      expect(result.report.sections[3].content).toContain('"因子": "f1"')
+    })
+
+    it('should calculate spearman correlations for monotonic but non-linear data', async () => {
+      const input = {
+        data: [
+          { target: 1, f1: 1, f2: 25 },
+          { target: 2, f1: 4, f2: 20 },
+          { target: 3, f1: 9, f2: 15 },
+          { target: 4, f1: 16, f2: 10 },
+          { target: 5, f1: 25, f2: 5 },
+        ],
+      }
+
+      const result = await spearmanNode.execute(input, { targetField: 'target', topN: 5 })
+
+      expect(result.viewType).toBe('report')
+      expect(result.report.title).toBe('Spearman 秩相关矩阵分析')
+      expect(result.metrics.targetField).toBe('target')
+      expect(result.report.sections[1].option.series[0].name).toBe('Spearman ρ')
+      expect(result.report.sections[2].option.xAxis.name).toBe('Spearman ρ')
+      expect(result.report.sections[2].option.series[0].data[0].value).toBe(1)
+      expect(result.report.sections[2].option.series[0].data[1].value).toBe(-1)
+      expect(result.report.sections[3].content).toContain('"因子": "f1"')
+    })
+
+    it('should calculate kendall correlations and rank inverse monotonic fields', async () => {
+      const input = {
+        data: [
+          { target: 1, f1: 5, f2: 1 },
+          { target: 2, f1: 4, f2: 2 },
+          { target: 3, f1: 3, f2: 3 },
+          { target: 4, f1: 2, f2: 4 },
+          { target: 5, f1: 1, f2: 5 },
+        ],
+      }
+
+      const result = await kendallNode.execute(input, { targetField: 'target', topN: 5 })
+
+      expect(result.viewType).toBe('report')
+      expect(result.report.title).toBe('Kendall 秩相关矩阵分析')
+      expect(result.metrics.targetField).toBe('target')
+      expect(result.report.sections[1].option.series[0].name).toBe('Kendall τ')
+      expect(result.report.sections[2].option.xAxis.name).toBe('Kendall τ')
+      expect(result.report.sections[2].option.series[0].data[0].value).toBe(-1)
+      expect(result.report.sections[2].option.series[0].data[1].value).toBe(1)
       expect(result.report.sections[3].content).toContain('"因子": "f1"')
     })
   })
@@ -223,7 +347,7 @@ describe('Node Definitions Execution Logic', () => {
         selectedFactors: {
           f_bat_volt: { checked: true },
           f_bat_curr: { checked: true },
-          sys_power: { checked: true }, // 非因子节点，应被忽略
+          sys_power: { checked: true },
         },
       }
 
@@ -245,7 +369,9 @@ describe('Node Definitions Execution Logic', () => {
         selectedFactors: {},
       }
 
-      await expect(neighborSystemNode.execute(null, config)).rejects.toThrow('请至少选择一个因子进行获取')
+      await expect(neighborSystemNode.execute(null, config)).rejects.toThrow(
+        '请至少选择一个因子进行获取',
+      )
     })
   })
 

@@ -5,9 +5,12 @@ import { neighborSystemNode } from './definitions/neighborSystem'
 import { dataCleaningNode } from './definitions/dataCleaning'
 import { dataProfilingNode } from './definitions/dataProfiling'
 import { dataAggregationNode } from './definitions/dataAggregation'
+import { dataFilterNode } from './definitions/dataFilter'
 import { xgboostShapNode } from './definitions/xgboostShap'
 import { lassoNode } from './definitions/lasso'
 import { pearsonNode } from './definitions/pearson'
+import { spearmanNode } from './definitions/spearman'
+import { kendallNode } from './definitions/kendall'
 import { dataExportNode } from './definitions/dataExport'
 import { chartDisplayNode } from './definitions/chartDisplay'
 
@@ -18,9 +21,12 @@ export const nodeDefinitions: NodeDefinition[] = [
   dataCleaningNode,
   dataProfilingNode,
   dataAggregationNode,
+  dataFilterNode,
   xgboostShapNode,
   lassoNode,
   pearsonNode,
+  spearmanNode,
+  kendallNode,
   dataExportNode,
   chartDisplayNode,
 ]
