@@ -10,6 +10,7 @@ import {
   Loader2,
   Plus,
   Trash2,
+  Copy,
   Pencil,
   Pin,
   PinOff,
@@ -89,6 +90,10 @@ const runNode = (force: boolean) => {
 const openConfig = () => {
   store.activeConfigNodeId = props.id
   store.addLog(`打开配置: ${currentLabel.value}`, 'info', props.id)
+}
+
+const duplicateNode = () => {
+  store.duplicateNode(props.id)
 }
 
 const deleteNode = () => {
@@ -261,6 +266,13 @@ const nodeShape = computed(() => {
         <PinOff v-else size="14" />
       </button>
       <div class="w-[1px] h-4 bg-slate-200 self-center mx-1"></div>
+      <button
+        v-tooltip.top="'复制节点'"
+        class="p-1.5 hover:bg-slate-50 rounded-lg text-slate-500 transition-colors cursor-pointer"
+        @click.stop="duplicateNode"
+      >
+        <Copy size="14" />
+      </button>
       <button
         v-tooltip.top="'重命名'"
         class="p-1.5 hover:bg-slate-50 rounded-lg text-slate-500 transition-colors cursor-pointer"

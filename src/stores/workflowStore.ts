@@ -332,6 +332,26 @@ export const useWorkflowStore = defineStore('workflow', () => {
     return newNode
   }
 
+  const duplicateNode = (nodeId: string) => {
+    const original = nodes.value.find((n) => n.id === nodeId)
+    if (!original) return null
+
+    const newNode: WorkflowNode = JSON.parse(JSON.stringify(original))
+    newNode.id = `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    newNode.position = {
+      x: original.position.x + 40,
+      y: original.position.y + 40,
+    }
+    newNode.data.label = `${original.data.label} (副本)`
+    newNode.data.status = 'idle'
+    newNode.data.output = null
+    newNode.data.logs = []
+
+    nodes.value.push(newNode)
+    addLog(`已复制节点: ${original.data.label}`, 'info')
+    return newNode
+  }
+
   const isValueValid = (value: any, type: string) => {
     if (value === undefined || value === null) return false
     if (type === 'file') {
@@ -570,6 +590,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     loadWorkflow,
     deleteWorkflow,
     duplicateWorkflow,
+    duplicateNode,
     exportWorkflow,
     importWorkflow,
     loadHistory,

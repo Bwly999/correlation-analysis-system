@@ -163,4 +163,20 @@ describe('Workflow Store', () => {
     expect(secondResult).toEqual(firstOutput)
     expect(store.logs.some((l) => l.message.includes('已冻结，使用历史输出数据'))).toBe(true)
   })
+
+  it('should duplicate a node correctly', () => {
+    const store = useWorkflowStore()
+    const original = store.addAndConnectNode('data-cleaning', 'Original Node', { x: 100, y: 100 })!
+    original.data.config.someProp = 'someValue'
+
+    const duplicated = store.duplicateNode(original.id)!
+
+    expect(store.nodes.length).toBe(2)
+    expect(duplicated.id).not.toBe(original.id)
+    expect(duplicated.data.label).toBe('Original Node (副本)')
+    expect(duplicated.position).toEqual({ x: 140, y: 140 })
+    expect(duplicated.data.config.someProp).toBe('someValue')
+    expect(duplicated.data.status).toBe('idle')
+    expect(duplicated.data.output).toBeNull()
+  })
 })
