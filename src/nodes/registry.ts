@@ -5,6 +5,8 @@ import { neighborSystemNode } from './definitions/neighborSystem'
 import { dataCleaningNode } from './definitions/dataCleaning'
 import { dataProfilingNode } from './definitions/dataProfiling'
 import { dataAggregationNode } from './definitions/dataAggregation'
+import { appendNode } from './definitions/append'
+import { objectMergeNode } from './definitions/objectMerge'
 import { dataFilterNode } from './definitions/dataFilter'
 import { xgboostShapNode } from './definitions/xgboostShap'
 import { lassoNode } from './definitions/lasso'
@@ -21,6 +23,8 @@ export const nodeDefinitions: NodeDefinition[] = [
   dataCleaningNode,
   dataProfilingNode,
   dataAggregationNode,
+  appendNode,
+  objectMergeNode,
   dataFilterNode,
   xgboostShapNode,
   lassoNode,
