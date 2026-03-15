@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { fileImportNode } from '../definitions/fileImport'
 import { dataCleaningNode } from '../definitions/dataCleaning'
+import { dataProfilingNode } from '../definitions/dataProfiling'
 import { dataAggregationNode } from '../definitions/dataAggregation'
 import { xgboostShapNode } from '../definitions/xgboostShap'
 import { neighborSystemNode } from '../definitions/neighborSystem'
@@ -89,6 +90,33 @@ describe('Node Definitions Execution Logic', () => {
     })
   })
 
+  describe('data-profiling', () => {
+    it('should build a profiling report and keep upstream data', async () => {
+      const input = {
+        data: [
+          { id: 'A001', target: 10, sensor_a: 1, sensor_b: null, ts: '2026-03-15T10:00:00Z' },
+          { id: 'A002', target: 12, sensor_a: 2, sensor_b: null, ts: '2026-03-15T11:00:00Z' },
+          { id: 'A003', target: 14, sensor_a: 3, sensor_b: 0, ts: '2026-03-15T12:00:00Z' },
+        ],
+      }
+
+      const result = await dataProfilingNode.execute(input, {
+        targetField: 'target',
+        topFields: 6,
+      })
+
+      expect(result.viewType).toBe('report')
+      expect(result.data).toHaveLength(3)
+      expect(result.metrics.fieldCount).toBe(5)
+      expect(result.metrics.numericFieldCount).toBeGreaterThanOrEqual(3)
+      expect(result.metrics.riskFieldCount).toBeGreaterThanOrEqual(1)
+      expect(result.report.title).toBe('数据体检与字段画像')
+      expect(result.report.sections[1].option.series[0].type).toBe('bar')
+      expect(result.report.sections[2].option.series[0].type).toBe('pie')
+      expect(result.report.sections[3].content).toContain('"字段": "sensor_b"')
+    })
+  })
+
   describe('data-aggregation', () => {
     it('should aggregate multiple columns into one using the new nested schema', async () => {
       const input = {
@@ -161,14 +189,28 @@ describe('Node Definitions Execution Logic', () => {
       expect(result.report.title).toBe('Lasso 回归分析')
     })
 
-    it('should simulate pearson result', async () => {
-      const input = { data: [{ target: 1, f1: 2 }] }
-      const config = { targetLabel: 'target' }
+    it('should calculate pearson correlations from numeric data', async () => {
+      const input = {
+        data: [
+          { target: 1, f1: 1, f2: 10 },
+          { target: 2, f1: 2, f2: 8 },
+          { target: 3, f1: 3, f2: 6 },
+          { target: 4, f1: 4, f2: 4 },
+          { target: 5, f1: 5, f2: 2 },
+        ],
+      }
+      const config = { targetField: 'target', topN: 5 }
 
       const result = await pearsonNode.execute(input, config)
 
       expect(result.viewType).toBe('report')
       expect(result.report.title).toBe('Pearson 相关系数矩阵分析')
+      expect(result.metrics.targetField).toBe('target')
+      expect(result.metrics.numericFieldCount).toBe(3)
+      expect(result.report.sections).toHaveLength(4)
+      expect(result.report.sections[1].option.series[0].type).toBe('heatmap')
+      expect(result.report.sections[2].option.series[0].data[0].value).toBe(1)
+      expect(result.report.sections[3].content).toContain('"因子": "f1"')
     })
   })
 

@@ -3,12 +3,13 @@ import { ref, computed } from 'vue'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
-import { BarChart, LineChart, PieChart, ScatterChart } from 'echarts/charts'
+import { BarChart, HeatmapChart, LineChart, PieChart, ScatterChart } from 'echarts/charts'
 import {
   GridComponent,
   TooltipComponent,
   TitleComponent,
   LegendComponent,
+  VisualMapComponent,
 } from 'echarts/components'
 import html2pdf from 'html2pdf.js'
 import html2canvas from 'html2canvas'
@@ -18,6 +19,7 @@ import { useToast } from 'primevue/usetoast'
 use([
   CanvasRenderer,
   BarChart,
+  HeatmapChart,
   LineChart,
   PieChart,
   ScatterChart,
@@ -25,6 +27,7 @@ use([
   TooltipComponent,
   TitleComponent,
   LegendComponent,
+  VisualMapComponent,
 ])
 
 const props = defineProps<{

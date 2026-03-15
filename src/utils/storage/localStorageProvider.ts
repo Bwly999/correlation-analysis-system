@@ -1,20 +1,12 @@
-import type {
-  IStorageProvider,
-  SavedWorkflow,
-  ExecutionRecord,
-} from './types'
+import type { ExecutionRecord, IStorageProvider, SavedWorkflow } from './types'
 
-/**
- * 默认的本地存储提供者，结合了 localStorage (工作流) 和 IndexedDB (执行历史)
- */
 export class LocalStorageProvider implements IStorageProvider {
   private workflowKey = 'saved_workflows'
+  private historyKey = 'execution_history_fallback'
   private dbName = 'WorkflowSystemDB'
   private storeName = 'execution_history'
   private version = 1
   private db: IDBDatabase | null = null
-
-  // --- 工作流 (localStorage) 实现 ---
 
   async getWorkflows(): Promise<SavedWorkflow[]> {
     const raw = localStorage.getItem(this.workflowKey)
@@ -23,24 +15,40 @@ export class LocalStorageProvider implements IStorageProvider {
 
   async getWorkflow(id: string): Promise<SavedWorkflow | null> {
     const workflows = await this.getWorkflows()
-    return workflows.find((w) => w.id === id) || null
+    return workflows.find((workflow) => workflow.id === id) || null
   }
 
   async saveWorkflow(workflow: SavedWorkflow): Promise<void> {
     const workflows = await this.getWorkflows()
-    const updated = workflows.filter((w) => w.id !== workflow.id).concat(workflow)
+    const updated = workflows.filter((item) => item.id !== workflow.id).concat(workflow)
     localStorage.setItem(this.workflowKey, JSON.stringify(updated))
   }
 
   async deleteWorkflow(id: string): Promise<void> {
     const workflows = await this.getWorkflows()
-    const filtered = workflows.filter((w) => w.id !== id)
+    const filtered = workflows.filter((workflow) => workflow.id !== id)
     localStorage.setItem(this.workflowKey, JSON.stringify(filtered))
   }
 
-  // --- 执行历史 (IndexedDB) 实现 ---
+  private canUseIndexedDB() {
+    return typeof indexedDB !== 'undefined'
+  }
+
+  private getLocalHistory(): ExecutionRecord[] {
+    const raw = localStorage.getItem(this.historyKey)
+    const records = raw ? (JSON.parse(raw) as ExecutionRecord[]) : []
+    return records.sort((a, b) => (b.startTime || 0) - (a.startTime || 0))
+  }
+
+  private saveLocalHistory(records: ExecutionRecord[]) {
+    localStorage.setItem(this.historyKey, JSON.stringify(records))
+  }
 
   private async getDB(): Promise<IDBDatabase> {
+    if (!this.canUseIndexedDB()) {
+      throw new Error('IndexedDB unavailable')
+    }
+
     if (this.db) return this.db
 
     return new Promise((resolve, reject) => {
@@ -63,12 +71,19 @@ export class LocalStorageProvider implements IStorageProvider {
   }
 
   async saveHistory(record: ExecutionRecord, limit = 20): Promise<ExecutionRecord[]> {
+    if (!this.canUseIndexedDB()) {
+      const history = this.getLocalHistory().filter((item) => item.id !== record.id)
+      const limitedHistory = [record, ...history].slice(0, limit)
+      this.saveLocalHistory(limitedHistory)
+      return limitedHistory
+    }
+
     const db = await this.getDB()
     const history = await this.getAllHistory()
 
     history.unshift(record)
     const limitedHistory = history.slice(0, limit)
-    const idsToKeep = new Set(limitedHistory.map((r) => r.id))
+    const idsToKeep = new Set(limitedHistory.map((item) => item.id))
 
     return new Promise((resolve, reject) => {
       const transaction = db.transaction([this.storeName], 'readwrite')
@@ -77,8 +92,8 @@ export class LocalStorageProvider implements IStorageProvider {
       store.put(record)
 
       const cursorRequest = store.openCursor()
-      cursorRequest.onsuccess = (event: any) => {
-        const cursor = event.target.result
+      cursorRequest.onsuccess = (event: Event) => {
+        const cursor = (event.target as IDBRequest<IDBCursorWithValue | null>).result
         if (cursor) {
           if (!idsToKeep.has(cursor.value.id)) {
             cursor.delete()
@@ -93,6 +108,10 @@ export class LocalStorageProvider implements IStorageProvider {
   }
 
   async getAllHistory(): Promise<ExecutionRecord[]> {
+    if (!this.canUseIndexedDB()) {
+      return this.getLocalHistory()
+    }
+
     const db = await this.getDB()
     return new Promise((resolve, reject) => {
       const transaction = db.transaction([this.storeName], 'readonly')
@@ -105,16 +124,23 @@ export class LocalStorageProvider implements IStorageProvider {
         )
         resolve(result)
       }
+
       request.onerror = () => reject(request.error)
     })
   }
 
   async clearAllHistory(): Promise<void> {
+    if (!this.canUseIndexedDB()) {
+      localStorage.removeItem(this.historyKey)
+      return
+    }
+
     const db = await this.getDB()
     return new Promise((resolve, reject) => {
       const transaction = db.transaction([this.storeName], 'readwrite')
       const store = transaction.objectStore(this.storeName)
       const request = store.clear()
+
       request.onsuccess = () => resolve()
       request.onerror = () => reject(request.error)
     })

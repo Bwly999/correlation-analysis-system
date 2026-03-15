@@ -3,6 +3,7 @@ import { fileImportNode } from './definitions/fileImport'
 import { manualJsonImportNode } from './definitions/manualJsonImport'
 import { neighborSystemNode } from './definitions/neighborSystem'
 import { dataCleaningNode } from './definitions/dataCleaning'
+import { dataProfilingNode } from './definitions/dataProfiling'
 import { dataAggregationNode } from './definitions/dataAggregation'
 import { xgboostShapNode } from './definitions/xgboostShap'
 import { lassoNode } from './definitions/lasso'
@@ -15,6 +16,7 @@ export const nodeDefinitions: NodeDefinition[] = [
   manualJsonImportNode,
   neighborSystemNode,
   dataCleaningNode,
+  dataProfilingNode,
   dataAggregationNode,
   xgboostShapNode,
   lassoNode,
