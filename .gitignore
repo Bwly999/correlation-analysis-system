@@ -43,3 +43,10 @@ ref/
 
 # Local git worktrees
 .worktrees/
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Local archive exports
+correlation-analysis-system*.zip
