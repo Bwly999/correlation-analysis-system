@@ -251,8 +251,8 @@ export const useWorkflowStore = defineStore('workflow', () => {
   const getNodeInputLimits = (nodeType: string) => {
     const definition = getNodeDefinition(nodeType)
     return {
-      inputMode: definition?.inputMode ?? 'single',
-      maxInputs: definition?.maxInputs ?? 1,
+      inputMode: (definition?.inputMode ?? 'single') as 'single' | 'multiple',
+      maxInputs: definition?.maxInputs as number | null | undefined,
     }
   }
 
@@ -277,7 +277,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
       return { valid: false, message: msg }
     }
 
-    if (typeof maxInputs === 'number' && maxInputs > 0 && targetIncomingEdges.length >= maxInputs) {
+    if (inputMode === 'multiple' && typeof maxInputs === 'number' && targetIncomingEdges.length >= maxInputs) {
       const msg = `流程规范限制: 节点 ${targetNode.data.label} 最多允许 ${maxInputs} 个输入`
       addLog(msg, 'error')
       return { valid: false, message: msg }

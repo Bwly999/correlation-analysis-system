@@ -10,7 +10,7 @@ import {
   TitleComponent,
   LegendComponent,
   DataZoomComponent,
-  DatasetComponent, // 引入数据管理组件
+  DatasetComponent,
   TransformComponent,
 } from 'echarts/components'
 import Select from 'primevue/select'
@@ -18,11 +18,12 @@ import MultiSelect from 'primevue/multiselect'
 import InputNumber from 'primevue/inputnumber'
 import {
   Settings2,
-  Filter,
   ListChecks,
   LineChart as LineChartIcon,
   BoxSelect,
+  Layers,
 } from 'lucide-vue-next'
+import { calculateBoxValues } from '@/utils/stats'
 
 use([
   CanvasRenderer,
@@ -43,18 +44,57 @@ const props = defineProps<{
 
 const chartType = ref('line')
 const maxPoints = ref(5000)
-const minFilter = ref<number | null>(null)
-const maxFilter = ref<number | null>(null)
 const selectedKeys = ref<string[]>([])
 const chartRef = shallowRef<any>(null)
 
-const chartTypes = [
-  { label: '折线云图', value: 'line', icon: markRaw(LineChartIcon) },
-  { label: '箱线分布', value: 'boxplot', icon: markRaw(BoxSelect) },
-]
+// 检查是否为 Parallel Collection 格式
+const isGroupedData = computed(() => {
+  return (
+    Array.isArray(props.data) &&
+    props.data.length > 0 &&
+    props.data[0] &&
+    typeof props.data[0] === 'object' &&
+    'name' in props.data[0] &&
+    'data' in props.data[0]
+  )
+})
+
+const chartTypes = computed(() => {
+  if (isGroupedData.value) {
+    return [{ label: '多组因子对比', value: 'boxplot', icon: markRaw(Layers) }]
+  }
+  return [
+    { label: '折线云图', value: 'line', icon: markRaw(LineChartIcon) },
+    { label: '箱线分布', value: 'boxplot', icon: markRaw(BoxSelect) },
+  ]
+})
+
+// 初始化时，如果数据是分组的，强制设为 boxplot
+watch(
+  isGroupedData,
+  (grouped) => {
+    if (grouped) chartType.value = 'boxplot'
+  },
+  { immediate: true },
+)
 
 const availableKeys = computed(() => {
   if (!Array.isArray(props.data) || props.data.length === 0) return []
+
+  if (isGroupedData.value) {
+    // 提取所有分组中共同拥有的数值字段
+    const groupFields = props.data
+      .map((g) => {
+        const firstRow = Array.isArray(g.data) ? g.data[0] : null
+        return firstRow ? Object.keys(firstRow).filter((k) => typeof firstRow[k] === 'number') : []
+      })
+      .filter((fields) => fields.length > 0)
+
+    if (groupFields.length === 0) return []
+    // 取交集
+    return groupFields.reduce((a, b) => a.filter((c) => b.includes(c)))
+  }
+
   return Object.keys(props.data[0]).filter((k) => typeof props.data[0][k] === 'number')
 })
 
@@ -68,171 +108,87 @@ watch(
   { immediate: true },
 )
 
-// 极速数据预处理
-const processedData = computed(() => {
-  const sourceData = props.data || []
-  if (sourceData.length === 0) return { rows: [], keys: [], yExtent: [0, 100] }
-
-  const limit = maxPoints.value
-  const keys =
-    selectedKeys.value.length > 0
-      ? selectedKeys.value
-      : availableKeys.value.length > 0
-        ? [availableKeys.value[0]]
-        : []
-
-  // 采样减少计算量
-  let rows = sourceData.slice(0, limit)
-
-  // 过滤逻辑
-  if (minFilter.value !== null || maxFilter.value !== null) {
-    rows = rows.filter((item) => {
-      return keys.some((key) => {
-        const val = item[key]
-        return (
-          (minFilter.value === null || val >= minFilter.value) &&
-          (maxFilter.value === null || val <= maxFilter.value)
-        )
-      })
-    })
-  }
-
-  // 预计算 Y 轴极值以稳定坐标轴
-  let min = Infinity,
-    max = -Infinity
-  for (let i = 0; i < rows.length; i++) {
-    for (let j = 0; j < keys.length; j++) {
-      const val = rows[i][keys[j]]
-      if (val < min) min = val
-      if (val > max) max = val
-    }
-  }
-
-  // 性能与视觉双重优化：增加 20% 的上下缓冲。
-  // 1. 视觉上让图形不“顶天立地”，增加呼吸感。
-  // 2. 性能上，保证剧烈波动的连线绝对处于 Canvas 渲染区内部，彻底免除底层极其昂贵的边缘裁剪(Clipping)计算。
-  const padding = (max - min) * 0.2 || 1
-  return {
-    rows,
-    keys,
-    yExtent: [min - padding, max + padding],
-  }
-})
-
-// 使用 Dataset API 构建配置
 const chartOption = computed(() => {
-  const { rows, keys, yExtent } = processedData.value
-  if (rows.length === 0 || keys.length === 0) return {}
+  const sourceData = props.data || []
+  const keys = selectedKeys.value.length > 0 ? selectedKeys.value : availableKeys.value.slice(0, 1)
+  if (keys.length === 0) return {}
 
-  const isBoxplot = chartType.value === 'boxplot'
-  const count = rows.length
-
-  // 核心优化配置
   const option: any = {
     animation: false,
     useDirtyRect: true,
     backgroundColor: 'transparent',
     hoverLayer: true,
-    color: [
-      '#4f46e5',
-      '#10b981',
-      '#f59e0b',
-      '#ec4899',
-      '#06b6d4',
-      '#8b5cf6',
-      '#ef4444',
-      '#14b8a6',
-      '#f97316',
-      '#6366f1',
-    ],
+    color: ['#4f46e5', '#10b981', '#f59e0b', '#ec4899', '#06b6d4', '#8b5cf6', '#ef4444', '#14b8a6'],
     tooltip: {
-      trigger: 'axis',
-      axisPointer: {
-        type: 'line',
-        animation: false,
-        lineStyle: { width: 1.5, type: 'dashed', color: '#94a3b8' },
-      },
+      trigger: 'item',
       confine: true,
-      transitionDuration: 0,
-      showDelay: 0,
-      extraCssText:
-        'box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); border-radius: 12px; pointer-events: none;',
+      extraCssText: 'box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); border-radius: 12px;',
     },
     legend: {
+      show: true,
       top: 0,
-      icon: 'circle',
-      textStyle: { color: '#64748b', fontSize: 10, fontWeight: 'bold' },
+      icon: 'roundRect',
+      textStyle: { color: '#64748b', fontSize: 11, fontWeight: '600' },
     },
-    grid: { left: '10', right: '10', top: '50', bottom: '65', containLabel: true },
-    dataZoom: [
-      // 性能修复：使用 filterMode: 'empty' 避免缩放时 ECharts 重新遍历并过滤截断数组，大幅提升滚轮缩放帧率
-      { type: 'inside', start: 0, end: 100, zoomOnMouseWheel: true, filterMode: 'empty' },
-      { type: 'slider', bottom: 12, height: 18, brushSelect: false, filterMode: 'empty' },
-    ],
+    grid: { left: '3%', right: '3%', top: '60', bottom: '10%', containLabel: true },
     xAxis: {
-      type: 'category', // 恢复类目轴，配合一维数组是 ECharts 渲染的最快路径
-      data: isBoxplot ? keys : Array.from({ length: count }, (_, i) => i + 1),
-      axisLabel: { fontSize: 10, color: '#94a3b8', hideOverlap: true },
-      splitLine: { show: false },
+      type: 'category',
+      data: keys, // X轴显示选中的因子
+      axisLabel: { fontSize: 11, color: '#64748b', fontWeight: '500' },
       axisLine: { lineStyle: { color: '#e2e8f0' } },
-      boundaryGap: isBoxplot,
     },
     yAxis: {
       type: 'value',
-      // 让箱线图也共享折线图的 20% 上下文留白（Padding），避免图形顶天立地
-      min: yExtent[0],
-      max: yExtent[1],
-      scale: false,
+      scale: true,
       axisLabel: { fontSize: 10, color: '#94a3b8' },
       splitLine: { lineStyle: { color: '#f1f5f9', type: 'dashed' } },
-      axisLine: { show: false },
     },
-    series: isBoxplot
-      ? []
-      : keys.map((key) => ({
-          name: key,
-          type: 'line',
-          data: rows.map((r) => (typeof r[key] === 'number' ? r[key] : 0)),
-          showSymbol: false,
-          smooth: false,
-          // 性能致命点修复：绝对不能在 5万条高重叠数据上使用半透明 (opacity < 1)！
-          // Canvas 在绘制半透明线段叠加时，需要对每一个相交像素进行昂贵的 Alpha 混合计算。
-          // 用“极细的实线 (width: 0.5, opacity: 1)”来代替“半透明粗线”，既能达到“弱化全局视觉”的目的，又能绕过 GPU 混合瓶颈。
-          lineStyle: { width: 0.5, opacity: 1, cap: 'butt', join: 'bevel' },
-          sampling: 'lttb',
-          large: true,
-          largeThreshold: 500,
-          progressive: 2000,
-          silent: true,
-          emphasis: { disabled: true },
-        })),
+    series: [],
   }
 
-  // 独立处理箱线图逻辑
-  if (isBoxplot) {
-    const boxData = keys.map((key) => {
-      const values = rows
-        .map((r) => r[key])
-        .filter((v) => typeof v === 'number')
-        .sort((a, b) => a - b)
-      if (values.length === 0) return [0, 0, 0, 0, 0]
-      return [
-        values[0],
-        values[Math.floor(values.length * 0.25)],
-        values[Math.floor(values.length * 0.5)],
-        values[Math.floor(values.length * 0.75)],
-        values[values.length - 1],
-      ]
-    })
-    option.series = [
-      {
-        name: '分布',
-        type: 'boxplot',
-        data: boxData,
-        itemStyle: { color: '#eef2ff', borderColor: '#6366f1', borderWidth: 1.5 },
+  if (isGroupedData.value) {
+    // 分组模式：每个数据源一个 Series
+    option.series = sourceData.map((group: any) => ({
+      name: group.name,
+      type: 'boxplot',
+      data: keys.map((key) => calculateBoxValues(group.data || [], key)),
+      itemStyle: {
+        borderWidth: 1.5,
       },
-    ]
-    option.tooltip.trigger = 'item'
+      emphasis: {
+        itemStyle: {
+          borderWidth: 2,
+          shadowBlur: 10,
+          shadowColor: 'rgba(0,0,0,0.1)',
+        },
+      },
+    }))
+  } else {
+    // 单表模式
+    if (chartType.value === 'boxplot') {
+      option.series = [
+        {
+          name: '数据分布',
+          type: 'boxplot',
+          data: keys.map((key) => calculateBoxValues(sourceData, key)),
+          itemStyle: { color: '#f8fafc', borderColor: '#4f46e5', borderWidth: 1.5 },
+        },
+      ]
+    } else {
+      // 折线模式
+      const rows = sourceData.slice(0, maxPoints.value)
+      option.tooltip.trigger = 'axis'
+      option.xAxis.data = Array.from({ length: rows.length }, (_, i) => i + 1)
+      option.series = keys.map((key) => ({
+        name: key,
+        type: 'line',
+        data: rows.map((r) => (typeof r[key] === 'number' ? r[key] : 0)),
+        showSymbol: false,
+        lineStyle: { width: 1 },
+        sampling: 'lttb',
+        large: true,
+      }))
+    }
   }
 
   return markRaw(option)
@@ -253,45 +209,24 @@ const chartOption = computed(() => {
         >
           <ListChecks size="14" class="text-indigo-500" />
           <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest"
-            >展示因子</span
+            >分析因子</span
           >
           <MultiSelect
             v-model="selectedKeys"
             :options="availableKeys"
-            placeholder="选择因子"
-            :max-selected-labels="2"
+            placeholder="选择对比因子"
             class="property-select"
             :filter="true"
+            :max-selected-labels="3"
           />
         </div>
+
         <div
-          class="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-100 rounded-lg shadow-sm"
-        >
-          <Filter size="14" class="text-indigo-500" />
-          <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest"
-            >数据过滤</span
-          >
-          <div class="flex items-center gap-1 ml-2">
-            <InputNumber
-              v-model="minFilter"
-              placeholder="下限"
-              class="filter-input"
-              :use-grouping="false"
-            />
-            <span class="text-slate-300">-</span>
-            <InputNumber
-              v-model="maxFilter"
-              placeholder="上限"
-              class="filter-input"
-              :use-grouping="false"
-            />
-          </div>
-        </div>
-        <div
+          v-if="!isGroupedData"
           class="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-100 rounded-lg shadow-sm"
         >
           <Settings2 size="14" class="text-slate-400" />
-          <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">限制</span>
+          <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">采样</span>
           <InputNumber
             v-model="maxPoints"
             :min="100"
@@ -301,12 +236,14 @@ const chartOption = computed(() => {
           />
         </div>
       </div>
+
       <Select
         v-model="chartType"
         :options="chartTypes"
         option-label="label"
         option-value="value"
         class="chart-type-select"
+        :disabled="isGroupedData"
       >
         <template #value="slotProps">
           <div v-if="slotProps.value" class="flex items-center gap-2 text-slate-800">
@@ -331,14 +268,8 @@ const chartOption = computed(() => {
 
     <!-- Chart -->
     <div class="flex-1 p-4 relative">
-      <div v-if="processedData.rows.length > 0" class="h-full w-full">
+      <div v-if="isGroupedData || (sourceData && sourceData.length > 0) || true" class="h-full w-full">
         <VChart ref="chartRef" :option="chartOption" autoresize />
-      </div>
-      <div v-else class="h-full flex flex-col items-center justify-center text-slate-300">
-        <div class="p-6 rounded-full bg-slate-50 mb-4 animate-pulse">
-          <Filter size="48" class="opacity-20 text-slate-900" />
-        </div>
-        <p class="font-bold text-xs uppercase tracking-widest">无符合条件的数据</p>
       </div>
     </div>
   </div>
@@ -366,7 +297,7 @@ const chartOption = computed(() => {
   background: #fdfdfe;
   transition: all 0.2s ease;
 }
-:deep(.chart-type-select:hover) {
+:deep(.chart-type-select:hover:not(.p-disabled)) {
   border-color: #94a3b8;
   background: #f8fafc;
 }
@@ -381,8 +312,8 @@ const chartOption = computed(() => {
 }
 :deep(.property-select) {
   height: 28px;
-  min-width: 140px;
-  max-width: 240px;
+  min-width: 160px;
+  max-width: 300px;
   font-size: 11px;
   font-weight: 700;
   border-color: #f1f5f9;
@@ -392,12 +323,5 @@ const chartOption = computed(() => {
   padding: 2px 8px;
   display: flex;
   align-items: center;
-}
-:deep(.property-select .p-multiselect-chip) {
-  padding: 1px 6px;
-  font-size: 10px;
-  background: #f1f5f9;
-  color: #334155;
-  border: 1px solid #e2e8f0;
 }
 </style>

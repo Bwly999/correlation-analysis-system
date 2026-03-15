@@ -18,6 +18,23 @@ const emit = defineEmits(['openDetail', 'generateMock'])
 
 const getSmartPreview = (data: any) => {
   if (!data) return '暂无数据可用。'
+  
+  // 检查是否为 Parallel Collection 格式: [{ name, data: [] }, ...]
+  if (Array.isArray(data) && data.length > 0 && data[0] && typeof data[0] === 'object' && 'name' in data[0] && 'data' in data[0]) {
+    const summary = data.map((group: any) => 
+      `  - ${group.name}: ${Array.isArray(group.data) ? group.data.length : 0} 条数据`
+    ).join('\n')
+    
+    // 截断预览
+    const previewData = data.map((group: any) => ({
+      name: group.name,
+      data: Array.isArray(group.data) ? group.data.slice(0, 2) : group.data,
+      _count: Array.isArray(group.data) ? group.data.length : 0
+    }))
+    
+    return `// 分组集合预览 (${data.length} 个分组)\n${summary}\n\n${JSON.stringify(previewData, null, 2)}\n...`
+  }
+
   if (Array.isArray(data))
     return `// 数组预览 (${data.length} 条)\n${JSON.stringify(data.slice(0, 5), null, 2)}\n...`
   if (data.data && Array.isArray(data.data))

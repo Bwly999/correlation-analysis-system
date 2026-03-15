@@ -252,6 +252,36 @@ describe('Node Definitions Execution Logic', () => {
       expect(result.diagnostics.conflicts[0].field).toBe('value')
       expect(result.lineage.fields.score[0].sourceNodeId).toBe('extra')
     })
+
+    it('should package multiple datasets into a collection for parallel analysis', async () => {
+      const mergeNode = nodeDefinitions.find((definition) => definition.name === 'data-merge')
+
+      const result = await mergeNode!.execute(
+        {
+          inputs: [
+            {
+              sourceNodeId: 'n1',
+              sourceNodeLabel: 'Group A',
+              payload: { data: [{ val: 10 }] },
+            },
+            {
+              sourceNodeId: 'n2',
+              sourceNodeLabel: 'Group B',
+              payload: { data: [{ val: 20 }, { val: 30 }] },
+            },
+          ],
+        },
+        {
+          mergeMode: 'collection',
+        },
+      )
+
+      expect(result.data).toHaveLength(2)
+      expect(result.data[0]).toEqual({ name: 'Group A', data: [{ val: 10 }] })
+      expect(result.data[1]).toEqual({ name: 'Group B', data: [{ val: 20 }, { val: 30 }] })
+      expect(result.stats.groupCount).toBe(2)
+      expect(result.stats.totalRows).toBe(3)
+    })
   })
 
   describe('data-filter', () => {

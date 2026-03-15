@@ -1,5 +1,6 @@
 import { markRaw } from 'vue'
 import type { NodeDefinition } from '../types'
+import { calculateBoxValues } from '../../utils/stats'
 
 type MergeInputItem = {
   sourceNodeId: string
@@ -39,7 +40,7 @@ export const dataMergeNode: NodeDefinition = {
   displayName: '数据合并',
   icon: 'git-merge',
   category: 'action',
-  description: '支持多种方式（纵向追加或横向关联）合并多个数据集。',
+  description: '支持多种方式（纵向追加、横向关联或分组集合）合并多个数据集。',
   inputMode: 'multiple',
   minInputs: 2,
   maxInputs: null,
@@ -52,6 +53,7 @@ export const dataMergeNode: NodeDefinition = {
       options: [
         { name: '纵向追加 (Append Rows)', value: 'append' },
         { name: '横向关联 (Join Columns)', value: 'join' },
+        { name: '分组集合 (Parallel Collection)', value: 'collection' },
       ],
     },
     // Append Rows Properties
@@ -146,6 +148,75 @@ export const dataMergeNode: NodeDefinition = {
     const items = Array.isArray(input?.inputs) ? input.inputs : []
     if (items.length < 2) {
       throw new Error('数据合并至少需要 2 个输入')
+    }
+
+    if (config.mergeMode === 'collection') {
+      const outputData = items.map((item) => ({
+        name: item.sourceNodeLabel,
+        data: item.payload?.data || [],
+      }))
+
+      // Auto-generate boxplot chart option if all groups have numeric data
+      let chartOption = null
+      try {
+        const groups = outputData.filter((g) => g.data.length > 0)
+        if (groups.length >= 1) {
+          // Find common numeric fields
+          const firstGroupFields = Object.keys(groups[0].data[0] || {}).filter(
+            (k) => typeof groups[0].data[0][k] === 'number',
+          )
+
+          if (firstGroupFields.length > 0) {
+            const boxData = groups.map((g) => calculateBoxValues(g.data, targetField))
+
+            chartOption = {
+              title: { text: `分组对比分析: ${targetField}`, left: 'center' },
+              tooltip: { trigger: 'item', axisPointer: { type: 'shadow' } },
+              grid: { left: '10%', right: '10%', bottom: '15%' },
+              xAxis: {
+                type: 'category',
+                data: sourceNames,
+                boundaryGap: true,
+                nameGap: 30,
+                splitArea: { show: false },
+                splitLine: { show: false },
+              },
+              yAxis: {
+                type: 'value',
+                name: targetField,
+                splitArea: { show: true },
+              },
+              series: [
+                {
+                  name: 'boxplot',
+                  type: 'boxplot',
+                  data: boxData,
+                  itemStyle: {
+                    color: '#f8fafc',
+                    borderColor: '#2563eb',
+                    borderWidth: 1.5,
+                  },
+                },
+              ],
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to generate preview chart for collection', e)
+      }
+
+      return {
+        data: markRaw(outputData),
+        chartOption: chartOption ? markRaw(chartOption) : null,
+        stats: {
+          inputCount: items.length,
+          groupCount: items.length,
+          totalRows: outputData.reduce((acc, curr) => acc + curr.data.length, 0),
+        },
+        lineage: {
+          groups: items.map((item) => ({ sourceNodeId: item.sourceNodeId, name: item.sourceNodeLabel })),
+        },
+      }
     }
 
     if (config.mergeMode === 'append') {
