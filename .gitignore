@@ -40,3 +40,6 @@ __screenshots__/
 
 # Reference source code
 ref/
+
+# Local git worktrees
+.worktrees/
