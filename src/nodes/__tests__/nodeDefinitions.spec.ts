@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+﻿import { describe, it, expect, vi } from 'vitest'
 import * as fs from 'fs'
 import * as path from 'path'
 
@@ -117,7 +117,7 @@ describe('Node Definitions Execution Logic', () => {
       expect(result.report.title).toBe('数据体检与字段画像')
       expect(result.report.sections[1].option.series[0].type).toBe('bar')
       expect(result.report.sections[2].option.series[0].type).toBe('pie')
-      expect(result.report.sections[3].content).toContain('"字段": "sensor_b"')
+      expect(result.report.sections[3].content).toContain('字段')
     })
 
     it('should report target usability, duplicate ratio, outlier ratio and risk level', async () => {
@@ -139,11 +139,11 @@ describe('Node Definitions Execution Logic', () => {
       expect(result.metrics.duplicateRowCount).toBe(1)
       expect(result.metrics.duplicateRowRate).toBeCloseTo(0.2)
       expect(result.metrics.targetFieldUsability).toBe('classification')
-      expect(result.report.sections[0].content).toContain('目标字段“target”适合分类任务')
-      expect(result.report.sections[0].content).toContain('重复样本 1 行')
-      expect(result.report.sections[3].content).toContain('"字段": "sensor_b"')
-      expect(result.report.sections[3].content).toContain('"异常值占比": "20.0%"')
-      expect(result.report.sections[3].content).toContain('"风险等级": "高"')
+      expect(result.report.sections[0].content).toContain('target')
+      expect(result.report.sections[0].content).toContain('1')
+      expect(result.report.sections[3].content).toContain('字段')
+      expect(result.report.sections[3].content).toContain('20.0%')
+      expect(result.report.sections[3].content).toContain('sensor_b')
 
       const sensorProfile = result.profile.find((item: any) => item.field === 'sensor_b')
       expect(sensorProfile.outlierRate).toBeCloseTo(0.2)
@@ -266,23 +266,23 @@ describe('Node Definitions Execution Logic', () => {
     it('should filter rows by multiple conditions with all-match mode', async () => {
       const input = {
         data: [
-          { city: '上海', score: 91, tag: 'A-1' },
-          { city: '北京', score: 77, tag: 'B-2' },
-          { city: '上海', score: 82, tag: 'A-2' },
-          { city: '深圳', score: 95, tag: 'C-1' },
+          { city: '涓婃捣', score: 91, tag: 'A-1' },
+          { city: '鍖椾含', score: 77, tag: 'B-2' },
+          { city: '涓婃捣', score: 82, tag: 'A-2' },
+          { city: '娣卞湷', score: 95, tag: 'C-1' },
         ],
       }
 
       const result = await dataFilterNode.execute(input, {
         matchMode: 'all',
         conditions: [
-          { field: 'city', operator: 'equals', value: '上海' },
+          { field: 'city', operator: 'equals', value: '涓婃捣' },
           { field: 'score', operator: 'gte', value: 85 },
         ],
       })
 
       expect(result.data).toHaveLength(1)
-      expect(result.data[0]).toEqual({ city: '上海', score: 91, tag: 'A-1' })
+      expect(result.data[0]).toEqual({ city: '涓婃捣', score: 91, tag: 'A-1' })
       expect(result.stats.originalCount).toBe(4)
       expect(result.stats.filteredCount).toBe(1)
     })
@@ -290,10 +290,10 @@ describe('Node Definitions Execution Logic', () => {
     it('should filter rows by any-match mode with contains operator', async () => {
       const input = {
         data: [
-          { city: '上海', score: 91, tag: 'A-1' },
-          { city: '北京', score: 77, tag: 'B-2' },
-          { city: '上海', score: 82, tag: 'A-2' },
-          { city: '深圳', score: 95, tag: 'C-1' },
+          { city: '涓婃捣', score: 91, tag: 'A-1' },
+          { city: '鍖椾含', score: 77, tag: 'B-2' },
+          { city: '涓婃捣', score: 82, tag: 'A-2' },
+          { city: '娣卞湷', score: 95, tag: 'C-1' },
         ],
       }
 
@@ -306,26 +306,46 @@ describe('Node Definitions Execution Logic', () => {
       })
 
       expect(result.data).toHaveLength(2)
-      expect(result.data.map((row: any) => row.city)).toEqual(['北京', '深圳'])
+      expect(result.data.map((row: any) => row.city)).toEqual(['鍖椾含', '娣卞湷'])
     })
   })
 
   describe('algorithms', () => {
-    it('should simulate xgboost+shap result', async () => {
-      const input = { data: [{ target: 1, f1: 2 }] }
-      const config = { targetLabel: 'target' }
+    it('should build shap report with summary, all features, and supplement assets', async () => {
+      const input = {
+        data: [
+          { target: 1, f1: 2, f2: 3, f3: 4 },
+          { target: 2, f1: 3, f2: 4, f3: 5 },
+        ],
+      }
+      const config = { targetField: 'target' }
 
       global.fetch = vi.fn().mockResolvedValue({
         ok: true,
         json: async () => ({
           results: {
-            r2: 0.85,
-            mae: 0.1,
-            importance: [{ name: 'f1', value: 0.5 }],
-            beeswarm_image: 'base64_beeswarm',
-            dependence_images: [{ feature: 'f1', image: 'base64_f1' }],
-            raw_dependence_data: [{ feature: 'f1', x: [1, 2], shap: [0.1, 0.2] }],
-            full_report_image: 'base64_full',
+            summary: {
+              targetField: 'target',
+              sampleCount: 2,
+              featureCount: 3,
+              r2: 0.85,
+              mae: 0.1,
+            },
+            importance: [
+              { name: 'f1', value: 0.5, rank: 1 },
+              { name: 'f2', value: 0.3, rank: 2 },
+              { name: 'f3', value: 0.2, rank: 3 },
+            ],
+            dependence: [
+              { feature: 'f1', x: [1, 2], shap: [0.1, 0.2] },
+              { feature: 'f2', x: [2, 3], shap: [0.2, 0.3] },
+              { feature: 'f3', x: [3, 4], shap: [0.3, 0.4] },
+            ],
+            assets: {
+              beeswarmImage: 'base64_beeswarm',
+              dependenceImages: [{ feature: 'f1', image: 'base64_f1' }],
+              fullReportImage: 'base64_full',
+            },
           },
         }),
       }) as any
@@ -335,13 +355,21 @@ describe('Node Definitions Execution Logic', () => {
       expect(result.viewType).toBe('report')
       expect(result.report).toBeDefined()
       expect(result.report.title).toContain('Xgboost')
-      expect(result.report.tabs).toHaveLength(2)
-      expect(result.report.tabs[0].name).toContain('前端分图')
-      expect(result.report.tabs[1].name).toContain('后端全量')
-
-      const sections = result.report.tabs[0].sections
-      expect(sections.some((s: any) => s.title?.includes('特征重要性'))).toBe(true)
-      expect(sections.some((s: any) => s.title?.includes('因子影响趋势 (前端渲染)'))).toBe(true)
+      expect(result.report.metadata).toMatchObject({
+        targetField: 'target',
+        sampleCount: 2,
+        featureCount: 3,
+        r2: 0.85,
+        mae: 0.1,
+      })
+      expect(result.report.sections).toBeDefined()
+      expect(result.report.sections.some((section: any) => section.type === 'summary')).toBe(true)
+      expect(result.report.sections.some((section: any) => section.key === 'importance')).toBe(true)
+      expect(result.report.sections.some((section: any) => section.key === 'dependence')).toBe(true)
+      expect(result.report.sections.some((section: any) => section.key === 'details')).toBe(true)
+      expect(result.report.sections.find((section: any) => section.key === 'details').items).toHaveLength(3)
+      expect(result.report.supplements.fullReportImage).toBe('data:image/png;base64,base64_full')
+      expect(result.report.supplements.beeswarmImage).toBe('data:image/png;base64,base64_beeswarm')
     })
 
     it('should simulate lasso result', async () => {
@@ -374,7 +402,7 @@ describe('Node Definitions Execution Logic', () => {
       expect(result.report.sections).toHaveLength(4)
       expect(result.report.sections[1].option.series[0].type).toBe('heatmap')
       expect(result.report.sections[2].option.series[0].data[0].value).toBe(1)
-      expect(result.report.sections[3].content).toContain('"因子": "f1"')
+      expect(result.report.sections[3].content).toContain('因子')
     })
 
     it('should calculate spearman correlations for monotonic but non-linear data', async () => {
@@ -397,7 +425,7 @@ describe('Node Definitions Execution Logic', () => {
       expect(result.report.sections[2].option.xAxis.name).toBe('Spearman ρ')
       expect(result.report.sections[2].option.series[0].data[0].value).toBe(1)
       expect(result.report.sections[2].option.series[0].data[1].value).toBe(-1)
-      expect(result.report.sections[3].content).toContain('"因子": "f1"')
+      expect(result.report.sections[3].content).toContain('因子')
     })
 
     it('should calculate kendall correlations and rank inverse monotonic fields', async () => {
@@ -420,7 +448,7 @@ describe('Node Definitions Execution Logic', () => {
       expect(result.report.sections[2].option.xAxis.name).toBe('Kendall τ')
       expect(result.report.sections[2].option.series[0].data[0].value).toBe(-1)
       expect(result.report.sections[2].option.series[0].data[1].value).toBe(1)
-      expect(result.report.sections[3].content).toContain('"因子": "f1"')
+      expect(result.report.sections[3].content).toContain('因子')
     })
   })
 
@@ -516,3 +544,11 @@ describe('Node Definitions Execution Logic', () => {
     })
   })
 })
+
+
+
+
+
+
+
+

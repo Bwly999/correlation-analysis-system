@@ -1,5 +1,5 @@
-<script setup lang="ts">
-import { ref, computed } from 'vue'
+﻿<script setup lang="ts">
+import { computed, ref } from 'vue'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
@@ -12,8 +12,7 @@ import {
   VisualMapComponent,
 } from 'echarts/components'
 import html2pdf from 'html2pdf.js'
-import html2canvas from 'html2canvas'
-import { FileText, Image as ImageIcon, Loader2 } from 'lucide-vue-next'
+import { FileText, Image as ImageIcon, Loader2, Search } from 'lucide-vue-next'
 import { useToast } from 'primevue/usetoast'
 
 use([
@@ -35,275 +34,313 @@ const props = defineProps<{
 }>()
 
 const toast = useToast()
-const activeTab = ref(0)
 const isExporting = ref(false)
-const chartRefs = ref<any[]>([])
-const sectionRefs = ref<HTMLElement[]>([])
-
-const isTabsMode = computed(() => {
-  return props.data.report?.tabs && props.data.report.tabs.length > 0
-})
-
-const currentSections = computed(() => {
-  if (isTabsMode.value) {
-    return props.data.report.tabs[activeTab.value].sections
-  }
-  return props.data.report?.sections || []
-})
-
 const reportRef = ref<HTMLElement | null>(null)
+const featureSearch = ref('')
+const expandedDetailCount = ref(0)
 
-/**
- * 修复颜色
- */
-const colorToRgba = (color: string): string => {
-  if (!color || color === 'transparent' || color === 'none') return color
-  if (!color.includes('oklch') && !color.includes('var(')) return color
-  try {
-    const canvas = document.createElement('canvas')
-    canvas.width = 1
-    canvas.height = 1
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return color
-    ctx.fillStyle = color
-    ctx.fillRect(0, 0, 1, 1)
-    const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data
-    return `rgba(${r}, ${g}, ${b}, ${a / 255})`
-  } catch (_e) {
-    return color
-  }
-}
+const report = computed(() => props.data?.report ?? {})
+const sections = computed(() => report.value.sections ?? [])
+const supplements = computed(() => report.value.supplements ?? {})
+const metadata = computed(() => report.value.metadata ?? {})
+const isShapReport = computed(() => {
+  return sections.value.some((section: any) => ['summary', 'dependence', 'details'].includes(section?.type))
+})
 
-const fixOklchColors = (container: HTMLElement, restore = false) => {
-  const elements = [container, ...Array.from(container.getElementsByTagName('*'))]
-  const colorProps = ['color', 'background-color', 'border-color', 'fill', 'stroke']
+const detailSection = computed(() => {
+  return sections.value.find((section: any) => section?.key === 'details' || section?.type === 'details')
+})
 
-  elements.forEach((el: any) => {
-    if (restore) {
-      // 恢复原始样式
-      if (el._originalStyles) {
-        Object.keys(el._originalStyles).forEach((prop) => {
-          el.style.setProperty(prop, el._originalStyles[prop])
-        })
-        delete el._originalStyles
-      }
-      return
-    }
+const dependenceSection = computed(() => {
+  return sections.value.find((section: any) => section?.key === 'dependence' || section?.type === 'dependence')
+})
 
-    const style = window.getComputedStyle(el)
-    colorProps.forEach((prop) => {
-      const val = style.getPropertyValue(prop)
-      if (val && (val.includes('oklch') || val.includes('var('))) {
-        const rgba = colorToRgba(val)
-        if (rgba && !rgba.includes('oklch')) {
-          // 记录原始样式以便后续恢复
-          el._originalStyles = el._originalStyles || {}
-          el._originalStyles[prop] = el.style.getPropertyValue(prop)
-          el.style.setProperty(prop, rgba, 'important')
-        }
-      }
-    })
+const normalizedDetails = computed(() => {
+  const section = detailSection.value
+  if (!section) return []
+  const items = Array.isArray(section.items) ? section.items : []
+  const keyword = featureSearch.value.trim().toLowerCase()
+  if (!keyword) return items
+  return items.filter((item: any) => {
+    const feature = String(item.feature ?? item.title ?? '').toLowerCase()
+    return feature.includes(keyword)
   })
-}
+})
 
-const exportToPDF = async () => {
+const normalizedDependence = computed(() => {
+  const section = dependenceSection.value
+  if (!section) return []
+  const items = Array.isArray(section.allItems) ? section.allItems : Array.isArray(section.items) ? section.items : []
+  const keyword = featureSearch.value.trim().toLowerCase()
+  if (!keyword) return items
+  return items.filter((item: any) => {
+    const feature = String(item.feature ?? item.title ?? '').toLowerCase()
+    return feature.includes(keyword)
+  })
+})
+
+const visibleDetails = computed(() => {
+  const section = detailSection.value
+  const items = normalizedDetails.value
+  if (!section) return []
+  if (featureSearch.value.trim()) return items
+  const limit = expandedDetailCount.value || section.defaultVisibleCount || items.length
+  return items.slice(0, limit)
+})
+
+const visibleDependence = computed(() => {
+  const section = dependenceSection.value
+  const items = normalizedDependence.value
+  if (!section) return []
+  if (featureSearch.value.trim()) return items
+  const limit = section.defaultVisibleCount || items.length
+  return items.slice(0, limit)
+})
+
+const hasMoreDetails = computed(() => {
+  const section = detailSection.value
+  if (!section || featureSearch.value.trim()) return false
+  const items = normalizedDetails.value
+  const limit = expandedDetailCount.value || section.defaultVisibleCount || items.length
+  return items.length > limit
+})
+
+const exportCurrentReport = async () => {
   if (!reportRef.value || isExporting.value) return
   isExporting.value = true
 
   toast.add({
     severity: 'info',
-    summary: '正在生成 PDF',
-    detail: '正在优化图表与排版...',
+    summary: '正在导出当前报告',
+    detail: '正在生成 PDF，请稍候。',
     life: 2000,
   })
 
-  // 1. 原地修复颜色，防止 html2canvas 内部解析 oklch 报错
-  fixOklchColors(reportRef.value)
-
-  const filename = `分析报告_${Date.now()}.pdf`
-  const opt = {
-    margin: 10,
-    filename,
-    image: { type: 'jpeg', quality: 0.8 },
-    html2canvas: {
-      scale: 1.2, // 1.2 倍率足以打印，且体积小、速度快
-      useCORS: true,
-      logging: false,
-      backgroundColor: '#ffffff',
-      // 修复截断：指定完整高度
-      height: reportRef.value.scrollHeight,
-      windowHeight: reportRef.value.scrollHeight,
-      onclone: (clonedDoc: Document) => {
-        // 在克隆的文档中，将所有图表容器替换为静态图片
-        // 这样 html2canvas 就不需要去解析 Canvas 或图表内部的复杂样式了
-        const chartElements = clonedDoc.querySelectorAll('[data-chart-index]')
-        chartElements.forEach((el: any) => {
-          const idx = parseInt(el.getAttribute('data-chart-index'))
-          const chartInstance = chartRefs.value[idx]
-          if (chartInstance) {
-            const imgData = chartInstance.getDataURL({ pixelRatio: 2, backgroundColor: '#fff' })
-            const img = clonedDoc.createElement('img')
-            img.src = imgData
-            img.style.width = '100%'
-            img.style.height = 'auto'
-            el.innerHTML = ''
-            el.appendChild(img)
-          }
-        })
-      },
-    },
-    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait', compress: true },
-  }
-
   try {
-    // 2. 执行 html2pdf 转换
-    await html2pdf().set(opt).from(reportRef.value).save()
-    toast.add({ severity: 'success', summary: '导出成功', detail: 'PDF 已保存', life: 3000 })
-  } catch (err) {
-    console.error('PDF 导出失败:', err)
-    toast.add({ severity: 'error', summary: '导出失败', detail: '生成 PDF 时出现错误', life: 5000 })
+    await html2pdf()
+      .set({
+        margin: 10,
+        filename: `分析报告_${Date.now()}.pdf`,
+        image: { type: 'jpeg', quality: 0.92 },
+        html2canvas: {
+          scale: 1.4,
+          useCORS: true,
+          logging: false,
+          backgroundColor: '#ffffff',
+          height: reportRef.value.scrollHeight,
+          windowHeight: reportRef.value.scrollHeight,
+        },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      })
+      .from(reportRef.value)
+      .save()
+
+    toast.add({
+      severity: 'success',
+      summary: '导出成功',
+      detail: '当前报告已导出。',
+      life: 2500,
+    })
+  } catch (error) {
+    console.error('导出当前报告失败:', error)
+    toast.add({
+      severity: 'error',
+      summary: '导出失败',
+      detail: '生成当前报告 PDF 时发生错误。',
+      life: 4000,
+    })
   } finally {
-    // 3. 恢复原始样式
-    fixOklchColors(reportRef.value, true)
     isExporting.value = false
   }
 }
 
-const exportToImage = async () => {
-  if (isExporting.value) return
+const exportOriginalImage = () => {
+  const imageUrl = supplements.value.fullReportImage
+  if (!imageUrl) return
 
-  if (isTabsMode.value && activeTab.value === 1) {
-    const imgSection = currentSections.value.find((s: any) => s.type === 'image')
-    if (imgSection) {
-      const a = document.createElement('a')
-      a.href = imgSection.url
-      a.download = `分析大图_${Date.now()}.png`
-      a.click()
-      return
-    }
-  }
-
-  if (!reportRef.value) return
-  isExporting.value = true
-  toast.add({
-    severity: 'info',
-    summary: '正在生成图片',
-    detail: '正在准备高清截图...',
-    life: 2000,
-  })
-
-  const tempContainer = document.createElement('div')
-  tempContainer.style.position = 'fixed'
-  tempContainer.style.left = '-9999px'
-  tempContainer.style.top = '0'
-  tempContainer.style.width = reportRef.value.offsetWidth + 'px'
-  document.body.appendChild(tempContainer)
-
-  try {
-    const clone = reportRef.value.cloneNode(true) as HTMLElement
-    tempContainer.appendChild(clone)
-    fixOklchColors(clone)
-
-    const canvas = await html2canvas(clone, {
-      scale: 1.5,
-      useCORS: true,
-      backgroundColor: '#ffffff',
-      logging: false,
-      height: clone.offsetHeight,
-      windowHeight: clone.offsetHeight,
-    })
-    const url = canvas.toDataURL('image/jpeg', 0.9)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `分析视图_${Date.now()}.jpg`
-    a.click()
-    toast.add({ severity: 'success', summary: '导出成功', detail: '图片已下载', life: 3000 })
-  } catch (err) {
-    console.error('导出图片失败:', err)
-    toast.add({ severity: 'error', summary: '导出失败', detail: '生成图片失败', life: 5000 })
-  } finally {
-    if (tempContainer.parentElement) document.body.removeChild(tempContainer)
-    isExporting.value = false
-  }
+  const anchor = document.createElement('a')
+  anchor.href = imageUrl
+  anchor.download = `后端原始整图_${Date.now()}.png`
+  anchor.click()
 }
 </script>
 
 <template>
   <div class="report-viewer h-full overflow-y-auto p-6 bg-slate-50 custom-scrollbar relative">
-    <div
-      class="max-w-4xl mx-auto bg-white p-8 rounded-2xl shadow-sm border border-slate-100 relative"
-    >
-      <div class="flex justify-between items-center mb-6 pb-4 border-b border-slate-100">
-        <h1 class="text-2xl font-black text-slate-800">
-          {{ data.report?.title || '分析报告' }}
-        </h1>
-        <div class="flex gap-2">
-          <button
-            :disabled="isExporting"
-            class="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 text-sm font-bold rounded-xl hover:bg-slate-200 transition-all border border-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"
-            title="导出为 PDF"
-            @click="exportToPDF"
-          >
-            <Loader2 v-if="isExporting" class="animate-spin" size="16" />
-            <FileText v-else size="16" />
-            PDF 导出
-          </button>
+    <div class="max-w-5xl mx-auto bg-white p-8 rounded-2xl shadow-sm border border-slate-100 relative">
+      <div class="flex flex-col gap-4 mb-6 pb-4 border-b border-slate-100 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h1 class="text-2xl font-black text-slate-800">
+            {{ report.title || '分析报告' }}
+          </h1>
+          <p v-if="isShapReport" class="mt-2 text-sm text-slate-500 leading-relaxed">
+            前端主报告负责阅读与筛选，后端原始整图作为补充视图保留完整归档能力。
+          </p>
+        </div>
+        <div class="flex flex-wrap gap-2">
           <button
             :disabled="isExporting"
             class="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white text-sm font-bold rounded-xl hover:bg-slate-800 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
-            title="导出为图片"
-            @click="exportToImage"
+            title="导出当前报告"
+            @click="exportCurrentReport"
           >
-            <Loader2 v-if="isExporting" class="animate-spin" size="16" />
-            <ImageIcon v-else size="16" />
-            图片导出
+            <Loader2 v-if="isExporting" class="animate-spin" :size="16" />
+            <FileText v-else :size="16" />
+            导出当前报告
+          </button>
+          <button
+            v-if="supplements.fullReportImage"
+            class="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 text-sm font-bold rounded-xl hover:bg-slate-200 transition-all border border-slate-200"
+            title="导出原始整图"
+            @click="exportOriginalImage"
+          >
+            <ImageIcon :size="16" />
+            导出原始整图
           </button>
         </div>
       </div>
 
-      <div v-if="isTabsMode" class="flex gap-6 mb-8 border-b border-slate-100">
-        <button
-          v-for="(tab, index) in data.report.tabs"
-          :key="index"
-          :class="[
-            'pb-3 px-2 text-sm font-bold transition-all border-b-2 -mb-[2px]',
-            activeTab === index
-              ? 'border-blue-600 text-blue-600'
-              : 'border-transparent text-slate-400 hover:text-slate-600',
-          ]"
-          @click="activeTab = index"
+      <div ref="reportRef" class="pdf-container space-y-8">
+        <template v-for="(section, idx) in sections" :key="section.key || idx">
+          <section v-if="section.type === 'summary'" class="space-y-4">
+            <div>
+              <h2 class="text-lg font-bold text-slate-800">{{ section.title }}</h2>
+              <p class="mt-1 text-sm text-slate-500">快速查看本次 SHAP 建模的核心上下文。</p>
+            </div>
+            <div class="grid gap-3 md:grid-cols-3 xl:grid-cols-5">
+              <article
+                v-for="card in section.cards"
+                :key="card.label"
+                class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4"
+              >
+                <p class="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">
+                  {{ card.label }}
+                </p>
+                <p class="mt-2 text-lg font-black text-slate-800">{{ card.value }}</p>
+              </article>
+            </div>
+          </section>
+
+          <section v-else-if="section.type === 'chart'" class="space-y-4">
+            <div>
+              <h2 class="text-lg font-bold text-slate-800">{{ section.title }}</h2>
+              <p v-if="section.key === 'importance'" class="mt-1 text-sm text-slate-500">
+                默认按 SHAP 重要性从高到低排序，可作为浏览全量因子的导航入口。
+              </p>
+            </div>
+            <div class="h-[400px] w-full rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+              <VChart :option="section.option" autoresize />
+            </div>
+          </section>
+
+          <section v-else-if="section.type === 'dependence'" class="space-y-4">
+            <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h2 class="text-lg font-bold text-slate-800">{{ section.title }}</h2>
+                <p class="mt-1 text-sm text-slate-500">
+                  默认展示高重要性因子，可通过搜索快速切换到任意因子。
+                </p>
+              </div>
+              <label class="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-500">
+                <Search :size="14" />
+                <input
+                  v-model="featureSearch"
+                  data-test="shap-feature-search"
+                  type="text"
+                  class="min-w-[200px] border-0 bg-transparent p-0 text-sm text-slate-700 outline-none"
+                  placeholder="搜索因子，如 f3"
+                />
+              </label>
+            </div>
+            <div class="grid gap-4 lg:grid-cols-2">
+              <article
+                v-for="item in visibleDependence"
+                :key="`dependence-${item.feature}`"
+                class="rounded-2xl border border-slate-200 bg-slate-50 p-4"
+              >
+                <h3 class="text-sm font-bold text-slate-700">{{ item.title }}</h3>
+                <div class="mt-3 h-[280px] rounded-xl border border-slate-100 bg-white p-3">
+                  <VChart :option="item.option" autoresize />
+                </div>
+              </article>
+            </div>
+          </section>
+
+          <section v-else-if="section.type === 'details'" class="space-y-4">
+            <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h2 class="text-lg font-bold text-slate-800">{{ section.title }}</h2>
+                <p class="mt-1 text-sm text-slate-500">
+                  默认只展开部分因子，支持搜索和逐步展开，保证全部因子都可访问。
+                </p>
+              </div>
+              <button
+                v-if="hasMoreDetails"
+                class="rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold text-slate-600 transition hover:bg-slate-100"
+                @click="expandedDetailCount = normalizedDetails.length"
+              >
+                显示全部因子
+              </button>
+            </div>
+            <div class="grid gap-4 lg:grid-cols-2">
+              <article
+                v-for="item in visibleDetails"
+                :key="`details-${item.feature}`"
+                class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+              >
+                <div class="flex items-center justify-between gap-3">
+                  <h3 class="text-sm font-bold text-slate-800">{{ item.title }}</h3>
+                  <span class="rounded-full bg-rose-50 px-2 py-1 text-[11px] font-bold text-rose-600">
+                    {{ item.feature }}
+                  </span>
+                </div>
+                <div class="mt-3 h-[260px] rounded-xl border border-slate-100 bg-slate-50 p-3">
+                  <VChart :option="item.option" autoresize />
+                </div>
+              </article>
+            </div>
+          </section>
+
+          <section v-else-if="section.type === 'text'" class="space-y-2">
+            <h2 v-if="section.title" class="text-lg font-bold text-slate-800">{{ section.title }}</h2>
+            <p class="text-sm leading-relaxed whitespace-pre-wrap text-slate-600">{{ section.content }}</p>
+          </section>
+
+          <section v-else-if="section.type === 'image'" class="space-y-3">
+            <h2 v-if="section.title" class="text-lg font-bold text-slate-800">{{ section.title }}</h2>
+            <div class="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+              <img :src="section.url" :alt="section.alt" class="mx-auto max-w-full rounded-xl shadow-sm" />
+            </div>
+          </section>
+        </template>
+
+        <section
+          v-if="supplements.fullReportImage || supplements.beeswarmImage"
+          class="rounded-2xl border border-slate-200 bg-slate-50 p-5"
         >
-          {{ tab.name }}
-        </button>
-      </div>
-
-      <div ref="reportRef" class="pdf-container">
-        <div v-for="(section, idx) in currentSections" :key="idx" ref="sectionRefs" class="mb-8">
-          <h2 v-if="section.title" class="text-lg font-bold text-slate-700 mb-4">
-            {{ section.title }}
-          </h2>
-
-          <p
-            v-if="section.type === 'text'"
-            class="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap"
-          >
-            {{ section.content }}
-          </p>
-
-          <div
-            v-else-if="section.type === 'image'"
-            class="flex justify-center my-4 bg-slate-50 rounded-xl p-4 border border-slate-100"
-          >
-            <img :src="section.url" :alt="section.alt" class="max-w-full rounded shadow-sm" />
+          <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div>
+              <h2 class="text-lg font-bold text-slate-800">后端原始整图</h2>
+              <p class="mt-1 text-sm leading-relaxed text-slate-500">
+                这是后端 Python 侧生成的原始整图，用于补充对照与归档，不替代前端主报告。
+              </p>
+            </div>
+            <button
+              v-if="supplements.fullReportImage"
+              class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-100"
+              @click="exportOriginalImage"
+            >
+              导出原始整图
+            </button>
           </div>
-
-          <div
-            v-else-if="section.type === 'chart'"
-            class="h-[400px] w-full my-4 bg-white border border-slate-100 rounded-xl p-4 shadow-sm"
-          >
-            <VChart ref="chartRefs" :option="section.option" autoresize />
+          <div v-if="supplements.fullReportImage" class="mt-4 rounded-2xl border border-slate-100 bg-white p-4">
+            <img
+              :src="supplements.fullReportImage"
+              alt="后端原始整图"
+              class="mx-auto max-w-full rounded-xl shadow-sm"
+            />
           </div>
-        </div>
+        </section>
       </div>
     </div>
   </div>
@@ -313,11 +350,14 @@ const exportToImage = async () => {
 .custom-scrollbar::-webkit-scrollbar {
   width: 6px;
 }
+
 .custom-scrollbar::-webkit-scrollbar-track {
   background: transparent;
 }
+
 .custom-scrollbar::-webkit-scrollbar-thumb {
   background: #cbd5e1;
   border-radius: 10px;
 }
 </style>
+

@@ -1,11 +1,129 @@
-import type { NodeDefinition } from '../types'
+﻿import type { NodeDefinition } from '../types'
+
+type ShapSummary = {
+  targetField: string
+  sampleCount: number
+  featureCount: number
+  r2: number
+  mae: number
+}
+
+type ShapImportanceItem = {
+  name: string
+  value: number
+  rank?: number
+}
+
+type ShapDependenceItem = {
+  feature: string
+  x: number[]
+  shap: number[]
+  actualY?: number[]
+}
+
+type ShapAssets = {
+  beeswarmImage?: string
+  fullReportImage?: string
+  dependenceImages?: Array<{ feature: string; image: string }>
+}
+
+const SHAP_PRIMARY_COLOR = '#ff0052'
+const SHAP_SECONDARY_COLOR = '#2563eb'
+const DEFAULT_VISIBLE_FEATURES = 6
+const DEFAULT_IMPORTANCE_LIMIT = 15
+
+const asImageDataUrl = (value?: string) => {
+  if (!value) return undefined
+  return value.startsWith('data:') ? value : `data:image/png;base64,${value}`
+}
+
+const normalizeImportance = (importance: ShapImportanceItem[] = []) => {
+  return importance
+    .map((item, index) => ({
+      name: item.name,
+      value: Number(item.value ?? 0),
+      rank: item.rank ?? index + 1,
+    }))
+    .sort((a, b) => b.value - a.value)
+    .map((item, index) => ({ ...item, rank: index + 1 }))
+}
+
+const normalizeDependence = (dependence: ShapDependenceItem[] = []) => {
+  return dependence.map((item) => ({
+    feature: item.feature,
+    x: Array.isArray(item.x) ? item.x : [],
+    shap: Array.isArray(item.shap) ? item.shap : [],
+    actualY: Array.isArray(item.actualY) ? item.actualY : [],
+  }))
+}
+
+const buildLegacyPayload = (results: Record<string, any>) => {
+  const importance = normalizeImportance(results.importance ?? [])
+  const dependence = normalizeDependence(results.dependence ?? results.raw_dependence_data ?? [])
+
+  const summary: ShapSummary = {
+    targetField: results.targetField ?? 'target',
+    sampleCount: dependence[0]?.x.length ?? 0,
+    featureCount: importance.length,
+    r2: Number(results.r2 ?? 0),
+    mae: Number(results.mae ?? 0),
+  }
+
+  const assets: ShapAssets = {
+    beeswarmImage: results.beeswarm_image,
+    fullReportImage: results.full_report_image,
+    dependenceImages: results.dependence_images ?? [],
+  }
+
+  return { summary, importance, dependence, assets }
+}
+
+const buildImportanceChartOption = (importance: Array<{ name: string; value: number }>) => {
+  const visible = importance.slice(0, DEFAULT_IMPORTANCE_LIMIT)
+  return {
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+    xAxis: { type: 'value', name: '平均绝对 SHAP 值' },
+    yAxis: {
+      type: 'category',
+      data: visible.map((item) => item.name).reverse(),
+    },
+    series: [
+      {
+        name: 'Mean |SHAP Value|',
+        type: 'bar',
+        data: visible.map((item) => item.value).reverse(),
+        itemStyle: {
+          color: SHAP_PRIMARY_COLOR,
+          borderRadius: [0, 4, 4, 0],
+        },
+      },
+    ],
+  }
+}
+
+const buildScatterOption = (item: ShapDependenceItem) => ({
+  title: { text: `因子趋势: ${item.feature}`, textStyle: { fontSize: 14 } },
+  tooltip: { trigger: 'item' },
+  xAxis: { type: 'value', name: item.feature, nameLocation: 'middle', nameGap: 25 },
+  yAxis: { type: 'value', name: 'SHAP Value' },
+  series: [
+    {
+      name: item.feature,
+      type: 'scatter',
+      symbolSize: 6,
+      data: item.x.map((xValue, index) => [xValue, item.shap[index]]),
+      itemStyle: { color: SHAP_SECONDARY_COLOR, opacity: 0.65 },
+    },
+  ],
+})
 
 export const xgboostShapNode: NodeDefinition = {
   name: 'xgboost-shap',
   displayName: 'Xgboost + SHAP',
   icon: 'brain',
   category: 'terminal',
-  description: '使用 Xgboost 结合 SHAP 值方法分析各个因子对目标变量的贡献程度和影响趋势。',
+  description: '使用 Xgboost 结合 SHAP 值分析各个因子对目标变量的贡献程度和影响趋势。',
   properties: [
     {
       name: 'targetField',
@@ -14,27 +132,28 @@ export const xgboostShapNode: NodeDefinition = {
       default: 'target',
       useUpstreamFactors: true,
       editable: true,
-      description: '选择回归/分类的目标字段名（支持从上游自动获取或手动输入）',
+      description: '选择回归或分类任务的目标字段名称，支持从上游自动获取。',
     },
     {
       name: 'factorNames',
       displayName: '影响因子 (X)',
       type: 'tags',
       useUpstreamFactors: true,
-      description: '选择参与分析的因子列表。留空则默认使用除目标变量外的所有数值字段。',
+      description: '选择参与分析的因子列表；留空时默认使用除目标变量外的全部数值字段。',
     },
   ],
   execute: async (input, config) => {
-    if (!input || !input.data) throw new Error('无输入数据')
+    if (!input || !input.data) {
+      throw new Error('无输入数据')
+    }
 
-    // 尝试调用后端 Python 服务
     const response = await fetch('http://localhost:8000/analyze/xgboost-shap', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         data: input.data,
         target: config.targetField || 'target',
-        config: config,
+        config,
       }),
     })
 
@@ -44,122 +163,85 @@ export const xgboostShapNode: NodeDefinition = {
     }
 
     const result = await response.json()
-    const {
-      r2,
-      mae,
-      importance,
-      beeswarm_image,
-      dependence_images,
-      raw_dependence_data,
-      full_report_image,
-    } = result.results
-
-    const barChartOption = {
-      tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-      grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-      xAxis: { type: 'value', name: '平均绝对贡献度' },
-      yAxis: {
-        type: 'category',
-        data: importance
-          .slice(0, 15)
-          .map((i: any) => i.name)
-          .reverse(),
-      },
-      series: [
-        {
-          name: 'Mean |SHAP Value|',
-          type: 'bar',
-          data: importance
-            .slice(0, 15)
-            .map((i: any) => i.value)
-            .reverse(),
-          itemStyle: {
-            color: '#ff0052', // SHAP 默认玫红色 (Rose-500 style)
-            borderRadius: [0, 4, 4, 0],
-          },
-        },
-      ],
-    }
-
-    const separatedSections: any[] = [
-      {
-        type: 'text',
-        content: `### 模型评估结果\n- **R² (拟合优度)**: ${r2}\n- **MAE (平均绝对误差)**: ${mae}\n\n该分析基于 XGBoost 回归模型及 SHAP 归因理论。`,
-      },
-      {
-        title: '特征重要性排行 (SHAP Importance)',
-        type: 'chart',
-        option: barChartOption,
-      },
-    ]
-
-    if (beeswarm_image) {
-      separatedSections.push({
-        title: '因子影响分布 (SHAP Beeswarm Plot)',
-        type: 'image',
-        url: `data:image/png;base64,${beeswarm_image}`,
-        alt: 'SHAP Beeswarm Plot',
-      })
-    }
-
-    // 优先使用原始数据渲染前端 ECharts 依赖图
-    if (raw_dependence_data && raw_dependence_data.length > 0) {
-      raw_dependence_data.forEach((dep: any) => {
-        const scatterOption = {
-          title: { text: `影响曲线: ${dep.feature}`, textStyle: { fontSize: 14 } },
-          tooltip: { trigger: 'item', formatter: '{b}: ({c})' },
-          xAxis: { type: 'value', name: dep.feature, nameLocation: 'middle', nameGap: 25 },
-          yAxis: { type: 'value', name: 'SHAP Value' },
-          series: [
-            {
-              symbolSize: 6,
-              data: dep.x.map((xVal: number, i: number) => [xVal, dep.shap[i]]),
-              type: 'scatter',
-              itemStyle: { color: '#2563eb', opacity: 0.6 },
-            },
-          ],
+    const normalized = result.results?.summary
+      ? {
+          summary: result.results.summary as ShapSummary,
+          importance: normalizeImportance(result.results.importance ?? []),
+          dependence: normalizeDependence(result.results.dependence ?? []),
+          assets: (result.results.assets ?? {}) as ShapAssets,
         }
-        separatedSections.push({
-          title: `因子影响趋势 (前端渲染): ${dep.feature}`,
-          type: 'chart',
-          option: scatterOption,
-        })
-      })
-    } else if (dependence_images && dependence_images.length > 0) {
-      // 兜底使用后端生成的图片
-      dependence_images.forEach((dep: any) => {
-        separatedSections.push({
-          title: `因子影响趋势: ${dep.feature}`,
-          type: 'image',
-          url: `data:image/png;base64,${dep.image}`,
-          alt: `SHAP Dependence Plot for ${dep.feature}`,
-        })
-      })
-    }
+      : buildLegacyPayload(result.results ?? {})
 
-    const integratedSections: any[] = []
-    if (full_report_image) {
-      integratedSections.push({
-        type: 'image',
-        url: `data:image/png;base64,${full_report_image}`,
-        alt: 'Integrated SHAP Analysis Report',
-      })
-    }
+    const { summary, importance, dependence, assets } = normalized
+    const visibleDependence = dependence.slice(0, DEFAULT_VISIBLE_FEATURES)
 
     return {
       viewType: 'report',
       report: {
         title: 'Xgboost + SHAP 因子贡献度分析报告',
-        tabs: [
+        metadata: {
+          targetField: summary.targetField,
+          sampleCount: summary.sampleCount,
+          featureCount: summary.featureCount || importance.length,
+          r2: summary.r2,
+          mae: summary.mae,
+        },
+        sections: [
           {
-            name: '多维图表展示 (前端分图)',
-            sections: separatedSections,
+            key: 'summary',
+            type: 'summary',
+            title: '模型摘要',
+            cards: [
+              { label: '目标字段', value: summary.targetField },
+              { label: '样本量', value: summary.sampleCount },
+              { label: '特征数', value: summary.featureCount || importance.length },
+              { label: 'R²', value: summary.r2 },
+              { label: 'MAE', value: summary.mae },
+            ],
           },
           {
-            name: '归因分析大图 (后端全量)',
-            sections: integratedSections,
+            key: 'importance',
+            type: 'chart',
+            title: '特征贡献排行',
+            option: buildImportanceChartOption(importance),
+            items: importance,
+          },
+          {
+            key: 'dependence',
+            type: 'dependence',
+            title: '关键因子趋势',
+            defaultVisibleCount: DEFAULT_VISIBLE_FEATURES,
+            items: visibleDependence.map((item) => ({
+              feature: item.feature,
+              title: `因子趋势: ${item.feature}`,
+              option: buildScatterOption(item),
+            })),
+            allItems: dependence.map((item) => ({
+              feature: item.feature,
+              title: `因子趋势: ${item.feature}`,
+              option: buildScatterOption(item),
+            })),
+          },
+          {
+            key: 'details',
+            type: 'details',
+            title: '完整因子明细',
+            defaultVisibleCount: DEFAULT_VISIBLE_FEATURES,
+            items: dependence.map((item) => ({
+              feature: item.feature,
+              title: `因子趋势: ${item.feature}`,
+              option: buildScatterOption(item),
+            })),
           },
         ],
+        supplements: {
+          beeswarmImage: asImageDataUrl(assets.beeswarmImage),
+          fullReportImage: asImageDataUrl(assets.fullReportImage),
+          dependenceImages: (assets.dependenceImages ?? []).map((item) => ({
+            feature: item.feature,
+            image: asImageDataUrl(item.image),
+          })),
+        },
       },
     }
   },
