@@ -1,4 +1,5 @@
 export type NodeCategory = 'trigger' | 'action' | 'terminal'
+export type NodeInputMode = 'single' | 'multiple'
 
 export interface NodeProperty {
   name: string
@@ -34,6 +35,9 @@ export interface NodeDefinition {
   category: NodeCategory
   description: string
   properties: NodeProperty[]
+  inputMode?: NodeInputMode
+  minInputs?: number
+  maxInputs?: number | null
   // 执行逻辑：输入数据 + 用户配置 -> 输出结果
   execute: (input: any, config: any) => Promise<any> | any
 }

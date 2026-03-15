@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { ref, computed, nextTick } from 'vue'
 import { Handle, Position, type NodeProps } from '@vue-flow/core'
 import { NodeToolbar } from '@vue-flow/node-toolbar'
@@ -15,6 +15,7 @@ import {
   PinOff,
 } from 'lucide-vue-next'
 import { useWorkflowStore } from '@/stores/workflowStore'
+import { getNodeDefinition } from '@/nodes/registry'
 import NodeIcon from './NodeIcon.vue'
 
 const props = defineProps<NodeProps>()
@@ -121,6 +122,11 @@ const isTerminal = computed(() => {
 const nodeShape = computed(() => {
   return isTrigger.value ? 'rounded-[20px] rounded-r-xl' : 'rounded-2xl'
 })
+
+const isMultipleInput = computed(() => {
+  const definition = getNodeDefinition(props.data.type)
+  return definition?.inputMode === 'multiple'
+})
 </script>
 
 <template>
@@ -137,6 +143,13 @@ const nodeShape = computed(() => {
         :size="64"
         class="bg-transparent text-slate-700 group-hover:scale-105 transition-transform duration-300"
       />
+
+      <div
+        v-if="isMultipleInput"
+        class="absolute top-2 left-2 rounded-full bg-blue-50 px-2 py-1 text-[9px] font-bold tracking-wide text-blue-600 border border-blue-200"
+      >
+        多输入
+      </div>
 
       <!-- Pin 状态图标 -->
       <div
@@ -328,3 +341,4 @@ const nodeShape = computed(() => {
   }
 }
 </style>
+

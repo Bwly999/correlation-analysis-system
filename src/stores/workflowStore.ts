@@ -1,4 +1,4 @@
-import { defineStore } from 'pinia'
+﻿import { defineStore } from 'pinia'
 import { ref, markRaw } from 'vue'
 import { type Node, type Edge } from '@vue-flow/core'
 import { getNodeDefinition } from '@/nodes/registry'
@@ -248,31 +248,47 @@ export const useWorkflowStore = defineStore('workflow', () => {
     return definition ? definition.category : 'action'
   }
 
+  const getNodeInputLimits = (nodeType: string) => {
+    const definition = getNodeDefinition(nodeType)
+    return {
+      inputMode: definition?.inputMode ?? 'single',
+      maxInputs: definition?.maxInputs ?? 1,
+    }
+  }
+
   const validateConnection = (sourceNodeId: string, targetNodeId: string) => {
     const sourceNode = nodes.value.find((n) => n.id === sourceNodeId)
     const targetNode = nodes.value.find((n) => n.id === targetNodeId)
     if (!sourceNode || !targetNode) return { valid: false, message: '节点不存在' }
-    const sourceCat = sourceNode.data.category
+    const sourceCat = sourceNode.data.category as keyof typeof CONNECTION_RULES
     const targetCat = targetNode.data.category
     if (!CONNECTION_RULES[sourceCat]?.includes(targetCat)) {
       const msg = `流程规范限制: ${sourceCat} 无法连接到 ${targetCat}`
       addLog(msg, 'error')
       return { valid: false, message: msg }
     }
-    return { valid: true }
-  }
 
-  const checkTriggerExists = () => {
-    return nodes.value.some((n) => n.data.category === 'trigger')
+    const targetIncomingEdges = edges.value.filter((edge) => edge.target === targetNodeId)
+    const { inputMode, maxInputs } = getNodeInputLimits(targetNode.data.type)
+
+    if (inputMode === 'single' && targetIncomingEdges.length >= 1) {
+      const msg = `流程规范限制: 节点 ${targetNode.data.label} 只允许一个上游输入`
+      addLog(msg, 'error')
+      return { valid: false, message: msg }
+    }
+
+    if (typeof maxInputs === 'number' && maxInputs > 0 && targetIncomingEdges.length >= maxInputs) {
+      const msg = `流程规范限制: 节点 ${targetNode.data.label} 最多允许 ${maxInputs} 个输入`
+      addLog(msg, 'error')
+      return { valid: false, message: msg }
+    }
+
+    return { valid: true }
   }
 
   const addAndConnectNode = (type: string, label: string, position: { x: number; y: number }) => {
     const definition = getNodeDefinition(type)
     const category = getCategoryByType(type)
-    if (category === 'trigger' && checkTriggerExists()) {
-      addLog('流程规范限制: 工作流只能包含一个数据获取节点', 'error')
-      return null
-    }
     const defaultConfig: any = {}
     definition?.properties.forEach((p) => {
       if (p.default !== undefined) defaultConfig[p.name] = p.default
@@ -399,21 +415,44 @@ export const useWorkflowStore = defineStore('workflow', () => {
 
       const incomingEdges = edges.value.filter((e) => e.target === nodeId)
       const inputs = []
-      for (const edge of incomingEdges) {
+      const structuredInputs = []
+      for (const [index, edge] of incomingEdges.entries()) {
         if (isStopping.value) throw new Error('User Aborted')
         const result = await executeNode(edge.source, forceUpdate)
         if (result === 'WAIT_INPUT' || result === 'STOPPED') {
           node.data.status = 'idle'
           return result
         }
+        const sourceNode = nodes.value.find((n) => n.id === edge.source)
         inputs.push(result)
+        structuredInputs.push({
+          sourceNodeId: edge.source,
+          sourceNodeLabel: sourceNode?.data.label ?? edge.source,
+          edgeId: edge.id,
+          order: index,
+          payload: result ?? null,
+        })
+      }
+
+      const { inputMode, minInputs } = {
+        inputMode: definition.inputMode ?? 'single',
+        minInputs: definition.minInputs ?? 0,
+      }
+
+      if (inputMode === 'multiple' && structuredInputs.length < minInputs) {
+        throw new Error(`节点 ${node.data.label} 至少需要 ${minInputs} 个输入`)
       }
 
       if (isStopping.value) throw new Error('User Aborted')
       await new Promise((resolve) => setTimeout(resolve, 300))
       if (isStopping.value) throw new Error('User Aborted')
 
-      const result = await definition.execute(inputs[0] || null, node.data.config)
+      const executionInput =
+        inputMode === 'multiple'
+          ? { inputs: structuredInputs }
+          : inputs[0] || null
+
+      const result = await definition.execute(executionInput, node.data.config)
 
       node.data.output = markRaw(result)
       node.data.status = 'success'
@@ -579,3 +618,5 @@ export const useWorkflowStore = defineStore('workflow', () => {
     createNewWorkflow,
   }
 })
+
+

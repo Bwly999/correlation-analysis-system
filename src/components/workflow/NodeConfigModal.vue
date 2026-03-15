@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { Loader2, Bug } from 'lucide-vue-next'
 import { useWorkflowStore } from '@/stores/workflowStore'
@@ -82,11 +82,36 @@ watch(localManualInput, (val) => {
 })
 
 const inputData = computed(() => {
-  if (!node.value) return null
-  const incomingEdges = store.edges.filter((e) => e.target === node.value?.id)
-  return incomingEdges.length > 0
-    ? store.nodes.find((n) => n.id === incomingEdges[0].source)?.data.output
-    : null
+  const currentNode = node.value
+  if (!currentNode) return null
+
+  const incomingEdges = store.edges.filter((e) => e.target === currentNode.id)
+  if (incomingEdges.length === 0) return null
+
+  if (nodeDefinition.value?.inputMode === 'multiple') {
+    return {
+      inputs: incomingEdges.map((edge, index) => {
+        const sourceNode = store.nodes.find((n) => n.id === edge.source)
+        const payload = sourceNode?.data.output ?? null
+        const rowCount = Array.isArray(payload?.data) ? payload.data.length : 0
+        const sample = Array.isArray(payload?.data) && payload.data.length > 0 ? payload.data[0] : null
+
+        return {
+          sourceNodeId: edge.source,
+          sourceNodeLabel: sourceNode?.data.label ?? edge.source,
+          edgeId: edge.id,
+          order: index,
+          payload,
+          summary: {
+            rowCount,
+            fields: sample && typeof sample === 'object' ? Object.keys(sample) : [],
+          },
+        }
+      }),
+    }
+  }
+
+  return store.nodes.find((n) => n.id === incomingEdges[0]?.source)?.data.output ?? null
 })
 
 const upstreamFactors = computed(() => {
@@ -277,3 +302,4 @@ const openAnalysis = (title: string, data: any) => {
   background: #ff523d !important;
 }
 </style>
+

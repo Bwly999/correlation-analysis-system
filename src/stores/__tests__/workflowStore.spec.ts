@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+﻿import { describe, it, expect, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useWorkflowStore } from '../workflowStore'
+import { nodeDefinitions } from '../../nodes/registry'
 
 describe('Workflow Store', () => {
   beforeEach(() => {
@@ -22,14 +23,14 @@ describe('Workflow Store', () => {
     expect(node?.data.category).toBe('trigger')
   })
 
-  it('should not allow adding multiple trigger nodes', () => {
+  it('should allow adding multiple trigger nodes', () => {
     const store = useWorkflowStore()
-    store.addAndConnectNode('file-import', 'Import 1', { x: 0, y: 0 })
-    // 第二个 trigger 应该返回 null
+    const node1 = store.addAndConnectNode('file-import', 'Import 1', { x: 0, y: 0 })
     const node2 = store.addAndConnectNode('neighbor-system', 'Import 2', { x: 100, y: 0 })
 
-    expect(store.nodes.length).toBe(1)
-    expect(node2).toBeNull()
+    expect(store.nodes.length).toBe(2)
+    expect(node1).not.toBeNull()
+    expect(node2).not.toBeNull()
   })
 
   it('should validate connections correctly based on categories', async () => {
@@ -56,6 +57,79 @@ describe('Workflow Store', () => {
 
     // Action -> Trigger: Invalid (Cannot connect back to trigger)
     expect(store.validateConnection(action.id, trigger.id).valid).toBe(false)
+  })
+
+  it('should block connecting a second upstream edge into a single-input node', async () => {
+    const store = useWorkflowStore()
+
+    const trigger1 = store.addAndConnectNode('file-import', 'Trigger 1', { x: 0, y: 0 })!
+    await new Promise((r) => setTimeout(r, 10))
+    const trigger2 = store.addAndConnectNode('neighbor-system', 'Trigger 2', { x: 0, y: 120 })!
+    await new Promise((r) => setTimeout(r, 10))
+    const target = store.addAndConnectNode('data-cleaning', 'Cleaner', { x: 300, y: 0 })!
+
+    store.edges.push({
+      id: 'e_trigger1_target',
+      source: trigger1.id,
+      target: target.id,
+      type: 'n8n',
+      animated: true,
+    })
+
+    expect(store.validateConnection(trigger2.id, target.id).valid).toBe(false)
+  })
+
+  it('should pass all upstream payloads to a multiple-input node', async () => {
+    const tempNodeDefinition = {
+      name: 'test-multi-input',
+      displayName: 'Test Multi Input',
+      icon: 'test',
+      category: 'action' as const,
+      description: 'test',
+      properties: [],
+      inputMode: 'multiple' as const,
+      minInputs: 2,
+      maxInputs: null,
+      execute: async (input: { inputs: Array<{ payload: { data: Array<Record<string, unknown>> } }> }) => ({
+        inputCount: input.inputs.length,
+        values: input.inputs.map((item) => item.payload.data[0]!.value),
+      }),
+    }
+
+    nodeDefinitions.push(tempNodeDefinition)
+
+    try {
+      const store = useWorkflowStore()
+      const trigger1 = store.addAndConnectNode('manual-json-import', 'Source 1', { x: 0, y: 0 })!
+      const trigger2 = store.addAndConnectNode('manual-json-import', 'Source 2', { x: 0, y: 120 })!
+      const target = store.addAndConnectNode('test-multi-input', 'Multi', { x: 300, y: 0 })!
+
+      trigger1.data.config.jsonData = JSON.stringify([{ value: 'A' }])
+      trigger2.data.config.jsonData = JSON.stringify([{ value: 'B' }])
+
+      store.edges.push({
+        id: 'e_t1_multi',
+        source: trigger1.id,
+        target: target.id,
+        type: 'n8n',
+        animated: true,
+      })
+      store.edges.push({
+        id: 'e_t2_multi',
+        source: trigger2.id,
+        target: target.id,
+        type: 'n8n',
+        animated: true,
+      })
+
+      const result = await store.executeNode(target.id, true)
+
+      expect(result.inputCount).toBe(2)
+      expect(result.values).toEqual(['A', 'B'])
+    } finally {
+      const index = nodeDefinitions.findIndex((definition) => definition.name === 'test-multi-input')
+      if (index >= 0) nodeDefinitions.splice(index, 1)
+    }
   })
 
   it('should execute a single node and cache output', async () => {
@@ -137,8 +211,8 @@ describe('Workflow Store', () => {
     await store.runGlobal()
 
     expect(store.executionHistory.length).toBe(1)
-    expect(store.executionHistory[0].status).toBe('success')
-    expect(store.executionHistory[0].workflowName).toBe('未命名工作流')
+    expect(store.executionHistory[0]!.status).toBe('success')
+    expect(store.executionHistory[0]!.workflowName).toBe('未命名工作流')
   })
 
   it('should skip execution and return cached output when node is pinned', async () => {
@@ -164,3 +238,4 @@ describe('Workflow Store', () => {
     expect(store.logs.some((l) => l.message.includes('已冻结，使用历史输出数据'))).toBe(true)
   })
 })
+

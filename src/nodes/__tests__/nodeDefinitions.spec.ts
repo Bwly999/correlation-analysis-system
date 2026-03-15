@@ -15,6 +15,7 @@ import { lassoNode } from '../definitions/lasso'
 import { pearsonNode } from '../definitions/pearson'
 import { spearmanNode } from '../definitions/spearman'
 import { kendallNode } from '../definitions/kendall'
+import { nodeDefinitions } from '../registry'
 
 global.URL.createObjectURL = vi.fn(() => 'blob:mock-url')
 
@@ -173,6 +174,91 @@ describe('Node Definitions Execution Logic', () => {
 
       expect(result.data[0].total).toBe(60)
       expect(result.data[1].total).toBe(15)
+    })
+  })
+
+  describe('append', () => {
+    it('should append multiple datasets with union field alignment and source tags', async () => {
+      const appendNode = nodeDefinitions.find((definition) => definition.name === 'append')
+
+      const result = await appendNode!.execute(
+        {
+          inputs: [
+            {
+              sourceNodeId: 'n1',
+              sourceNodeLabel: 'Source A',
+              edgeId: 'e1',
+              order: 0,
+              payload: { data: [{ id: 1, city: '??' }] },
+            },
+            {
+              sourceNodeId: 'n2',
+              sourceNodeLabel: 'Source B',
+              edgeId: 'e2',
+              order: 1,
+              payload: { data: [{ id: 2, score: 95 }] },
+            },
+          ],
+        },
+        {
+          alignFieldsMode: 'union',
+          fillMissingValue: 'null',
+          addSourceTag: true,
+          sourceTagName: '__source',
+        },
+      )
+
+      expect(appendNode).toBeDefined()
+      expect(result.data).toHaveLength(2)
+      expect(result.data[0]).toEqual({ id: 1, city: '??', score: null, __source: 'Source A' })
+      expect(result.data[1]).toEqual({ id: 2, city: null, score: 95, __source: 'Source B' })
+      expect(result.stats.inputCount).toBe(2)
+      expect(result.stats.outputRows).toBe(2)
+      expect(result.lineage.fields.score[0].sourceNodeId).toBe('n2')
+    })
+  })
+
+  describe('object-merge', () => {
+    it('should left-join datasets and suffix conflicting fields', async () => {
+      const mergeNode = nodeDefinitions.find((definition) => definition.name === 'object-merge')
+
+      const result = await mergeNode!.execute(
+        {
+          inputs: [
+            {
+              sourceNodeId: 'base',
+              sourceNodeLabel: 'Base',
+              edgeId: 'e1',
+              order: 0,
+              payload: { data: [{ id: 1, city: '??', value: 10 }, { id: 2, city: '??', value: 20 }] },
+            },
+            {
+              sourceNodeId: 'extra',
+              sourceNodeLabel: 'Extra',
+              edgeId: 'e2',
+              order: 1,
+              payload: { data: [{ id: 1, value: 99, score: 90 }, { id: 3, value: 88, score: 70 }] },
+            },
+          ],
+        },
+        {
+          joinType: 'left',
+          baseJoinKey: 'id',
+          conflictStrategy: 'suffix',
+          suffixMode: 'source_label',
+          dropDuplicateKeyFields: true,
+        },
+      )
+
+      expect(mergeNode).toBeDefined()
+      expect(result.data).toHaveLength(2)
+      expect(result.data[0]).toEqual({ id: 1, city: '??', value: 10, value_Extra: 99, score: 90 })
+      expect(result.data[1]).toEqual({ id: 2, city: '??', value: 20, value_Extra: null, score: null })
+      expect(result.stats.outputRows).toBe(2)
+      expect(result.stats.matchedRows).toBe(1)
+      expect(result.stats.conflictFieldCount).toBe(1)
+      expect(result.diagnostics.conflicts[0].field).toBe('value')
+      expect(result.lineage.fields.score[0].sourceNodeId).toBe('extra')
     })
   })
 
