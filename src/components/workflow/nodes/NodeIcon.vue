@@ -11,6 +11,8 @@ import {
   PieChart,
   Edit3,
   Brain,
+  GitMerge,
+  Filter,
 } from 'lucide-vue-next'
 
 const props = defineProps<{
@@ -25,6 +27,8 @@ const iconMap: Record<string, any> = {
   'data-cleaning': { icon: Settings2, color: 'text-blue-500', bg: 'bg-blue-50' },
   'data-profiling': { icon: ScanSearch, color: 'text-sky-600', bg: 'bg-sky-50' },
   'data-aggregation': { icon: Sigma, color: 'text-blue-600', bg: 'bg-blue-50' },
+  'data-merge': { icon: GitMerge, color: 'text-blue-600', bg: 'bg-blue-50' },
+  'data-filter': { icon: Filter, color: 'text-amber-500', bg: 'bg-amber-50' },
   'xgboost-shap': { icon: Brain, color: 'text-rose-500', bg: 'bg-rose-50' },
   algorithm: { icon: BarChart3, color: 'text-orange-500', bg: 'bg-orange-50' },
   'data-export': { icon: Download, color: 'text-indigo-500', bg: 'bg-indigo-50' },

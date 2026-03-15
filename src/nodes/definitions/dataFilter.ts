@@ -62,7 +62,7 @@ const matchesCondition = (row: Record<string, unknown>, condition: FilterConditi
 export const dataFilterNode: NodeDefinition = {
   name: 'data-filter',
   displayName: '数据筛选',
-  icon: 'list-filter',
+  icon: 'filter',
   category: 'action',
   description: '根据多个条件筛选数据行，支持数值比较、文本匹配以及空值判断。',
   properties: [

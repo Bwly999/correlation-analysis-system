@@ -52,16 +52,16 @@ describe('NodeConfigModal', () => {
         },
       } as any,
       {
-        id: 'append-node',
+        id: 'data-merge-node',
         type: 'custom',
         position: { x: 300, y: 0 },
-        label: '纵向追加',
+        label: '数据合并',
         data: {
-          label: '纵向追加',
-          type: 'append',
+          label: '数据合并',
+          type: 'data-merge',
           category: 'action',
           status: 'idle',
-          config: {},
+          config: { mergeMode: 'append' },
           logs: [],
           useManualInput: false,
           manualInput: '',
@@ -70,12 +70,12 @@ describe('NodeConfigModal', () => {
       } as any,
     ]
     store.edges = [
-      { id: 'e1', source: 'source-1', target: 'append-node', type: 'n8n', animated: true },
-      { id: 'e2', source: 'source-2', target: 'append-node', type: 'n8n', animated: true },
+      { id: 'e1', source: 'source-1', target: 'data-merge-node', type: 'n8n', animated: true },
+      { id: 'e2', source: 'source-2', target: 'data-merge-node', type: 'n8n', animated: true },
     ] as any
 
     const wrapper = mount(NodeConfigModal, {
-      props: { visible: true, nodeId: 'append-node' },
+      props: { visible: true, nodeId: 'data-merge-node' },
       global: {
         stubs: {
           Dialog: { template: '<div><slot name="header" /><slot /></div>' },

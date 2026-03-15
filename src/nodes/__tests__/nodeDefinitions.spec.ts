@@ -177,30 +177,27 @@ describe('Node Definitions Execution Logic', () => {
     })
   })
 
-  describe('append', () => {
+  describe('data-merge', () => {
     it('should append multiple datasets with union field alignment and source tags', async () => {
-      const appendNode = nodeDefinitions.find((definition) => definition.name === 'append')
+      const mergeNode = nodeDefinitions.find((definition) => definition.name === 'data-merge')
 
-      const result = await appendNode!.execute(
+      const result = await mergeNode!.execute(
         {
           inputs: [
             {
               sourceNodeId: 'n1',
               sourceNodeLabel: 'Source A',
-              edgeId: 'e1',
-              order: 0,
-              payload: { data: [{ id: 1, city: '??' }] },
+              payload: { data: [{ id: 1, city: '上海' }] },
             },
             {
               sourceNodeId: 'n2',
               sourceNodeLabel: 'Source B',
-              edgeId: 'e2',
-              order: 1,
               payload: { data: [{ id: 2, score: 95 }] },
             },
           ],
         },
         {
+          mergeMode: 'append',
           alignFieldsMode: 'union',
           fillMissingValue: 'null',
           addSourceTag: true,
@@ -208,19 +205,17 @@ describe('Node Definitions Execution Logic', () => {
         },
       )
 
-      expect(appendNode).toBeDefined()
+      expect(mergeNode).toBeDefined()
       expect(result.data).toHaveLength(2)
-      expect(result.data[0]).toEqual({ id: 1, city: '??', score: null, __source: 'Source A' })
+      expect(result.data[0]).toEqual({ id: 1, city: '上海', score: null, __source: 'Source A' })
       expect(result.data[1]).toEqual({ id: 2, city: null, score: 95, __source: 'Source B' })
       expect(result.stats.inputCount).toBe(2)
       expect(result.stats.outputRows).toBe(2)
       expect(result.lineage.fields.score[0].sourceNodeId).toBe('n2')
     })
-  })
 
-  describe('object-merge', () => {
     it('should left-join datasets and suffix conflicting fields', async () => {
-      const mergeNode = nodeDefinitions.find((definition) => definition.name === 'object-merge')
+      const mergeNode = nodeDefinitions.find((definition) => definition.name === 'data-merge')
 
       const result = await mergeNode!.execute(
         {
@@ -228,20 +223,17 @@ describe('Node Definitions Execution Logic', () => {
             {
               sourceNodeId: 'base',
               sourceNodeLabel: 'Base',
-              edgeId: 'e1',
-              order: 0,
-              payload: { data: [{ id: 1, city: '??', value: 10 }, { id: 2, city: '??', value: 20 }] },
+              payload: { data: [{ id: 1, city: '上海', value: 10 }, { id: 2, city: '北京', value: 20 }] },
             },
             {
               sourceNodeId: 'extra',
               sourceNodeLabel: 'Extra',
-              edgeId: 'e2',
-              order: 1,
               payload: { data: [{ id: 1, value: 99, score: 90 }, { id: 3, value: 88, score: 70 }] },
             },
           ],
         },
         {
+          mergeMode: 'join',
           joinType: 'left',
           baseJoinKey: 'id',
           conflictStrategy: 'suffix',
@@ -252,8 +244,8 @@ describe('Node Definitions Execution Logic', () => {
 
       expect(mergeNode).toBeDefined()
       expect(result.data).toHaveLength(2)
-      expect(result.data[0]).toEqual({ id: 1, city: '??', value: 10, value_Extra: 99, score: 90 })
-      expect(result.data[1]).toEqual({ id: 2, city: '??', value: 20, value_Extra: null, score: null })
+      expect(result.data[0]).toEqual({ id: 1, city: '上海', value: 10, value_Extra: 99, score: 90 })
+      expect(result.data[1]).toEqual({ id: 2, city: '北京', value: 20, value_Extra: null, score: null })
       expect(result.stats.outputRows).toBe(2)
       expect(result.stats.matchedRows).toBe(1)
       expect(result.stats.conflictFieldCount).toBe(1)

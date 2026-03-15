@@ -15,16 +15,16 @@ describe('BaseNode', () => {
     const store = useWorkflowStore()
     store.nodes = [
       {
-        id: 'append-node',
+        id: 'data-merge-node',
         type: 'custom',
         position: { x: 0, y: 0 },
-        label: '纵向追加',
+        label: '数据合并',
         data: {
-          label: '纵向追加',
-          type: 'append',
+          label: '数据合并',
+          type: 'data-merge',
           category: 'action',
           status: 'idle',
-          config: {},
+          config: { mergeMode: 'append' },
           logs: [],
           useManualInput: false,
           manualInput: '',
@@ -35,7 +35,7 @@ describe('BaseNode', () => {
 
     const wrapper = mount(BaseNode, {
       props: {
-        id: 'append-node',
+        id: 'data-merge-node',
         type: 'custom',
         selected: false,
         dragging: false,
