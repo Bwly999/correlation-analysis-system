@@ -490,6 +490,14 @@ export const useWorkflowStore = defineStore('workflow', () => {
     }
   }
 
+  const resumePendingExecution = async () => {
+    const pending = pendingExecution.value
+    if (!pending) return null
+
+    pendingExecution.value = null
+    return executeNode(pending.nodeId, pending.forceUpdate)
+  }
+
   const runGlobal = async () => {
     if (isRunning.value) return
 
@@ -623,6 +631,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     validateConnection,
     addAndConnectNode,
     executeNode,
+    resumePendingExecution,
     runGlobal,
     getSavedWorkflows,
     saveWorkflow,

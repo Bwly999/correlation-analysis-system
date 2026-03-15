@@ -70,8 +70,7 @@ watch(
 
 const resumeExecution = async () => {
   if (store.pendingExecution) {
-    store.pendingExecution = null
-    await store.runGlobal()
+    await store.resumePendingExecution()
   }
 }
 

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
+import { defineComponent } from 'vue'
 import WorkflowCanvas from '../WorkflowCanvas.vue'
 import { useWorkflowStore } from '@/stores/workflowStore'
 
@@ -11,6 +12,11 @@ const findNode = vi.fn()
 const fitView = vi.fn()
 const onConnect = vi.fn()
 const project = vi.fn((position) => position)
+const runtimeInputModalStub = defineComponent({
+  name: 'RuntimeInputModal',
+  emits: ['confirm'],
+  template: '<div class="runtime-input-modal-stub"></div>',
+})
 
 vi.mock('@vue-flow/core', () => ({
   VueFlow: {
@@ -58,7 +64,7 @@ describe('WorkflowCanvas', () => {
           BaseNode: { template: '<div />' },
           LogPanel: { template: '<div />' },
           NodeConfigModal: { template: '<div />' },
-          RuntimeInputModal: { template: '<div />' },
+          RuntimeInputModal: runtimeInputModalStub,
           DataAnalysisModal: { template: '<div />' },
           WorkflowManagerModal: { template: '<div />' },
           ConfirmDialog: { template: '<div />' },
@@ -75,5 +81,58 @@ describe('WorkflowCanvas', () => {
     expect(vueFlow.props('nodesDraggable')).toBe(false)
     expect(vueFlow.props('nodesConnectable')).toBe(false)
     expect(vueFlow.props('elementsSelectable')).toBe(true)
+  })
+
+  it('resumes the pending node execution after runtime input confirmation', async () => {
+    const store = useWorkflowStore()
+    const resumeSpy = vi.spyOn(store, 'resumePendingExecution').mockResolvedValue(null as any)
+    store.pendingExecution = { nodeId: 'node_1', forceUpdate: true }
+    store.nodes = [
+      {
+        id: 'node_1',
+        type: 'custom',
+        position: { x: 0, y: 0 },
+        label: 'Trigger',
+        data: {
+          label: 'Trigger',
+          type: 'file-import',
+          category: 'trigger',
+          status: 'idle',
+          config: {},
+          logs: [],
+          useManualInput: false,
+          manualInput: '',
+          isPinned: false,
+        },
+      } as any,
+    ]
+
+    const wrapper = mount(WorkflowCanvas, {
+      global: {
+        stubs: {
+          Background: { template: '<div />' },
+          Controls: { template: '<div />' },
+          NodeSidebar: { template: '<div />' },
+          WorkflowHeader: { template: '<div />' },
+          BaseNode: { template: '<div />' },
+          LogPanel: { template: '<div />' },
+          NodeConfigModal: { template: '<div />' },
+          RuntimeInputModal: runtimeInputModalStub,
+          DataAnalysisModal: { template: '<div />' },
+          WorkflowManagerModal: { template: '<div />' },
+          ConfirmDialog: { template: '<div />' },
+          Button: { template: '<button><slot /></button>' },
+          N8nEdge: { template: '<div />' },
+        },
+        directives: {
+          tooltip: () => undefined,
+        },
+      },
+    })
+
+    wrapper.findComponent({ name: 'RuntimeInputModal' }).vm.$emit('confirm')
+    await wrapper.vm.$nextTick()
+
+    expect(resumeSpy).toHaveBeenCalledTimes(1)
   })
 })

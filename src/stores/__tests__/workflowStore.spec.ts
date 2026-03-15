@@ -191,6 +191,24 @@ describe('Workflow Store', () => {
     expect(store.pendingExecution?.nodeId).toBe(node.id)
   })
 
+  it('should resume pending debug execution for a trigger node without requiring a terminal model', async () => {
+    const store = useWorkflowStore()
+    const node = store.addAndConnectNode('file-import', 'Trigger', { x: 0, y: 0 })!
+
+    const waitingResult = await store.executeNode(node.id, true)
+    expect(waitingResult).toBe('WAIT_INPUT')
+    expect(store.pendingExecution?.nodeId).toBe(node.id)
+
+    node.data.config.fileData = new File(['a,b\n1,2'], 'test.csv')
+
+    const resumed = await store.resumePendingExecution()
+
+    expect(resumed?.data).toBeDefined()
+    expect(node.data.status).toBe('success')
+    expect(store.pendingExecution).toBeNull()
+    expect(store.logs.some((l) => l.message.includes('未找到分析模型'))).toBe(false)
+  })
+
   it('should record execution history after a global run', async () => {
     const store = useWorkflowStore()
     const triggerNode = store.addAndConnectNode('file-import', 'Trigger', { x: 0, y: 0 })!
