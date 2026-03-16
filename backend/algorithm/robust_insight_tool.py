@@ -469,18 +469,16 @@ class VisualStudio:
         """内部绘图核心逻辑 (共享于文件保存与 Base64 生成)"""
         n_features = len(feature_names)
         
-        # 1. 动态计算画布尺寸 - 大幅增加高度系数以防重叠
+        # 1. 动态计算画布尺寸，避免完整报告在高特征数下出现极端放大
         if full_report_mode:
-            # 增加基础高度和特征系数
-            summary_unit_height = max(12, n_features * 0.8) 
+            summary_unit_height = max(6, n_features * 0.4)
             summary_section_height = summary_unit_height * 2
             
             plots_per_row = 3
             n_rows = math.ceil(n_features / plots_per_row)
-            # 增加明细图每行的高度
-            detail_height = n_rows * 8.0
+            detail_height = n_rows * 4.5
             
-            total_height = summary_section_height + detail_height + 5 # 增加标题预留位
+            total_height = summary_section_height + detail_height + 3
             fig_size = (AppConfig.BASE_FIGURE_WIDTH, int(total_height))
             beeswarm_max_display = n_features 
         else:
@@ -493,8 +491,8 @@ class VisualStudio:
         with sns.plotting_context("notebook", font_scale=AppConfig.FONT_SCALE):
             SystemContext._fix_matplotlib_chinese()
             
-            # 使用 layout='constrained' 并配合较大的 figsize
-            fig = plt.figure(figsize=fig_size, dpi=AppConfig.DPI, layout='constrained')
+            # SHAP 图在 constrained layout 下容易挤压并放大文本，改用手动留白控制。
+            fig = plt.figure(figsize=fig_size, dpi=AppConfig.DPI)
             
             # 3. 构造增强标题
             if len(feature_names) > 5 and not full_report_mode:
@@ -508,17 +506,15 @@ class VisualStudio:
                 f"Input X: {x_desc}\n"
                 f"生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M')}"
             )
-            # 增大标题字号和边距
-            fig.suptitle(title_text, fontsize=28, fontweight='bold', y=0.98)
+            fig.suptitle(title_text, fontsize=24, fontweight='bold')
 
-            # 4. 定义 GridSpec - 增加显式间距 hspace
+            # 4. 定义 GridSpec
             if full_report_mode:
                 height_ratios = [summary_unit_height, summary_unit_height, detail_height]
                 gs = fig.add_gridspec(3, 1, height_ratios=height_ratios)
                 ax_beeswarm = fig.add_subplot(gs[0, 0])
                 ax_bar = fig.add_subplot(gs[1, 0])
-                # 子网格也增加间距
-                gs_bottom = gs[2].subgridspec(n_rows, 3, hspace=0.4, wspace=0.2)
+                gs_bottom = gs[2].subgridspec(n_rows, 3)
             else:
                 gs = fig.add_gridspec(3, 2)
                 ax_beeswarm = fig.add_subplot(gs[0, 0])
@@ -527,12 +523,12 @@ class VisualStudio:
             # --- 绘制 Summary ---
             plt.sca(ax_beeswarm)
             ax_beeswarm.set_title("【全局概览】关键因子影响力度与方向 (Beeswarm)", fontsize=22, fontweight='bold', pad=20)
-            shap.plots.beeswarm(shap_values, max_display=beeswarm_max_display, show=False)
+            shap.plots.beeswarm(shap_values, max_display=beeswarm_max_display, ax=ax_beeswarm, show=False, plot_size=None)
             ax_beeswarm.set_xlabel("SHAP Value (对结果的影响值)", fontsize=18)
 
             plt.sca(ax_bar)
             ax_bar.set_title("【量化排名】特征平均绝对贡献度 (Importance Bar)", fontsize=22, fontweight='bold', pad=20)
-            shap.plots.bar(shap_values, max_display=beeswarm_max_display, show=False)
+            shap.plots.bar(shap_values, max_display=beeswarm_max_display, ax=ax_bar, show=False)
             ax_bar.set_xlabel("Mean |SHAP Value| (平均影响幅度)", fontsize=18)
 
             # --- 绘制 Details ---
@@ -578,6 +574,8 @@ class VisualStudio:
                     if i < 4: ax = fig.add_subplot(gs[plot_locs[i][0], plot_locs[i][1]])
                     else: continue
                 plot_dependence(ax, rank, feat_idx)
+
+            fig.subplots_adjust(top=0.9, hspace=0.35)
             
             return fig
 
