@@ -167,6 +167,8 @@ export const dataMergeNode: NodeDefinition = {
           )
 
           if (firstGroupFields.length > 0) {
+            const targetField = firstGroupFields[0]!
+            const sourceNames = groups.map((group) => group.name)
             const boxData = groups.map((g) => calculateBoxValues(g.data, targetField))
 
             chartOption = {

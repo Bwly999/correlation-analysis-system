@@ -52,6 +52,7 @@ export const chartDisplayNode: NodeDefinition = {
 
     const isGrouped = isParallelCollection(input.data)
     const yKey = config.yAxis || ''
+    let rows = input.data
 
     if (isGrouped) {
       const groups: Array<{ name: string; data: any[] }> = input.data
@@ -80,11 +81,10 @@ export const chartDisplayNode: NodeDefinition = {
 
         return { viewType: 'chart', chartOption: markRaw(option) }
       }
-      input.data = validGroups[0].data
+      rows = validGroups[0].data
     }
 
     // 标准单数据集逻辑
-    const rows = input.data
     const xKey = config.xAxis || Object.keys(rows[0] || {})[0]
     const targetYKey = yKey || Object.keys(rows[0] || {})[1]
     let option: any

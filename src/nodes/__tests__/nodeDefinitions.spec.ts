@@ -281,6 +281,8 @@ describe('Node Definitions Execution Logic', () => {
       expect(result.data[1]).toEqual({ name: 'Group B', data: [{ val: 20 }, { val: 30 }] })
       expect(result.stats.groupCount).toBe(2)
       expect(result.stats.totalRows).toBe(3)
+      expect(result.chartOption).not.toBeNull()
+      expect(result.chartOption.xAxis.data).toEqual(['Group A', 'Group B'])
     })
   })
 
@@ -540,6 +542,37 @@ describe('Node Definitions Execution Logic', () => {
 
       expect(result.viewType).toBe('chart')
       expect(result.chartOption.series[0].type).toBe('bar')
+    })
+
+    it('should not mutate grouped collection input when rendering non-boxplot charts', async () => {
+      const input = {
+        data: [
+          {
+            name: '组一',
+            data: [
+              { f1: 1, target: 2 },
+              { f1: 3, target: 4 },
+            ],
+          },
+          {
+            name: '组二',
+            data: [
+              { f1: 5, target: 6 },
+              { f1: 7, target: 8 },
+            ],
+          },
+        ],
+      }
+      const snapshot = JSON.parse(JSON.stringify(input))
+
+      const result = await chartDisplayNode.execute(input, {
+        chartType: 'scatter',
+        xAxis: 'f1',
+        yAxis: 'target',
+      })
+
+      expect(result.viewType).toBe('chart')
+      expect(input).toEqual(snapshot)
     })
   })
 

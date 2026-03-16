@@ -256,6 +256,30 @@ export const useWorkflowStore = defineStore('workflow', () => {
     }
   }
 
+  const applyNodeConfigDefaults = (node: WorkflowNode) => {
+    const definition = getNodeDefinition(node.data.type)
+    if (!definition) return null
+
+    const nextConfig = { ...(node.data.config ?? {}) }
+    let changed = false
+
+    definition.properties.forEach((property) => {
+      if (nextConfig[property.name] === undefined && property.default !== undefined) {
+        nextConfig[property.name] = property.default
+        changed = true
+      }
+    })
+
+    if (changed) {
+      node.data.config = nextConfig
+    }
+
+    return {
+      definition,
+      config: changed ? nextConfig : node.data.config,
+    }
+  }
+
   const validateConnection = (sourceNodeId: string, targetNodeId: string) => {
     const sourceNode = nodes.value.find((n) => n.id === sourceNodeId)
     const targetNode = nodes.value.find((n) => n.id === targetNodeId)
@@ -395,15 +419,17 @@ export const useWorkflowStore = defineStore('workflow', () => {
         return node.data.output
       }
 
-      const definition = getNodeDefinition(node.data.type)
-      if (!definition) {
+      const resolvedNode = applyNodeConfigDefaults(node)
+      const resolvedConfig = resolvedNode?.config ?? node.data.config
+      if (!resolvedNode?.definition) {
         addLog(`未找到定义: ${node.data.type}`, 'error', nodeId)
         return
       }
+      const definition = resolvedNode.definition
 
       if (definition.category === 'trigger') {
         const missingRuntimeProps = definition.properties.filter(
-          (p) => p.isRuntimeInput && !isValueValid(node.data.config[p.name], p.type),
+          (p) => p.isRuntimeInput && !isValueValid(resolvedConfig[p.name], p.type),
         )
         if (missingRuntimeProps.length > 0) {
           addLog(`节点 ${node.data.label} 缺少运行时输入`, 'info', nodeId)
@@ -423,7 +449,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
             throw new Error('手动输入 JSON 格式错误', { cause: e })
           }
         }
-        const result = await definition.execute(parsedInput, node.data.config)
+        const result = await definition.execute(parsedInput, resolvedConfig)
         node.data.output = markRaw(result)
         node.data.status = 'success'
         return result
@@ -472,7 +498,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
           ? { inputs: structuredInputs }
           : inputs[0] || null
 
-      const result = await definition.execute(executionInput, node.data.config)
+      const result = await definition.execute(executionInput, resolvedConfig)
 
       node.data.output = markRaw(result)
       node.data.status = 'success'

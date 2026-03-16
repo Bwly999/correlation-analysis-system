@@ -132,6 +132,118 @@ describe('Workflow Store', () => {
     }
   })
 
+  it('should honor node definition defaults during global execution for legacy multi-input nodes', async () => {
+    const store = useWorkflowStore()
+    const trigger1 = store.addAndConnectNode('manual-json-import', '来源一', { x: 0, y: 0 })!
+    const trigger2 = store.addAndConnectNode('manual-json-import', '来源二', { x: 0, y: 120 })!
+    const mergeNode = store.addAndConnectNode('data-merge', '数据合并', { x: 300, y: 60 })!
+    const terminalNode = store.addAndConnectNode('chart-display', '图表', { x: 600, y: 60 })!
+
+    trigger1.data.config.jsonData = JSON.stringify([{ id: 1, city: '上海' }])
+    trigger2.data.config.jsonData = JSON.stringify([{ id: 2, score: 98 }])
+
+    // 模拟旧工作流或残缺配置：运行前未持久化数据合并节点默认参数。
+    mergeNode.data.config = {}
+
+    store.edges.push(
+      {
+        id: 'e_t1_merge',
+        source: trigger1.id,
+        target: mergeNode.id,
+        type: 'n8n',
+        animated: true,
+      },
+      {
+        id: 'e_t2_merge',
+        source: trigger2.id,
+        target: mergeNode.id,
+        type: 'n8n',
+        animated: true,
+      },
+      {
+        id: 'e_merge_terminal',
+        source: mergeNode.id,
+        target: terminalNode.id,
+        type: 'n8n',
+        animated: true,
+      },
+    )
+
+    await store.runGlobal()
+
+    expect(mergeNode.data.output?.stats?.inputCount).toBe(2)
+    expect(mergeNode.data.output?.stats?.outputRows).toBe(2)
+    expect(mergeNode.data.output?.data).toEqual([
+      { id: 1, city: '上海', score: null },
+      { id: 2, city: null, score: 98 },
+    ])
+  })
+
+  it('should preserve collection merge output during global execution when consumed by chart display', async () => {
+    const store = useWorkflowStore()
+    const trigger1 = store.addAndConnectNode('manual-json-import', '手动输入数据1', { x: 0, y: 0 })!
+    const trigger2 = store.addAndConnectNode('manual-json-import', '手动输入数据2', { x: 0, y: 120 })!
+    const trigger3 = store.addAndConnectNode('manual-json-import', '手动输入数据3', { x: 0, y: 240 })!
+    const mergeNode = store.addAndConnectNode('data-merge', '数据合并', { x: 300, y: 120 })!
+    const terminalNode = store.addAndConnectNode('chart-display', '图表展示', { x: 600, y: 120 })!
+
+    const sharedRows = [
+      { f1: 10, f2: 20, target: 1 },
+      { f1: 12, f2: 18, target: 0 },
+    ]
+
+    trigger1.data.config.jsonData = JSON.stringify(sharedRows)
+    trigger2.data.config.jsonData = JSON.stringify(sharedRows)
+    trigger3.data.config.jsonData = JSON.stringify(sharedRows)
+
+    mergeNode.data.config = { mergeMode: 'collection' }
+    terminalNode.data.config = { chartType: 'scatter', xAxis: 'f1', yAxis: 'target' }
+
+    store.edges.push(
+      {
+        id: 'e_t1_merge_collection',
+        source: trigger1.id,
+        target: mergeNode.id,
+        type: 'n8n',
+        animated: true,
+      },
+      {
+        id: 'e_t2_merge_collection',
+        source: trigger2.id,
+        target: mergeNode.id,
+        type: 'n8n',
+        animated: true,
+      },
+      {
+        id: 'e_t3_merge_collection',
+        source: trigger3.id,
+        target: mergeNode.id,
+        type: 'n8n',
+        animated: true,
+      },
+      {
+        id: 'e_merge_chart_collection',
+        source: mergeNode.id,
+        target: terminalNode.id,
+        type: 'n8n',
+        animated: true,
+      },
+    )
+
+    await store.runGlobal()
+
+    expect(mergeNode.data.output?.data).toEqual([
+      { name: '手动输入数据1', data: sharedRows },
+      { name: '手动输入数据2', data: sharedRows },
+      { name: '手动输入数据3', data: sharedRows },
+    ])
+    expect(mergeNode.data.output?.stats).toEqual({
+      inputCount: 3,
+      groupCount: 3,
+      totalRows: 6,
+    })
+  })
+
   it('should execute a single node and cache output', async () => {
     const store = useWorkflowStore()
     const node = store.addAndConnectNode('file-import', 'Trigger', { x: 0, y: 0 })!
