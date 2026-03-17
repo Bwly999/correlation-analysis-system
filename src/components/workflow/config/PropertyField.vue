@@ -274,9 +274,8 @@ const filteredTreeOptions = computed(() =>
     <Textarea
       v-else-if="prop.type === 'textarea'"
       v-model="configValue"
-      auto-resize
-      :rows="5"
-      class="w-full ndv-input max-h-[280px] overflow-y-auto custom-textarea"
+      :rows="8"
+      class="w-full ndv-input max-h-[240px] overflow-y-auto custom-textarea"
       :placeholder="prop.placeholder"
     />
 
@@ -423,6 +422,17 @@ const filteredTreeOptions = computed(() =>
   border-color: #e2e8f0 !important;
   background-color: #ffffff !important;
   border-radius: 12px !important;
+}
+
+.custom-textarea::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-textarea::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-textarea::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 10px;
 }
 
 .ndv-tree {

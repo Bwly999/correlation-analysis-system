@@ -81,11 +81,12 @@ const handleConfirm = () => {
 <template>
   <Dialog
     :visible="visible"
+    @update:visible="emit('close')"
     modal
+    dismissableMask
     :style="{ width: '560px' }"
     :closable="true"
     class="runtime-input-dialog"
-    @hide="emit('close')"
   >
     <template #header>
       <div class="flex items-center gap-2">
@@ -100,12 +101,19 @@ const handleConfirm = () => {
       <div class="flex gap-3 rounded-xl border border-blue-100 bg-blue-50/50 p-4 shadow-sm shrink-0">
         <Info class="shrink-0 text-blue-500" :size="18" />
         <p class="text-[13px] font-medium leading-relaxed text-slate-600">
-          请为节点 <span class="font-bold text-blue-700">{{ node?.data.label }}</span> 补充本次运行所需的动态参数。这些设置仅对本次运行有效。
+          请为节点
+          <span class="font-bold text-blue-700">{{ node?.data.label }}</span>
+          补充本次运行所需的动态参数。这些设置仅对本次运行有效。
         </p>
       </div>
 
-      <div v-if="runtimeProperties.length === 0" class="flex flex-col items-center justify-center py-10 text-center">
-        <div class="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-slate-50 text-slate-300">
+      <div
+        v-if="runtimeProperties.length === 0"
+        class="flex flex-col items-center justify-center py-10 text-center"
+      >
+        <div
+          class="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-slate-50 text-slate-300"
+        >
           <Settings :size="24" />
         </div>
         <p class="text-sm font-medium text-slate-400">当前节点没有需要填写的运行时参数</p>
@@ -113,9 +121,9 @@ const handleConfirm = () => {
 
       <div v-else class="flex flex-col min-h-0">
         <!-- 顶部固定区域：通常是启动方式 -->
-        <div 
-          v-if="firstProperty" 
-          class="shrink-0 mb-2 overflow-hidden" 
+        <div
+          v-if="firstProperty"
+          class="shrink-0 mb-2 overflow-hidden"
           :style="{ height: topHeight + 'px' }"
         >
           <PropertyField
@@ -128,7 +136,7 @@ const handleConfirm = () => {
         </div>
 
         <!-- 可调节分割线 -->
-        <div 
+        <div
           v-if="otherProperties.length > 0"
           class="group flex items-center justify-center h-4 cursor-row-resize select-none my-1"
           @mousedown="startResizing"
@@ -193,24 +201,6 @@ const handleConfirm = () => {
 
 .runtime-prop-item {
   animation: slide-up 0.3s ease-out forwards;
-}
-
-.custom-scrollbar::-webkit-scrollbar {
-  width: 4px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: #f8fafc;
-  border-radius: 10px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #e2e8f0;
-  border-radius: 10px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #cbd5e1;
 }
 
 @keyframes slide-up {
