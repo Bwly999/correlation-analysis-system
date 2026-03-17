@@ -11,13 +11,12 @@ const props = defineProps<{
 const emit = defineEmits(['update:config', 'save'])
 
 const updateConfig = (propName: string, value: any) => {
-  const newConfig = { ...props.config, [propName]: value }
-  emit('update:config', newConfig)
+  emit('update:config', { ...props.config, [propName]: value })
 }
 </script>
 
 <template>
-  <div class="space-y-10 max-w-2xl mx-auto py-4">
+  <div class="mx-auto max-w-2xl space-y-10 py-4">
     <div
       v-for="prop in properties"
       v-show="!prop.displayIf || prop.displayIf(config)"
@@ -27,6 +26,7 @@ const updateConfig = (propName: string, value: any) => {
         :prop="prop"
         :model-value="config[prop.name]"
         :upstream-factors="upstreamFactors"
+        :config-context="config"
         @update:model-value="(val) => updateConfig(prop.name, val)"
         @save="emit('save')"
       />

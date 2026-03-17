@@ -7,11 +7,13 @@ import Aura from '@primevue/themes/aura'
 import App from './App.vue'
 import './style/main.css'
 import Tooltip from 'primevue/tooltip'
+import { initializeKanbanHostBridge } from '@/services/kanbanIntegration'
 
 const app = createApp(App)
 const pinia = createPinia()
 
 app.use(pinia)
+initializeKanbanHostBridge()
 if (window) (window as any).pinia = pinia
 app.directive('tooltip', Tooltip)
 app.use(PrimeVue, {

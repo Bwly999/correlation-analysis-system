@@ -2,6 +2,34 @@
 import * as fs from 'fs'
 import * as path from 'path'
 
+const {
+  mockFetchKanbanData,
+  mockGetKanbanAuthToken,
+  mockGetFactorTree,
+  mockGetSchemeTree,
+  mockListAuthorizedProducts,
+  mockListMaterialTypes,
+  mockListTaskOrderTypes,
+} = vi.hoisted(() => ({
+  mockFetchKanbanData: vi.fn(),
+  mockGetKanbanAuthToken: vi.fn(),
+  mockGetFactorTree: vi.fn(),
+  mockGetSchemeTree: vi.fn(),
+  mockListAuthorizedProducts: vi.fn(),
+  mockListMaterialTypes: vi.fn(),
+  mockListTaskOrderTypes: vi.fn(),
+}))
+
+vi.mock('@/services/kanbanIntegration', () => ({
+  fetchKanbanData: mockFetchKanbanData,
+  getKanbanAuthToken: mockGetKanbanAuthToken,
+  getFactorTree: mockGetFactorTree,
+  getSchemeTree: mockGetSchemeTree,
+  listAuthorizedProducts: mockListAuthorizedProducts,
+  listMaterialTypes: mockListMaterialTypes,
+  listTaskOrderTypes: mockListTaskOrderTypes,
+}))
+
 import { fileImportNode } from '../definitions/fileImport'
 import { dataCleaningNode } from '../definitions/dataCleaning'
 import { dataProfilingNode } from '../definitions/dataProfiling'
@@ -20,6 +48,17 @@ import { nodeDefinitions } from '../registry'
 global.URL.createObjectURL = vi.fn(() => 'blob:mock-url')
 
 describe('Node Definitions Execution Logic', () => {
+  it('should expose readable Chinese labels for the board integration node', () => {
+    expect(neighborSystemNode.displayName).toBe('看板数据对接')
+    expect(
+      neighborSystemNode.properties.find((property) => property.name === 'productName')
+        ?.displayName,
+    ).toBe('产品名称')
+    expect(
+      neighborSystemNode.properties.find((property) => property.name === 'selectedFactors')
+        ?.displayName,
+    ).toBe('因子全集')
+  })
   describe('file-import', () => {
     it('should parse a CSV file correctly', async () => {
       const csvPath = path.resolve(__dirname, '../../../test/resource/test_data.csv')
@@ -223,12 +262,22 @@ describe('Node Definitions Execution Logic', () => {
             {
               sourceNodeId: 'base',
               sourceNodeLabel: 'Base',
-              payload: { data: [{ id: 1, city: '上海', value: 10 }, { id: 2, city: '北京', value: 20 }] },
+              payload: {
+                data: [
+                  { id: 1, city: '上海', value: 10 },
+                  { id: 2, city: '北京', value: 20 },
+                ],
+              },
             },
             {
               sourceNodeId: 'extra',
               sourceNodeLabel: 'Extra',
-              payload: { data: [{ id: 1, value: 99, score: 90 }, { id: 3, value: 88, score: 70 }] },
+              payload: {
+                data: [
+                  { id: 1, value: 99, score: 90 },
+                  { id: 3, value: 88, score: 70 },
+                ],
+              },
             },
           ],
         },
@@ -245,7 +294,13 @@ describe('Node Definitions Execution Logic', () => {
       expect(mergeNode).toBeDefined()
       expect(result.data).toHaveLength(2)
       expect(result.data[0]).toEqual({ id: 1, city: '上海', value: 10, value_Extra: 99, score: 90 })
-      expect(result.data[1]).toEqual({ id: 2, city: '北京', value: 20, value_Extra: null, score: null })
+      expect(result.data[1]).toEqual({
+        id: 2,
+        city: '北京',
+        value: 20,
+        value_Extra: null,
+        score: null,
+      })
       expect(result.stats.outputRows).toBe(2)
       expect(result.stats.matchedRows).toBe(1)
       expect(result.stats.conflictFieldCount).toBe(1)
@@ -290,23 +345,23 @@ describe('Node Definitions Execution Logic', () => {
     it('should filter rows by multiple conditions with all-match mode', async () => {
       const input = {
         data: [
-          { city: '涓婃捣', score: 91, tag: 'A-1' },
-          { city: '鍖椾含', score: 77, tag: 'B-2' },
-          { city: '涓婃捣', score: 82, tag: 'A-2' },
-          { city: '娣卞湷', score: 95, tag: 'C-1' },
+          { city: '上海', score: 91, tag: 'A-1' },
+          { city: '北京', score: 77, tag: 'B-2' },
+          { city: '上海', score: 82, tag: 'A-2' },
+          { city: '深圳', score: 95, tag: 'C-1' },
         ],
       }
 
       const result = await dataFilterNode.execute(input, {
         matchMode: 'all',
         conditions: [
-          { field: 'city', operator: 'equals', value: '涓婃捣' },
+          { field: 'city', operator: 'equals', value: '上海' },
           { field: 'score', operator: 'gte', value: 85 },
         ],
       })
 
       expect(result.data).toHaveLength(1)
-      expect(result.data[0]).toEqual({ city: '涓婃捣', score: 91, tag: 'A-1' })
+      expect(result.data[0]).toEqual({ city: '上海', score: 91, tag: 'A-1' })
       expect(result.stats.originalCount).toBe(4)
       expect(result.stats.filteredCount).toBe(1)
     })
@@ -314,10 +369,10 @@ describe('Node Definitions Execution Logic', () => {
     it('should filter rows by any-match mode with contains operator', async () => {
       const input = {
         data: [
-          { city: '涓婃捣', score: 91, tag: 'A-1' },
-          { city: '鍖椾含', score: 77, tag: 'B-2' },
-          { city: '涓婃捣', score: 82, tag: 'A-2' },
-          { city: '娣卞湷', score: 95, tag: 'C-1' },
+          { city: '上海', score: 91, tag: 'A-1' },
+          { city: '北京', score: 77, tag: 'B-2' },
+          { city: '上海', score: 82, tag: 'A-2' },
+          { city: '深圳', score: 95, tag: 'C-1' },
         ],
       }
 
@@ -330,7 +385,7 @@ describe('Node Definitions Execution Logic', () => {
       })
 
       expect(result.data).toHaveLength(2)
-      expect(result.data.map((row: any) => row.city)).toEqual(['鍖椾含', '娣卞湷'])
+      expect(result.data.map((row: any) => row.city)).toEqual(['北京', '深圳'])
     })
   })
 
@@ -391,7 +446,9 @@ describe('Node Definitions Execution Logic', () => {
       expect(result.report.sections.some((section: any) => section.key === 'importance')).toBe(true)
       expect(result.report.sections.some((section: any) => section.key === 'dependence')).toBe(true)
       expect(result.report.sections.some((section: any) => section.key === 'details')).toBe(true)
-      expect(result.report.sections.find((section: any) => section.key === 'details').items).toHaveLength(3)
+      expect(
+        result.report.sections.find((section: any) => section.key === 'details').items,
+      ).toHaveLength(3)
       expect(result.report.supplements.fullReportImage).toBe('data:image/png;base64,base64_full')
       expect(result.report.supplements.beeswarmImage).toBe('data:image/png;base64,base64_beeswarm')
     })
@@ -477,39 +534,122 @@ describe('Node Definitions Execution Logic', () => {
   })
 
   describe('neighbor-system', () => {
-    it('should generate mock data based on fetch mode and factor selection', async () => {
+    it('should fetch board data through the integration bridge', async () => {
+      mockGetKanbanAuthToken.mockReturnValue('token-from-host')
+      mockFetchKanbanData.mockResolvedValue({
+        rows: [
+          { sn: 'SN001', F_TEMP: 12.3, F_PRESS: 45.6 },
+          { sn: 'SN002', F_TEMP: 22.3, F_PRESS: 55.6 },
+        ],
+        metadata: {
+          totalSn: 2,
+        },
+      })
+
       const config = {
-        productId: 'p_01',
+        productName: '试制产品 A1',
         fetchMode: 'time',
-        timeRange: [new Date(), new Date()],
+        factorTreeOptions: [
+          {
+            key: 'scene_all',
+            label: '全场景/全场景',
+            data: { nodeType: 'scene' },
+            children: [
+              {
+                key: 'PROC_A',
+                label: '涂布',
+                data: { nodeType: 'process', process: '涂布' },
+                children: [
+                  {
+                    key: 'F_TEMP',
+                    label: '温度',
+                    data: { nodeType: 'factor', factorKey: 'F_TEMP', process: '涂布' },
+                  },
+                  {
+                    key: 'F_PRESS',
+                    label: '压力',
+                    data: { nodeType: 'factor', factorKey: 'F_PRESS', process: '涂布' },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+        timeRange: [new Date('2026-03-01'), new Date('2026-03-10')],
+        materialType: '正极',
         selectedFactors: {
-          f_bat_volt: { checked: true },
-          f_bat_curr: { checked: true },
-          sys_power: { checked: true },
+          'factor:涂布::F_TEMP': { checked: true },
+          'factor:涂布::F_PRESS': { checked: true },
         },
       }
 
       const result = await neighborSystemNode.execute(null, config)
 
-      expect(result.data).toBeDefined()
-      expect(result.data.length).toBeGreaterThan(0)
+      expect(mockFetchKanbanData).toHaveBeenCalledWith(
+        expect.objectContaining({
+          token: 'token-from-host',
+          productName: '试制产品 A1',
+          fetchMode: 'time',
+          materialType: '正极',
+          factorKeys: ['F_TEMP', 'F_PRESS'],
+          processList: ['涂布'],
+        }),
+      )
+      expect(result.data).toEqual([
+        { sn: 'SN001', F_TEMP: 12.3, F_PRESS: 45.6 },
+        { sn: 'SN002', F_TEMP: 22.3, F_PRESS: 55.6 },
+      ])
       expect(result.metadata.factors_count).toBe(2)
-      expect(result.metadata.product).toBe('p_01')
-      expect(result.data[0].f_bat_volt).toBeDefined()
-      expect(result.data[0].f_bat_curr).toBeDefined()
-      expect(result.data[0].sn).toMatch(/^SN_TIME_/)
+      expect(result.metadata.product).toBe('试制产品 A1')
+      expect(result.metadata.fetch_mode).toBe('time')
     })
 
     it('should throw error if no factors are selected', async () => {
+      mockGetKanbanAuthToken.mockReturnValue('token-from-host')
       const config = {
         fetchMode: 'sn',
         snList: 'SN001',
+        productName: '试制产品 A1',
         selectedFactors: {},
       }
 
       await expect(neighborSystemNode.execute(null, config)).rejects.toThrow(
         '请至少选择一个因子进行获取',
       )
+    })
+
+    it('should require a token from the host system', async () => {
+      mockGetKanbanAuthToken.mockReturnValue('')
+
+      await expect(
+        neighborSystemNode.execute(null, {
+          productName: '试制产品 A1',
+          fetchMode: 'sn',
+          snList: 'SN001',
+          factorTreeOptions: [
+            {
+              key: 'scene_all',
+              label: '全场景/全场景',
+              data: { nodeType: 'scene' },
+              children: [
+                {
+                  key: 'PROC_A',
+                  label: '涂布',
+                  data: { nodeType: 'process', process: '涂布' },
+                  children: [
+                    {
+                      key: 'F_TEMP',
+                      label: '温度',
+                      data: { nodeType: 'factor', factorKey: 'F_TEMP', process: '涂布' },
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+          selectedFactors: { 'factor:涂布::F_TEMP': { checked: true } },
+        }),
+      ).rejects.toThrow('未接收到宿主系统传入的访问凭证')
     })
   })
 
@@ -599,11 +739,3 @@ describe('Node Definitions Execution Logic', () => {
     })
   })
 })
-
-
-
-
-
-
-
-

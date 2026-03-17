@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { FileType, Info, HelpCircle, RefreshCw } from 'lucide-vue-next'
+import { computed, ref, watch } from 'vue'
+import { Info } from 'lucide-vue-next'
 import Dialog from 'primevue/dialog'
 import Button from 'primevue/button'
-import DatePicker from 'primevue/datepicker'
-import MonacoEditor from './MonacoEditor.vue'
-import { useWorkflowStore, type WorkflowNode } from '@/stores/workflowStore'
+import PropertyField from './config/PropertyField.vue'
+import { type WorkflowNode } from '@/utils/storage'
 import { getNodeDefinition } from '@/nodes/registry'
 
 const props = defineProps<{
@@ -13,63 +13,37 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits(['close', 'confirm'])
-const _store = useWorkflowStore()
-const config = ref<any>({})
-const isDragging = ref<Record<string, boolean>>({})
+const config = ref<Record<string, any>>({})
 
 const nodeDefinition = computed(() => (props.node ? getNodeDefinition(props.node.data.type) : null))
 const runtimeProperties = computed(
-  () => nodeDefinition.value?.properties.filter((p) => p.isRuntimeInput) || [],
+  () => nodeDefinition.value?.properties.filter((property) => property.isRuntimeInput) || [],
 )
 
 watch(
   () => props.node,
-  (newNode) => {
-    if (newNode) {
-      const baseConfig = { ...newNode.data.config }
-      runtimeProperties.value.forEach((p) => {
-        if (baseConfig[p.name] === undefined) {
-          baseConfig[p.name] = p.default
-        }
-      })
-      config.value = baseConfig
+  (node) => {
+    if (!node) {
+      config.value = {}
+      return
     }
+
+    const nextConfig = { ...node.data.config }
+    runtimeProperties.value.forEach((property) => {
+      if (nextConfig[property.name] === undefined) {
+        nextConfig[property.name] = property.default
+      }
+    })
+    config.value = nextConfig
   },
   { immediate: true },
 )
 
-const handleFile = (file: File, propName: string) => {
-  if (file) {
-    config.value[propName] = file
-  }
-}
-
-const onFileSelect = (event: any, propName: string) => {
-  const file = event.target.files[0]
-  handleFile(file, propName)
-  event.target.value = ''
-}
-
-const onDrop = (event: DragEvent, propName: string) => {
-  event.preventDefault()
-  isDragging.value[propName] = false
-  const file = event.dataTransfer?.files[0]
-  if (file) handleFile(file, propName)
-}
-
-const onDragOver = (event: DragEvent, propName: string) => {
-  event.preventDefault()
-  isDragging.value[propName] = true
-}
-
-const onDragLeave = (event: DragEvent, propName: string) => {
-  isDragging.value[propName] = false
+const updateConfig = (propName: string, value: any) => {
+  config.value = { ...config.value, [propName]: value }
 }
 
 const handleConfirm = () => {
-  if (props.node) {
-    props.node.data.config = { ...props.node.data.config, ...config.value }
-  }
   emit('confirm', config.value)
 }
 </script>
@@ -78,99 +52,40 @@ const handleConfirm = () => {
   <Dialog
     :visible="visible"
     modal
-    header="运行时参数设置"
-    :style="{ width: '450px' }"
+    header="运行时输入"
+    :style="{ width: '520px' }"
     :closable="false"
     class="runtime-input-dialog"
   >
     <div class="flex flex-col gap-6 py-4">
-      <div class="p-4 bg-indigo-50 border border-indigo-100 rounded-xl flex gap-3 shadow-sm">
-        <Info class="text-indigo-500 shrink-0" size="18" />
-        <p class="text-xs text-indigo-700 leading-relaxed font-medium">
-          节点 <b>{{ node?.data.label }}</b> 需要您提供即时输入参数以启动分析流程。
+      <div class="flex gap-3 rounded-xl border border-blue-100 bg-blue-50 p-4 shadow-sm">
+        <Info class="shrink-0 text-blue-500" :size="18" />
+        <p class="text-xs font-medium leading-relaxed text-blue-700">
+          请为 <b>{{ node?.data.label }}</b> 补充本次运行所需的动态参数。
         </p>
       </div>
 
-      <div v-for="prop in runtimeProperties" :key="prop.name" class="flex flex-col gap-2">
-        <label
-          class="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center"
-        >
-          {{ prop.displayName }}
-          <HelpCircle
-            v-if="prop.description"
-            v-tooltip.top="prop.description"
-            size="12"
-            class="ml-1 opacity-50 cursor-help"
-          />
-        </label>
+      <div v-if="runtimeProperties.length === 0" class="text-sm text-slate-500">
+        当前节点没有需要填写的运行时参数。
+      </div>
 
-        <!-- 根据类型渲染 -->
-        <DatePicker
-          v-if="prop.type === 'datetime-range'"
-          v-model="config[prop.name]"
-          selection-mode="range"
-          show-time
-          class="w-full"
+      <div
+        v-for="prop in runtimeProperties"
+        v-show="!prop.displayIf || prop.displayIf(config)"
+        :key="prop.name"
+      >
+        <PropertyField
+          :prop="prop"
+          :model-value="config[prop.name]"
+          :upstream-factors="[]"
+          :config-context="config"
+          @update:model-value="(val) => updateConfig(prop.name, val)"
         />
-        <MonacoEditor v-else-if="prop.type === 'json'" v-model="config[prop.name]" height="200px" />
-
-        <div v-else-if="prop.type === 'file'" class="space-y-2">
-          <label
-            class="flex flex-col items-center justify-center border-2 border-dashed rounded-xl transition-all cursor-pointer group relative overflow-hidden"
-            :class="[
-              isDragging[prop.name]
-                ? 'bg-indigo-100 border-indigo-500 scale-[1.02]'
-                : config[prop.name]
-                  ? 'bg-emerald-50 border-emerald-200 hover:border-emerald-400 py-6'
-                  : 'bg-slate-50 border-slate-200 hover:border-indigo-400 p-8',
-            ]"
-            @dragover="onDragOver($event, prop.name)"
-            @dragleave="onDragLeave($event, prop.name)"
-            @drop="onDrop($event, prop.name)"
-          >
-            <input type="file" class="hidden" @change="onFileSelect($event, prop.name)" />
-
-            <template v-if="config[prop.name] && !isDragging[prop.name]">
-              <FileType size="24" class="text-emerald-600 mb-2" />
-              <span
-                class="text-[11px] font-bold text-emerald-800 truncate px-4 w-full text-center"
-                >{{ config[prop.name].name }}</span
-              >
-              <span
-                class="mt-2 text-[9px] font-black text-emerald-500 uppercase flex items-center gap-1 opacity-60 group-hover:opacity-100"
-              >
-                <RefreshCw size="10" /> Click to replace
-              </span>
-            </template>
-
-            <template v-else>
-              <FileType
-                size="24"
-                :class="[
-                  isDragging[prop.name]
-                    ? 'text-indigo-600'
-                    : 'text-slate-300 group-hover:text-indigo-400',
-                ]"
-                class="mb-2"
-              />
-              <span
-                class="text-[10px] font-bold uppercase"
-                :class="[
-                  isDragging[prop.name]
-                    ? 'text-indigo-700'
-                    : 'text-slate-400 group-hover:text-indigo-500',
-                ]"
-              >
-                {{ isDragging[prop.name] ? 'Drop file' : 'Select file or drop' }}
-              </span>
-            </template>
-          </label>
-        </div>
       </div>
     </div>
 
     <template #footer>
-      <div class="flex gap-2 w-full">
+      <div class="flex w-full gap-2">
         <Button
           label="取消"
           severity="secondary"
@@ -179,7 +94,7 @@ const handleConfirm = () => {
           @click="emit('close')"
         />
         <Button
-          label="确认并启动"
+          label="确认并继续"
           severity="primary"
           class="flex-1 cursor-pointer"
           @click="handleConfirm"
@@ -194,6 +109,7 @@ const handleConfirm = () => {
   border-bottom: none;
   padding-bottom: 0;
 }
+
 .runtime-input-dialog .p-dialog-footer {
   border-top: none;
 }

@@ -1,197 +1,267 @@
 import type { NodeDefinition } from '../types'
+import {
+  fetchKanbanData,
+  getFactorTree,
+  getKanbanAuthToken,
+  getSchemeTree,
+  listAuthorizedProducts,
+  listMaterialTypes,
+  listTaskOrderTypes,
+} from '@/services/kanbanIntegration'
+
+const FACTOR_KEY_PREFIX = 'factor:'
+const SCHEME_KEY_PREFIX = 'scheme:'
+
+const parseDelimitedList = (value: string) =>
+  (value || '')
+    .split(/[\n,\uff0c]/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+
+const extractCheckedLeafKeys = (
+  selection: Record<string, { checked?: boolean }> | undefined,
+  prefix: string,
+) =>
+  Object.entries(selection || {})
+    .filter(([key, state]) => Boolean(state?.checked) && key.startsWith(prefix))
+    .map(([key]) => key)
+
+const parseFactorSelections = (selection: Record<string, { checked?: boolean }> | undefined) => {
+  const factorSelections = extractCheckedLeafKeys(selection, FACTOR_KEY_PREFIX)
+
+  const factors = factorSelections.map((key) => {
+    const rawValue = key.slice(FACTOR_KEY_PREFIX.length)
+    const [process, factorKey] = rawValue.split('::')
+
+    return {
+      process,
+      factorKey,
+      selectionKey: key,
+    }
+  })
+
+  return {
+    factors,
+    factorKeys: factors
+      .map((item) => item.factorKey)
+      .filter((value): value is string => Boolean(value)),
+    processList: [
+      ...new Set(
+        factors.map((item) => item.process).filter((value): value is string => Boolean(value)),
+      ),
+    ],
+  }
+}
+
+const parseSchemeSelections = (selection: Record<string, { checked?: boolean }> | undefined) =>
+  extractCheckedLeafKeys(selection, SCHEME_KEY_PREFIX).map((key) =>
+    key.slice(SCHEME_KEY_PREFIX.length),
+  )
+
+const ensureDateRange = (value: Date[] | undefined) => {
+  if (!Array.isArray(value) || value.length < 2 || !value[0] || !value[1]) {
+    throw new Error('请选择完整的查询日期范围')
+  }
+
+  return [value[0].toISOString(), value[1].toISOString()] as [string, string]
+}
+
+const ensureToken = () => {
+  const token = getKanbanAuthToken()
+  if (!token) {
+    throw new Error('未接收到宿主系统传入的访问凭证')
+  }
+  return token
+}
 
 export const neighborSystemNode: NodeDefinition = {
   name: 'neighbor-system',
-  displayName: '相邻系统对接',
+  displayName: '看板数据对接',
   icon: 'database',
   category: 'trigger',
-  description: '对接外部系统 API 获取因子数据。支持按时间、方案或 SN 集合进行多维度筛选。',
+  description:
+    '通过中间层对接宿主看板系统，按时间、方案、SN 或任务令拉取 SN，再统一查询因子明细数据。',
   properties: [
     {
-      name: 'productId',
-      displayName: '产品型号',
+      name: 'productName',
+      displayName: '产品名称',
       type: 'options',
-      default: 'p_01',
-      options: [
-        { name: '旗舰系列 A1', value: 'p_01' },
-        { name: '标准系列 B2', value: 'p_02' },
-        { name: '经济系列 C3', value: 'p_03' },
-      ],
+      default: '',
       required: true,
+      placeholder: '请选择产品名称',
+      resolveOptions: async () => listAuthorizedProducts(ensureToken()),
+    },
+    {
+      name: 'selectedFactors',
+      displayName: '因子全集',
+      type: 'tree',
+      required: true,
+      default: {},
+      filterable: true,
+      placeholder: '搜索场景 / 工序 / 因子名称',
+      emptyMessage: '请先选择产品名称',
+      dependencies: ['productName'],
+      resolveOptions: async ({ config }) => {
+        if (!config.productName) return []
+        return getFactorTree(ensureToken(), config.productName)
+      },
     },
     {
       name: 'fetchMode',
-      displayName: '数据获取模式',
-      type: 'options',
+      displayName: '启动方式',
+      type: 'select-button',
       default: 'time',
       isRuntimeInput: true,
       options: [
-        { name: '时间范围', value: 'time' },
-        { name: '按方案', value: 'scheme' },
-        { name: '按 SN 集合', value: 'sn' },
+        { name: '按时间查询', value: 'time' },
+        { name: '按方案查询', value: 'scheme' },
+        { name: '按 SN 查询', value: 'sn' },
+        { name: '按任务令查询', value: 'taskOrder' },
       ],
     },
     {
       name: 'timeRange',
-      displayName: '查询时间段',
+      displayName: '查询日期',
       type: 'datetime-range',
+      default: null,
       isRuntimeInput: true,
-      description: '获取该时间段内产生数据的 SN 列表',
+      dateOnly: true,
+      description: '最小粒度到天，按时间段查询 SN 列表。',
       displayIf: (config) => config.fetchMode === 'time',
     },
     {
-      name: 'schemeId',
-      displayName: '选择方案',
+      name: 'materialType',
+      displayName: '物料类型',
       type: 'options',
       default: '',
       isRuntimeInput: true,
-      options: [
-        { name: '全量生产方案', value: 'sch_full' },
-        { name: '核心部件抽检方案', value: 'sch_core' },
-        { name: '老化测试方案', value: 'sch_aging' },
-      ],
+      editable: true,
+      placeholder: '请选择或输入物料类型',
+      dependencies: ['productName'],
+      resolveOptions: async ({ config }) => listMaterialTypes(ensureToken(), config.productName),
+      displayIf: (config) => config.fetchMode === 'time',
+    },
+    {
+      name: 'schemeSelection',
+      displayName: '阶段方案',
+      type: 'tree',
+      default: {},
+      isRuntimeInput: true,
+      filterable: true,
+      placeholder: '搜索阶段 / 方案',
+      emptyMessage: '请先选择产品名称',
+      dependencies: ['productName'],
+      resolveOptions: async ({ config }) => {
+        if (!config.productName) return []
+        return getSchemeTree(ensureToken(), config.productName)
+      },
+      displayIf: (config) => config.fetchMode === 'scheme',
+    },
+    {
+      name: 'taskOrderType',
+      displayName: '任务令类型',
+      type: 'options',
+      default: '',
+      isRuntimeInput: true,
+      editable: true,
+      placeholder: '请选择或输入任务令类型',
+      dependencies: ['productName'],
+      resolveOptions: async ({ config }) => listTaskOrderTypes(ensureToken(), config.productName),
       displayIf: (config) => config.fetchMode === 'scheme',
     },
     {
       name: 'snList',
-      displayName: 'SN 集合',
-      type: 'string',
+      displayName: 'SN 列表',
+      type: 'textarea',
       default: '',
       isRuntimeInput: true,
-      placeholder: '多个 SN 以逗号或换行分隔',
-      description: '直接指定要查询的设备序列号',
+      placeholder: '请输入 SN，支持换行、英文逗号或中文逗号分隔',
       displayIf: (config) => config.fetchMode === 'sn',
     },
     {
-      name: 'selectedFactors',
-      displayName: '选择要获取的因子',
-      type: 'tree',
-      required: true,
-      description: '从因子全集树中选择（系统 -> 模块 -> 因子）',
-      default: {},
-      options: [
-        {
-          key: 'sys_power',
-          label: '动力系统',
-          data: 'Power System',
-          children: [
-            {
-              key: 'mod_battery',
-              label: '电池管理模块',
-              data: 'Battery Module',
-              children: [
-                { key: 'f_bat_volt', label: '总电压', data: 'Total Voltage' },
-                { key: 'f_bat_curr', label: '充放电电流', data: 'Current' },
-                { key: 'f_bat_temp', label: '电芯最高温度', data: 'Max Temp' },
-                { key: 'f_bat_soc', label: '剩余电量 (SOC)', data: 'SOC' },
-              ],
-            },
-            {
-              key: 'mod_motor',
-              label: '驱动电机模块',
-              data: 'Motor Module',
-              children: [
-                { key: 'f_mot_speed', label: '电机转速', data: 'Motor Speed' },
-                { key: 'f_mot_torque', label: '输出扭矩', data: 'Torque' },
-                { key: 'f_mot_temp', label: '电机绕组温度', data: 'Winding Temp' },
-              ],
-            },
-          ],
-        },
-        {
-          key: 'sys_control',
-          label: '智能控制系统',
-          data: 'Control System',
-          children: [
-            {
-              key: 'mod_ecu',
-              label: '中央控制单元',
-              data: 'ECU',
-              children: [
-                { key: 'f_cpu_load', label: 'CPU 负载', data: 'CPU Load' },
-                { key: 'f_mem_usage', label: '内存占用', data: 'Memory' },
-              ],
-            },
-          ],
-        },
-        {
-          key: 'sys_env',
-          label: '环境感知系统',
-          data: 'Environment System',
-          children: [
-            {
-              key: 'mod_sensor',
-              label: '外部传感器组',
-              data: 'Sensors',
-              children: [
-                { key: 'f_env_temp', label: '环境温度', data: 'Env Temp' },
-                { key: 'f_env_hum', label: '环境湿度', data: 'Env Humidity' },
-              ],
-            },
-          ],
-        },
-      ],
+      name: 'taskOrderList',
+      displayName: '任务令列表',
+      type: 'textarea',
+      default: '',
+      isRuntimeInput: true,
+      placeholder: '请输入任务令，支持换行、英文逗号或中文逗号分隔',
+      displayIf: (config) => config.fetchMode === 'taskOrder',
     },
   ],
-  execute: async (input, config) => {
-    // 1. 模拟获取因子全集并解析选中的因子 ID
-    // 选中的 key 可能是系统、模块或因子，我们只需要叶子节点（因子）
-    const selectedKeys = Object.keys(config.selectedFactors || {}).filter(
-      (key) => config.selectedFactors[key].checked && key.startsWith('f_'),
-    )
+  execute: async (_input, config) => {
+    const token = ensureToken()
 
-    if (selectedKeys.length === 0) {
+    if (!config.productName) {
+      throw new Error('请选择产品名称')
+    }
+
+    const { factorKeys, processList } = parseFactorSelections(config.selectedFactors)
+    if (factorKeys.length === 0) {
       throw new Error('请至少选择一个因子进行获取')
     }
+    if (processList.length === 0) {
+      throw new Error('无法根据所选因子识别工序信息')
+    }
 
-    // 2. 根据 fetchMode 模拟获取 SN 列表
-    let snList: string[] = []
-    console.log(`[相邻系统] 正在按模式 [${config.fetchMode}] 检索 SN 列表...`)
+    let snList: string[] | undefined
+    let schemeList: string[] | undefined
+    let timeRange: [string, string] | undefined
+    let taskOrderList: string[] | undefined
 
     if (config.fetchMode === 'time') {
-      const [start, end] = config.timeRange || []
-      console.log(`[API] GET /api/v1/sn/query-by-time?start=${start}&end=${end}`)
-      snList = ['SN_TIME_001', 'SN_TIME_002', 'SN_TIME_003']
-    } else if (config.fetchMode === 'scheme') {
-      console.log(`[API] GET /api/v1/sn/query-by-scheme?id=${config.schemeId}`)
-      snList = ['SN_SCH_001', 'SN_SCH_002', 'SN_SCH_003', 'SN_SCH_004']
-    } else {
-      snList = (config.snList || '')
-        .split(/[,\n]/)
-        .map((s: string) => s.trim())
-        .filter(Boolean)
-      console.log(`[API] 使用用户输入的 SN 集合: ${snList.length} 个`)
-    }
-
-    if (snList.length === 0) {
-      throw new Error('未检索到有效的 SN 列表，请检查查询参数')
-    }
-
-    // 3. 模拟使用 SN List 和 Factor List 获取详细数据
-    console.log(`[API] POST /api/v1/data/fetch-multi-factors`)
-    console.log(`[Payload] SNs: ${snList.length}, Factors: ${selectedKeys.length}`)
-
-    // 生成模拟结果数据
-    const data = snList.map((sn) => {
-      const entry: any = {
-        sn,
-        timestamp: new Date().toISOString(),
-        product_id: config.productId,
+      timeRange = ensureDateRange(config.timeRange)
+      if (!config.materialType) {
+        throw new Error('请选择物料类型')
       }
-      // 为每个选中的因子生成随机数据
-      selectedKeys.forEach((f) => {
-        entry[f] = (Math.random() * 100).toFixed(2)
-      })
-      return entry
+    }
+
+    if (config.fetchMode === 'scheme') {
+      schemeList = parseSchemeSelections(config.schemeSelection)
+      if (schemeList.length === 0) {
+        throw new Error('请至少选择一个阶段方案')
+      }
+      if (!config.taskOrderType) {
+        throw new Error('请选择任务令类型')
+      }
+    }
+
+    if (config.fetchMode === 'sn') {
+      snList = parseDelimitedList(config.snList)
+      if (snList.length === 0) {
+        throw new Error('请输入至少一个 SN')
+      }
+    }
+
+    if (config.fetchMode === 'taskOrder') {
+      taskOrderList = parseDelimitedList(config.taskOrderList)
+      if (taskOrderList.length === 0) {
+        throw new Error('请输入至少一个任务令')
+      }
+    }
+
+    const result = await fetchKanbanData({
+      token,
+      productName: config.productName,
+      fetchMode: config.fetchMode,
+      factorKeys,
+      processList,
+      materialType: config.materialType,
+      timeRange,
+      schemeList,
+      taskOrderType: config.taskOrderType,
+      snList,
+      taskOrderList,
     })
 
     return {
-      data,
+      data: result.rows,
       metadata: {
-        total_sn: snList.length,
-        factors_count: selectedKeys.length,
-        product: config.productId,
+        total_sn: result.metadata?.totalSn ?? result.rows.length,
+        factors_count: factorKeys.length,
+        product: config.productName,
         fetch_mode: config.fetchMode,
+        process_list: processList,
+        ...result.metadata,
       },
     }
   },

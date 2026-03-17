@@ -12,26 +12,25 @@ const props = defineProps<{
 const emit = defineEmits(['update:config'])
 
 const updateConfig = (propName: string, value: any) => {
-  const newConfig = { ...props.config, [propName]: value }
-  emit('update:config', newConfig)
+  emit('update:config', { ...props.config, [propName]: value })
 }
 </script>
 
 <template>
-  <div class="flex-1 min-h-0 flex flex-col border-t border-slate-200 bg-[#f1f5f9] overflow-hidden">
-    <div class="px-4 py-3 flex items-center justify-between">
+  <div class="flex min-h-0 flex-1 flex-col overflow-hidden border-t border-slate-200 bg-[#f1f5f9]">
+    <div class="flex items-center justify-between px-4 py-3">
       <span
-        class="text-[10px] font-black text-slate-500 uppercase tracking-[0.1em] flex items-center gap-2"
+        class="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.1em] text-slate-500"
       >
-        <Zap size="12" class="text-amber-500" /> 节点启动输入
+        <Zap :size="12" class="text-amber-500" /> 运行时输入
       </span>
     </div>
-    <div class="flex-1 overflow-y-auto px-4 pb-4 custom-scrollbar">
+    <div class="custom-scrollbar flex-1 overflow-y-auto px-4 pb-4">
       <div
         v-if="properties.length === 0"
-        class="h-full flex flex-col items-center justify-center text-slate-400 italic text-[11px]"
+        class="flex h-full flex-col items-center justify-center text-[11px] italic text-slate-400"
       >
-        无需额外输入参数
+        当前节点没有可配置的运行时输入
       </div>
       <div v-else class="space-y-6">
         <div
@@ -43,6 +42,7 @@ const updateConfig = (propName: string, value: any) => {
             :prop="prop"
             :model-value="config[prop.name]"
             :upstream-factors="upstreamFactors"
+            :config-context="config"
             @update:model-value="(val) => updateConfig(prop.name, val)"
           />
         </div>
@@ -55,6 +55,7 @@ const updateConfig = (propName: string, value: any) => {
 .custom-scrollbar::-webkit-scrollbar {
   width: 4px;
 }
+
 .custom-scrollbar::-webkit-scrollbar-thumb {
   background: #cbd5e1;
   border-radius: 10px;

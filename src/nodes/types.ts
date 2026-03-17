@@ -1,11 +1,17 @@
 export type NodeCategory = 'trigger' | 'action' | 'terminal'
 export type NodeInputMode = 'single' | 'multiple'
 
+export interface NodePropertyContext {
+  config: Record<string, any>
+  property: NodeProperty
+}
+
 export interface NodeProperty {
   name: string
   displayName: string
   type:
     | 'string'
+    | 'textarea'
     | 'number'
     | 'options'
     | 'multi-options'
@@ -16,15 +22,21 @@ export interface NodeProperty {
     | 'datetime-range'
     | 'json'
     | 'tags'
+    | 'select-button'
   default?: any
   description?: string
   placeholder?: string
-  options?: any[] // 用于 options 类型、multi-options 或 tree 类型的静态选项
-  properties?: NodeProperty[] // 用于 collection 类型定义每一项的结构
+  options?: any[]
+  properties?: NodeProperty[]
   required?: boolean
   isRuntimeInput?: boolean
-  useUpstreamFactors?: boolean // [新增] 是否自动拉取上游字段作为选项
-  editable?: boolean // [新增] Select 选项是否允许手动编辑输入
+  useUpstreamFactors?: boolean
+  editable?: boolean
+  filterable?: boolean
+  dateOnly?: boolean
+  emptyMessage?: string
+  dependencies?: string[]
+  resolveOptions?: (context: NodePropertyContext) => Promise<any[]> | any[]
   displayIf?: (config: any) => boolean
 }
 
@@ -38,6 +50,5 @@ export interface NodeDefinition {
   inputMode?: NodeInputMode
   minInputs?: number
   maxInputs?: number | null
-  // 执行逻辑：输入数据 + 用户配置 -> 输出结果
   execute: (input: any, config: any) => Promise<any> | any
 }

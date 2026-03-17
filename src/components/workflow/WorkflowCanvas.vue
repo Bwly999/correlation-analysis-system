@@ -68,8 +68,12 @@ watch(
   },
 )
 
-const resumeExecution = async () => {
+const resumeExecution = async (runtimeConfig?: Record<string, any>) => {
   if (store.pendingExecution) {
+    const pendingNode = store.nodes.find((node) => node.id === store.pendingExecution?.nodeId)
+    if (pendingNode && runtimeConfig) {
+      pendingNode.data.config = { ...pendingNode.data.config, ...runtimeConfig }
+    }
     await store.resumePendingExecution()
   }
 }

@@ -1,11 +1,10 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { HelpCircle, Trash2, Settings, FileType } from 'lucide-vue-next'
+import { computed, ref, watch } from 'vue'
+import { HelpCircle, Trash2, Settings, FileType, Search, LoaderCircle } from 'lucide-vue-next'
 import { type NodeProperty } from '@/nodes/types'
 import { useWorkflowStore } from '@/stores/workflowStore'
 import MonacoEditor from '../MonacoEditor.vue'
 
-// PrimeVue Components
 import Select from 'primevue/select'
 import MultiSelect from 'primevue/multiselect'
 import InputText from 'primevue/inputtext'
@@ -16,36 +15,87 @@ import Tree from 'primevue/tree'
 import DatePicker from 'primevue/datepicker'
 import Button from 'primevue/button'
 import SelectButton from 'primevue/selectbutton'
+import Textarea from 'primevue/textarea'
+
+defineOptions({
+  name: 'PropertyField',
+})
 
 const props = defineProps<{
   prop: NodeProperty
   modelValue: any
   upstreamFactors: Array<{ name: string; value: string }>
+  configContext?: Record<string, any>
 }>()
 
 const emit = defineEmits(['update:modelValue', 'save'])
 const store = useWorkflowStore()
 const autoCompleteRef = ref<any>(null)
+const filteredFactors = ref<string[]>([])
+const treeFilterQuery = ref('')
+const remoteOptions = ref<any[]>([])
+const isOptionsLoading = ref(false)
+const optionsError = ref('')
 
 const configValue = computed({
   get: () => props.modelValue,
   set: (val) => emit('update:modelValue', val),
 })
 
-// AutoComplete 逻辑
-const filteredFactors = ref<string[]>([])
-const searchFactors = (event: any) => {
-  const query = event.query.toLowerCase()
-  filteredFactors.value = props.upstreamFactors
-    .filter((f) => f.name.toLowerCase().includes(query))
-    .map((f) => f.name)
+const dependencyKey = computed(() =>
+  JSON.stringify((props.prop.dependencies || []).map((key) => props.configContext?.[key] ?? null)),
+)
+
+const loadOptions = async () => {
+  if (!props.prop.resolveOptions) {
+    remoteOptions.value = props.prop.options || []
+    optionsError.value = ''
+    return
+  }
+
+  isOptionsLoading.value = true
+  optionsError.value = ''
+  try {
+    remoteOptions.value =
+      (await props.prop.resolveOptions({
+        config: props.configContext || {},
+        property: props.prop,
+      })) || []
+  } catch (error: any) {
+    remoteOptions.value = []
+    optionsError.value = error?.message || '选项加载失败'
+  } finally {
+    isOptionsLoading.value = false
+  }
 }
 
-// Collection 操作
+watch(
+  () => [props.prop.name, dependencyKey.value],
+  () => {
+    void loadOptions()
+  },
+  { immediate: true },
+)
+
+const optionSource = computed(() => {
+  if (props.prop.useUpstreamFactors) return props.upstreamFactors
+  if (props.prop.resolveOptions) return remoteOptions.value
+  return props.prop.options || []
+})
+
+const searchFactors = (event: any) => {
+  const query = String(event.query || '').toLowerCase()
+  filteredFactors.value = props.upstreamFactors
+    .filter((factor) => factor.name.toLowerCase().includes(query))
+    .map((factor) => factor.name)
+}
+
 const addCollectionItem = () => {
   const newValue = [...(props.modelValue || [])]
-  const newItem: any = {}
-  props.prop.properties?.forEach((p) => (newItem[p.name] = p.default))
+  const newItem: Record<string, any> = {}
+  props.prop.properties?.forEach((property) => {
+    newItem[property.name] = property.default
+  })
   newValue.push(newItem)
   emit('update:modelValue', newValue)
 }
@@ -62,47 +112,70 @@ const updateSubItem = (index: number, subPropName: string, val: any) => {
   emit('update:modelValue', newValue)
 }
 
-const onFileSelect = (event: any) => {
-  const file = event.target.files[0]
+const onFileSelect = (event: Event) => {
+  const target = event.target as HTMLInputElement
+  const file = target.files?.[0]
   if (file) {
     emit('update:modelValue', file)
     store.addLog(`已选择文件: ${file.name}`, 'info')
   }
-  event.target.value = ''
+  target.value = ''
 }
+
+const filterTreeNodes = (nodes: any[], query: string): any[] => {
+  if (!query.trim()) return nodes
+
+  const normalizedQuery = query.trim().toLowerCase()
+
+  return nodes
+    .map((node) => {
+      const searchText = String(node.data?.searchText || node.label || '').toLowerCase()
+      const matchedChildren = filterTreeNodes(node.children || [], query)
+      if (searchText.includes(normalizedQuery) || matchedChildren.length > 0) {
+        return {
+          ...node,
+          children: matchedChildren,
+        }
+      }
+      return null
+    })
+    .filter(Boolean)
+}
+
+const filteredTreeOptions = computed(() =>
+  filterTreeNodes(optionSource.value, treeFilterQuery.value),
+)
 </script>
 
 <template>
   <div class="flex flex-col gap-3">
-    <!-- 字段标签 -->
     <label v-if="prop.type !== 'collection'" class="ndv-label">
       {{ prop.displayName }}
       <HelpCircle
         v-if="prop.description"
         v-tooltip.top="prop.description"
-        size="12"
-        class="text-slate-300 ml-1 cursor-help"
+        :size="12"
+        class="ml-1 cursor-help text-slate-300"
       />
     </label>
 
-    <!-- Collection 类型 (递归渲染) -->
     <div v-if="prop.type === 'collection'" class="space-y-6">
       <div
         v-for="(item, idx) in configValue"
         :key="idx"
-        class="p-6 bg-[#fcfcfd] border border-slate-200 rounded-2xl shadow-sm relative group/item hover:border-indigo-300 transition-all"
+        class="group/item relative rounded-2xl border border-slate-200 bg-[#fcfcfd] p-6 shadow-sm transition-all hover:border-blue-300"
       >
-        <div class="flex items-center justify-between mb-6 pb-4 border-b border-slate-100">
+        <div class="mb-6 flex items-center justify-between border-b border-slate-100 pb-4">
           <span
-            class="flex items-center gap-2 text-[10px] font-black text-indigo-500 uppercase tracking-widest"
+            class="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-blue-600"
           >
-            <Settings size="12" /> 配置组 #{{ idx + 1 }}
+            <Settings :size="12" /> 配置项 #{{ idx + 1 }}
           </span>
           <button
-            class="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all cursor-pointer"
+            class="cursor-pointer rounded-lg p-1.5 text-slate-300 transition-all hover:bg-rose-50 hover:text-rose-500"
             @click="removeCollectionItem(idx)"
           >
-            <Trash2 size="14" />
+            <Trash2 :size="14" />
           </button>
         </div>
 
@@ -113,6 +186,7 @@ const onFileSelect = (event: any) => {
             :prop="subProp"
             :model-value="item[subProp.name]"
             :upstream-factors="upstreamFactors"
+            :config-context="item"
             @update:model-value="(val) => updateSubItem(idx, subProp.name, val)"
             @save="emit('save')"
           />
@@ -120,38 +194,35 @@ const onFileSelect = (event: any) => {
       </div>
 
       <Button
-        :label="`添加${prop.displayName}`"
+        :label="`新增${prop.displayName}`"
         icon="pi pi-plus"
-        class="w-full !bg-slate-900 hover:!bg-slate-800 !border-none !ring-0 rounded-2xl py-4 transition-all font-sans font-bold text-[12px] uppercase tracking-wide !text-white shadow-xl shadow-slate-200 hover:shadow-slate-300 active:scale-[0.97] cursor-pointer"
+        class="w-full cursor-pointer rounded-2xl border-none py-4 text-[12px] font-bold tracking-wide !text-white shadow-xl shadow-slate-200 transition-all hover:shadow-slate-300 active:scale-[0.97] !bg-slate-900 hover:!bg-slate-800"
         @click="addCollectionItem"
       />
     </div>
 
-    <!-- 基础类型 -->
     <div v-else-if="prop.type === 'file'" class="space-y-2">
       <label
-        class="flex flex-col items-center justify-center border-2 border-dashed rounded-xl h-24 transition-all cursor-pointer bg-white border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/30"
+        class="flex h-24 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-200 bg-white transition-all hover:border-blue-400 hover:bg-blue-50/30"
         @dragover.prevent
         @drop.prevent="
-          (e) => {
-            const f = e.dataTransfer?.files[0]
-            if (f) {
-              emit('update:modelValue', f)
-              store.addLog(`已选择文件: ${f.name}`, 'info')
+          (event) => {
+            const file = event.dataTransfer?.files[0]
+            if (file) {
+              emit('update:modelValue', file)
+              store.addLog(`已选择文件: ${file.name}`, 'info')
             }
           }
         "
       >
         <input type="file" class="hidden" @change="onFileSelect" />
         <FileType
-          size="20"
-          :class="modelValue ? 'text-emerald-500' : 'text-slate-300'"
+          :size="20"
           class="mb-1"
+          :class="modelValue ? 'text-emerald-500' : 'text-slate-300'"
         />
-        <span
-          class="text-[9px] font-bold text-slate-400 text-center px-2 uppercase truncate w-full"
-        >
-          {{ modelValue ? modelValue.name : '点击或拖拽上传' }}
+        <span class="w-full truncate px-2 text-center text-[10px] font-bold text-slate-400">
+          {{ modelValue ? modelValue.name : '点击或拖拽上传文件' }}
         </span>
       </label>
     </div>
@@ -159,20 +230,22 @@ const onFileSelect = (event: any) => {
     <Select
       v-else-if="prop.type === 'options'"
       v-model="configValue"
-      :options="prop.useUpstreamFactors || !prop.options ? upstreamFactors : prop.options"
+      :options="optionSource"
       option-label="name"
       option-value="value"
       :editable="prop.editable"
+      :placeholder="prop.placeholder"
       class="w-full ndv-input"
     />
 
     <MultiSelect
       v-else-if="prop.type === 'multi-options'"
       v-model="configValue"
-      :options="prop.useUpstreamFactors || !prop.options ? upstreamFactors : prop.options"
+      :options="optionSource"
       option-label="name"
       option-value="value"
       display="chip"
+      :placeholder="prop.placeholder"
       class="w-full text-xs ndv-input"
     />
 
@@ -189,9 +262,18 @@ const onFileSelect = (event: any) => {
       :placeholder="prop.placeholder"
     />
 
+    <Textarea
+      v-else-if="prop.type === 'textarea'"
+      v-model="configValue"
+      auto-resize
+      :rows="5"
+      class="w-full ndv-input"
+      :placeholder="prop.placeholder"
+    />
+
     <AutoComplete
-      ref="autoCompleteRef"
       v-else-if="prop.type === 'tags'"
+      ref="autoCompleteRef"
       v-model="configValue"
       multiple
       :suggestions="filteredFactors"
@@ -204,44 +286,32 @@ const onFileSelect = (event: any) => {
         root: { class: 'w-full' },
         input: { class: 'w-full ndv-input text-xs min-h-[42px] p-autocomplete-input' },
         token: {
-          class:
-            'bg-indigo-50 text-indigo-700 font-bold border border-indigo-100 rounded-lg py-0.5 px-2',
+          class: 'rounded-lg border border-blue-100 bg-blue-50 px-2 py-0.5 font-bold text-blue-700',
         },
       }"
       @complete="searchFactors"
       @focus="
-        (e: any) => {
+        (event) => {
           if (prop.useUpstreamFactors && upstreamFactors.length > 0) {
-            searchFactors({ query: e.target.value || '' })
-            // 延迟一丁点时间确保 overlay 能够显示
-            setTimeout(() => {
-              autoCompleteRef?.show()
-            }, 50)
+            searchFactors({ query: (event.target as HTMLInputElement).value || '' })
+            window.setTimeout(() => autoCompleteRef?.show(), 50)
           }
         }
       "
-      @item-select="
-        () => {
-          // 选择项后强制保持下拉框开启
-          setTimeout(() => {
-            autoCompleteRef?.show()
-          }, 0)
-        }
-      "
+      @item-select="() => window.setTimeout(() => autoCompleteRef?.show(), 0)"
       @keydown.enter="
-        (e: any) => {
-          const val = e.target.value?.trim()
-          if (val) {
-            let currentTags = Array.isArray(configValue) ? [...configValue] : []
-            if (!currentTags.includes(val)) {
-              currentTags.push(val)
-              configValue = currentTags
-            }
-            e.target.value = ''
-            e.preventDefault()
-            // 手动触发搜索以维持下拉框内容
-            searchFactors({ query: '' })
+        (event) => {
+          const target = event.target as HTMLInputElement
+          const value = target.value?.trim()
+          if (!value) return
+          const nextTags = Array.isArray(configValue) ? [...configValue] : []
+          if (!nextTags.includes(value)) {
+            nextTags.push(value)
+            configValue = nextTags
           }
+          target.value = ''
+          event.preventDefault()
+          searchFactors({ query: '' })
         }
       "
     />
@@ -252,13 +322,44 @@ const onFileSelect = (event: any) => {
 
     <div
       v-else-if="prop.type === 'tree'"
-      class="border rounded-lg bg-[#f8fafc] p-2 max-h-[300px] overflow-auto shadow-inner"
+      class="rounded-xl border border-slate-200 bg-slate-50 p-3 shadow-inner"
     >
+      <div v-if="prop.filterable" class="relative mb-3">
+        <Search
+          :size="14"
+          class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+        />
+        <InputText
+          v-model="treeFilterQuery"
+          class="w-full ndv-input pl-9"
+          :placeholder="prop.placeholder || '搜索节点'"
+        />
+      </div>
+
+      <div
+        v-if="isOptionsLoading"
+        class="flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-xs text-slate-500"
+      >
+        <LoaderCircle :size="14" class="animate-spin text-blue-500" /> 正在加载选项...
+      </div>
+      <div
+        v-else-if="optionsError"
+        class="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-600"
+      >
+        {{ optionsError }}
+      </div>
+      <div
+        v-else-if="filteredTreeOptions.length === 0"
+        class="rounded-lg border border-dashed border-slate-200 bg-white px-3 py-6 text-center text-xs text-slate-400"
+      >
+        {{ prop.emptyMessage || '暂无可选项' }}
+      </div>
       <Tree
+        v-else
         v-model:selection-keys="configValue"
-        :value="prop.options"
+        :value="filteredTreeOptions"
         selection-mode="checkbox"
-        class="ndv-tree"
+        class="ndv-tree max-h-[320px] overflow-auto"
       />
     </div>
 
@@ -266,14 +367,16 @@ const onFileSelect = (event: any) => {
       v-else-if="prop.type === 'datetime-range'"
       v-model="configValue"
       selection-mode="range"
-      show-time
-      class="w-full text-xs"
+      :show-time="!prop.dateOnly"
+      :manual-input="false"
+      date-format="yy-mm-dd"
+      class="w-full"
     />
 
     <SelectButton
       v-else-if="prop.type === 'select-button'"
       v-model="configValue"
-      :options="prop.options"
+      :options="optionSource"
       option-label="name"
       option-value="value"
       class="w-full select-button-custom"
@@ -283,19 +386,21 @@ const onFileSelect = (event: any) => {
 
 <style scoped>
 .ndv-label {
-  font-size: 11px;
-  font-weight: 700;
-  color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
   display: flex;
   align-items: center;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
+
 .ndv-input {
   border-color: #e2e8f0 !important;
   background-color: #ffffff !important;
-  border-radius: 8px !important;
+  border-radius: 12px !important;
 }
+
 .ndv-tree {
   background: transparent !important;
   border: none !important;
@@ -304,34 +409,31 @@ const onFileSelect = (event: any) => {
 
 :deep(.select-button-custom) {
   display: flex;
-  gap: 2px;
+  gap: 4px;
+  border-radius: 12px;
   background: #f1f5f9;
-  padding: 3px;
-  border-radius: 10px;
+  padding: 4px;
 }
+
 :deep(.select-button-custom .p-togglebutton) {
   flex: 1;
   border: none !important;
   background: transparent !important;
   color: #64748b !important;
-  font-size: 10px !important;
+  font-size: 11px !important;
   font-weight: 800 !important;
-  text-transform: uppercase !important;
-  letter-spacing: 0.05em !important;
-  border-radius: 7px !important;
-  padding: 8px 4px !important;
+  border-radius: 10px !important;
+  padding: 9px 6px !important;
   transition: all 0.2s ease !important;
 }
+
 :deep(.select-button-custom .p-togglebutton.p-togglebutton-selected) {
   background: white !important;
-  color: #1e293b !important;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05) !important;
+  color: #0f172a !important;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08) !important;
 }
+
 :deep(.select-button-custom .p-togglebutton::before) {
   display: none !important;
-}
-:deep(.select-button-custom .p-togglebutton:not(.p-togglebutton-selected):hover) {
-  background: rgba(255, 255, 255, 0.5) !important;
-  color: #475569 !important;
 }
 </style>
