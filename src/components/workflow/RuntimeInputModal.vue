@@ -81,7 +81,7 @@ const handleConfirm = () => {
         <p class="text-sm font-medium text-slate-400">当前节点没有需要填写的运行时参数</p>
       </div>
 
-      <div class="space-y-6">
+      <div class="space-y-6 min-h-0 flex-1 overflow-y-auto">
         <div
           v-for="prop in runtimeProperties"
           v-show="!prop.displayIf || prop.displayIf(config)"

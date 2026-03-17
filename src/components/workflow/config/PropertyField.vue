@@ -148,8 +148,8 @@ const filteredTreeOptions = computed(() =>
 </script>
 
 <template>
-  <div class="flex flex-col gap-3">
-    <label v-if="prop.type !== 'collection'" class="ndv-label">
+  <div class="flex flex-col gap-3 shrink-0">
+    <label v-if="prop.type !== 'collection'" class="ndv-label shrink-0">
       {{ prop.displayName }}
       <span v-if="prop.required" class="ml-1 text-rose-500">*</span>
       <HelpCircle
@@ -276,7 +276,7 @@ const filteredTreeOptions = computed(() =>
       v-model="configValue"
       auto-resize
       :rows="5"
-      class="w-full ndv-input"
+      class="w-full ndv-input max-h-[280px] overflow-y-auto custom-textarea"
       :placeholder="prop.placeholder"
     />
 
