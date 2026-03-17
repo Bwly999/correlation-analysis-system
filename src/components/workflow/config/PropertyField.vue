@@ -151,6 +151,7 @@ const filteredTreeOptions = computed(() =>
   <div class="flex flex-col gap-3">
     <label v-if="prop.type !== 'collection'" class="ndv-label">
       {{ prop.displayName }}
+      <span v-if="prop.required" class="ml-1 text-rose-500">*</span>
       <HelpCircle
         v-if="prop.description"
         v-tooltip.top="prop.description"
@@ -159,27 +160,34 @@ const filteredTreeOptions = computed(() =>
       />
     </label>
 
-    <div v-if="prop.type === 'collection'" class="space-y-6">
+    <div v-if="prop.type === 'collection'" class="space-y-4">
       <div
         v-for="(item, idx) in configValue"
         :key="idx"
-        class="group/item relative rounded-2xl border border-slate-200 bg-[#fcfcfd] p-6 shadow-sm transition-all hover:border-blue-300"
+        class="group/item relative rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-all hover:border-blue-200 hover:shadow-md"
       >
-        <div class="mb-6 flex items-center justify-between border-b border-slate-100 pb-4">
-          <span
-            class="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-blue-600"
-          >
-            <Settings :size="12" /> 配置项 #{{ idx + 1 }}
-          </span>
+        <div class="mb-4 flex items-center justify-between border-b border-slate-50 pb-3">
+          <div class="flex items-center gap-2">
+            <div
+              class="flex h-6 w-6 items-center justify-center rounded bg-slate-50 text-slate-400 group-hover/item:bg-blue-50 group-hover/item:text-blue-500"
+            >
+              <Settings :size="12" />
+            </div>
+            <span
+              class="text-[10px] font-bold uppercase tracking-wider text-slate-500 group-hover/item:text-blue-600"
+            >
+              {{ prop.displayName }} #{{ idx + 1 }}
+            </span>
+          </div>
           <button
-            class="cursor-pointer rounded-lg p-1.5 text-slate-300 transition-all hover:bg-rose-50 hover:text-rose-500"
+            class="cursor-pointer rounded-md p-1.5 text-slate-300 transition-all hover:bg-rose-50 hover:text-rose-500"
             @click="removeCollectionItem(idx)"
           >
             <Trash2 :size="14" />
           </button>
         </div>
 
-        <div class="space-y-6">
+        <div class="space-y-5">
           <PropertyField
             v-for="subProp in prop.properties"
             :key="subProp.name"
@@ -194,9 +202,10 @@ const filteredTreeOptions = computed(() =>
       </div>
 
       <Button
-        :label="`新增${prop.displayName}`"
+        variant="text"
+        :label="`添加${prop.displayName}`"
         icon="pi pi-plus"
-        class="w-full cursor-pointer rounded-2xl border-none py-4 text-[12px] font-bold tracking-wide !text-white shadow-xl shadow-slate-200 transition-all hover:shadow-slate-300 active:scale-[0.97] !bg-slate-900 hover:!bg-slate-800"
+        class="w-full border border-dashed border-slate-300 py-3 text-[12px] font-bold !text-slate-500 hover:!border-blue-400 hover:!bg-blue-50 hover:!text-blue-600 active:scale-[0.98]"
         @click="addCollectionItem"
       />
     </div>
@@ -286,8 +295,11 @@ const filteredTreeOptions = computed(() =>
         root: { class: 'w-full' },
         input: { class: 'w-full ndv-input text-xs min-h-[42px] p-autocomplete-input' },
         token: {
-          class: 'rounded-lg border border-blue-100 bg-blue-50 px-2 py-0.5 font-bold text-blue-700',
+          class:
+            'rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 font-semibold text-slate-600 gap-1.5',
         },
+        tokenLabel: { class: 'text-[11px]' },
+        removeTokenIcon: { class: 'text-[10px] hover:text-rose-500' },
       }"
       @complete="searchFactors"
       @focus="
@@ -322,45 +334,54 @@ const filteredTreeOptions = computed(() =>
 
     <div
       v-else-if="prop.type === 'tree'"
-      class="rounded-xl border border-slate-200 bg-slate-50 p-3 shadow-inner"
+      class="rounded-xl border border-slate-200 bg-white p-0 shadow-sm overflow-hidden"
     >
-      <div v-if="prop.filterable" class="relative mb-3">
+      <div v-if="prop.filterable" class="relative border-b border-slate-100 p-2 bg-slate-50/50">
         <Search
           :size="14"
-          class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+          class="pointer-events-none absolute left-5 top-1/2 -translate-y-1/2 text-slate-400"
         />
         <InputText
           v-model="treeFilterQuery"
-          class="w-full ndv-input pl-9"
-          :placeholder="prop.placeholder || '搜索节点'"
+          class="w-full !border-slate-200 !bg-white !rounded-lg !pl-9 !text-xs !h-9"
+          :placeholder="prop.placeholder || '搜索...'"
         />
       </div>
 
-      <div
-        v-if="isOptionsLoading"
-        class="flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-xs text-slate-500"
-      >
-        <LoaderCircle :size="14" class="animate-spin text-blue-500" /> 正在加载选项...
+      <div class="p-2">
+        <div
+          v-if="isOptionsLoading"
+          class="flex items-center justify-center gap-2 py-8 text-xs text-slate-400"
+        >
+          <LoaderCircle :size="16" class="animate-spin text-blue-500" /> 加载中...
+        </div>
+        <div
+          v-else-if="optionsError"
+          class="rounded-lg border border-rose-100 bg-rose-50 p-4 text-xs text-rose-500 text-center"
+        >
+          {{ optionsError }}
+        </div>
+        <div
+          v-else-if="filteredTreeOptions.length === 0"
+          class="py-12 text-center text-xs text-slate-300 italic"
+        >
+          {{ prop.emptyMessage || '暂无数据' }}
+        </div>
+        <Tree
+          v-else
+          v-model:selection-keys="configValue"
+          :value="filteredTreeOptions"
+          selection-mode="checkbox"
+          class="ndv-tree max-h-[360px] overflow-auto"
+          :pt="{
+            root: { class: 'p-0' },
+            node: { class: 'p-0' },
+            content: { class: 'p-1 hover:bg-blue-50/50 rounded-lg transition-colors' },
+            label: { class: 'text-[12px] text-slate-600 font-medium' },
+            checkbox: { class: 'mr-2' },
+          }"
+        />
       </div>
-      <div
-        v-else-if="optionsError"
-        class="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-600"
-      >
-        {{ optionsError }}
-      </div>
-      <div
-        v-else-if="filteredTreeOptions.length === 0"
-        class="rounded-lg border border-dashed border-slate-200 bg-white px-3 py-6 text-center text-xs text-slate-400"
-      >
-        {{ prop.emptyMessage || '暂无可选项' }}
-      </div>
-      <Tree
-        v-else
-        v-model:selection-keys="configValue"
-        :value="filteredTreeOptions"
-        selection-mode="checkbox"
-        class="ndv-tree max-h-[320px] overflow-auto"
-      />
     </div>
 
     <DatePicker
@@ -370,7 +391,10 @@ const filteredTreeOptions = computed(() =>
       :show-time="!prop.dateOnly"
       :manual-input="false"
       date-format="yy-mm-dd"
-      class="w-full"
+      class="w-full ndv-datepicker"
+      :pt="{
+        input: { class: 'w-full ndv-input text-xs' },
+      }"
     />
 
     <SelectButton
