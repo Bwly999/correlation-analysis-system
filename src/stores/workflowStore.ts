@@ -394,8 +394,13 @@ export const useWorkflowStore = defineStore('workflow', () => {
 
   const isValueValid = (value: any, type: string) => {
     if (value === undefined || value === null) return false
+    if (typeof value === 'string') return value.trim().length > 0
+    if (Array.isArray(value)) return value.length > 0
     if (type === 'file') {
       return value instanceof File || (typeof value === 'object' && value.name)
+    }
+    if (typeof value === 'object') {
+      return Object.keys(value).length > 0
     }
     return true
   }
@@ -429,7 +434,11 @@ export const useWorkflowStore = defineStore('workflow', () => {
 
       if (definition.category === 'trigger') {
         const missingRuntimeProps = definition.properties.filter(
-          (p) => p.isRuntimeInput && !isValueValid(resolvedConfig[p.name], p.type),
+          (p) =>
+            p.isRuntimeInput &&
+            p.required &&
+            (!p.displayIf || p.displayIf(resolvedConfig)) &&
+            !isValueValid(resolvedConfig[p.name], p.type),
         )
         if (missingRuntimeProps.length > 0) {
           addLog(`节点 ${node.data.label} 缺少运行时输入`, 'info', nodeId)

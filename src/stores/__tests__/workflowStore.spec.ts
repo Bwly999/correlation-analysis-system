@@ -321,6 +321,122 @@ describe('Workflow Store', () => {
     expect(store.logs.some((l) => l.message.includes('未找到分析模型'))).toBe(false)
   })
 
+  it('should only require visible runtime inputs for trigger nodes', async () => {
+    const conditionalTriggerDefinition = {
+      name: 'test-conditional-trigger',
+      displayName: 'Test Conditional Trigger',
+      icon: 'test',
+      category: 'trigger' as const,
+      description: 'test',
+      properties: [
+        {
+          name: 'mode',
+          displayName: '模式',
+          type: 'select-button' as const,
+          default: 'a',
+          isRuntimeInput: true,
+          options: [
+            { name: '模式 A', value: 'a' },
+            { name: '模式 B', value: 'b' },
+          ],
+        },
+        {
+          name: 'inputA',
+          displayName: '输入 A',
+          type: 'datetime-range' as const,
+          default: null,
+          required: true,
+          isRuntimeInput: true,
+          displayIf: (config: Record<string, string>) => config.mode === 'a',
+        },
+        {
+          name: 'inputB',
+          displayName: '输入 B',
+          type: 'string' as const,
+          default: '',
+          required: true,
+          isRuntimeInput: true,
+          displayIf: (config: Record<string, string>) => config.mode === 'b',
+        },
+      ],
+      execute: async (_input: unknown, config: Record<string, string>) => ({
+        mode: config.mode,
+        value: config.mode === 'a' ? config.inputA : config.inputB,
+      }),
+    }
+
+    nodeDefinitions.push(conditionalTriggerDefinition)
+
+    try {
+      const store = useWorkflowStore()
+      const node = store.addAndConnectNode(
+        'test-conditional-trigger',
+        '条件触发器',
+        { x: 0, y: 0 },
+      )!
+
+      node.data.config = {
+        mode: 'b',
+        inputB: 'only-visible-input',
+      }
+
+      const result = await store.executeNode(node.id, true)
+
+      expect(result).toEqual({
+        mode: 'b',
+        value: 'only-visible-input',
+      })
+      expect(store.pendingExecution).toBeNull()
+      expect(node.data.status).toBe('success')
+    } finally {
+      const index = nodeDefinitions.findIndex(
+        (definition) => definition.name === 'test-conditional-trigger',
+      )
+      if (index >= 0) nodeDefinitions.splice(index, 1)
+    }
+  })
+
+  it('should treat empty string runtime inputs as missing when they are visible and required', async () => {
+    const stringTriggerDefinition = {
+      name: 'test-string-trigger',
+      displayName: 'Test String Trigger',
+      icon: 'test',
+      category: 'trigger' as const,
+      description: 'test',
+      properties: [
+        {
+          name: 'keyword',
+          displayName: '关键词',
+          type: 'textarea' as const,
+          default: '',
+          required: true,
+          isRuntimeInput: true,
+        },
+      ],
+      execute: async () => ({ ok: true }),
+    }
+
+    nodeDefinitions.push(stringTriggerDefinition)
+
+    try {
+      const store = useWorkflowStore()
+      const node = store.addAndConnectNode('test-string-trigger', '字符串触发器', { x: 0, y: 0 })!
+
+      node.data.config = {
+        keyword: '',
+      }
+
+      const result = await store.executeNode(node.id, true)
+
+      expect(result).toBe('WAIT_INPUT')
+      expect(store.pendingExecution?.nodeId).toBe(node.id)
+      expect(node.data.status).toBe('idle')
+    } finally {
+      const index = nodeDefinitions.findIndex((definition) => definition.name === 'test-string-trigger')
+      if (index >= 0) nodeDefinitions.splice(index, 1)
+    }
+  })
+
   it('should record execution history after a global run', async () => {
     const store = useWorkflowStore()
     const triggerNode = store.addAndConnectNode('file-import', 'Trigger', { x: 0, y: 0 })!
