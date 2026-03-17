@@ -50,3 +50,6 @@ __pycache__/
 
 # Local archive exports
 correlation-analysis-system*.zip
+
+# Local binaries
+cloc-2.06.exe

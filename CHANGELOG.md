@@ -2,6 +2,10 @@
 
 ## [2026-03-18]
 
+### 维护 (Maintenance)
+
+- **Git 忽略规则补充**: 将 `cloc-2.06.exe` 加入 `.gitignore`，避免本地二进制工具被误提交。
+
 ### 🎨 UI/UX 体验优化
 
 - **节点配置弹窗 (NodeConfigModal) 布局升级**:
