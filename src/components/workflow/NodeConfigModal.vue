@@ -37,6 +37,32 @@ const localManualInput = ref('')
 // 深度分析弹窗状态
 const analysisModal = ref({ visible: false, title: '', data: null })
 
+// 左侧边栏比例调节逻辑
+const topPaneHeight = ref(400) // 默认输入数据面板高度
+const isResizingLeft = ref(false)
+
+const startResizingLeft = (e: MouseEvent) => {
+  isResizingLeft.value = true
+  const startY = e.clientY
+  const startHeight = topPaneHeight.value
+
+  const onMouseMove = (moveEvent: MouseEvent) => {
+    if (!isResizingLeft.value) return
+    const deltaY = moveEvent.clientY - startY
+    // 限制高度范围
+    topPaneHeight.value = Math.max(150, Math.min(600, startHeight + deltaY))
+  }
+
+  const onMouseUp = () => {
+    isResizingLeft.value = false
+    document.removeEventListener('mousemove', onMouseMove)
+    document.removeEventListener('mouseup', onMouseUp)
+  }
+
+  document.addEventListener('mousemove', onMouseMove)
+  document.addEventListener('mouseup', onMouseUp)
+}
+
 // 获取当前节点的定义
 const nodeDefinition = computed(() => (node.value ? getNodeDefinition(node.value.data.type) : null))
 
@@ -177,10 +203,11 @@ const openAnalysis = (title: string, data: any) => {
       />
     </template>
 
-    <div v-if="node" class="ndv-body flex h-full bg-white border-t -mx-6 overflow-hidden">
+    <div v-if="node" class="ndv-body flex h-full bg-white border-t -mx-6 overflow-hidden" :class="{ 'cursor-row-resize select-none': isResizingLeft }">
       <!-- 左侧边栏 -->
       <div class="w-[320px] bg-[#f1f5f9] border-r flex flex-col overflow-hidden shrink-0">
-        <div class="flex-[3] min-h-0 p-4 pb-2 flex flex-col">
+        <!-- 上部分：输入数据 -->
+        <div class="shrink-0 min-h-0 p-4 pb-2 flex flex-col" :style="{ height: topPaneHeight + 'px' }">
           <DataDisplayPanel
             v-model:use-manual-input="localUseManualInput"
             v-model:manual-input-str="localManualInput"
@@ -196,7 +223,17 @@ const openAnalysis = (title: string, data: any) => {
             "
           />
         </div>
-        <div class="flex-none">
+
+        <!-- 拖拽分割线 -->
+        <div 
+          class="group flex items-center justify-center h-4 cursor-row-resize select-none shrink-0"
+          @mousedown="startResizingLeft"
+        >
+          <div class="w-12 h-1 bg-slate-200 rounded-full group-hover:bg-blue-400 transition-colors" />
+        </div>
+
+        <!-- 下部分：运行时输入 -->
+        <div class="flex-1 min-h-0 overflow-hidden">
           <RuntimeInputs
             v-model:config="config"
             :properties="runtimeProperties"
