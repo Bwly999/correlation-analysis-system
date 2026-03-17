@@ -15,10 +15,40 @@ const props = defineProps<{
 const emit = defineEmits(['close', 'confirm'])
 const config = ref<Record<string, any>>({})
 
+// 分割线逻辑
+const topHeight = ref(100)
+const isResizing = ref(false)
+
+const startResizing = (e: MouseEvent) => {
+  isResizing.value = true
+  const startY = e.clientY
+  const startHeight = topHeight.value
+
+  const onMouseMove = (moveEvent: MouseEvent) => {
+    if (!isResizing.value) return
+    const deltaY = moveEvent.clientY - startY
+    // 限制高度范围：80px 到 400px
+    topHeight.value = Math.max(80, Math.min(400, startHeight + deltaY))
+  }
+
+  const onMouseUp = () => {
+    isResizing.value = false
+    document.removeEventListener('mousemove', onMouseMove)
+    document.removeEventListener('mouseup', onMouseUp)
+  }
+
+  document.addEventListener('mousemove', onMouseMove)
+  document.addEventListener('mouseup', onMouseUp)
+}
+
 const nodeDefinition = computed(() => (props.node ? getNodeDefinition(props.node.data.type) : null))
 const runtimeProperties = computed(
   () => nodeDefinition.value?.properties.filter((property) => property.isRuntimeInput) || [],
 )
+
+// 将属性拆分为首个属性（启动方式）和其余属性
+const firstProperty = computed(() => runtimeProperties.value[0] || null)
+const otherProperties = computed(() => runtimeProperties.value.slice(1))
 
 watch(
   () => props.node,
@@ -66,8 +96,8 @@ const handleConfirm = () => {
       </div>
     </template>
 
-    <div class="flex flex-col gap-6 py-2">
-      <div class="flex gap-3 rounded-xl border border-blue-100 bg-blue-50/50 p-4 shadow-sm">
+    <div class="flex flex-col gap-4 py-2" :class="{ 'cursor-row-resize select-none': isResizing }">
+      <div class="flex gap-3 rounded-xl border border-blue-100 bg-blue-50/50 p-4 shadow-sm shrink-0">
         <Info class="shrink-0 text-blue-500" :size="18" />
         <p class="text-[13px] font-medium leading-relaxed text-slate-600">
           请为节点 <span class="font-bold text-blue-700">{{ node?.data.label }}</span> 补充本次运行所需的动态参数。这些设置仅对本次运行有效。
@@ -81,20 +111,47 @@ const handleConfirm = () => {
         <p class="text-sm font-medium text-slate-400">当前节点没有需要填写的运行时参数</p>
       </div>
 
-      <div class="space-y-6 min-h-0 flex-1 overflow-y-auto">
-        <div
-          v-for="prop in runtimeProperties"
-          v-show="!prop.displayIf || prop.displayIf(config)"
-          :key="prop.name"
-          class="runtime-prop-item"
+      <div v-else class="flex flex-col min-h-0">
+        <!-- 顶部固定区域：通常是启动方式 -->
+        <div 
+          v-if="firstProperty" 
+          class="shrink-0 mb-2 overflow-hidden" 
+          :style="{ height: topHeight + 'px' }"
         >
           <PropertyField
-            :prop="prop"
-            :model-value="config[prop.name]"
+            :prop="firstProperty"
+            :model-value="config[firstProperty.name]"
             :upstream-factors="[]"
             :config-context="config"
-            @update:model-value="(val) => updateConfig(prop.name, val)"
+            @update:model-value="(val) => updateConfig(firstProperty.name, val)"
           />
+        </div>
+
+        <!-- 可调节分割线 -->
+        <div 
+          v-if="otherProperties.length > 0"
+          class="group flex items-center justify-center h-4 cursor-row-resize select-none my-1"
+          @mousedown="startResizing"
+        >
+          <div class="w-12 h-1 bg-slate-200 rounded-full group-hover:bg-blue-400 transition-colors" />
+        </div>
+
+        <!-- 底部滚动区域：其余属性 -->
+        <div class="space-y-6 flex-1 overflow-y-auto pr-2 custom-scrollbar">
+          <div
+            v-for="prop in otherProperties"
+            v-show="!prop.displayIf || prop.displayIf(config)"
+            :key="prop.name"
+            class="runtime-prop-item"
+          >
+            <PropertyField
+              :prop="prop"
+              :model-value="config[prop.name]"
+              :upstream-factors="[]"
+              :config-context="config"
+              @update:model-value="(val) => updateConfig(prop.name, val)"
+            />
+          </div>
         </div>
       </div>
     </div>
@@ -136,6 +193,24 @@ const handleConfirm = () => {
 
 .runtime-prop-item {
   animation: slide-up 0.3s ease-out forwards;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #f8fafc;
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #e2e8f0;
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #cbd5e1;
 }
 
 @keyframes slide-up {
