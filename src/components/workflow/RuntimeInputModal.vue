@@ -6,6 +6,7 @@ import Button from 'primevue/button'
 import PropertyField from './config/PropertyField.vue'
 import { type WorkflowNode } from '@/utils/storage'
 import { getNodeDefinition } from '@/nodes/registry'
+import { useWorkflowStore } from '@/stores/workflowStore'
 
 const props = defineProps<{
   visible: boolean
@@ -14,6 +15,7 @@ const props = defineProps<{
 
 const emit = defineEmits(['close', 'confirm'])
 const config = ref<Record<string, any>>({})
+const store = useWorkflowStore()
 
 // 分割线逻辑
 const topHeight = ref(100)
@@ -49,6 +51,58 @@ const runtimeProperties = computed(
 // 将属性拆分为首个属性（启动方式）和其余属性
 const firstProperty = computed(() => runtimeProperties.value[0] || null)
 const otherProperties = computed(() => runtimeProperties.value.slice(1))
+const isGlobalContinuation = computed(() => store.pendingExecution?.executionScope === 'global')
+const globalPromptProgressText = computed(() => {
+  if (!isGlobalContinuation.value) return ''
+  const current = store.pendingExecution?.promptIndex
+  const total = store.pendingExecution?.promptTotal
+  if (!current || !total || total <= 1) return ''
+  return `${current}/${total}`
+})
+const currentNodeLabel = computed(() => props.node?.data.label || '当前节点')
+
+const isValueValid = (value: any, type: string) => {
+  if (value === undefined || value === null) return false
+  if (typeof value === 'string') return value.trim().length > 0
+  if (Array.isArray(value)) return value.length > 0
+  if (type === 'file') {
+    return value instanceof File || (typeof value === 'object' && value.name)
+  }
+  if (typeof value === 'object') {
+    return Object.keys(value).length > 0
+  }
+  return true
+}
+
+const visibleRequiredRuntimeProperties = computed(() =>
+  runtimeProperties.value.filter(
+    (property) =>
+      property.required && (!property.displayIf || property.displayIf(config.value)),
+  ),
+)
+
+const missingRequiredRuntimeProperties = computed(() =>
+  visibleRequiredRuntimeProperties.value.filter(
+    (property) => !isValueValid(config.value[property.name], property.type),
+  ),
+)
+
+const hasMissingRequiredInputs = computed(() => missingRequiredRuntimeProperties.value.length > 0)
+const missingRequiredHint = computed(() => {
+  if (!hasMissingRequiredInputs.value) return ''
+  const names = missingRequiredRuntimeProperties.value.map((property) => property.displayName)
+  const preview = names.slice(0, 2).join('、')
+  const suffix = names.length > 2 ? ` 等 ${names.length} 项` : ''
+  return `仍需填写：${preview}${suffix}`
+})
+
+const confirmLabel = computed(() => {
+  if (!isGlobalContinuation.value) return '确认并开始运行'
+  const current = store.pendingExecution?.promptIndex
+  const total = store.pendingExecution?.promptTotal
+  if (current && total && current >= total) return '确认并执行工作流'
+  return '确认并继续下一项'
+})
 
 watch(
   () => props.node,
@@ -93,7 +147,15 @@ const handleConfirm = () => {
         <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
           <Settings :size="18" />
         </div>
-        <span class="text-lg font-bold text-slate-900">运行时输入</span>
+        <div class="flex items-center gap-2">
+          <span class="text-lg font-bold text-slate-900">运行时输入</span>
+          <span
+            v-if="globalPromptProgressText"
+            class="rounded-md border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] font-bold text-blue-700"
+          >
+            {{ globalPromptProgressText }}
+          </span>
+        </div>
       </div>
     </template>
 
@@ -102,8 +164,14 @@ const handleConfirm = () => {
         <Info class="shrink-0 text-blue-500" :size="18" />
         <p class="text-[13px] font-medium leading-relaxed text-slate-600">
           请为节点
-          <span class="font-bold text-blue-700">{{ node?.data.label }}</span>
+          <span class="font-bold text-blue-700">{{ currentNodeLabel }}</span>
           补充本次运行所需的动态参数。这些设置仅对本次运行有效。
+          <span v-if="isGlobalContinuation" class="mt-1 block text-[12px] text-blue-700">
+            提交后系统会自动继续执行；若还有其他启动节点缺少参数，将继续弹出下一项。
+          </span>
+          <span v-if="hasMissingRequiredInputs" class="mt-1 block text-[12px] text-rose-600">
+            {{ missingRequiredHint }}
+          </span>
         </p>
       </div>
 
@@ -174,9 +242,10 @@ const handleConfirm = () => {
           @click="emit('close')"
         />
         <Button
-          label="确认并开始运行"
+          :label="confirmLabel"
           severity="primary"
           class="rounded-xl px-8 font-bold shadow-lg shadow-blue-200"
+          :disabled="hasMissingRequiredInputs"
           @click="handleConfirm"
         />
       </div>

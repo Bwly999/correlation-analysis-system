@@ -33,7 +33,17 @@ export const useWorkflowStore = defineStore('workflow', () => {
   } | null>(null)
 
   const activeConfigNodeId = ref<string | null>(null)
-  const pendingExecution = ref<{ nodeId: string; forceUpdate: boolean } | null>(null)
+  const pendingExecution = ref<
+    {
+      nodeId: string
+      forceUpdate: boolean
+      executionScope?: 'single' | 'global'
+      promptIndex?: number
+      promptTotal?: number
+    } | null
+  >(null)
+  let pendingExecutionResolver: ((result: 'RESUMED' | 'STOPPED') => void) | null = null
+  let globalRuntimeQueueNodeIds: string[] = []
   const lastExecutedTerminalNodeId = ref<string | null>(null)
   const executionHistory = ref<ExecutionRecord[]>([])
   const savedWorkflows = ref<SavedWorkflow[]>([])
@@ -239,6 +249,10 @@ export const useWorkflowStore = defineStore('workflow', () => {
       isStopping.value = true
       pendingExecution.value = null
       isRunning.value = false
+      if (pendingExecutionResolver) {
+        pendingExecutionResolver('STOPPED')
+        pendingExecutionResolver = null
+      }
       addLog('正在停止工作流...', 'warn')
     }
   }
@@ -278,6 +292,30 @@ export const useWorkflowStore = defineStore('workflow', () => {
       definition,
       config: changed ? nextConfig : node.data.config,
     }
+  }
+
+  const hasMissingRequiredRuntimeInput = (node: WorkflowNode) => {
+    const resolvedNode = applyNodeConfigDefaults(node)
+    const definition = resolvedNode?.definition
+    const resolvedConfig = resolvedNode?.config ?? node.data.config
+    if (!definition || definition.category !== 'trigger') return false
+
+    return definition.properties.some(
+      (property) =>
+        property.isRuntimeInput &&
+        property.required &&
+        (!property.displayIf || property.displayIf(resolvedConfig)) &&
+        !isValueValid(resolvedConfig[property.name], property.type),
+    )
+  }
+
+  const collectUpstreamNodeIds = (targetNodeId: string, acc = new Set<string>()) => {
+    if (acc.has(targetNodeId)) return acc
+    acc.add(targetNodeId)
+    edges.value
+      .filter((edge) => edge.target === targetNodeId)
+      .forEach((edge) => collectUpstreamNodeIds(edge.source, acc))
+    return acc
   }
 
   const validateConnection = (sourceNodeId: string, targetNodeId: string) => {
@@ -405,7 +443,11 @@ export const useWorkflowStore = defineStore('workflow', () => {
     return true
   }
 
-  const executeNode = async (nodeId: string, forceUpdate = false): Promise<any> => {
+  const executeNode = async (
+    nodeId: string,
+    forceUpdate = false,
+    executionScope: 'single' | 'global' = 'single',
+  ): Promise<any> => {
     const node = nodes.value.find((n) => n.id === nodeId)
     if (!node) return
 
@@ -442,8 +484,21 @@ export const useWorkflowStore = defineStore('workflow', () => {
         )
         if (missingRuntimeProps.length > 0) {
           addLog(`节点 ${node.data.label} 缺少运行时输入`, 'info', nodeId)
-          pendingExecution.value = { nodeId, forceUpdate }
-          isRunning.value = false
+          const queueIndex =
+            executionScope === 'global' ? globalRuntimeQueueNodeIds.indexOf(nodeId) : -1
+          pendingExecution.value = {
+            nodeId,
+            forceUpdate,
+            executionScope,
+            promptIndex: queueIndex >= 0 ? queueIndex + 1 : undefined,
+            promptTotal:
+              executionScope === 'global' && globalRuntimeQueueNodeIds.length > 0
+                ? globalRuntimeQueueNodeIds.length
+                : undefined,
+          }
+          if (executionScope === 'single') {
+            isRunning.value = false
+          }
           return 'WAIT_INPUT'
         }
       }
@@ -473,7 +528,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
       const structuredInputs = []
       for (const [index, edge] of incomingEdges.entries()) {
         if (isStopping.value) throw new Error('User Aborted')
-        const result = await executeNode(edge.source, forceUpdate)
+        const result = await executeNode(edge.source, forceUpdate, executionScope)
         if (result === 'WAIT_INPUT' || result === 'STOPPED') {
           node.data.status = 'idle'
           return result
@@ -530,7 +585,18 @@ export const useWorkflowStore = defineStore('workflow', () => {
     if (!pending) return null
 
     pendingExecution.value = null
-    return executeNode(pending.nodeId, pending.forceUpdate)
+    const result = await executeNode(
+      pending.nodeId,
+      pending.forceUpdate,
+      pending.executionScope ?? 'single',
+    )
+
+    if (pending.executionScope === 'global' && pendingExecutionResolver) {
+      pendingExecutionResolver(result === 'STOPPED' ? 'STOPPED' : 'RESUMED')
+      pendingExecutionResolver = null
+    }
+
+    return result
   }
 
   const runGlobal = async () => {
@@ -542,10 +608,18 @@ export const useWorkflowStore = defineStore('workflow', () => {
     addLog('开始全局运行...', 'info')
 
     const terminalNodes = nodes.value.filter((n) => n.data.category === 'terminal')
-    if (terminalNodes.length === 0) {
-      addLog('运行失败: 未找到分析模型', 'error')
+    const fallbackLeafNodes = nodes.value.filter(
+      (node) => !edges.value.some((edge) => edge.source === node.id),
+    )
+    const executionTargets = terminalNodes.length > 0 ? terminalNodes : fallbackLeafNodes
+
+    if (executionTargets.length === 0) {
+      addLog('运行失败: 工作流中没有可执行节点', 'error')
       isRunning.value = false
       return
+    }
+    if (terminalNodes.length === 0) {
+      addLog('未检测到分析模型，已切换为末端节点执行模式', 'warn')
     }
 
     nodes.value.forEach((n) => {
@@ -557,16 +631,31 @@ export const useWorkflowStore = defineStore('workflow', () => {
 
     let finalStatus: 'success' | 'error' | 'stopped' = 'success'
     try {
+      const executionScopeNodeIds = new Set<string>()
+      executionTargets.forEach((node) => {
+        collectUpstreamNodeIds(node.id, executionScopeNodeIds)
+      })
+      globalRuntimeQueueNodeIds = nodes.value
+        .filter((node) => executionScopeNodeIds.has(node.id))
+        .filter((node) => hasMissingRequiredRuntimeInput(node))
+        .map((node) => node.id)
+
       let lastResultId = null
-      for (const node of terminalNodes) {
+      for (const node of executionTargets) {
         if (isStopping.value) {
           finalStatus = 'stopped'
           break
         }
-        const result = await executeNode(node.id, false)
-        if (result === 'WAIT_INPUT') {
-          isRunning.value = false
-          return
+        let result = await executeNode(node.id, false, 'global')
+        while (result === 'WAIT_INPUT') {
+          const resumed = await new Promise<'RESUMED' | 'STOPPED'>((resolve) => {
+            pendingExecutionResolver = resolve
+          })
+          if (resumed === 'STOPPED') {
+            result = 'STOPPED'
+            break
+          }
+          result = await executeNode(node.id, false, 'global')
         }
         if (result === 'STOPPED') {
           finalStatus = 'stopped'
@@ -574,11 +663,12 @@ export const useWorkflowStore = defineStore('workflow', () => {
         }
         lastResultId = node.id
       }
-      lastExecutedTerminalNodeId.value = lastResultId
+      lastExecutedTerminalNodeId.value = terminalNodes.length > 0 ? lastResultId : null
     } catch (err) {
       finalStatus = 'error'
       addLog(`全局运行中断: ${err}`, 'error')
     } finally {
+      globalRuntimeQueueNodeIds = []
       isRunning.value = false
       isStopping.value = false
       const duration = Date.now() - startTime

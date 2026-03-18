@@ -321,6 +321,65 @@ describe('Workflow Store', () => {
     expect(store.logs.some((l) => l.message.includes('未找到分析模型'))).toBe(false)
   })
 
+  it('should keep global run alive and collect runtime inputs for multiple trigger nodes', async () => {
+    const store = useWorkflowStore()
+    const trigger1 = store.addAndConnectNode('file-import', '触发器一', { x: 0, y: 0 })!
+    const trigger2 = store.addAndConnectNode('file-import', '触发器二', { x: 0, y: 120 })!
+    const mergeNode = store.addAndConnectNode('data-merge', '数据合并', { x: 320, y: 60 })!
+    const terminalNode = store.addAndConnectNode('chart-display', '图表展示', { x: 640, y: 60 })!
+
+    store.edges.push(
+      {
+        id: 'e_trigger1_merge_runtime',
+        source: trigger1.id,
+        target: mergeNode.id,
+        type: 'n8n',
+        animated: true,
+      },
+      {
+        id: 'e_trigger2_merge_runtime',
+        source: trigger2.id,
+        target: mergeNode.id,
+        type: 'n8n',
+        animated: true,
+      },
+      {
+        id: 'e_merge_terminal_runtime',
+        source: mergeNode.id,
+        target: terminalNode.id,
+        type: 'n8n',
+        animated: true,
+      },
+    )
+
+    const waitForPending = async () => {
+      for (let attempt = 0; attempt < 50; attempt += 1) {
+        if (store.pendingExecution) return
+        await new Promise((resolve) => setTimeout(resolve, 20))
+      }
+      throw new Error('等待运行时参数输入超时')
+    }
+
+    const runPromise = store.runGlobal()
+
+    for (let i = 0; i < 2; i += 1) {
+      await waitForPending()
+      expect(store.pendingExecution?.executionScope).toBe('global')
+      expect(store.pendingExecution?.promptTotal).toBe(2)
+      expect(store.pendingExecution?.promptIndex).toBe(i + 1)
+      const pendingNode = store.nodes.find((node) => node.id === store.pendingExecution?.nodeId)!
+      pendingNode.data.config.fileData = new File(['a,b\n1,2'], `runtime-${i}.csv`)
+      await store.resumePendingExecution()
+    }
+
+    await runPromise
+
+    expect(store.pendingExecution).toBeNull()
+    expect(store.isRunning).toBe(false)
+    expect(terminalNode.data.status).toBe('success')
+    expect(store.executionHistory[0]!.status).toBe('success')
+  })
+
   it('should only require visible runtime inputs for trigger nodes', async () => {
     const conditionalTriggerDefinition = {
       name: 'test-conditional-trigger',
@@ -459,6 +518,19 @@ describe('Workflow Store', () => {
     expect(store.executionHistory.length).toBe(1)
     expect(store.executionHistory[0]!.status).toBe('success')
     expect(store.executionHistory[0]!.workflowName).toBe('未命名工作流')
+  })
+
+  it('should run successfully without terminal nodes by executing leaf nodes', async () => {
+    const store = useWorkflowStore()
+    const triggerNode = store.addAndConnectNode('file-import', 'Trigger', { x: 0, y: 0 })!
+    triggerNode.data.config.fileData = new File(['a,b\n1,2'], 'test.csv')
+
+    await store.runGlobal()
+
+    expect(triggerNode.data.status).toBe('success')
+    expect(store.logs.some((l) => l.message.includes('未找到分析模型'))).toBe(false)
+    expect(store.logs.some((l) => l.message.includes('末端节点执行模式'))).toBe(true)
+    expect(store.executionHistory[0]!.status).toBe('success')
   })
 
   it('should skip execution and return cached output when node is pinned', async () => {
