@@ -74,7 +74,7 @@ const onDragStart = (event: DragEvent, node: { type: string; label: string }) =>
   <div
     class="flex flex-col h-full bg-[#ffffff] border-l border-[#efefef] shadow-[-10px_0_30px_rgba(0,0,0,0.02)] overflow-hidden"
   >
-    <div class="p-5 pb-3 bg-white sticky top-0 z-20">
+    <div class="sidebar-header p-5 pb-3 bg-white sticky top-0 z-20">
       <div class="flex items-center justify-between mb-5">
         <div class="flex items-center gap-2">
           <div class="w-1.5 h-4 bg-slate-900 rounded-full"></div>
@@ -112,7 +112,7 @@ const onDragStart = (event: DragEvent, node: { type: string; label: string }) =>
       </div>
     </div>
 
-    <div class="flex-1 overflow-y-auto custom-scrollbar px-4 space-y-8 pb-10 pt-2">
+    <div class="sidebar-list flex-1 overflow-y-auto custom-scrollbar px-4 space-y-8 pb-10 pt-2">
       <div
         v-if="store.pendingConnection"
         class="mt-2 p-4 bg-slate-900 text-white rounded-2xl shadow-lg shadow-slate-200 animate-in zoom-in-95 duration-300 relative overflow-hidden"
@@ -140,7 +140,7 @@ const onDragStart = (event: DragEvent, node: { type: string; label: string }) =>
       </div>
 
       <div v-for="category in filteredCategories" :key="category.name">
-        <div class="px-2 mb-4 flex items-center gap-3">
+        <div class="sidebar-category-title px-2 mb-4 flex items-center gap-3">
           <component :is="category.icon" size="14" class="text-slate-400" />
           <span class="text-[11px] font-bold text-[#64748b] tracking-wider">
             {{ category.label }}
@@ -237,5 +237,26 @@ const onDragStart = (event: DragEvent, node: { type: string; label: string }) =>
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: #cbd5e1;
+}
+
+@media (min-width: 1600px) {
+  .sidebar-header {
+    padding: 1rem 1rem 0.5rem;
+  }
+
+  .sidebar-list {
+    padding: 0 0.75rem 1.25rem;
+    gap: 1.5rem;
+  }
+
+  .sidebar-category-title {
+    margin-bottom: 0.75rem;
+  }
+
+  .n8n-node-item-inner {
+    padding: 0.75rem;
+    border-radius: 0.875rem;
+    min-height: 72px;
+  }
 }
 </style>

@@ -106,7 +106,7 @@ const selectNode = (nodeId: string) => {
     class="h-full flex flex-col bg-white text-slate-600 font-sans border-t border-slate-200 shadow-2xl"
   >
     <div
-      class="flex items-center justify-between px-4 py-2 border-b border-slate-100 bg-slate-50/50"
+      class="log-toolbar flex items-center justify-between px-4 py-2 border-b border-slate-100 bg-slate-50/50"
     >
       <div class="flex items-center gap-6">
         <div class="flex items-center gap-2">
@@ -198,7 +198,7 @@ const selectNode = (nodeId: string) => {
         <div
           v-for="(log, index) in filteredLogs"
           :key="index"
-          class="flex items-center gap-4 px-4 py-2.5 hover:bg-slate-50 transition-colors group border-l-4 border-transparent"
+          class="log-row flex items-center gap-4 px-4 py-2.5 hover:bg-slate-50 transition-colors group border-l-4 border-transparent"
           :class="{
             'hover:border-emerald-400': log.level === 'info',
             'hover:border-rose-400': log.level === 'error',
@@ -266,5 +266,16 @@ const selectNode = (nodeId: string) => {
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: #cbd5e1;
+}
+
+@media (min-width: 1600px) {
+  .log-toolbar {
+    padding: 0.375rem 1rem;
+  }
+
+  .log-row {
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+  }
 }
 </style>

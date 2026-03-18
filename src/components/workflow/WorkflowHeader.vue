@@ -3,6 +3,7 @@ import { useWorkflowStore } from '@/stores/workflowStore'
 import {
   LayoutGrid,
   ChevronRight,
+  ChevronDown,
   Edit2,
   Save,
   FileUp,
@@ -77,11 +78,11 @@ const formatDuration = (ms: number) => {
 
 <template>
   <header
-    class="absolute top-0 left-0 right-0 h-[56px] bg-white border-b border-slate-200 z-[100] flex items-center justify-between px-6"
+    class="absolute top-0 left-0 right-0 h-[56px] bg-white/95 backdrop-blur border-b border-slate-200 z-[100] flex items-center justify-between px-5 xl:px-6"
   >
     <input ref="fileInput" type="file" class="hidden" accept=".json" @change="handleImport" />
 
-    <div class="flex items-center gap-4">
+    <div class="flex items-center gap-3.5">
       <!-- 导航/面包屑 -->
       <div
         class="flex items-center gap-2 text-slate-500 hover:text-slate-900 transition-colors cursor-pointer group px-2 py-1.5 rounded-md hover:bg-slate-100"
@@ -97,7 +98,7 @@ const formatDuration = (ms: number) => {
         <input
           v-model="store.workflowName"
           :disabled="store.isHistoryMode"
-          class="font-semibold text-[14px] text-slate-900 border border-transparent hover:border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 bg-transparent focus:bg-white rounded-md px-2.5 py-1 transition-all w-[300px] outline-none disabled:opacity-70 disabled:cursor-not-allowed"
+          class="font-semibold text-[14px] text-slate-900 border border-transparent hover:border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 bg-transparent focus:bg-white rounded-md px-2.5 py-1 transition-all w-[300px] outline-none disabled:opacity-70 disabled:cursor-not-allowed"
           placeholder="Untitled Workflow"
         />
         <Edit2
@@ -108,11 +109,11 @@ const formatDuration = (ms: number) => {
 
         <!-- 历史记录触发图标 -->
         <button
-          class="p-1.5 rounded-md hover:bg-slate-100 text-slate-400 hover:text-indigo-600 transition-all ml-1 outline-none cursor-pointer relative z-20"
+          class="toolbar-icon-btn ml-1 relative z-20"
           title="查看运行历史"
           @click.stop="toggleHistory"
         >
-          <History :size="18" :class="{ 'text-indigo-600': store.isHistoryMode }" />
+          <History :size="17" :class="{ 'text-blue-600': store.isHistoryMode }" />
         </button>
 
         <Popover
@@ -171,48 +172,35 @@ const formatDuration = (ms: number) => {
       </div>
     </div>
 
-    <div class="flex items-center gap-3">
-      <!-- 在线状态 / 历史模式状态 -->
+    <div class="action-deck">
       <div
-        class="flex items-center gap-2 px-3 py-1 rounded-md border transition-all"
+        class="status-pill"
         :class="
           store.isHistoryMode
-            ? 'bg-amber-50 border-amber-200 shadow-sm'
-            : 'bg-slate-50 border-slate-200'
+            ? 'bg-amber-50 border-amber-200 text-amber-700'
+            : 'bg-white border-slate-200 text-slate-600'
         "
       >
         <div
-          class="w-2 h-2 rounded-full"
+          class="w-1.5 h-1.5 rounded-full"
           :class="store.isHistoryMode ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'"
         ></div>
-        <span
-          class="text-[11px] font-bold"
-          :class="store.isHistoryMode ? 'text-amber-700' : 'text-slate-600'"
-        >
+        <span class="text-[10px] font-bold tracking-wide">
           {{ store.isHistoryMode ? 'HISTORY VIEW' : 'Connected' }}
         </span>
       </div>
 
-      <div class="h-4 w-[1px] bg-slate-200 mx-1"></div>
+      <div class="deck-divider"></div>
 
-      <!-- 操作按钮 -->
-      <Button
-        v-if="!store.isHistoryMode"
-        severity="secondary"
-        text
-        class="h-8 px-4 text-[12px] font-medium flex gap-2 items-center rounded-md bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 transition-colors shadow-sm outline-none"
-        @click="async () => await store.saveWorkflow()"
-      >
-        <Save :size="15" class="text-slate-500" />
-        Save
+      <Button v-if="!store.isHistoryMode" class="save-btn" @click="async () => await store.saveWorkflow()">
+        <Save :size="14" />
+        <span>保存</span>
       </Button>
 
-      <button
-        v-if="!store.isHistoryMode"
-        class="w-8 h-8 flex items-center justify-center rounded-md border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-600 transition-colors shadow-sm bg-white outline-none cursor-pointer"
-        @click="toggleMenu"
-      >
-        <FileUp :size="16" />
+      <button v-if="!store.isHistoryMode" class="file-btn" @click="toggleMenu">
+        <FileUp :size="14" />
+        <span>文件</span>
+        <ChevronDown :size="12" />
       </button>
       <Menu ref="menu" :model="menuItems" :popup="true" class="n8n-popup-menu" />
     </div>
@@ -224,5 +212,99 @@ const formatDuration = (ms: number) => {
   border-radius: 12px !important;
   border: 1px solid #e2e8f0 !important;
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1) !important;
+}
+
+.toolbar-icon-btn {
+  width: 2rem;
+  height: 2rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.375rem;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+
+.toolbar-icon-btn:hover {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+  color: #2563eb;
+}
+
+
+.action-deck {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  height: 2.5rem;
+  padding: 0.25rem 0.375rem;
+  border-radius: 0.875rem;
+  border: 1px solid #dbe4ef;
+  background: linear-gradient(180deg, #f8fbff 0%, #f2f6fb 100%);
+  box-shadow:
+    0 6px 14px -10px rgba(15, 23, 42, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.625rem;
+  border-radius: 0.625rem;
+  border: 1px solid #e2e8f0;
+}
+
+.deck-divider {
+  width: 1px;
+  height: 18px;
+  background: #d6dfeb;
+}
+
+.save-btn {
+  height: 2rem;
+  padding: 0 0.875rem;
+  border-radius: 0.625rem;
+  border: 1px solid #1d4ed8;
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
+  display: inline-flex;
+  gap: 0.375rem;
+  align-items: center;
+  box-shadow: 0 8px 18px -10px rgba(37, 99, 235, 0.85);
+  transition: all 0.2s ease;
+}
+
+.save-btn:hover {
+  transform: translateY(-0.5px);
+  filter: saturate(1.08);
+}
+
+.file-btn {
+  height: 2rem;
+  padding: 0 0.625rem;
+  border-radius: 0.625rem;
+  border: 1px solid #d1dbe8;
+  background: #ffffff;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.file-btn:hover {
+  border-color: #b8c7da;
+  background: #f8fafc;
+  color: #0f172a;
 }
 </style>

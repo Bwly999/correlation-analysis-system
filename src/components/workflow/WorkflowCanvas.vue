@@ -11,6 +11,7 @@ import NodeConfigModal from './NodeConfigModal.vue'
 import RuntimeInputModal from './RuntimeInputModal.vue'
 import DataAnalysisModal from './DataAnalysisModal.vue'
 import WorkflowManagerModal from './WorkflowManagerModal.vue'
+import { getWorkflowLayoutMetrics } from './layout'
 import Button from 'primevue/button'
 import N8nEdge from './edges/N8nEdge.vue'
 import {
@@ -35,9 +36,24 @@ const isConfigVisible = ref(false)
 const isLogExpanded = ref(true)
 const isWorkflowListVisible = ref(false)
 const isSidebarVisible = ref(true)
+const viewportWidth = ref(typeof window === 'undefined' ? 1920 : window.innerWidth)
+
+const layoutMetrics = computed(() => getWorkflowLayoutMetrics(viewportWidth.value))
+const logHeight = computed(() =>
+  isLogExpanded.value ? layoutMetrics.value.logExpandedHeight : layoutMetrics.value.logCollapsedHeight,
+)
+const runBarBottom = computed(() => logHeight.value + 20)
+const sidebarRightOffset = computed(() =>
+  isSidebarVisible.value ? `${layoutMetrics.value.sidebarWidth}px` : '0',
+)
+
+const onWindowResize = () => {
+  viewportWidth.value = window.innerWidth
+}
 
 // 初始化加载
 onMounted(async () => {
+  window.addEventListener('resize', onWindowResize)
   const workflows = await store.getSavedWorkflows()
   // 如果没有工作流，自动打开管理中心
   if (workflows.length === 0) {
@@ -152,6 +168,10 @@ onMounted(() => {
     openWorkflowList()
   }
 })
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', onWindowResize)
+})
 </script>
 
 <template>
@@ -161,7 +181,7 @@ onMounted(() => {
     <WorkflowHeader @open-projects="openWorkflowList" />
 
     <main
-      :style="{ bottom: isLogExpanded ? '300px' : '44px' }"
+      :style="{ bottom: `${logHeight}px` }"
       class="absolute inset-0 top-[56px] overflow-hidden shadow-[inset_0_2px_10px_rgba(0,0,0,0.05)] border-t border-slate-200 transition-all duration-300 ease-in-out"
     >
       <!-- 历史模式提示条 -->
@@ -225,7 +245,11 @@ onMounted(() => {
 
         <Controls
           position="bottom-left"
-          class="ml-6 mb-6 transition-all duration-300 !bg-white !border-[#efefef] !shadow-xl !rounded-2xl !p-1"
+          class="transition-all duration-300 !bg-white !border-[#efefef] !shadow-xl !rounded-2xl !p-1"
+          :style="{
+            marginLeft: `${layoutMetrics.contentPadding}px`,
+            marginBottom: `${layoutMetrics.contentPadding}px`,
+          }"
         >
           <template #control-button-reset></template>
         </Controls>
@@ -233,7 +257,7 @@ onMounted(() => {
         <div
           v-if="!store.isHistoryMode"
           class="absolute right-0 top-1/2 -translate-y-1/2 z-[100] transition-all duration-500 ease-in-out"
-          :style="{ right: isSidebarVisible ? '340px' : '0' }"
+          :style="{ right: sidebarRightOffset }"
         >
           <button
             v-tooltip.left="isSidebarVisible ? '关闭节点库' : '打开节点库'"
@@ -248,7 +272,10 @@ onMounted(() => {
           </button>
         </div>
 
-        <div class="absolute left-6 bottom-6 z-[100] flex flex-col gap-2">
+        <div
+          class="absolute z-[100] flex flex-col gap-2 transition-all duration-300"
+          :style="{ left: `${layoutMetrics.contentPadding}px`, bottom: `${layoutMetrics.contentPadding}px` }"
+        >
           <button
             v-tooltip.right="'复位视图'"
             class="w-10 h-10 bg-white border border-[#efefef] rounded-xl shadow-xl flex items-center justify-center text-[#3c4257] hover:text-indigo-600 transition-all active:scale-90 group cursor-pointer"
@@ -262,9 +289,9 @@ onMounted(() => {
 
     <aside
       v-if="!store.isHistoryMode"
-      class="absolute right-0 top-[60px] z-[130] transition-all duration-500 ease-in-out shadow-[-20px_0_50px_rgba(0,0,0,0.03)]"
+      class="absolute right-0 top-[56px] z-[130] transition-all duration-500 ease-in-out shadow-[-20px_0_50px_rgba(0,0,0,0.03)]"
       :class="isSidebarVisible ? 'translate-x-0' : 'translate-x-full'"
-      :style="{ width: '340px', bottom: isLogExpanded ? '300px' : '44px' }"
+      :style="{ width: `${layoutMetrics.sidebarWidth}px`, bottom: `${logHeight}px` }"
     >
       <NodeSidebar @close="isSidebarVisible = false" />
     </aside>
@@ -272,7 +299,7 @@ onMounted(() => {
     <div
       v-if="!store.isHistoryMode"
       class="absolute left-1/2 -translate-x-1/2 z-[90] transition-all duration-500 flex gap-3"
-      :style="{ bottom: isLogExpanded ? '320px' : '64px' }"
+      :style="{ bottom: `${runBarBottom}px` }"
     >
       <Button
         :disabled="store.isRunning || !!store.pendingExecution"
@@ -295,7 +322,7 @@ onMounted(() => {
 
     <footer
       class="absolute bottom-0 left-0 right-0 z-[120] transition-all duration-300 ease-in-out flex flex-col"
-      :style="{ height: isLogExpanded ? '300px' : '44px' }"
+      :style="{ height: `${logHeight}px` }"
     >
       <div
         class="h-11 min-h-[44px] bg-white border-t border-[#efefef] flex items-center justify-between px-6 shadow-[0_-1px_3px_rgba(0,0,0,0.02)] relative z-10"
