@@ -2,6 +2,7 @@
 import { ref, markRaw } from 'vue'
 import { type Node, type Edge } from '@vue-flow/core'
 import { getNodeDefinition } from '@/nodes/registry'
+import { isNodeResult, normalizeNodeResult, withResultAliases } from '@/nodes/result'
 import {
   storageProvider,
   type WorkflowNode,
@@ -15,6 +16,12 @@ export const CONNECTION_RULES: Record<string, string[]> = {
   terminal: [],
 }
 
+export type PendingConnectionState = {
+  sourceNodeId: string
+  sourceHandleId?: string
+  edgeId?: string
+} | null
+
 export const useWorkflowStore = defineStore('workflow', () => {
   const nodes = ref<WorkflowNode[]>([])
   const edges = ref<Edge[]>([])
@@ -26,11 +33,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
   const isStopping = ref(false)
   const needsViewReset = ref(false) // 视图复位信号
 
-  const pendingConnection = ref<{
-    sourceNodeId: string
-    sourceHandleId?: string
-    edgeId?: string
-  } | null>(null)
+  const pendingConnection = ref<PendingConnectionState>(null)
 
   const activeConfigNodeId = ref<string | null>(null)
   const pendingExecution = ref<
@@ -59,9 +62,10 @@ export const useWorkflowStore = defineStore('workflow', () => {
 
   // --- 持久化操作封装 ---
 
-  const refreshWorkflows = async () => {
-    savedWorkflows.value = await storageProvider.getWorkflows()
-    return savedWorkflows.value
+  const refreshWorkflows = async (): Promise<SavedWorkflow[]> => {
+    const workflows = (await storageProvider.getWorkflows()) as SavedWorkflow[]
+    savedWorkflows.value = workflows
+    return workflows
   }
 
   const getSavedWorkflows = async (): Promise<SavedWorkflow[]> => {
@@ -74,6 +78,26 @@ export const useWorkflowStore = defineStore('workflow', () => {
     addLog('工作流已删除', 'warn')
     return updated
   }
+
+  const serializeWorkflowNodes = (sourceNodes: WorkflowNode[]) =>
+    sourceNodes.map((node) => ({
+      ...node,
+      data: {
+        ...node.data,
+        status: 'idle' as const,
+        output: node.data.isPinned ? node.data.output : null,
+      },
+    }))
+
+  const resetWorkflowNodeRuntimeState = (sourceNodes: any[]): WorkflowNode[] =>
+    sourceNodes.map((node) => ({
+      ...node,
+      data: {
+        ...node.data,
+        status: 'idle' as const,
+        output: node.data?.isPinned ? node.data.output : null,
+      },
+    }))
 
   const createNewWorkflow = () => {
     nodes.value = []
@@ -90,20 +114,13 @@ export const useWorkflowStore = defineStore('workflow', () => {
     if (name) workflowName.value = name
     const id = currentWorkflowId.value || `wf_${Date.now()}`
     currentWorkflowId.value = id
-    const workflow: SavedWorkflow = {
+    const workflow = {
       id,
       name: workflowName.value,
-      nodes: nodes.value.map((n) => ({
-        ...n,
-        data: {
-          ...n.data,
-          status: 'idle',
-          output: n.data.isPinned ? n.data.output : null,
-        },
-      })),
-      edges: edges.value,
+      nodes: serializeWorkflowNodes(nodes.value as WorkflowNode[]),
+      edges: [...(edges.value as Edge[])],
       updatedAt: Date.now(),
-    }
+    } as SavedWorkflow
     await storageProvider.saveWorkflow(workflow)
     await refreshWorkflows()
     addLog(`工作流 "${workflow.name}" 已保存`, 'info')
@@ -113,14 +130,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
   const loadWorkflow = async (id: string) => {
     const workflow = await storageProvider.getWorkflow(id)
     if (workflow) {
-      nodes.value = workflow.nodes.map((n: any) => ({
-        ...n,
-        data: {
-          ...n.data,
-          status: 'idle',
-          output: n.data.isPinned ? n.data.output : null,
-        },
-      }))
+      nodes.value = resetWorkflowNodeRuntimeState(workflow.nodes)
       edges.value = workflow.edges
       workflowName.value = workflow.name
       currentWorkflowId.value = workflow.id
@@ -137,14 +147,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
         ...original,
         id: newId,
         name: `${original.name} (副本)`,
-        nodes: original.nodes.map((n: any) => ({
-          ...n,
-          data: {
-            ...n.data,
-            status: 'idle',
-            output: n.data.isPinned ? n.data.output : null,
-          },
-        })),
+        nodes: resetWorkflowNodeRuntimeState(original.nodes),
         updatedAt: Date.now(),
       }
       await storageProvider.saveWorkflow(duplicated)
@@ -156,14 +159,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
   }
 
   const exportWorkflow = () => {
-    const cleanNodes = nodes.value.map((n) => ({
-      ...n,
-      data: {
-        ...n.data,
-        status: 'idle',
-        output: n.data.isPinned ? n.data.output : null,
-      },
-    }))
+    const cleanNodes = serializeWorkflowNodes(nodes.value as WorkflowNode[])
     const workflow = { name: workflowName.value, nodes: cleanNodes, edges: edges.value }
     const blob = new Blob([JSON.stringify(workflow, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
@@ -180,14 +176,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     reader.onload = (e) => {
       try {
         const workflow = JSON.parse(e.target?.result as string)
-        const importedNodes = (workflow.nodes || []).map((n: any) => ({
-          ...n,
-          data: {
-            ...n.data,
-            status: 'idle',
-            output: n.data.isPinned ? n.data.output : null,
-          },
-        }))
+        const importedNodes = resetWorkflowNodeRuntimeState(workflow.nodes || [])
         nodes.value = importedNodes
         edges.value = workflow.edges || []
         workflowName.value = workflow.name || '导入的工作流'
@@ -312,15 +301,17 @@ export const useWorkflowStore = defineStore('workflow', () => {
   const collectUpstreamNodeIds = (targetNodeId: string, acc = new Set<string>()) => {
     if (acc.has(targetNodeId)) return acc
     acc.add(targetNodeId)
-    edges.value
+    ;(edges.value as Edge[])
       .filter((edge) => edge.target === targetNodeId)
       .forEach((edge) => collectUpstreamNodeIds(edge.source, acc))
     return acc
   }
 
   const validateConnection = (sourceNodeId: string, targetNodeId: string) => {
-    const sourceNode = nodes.value.find((n) => n.id === sourceNodeId)
-    const targetNode = nodes.value.find((n) => n.id === targetNodeId)
+    const currentNodes = nodes.value as WorkflowNode[]
+    const currentEdges = edges.value as Edge[]
+    const sourceNode = currentNodes.find((n) => n.id === sourceNodeId)
+    const targetNode = currentNodes.find((n) => n.id === targetNodeId)
     if (!sourceNode || !targetNode) return { valid: false, message: '节点不存在' }
     const sourceCat = sourceNode.data.category as keyof typeof CONNECTION_RULES
     const targetCat = targetNode.data.category
@@ -330,7 +321,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
       return { valid: false, message: msg }
     }
 
-    const targetIncomingEdges = edges.value.filter((edge) => edge.target === targetNodeId)
+    const targetIncomingEdges = currentEdges.filter((edge) => edge.target === targetNodeId)
     const { inputMode, maxInputs } = getNodeInputLimits(targetNode.data.type)
 
     if (inputMode === 'single' && targetIncomingEdges.length >= 1) {
@@ -372,38 +363,44 @@ export const useWorkflowStore = defineStore('workflow', () => {
         isPinned: false,
       },
     }
-    nodes.value.push(newNode)
+    nodes.value = [...(nodes.value as WorkflowNode[]), newNode]
     if (pendingConnection.value) {
+      const currentEdges = edges.value as Edge[]
       const { sourceNodeId, sourceHandleId, edgeId } = pendingConnection.value
       if (edgeId) {
-        const oldEdge = edges.value.find((e) => e.id === edgeId)
+        const oldEdge = currentEdges.find((e) => e.id === edgeId)
         if (oldEdge) {
           const targetNodeId = oldEdge.target
-          edges.value = edges.value.filter((e) => e.id !== edgeId)
-          edges.value.push({
-            id: `e_${Date.now()}_1`,
-            source: sourceNodeId,
-            target: newNode.id,
-            type: 'n8n',
-            animated: true,
-          })
-          edges.value.push({
-            id: `e_${Date.now()}_2`,
-            source: newNode.id,
-            target: targetNodeId,
-            type: 'n8n',
-            animated: true,
-          })
+          edges.value = [
+            ...currentEdges.filter((e) => e.id !== edgeId),
+            {
+              id: `e_${Date.now()}_1`,
+              source: sourceNodeId,
+              target: newNode.id,
+              type: 'n8n',
+              animated: true,
+            },
+            {
+              id: `e_${Date.now()}_2`,
+              source: newNode.id,
+              target: targetNodeId,
+              type: 'n8n',
+              animated: true,
+            },
+          ]
         }
       } else {
-        edges.value.push({
-          id: `e_${Date.now()}`,
-          source: sourceNodeId,
-          target: newNode.id,
-          sourceHandle: sourceHandleId,
-          type: 'n8n',
-          animated: true,
-        })
+        edges.value = [
+          ...currentEdges,
+          {
+            id: `e_${Date.now()}`,
+            source: sourceNodeId,
+            target: newNode.id,
+            sourceHandle: sourceHandleId,
+            type: 'n8n',
+            animated: true,
+          },
+        ]
       }
       pendingConnection.value = null
     }
@@ -411,7 +408,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
   }
 
   const duplicateNode = (nodeId: string) => {
-    const original = nodes.value.find((n) => n.id === nodeId)
+    const original = (nodes.value as WorkflowNode[]).find((n) => n.id === nodeId)
     if (!original) return null
 
     const newNode: WorkflowNode = JSON.parse(JSON.stringify(original))
@@ -425,9 +422,40 @@ export const useWorkflowStore = defineStore('workflow', () => {
     newNode.data.output = null
     newNode.data.logs = []
 
-    nodes.value.push(newNode)
+    nodes.value = [...(nodes.value as WorkflowNode[]), newNode]
     addLog(`已复制节点: ${original.data.label}`, 'info')
     return newNode
+  }
+
+  const removeNode = (nodeId: string) => {
+    const currentNodes = nodes.value as WorkflowNode[]
+    const currentEdges = edges.value as Edge[]
+    const removedNode = currentNodes.find((node) => node.id === nodeId)
+    if (!removedNode) return null
+
+    const nextNodes: WorkflowNode[] = currentNodes.filter((node) => node.id !== nodeId)
+    const nextEdges: Edge[] = currentEdges.filter(
+      (edge) => edge.source !== nodeId && edge.target !== nodeId,
+    )
+
+    nodes.value = nextNodes
+    edges.value = nextEdges
+    addLog(`已删除节点: ${removedNode.data.label}`, 'warn')
+    return removedNode
+  }
+
+  const removeEdge = (edgeId: string) => {
+    const currentEdges = edges.value as Edge[]
+    const nextEdges: Edge[] = currentEdges.filter((edge) => edge.id !== edgeId)
+    edges.value = nextEdges
+  }
+
+  const setPendingConnection = (nextConnection: PendingConnectionState) => {
+    pendingConnection.value = nextConnection
+  }
+
+  const setActiveConfigNodeId = (nodeId: string | null) => {
+    activeConfigNodeId.value = nodeId
   }
 
   const isValueValid = (value: any, type: string) => {
@@ -443,12 +471,66 @@ export const useWorkflowStore = defineStore('workflow', () => {
     return true
   }
 
+  const toStoredOutput = (value: any) => {
+    if (!isNodeResult(value)) return value
+    return normalizeNodeResult(value)
+  }
+
+  const toExecutionInputValue = (value: any) => {
+    if (!isNodeResult(value)) return value
+    return withResultAliases(normalizeNodeResult(value))
+  }
+
+  const truncateOutputForHistory = (output: any) => {
+    if (!output || !isNodeResult(output)) return output
+
+    const snapshot = JSON.parse(JSON.stringify(output))
+
+    if (snapshot.kind === 'table' && Array.isArray(snapshot.payload) && snapshot.payload.length > 100) {
+      const originalRowCount = Array.isArray(output.payload) ? output.payload.length : 0
+      snapshot.payload = snapshot.payload.slice(0, 10)
+      snapshot.meta = {
+        ...(snapshot.meta ?? {}),
+        historyTruncated: true,
+        originalRowCount: snapshot.meta?.rowCount ?? originalRowCount,
+      }
+    }
+
+    if (
+      snapshot.kind === 'tableCollection' &&
+      Array.isArray(snapshot.payload) &&
+      snapshot.payload.some((group: any) => Array.isArray(group.data) && group.data.length > 20)
+    ) {
+      snapshot.payload = snapshot.payload.map((group: any) => ({
+        ...group,
+        data: Array.isArray(group.data) ? group.data.slice(0, 5) : [],
+      }))
+      snapshot.meta = {
+        ...(snapshot.meta ?? {}),
+        historyTruncated: true,
+      }
+    }
+
+    if (
+      snapshot.kind === 'report' &&
+      snapshot.meta?.sourceData &&
+      Array.isArray(snapshot.meta.sourceData) &&
+      snapshot.meta.sourceData.length > 100
+    ) {
+      snapshot.meta.sourceData = snapshot.meta.sourceData.slice(0, 10)
+      snapshot.meta.historyTruncated = true
+    }
+
+    return snapshot
+  }
+
   const executeNode = async (
     nodeId: string,
     forceUpdate = false,
     executionScope: 'single' | 'global' = 'single',
   ): Promise<any> => {
-    const node = nodes.value.find((n) => n.id === nodeId)
+    const currentNodes = nodes.value as WorkflowNode[]
+    const node = currentNodes.find((n) => n.id === nodeId)
     if (!node) return
 
     const wasRunning = isRunning.value
@@ -510,22 +592,23 @@ export const useWorkflowStore = defineStore('workflow', () => {
           try {
             parsedInput = JSON.parse(parsedInput)
           } catch (e) {
-            throw new Error('手动输入 JSON 格式错误', { cause: e })
+            throw new Error('手动输入 JSON 格式错误')
           }
         }
         const result = await definition.execute(parsedInput, resolvedConfig)
-        node.data.output = markRaw(result)
+        node.data.output = markRaw(toStoredOutput(result))
         node.data.status = 'success'
-        return result
+        return node.data.output
       }
 
       if (!forceUpdate && node.data.output) return node.data.output
 
       node.data.status = 'running'
 
-      const incomingEdges = edges.value.filter((e) => e.target === nodeId)
-      const inputs = []
-      const structuredInputs = []
+      const currentEdges = edges.value as Edge[]
+      const incomingEdges = currentEdges.filter((e) => e.target === nodeId)
+      const inputs: any[] = []
+      const structuredInputs: any[] = []
       for (const [index, edge] of incomingEdges.entries()) {
         if (isStopping.value) throw new Error('User Aborted')
         const result = await executeNode(edge.source, forceUpdate, executionScope)
@@ -533,14 +616,17 @@ export const useWorkflowStore = defineStore('workflow', () => {
           node.data.status = 'idle'
           return result
         }
-        const sourceNode = nodes.value.find((n) => n.id === edge.source)
-        inputs.push(result)
+        const sourceNode = currentNodes.find((n) => n.id === edge.source)
+        const normalizedResult = isNodeResult(result) ? normalizeNodeResult(result) : null
+        const executionValue = toExecutionInputValue(result)
+        inputs.push(executionValue)
         structuredInputs.push({
           sourceNodeId: edge.source,
           sourceNodeLabel: sourceNode?.data.label ?? edge.source,
           edgeId: edge.id,
           order: index,
-          payload: result ?? null,
+          payload: executionValue ?? null,
+          result: normalizedResult,
         })
       }
 
@@ -564,7 +650,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
 
       const result = await definition.execute(executionInput, resolvedConfig)
 
-      node.data.output = markRaw(result)
+      node.data.output = markRaw(toStoredOutput(result))
       node.data.status = 'success'
       addLog(`执行成功: ${node.data.label}`, 'info', nodeId)
       return node.data.output
@@ -607,9 +693,11 @@ export const useWorkflowStore = defineStore('workflow', () => {
     const startTime = Date.now()
     addLog('开始全局运行...', 'info')
 
-    const terminalNodes = nodes.value.filter((n) => n.data.category === 'terminal')
-    const fallbackLeafNodes = nodes.value.filter(
-      (node) => !edges.value.some((edge) => edge.source === node.id),
+    const currentNodes = nodes.value as WorkflowNode[]
+    const currentEdges = edges.value as Edge[]
+    const terminalNodes = currentNodes.filter((n) => n.data.category === 'terminal')
+    const fallbackLeafNodes = currentNodes.filter(
+      (node) => !currentEdges.some((edge) => edge.source === node.id),
     )
     const executionTargets = terminalNodes.length > 0 ? terminalNodes : fallbackLeafNodes
 
@@ -635,7 +723,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
       executionTargets.forEach((node) => {
         collectUpstreamNodeIds(node.id, executionScopeNodeIds)
       })
-      globalRuntimeQueueNodeIds = nodes.value
+      globalRuntimeQueueNodeIds = currentNodes
         .filter((node) => executionScopeNodeIds.has(node.id))
         .filter((node) => hasMissingRequiredRuntimeInput(node))
         .map((node) => node.id)
@@ -684,15 +772,10 @@ export const useWorkflowStore = defineStore('workflow', () => {
         startTime,
         duration,
         status: finalStatus,
-        nodes: nodes.value.map((n) => {
+        nodes: currentNodes.map((n) => {
           const snapshot = JSON.parse(JSON.stringify(n))
-          if (
-            snapshot.data?.output?.data &&
-            Array.isArray(snapshot.data.output.data) &&
-            snapshot.data.output.data.length > 100
-          ) {
-            snapshot.data.output.data = snapshot.data.output.data.slice(0, 10)
-            snapshot.data.output._truncated = true
+          if (snapshot.data?.output) {
+            snapshot.data.output = truncateOutputForHistory(snapshot.data.output)
           }
           return snapshot
         }),
@@ -764,6 +847,8 @@ export const useWorkflowStore = defineStore('workflow', () => {
     deleteWorkflow,
     duplicateWorkflow,
     duplicateNode,
+    removeNode,
+    removeEdge,
     exportWorkflow,
     importWorkflow,
     loadHistory,
@@ -771,6 +856,8 @@ export const useWorkflowStore = defineStore('workflow', () => {
     enterHistoryMode,
     exitHistoryMode,
     createNewWorkflow,
+    setPendingConnection,
+    setActiveConfigNodeId,
   }
 })
 

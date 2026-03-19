@@ -44,8 +44,11 @@ import { pearsonNode } from '../definitions/pearson'
 import { spearmanNode } from '../definitions/spearman'
 import { kendallNode } from '../definitions/kendall'
 import { nodeDefinitions } from '../registry'
+import { withResultAliases } from '../result'
 
 global.URL.createObjectURL = vi.fn(() => 'blob:mock-url')
+
+const asLegacy = (result: unknown) => withResultAliases(result as any) as any
 
 describe('Node Definitions Execution Logic', () => {
   it('should expose readable Chinese labels for the board integration node', () => {
@@ -68,9 +71,11 @@ describe('Node Definitions Execution Logic', () => {
       const config = { fileData: file, format: 'auto' }
       const result = await fileImportNode.execute(null, config)
 
-      expect(result.data).toBeDefined()
-      expect(result.data.length).toBeGreaterThan(0)
-      expect(result.type).toBe('csv')
+      const legacy = asLegacy(result)
+
+      expect(legacy.data).toBeDefined()
+      expect(legacy.data.length).toBeGreaterThan(0)
+      expect(legacy.type).toBe('csv')
     })
 
     it('should parse an XLSX file correctly', async () => {
@@ -83,9 +88,11 @@ describe('Node Definitions Execution Logic', () => {
       const config = { fileData: file, format: 'auto' }
       const result = await fileImportNode.execute(null, config)
 
-      expect(result.data).toBeDefined()
-      expect(result.data.length).toBeGreaterThan(0)
-      expect(result.type).toBe('excel')
+      const legacy = asLegacy(result)
+
+      expect(legacy.data).toBeDefined()
+      expect(legacy.data.length).toBeGreaterThan(0)
+      expect(legacy.type).toBe('excel')
     })
   })
 
@@ -96,10 +103,12 @@ describe('Node Definitions Execution Logic', () => {
 
       const result = await dataCleaningNode.execute(input, config)
 
-      expect(result.data).toBeDefined()
-      expect(result.stats.originalCount).toBe(3)
-      expect(result.stats.missingFilled).toBe(1)
-      expect(result.data[1].a).toBe(1.5)
+      const legacy = asLegacy(result)
+
+      expect(legacy.data).toBeDefined()
+      expect(legacy.stats.originalCount).toBe(3)
+      expect(legacy.stats.missingFilled).toBe(1)
+      expect(legacy.data[1].a).toBe(1.5)
     })
 
     it('should perform min-max scaling', async () => {
@@ -110,9 +119,11 @@ describe('Node Definitions Execution Logic', () => {
 
       const result = await dataCleaningNode.execute(input, config)
 
-      expect(result.data[0].a).toBe(0)
-      expect(result.data[1].a).toBe(0.5)
-      expect(result.data[2].a).toBe(1)
+      const legacy = asLegacy(result)
+
+      expect(legacy.data[0].a).toBe(0)
+      expect(legacy.data[1].a).toBe(0.5)
+      expect(legacy.data[2].a).toBe(1)
     })
 
     it('should perform label encoding for string fields', async () => {
@@ -127,9 +138,11 @@ describe('Node Definitions Execution Logic', () => {
 
       const result = await dataCleaningNode.execute(input, config)
 
-      expect(typeof result.data[0].category).toBe('number')
-      expect(result.data[0].category).toBe(result.data[2].category)
-      expect(result.data[0].category).not.toBe(result.data[1].category)
+      const legacy = asLegacy(result)
+
+      expect(typeof legacy.data[0].category).toBe('number')
+      expect(legacy.data[0].category).toBe(legacy.data[2].category)
+      expect(legacy.data[0].category).not.toBe(legacy.data[1].category)
     })
   })
 
@@ -148,15 +161,17 @@ describe('Node Definitions Execution Logic', () => {
         topFields: 6,
       })
 
-      expect(result.viewType).toBe('report')
-      expect(result.data).toHaveLength(3)
-      expect(result.metrics.fieldCount).toBe(5)
-      expect(result.metrics.numericFieldCount).toBeGreaterThanOrEqual(3)
-      expect(result.metrics.riskFieldCount).toBeGreaterThanOrEqual(1)
-      expect(result.report.title).toBe('数据体检与字段画像')
-      expect(result.report.sections[1].option.series[0].type).toBe('bar')
-      expect(result.report.sections[2].option.series[0].type).toBe('pie')
-      expect(result.report.sections[3].content).toContain('字段')
+      const legacy = asLegacy(result)
+
+      expect(legacy.viewType).toBe('report')
+      expect(legacy.data).toHaveLength(3)
+      expect(legacy.metrics.fieldCount).toBe(5)
+      expect(legacy.metrics.numericFieldCount).toBeGreaterThanOrEqual(3)
+      expect(legacy.metrics.riskFieldCount).toBeGreaterThanOrEqual(1)
+      expect(legacy.report.title).toBe('数据体检与字段画像')
+      expect(legacy.report.sections[1].option.series[0].type).toBe('bar')
+      expect(legacy.report.sections[2].option.series[0].type).toBe('pie')
+      expect(legacy.report.sections[3].content).toContain('字段')
     })
 
     it('should report target usability, duplicate ratio, outlier ratio and risk level', async () => {
@@ -175,16 +190,18 @@ describe('Node Definitions Execution Logic', () => {
         topFields: 10,
       })
 
-      expect(result.metrics.duplicateRowCount).toBe(1)
-      expect(result.metrics.duplicateRowRate).toBeCloseTo(0.2)
-      expect(result.metrics.targetFieldUsability).toBe('classification')
-      expect(result.report.sections[0].content).toContain('target')
-      expect(result.report.sections[0].content).toContain('1')
-      expect(result.report.sections[3].content).toContain('字段')
-      expect(result.report.sections[3].content).toContain('20.0%')
-      expect(result.report.sections[3].content).toContain('sensor_b')
+      const legacy = asLegacy(result)
 
-      const sensorProfile = result.profile.find((item: any) => item.field === 'sensor_b')
+      expect(legacy.metrics.duplicateRowCount).toBe(1)
+      expect(legacy.metrics.duplicateRowRate).toBeCloseTo(0.2)
+      expect(legacy.metrics.targetFieldUsability).toBe('classification')
+      expect(legacy.report.sections[0].content).toContain('target')
+      expect(legacy.report.sections[0].content).toContain('1')
+      expect(legacy.report.sections[3].content).toContain('字段')
+      expect(legacy.report.sections[3].content).toContain('20.0%')
+      expect(legacy.report.sections[3].content).toContain('sensor_b')
+
+      const sensorProfile = legacy.profile.find((item: any) => item.field === 'sensor_b')
       expect(sensorProfile.outlierRate).toBeCloseTo(0.2)
       expect(sensorProfile.riskLevel).toBe('high')
     })
@@ -211,8 +228,10 @@ describe('Node Definitions Execution Logic', () => {
 
       const result = await dataAggregationNode.execute(input, config)
 
-      expect(result.data[0].total).toBe(60)
-      expect(result.data[1].total).toBe(15)
+      const legacy = asLegacy(result)
+
+      expect(legacy.data[0].total).toBe(60)
+      expect(legacy.data[1].total).toBe(15)
     })
   })
 
@@ -244,13 +263,15 @@ describe('Node Definitions Execution Logic', () => {
         },
       )
 
+      const legacy = asLegacy(result)
+
       expect(mergeNode).toBeDefined()
-      expect(result.data).toHaveLength(2)
-      expect(result.data[0]).toEqual({ id: 1, city: '上海', score: null, __source: 'Source A' })
-      expect(result.data[1]).toEqual({ id: 2, city: null, score: 95, __source: 'Source B' })
-      expect(result.stats.inputCount).toBe(2)
-      expect(result.stats.outputRows).toBe(2)
-      expect(result.lineage.fields.score[0].sourceNodeId).toBe('n2')
+      expect(legacy.data).toHaveLength(2)
+      expect(legacy.data[0]).toEqual({ id: 1, city: '上海', score: null, __source: 'Source A' })
+      expect(legacy.data[1]).toEqual({ id: 2, city: null, score: 95, __source: 'Source B' })
+      expect(legacy.stats.inputCount).toBe(2)
+      expect(legacy.stats.outputRows).toBe(2)
+      expect(legacy.lineage.fields.score[0].sourceNodeId).toBe('n2')
     })
 
     it('should left-join datasets and suffix conflicting fields', async () => {
@@ -291,21 +312,23 @@ describe('Node Definitions Execution Logic', () => {
         },
       )
 
+      const legacy = asLegacy(result)
+
       expect(mergeNode).toBeDefined()
-      expect(result.data).toHaveLength(2)
-      expect(result.data[0]).toEqual({ id: 1, city: '上海', value: 10, value_Extra: 99, score: 90 })
-      expect(result.data[1]).toEqual({
+      expect(legacy.data).toHaveLength(2)
+      expect(legacy.data[0]).toEqual({ id: 1, city: '上海', value: 10, value_Extra: 99, score: 90 })
+      expect(legacy.data[1]).toEqual({
         id: 2,
         city: '北京',
         value: 20,
         value_Extra: null,
         score: null,
       })
-      expect(result.stats.outputRows).toBe(2)
-      expect(result.stats.matchedRows).toBe(1)
-      expect(result.stats.conflictFieldCount).toBe(1)
-      expect(result.diagnostics.conflicts[0].field).toBe('value')
-      expect(result.lineage.fields.score[0].sourceNodeId).toBe('extra')
+      expect(legacy.stats.outputRows).toBe(2)
+      expect(legacy.stats.matchedRows).toBe(1)
+      expect(legacy.stats.conflictFieldCount).toBe(1)
+      expect(legacy.diagnostics.conflicts[0].field).toBe('value')
+      expect(legacy.lineage.fields.score[0].sourceNodeId).toBe('extra')
     })
 
     it('should package multiple datasets into a collection for parallel analysis', async () => {
@@ -331,13 +354,15 @@ describe('Node Definitions Execution Logic', () => {
         },
       )
 
-      expect(result.data).toHaveLength(2)
-      expect(result.data[0]).toEqual({ name: 'Group A', data: [{ val: 10 }] })
-      expect(result.data[1]).toEqual({ name: 'Group B', data: [{ val: 20 }, { val: 30 }] })
-      expect(result.stats.groupCount).toBe(2)
-      expect(result.stats.totalRows).toBe(3)
-      expect(result.chartOption).not.toBeNull()
-      expect(result.chartOption.xAxis.data).toEqual(['Group A', 'Group B'])
+      const legacy = asLegacy(result)
+
+      expect(legacy.data).toHaveLength(2)
+      expect(legacy.data[0]).toEqual({ name: 'Group A', data: [{ val: 10 }] })
+      expect(legacy.data[1]).toEqual({ name: 'Group B', data: [{ val: 20 }, { val: 30 }] })
+      expect(legacy.stats.groupCount).toBe(2)
+      expect(legacy.stats.totalRows).toBe(3)
+      expect(legacy.chartOption).not.toBeNull()
+      expect(legacy.chartOption.xAxis.data).toEqual(['Group A', 'Group B'])
     })
   })
 
@@ -360,10 +385,12 @@ describe('Node Definitions Execution Logic', () => {
         ],
       })
 
-      expect(result.data).toHaveLength(1)
-      expect(result.data[0]).toEqual({ city: '上海', score: 91, tag: 'A-1' })
-      expect(result.stats.originalCount).toBe(4)
-      expect(result.stats.filteredCount).toBe(1)
+      const legacy = asLegacy(result)
+
+      expect(legacy.data).toHaveLength(1)
+      expect(legacy.data[0]).toEqual({ city: '上海', score: 91, tag: 'A-1' })
+      expect(legacy.stats.originalCount).toBe(4)
+      expect(legacy.stats.filteredCount).toBe(1)
     })
 
     it('should filter rows by any-match mode with contains operator', async () => {
@@ -384,8 +411,10 @@ describe('Node Definitions Execution Logic', () => {
         ],
       })
 
-      expect(result.data).toHaveLength(2)
-      expect(result.data.map((row: any) => row.city)).toEqual(['北京', '深圳'])
+      const legacy = asLegacy(result)
+
+      expect(legacy.data).toHaveLength(2)
+      expect(legacy.data.map((row: any) => row.city)).toEqual(['北京', '深圳'])
     })
   })
 
@@ -431,26 +460,28 @@ describe('Node Definitions Execution Logic', () => {
 
       const result = await xgboostShapNode.execute(input, config)
 
-      expect(result.viewType).toBe('report')
-      expect(result.report).toBeDefined()
-      expect(result.report.title).toContain('Xgboost')
-      expect(result.report.metadata).toMatchObject({
+      const legacy = asLegacy(result)
+
+      expect(legacy.viewType).toBe('report')
+      expect(legacy.report).toBeDefined()
+      expect(legacy.report.title).toContain('Xgboost')
+      expect(legacy.report.metadata).toMatchObject({
         targetField: 'target',
         sampleCount: 2,
         featureCount: 3,
         r2: 0.85,
         mae: 0.1,
       })
-      expect(result.report.sections).toBeDefined()
-      expect(result.report.sections.some((section: any) => section.type === 'summary')).toBe(true)
-      expect(result.report.sections.some((section: any) => section.key === 'importance')).toBe(true)
-      expect(result.report.sections.some((section: any) => section.key === 'dependence')).toBe(true)
-      expect(result.report.sections.some((section: any) => section.key === 'details')).toBe(true)
+      expect(legacy.report.sections).toBeDefined()
+      expect(legacy.report.sections.some((section: any) => section.type === 'summary')).toBe(true)
+      expect(legacy.report.sections.some((section: any) => section.key === 'importance')).toBe(true)
+      expect(legacy.report.sections.some((section: any) => section.key === 'dependence')).toBe(true)
+      expect(legacy.report.sections.some((section: any) => section.key === 'details')).toBe(true)
       expect(
-        result.report.sections.find((section: any) => section.key === 'details').items,
+        legacy.report.sections.find((section: any) => section.key === 'details').items,
       ).toHaveLength(3)
-      expect(result.report.supplements.fullReportImage).toBe('data:image/png;base64,base64_full')
-      expect(result.report.supplements.beeswarmImage).toBe('data:image/png;base64,base64_beeswarm')
+      expect(legacy.report.supplements.fullReportImage).toBe('data:image/png;base64,base64_full')
+      expect(legacy.report.supplements.beeswarmImage).toBe('data:image/png;base64,base64_beeswarm')
     })
 
     it('should simulate lasso result', async () => {
@@ -459,8 +490,10 @@ describe('Node Definitions Execution Logic', () => {
 
       const result = await lassoNode.execute(input, config)
 
-      expect(result.viewType).toBe('report')
-      expect(result.report.title).toBe('Lasso 回归分析')
+      const legacy = asLegacy(result)
+
+      expect(legacy.viewType).toBe('report')
+      expect(legacy.report.title).toBe('Lasso 回归分析')
     })
 
     it('should calculate pearson correlations from numeric data', async () => {
@@ -476,14 +509,16 @@ describe('Node Definitions Execution Logic', () => {
 
       const result = await pearsonNode.execute(input, { targetField: 'target', topN: 5 })
 
-      expect(result.viewType).toBe('report')
-      expect(result.report.title).toBe('Pearson 相关系数矩阵分析')
-      expect(result.metrics.targetField).toBe('target')
-      expect(result.metrics.numericFieldCount).toBe(3)
-      expect(result.report.sections).toHaveLength(4)
-      expect(result.report.sections[1].option.series[0].type).toBe('heatmap')
-      expect(result.report.sections[2].option.series[0].data[0].value).toBe(1)
-      expect(result.report.sections[3].content).toContain('因子')
+      const legacy = asLegacy(result)
+
+      expect(legacy.viewType).toBe('report')
+      expect(legacy.report.title).toBe('Pearson 相关系数矩阵分析')
+      expect(legacy.metrics.targetField).toBe('target')
+      expect(legacy.metrics.numericFieldCount).toBe(3)
+      expect(legacy.report.sections).toHaveLength(4)
+      expect(legacy.report.sections[1].option.series[0].type).toBe('heatmap')
+      expect(legacy.report.sections[2].option.series[0].data[0].value).toBe(1)
+      expect(legacy.report.sections[3].content).toContain('因子')
     })
 
     it('should calculate spearman correlations for monotonic but non-linear data', async () => {
@@ -499,14 +534,16 @@ describe('Node Definitions Execution Logic', () => {
 
       const result = await spearmanNode.execute(input, { targetField: 'target', topN: 5 })
 
-      expect(result.viewType).toBe('report')
-      expect(result.report.title).toBe('Spearman 秩相关矩阵分析')
-      expect(result.metrics.targetField).toBe('target')
-      expect(result.report.sections[1].option.series[0].name).toBe('Spearman ρ')
-      expect(result.report.sections[2].option.xAxis.name).toBe('Spearman ρ')
-      expect(result.report.sections[2].option.series[0].data[0].value).toBe(1)
-      expect(result.report.sections[2].option.series[0].data[1].value).toBe(-1)
-      expect(result.report.sections[3].content).toContain('因子')
+      const legacy = asLegacy(result)
+
+      expect(legacy.viewType).toBe('report')
+      expect(legacy.report.title).toBe('Spearman 秩相关矩阵分析')
+      expect(legacy.metrics.targetField).toBe('target')
+      expect(legacy.report.sections[1].option.series[0].name).toBe('Spearman ρ')
+      expect(legacy.report.sections[2].option.xAxis.name).toBe('Spearman ρ')
+      expect(legacy.report.sections[2].option.series[0].data[0].value).toBe(1)
+      expect(legacy.report.sections[2].option.series[0].data[1].value).toBe(-1)
+      expect(legacy.report.sections[3].content).toContain('因子')
     })
 
     it('should calculate kendall correlations and rank inverse monotonic fields', async () => {
@@ -522,14 +559,16 @@ describe('Node Definitions Execution Logic', () => {
 
       const result = await kendallNode.execute(input, { targetField: 'target', topN: 5 })
 
-      expect(result.viewType).toBe('report')
-      expect(result.report.title).toBe('Kendall 秩相关矩阵分析')
-      expect(result.metrics.targetField).toBe('target')
-      expect(result.report.sections[1].option.series[0].name).toBe('Kendall τ')
-      expect(result.report.sections[2].option.xAxis.name).toBe('Kendall τ')
-      expect(result.report.sections[2].option.series[0].data[0].value).toBe(-1)
-      expect(result.report.sections[2].option.series[0].data[1].value).toBe(1)
-      expect(result.report.sections[3].content).toContain('因子')
+      const legacy = asLegacy(result)
+
+      expect(legacy.viewType).toBe('report')
+      expect(legacy.report.title).toBe('Kendall 秩相关矩阵分析')
+      expect(legacy.metrics.targetField).toBe('target')
+      expect(legacy.report.sections[1].option.series[0].name).toBe('Kendall τ')
+      expect(legacy.report.sections[2].option.xAxis.name).toBe('Kendall τ')
+      expect(legacy.report.sections[2].option.series[0].data[0].value).toBe(-1)
+      expect(legacy.report.sections[2].option.series[0].data[1].value).toBe(1)
+      expect(legacy.report.sections[3].content).toContain('因子')
     })
   })
 
@@ -585,6 +624,8 @@ describe('Node Definitions Execution Logic', () => {
 
       const result = await neighborSystemNode.execute(null, config)
 
+      const legacy = asLegacy(result)
+
       expect(mockFetchKanbanData).toHaveBeenCalledWith(
         expect.objectContaining({
           token: 'token-from-host',
@@ -595,13 +636,13 @@ describe('Node Definitions Execution Logic', () => {
           processList: ['涂布'],
         }),
       )
-      expect(result.data).toEqual([
+      expect(legacy.data).toEqual([
         { sn: 'SN001', F_TEMP: 12.3, F_PRESS: 45.6 },
         { sn: 'SN002', F_TEMP: 22.3, F_PRESS: 55.6 },
       ])
-      expect(result.metadata.factors_count).toBe(2)
-      expect(result.metadata.product).toBe('试制产品 A1')
-      expect(result.metadata.fetch_mode).toBe('time')
+      expect(legacy.metadata.factors_count).toBe(2)
+      expect(legacy.metadata.product).toBe('试制产品 A1')
+      expect(legacy.metadata.fetch_mode).toBe('time')
     })
 
     it('should throw error if no factors are selected', async () => {
@@ -665,8 +706,10 @@ describe('Node Definitions Execution Logic', () => {
 
       const result = await chartDisplayNode.execute(input, config)
 
-      expect(result.viewType).toBe('chart')
-      expect(result.chartOption.series[0].type).toBe('scatter')
+      const legacy = asLegacy(result)
+
+      expect(legacy.viewType).toBe('chart')
+      expect(legacy.chartOption.series[0].type).toBe('scatter')
     })
 
     it('should generate bar chart option', async () => {
@@ -680,8 +723,10 @@ describe('Node Definitions Execution Logic', () => {
 
       const result = await chartDisplayNode.execute(input, config)
 
-      expect(result.viewType).toBe('chart')
-      expect(result.chartOption.series[0].type).toBe('bar')
+      const legacy = asLegacy(result)
+
+      expect(legacy.viewType).toBe('chart')
+      expect(legacy.chartOption.series[0].type).toBe('bar')
     })
 
     it('should not mutate grouped collection input when rendering non-boxplot charts', async () => {
@@ -711,7 +756,9 @@ describe('Node Definitions Execution Logic', () => {
         yAxis: 'target',
       })
 
-      expect(result.viewType).toBe('chart')
+      const legacy = asLegacy(result)
+
+      expect(legacy.viewType).toBe('chart')
       expect(input).toEqual(snapshot)
     })
   })
@@ -723,9 +770,11 @@ describe('Node Definitions Execution Logic', () => {
 
       const result = await dataExportNode.execute(input, config)
 
-      expect(result.viewType).toBe('export')
-      expect(result.exportInfo.filename).toBe('test_export.csv')
-      expect(result.exportInfo.url).toBe('blob:mock-url')
+      const legacy = asLegacy(result)
+
+      expect(legacy.viewType).toBe('export')
+      expect(legacy.exportInfo.filename).toBe('test_export.csv')
+      expect(legacy.exportInfo.url).toBe('blob:mock-url')
     })
 
     it('should generate export info for JSON', async () => {
@@ -734,8 +783,10 @@ describe('Node Definitions Execution Logic', () => {
 
       const result = await dataExportNode.execute(input, config)
 
-      expect(result.viewType).toBe('export')
-      expect(result.exportInfo.filename).toBe('test_export.json')
+      const legacy = asLegacy(result)
+
+      expect(legacy.viewType).toBe('export')
+      expect(legacy.exportInfo.filename).toBe('test_export.json')
     })
   })
 })

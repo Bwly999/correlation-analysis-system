@@ -102,7 +102,7 @@ watch(
   availableKeys,
   (newKeys) => {
     if (newKeys.length > 0 && selectedKeys.value.length === 0) {
-      selectedKeys.value = [newKeys[0]]
+      selectedKeys.value = [newKeys[0]!]
     }
   },
   { immediate: true },
@@ -222,7 +222,7 @@ const chartOption = computed(() => {
         <div
           class="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-100 rounded-lg shadow-sm"
         >
-          <ListChecks size="14" class="text-indigo-500" />
+          <ListChecks :size="14" class="text-indigo-500" />
           <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest"
             >分析因子</span
           >
@@ -240,7 +240,7 @@ const chartOption = computed(() => {
           v-if="!isGroupedData"
           class="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-100 rounded-lg shadow-sm"
         >
-          <Settings2 size="14" class="text-slate-400" />
+          <Settings2 :size="14" class="text-slate-400" />
           <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">采样</span>
           <InputNumber
             v-model="maxPoints"
@@ -264,8 +264,8 @@ const chartOption = computed(() => {
           <div v-if="slotProps.value" class="flex items-center gap-2 text-slate-800">
             <component
               :is="chartTypes.find((c) => c.value === slotProps.value)?.icon"
-              size="14"
-              stroke-width="2.5"
+              :size="14"
+              :stroke-width="2.5"
             />
             <span>{{ chartTypes.find((c) => c.value === slotProps.value)?.label }}</span>
           </div>
@@ -274,7 +274,7 @@ const chartOption = computed(() => {
           <div
             class="flex items-center gap-2 font-bold text-[11px] uppercase tracking-widest text-slate-500 w-full"
           >
-            <component :is="slotProps.option.icon" size="14" class="text-slate-700" />
+            <component :is="slotProps.option.icon" :size="14" class="text-slate-700" />
             <span>{{ slotProps.option.label }}</span>
           </div>
         </template>

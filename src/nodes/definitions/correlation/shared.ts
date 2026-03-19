@@ -1,4 +1,5 @@
 import type { NodeDefinition, NodeProperty } from '../../types'
+import { createReportResult, extractTableRows } from '../../result'
 
 type NumericRow = Record<string, number | null>
 
@@ -40,7 +41,7 @@ const methodMeta: Record<CorrelationMethod, CorrelationMethodMeta> = {
   pearson: {
     name: 'pearson',
     displayName: 'Pearson 相关系数',
-    description: '计算数值字段之间及目标变量与因子之间的 Pearson 相关性，并输出显著性摘要。',
+    description: '计算数值字段之间以及目标变量与因子之间的 Pearson 相关性，并给出显著性摘要。',
     reportTitle: 'Pearson 相关系数矩阵分析',
     chartSeriesName: 'Pearson r',
     axisName: 'Pearson r',
@@ -48,7 +49,7 @@ const methodMeta: Record<CorrelationMethod, CorrelationMethodMeta> = {
   spearman: {
     name: 'spearman',
     displayName: 'Spearman 秩相关系数',
-    description: '计算数值字段之间及目标变量与因子之间的 Spearman 秩相关性，并输出显著性摘要。',
+    description: '计算数值字段之间以及目标变量与因子之间的 Spearman 秩相关性，并给出显著性摘要。',
     reportTitle: 'Spearman 秩相关矩阵分析',
     chartSeriesName: 'Spearman ρ',
     axisName: 'Spearman ρ',
@@ -56,7 +57,7 @@ const methodMeta: Record<CorrelationMethod, CorrelationMethodMeta> = {
   kendall: {
     name: 'kendall',
     displayName: 'Kendall 秩相关系数',
-    description: '计算数值字段之间及目标变量与因子之间的 Kendall 秩相关性，并输出显著性摘要。',
+    description: '计算数值字段之间以及目标变量与因子之间的 Kendall 秩相关性，并给出显著性摘要。',
     reportTitle: 'Kendall 秩相关矩阵分析',
     chartSeriesName: 'Kendall τ',
     axisName: 'Kendall τ',
@@ -71,20 +72,19 @@ const commonProperties: NodeProperty[] = [
     default: 'target',
     useUpstreamFactors: true,
     editable: true,
-    description: '用于重点排序和摘要解读的目标字段名。',
+    description: '用于重点排序和摘要解读的目标字段名称。',
   },
   {
     name: 'topN',
     displayName: '重点展示因子数',
     type: 'number',
     default: 8,
-    description: '按与目标变量的相关绝对值排序，展示前 N 个关键因子。',
+    description: '按与目标变量的相关绝对值排序，展示前 N 个重点因子。',
   },
 ]
 
-const isFiniteNumber = (value: unknown): value is number => {
-  return typeof value === 'number' && Number.isFinite(value)
-}
+const isFiniteNumber = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value)
 
 const toFiniteNumber = (value: unknown): number | null => {
   if (isFiniteNumber(value)) return value
@@ -110,11 +110,11 @@ const rankValues = (values: number[]) => {
   while (start < indexed.length) {
     let end = start
     while (end + 1 < indexed.length && indexed[end + 1]!.value === indexed[start]!.value) {
-      end++
+      end += 1
     }
 
     const averageRank = (start + end + 2) / 2
-    for (let cursor = start; cursor <= end; cursor++) {
+    for (let cursor = start; cursor <= end; cursor += 1) {
       const item = indexed[cursor]
       if (item) ranks[item.index] = averageRank
     }
@@ -247,8 +247,8 @@ const calculateKendall = (xValues: number[], yValues: number[]): PairStats => {
   let tiesX = 0
   let tiesY = 0
 
-  for (let left = 0; left < sampleSize - 1; left++) {
-    for (let right = left + 1; right < sampleSize; right++) {
+  for (let left = 0; left < sampleSize - 1; left += 1) {
+    for (let right = left + 1; right < sampleSize; right += 1) {
       const xLeft = xValues[left]
       const xRight = xValues[right]
       const yLeft = yValues[left]
@@ -268,18 +268,18 @@ const calculateKendall = (xValues: number[], yValues: number[]): PairStats => {
 
       if (dx === 0 && dy === 0) continue
       if (dx === 0) {
-        tiesX++
+        tiesX += 1
         continue
       }
       if (dy === 0) {
-        tiesY++
+        tiesY += 1
         continue
       }
 
       if (dx === dy) {
-        concordant++
+        concordant += 1
       } else {
-        discordant++
+        discordant += 1
       }
     }
   }
@@ -315,14 +315,15 @@ const createSummaryLines = (
 ) => {
   const lines = [
     `本次共识别 ${numericKeys.length} 个数值字段，基于 ${rowCount} 行样本计算相关矩阵。`,
-    `目标字段使用 "${targetField}"。与目标变量相关性显著（近似 p < 0.05）的字段有 ${significantRelationCount} 个，强相关（|r| >= 0.60）的字段有 ${strongRelationCount} 个。`,
+    `目标字段使用 "${targetField}"。与目标变量相关性显著（近似 p < 0.05）的字段共 ${significantRelationCount} 个，强相关（|r| >= 0.60）的字段共 ${strongRelationCount} 个。`,
     `数值字段缺失单元格共 ${incompleteFieldCount} 个；相关分析采用成对可用样本计算，不同字段对的样本量可能不同。`,
   ]
 
   const strongest = topTargetRelations[0]
   if (strongest) {
+    const focusField = strongest.xField === targetField ? strongest.yField : strongest.xField
     lines.push(
-      `当前最值得优先关注的因子是 "${strongest.xField === targetField ? strongest.yField : strongest.xField}"，与目标变量呈 ${directionLabel(strongest.correlation)}，强度为 ${strengthLabel(strongest.correlation)}（r=${strongest.correlation.toFixed(3)}，近似 p ${formatPValue(strongest.pValue)}）。`,
+      `当前最值得优先关注的因子是 "${focusField}"，与目标变量呈 ${directionLabel(strongest.correlation)}，强度为 ${strengthLabel(strongest.correlation)}（r=${strongest.correlation.toFixed(3)}，近似 p ${formatPValue(strongest.pValue)}）。`,
     )
   }
 
@@ -334,16 +335,9 @@ export const executeCorrelationAnalysis = async (
   input: unknown,
   config: Record<string, unknown>,
 ) => {
-  const payload = input as { data?: unknown[] } | null
-  if (!payload || !Array.isArray(payload.data) || payload.data.length === 0) {
+  const sourceRows = extractTableRows(input)
+  if (!sourceRows || sourceRows.length === 0) {
     throw new Error('无可分析的输入数据')
-  }
-
-  const sourceRows = payload.data.filter(
-    (row): row is Record<string, unknown> => row !== null && typeof row === 'object',
-  )
-  if (sourceRows.length === 0) {
-    throw new Error('输入数据格式不正确')
   }
 
   const { numericKeys, normalizedRows } = buildNumericDataset(sourceRows)
@@ -539,10 +533,8 @@ export const executeCorrelationAnalysis = async (
     strongRelationCount,
   }
 
-  return {
-    viewType: 'report',
-    metrics,
-    report: {
+  return createReportResult(
+    {
       title: meta.reportTitle,
       sections: [
         {
@@ -566,7 +558,15 @@ export const executeCorrelationAnalysis = async (
         },
       ],
     },
-  }
+    {
+      meta: {
+        sourceData: sourceRows,
+        metrics,
+        pairDetails,
+        matrixData,
+      },
+    },
+  )
 }
 
 export const createCorrelationNode = (method: CorrelationMethod): NodeDefinition => {

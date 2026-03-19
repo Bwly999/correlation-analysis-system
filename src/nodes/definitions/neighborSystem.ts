@@ -8,6 +8,7 @@ import {
   listMaterialTypes,
   listTaskOrderTypes,
 } from '@/services/kanbanIntegration'
+import { createTableResult } from '../result'
 
 const FACTOR_KEY_PREFIX = 'factor:'
 const SCHEME_KEY_PREFIX = 'scheme:'
@@ -259,16 +260,19 @@ export const neighborSystemNode: NodeDefinition = {
       taskOrderList,
     })
 
-    return {
-      data: result.rows,
-      metadata: {
-        total_sn: result.metadata?.totalSn ?? result.rows.length,
-        factors_count: factorKeys.length,
-        product: config.productName,
-        fetch_mode: config.fetchMode,
-        process_list: processList,
-        ...result.metadata,
+    return createTableResult(result.rows, {
+      meta: {
+        filename: 'neighbor-system',
+        sourceType: 'kanban',
+        metadata: {
+          total_sn: result.metadata?.totalSn ?? result.rows.length,
+          factors_count: factorKeys.length,
+          product: config.productName,
+          fetch_mode: config.fetchMode,
+          process_list: processList,
+          ...result.metadata,
+        },
       },
-    }
+    })
   },
 }

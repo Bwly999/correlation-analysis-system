@@ -1,8 +1,10 @@
 ﻿<script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import type { Edge } from '@vue-flow/core'
 import { Loader2, Bug } from 'lucide-vue-next'
 import { useWorkflowStore } from '@/stores/workflowStore'
 import { getNodeDefinition } from '@/nodes/registry'
+import type { WorkflowNode } from '@/utils/storage'
 
 // Sub Components
 import DataDisplayPanel from './DataDisplayPanel.vue'
@@ -11,6 +13,11 @@ import ConfigHeader from './config/ConfigHeader.vue'
 import ConfigFooter from './config/ConfigFooter.vue'
 import ConfigForm from './config/ConfigForm.vue'
 import RuntimeInputs from './config/RuntimeInputs.vue'
+import {
+  getResultRows,
+  getResultSchemaFields,
+  normalizeWorkflowResult,
+} from './resultView'
 
 // PrimeVue Components
 import Dialog from 'primevue/dialog'
@@ -22,9 +29,16 @@ const props = defineProps<{
 
 const emit = defineEmits(['close'])
 const store = useWorkflowStore()
+const workflowNodes = computed<WorkflowNode[]>(() => store.nodes as WorkflowNode[])
+const workflowEdges = computed<Edge[]>(() => store.edges as Edge[])
+
+const findWorkflowNode = (nodeId: string | null | undefined): WorkflowNode | null => {
+  if (!nodeId) return null
+  return workflowNodes.value.find((currentNode) => currentNode.id === nodeId) ?? null
+}
 
 // 直接从 Store 中获取响应式节点对象
-const node = computed(() => store.nodes.find((n) => n.id === props.nodeId) || null)
+const node = computed<WorkflowNode | null>(() => findWorkflowNode(props.nodeId))
 
 // 状态管理
 const config = ref<any>({})
@@ -111,16 +125,19 @@ const inputData = computed(() => {
   const currentNode = node.value
   if (!currentNode) return null
 
-  const incomingEdges = store.edges.filter((e) => e.target === currentNode.id)
+  const currentEdges = workflowEdges.value
+  const currentNodes = workflowNodes.value
+  const incomingEdges = currentEdges.filter((edge) => edge.target === currentNode.id)
   if (incomingEdges.length === 0) return null
 
   if (nodeDefinition.value?.inputMode === 'multiple') {
     return {
       inputs: incomingEdges.map((edge, index) => {
-        const sourceNode = store.nodes.find((n) => n.id === edge.source)
+        const sourceNode = currentNodes.find((item) => item.id === edge.source)
         const payload = sourceNode?.data.output ?? null
-        const rowCount = Array.isArray(payload?.data) ? payload.data.length : 0
-        const sample = Array.isArray(payload?.data) && payload.data.length > 0 ? payload.data[0] : null
+        const normalized = normalizeWorkflowResult(payload)
+        const rows = getResultRows(payload)
+        const schemaFields = getResultSchemaFields(payload)
 
         return {
           sourceNodeId: edge.source,
@@ -128,16 +145,18 @@ const inputData = computed(() => {
           edgeId: edge.id,
           order: index,
           payload,
+          result: normalized,
           summary: {
-            rowCount,
-            fields: sample && typeof sample === 'object' ? Object.keys(sample) : [],
+            rowCount: normalized?.meta?.rowCount ?? rows.length,
+            fields: schemaFields.map((field) => field.name),
+            kind: normalized?.kind ?? 'unknown',
           },
         }
       }),
     }
   }
 
-  return store.nodes.find((n) => n.id === incomingEdges[0]?.source)?.data.output ?? null
+  return currentNodes.find((item) => item.id === incomingEdges[0]?.source)?.data.output ?? null
 })
 
 const upstreamFactors = computed(() => {
@@ -151,11 +170,22 @@ const upstreamFactors = computed(() => {
       return []
     }
   }
-  if (data.data && Array.isArray(data.data)) data = data.data[0]
-  else if (Array.isArray(data)) data = data[0]
-  return data && typeof data === 'object'
-    ? Object.keys(data).map((key) => ({ name: key, value: key }))
-    : []
+  const schemaFields = getResultSchemaFields(data)
+  if (schemaFields.length > 0) {
+    return schemaFields.map((field) => ({ name: field.name, value: field.name }))
+  }
+
+  const rows = getResultRows(data)
+  const sample = rows[0]
+  if (sample && typeof sample === 'object') {
+    return Object.keys(sample).map((key) => ({ name: key, value: key }))
+  }
+
+  if (Array.isArray(data) && data[0] && typeof data[0] === 'object') {
+    return Object.keys(data[0]).map((key) => ({ name: key, value: key }))
+  }
+
+  return []
 })
 
 const runCurrentNode = async () => {
@@ -272,10 +302,10 @@ const openAnalysis = (title: string, data: any) => {
           >
             <Loader2
               v-if="node.data.status === 'running'"
-              size="16"
+              :size="16"
               class="text-white animate-spin"
             />
-            <Bug v-else size="16" class="text-white" />
+            <Bug v-else :size="16" class="text-white" />
             <span class="text-[12px] font-bold text-white uppercase tracking-wider">
               {{ node.data.status === 'running' ? '正在调试...' : '调试节点' }}
             </span>

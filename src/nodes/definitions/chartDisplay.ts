@@ -1,24 +1,25 @@
 import { markRaw } from 'vue'
 import type { NodeDefinition } from '../types'
 import { calculateBoxValues } from '../../utils/stats'
+import {
+  createChartResult,
+  extractTableCollectionGroups,
+  extractTableRows,
+} from '../result'
 
-const isParallelCollection = (data: any) => {
-  return (
-    Array.isArray(data) &&
-    data.length > 0 &&
-    data[0] &&
-    typeof data[0] === 'object' &&
-    'name' in data[0] &&
-    'data' in data[0]
-  )
-}
+const isNumericColumn = (rows: Array<Record<string, unknown>>, key: string) =>
+  rows.some((row) => typeof row[key] === 'number' && Number.isFinite(row[key] as number))
+
+const resolveRows = (input: unknown) => extractTableRows(input)
+
+const resolveGroups = (input: unknown) => extractTableCollectionGroups(input)
 
 export const chartDisplayNode: NodeDefinition = {
   name: 'chart-display',
   displayName: '图表展示',
   icon: 'pie-chart',
   category: 'terminal',
-  description: '将输入的数据以灵活的自定义图表进行展示。支持单数据集及多分组对比。',
+  description: '将输入数据转换为可视化图表，支持单表散点图、柱状图和多组箱线图。',
   properties: [
     {
       name: 'chartType',
@@ -26,42 +27,51 @@ export const chartDisplayNode: NodeDefinition = {
       type: 'options',
       default: 'scatter',
       options: [
-        { name: '散点图 (两变量关系)', value: 'scatter' },
-        { name: '柱状图 (分类对比)', value: 'bar' },
-        { name: '多组箱线图 (分组对比)', value: 'boxplot' },
+        { name: '散点图（双变量关系）', value: 'scatter' },
+        { name: '柱状图（分类对比）', value: 'bar' },
+        { name: '箱线图（分布对比）', value: 'boxplot' },
       ],
     },
     {
       name: 'xAxis',
-      displayName: 'X轴字段',
+      displayName: 'X 轴字段',
       type: 'string',
       default: '',
-      placeholder: '请输入X轴对应的字段名',
+      placeholder: '请输入 X 轴对应的字段名',
       displayIf: (config) => config.chartType !== 'boxplot',
     },
     {
       name: 'yAxis',
-      displayName: '对比因子 / Y轴',
+      displayName: 'Y 轴字段',
       type: 'string',
       default: '',
-      placeholder: '请输入要分析的数值字段',
+      placeholder: '请输入用于展示的数值字段名',
     },
   ],
   execute: async (input, config) => {
-    if (!input || !input.data) return { message: '无输入数据' }
+    const groupedData = resolveGroups(input)
+    const yKey = typeof config.yAxis === 'string' ? config.yAxis.trim() : ''
 
-    const isGrouped = isParallelCollection(input.data)
-    const yKey = config.yAxis || ''
-    let rows = input.data
+    if (groupedData && groupedData.length > 0) {
+      const validGroups = groupedData.filter((group) => Array.isArray(group.data) && group.data.length > 0)
+      if (validGroups.length === 0) {
+        throw new Error('分组集合中没有可用于绘图的数据')
+      }
 
-    if (isGrouped) {
-      const groups: Array<{ name: string; data: any[] }> = input.data
-      const validGroups = groups.filter((g) => Array.isArray(g.data) && g.data.length > 0)
-      if (validGroups.length === 0) return { message: '分组中无有效数据' }
-
+      const firstGroup = validGroups[0]!
+      const fallbackKeys = Object.keys(firstGroup.data[0] ?? {}).filter((key: string) =>
+        isNumericColumn(firstGroup.data, key),
+      )
       const targetKeys = yKey
-        ? yKey.split(',').map((s) => s.trim())
-        : [Object.keys(validGroups[0].data[0]).find((k) => typeof validGroups[0].data[0][k] === 'number') || '']
+        ? yKey
+            .split(',')
+            .map((key: string) => key.trim())
+            .filter((key: string): key is string => Boolean(key))
+        : fallbackKeys.slice(0, 1)
+
+      if (targetKeys.length === 0) {
+        throw new Error('未找到可用于绘图的数值字段')
+      }
 
       if (config.chartType === 'boxplot') {
         const option = {
@@ -70,24 +80,92 @@ export const chartDisplayNode: NodeDefinition = {
           legend: { show: true, top: 25 },
           grid: { top: '15%', bottom: '15%', left: '5%', right: '5%', containLabel: true },
           xAxis: { type: 'category', data: targetKeys, boundaryGap: true },
-          yAxis: { type: 'value', scale: true, boundaryGap: ['15%', '15%'], splitArea: { show: true } },
+          yAxis: {
+            type: 'value',
+            scale: true,
+            boundaryGap: ['15%', '15%'],
+            splitArea: { show: true },
+          },
           series: validGroups.map((group) => ({
             name: group.name,
             type: 'boxplot',
-            data: targetKeys.map((key) => calculateBoxValues(group.data, key)),
+            data: targetKeys.map((key: string) => calculateBoxValues(group.data, key)),
             itemStyle: { borderWidth: 1.5 },
           })),
         }
 
-        return { viewType: 'chart', chartOption: markRaw(option) }
+        return createChartResult(markRaw(option), {
+          meta: {
+            chartType: 'boxplot',
+            sourceKind: 'tableCollection',
+            groupCount: validGroups.length,
+            targetKeys,
+          },
+        })
       }
-      rows = validGroups[0].data
+
+      const fallbackRows = firstGroup.data
+      const xKey =
+        (typeof config.xAxis === 'string' && config.xAxis.trim()) || Object.keys(fallbackRows[0] ?? {})[0] || ''
+      const targetYKey = targetKeys[0]!
+      const option =
+        config.chartType === 'bar'
+          ? {
+              title: { text: `${targetYKey} 分布`, left: 'center' },
+              tooltip: { trigger: 'axis' },
+              legend: { show: true, top: 25 },
+              grid: { top: '18%', bottom: '15%', left: '10%', right: '10%', containLabel: true },
+              xAxis: { type: 'category', data: validGroups.map((group) => group.name), boundaryGap: true },
+              yAxis: { type: 'value', boundaryGap: ['0%', '15%'] },
+              series: [
+                {
+                  name: targetYKey,
+                  type: 'bar',
+                  data: validGroups.map((group) => group.data[0]?.[targetYKey] ?? null),
+                },
+              ],
+            }
+          : {
+              title: { text: `${xKey} vs ${targetYKey} 分组散点图`, left: 'center' },
+              tooltip: { trigger: 'item' },
+              legend: { show: true, top: 25 },
+              grid: { top: '18%', bottom: '15%', left: '10%', right: '10%', containLabel: true },
+              xAxis: { type: 'value', name: xKey, boundaryGap: ['5%', '5%'] },
+              yAxis: { type: 'value', name: targetYKey, scale: true, boundaryGap: ['15%', '15%'] },
+              series: validGroups.map((group) => ({
+                name: group.name,
+                type: 'scatter',
+                symbolSize: 8,
+                data: group.data.map((row) => [row[xKey], row[targetYKey]]),
+              })),
+            }
+
+      return createChartResult(markRaw(option), {
+        meta: {
+          chartType: config.chartType === 'bar' ? 'bar' : 'scatter',
+          sourceKind: 'tableCollection',
+          groupCount: validGroups.length,
+          xAxis: xKey,
+          yAxis: targetYKey,
+        },
+      })
     }
 
-    // 标准单数据集逻辑
-    const xKey = config.xAxis || Object.keys(rows[0] || {})[0]
-    const targetYKey = yKey || Object.keys(rows[0] || {})[1]
-    let option: any
+    const rows = resolveRows(input)
+    if (!rows || rows.length === 0) {
+      throw new Error('无输入数据')
+    }
+
+    const xKey =
+      (typeof config.xAxis === 'string' && config.xAxis.trim()) || Object.keys(rows[0] ?? {})[0] || ''
+    const targetYKey =
+      yKey || Object.keys(rows[0] ?? {}).find((key) => key !== xKey) || Object.keys(rows[0] ?? {})[1] || ''
+
+    if (!targetYKey) {
+      throw new Error('未找到可用于绘图的字段')
+    }
+
+    let option: Record<string, unknown>
 
     if (config.chartType === 'scatter') {
       option = {
@@ -99,7 +177,7 @@ export const chartDisplayNode: NodeDefinition = {
         series: [
           {
             symbolSize: 8,
-            data: rows.map((r: any) => [r[xKey], r[targetYKey]]),
+            data: rows.map((row) => [row[xKey], row[targetYKey]]),
             type: 'scatter',
             itemStyle: { color: '#0ea5e9' },
           },
@@ -110,11 +188,11 @@ export const chartDisplayNode: NodeDefinition = {
         title: { text: `${targetYKey} 分布`, left: 'center' },
         tooltip: { trigger: 'axis' },
         grid: { top: '15%', bottom: '15%', left: '10%', right: '10%', containLabel: true },
-        xAxis: { type: 'category', data: rows.map((r: any) => r[xKey]), boundaryGap: true },
+        xAxis: { type: 'category', data: rows.map((row) => row[xKey]), boundaryGap: true },
         yAxis: { type: 'value', boundaryGap: ['0%', '15%'] },
-        series: [{ data: rows.map((r: any) => r[targetYKey]), type: 'bar' }],
+        series: [{ data: rows.map((row) => row[targetYKey]), type: 'bar' }],
       }
-    } else if (config.chartType === 'boxplot') {
+    } else {
       option = {
         title: { text: `${targetYKey} 分布`, left: 'center' },
         grid: { top: '15%', bottom: '15%', left: '10%', right: '10%', containLabel: true },
@@ -130,6 +208,14 @@ export const chartDisplayNode: NodeDefinition = {
       }
     }
 
-    return { viewType: 'chart', chartOption: markRaw(option) }
+    return createChartResult(markRaw(option), {
+      meta: {
+        chartType: config.chartType || 'scatter',
+        sourceKind: 'table',
+        rowCount: rows.length,
+        xAxis: xKey,
+        yAxis: targetYKey,
+      },
+    })
   },
 }

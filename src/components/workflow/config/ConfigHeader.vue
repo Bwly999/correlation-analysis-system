@@ -35,7 +35,7 @@ const emit = defineEmits(['update:nodeLabel', 'update:isPinned', 'close', 'save'
         class="flex items-center gap-2 px-3 py-1.5 bg-slate-100 rounded-lg border border-slate-200"
       >
         <Pin
-          size="14"
+          :size="14"
           :class="isPinned ? 'text-amber-500' : 'text-slate-400'"
           :fill="isPinned ? 'currentColor' : 'none'"
         />
@@ -52,7 +52,7 @@ const emit = defineEmits(['update:nodeLabel', 'update:isPinned', 'close', 'save'
         />
       </div>
       <Button severity="secondary" text class="cursor-pointer" @click="emit('close')">
-        <X size="20" />
+        <X :size="20" />
       </Button>
     </div>
   </div>

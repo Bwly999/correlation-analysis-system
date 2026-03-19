@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed, ref } from 'vue'
 import { useWorkflowStore } from '@/stores/workflowStore'
 import {
   LayoutGrid,
@@ -88,9 +89,9 @@ const formatDuration = (ms: number) => {
         class="flex items-center gap-2 text-slate-500 hover:text-slate-900 transition-colors cursor-pointer group px-2 py-1.5 rounded-md hover:bg-slate-100"
         @click="emit('open-projects')"
       >
-        <LayoutGrid size="16" class="opacity-70 group-hover:opacity-100" />
+        <LayoutGrid :size="16" class="opacity-70 group-hover:opacity-100" />
         <span class="text-[13px] font-medium">Projects</span>
-        <ChevronRight size="14" class="opacity-40" />
+        <ChevronRight :size="14" class="opacity-40" />
       </div>
 
       <!-- 项目名称编辑 -->
@@ -103,7 +104,7 @@ const formatDuration = (ms: number) => {
         />
         <Edit2
           v-if="!store.isHistoryMode"
-          size="12"
+          :size="12"
           class="text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity absolute right-2 pointer-events-none"
         />
 

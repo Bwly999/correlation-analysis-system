@@ -14,6 +14,28 @@ import {
 import html2pdf from 'html2pdf.js'
 import { FileText, Image as ImageIcon, Loader2, Search } from 'lucide-vue-next'
 import { useToast } from 'primevue/usetoast'
+import { getResultReport } from '../resultView'
+
+type ReportSection = {
+  key?: string
+  type?: string
+  title?: string
+  option?: Record<string, unknown>
+  items?: any[]
+  allItems?: any[]
+  cards?: Array<{ label: string; value: unknown }>
+  content?: string
+  url?: string
+  alt?: string
+  defaultVisibleCount?: number
+}
+
+type ReportPayload = {
+  title?: string
+  sections?: ReportSection[]
+  supplements?: Record<string, any>
+  metadata?: Record<string, any>
+}
 
 use([
   CanvasRenderer,
@@ -39,10 +61,12 @@ const reportRef = ref<HTMLElement | null>(null)
 const featureSearch = ref('')
 const expandedDetailCount = ref(0)
 
-const report = computed(() => props.data?.report ?? {})
-const sections = computed(() => report.value.sections ?? [])
-const supplements = computed(() => report.value.supplements ?? {})
-const metadata = computed(() => report.value.metadata ?? {})
+const report = computed<ReportPayload>(() => (getResultReport(props.data) ?? {}) as ReportPayload)
+const sections = computed<ReportSection[]>(() =>
+  Array.isArray(report.value.sections) ? report.value.sections : [],
+)
+const supplements = computed<Record<string, any>>(() => report.value.supplements ?? {})
+const metadata = computed<Record<string, any>>(() => report.value.metadata ?? {})
 const isShapReport = computed(() => {
   return sections.value.some((section: any) => ['summary', 'dependence', 'details'].includes(section?.type))
 })

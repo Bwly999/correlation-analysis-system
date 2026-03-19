@@ -1,11 +1,12 @@
 import type { NodeDefinition } from '../types'
+import { createFileResult, extractTableRows } from '../result'
 
 export const dataExportNode: NodeDefinition = {
   name: 'data-export',
   displayName: '数据导出',
   icon: 'download',
   category: 'terminal',
-  description: '将处理后的数据导出为指定格式的文件。',
+  description: '将当前节点的数据导出为 CSV、Excel 或 JSON 文件。',
   properties: [
     {
       name: 'format',
@@ -13,9 +14,9 @@ export const dataExportNode: NodeDefinition = {
       type: 'options',
       default: 'csv',
       options: [
-        { name: 'CSV (逗号分隔)', value: 'csv' },
+        { name: 'CSV', value: 'csv' },
         { name: 'Excel (.xlsx)', value: 'xlsx' },
-        { name: 'JSON 数据', value: 'json' },
+        { name: 'JSON', value: 'json' },
       ],
     },
     {
@@ -23,36 +24,47 @@ export const dataExportNode: NodeDefinition = {
       displayName: '文件名称',
       type: 'string',
       default: 'export_data',
-      placeholder: '输入导出的文件名前缀',
+      placeholder: '输入导出文件名前缀',
     },
   ],
   execute: async (input, config) => {
-    if (!input || !input.data) return { message: '无输入数据' }
-    console.log('Exporting data as:', config.format)
+    const rows = extractTableRows(input)
+    if (!rows || rows.length === 0) {
+      throw new Error('无输入数据')
+    }
 
-    // 模拟文件生成
-    const format = config.format || 'csv'
+    const format = typeof config.format === 'string' ? config.format : 'csv'
     const filename = `${config.filename || 'export_data'}.${format}`
     let blob: Blob
 
     if (format === 'json') {
-      blob = new Blob([JSON.stringify(input.data, null, 2)], { type: 'application/json' })
+      blob = new Blob([JSON.stringify(rows, null, 2)], { type: 'application/json' })
     } else {
-      // 简单模拟 CSV
-      const keys = Object.keys(input.data[0] || {})
+      const headers = Object.keys(rows[0] ?? {})
       const csvContent = [
-        keys.join(','),
-        ...input.data.slice(0, 100).map((row: any) => keys.map((k) => row[k]).join(',')),
+        headers.join(','),
+        ...rows.map((row) => headers.map((key) => JSON.stringify(row[key] ?? '')).join(',')),
       ].join('\n')
       blob = new Blob([csvContent], { type: 'text/csv' })
     }
 
-    return {
-      viewType: 'export',
-      exportInfo: {
+    return createFileResult(
+      {
         filename,
         url: URL.createObjectURL(blob),
+        format,
       },
-    }
+      {
+        meta: {
+          sourceKind: 'table',
+          rowCount: rows.length,
+        },
+        preview: {
+          viewer: 'file-viewer',
+          title: '导出文件',
+          summary: `已生成 ${filename}`,
+        },
+      },
+    )
   },
 }

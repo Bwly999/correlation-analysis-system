@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed, onMounted, ref } from 'vue'
 import { useWorkflowStore } from '@/stores/workflowStore'
 import { type SavedWorkflow, type ExecutionRecord } from '@/utils/storage'
 import Dialog from 'primevue/dialog'
@@ -112,7 +113,7 @@ const handleClearHistory = async () => {
       <div class="flex items-center justify-between w-full pr-4">
         <div class="flex items-center gap-3">
           <div class="p-2 bg-slate-100 text-slate-600 rounded-lg">
-            <Layers2 size="20" :stroke-width="2.5" />
+            <Layers2 :size="20" :stroke-width="2.5" />
           </div>
           <span class="font-bold text-[16px] text-slate-900 tracking-tight">工作流管理中心</span>
         </div>
@@ -121,7 +122,7 @@ const handleClearHistory = async () => {
           aria-label="Close"
           @click="emit('close')"
         >
-          <X size="20" :stroke-width="2.5" />
+          <X :size="20" :stroke-width="2.5" />
         </button>
       </div>
     </template>
@@ -129,8 +130,8 @@ const handleClearHistory = async () => {
     <div class="py-2">
       <Tabs v-model:value="activeTab">
         <TabList>
-          <Tab value="0" class="flex items-center gap-2"><FolderOpen size="14" /> 我的工作流</Tab>
-          <Tab value="1" class="flex items-center gap-2"><History size="14" /> 运行历史</Tab>
+          <Tab value="0" class="flex items-center gap-2"><FolderOpen :size="14" /> 我的工作流</Tab>
+          <Tab value="1" class="flex items-center gap-2"><History :size="14" /> 运行历史</Tab>
         </TabList>
         <TabPanels>
           <TabPanel value="0">
@@ -143,7 +144,7 @@ const handleClearHistory = async () => {
                 <div
                   class="p-3 bg-white/10 rounded-xl group-hover/new:bg-white/20 transition-colors"
                 >
-                  <Plus size="24" stroke-width="2.5" />
+                  <Plus :size="24" :stroke-width="2.5" />
                 </div>
                 <div>
                   <div class="font-bold text-[16px] tracking-tight">创建新工作流</div>
@@ -157,7 +158,7 @@ const handleClearHistory = async () => {
                   v-if="sortedWorkflows.length === 0"
                   class="text-center py-10 text-[#a3acb9] italic border-2 border-dashed rounded-2xl flex flex-col items-center gap-2"
                 >
-                  <FolderOpen size="32" class="opacity-20" /> 还没有保存过任何工作流。
+                  <FolderOpen :size="32" class="opacity-20" /> 还没有保存过任何工作流。
                 </div>
                 <div
                   v-for="wf in sortedWorkflows"
@@ -168,7 +169,7 @@ const handleClearHistory = async () => {
                     <span class="font-bold text-[13px] text-[#3c4257]">{{ wf.name }}</span>
                     <span
                       class="text-[10px] text-[#a3acb9] flex items-center gap-1.5 font-medium uppercase tracking-tight"
-                      ><Clock size="12" /> 更新于
+                      ><Clock :size="12" /> 更新于
                       {{ new Date(wf.updatedAt).toLocaleString() }}</span
                     >
                   </div>
@@ -187,7 +188,7 @@ const handleClearHistory = async () => {
                       size="small"
                       class="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50"
                       @click="handleDuplicateWorkflow(wf.id)"
-                      ><Copy size="16"
+                      ><Copy :size="16"
                     /></Button>
                     <Button
                       v-tooltip.top="'删除工作流'"
@@ -196,7 +197,7 @@ const handleClearHistory = async () => {
                       size="small"
                       class="text-slate-400 hover:text-rose-600 hover:bg-rose-50"
                       @click="handleDeleteWorkflow(wf.id)"
-                      ><Trash2 size="16"
+                      ><Trash2 :size="16"
                     /></Button>
                   </div>
                 </div>
@@ -225,7 +226,7 @@ const handleClearHistory = async () => {
                 v-if="currentWorkflowHistory.length === 0"
                 class="text-center py-20 text-[#a3acb9] italic"
               >
-                <History size="48" class="mx-auto mb-4 opacity-10" /> 暂无当前工作流的运行记录。
+                <History :size="48" class="mx-auto mb-4 opacity-10" /> 暂无当前工作流的运行记录。
               </div>
               <div
                 v-for="record in currentWorkflowHistory"
@@ -243,15 +244,15 @@ const handleClearHistory = async () => {
                   <div class="flex items-center gap-2">
                     <CheckCircle2
                       v-if="record.status === 'success'"
-                      size="14"
+                      :size="14"
                       class="text-emerald-500"
                     />
                     <AlertCircle
                       v-else-if="record.status === 'error'"
-                      size="14"
+                      :size="14"
                       class="text-rose-500"
                     />
-                    <StopCircle v-else size="14" class="text-amber-500" />
+                    <StopCircle v-else :size="14" class="text-amber-500" />
                     <span class="font-bold text-[13px] text-[#3c4257]">{{
                       record.workflowName
                     }}</span>
@@ -260,10 +261,10 @@ const handleClearHistory = async () => {
                     class="flex items-center gap-3 text-[10px] text-[#a3acb9] font-medium uppercase tracking-tight"
                   >
                     <span class="flex items-center gap-1"
-                      ><Clock size="12" /> {{ new Date(record.startTime).toLocaleString() }}</span
+                      ><Clock :size="12" /> {{ new Date(record.startTime).toLocaleString() }}</span
                     >
                     <span class="flex items-center gap-1"
-                      ><Activity size="12" /> {{ (record.duration / 1000).toFixed(2) }}s</span
+                      ><Activity :size="12" /> {{ (record.duration / 1000).toFixed(2) }}s</span
                     >
                   </div>
                 </div>

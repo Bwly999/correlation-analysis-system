@@ -1,40 +1,67 @@
 import type { NodeDefinition } from '../types'
 import { markRaw } from 'vue'
+import { createTableResult, extractTableRows } from '../result'
+
+const toFiniteNumber = (value: unknown) => {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  return null
+}
+
+const summarizeValues = (values: number[], method: string) => {
+  if (values.length === 0) return null
+  if (method === 'mean') return values.reduce((a, b) => a + b, 0) / values.length
+  if (method === 'sum') return values.reduce((a, b) => a + b, 0)
+  if (method === 'max') return Math.max(...values)
+  if (method === 'min') return Math.min(...values)
+  if (method === 'count') return values.length
+  if (method === 'std') {
+    const avg = values.reduce((a, b) => a + b, 0) / values.length
+    return Math.sqrt(values.reduce((sum, value) => sum + Math.pow(value - avg, 2), 0) / values.length)
+  }
+  if (method === 'median') {
+    const sorted = [...values].sort((a, b) => a - b)
+    return sorted[Math.floor(sorted.length / 2)] ?? null
+  }
+  return null
+}
 
 export const dataAggregationNode: NodeDefinition = {
   name: 'data-aggregation',
   displayName: '数据聚合',
   icon: 'sigma',
   category: 'action',
-  description: '提供多列合并、Group By 分组统计及移动窗口计算，是特征工程的核心算子。',
+  description: '提供行内合并、分组统计和移动窗口聚合，便于构建新的分析特征。',
   properties: [
     {
       name: 'mode',
       displayName: '聚合模式',
-      type: 'select-button', // 仅保留组件 UI 改进
+      type: 'select-button',
       default: 'row_combine',
       options: [
-        { name: '行内多列合并 (Row-wise)', value: 'row_combine' },
-        { name: '维度分组统计 (Group By)', value: 'group_by' },
-        { name: '移动窗口计算 (Rolling)', value: 'rolling' },
+        { name: '行内多列合并', value: 'row_combine' },
+        { name: '分组统计', value: 'group_by' },
+        { name: '移动窗口', value: 'rolling' },
       ],
-      description: '行内合并用于构建综合指标；分组统计用于分析维度特征；移动窗口用于捕捉时序趋势。',
+      description: '行内合并适合构建综合指标；分组统计适合做维度汇总；移动窗口适合处理时序特征。',
     },
-    // --- 模式 1: 行内多列合并 (恢复原始 Collection 布局) ---
     {
       name: 'aggregationGroups',
       displayName: '任务配置',
       type: 'collection',
       default: [],
       displayIf: (config) => config.mode === 'row_combine',
-      description: '定义如何将当前行内的多个字段合并为一个新字段。',
+      description: '定义如何把当前行内多个字段聚合为一个新字段。',
       properties: [
         {
           name: 'targetFactorName',
           displayName: '新字段名称',
           type: 'string',
           default: 'factor_combined',
-          placeholder: '例如: factor_index',
+          placeholder: '例如：factor_index',
         },
         {
           name: 'method',
@@ -42,10 +69,10 @@ export const dataAggregationNode: NodeDefinition = {
           type: 'options',
           default: 'mean',
           options: [
-            { name: '算术平均 (Mean)', value: 'mean' },
-            { name: '总和 (Sum)', value: 'sum' },
-            { name: '最大值 (Max)', value: 'max' },
-            { name: '最小值 (Min)', value: 'min' },
+            { name: '平均值', value: 'mean' },
+            { name: '求和', value: 'sum' },
+            { name: '最大值', value: 'max' },
+            { name: '最小值', value: 'min' },
           ],
         },
         {
@@ -54,20 +81,19 @@ export const dataAggregationNode: NodeDefinition = {
           type: 'tags',
           default: [],
           useUpstreamFactors: true,
-          description: '输入或选择要参与合并的字段名。',
+          description: '输入或选择需要参与聚合的字段名。',
         },
       ],
     },
-    // --- 模式 2: 分组聚合 ---
     {
       name: 'groupByField',
-      displayName: '分组基准字段',
+      displayName: '分组字段',
       type: 'options',
       useUpstreamFactors: true,
       editable: true,
       displayIf: (config) => config.mode === 'group_by',
-      placeholder: '例如: 行业, 日期, 分类',
-      description: '数据将根据此字段的唯一值进行拆分并分别统计。',
+      placeholder: '例如：工序、日期、类型',
+      description: '按该字段拆分数据后分别计算统计结果。',
     },
     {
       name: 'groupByMethods',
@@ -76,21 +102,20 @@ export const dataAggregationNode: NodeDefinition = {
       default: ['mean'],
       displayIf: (config) => config.mode === 'group_by',
       options: [
-        { name: '均值 (Mean)', value: 'mean' },
-        { name: '总和 (Sum)', value: 'sum' },
-        { name: '数据量 (Count)', value: 'count' },
-        { name: '标准差 (Std)', value: 'std' },
-        { name: '中位数 (Median)', value: 'median' },
+        { name: '平均值', value: 'mean' },
+        { name: '求和', value: 'sum' },
+        { name: '数量', value: 'count' },
+        { name: '标准差', value: 'std' },
+        { name: '中位数', value: 'median' },
       ],
     },
-    // --- 模式 3: 移动窗口 ---
     {
       name: 'windowSize',
-      displayName: '窗口长度 (N)',
+      displayName: '窗口长度',
       type: 'number',
       default: 5,
       displayIf: (config) => config.mode === 'rolling',
-      description: '计算包含当前行在内的前 N 行数据的移动统计量。',
+      description: '计算包含当前行在内的前 N 行窗口统计值。',
     },
     {
       name: 'rollingMethod',
@@ -99,10 +124,10 @@ export const dataAggregationNode: NodeDefinition = {
       default: 'mean',
       displayIf: (config) => config.mode === 'rolling',
       options: [
-        { name: '移动平均 (MA)', value: 'mean' },
-        { name: '窗口求和 (Sum)', value: 'sum' },
-        { name: '窗口最大值 (Max)', value: 'max' },
-        { name: '窗口最小值 (Min)', value: 'min' },
+        { name: '移动平均', value: 'mean' },
+        { name: '窗口求和', value: 'sum' },
+        { name: '窗口最大值', value: 'max' },
+        { name: '窗口最小值', value: 'min' },
       ],
     },
     {
@@ -112,125 +137,140 @@ export const dataAggregationNode: NodeDefinition = {
       default: [],
       useUpstreamFactors: true,
       displayIf: (config) => config.mode === 'group_by' || config.mode === 'rolling',
-      description: '指定要参与聚合计算的字段。留空则尝试自动处理所有数值型字段。',
+      description: '留空时自动选择全部数值字段。',
     },
   ],
   execute: async (input, config) => {
-    if (!input || !input.data || !Array.isArray(input.data)) {
+    const rawData = extractTableRows(input)
+    if (!rawData || rawData.length === 0) {
       throw new Error('输入数据格式不正确')
     }
 
-    const rawData = input.data
-    const allFields = Object.keys(rawData[0] || {})
-    const targetFields =
-      config.targetColumns && config.targetColumns.length > 0
-        ? config.targetColumns.filter((f: string) => allFields.includes(f))
-        : allFields.filter((f: string) => typeof rawData[0][f] === 'number')
+    const allFields = Object.keys(rawData[0] ?? {})
+    const targetFields: string[] =
+      Array.isArray(config.targetColumns) && config.targetColumns.length > 0
+        ? config.targetColumns.filter((field: string) => allFields.includes(field))
+        : allFields.filter((field) => rawData.some((row) => toFiniteNumber(row[field]) !== null))
 
     if (config.mode === 'row_combine') {
-      const groups = config.aggregationGroups || []
-      const resultData = rawData.map((row: any) => {
-        const newRow = { ...row }
+      const groups = Array.isArray(config.aggregationGroups) ? config.aggregationGroups : []
+      const resultData = rawData.map((row) => {
+        const nextRow = { ...row }
         groups.forEach((group: any) => {
-          const inputCols = group.inputColumns || []
-          const vals = inputCols
-            .map((col: string) => Number(row[col]))
-            .filter((v: number) => !isNaN(v))
+          const inputColumns = Array.isArray(group.inputColumns) ? group.inputColumns : []
+          const values = inputColumns
+            .map((column: string) => toFiniteNumber(row[column]))
+            .filter((value: number | null): value is number => value !== null)
 
-          if (vals.length === 0) {
-            newRow[group.targetFactorName] = null
-            return
-          }
-
-          if (group.method === 'mean') {
-            newRow[group.targetFactorName] = vals.reduce((a, b) => a + b, 0) / vals.length
-          } else if (group.method === 'sum') {
-            newRow[group.targetFactorName] = vals.reduce((a, b) => a + b, 0)
-          } else if (group.method === 'max') {
-            newRow[group.targetFactorName] = Math.max(...vals)
-          } else if (group.method === 'min') {
-            newRow[group.targetFactorName] = Math.min(...vals)
-          }
+          nextRow[group.targetFactorName || 'factor_combined'] = summarizeValues(
+            values,
+            group.method || 'mean',
+          )
         })
-        return newRow
+        return nextRow
       })
-      return { data: markRaw(resultData), count: resultData.length }
+
+      return createTableResult(markRaw(resultData), {
+        meta: {
+          stats: {
+            mode: 'row_combine',
+            originalCount: rawData.length,
+            outputCount: resultData.length,
+            taskCount: groups.length,
+          },
+        },
+      })
     }
 
     if (config.mode === 'group_by') {
-      const groupKey = config.groupByField
+      const groupKey = typeof config.groupByField === 'string' ? config.groupByField : ''
       if (!groupKey || !allFields.includes(groupKey)) {
         throw new Error(`分组字段 "${groupKey}" 不存在`)
       }
 
-      const groups: Record<string, any[]> = {}
-      rawData.forEach((row: any) => {
-        const val = String(row[groupKey])
-        if (!groups[val]) groups[val] = []
-        groups[val].push(row)
+      const groupedRows: Record<string, Array<Record<string, unknown>>> = {}
+      rawData.forEach((row) => {
+        const groupValue = String(row[groupKey] ?? '')
+        groupedRows[groupValue] ??= []
+        groupedRows[groupValue].push(row)
       })
 
-      const methods = config.groupByMethods || ['mean']
-      const resultData = Object.entries(groups).map(([groupVal, rows]) => {
-        const result: any = { [groupKey]: groupVal, row_count: rows.length }
-        targetFields.forEach((f: string) => {
-          if (f === groupKey) return
-          const values = rows.map((r) => Number(r[f])).filter((v) => !isNaN(v))
-          if (values.length === 0) return
+      const methods: string[] =
+        Array.isArray(config.groupByMethods) && config.groupByMethods.length > 0
+        ? config.groupByMethods
+        : ['mean']
 
-          methods.forEach((m: string) => {
-            const key = `${f}_${m}`
-            if (m === 'mean') {
-              result[key] = values.reduce((a, b) => a + b, 0) / values.length
-            } else if (m === 'sum') {
-              result[key] = values.reduce((a, b) => a + b, 0)
-            } else if (m === 'count') {
-              result[key] = values.length
-            } else if (m === 'std') {
-              const mean = values.reduce((a, b) => a + b, 0) / values.length
-              result[key] = Math.sqrt(
-                values.reduce((s, v) => s + Math.pow(v - mean, 2), 0) / values.length,
-              )
-            } else if (m === 'median') {
-              const sorted = [...values].sort((a, b) => a - b)
-              result[key] = sorted[Math.floor(sorted.length / 2)]
-            }
+      const resultData = Object.entries(groupedRows).map(([groupValue, rows]) => {
+        const summary: Record<string, unknown> = {
+          [groupKey]: groupValue,
+          row_count: rows.length,
+        }
+
+        targetFields.forEach((field) => {
+          if (field === groupKey) return
+          const values = rows
+            .map((row) => toFiniteNumber(row[field]))
+            .filter((value: number | null): value is number => value !== null)
+
+          methods.forEach((method: string) => {
+            summary[`${field}_${method}`] = summarizeValues(values, method)
           })
         })
-        return result
+
+        return summary
       })
-      return { data: markRaw(resultData), count: resultData.length }
+
+      return createTableResult(markRaw(resultData), {
+        meta: {
+          stats: {
+            mode: 'group_by',
+            originalCount: rawData.length,
+            outputCount: resultData.length,
+            groupCount: Object.keys(groupedRows).length,
+          },
+        },
+      })
     }
 
     if (config.mode === 'rolling') {
-      const windowSize = Number(config.windowSize || 5)
-      const method = config.rollingMethod || 'mean'
+      const windowSize = Math.max(1, Number(config.windowSize || 5))
+      const method = typeof config.rollingMethod === 'string' ? config.rollingMethod : 'mean'
 
-      const resultData = rawData.map((row: any, idx: number) => {
-        const newRow = { ...row }
-        targetFields.forEach((f: string) => {
-          const start = Math.max(0, idx - windowSize + 1)
-          const windowRows = rawData.slice(start, idx + 1)
-          const values = windowRows.map((r: any) => Number(r[f])).filter((v: number) => !isNaN(v))
+      const resultData = rawData.map((row, index) => {
+        const nextRow = { ...row }
+        targetFields.forEach((field) => {
+          const start = Math.max(0, index - windowSize + 1)
+          const values = rawData
+            .slice(start, index + 1)
+            .map((windowRow) => toFiniteNumber(windowRow[field]))
+            .filter((value: number | null): value is number => value !== null)
 
-          const key = `${f}_rolling_${windowSize}`
-          if (values.length === 0) {
-            newRow[key] = null
-          } else if (method === 'mean') {
-            newRow[key] = values.reduce((a, b) => a + b, 0) / values.length
-          } else if (method === 'sum') {
-            newRow[key] = values.reduce((a, b) => a + b, 0)
-          } else if (method === 'max') {
-            newRow[key] = Math.max(...values)
-          } else if (method === 'min') {
-            newRow[key] = Math.min(...values)
-          }
+          nextRow[`${field}_rolling_${windowSize}`] = summarizeValues(values, method)
         })
-        return newRow
+        return nextRow
       })
-      return { data: markRaw(resultData), count: resultData.length }
+
+      return createTableResult(markRaw(resultData), {
+        meta: {
+          stats: {
+            mode: 'rolling',
+            originalCount: rawData.length,
+            outputCount: resultData.length,
+            windowSize,
+            method,
+          },
+        },
+      })
     }
 
-    return { data: markRaw(rawData), count: rawData.length }
+    return createTableResult(markRaw(rawData), {
+      meta: {
+        stats: {
+          mode: 'passthrough',
+          originalCount: rawData.length,
+          outputCount: rawData.length,
+        },
+      },
+    })
   },
 }

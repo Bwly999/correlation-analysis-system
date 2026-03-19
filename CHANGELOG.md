@@ -2,6 +2,22 @@
 
 ## [2026-03-19]
 
+### Refactor
+
+- Introduced a unified `NodeResult` / `DataKind` result protocol with schema and preview helpers for table, report, chart, export, and JSON outputs.
+- Migrated core workflow nodes to the new protocol, including import, cleaning, profiling, merge, aggregation, filter, export, correlation, Lasso, neighbor system, XGBoost + SHAP, and chart display.
+- Switched `workflowStore`, config panels, data viewers, and analysis modals to consume normalized results first while keeping an alias bridge for legacy node inputs.
+
+### Test
+
+- Added protocol regression tests for result helpers, migrated nodes, remaining nodes, and store compatibility paths, including multi-input and history truncation scenarios.
+
+### Fix
+
+- Resolved `TS2589` deep type instantiation issues across `workflowStore` and workflow UI components so `vue-tsc` and `pnpm build` pass again.
+
+## [2026-03-19]
+
 ### UI/UX
 
 - ??? `NodeSidebar` ??????????????????????????????????

@@ -1,6 +1,7 @@
 import type { NodeDefinition } from '../types'
 import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
+import { createTableResult } from '../result'
 
 export const fileImportNode: NodeDefinition = {
   name: 'file-import',
@@ -113,7 +114,14 @@ export const fileImportNode: NodeDefinition = {
           skipEmptyLines: true,
           complete: (results) => {
             const cleaned = cleanData(results.data)
-            resolve({ data: cleaned, filename: file.name, type: 'csv' })
+            resolve(
+              createTableResult(cleaned, {
+                meta: {
+                  filename: file.name,
+                  sourceType: 'csv',
+                },
+              }),
+            )
           },
           error: (err) => reject(err),
         })
@@ -126,10 +134,23 @@ export const fileImportNode: NodeDefinition = {
             const data = new Uint8Array(e.target?.result as ArrayBuffer)
             const workbook = XLSX.read(data, { type: 'array' })
             const firstSheetName = workbook.SheetNames[0]
+            if (!firstSheetName) {
+              throw new Error('Excel 文件中未找到可读取的工作表')
+            }
             const worksheet = workbook.Sheets[firstSheetName]
+            if (!worksheet) {
+              throw new Error(`Excel 工作表 ${firstSheetName} 读取失败`)
+            }
             const jsonData = XLSX.utils.sheet_to_json(worksheet)
             const cleaned = cleanData(jsonData as any[])
-            resolve({ data: cleaned, filename: file.name, type: 'excel' })
+            resolve(
+              createTableResult(cleaned, {
+                meta: {
+                  filename: file.name,
+                  sourceType: 'excel',
+                },
+              }),
+            )
           } catch (err) {
             reject(err)
           }
@@ -146,9 +167,12 @@ export const fileImportNode: NodeDefinition = {
             const arrayData = Array.isArray(jsonData) ? jsonData : [jsonData]
             const cleaned = cleanData(arrayData)
             resolve({
-              data: cleaned,
-              filename: file.name,
-              type: 'json',
+              ...createTableResult(cleaned, {
+                meta: {
+                  filename: file.name,
+                  sourceType: 'json',
+                },
+              }),
             })
           } catch (err) {
             reject(err)

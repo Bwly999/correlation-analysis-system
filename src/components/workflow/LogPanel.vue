@@ -110,7 +110,7 @@ const selectNode = (nodeId: string) => {
     >
       <div class="flex items-center gap-6">
         <div class="flex items-center gap-2">
-          <List size="14" class="text-indigo-600" />
+          <List :size="14" class="text-indigo-600" />
           <span class="font-bold text-slate-800 text-xs uppercase tracking-wider">执行日志</span>
         </div>
         <div class="h-4 w-[1px] bg-slate-200"></div>
@@ -130,7 +130,7 @@ const selectNode = (nodeId: string) => {
               "
               @click="selectedLevel = level.value"
             >
-              <component :is="level.icon" size="10" :class="level.color" />
+              <component :is="level.icon" :size="10" :class="level.color" />
               {{ level.label }}
             </button>
           </div>
@@ -145,14 +145,14 @@ const selectNode = (nodeId: string) => {
                   : 'w-8 opacity-0 pointer-events-none absolute right-0'
               "
             >
-              <Search size="10" class="text-slate-400 shrink-0" />
+              <Search :size="10" class="text-slate-400 shrink-0" />
               <input
                 v-model="searchQuery"
                 placeholder="搜索日志..."
                 class="bg-transparent border-none outline-none w-full text-[10px] text-slate-700 placeholder:text-slate-300"
               />
               <button class="hover:text-rose-500 cursor-pointer" @click="toggleSearch">
-                <X size="10" />
+                <X :size="10" />
               </button>
             </div>
             <button
@@ -161,7 +161,7 @@ const selectNode = (nodeId: string) => {
               title="搜索日志"
               @click="toggleSearch"
             >
-              <Search size="12" />
+              <Search :size="12" />
             </button>
           </div>
 
@@ -170,7 +170,7 @@ const selectNode = (nodeId: string) => {
             title="导出日志"
             @click="exportLogs"
           >
-            <Download size="12" />
+            <Download :size="12" />
           </button>
         </div>
       </div>
@@ -179,7 +179,7 @@ const selectNode = (nodeId: string) => {
         class="text-[11px] font-bold text-slate-400 hover:text-rose-500 flex items-center gap-1.5 transition-colors uppercase cursor-pointer"
         @click="clearLogs"
       >
-        <Trash2 size="12" /> 清空全部
+        <Trash2 :size="12" /> 清空全部
       </button>
     </div>
 
@@ -188,7 +188,7 @@ const selectNode = (nodeId: string) => {
         v-if="filteredLogs.length === 0"
         class="h-full flex flex-col items-center justify-center text-slate-300 py-10"
       >
-        <Terminal size="32" class="mb-2 opacity-20" />
+        <Terminal :size="32" class="mb-2 opacity-20" />
         <span class="text-xs font-medium italic">
           {{ searchQuery || selectedLevel !== 'all' ? '未找到匹配的日志' : '暂无执行数据' }}
         </span>
@@ -210,7 +210,7 @@ const selectNode = (nodeId: string) => {
           <div class="flex items-center gap-2 w-20 shrink-0">
             <component
               :is="levels.find((l) => l.value === log.level)?.icon || CircleDot"
-              size="12"
+              :size="12"
               :class="{
                 'text-emerald-500': log.level === 'info',
                 'text-rose-500': log.level === 'error',
@@ -244,7 +244,7 @@ const selectNode = (nodeId: string) => {
             <button
               class="p-1 hover:bg-white border border-transparent hover:border-slate-200 rounded shadow-sm transition-all cursor-pointer"
             >
-              <List size="12" class="text-slate-400" />
+              <List :size="12" class="text-slate-400" />
             </button>
           </div>
         </div>

@@ -196,10 +196,10 @@ const handleConfirm = () => {
         >
           <PropertyField
             :prop="firstProperty"
-            :model-value="config[firstProperty.name]"
+            :model-value="config[firstProperty!.name]"
             :upstream-factors="[]"
             :config-context="config"
-            @update:model-value="(val) => updateConfig(firstProperty.name, val)"
+            @update:model-value="(val) => updateConfig(firstProperty!.name, val)"
           />
         </div>
 

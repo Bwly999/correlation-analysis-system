@@ -5,7 +5,7 @@
 export const calculateBoxValues = (data: any[], key: string): [number, number, number, number, number] => {
   let values = data
     .map((r) => r[key])
-    .filter((v) => typeof v === 'number')
+    .filter((v): v is number => typeof v === 'number')
 
   if (values.length === 0) return [0, 0, 0, 0, 0]
 
@@ -13,9 +13,9 @@ export const calculateBoxValues = (data: any[], key: string): [number, number, n
   if (values.length > 10000) {
     const sampleSize = 5000
     const step = values.length / sampleSize
-    const sampled = []
+    const sampled: number[] = []
     for (let i = 0; i < sampleSize; i++) {
-      sampled.push(values[Math.floor(i * step)])
+      sampled.push(values[Math.floor(i * step)]!)
     }
     values = sampled
   }
@@ -24,10 +24,10 @@ export const calculateBoxValues = (data: any[], key: string): [number, number, n
   const len = sorted.length
 
   return [
-    sorted[0],
-    sorted[Math.floor(len * 0.25)],
-    sorted[Math.floor(len * 0.5)],
-    sorted[Math.floor(len * 0.75)],
-    sorted[len - 1],
+    sorted[0]!,
+    sorted[Math.floor(len * 0.25)]!,
+    sorted[Math.floor(len * 0.5)]!,
+    sorted[Math.floor(len * 0.75)]!,
+    sorted[len - 1]!,
   ]
 }
