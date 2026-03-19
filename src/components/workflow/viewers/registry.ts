@@ -1,11 +1,9 @@
-import ChartViewer from './ChartViewer.vue'
-import ExportViewer from './ExportViewer.vue'
-import ReportViewer from './ReportViewer.vue'
+import { defineAsyncComponent } from 'vue'
 
 export const workflowViewerRegistry = {
-  'chart-viewer': ChartViewer,
-  'file-viewer': ExportViewer,
-  'report-viewer': ReportViewer,
+  'chart-viewer': defineAsyncComponent(() => import('./ChartViewer.vue')),
+  'file-viewer': defineAsyncComponent(() => import('./ExportViewer.vue')),
+  'report-viewer': defineAsyncComponent(() => import('./ReportViewer.vue')),
 } as const
 
 export type WorkflowViewerKey = keyof typeof workflowViewerRegistry

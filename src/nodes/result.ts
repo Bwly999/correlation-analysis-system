@@ -42,6 +42,11 @@ export interface NodeResult<T = unknown> {
 export const isPlainObject = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 
+const isCollectionGroup = (
+  value: unknown,
+): value is { name: string; data: Array<Record<string, unknown>> } =>
+  isPlainObject(value) && typeof value.name === 'string' && Array.isArray(value.data)
+
 const isDateLike = (value: unknown) =>
   typeof value === 'string' && value.trim() !== '' && Number.isFinite(Date.parse(value))
 
@@ -195,8 +200,12 @@ export const extractTableRows = (input: unknown): Array<Record<string, unknown>>
     return input.payload.filter((row): row is Record<string, unknown> => isPlainObject(row))
   }
 
-  if (isPlainObject(input) && Array.isArray(input.data)) {
-    return input.data.filter((row): row is Record<string, unknown> => isPlainObject(row))
+  if (
+    Array.isArray(input) &&
+    input.every((row) => isPlainObject(row)) &&
+    !input.every((row) => isCollectionGroup(row))
+  ) {
+    return input.filter((row): row is Record<string, unknown> => isPlainObject(row))
   }
 
   return null
@@ -207,7 +216,7 @@ export const extractTableCollectionGroups = (
 ): Array<{ name: string; data: Array<Record<string, unknown>> }> | null => {
   if (isNodeResult(input) && input.kind === 'tableCollection' && Array.isArray(input.payload)) {
     return input.payload
-      .filter((group) => isPlainObject(group) && typeof group.name === 'string')
+      .filter((group) => isCollectionGroup(group))
       .map((group) => ({
         name: group.name as string,
         data: Array.isArray(group.data)
@@ -218,79 +227,14 @@ export const extractTableCollectionGroups = (
       }))
   }
 
-  if (isPlainObject(input) && Array.isArray(input.data)) {
-    return input.data
-      .filter((group) => isPlainObject(group) && typeof group.name === 'string')
-      .map((group) => ({
-        name: group.name as string,
-        data: Array.isArray(group.data)
-          ? group.data.filter(
-              (row: unknown): row is Record<string, unknown> => isPlainObject(row),
-            )
-          : [],
-      }))
+  if (Array.isArray(input) && input.every((group) => isCollectionGroup(group))) {
+    return input.map((group) => ({
+      name: group.name,
+      data: group.data.filter(
+        (row: unknown): row is Record<string, unknown> => isPlainObject(row),
+      ),
+    }))
   }
 
   return null
-}
-
-export const withResultAliases = <T>(result: NodeResult<T>) => {
-  const normalized = normalizeNodeResult(result)
-
-  if (normalized.kind === 'table') {
-    return {
-      ...normalized,
-      data: normalized.payload,
-      stats: normalized.meta?.stats,
-      diagnostics: normalized.meta?.diagnostics,
-      metadata: normalized.meta?.metadata,
-      type: normalized.meta?.sourceType,
-    }
-  }
-
-  if (normalized.kind === 'tableCollection') {
-    return {
-      ...normalized,
-      data: normalized.payload,
-      stats: normalized.meta?.stats,
-      diagnostics: normalized.meta?.diagnostics,
-      chartOption: normalized.meta?.chartOption,
-    }
-  }
-
-  if (normalized.kind === 'report') {
-    return {
-      ...normalized,
-      viewType: 'report',
-      report: normalized.payload,
-      metrics: normalized.meta?.metrics,
-      profile: normalized.meta?.profile,
-      data: normalized.meta?.sourceData ?? null,
-    }
-  }
-
-  if (normalized.kind === 'chart') {
-    return {
-      ...normalized,
-      viewType: 'chart',
-      chartOption: normalized.payload,
-    }
-  }
-
-  if (normalized.kind === 'file') {
-    return {
-      ...normalized,
-      viewType: 'export',
-      exportInfo: normalized.payload,
-    }
-  }
-
-  if (normalized.kind === 'json' && isPlainObject(normalized.payload)) {
-    return {
-      ...normalized,
-      ...normalized.payload,
-    }
-  }
-
-  return normalized
 }

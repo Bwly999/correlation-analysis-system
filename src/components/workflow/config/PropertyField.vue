@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, defineAsyncComponent } from 'vue'
 import { HelpCircle, Trash2, Settings, FileType, Search, LoaderCircle } from 'lucide-vue-next'
 import { type NodeProperty } from '@/nodes/types'
 import { useWorkflowStore } from '@/stores/workflowStore'
-import MonacoEditor from '../MonacoEditor.vue'
 
 import Select from 'primevue/select'
 import MultiSelect from 'primevue/multiselect'
@@ -16,6 +15,8 @@ import DatePicker from 'primevue/datepicker'
 import Button from 'primevue/button'
 import SelectButton from 'primevue/selectbutton'
 import Textarea from 'primevue/textarea'
+
+const MonacoEditor = defineAsyncComponent(() => import('../MonacoEditor.vue'))
 
 defineOptions({
   name: 'PropertyField',

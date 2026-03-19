@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, defineAsyncComponent } from 'vue'
 import { Maximize, Zap, FileJson, Pin } from 'lucide-vue-next'
 import ToggleSwitch from 'primevue/toggleswitch'
-import MonacoEditor from './MonacoEditor.vue'
 import {
   getResultChartOption,
   getResultFileInfo,
@@ -14,6 +13,8 @@ import {
   getResultSchemaFields,
   normalizeWorkflowResult,
 } from './resultView'
+
+const MonacoEditor = defineAsyncComponent(() => import('./MonacoEditor.vue'))
 
 const props = defineProps<{
   title: string

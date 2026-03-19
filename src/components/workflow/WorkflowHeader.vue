@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useWorkflowStore } from '@/stores/workflowStore'
+import type { ExecutionRecord } from '@/utils/storage'
 import {
   LayoutGrid,
   ChevronRight,
@@ -23,12 +24,13 @@ const emit = defineEmits(['open-projects'])
 const store = useWorkflowStore()
 
 // 过滤当前工作流的历史记录
-const filteredHistory = computed(() => {
+const filteredHistory = computed<ExecutionRecord[]>(() => {
+  const currentHistory = store.executionHistory as ExecutionRecord[]
   if (store.currentWorkflowId) {
-    return store.executionHistory.filter((r) => r.workflowId === store.currentWorkflowId)
+    return currentHistory.filter((record) => record.workflowId === store.currentWorkflowId)
   }
   // 如果当前没有选中的工作流（如新建工作流时），展示所有历史以方便回溯
-  return store.executionHistory
+  return currentHistory
 })
 
 const menu = ref()

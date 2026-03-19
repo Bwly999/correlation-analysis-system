@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+﻿import { describe, expect, it } from 'vitest'
 import * as fs from 'fs'
 import * as path from 'path'
 import { fileImportNode } from '../definitions/fileImport'
@@ -6,6 +6,7 @@ import { dataCleaningNode } from '../definitions/dataCleaning'
 import { dataMergeNode } from '../definitions/dataMerge'
 import { dataProfilingNode } from '../definitions/dataProfiling'
 import { chartDisplayNode } from '../definitions/chartDisplay'
+import { createTableResult } from '../result'
 
 describe('core nodes standardized result protocol', () => {
   it('file-import should return a table result with schema and preview metadata', async () => {
@@ -24,7 +25,7 @@ describe('core nodes standardized result protocol', () => {
 
   it('data-cleaning should return a table result and move stats into meta', async () => {
     const result = await dataCleaningNode.execute(
-      { data: [{ a: 1 }, { a: null }, { a: 2 }] },
+      createTableResult([{ a: 1 }, { a: null }, { a: 2 }]),
       { missingValueStrategy: 'mean', outlierMethod: 'none' },
     )
 
@@ -44,12 +45,12 @@ describe('core nodes standardized result protocol', () => {
           {
             sourceNodeId: 'n1',
             sourceNodeLabel: 'Source A',
-            payload: { data: [{ id: 1, city: '上海' }] },
+            result: createTableResult([{ id: 1, city: '上海' }]),
           },
           {
             sourceNodeId: 'n2',
             sourceNodeLabel: 'Source B',
-            payload: { data: [{ id: 2, score: 95 }] },
+            result: createTableResult([{ id: 2, score: 95 }]),
           },
         ],
       },
@@ -74,13 +75,11 @@ describe('core nodes standardized result protocol', () => {
 
   it('data-profiling should return a report result with report payload and metrics meta', async () => {
     const result = await dataProfilingNode.execute(
-      {
-        data: [
-          { id: 'A001', target: 10, sensor_a: 1, sensor_b: null, ts: '2026-03-15T10:00:00Z' },
-          { id: 'A002', target: 12, sensor_a: 2, sensor_b: null, ts: '2026-03-15T11:00:00Z' },
-          { id: 'A003', target: 14, sensor_a: 3, sensor_b: 0, ts: '2026-03-15T12:00:00Z' },
-        ],
-      },
+      createTableResult([
+        { id: 'A001', target: 10, sensor_a: 1, sensor_b: null, ts: '2026-03-15T10:00:00Z' },
+        { id: 'A002', target: 12, sensor_a: 2, sensor_b: null, ts: '2026-03-15T11:00:00Z' },
+        { id: 'A003', target: 14, sensor_a: 3, sensor_b: 0, ts: '2026-03-15T12:00:00Z' },
+      ]),
       {
         targetField: 'target',
         topFields: 6,
@@ -95,12 +94,10 @@ describe('core nodes standardized result protocol', () => {
 
   it('chart-display should return a chart result with chart payload', async () => {
     const result = await chartDisplayNode.execute(
-      {
-        data: [
-          { f1: 10, target: 1 },
-          { f1: 20, target: 2 },
-        ],
-      },
+      createTableResult([
+        { f1: 10, target: 1 },
+        { f1: 20, target: 2 },
+      ]),
       {
         chartType: 'scatter',
         xAxis: 'f1',

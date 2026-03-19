@@ -44,11 +44,76 @@ import { pearsonNode } from '../definitions/pearson'
 import { spearmanNode } from '../definitions/spearman'
 import { kendallNode } from '../definitions/kendall'
 import { nodeDefinitions } from '../registry'
-import { withResultAliases } from '../result'
+import {
+  createTableCollectionResult,
+  createTableResult,
+  isPlainObject,
+  normalizeNodeResult,
+  type NodeResult,
+} from '../result'
 
 global.URL.createObjectURL = vi.fn(() => 'blob:mock-url')
 
-const asLegacy = (result: unknown) => withResultAliases(result as any) as any
+const asLegacy = (result: unknown): any => {
+  const normalized = normalizeNodeResult(result as NodeResult)
+
+  if (normalized.kind === 'table') {
+    return {
+      ...normalized,
+      data: normalized.payload,
+      stats: normalized.meta?.stats,
+      diagnostics: normalized.meta?.diagnostics,
+      metadata: normalized.meta?.metadata,
+      type: normalized.meta?.sourceType,
+    }
+  }
+
+  if (normalized.kind === 'tableCollection') {
+    return {
+      ...normalized,
+      data: normalized.payload,
+      stats: normalized.meta?.stats,
+      diagnostics: normalized.meta?.diagnostics,
+      chartOption: normalized.meta?.chartOption,
+    }
+  }
+
+  if (normalized.kind === 'report') {
+    return {
+      ...normalized,
+      viewType: 'report',
+      report: normalized.payload,
+      metrics: normalized.meta?.metrics,
+      profile: normalized.meta?.profile,
+      data: normalized.meta?.sourceData ?? null,
+    }
+  }
+
+  if (normalized.kind === 'chart') {
+    return {
+      ...normalized,
+      viewType: 'chart',
+      chartOption: normalized.payload,
+    }
+  }
+
+  if (normalized.kind === 'file') {
+    return {
+      ...normalized,
+      viewType: 'export',
+      exportInfo: normalized.payload,
+    }
+  }
+
+  if (normalized.kind === 'json' && isPlainObject(normalized.payload)) {
+    return {
+      ...normalized,
+      ...normalized.payload,
+    }
+  }
+
+  return normalized
+}
 
 describe('Node Definitions Execution Logic', () => {
   it('should expose readable Chinese labels for the board integration node', () => {
@@ -98,7 +163,7 @@ describe('Node Definitions Execution Logic', () => {
 
   describe('data-cleaning', () => {
     it('should handle missing values and record stats', async () => {
-      const input = { data: [{ a: 1 }, { a: null }, { a: 2 }] }
+      const input = createTableResult([{ a: 1 }, { a: null }, { a: 2 }])
       const config = { missingValueStrategy: 'mean', outlierMethod: 'none' }
 
       const result = await dataCleaningNode.execute(input, config)
@@ -112,9 +177,7 @@ describe('Node Definitions Execution Logic', () => {
     })
 
     it('should perform min-max scaling', async () => {
-      const input = {
-        data: [{ a: 0 }, { a: 5 }, { a: 10 }],
-      }
+      const input = createTableResult([{ a: 0 }, { a: 5 }, { a: 10 }])
       const config = { scaling: 'minmax', targetColumns: ['a'] }
 
       const result = await dataCleaningNode.execute(input, config)
@@ -127,13 +190,11 @@ describe('Node Definitions Execution Logic', () => {
     })
 
     it('should perform label encoding for string fields', async () => {
-      const input = {
-        data: [
-          { category: 'A', value: 10 },
-          { category: 'B', value: 20 },
-          { category: 'A', value: 30 },
-        ],
-      }
+      const input = createTableResult([
+        { category: 'A', value: 10 },
+        { category: 'B', value: 20 },
+        { category: 'A', value: 30 },
+      ])
       const config = { encoding: 'label', targetColumns: ['category'] }
 
       const result = await dataCleaningNode.execute(input, config)
@@ -148,13 +209,11 @@ describe('Node Definitions Execution Logic', () => {
 
   describe('data-profiling', () => {
     it('should build a profiling report and keep upstream data', async () => {
-      const input = {
-        data: [
-          { id: 'A001', target: 10, sensor_a: 1, sensor_b: null, ts: '2026-03-15T10:00:00Z' },
-          { id: 'A002', target: 12, sensor_a: 2, sensor_b: null, ts: '2026-03-15T11:00:00Z' },
-          { id: 'A003', target: 14, sensor_a: 3, sensor_b: 0, ts: '2026-03-15T12:00:00Z' },
-        ],
-      }
+      const input = createTableResult([
+        { id: 'A001', target: 10, sensor_a: 1, sensor_b: null, ts: '2026-03-15T10:00:00Z' },
+        { id: 'A002', target: 12, sensor_a: 2, sensor_b: null, ts: '2026-03-15T11:00:00Z' },
+        { id: 'A003', target: 14, sensor_a: 3, sensor_b: 0, ts: '2026-03-15T12:00:00Z' },
+      ])
 
       const result = await dataProfilingNode.execute(input, {
         targetField: 'target',
@@ -175,15 +234,13 @@ describe('Node Definitions Execution Logic', () => {
     })
 
     it('should report target usability, duplicate ratio, outlier ratio and risk level', async () => {
-      const input = {
-        data: [
-          { target: 'A', sensor_a: 1, sensor_b: 10, batch_id: 'B1' },
-          { target: 'A', sensor_a: 1, sensor_b: 10, batch_id: 'B1' },
-          { target: 'B', sensor_a: 2, sensor_b: 11, batch_id: 'B2' },
-          { target: 'C', sensor_a: 3, sensor_b: 12, batch_id: 'B3' },
-          { target: 'D', sensor_a: 4, sensor_b: 200, batch_id: 'B4' },
-        ],
-      }
+      const input = createTableResult([
+        { target: 'A', sensor_a: 1, sensor_b: 10, batch_id: 'B1' },
+        { target: 'A', sensor_a: 1, sensor_b: 10, batch_id: 'B1' },
+        { target: 'B', sensor_a: 2, sensor_b: 11, batch_id: 'B2' },
+        { target: 'C', sensor_a: 3, sensor_b: 12, batch_id: 'B3' },
+        { target: 'D', sensor_a: 4, sensor_b: 200, batch_id: 'B4' },
+      ])
 
       const result = await dataProfilingNode.execute(input, {
         targetField: 'target',
@@ -209,12 +266,10 @@ describe('Node Definitions Execution Logic', () => {
 
   describe('data-aggregation', () => {
     it('should aggregate multiple columns into one using the new nested schema', async () => {
-      const input = {
-        data: [
-          { f1: 10, f2: 20, f3: 30 },
-          { f1: 5, f2: 5, f3: 5 },
-        ],
-      }
+      const input = createTableResult([
+        { f1: 10, f2: 20, f3: 30 },
+        { f1: 5, f2: 5, f3: 5 },
+      ])
       const config = {
         mode: 'row_combine',
         aggregationGroups: [
@@ -245,12 +300,12 @@ describe('Node Definitions Execution Logic', () => {
             {
               sourceNodeId: 'n1',
               sourceNodeLabel: 'Source A',
-              payload: { data: [{ id: 1, city: '上海' }] },
+              result: createTableResult([{ id: 1, city: '上海' }]),
             },
             {
               sourceNodeId: 'n2',
               sourceNodeLabel: 'Source B',
-              payload: { data: [{ id: 2, score: 95 }] },
+              result: createTableResult([{ id: 2, score: 95 }]),
             },
           ],
         },
@@ -283,22 +338,18 @@ describe('Node Definitions Execution Logic', () => {
             {
               sourceNodeId: 'base',
               sourceNodeLabel: 'Base',
-              payload: {
-                data: [
-                  { id: 1, city: '上海', value: 10 },
-                  { id: 2, city: '北京', value: 20 },
-                ],
-              },
+              result: createTableResult([
+                { id: 1, city: '上海', value: 10 },
+                { id: 2, city: '北京', value: 20 },
+              ]),
             },
             {
               sourceNodeId: 'extra',
               sourceNodeLabel: 'Extra',
-              payload: {
-                data: [
-                  { id: 1, value: 99, score: 90 },
-                  { id: 3, value: 88, score: 70 },
-                ],
-              },
+              result: createTableResult([
+                { id: 1, value: 99, score: 90 },
+                { id: 3, value: 88, score: 70 },
+              ]),
             },
           ],
         },
@@ -340,12 +391,12 @@ describe('Node Definitions Execution Logic', () => {
             {
               sourceNodeId: 'n1',
               sourceNodeLabel: 'Group A',
-              payload: { data: [{ val: 10 }] },
+              result: createTableResult([{ val: 10 }]),
             },
             {
               sourceNodeId: 'n2',
               sourceNodeLabel: 'Group B',
-              payload: { data: [{ val: 20 }, { val: 30 }] },
+              result: createTableResult([{ val: 20 }, { val: 30 }]),
             },
           ],
         },
@@ -368,14 +419,12 @@ describe('Node Definitions Execution Logic', () => {
 
   describe('data-filter', () => {
     it('should filter rows by multiple conditions with all-match mode', async () => {
-      const input = {
-        data: [
-          { city: '上海', score: 91, tag: 'A-1' },
-          { city: '北京', score: 77, tag: 'B-2' },
-          { city: '上海', score: 82, tag: 'A-2' },
-          { city: '深圳', score: 95, tag: 'C-1' },
-        ],
-      }
+      const input = createTableResult([
+        { city: '上海', score: 91, tag: 'A-1' },
+        { city: '北京', score: 77, tag: 'B-2' },
+        { city: '上海', score: 82, tag: 'A-2' },
+        { city: '深圳', score: 95, tag: 'C-1' },
+      ])
 
       const result = await dataFilterNode.execute(input, {
         matchMode: 'all',
@@ -394,14 +443,12 @@ describe('Node Definitions Execution Logic', () => {
     })
 
     it('should filter rows by any-match mode with contains operator', async () => {
-      const input = {
-        data: [
-          { city: '上海', score: 91, tag: 'A-1' },
-          { city: '北京', score: 77, tag: 'B-2' },
-          { city: '上海', score: 82, tag: 'A-2' },
-          { city: '深圳', score: 95, tag: 'C-1' },
-        ],
-      }
+      const input = createTableResult([
+        { city: '上海', score: 91, tag: 'A-1' },
+        { city: '北京', score: 77, tag: 'B-2' },
+        { city: '上海', score: 82, tag: 'A-2' },
+        { city: '深圳', score: 95, tag: 'C-1' },
+      ])
 
       const result = await dataFilterNode.execute(input, {
         matchMode: 'any',
@@ -420,12 +467,10 @@ describe('Node Definitions Execution Logic', () => {
 
   describe('algorithms', () => {
     it('should build shap report with summary, all features, and supplement assets', async () => {
-      const input = {
-        data: [
-          { target: 1, f1: 2, f2: 3, f3: 4 },
-          { target: 2, f1: 3, f2: 4, f3: 5 },
-        ],
-      }
+      const input = createTableResult([
+        { target: 1, f1: 2, f2: 3, f3: 4 },
+        { target: 2, f1: 3, f2: 4, f3: 5 },
+      ])
       const config = { targetField: 'target' }
 
       global.fetch = vi.fn().mockResolvedValue({
@@ -485,7 +530,7 @@ describe('Node Definitions Execution Logic', () => {
     })
 
     it('should simulate lasso result', async () => {
-      const input = { data: [{ target: 1, f1: 2 }] }
+      const input = createTableResult([{ target: 1, f1: 2 }])
       const config = { targetLabel: 'target' }
 
       const result = await lassoNode.execute(input, config)
@@ -497,15 +542,13 @@ describe('Node Definitions Execution Logic', () => {
     })
 
     it('should calculate pearson correlations from numeric data', async () => {
-      const input = {
-        data: [
-          { target: 1, f1: 1, f2: 10 },
-          { target: 2, f1: 2, f2: 8 },
-          { target: 3, f1: 3, f2: 6 },
-          { target: 4, f1: 4, f2: 4 },
-          { target: 5, f1: 5, f2: 2 },
-        ],
-      }
+      const input = createTableResult([
+        { target: 1, f1: 1, f2: 10 },
+        { target: 2, f1: 2, f2: 8 },
+        { target: 3, f1: 3, f2: 6 },
+        { target: 4, f1: 4, f2: 4 },
+        { target: 5, f1: 5, f2: 2 },
+      ])
 
       const result = await pearsonNode.execute(input, { targetField: 'target', topN: 5 })
 
@@ -522,15 +565,13 @@ describe('Node Definitions Execution Logic', () => {
     })
 
     it('should calculate spearman correlations for monotonic but non-linear data', async () => {
-      const input = {
-        data: [
-          { target: 1, f1: 1, f2: 25 },
-          { target: 2, f1: 4, f2: 20 },
-          { target: 3, f1: 9, f2: 15 },
-          { target: 4, f1: 16, f2: 10 },
-          { target: 5, f1: 25, f2: 5 },
-        ],
-      }
+      const input = createTableResult([
+        { target: 1, f1: 1, f2: 25 },
+        { target: 2, f1: 4, f2: 20 },
+        { target: 3, f1: 9, f2: 15 },
+        { target: 4, f1: 16, f2: 10 },
+        { target: 5, f1: 25, f2: 5 },
+      ])
 
       const result = await spearmanNode.execute(input, { targetField: 'target', topN: 5 })
 
@@ -547,15 +588,13 @@ describe('Node Definitions Execution Logic', () => {
     })
 
     it('should calculate kendall correlations and rank inverse monotonic fields', async () => {
-      const input = {
-        data: [
-          { target: 1, f1: 5, f2: 1 },
-          { target: 2, f1: 4, f2: 2 },
-          { target: 3, f1: 3, f2: 3 },
-          { target: 4, f1: 2, f2: 4 },
-          { target: 5, f1: 1, f2: 5 },
-        ],
-      }
+      const input = createTableResult([
+        { target: 1, f1: 5, f2: 1 },
+        { target: 2, f1: 4, f2: 2 },
+        { target: 3, f1: 3, f2: 3 },
+        { target: 4, f1: 2, f2: 4 },
+        { target: 5, f1: 1, f2: 5 },
+      ])
 
       const result = await kendallNode.execute(input, { targetField: 'target', topN: 5 })
 
@@ -696,12 +735,10 @@ describe('Node Definitions Execution Logic', () => {
 
   describe('chart-display', () => {
     it('should generate scatter chart option', async () => {
-      const input = {
-        data: [
-          { x: 1, y: 2 },
-          { x: 3, y: 4 },
-        ],
-      }
+      const input = createTableResult([
+        { x: 1, y: 2 },
+        { x: 3, y: 4 },
+      ])
       const config = { chartType: 'scatter', xAxis: 'x', yAxis: 'y' }
 
       const result = await chartDisplayNode.execute(input, config)
@@ -713,12 +750,10 @@ describe('Node Definitions Execution Logic', () => {
     })
 
     it('should generate bar chart option', async () => {
-      const input = {
-        data: [
-          { x: 'A', y: 10 },
-          { x: 'B', y: 20 },
-        ],
-      }
+      const input = createTableResult([
+        { x: 'A', y: 10 },
+        { x: 'B', y: 20 },
+      ])
       const config = { chartType: 'bar', xAxis: 'x', yAxis: 'y' }
 
       const result = await chartDisplayNode.execute(input, config)
@@ -730,24 +765,22 @@ describe('Node Definitions Execution Logic', () => {
     })
 
     it('should not mutate grouped collection input when rendering non-boxplot charts', async () => {
-      const input = {
-        data: [
-          {
-            name: '组一',
-            data: [
-              { f1: 1, target: 2 },
-              { f1: 3, target: 4 },
-            ],
-          },
-          {
-            name: '组二',
-            data: [
-              { f1: 5, target: 6 },
-              { f1: 7, target: 8 },
-            ],
-          },
-        ],
-      }
+      const input = createTableCollectionResult([
+        {
+          name: '组一',
+          data: [
+            { f1: 1, target: 2 },
+            { f1: 3, target: 4 },
+          ],
+        },
+        {
+          name: '组二',
+          data: [
+            { f1: 5, target: 6 },
+            { f1: 7, target: 8 },
+          ],
+        },
+      ])
       const snapshot = JSON.parse(JSON.stringify(input))
 
       const result = await chartDisplayNode.execute(input, {
@@ -765,7 +798,7 @@ describe('Node Definitions Execution Logic', () => {
 
   describe('data-export', () => {
     it('should generate export info for CSV', async () => {
-      const input = { data: [{ a: 1, b: 2 }] }
+      const input = createTableResult([{ a: 1, b: 2 }])
       const config = { format: 'csv', filename: 'test_export' }
 
       const result = await dataExportNode.execute(input, config)
@@ -778,7 +811,7 @@ describe('Node Definitions Execution Logic', () => {
     })
 
     it('should generate export info for JSON', async () => {
-      const input = { data: [{ a: 1, b: 2 }] }
+      const input = createTableResult([{ a: 1, b: 2 }])
       const config = { format: 'json', filename: 'test_export' }
 
       const result = await dataExportNode.execute(input, config)
@@ -790,3 +823,5 @@ describe('Node Definitions Execution Logic', () => {
     })
   })
 })
+
+

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+﻿import { describe, expect, it, vi } from 'vitest'
 
 const {
   mockFetchKanbanData,
@@ -38,6 +38,7 @@ import { spearmanNode } from '../definitions/spearman'
 import { kendallNode } from '../definitions/kendall'
 import { dataExportNode } from '../definitions/dataExport'
 import { neighborSystemNode } from '../definitions/neighborSystem'
+import { createTableResult } from '../result'
 
 global.URL.createObjectURL = vi.fn(() => 'blob:mock-url')
 
@@ -56,12 +57,10 @@ describe('remaining nodes standardized result protocol', () => {
 
   it('data-aggregation should return a standardized table result', async () => {
     const result = await dataAggregationNode.execute(
-      {
-        data: [
-          { f1: 10, f2: 20, f3: 30 },
-          { f1: 5, f2: 5, f3: 5 },
-        ],
-      },
+      createTableResult([
+        { f1: 10, f2: 20, f3: 30 },
+        { f1: 5, f2: 5, f3: 5 },
+      ]),
       {
         mode: 'row_combine',
         aggregationGroups: [
@@ -84,13 +83,11 @@ describe('remaining nodes standardized result protocol', () => {
 
   it('data-filter should return a standardized table result with stats', async () => {
     const result = await dataFilterNode.execute(
-      {
-        data: [
-          { city: '上海', score: 91 },
-          { city: '北京', score: 77 },
-          { city: '上海', score: 82 },
-        ],
-      },
+      createTableResult([
+        { city: '上海', score: 91 },
+        { city: '北京', score: 77 },
+        { city: '上海', score: 82 },
+      ]),
       {
         matchMode: 'all',
         conditions: [
@@ -136,12 +133,10 @@ describe('remaining nodes standardized result protocol', () => {
     }) as any
 
     const result = await xgboostShapNode.execute(
-      {
-        data: [
-          { target: 1, f1: 2, f2: 3 },
-          { target: 2, f1: 3, f2: 4 },
-        ],
-      },
+      createTableResult([
+        { target: 1, f1: 2, f2: 3 },
+        { target: 2, f1: 3, f2: 4 },
+      ]),
       { targetField: 'target' },
     )
 
@@ -157,9 +152,7 @@ describe('remaining nodes standardized result protocol', () => {
 
   it('lasso should return a report result', async () => {
     const result = await lassoNode.execute(
-      {
-        data: [{ target: 1, f1: 2 }],
-      },
+      createTableResult([{ target: 1, f1: 2 }]),
       { targetField: 'target' },
     )
 
@@ -172,15 +165,13 @@ describe('remaining nodes standardized result protocol', () => {
   })
 
   it('correlation nodes should return standardized report results', async () => {
-    const input = {
-      data: [
-        { target: 1, f1: 1, f2: 10 },
-        { target: 2, f1: 2, f2: 8 },
-        { target: 3, f1: 3, f2: 6 },
-        { target: 4, f1: 4, f2: 4 },
-        { target: 5, f1: 5, f2: 2 },
-      ],
-    }
+    const input = createTableResult([
+      { target: 1, f1: 1, f2: 10 },
+      { target: 2, f1: 2, f2: 8 },
+      { target: 3, f1: 3, f2: 6 },
+      { target: 4, f1: 4, f2: 4 },
+      { target: 5, f1: 5, f2: 2 },
+    ])
 
     const pearson = await pearsonNode.execute(input, { targetField: 'target', topN: 5 })
     const spearman = await spearmanNode.execute(input, { targetField: 'target', topN: 5 })
@@ -231,7 +222,7 @@ describe('remaining nodes standardized result protocol', () => {
 
   it('data-export should return a file result', async () => {
     const result = await dataExportNode.execute(
-      { data: [{ a: 1, b: 2 }] },
+      createTableResult([{ a: 1, b: 2 }]),
       { format: 'csv', filename: 'test_export' },
     )
 

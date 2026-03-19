@@ -49,11 +49,12 @@ const sortedWorkflows = computed(() => {
 })
 
 // 当前工作流的运行历史
-const currentWorkflowHistory = computed(() => {
+const currentWorkflowHistory = computed<ExecutionRecord[]>(() => {
+  const executionHistory = store.executionHistory as ExecutionRecord[]
   if (store.currentWorkflowId) {
-    return store.executionHistory.filter((r) => r.workflowId === store.currentWorkflowId)
+    return executionHistory.filter((record) => record.workflowId === store.currentWorkflowId)
   }
-  return store.executionHistory
+  return executionHistory
 })
 
 const handleLoadWorkflow = async (id: string) => {
