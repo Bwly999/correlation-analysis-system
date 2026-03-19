@@ -92,7 +92,7 @@ const formatDuration = (ms: number) => {
         @click="emit('open-projects')"
       >
         <LayoutGrid :size="16" class="opacity-70 group-hover:opacity-100" />
-        <span class="text-[13px] font-medium">Projects</span>
+        <span class="text-[13px] font-medium">项目</span>
         <ChevronRight :size="14" class="opacity-40" />
       </div>
 
@@ -102,7 +102,7 @@ const formatDuration = (ms: number) => {
           v-model="store.workflowName"
           :disabled="store.isHistoryMode"
           class="font-semibold text-[14px] text-slate-900 border border-transparent hover:border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 bg-transparent focus:bg-white rounded-md px-2.5 py-1 transition-all w-[300px] outline-none disabled:opacity-70 disabled:cursor-not-allowed"
-          placeholder="Untitled Workflow"
+          placeholder="未命名工作流"
         />
         <Edit2
           v-if="!store.isHistoryMode"
@@ -189,7 +189,7 @@ const formatDuration = (ms: number) => {
           :class="store.isHistoryMode ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'"
         ></div>
         <span class="text-[10px] font-bold tracking-wide">
-          {{ store.isHistoryMode ? 'HISTORY VIEW' : 'Connected' }}
+          {{ store.isHistoryMode ? '历史视图' : '已连接' }}
         </span>
       </div>
 
