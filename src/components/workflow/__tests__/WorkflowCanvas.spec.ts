@@ -10,6 +10,8 @@ vi.mock('../MonacoEditor.vue', () => ({ default: { template: '<div />' } }))
 const addEdges = vi.fn()
 const findNode = vi.fn()
 const fitView = vi.fn()
+const getViewport = vi.fn(() => ({ x: 500, y: 120, zoom: 1 }))
+const setViewport = vi.fn()
 const onConnect = vi.fn()
 const project = vi.fn((position) => position)
 const runtimeInputModalStub = defineComponent({
@@ -17,6 +19,20 @@ const runtimeInputModalStub = defineComponent({
   emits: ['confirm'],
   template: '<div class="runtime-input-modal-stub"></div>',
 })
+const workflowManagerModalStub = defineComponent({
+  name: 'WorkflowManagerModal',
+  props: {
+    visible: Boolean,
+  },
+  emits: ['close', 'load-workflow', 'create-workflow'],
+  template: '<div class="workflow-manager-modal-stub" :data-visible="visible"></div>',
+})
+
+const flushAsyncWork = async () => {
+  await Promise.resolve()
+  await Promise.resolve()
+  await new Promise((resolve) => setTimeout(resolve, 0))
+}
 
 vi.mock('primevue/usetoast', () => ({
   useToast: () => ({
@@ -46,6 +62,8 @@ vi.mock('@vue-flow/core', () => ({
     project,
     findNode,
     fitView,
+    getViewport,
+    setViewport,
   }),
 }))
 
@@ -54,6 +72,12 @@ describe('WorkflowCanvas', () => {
     setActivePinia(createPinia())
     vi.clearAllMocks()
     document.queryCommandSupported = vi.fn(() => true) as any
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      callback(0)
+      return 1
+    })
+    fitView.mockResolvedValue(true)
+    setViewport.mockResolvedValue(true)
   })
 
   it('keeps nodes selectable in history mode so snapshots can still be opened', async () => {
@@ -72,7 +96,7 @@ describe('WorkflowCanvas', () => {
           NodeConfigModal: { template: '<div />' },
           RuntimeInputModal: runtimeInputModalStub,
           DataAnalysisModal: { template: '<div />' },
-          WorkflowManagerModal: { template: '<div />' },
+          WorkflowManagerModal: workflowManagerModalStub,
           ConfirmDialog: { template: '<div />' },
           Button: { template: '<button><slot /></button>' },
           N8nEdge: { template: '<div />' },
@@ -125,7 +149,7 @@ describe('WorkflowCanvas', () => {
           NodeConfigModal: { template: '<div />' },
           RuntimeInputModal: runtimeInputModalStub,
           DataAnalysisModal: { template: '<div />' },
-          WorkflowManagerModal: { template: '<div />' },
+          WorkflowManagerModal: workflowManagerModalStub,
           ConfirmDialog: { template: '<div />' },
           Button: { template: '<button><slot /></button>' },
           N8nEdge: { template: '<div />' },
@@ -158,7 +182,7 @@ describe('WorkflowCanvas', () => {
           NodeConfigModal: { template: '<div />' },
           RuntimeInputModal: runtimeInputModalStub,
           DataAnalysisModal: { template: '<div />' },
-          WorkflowManagerModal: { template: '<div />' },
+          WorkflowManagerModal: workflowManagerModalStub,
           UnsavedWorkflowDialog: { template: '<div />' },
           ConfirmDialog: { template: '<div />' },
           Toast: { template: '<div />' },
@@ -191,7 +215,7 @@ describe('WorkflowCanvas', () => {
           NodeConfigModal: { template: '<div />' },
           RuntimeInputModal: runtimeInputModalStub,
           DataAnalysisModal: { template: '<div />' },
-          WorkflowManagerModal: { template: '<div />' },
+          WorkflowManagerModal: workflowManagerModalStub,
           UnsavedWorkflowDialog: { template: '<div />' },
           ConfirmDialog: { template: '<div />' },
           Toast: { template: '<div />' },
@@ -242,5 +266,123 @@ describe('WorkflowCanvas', () => {
     expect(runButton.exists()).toBe(true)
     expect(runShell.classes()).toContain('workflow-run-shell--idle')
     expect(runButton.classes()).toContain('workflow-run-bar--idle')
+  })
+
+  it('shifts the fitted viewport left by half the sidebar width after workflow load', async () => {
+    const store = useWorkflowStore()
+    store.addAndConnectNode('manual-json-import', '手动输入数据', { x: 0, y: 0 })
+
+    mount(WorkflowCanvas, {
+      global: {
+        stubs: {
+          Background: { template: '<div />' },
+          Controls: { template: '<div />' },
+          NodeSidebar: { template: '<div />' },
+          WorkflowHeader: { template: '<div />' },
+          BaseNode: { template: '<div />' },
+          LogPanel: { template: '<div />' },
+          NodeConfigModal: { template: '<div />' },
+          RuntimeInputModal: runtimeInputModalStub,
+          DataAnalysisModal: { template: '<div />' },
+          WorkflowManagerModal: workflowManagerModalStub,
+          UnsavedWorkflowDialog: { template: '<div />' },
+          HelpCenterModal: { template: '<div />' },
+          ConfirmDialog: { template: '<div />' },
+          Toast: { template: '<div />' },
+          Button: { template: '<button><slot /></button>' },
+          N8nEdge: { template: '<div />' },
+        },
+        directives: {
+          tooltip: () => undefined,
+        },
+      },
+    })
+
+    await flushAsyncWork()
+    await flushAsyncWork()
+
+    expect(fitView).toHaveBeenCalled()
+    expect(fitView).toHaveBeenCalledWith({ padding: 0.2, duration: 0 })
+    expect(setViewport).toHaveBeenNthCalledWith(
+      1,
+      {
+        x: 500,
+        y: 120,
+        zoom: 1,
+      },
+      { duration: 0 },
+    )
+    expect(setViewport).toHaveBeenCalledWith(
+      {
+        x: 330,
+        y: 120,
+        zoom: 1,
+      },
+      { duration: 800 },
+    )
+  })
+
+  it('loads the first workflow from the manager and resets the viewport once after the modal closes', async () => {
+    const store = useWorkflowStore()
+    store.addAndConnectNode('manual-json-import', '手动输入数据', { x: 0, y: 0 })
+    const saved = await store.saveWorkflow('首次打开复位')
+    store.createNewWorkflow()
+
+    const wrapper = mount(WorkflowCanvas, {
+      global: {
+        stubs: {
+          Background: { template: '<div />' },
+          Controls: { template: '<div />' },
+          NodeSidebar: { template: '<div />' },
+          WorkflowHeader: { template: '<div />' },
+          BaseNode: { template: '<div />' },
+          LogPanel: { template: '<div />' },
+          NodeConfigModal: { template: '<div />' },
+          RuntimeInputModal: runtimeInputModalStub,
+          DataAnalysisModal: { template: '<div />' },
+          WorkflowManagerModal: workflowManagerModalStub,
+          UnsavedWorkflowDialog: { template: '<div />' },
+          HelpCenterModal: { template: '<div />' },
+          ConfirmDialog: { template: '<div />' },
+          Toast: { template: '<div />' },
+          Button: { template: '<button><slot /></button>' },
+          N8nEdge: { template: '<div />' },
+        },
+        directives: {
+          tooltip: () => undefined,
+        },
+      },
+    })
+
+    await flushAsyncWork()
+    await flushAsyncWork()
+
+    expect(fitView).not.toHaveBeenCalled()
+
+    wrapper.findComponent(workflowManagerModalStub).vm.$emit('load-workflow', saved.id)
+    await flushAsyncWork()
+    await flushAsyncWork()
+    await flushAsyncWork()
+
+    expect(fitView).toHaveBeenCalledTimes(1)
+    expect(setViewport).toHaveBeenCalledTimes(2)
+    expect(setViewport).toHaveBeenNthCalledWith(
+      1,
+      {
+        x: 500,
+        y: 120,
+        zoom: 1,
+      },
+      { duration: 0 },
+    )
+    expect(setViewport).toHaveBeenNthCalledWith(
+      2,
+      {
+        x: 330,
+        y: 120,
+        zoom: 1,
+      },
+      { duration: 800 },
+    )
   })
 })

@@ -107,31 +107,65 @@ export const useWorkflowStore = defineStore('workflow', () => {
   const cloneWorkflowNodes = (sourceNodes: WorkflowNode[]): WorkflowNode[] =>
     cloneJsonValue(sourceNodes)
 
-  const cloneWorkflowEdges = (sourceEdges: Edge[]): Edge[] => cloneJsonValue(sourceEdges)
-
-  const serializeWorkflowNodes = (sourceNodes: WorkflowNode[]): WorkflowNodeSnapshot[] =>
-    sourceNodes.map((node) =>
+  const serializeWorkflowEdges = (sourceEdges: Edge[]): Edge[] =>
+    sourceEdges.map((edge) =>
       cloneJsonValue({
-        id: node.id,
-        type: node.type,
-        position: node.position,
-        label: node.label,
-        selected: node.selected,
-        dragging: node.dragging,
-        data: {
-          ...node.data,
-          status: 'idle' as const,
-          output: node.data.isPinned ? node.data.output : null,
-        },
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+        sourceHandle: edge.sourceHandle,
+        targetHandle: edge.targetHandle,
+        type: edge.type,
+        animated: edge.animated,
+        label: edge.label,
+        data: edge.data,
+        style: edge.style,
+        markerStart: edge.markerStart,
+        markerEnd: edge.markerEnd,
       }),
     )
+
+  const cloneWorkflowEdges = (sourceEdges: Edge[]): Edge[] => serializeWorkflowEdges(sourceEdges)
+
+  const normalizeNodeConfigWithDefaults = (node: WorkflowNode): WorkflowNode => {
+    const nextNode = cloneJsonValue(node)
+    const definition = getNodeDefinition(nextNode.data.type)
+
+    if (!definition) return nextNode
+
+    const nextConfig = { ...(nextNode.data.config ?? {}) }
+    definition.properties.forEach((property) => {
+      if (nextConfig[property.name] === undefined && property.default !== undefined) {
+        nextConfig[property.name] = cloneJsonValue(property.default)
+      }
+    })
+    nextNode.data.config = nextConfig
+
+    return nextNode
+  }
+
+  const serializeWorkflowNodes = (sourceNodes: WorkflowNode[]): WorkflowNodeSnapshot[] =>
+    sourceNodes.map((node) => {
+      const normalizedNode = normalizeNodeConfigWithDefaults(node)
+      return cloneJsonValue({
+        id: normalizedNode.id,
+        type: normalizedNode.type,
+        position: normalizedNode.position,
+        label: normalizedNode.label,
+        data: {
+          ...normalizedNode.data,
+          status: 'idle' as const,
+          output: normalizedNode.data.isPinned ? normalizedNode.data.output : null,
+        },
+      })
+    })
 
   const getWorkflowPersistenceSignature = () =>
     JSON.stringify({
       id: currentWorkflowId.value,
       name: workflowName.value,
       nodes: serializeWorkflowNodes(getCurrentNodes()),
-      edges: cloneWorkflowEdges(getCurrentEdges()),
+      edges: serializeWorkflowEdges(getCurrentEdges()),
     })
 
   const syncSavedWorkflowSignature = () => {
@@ -150,17 +184,16 @@ export const useWorkflowStore = defineStore('workflow', () => {
   )
 
   const resetWorkflowNodeRuntimeState = (sourceNodes: Array<WorkflowNode | WorkflowNodeSnapshot>): WorkflowNode[] =>
-    sourceNodes.map((node) => {
-      const nextNode: WorkflowNode = {
+    sourceNodes.map((node) =>
+      normalizeNodeConfigWithDefaults({
         ...(node as WorkflowNode),
         data: {
           ...node.data,
           status: 'idle' as const,
           output: node.data?.isPinned ? node.data.output : null,
         },
-      }
-      return nextNode
-    })
+      }),
+    )
 
   const createNewWorkflow = () => {
     nodes.value = []
@@ -185,7 +218,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
       id,
       name: workflowName.value,
       nodes: serializedNodes,
-      edges: [...currentEdges],
+      edges: serializeWorkflowEdges(currentEdges),
       updatedAt: Date.now(),
     }
     await storageProvider.saveWorkflow(workflow)
@@ -199,7 +232,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     const workflow = await storageProvider.getWorkflow(id)
     if (workflow) {
       nodes.value = resetWorkflowNodeRuntimeState(workflow.nodes)
-      edges.value = workflow.edges
+      edges.value = serializeWorkflowEdges(workflow.edges)
       workflowName.value = workflow.name
       currentWorkflowId.value = workflow.id
       addLog(`已加载工作流: ${workflow.name}`, 'info')
@@ -250,7 +283,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
         const workflow = JSON.parse(e.target?.result as string)
         const importedNodes = resetWorkflowNodeRuntimeState(workflow.nodes || [])
         nodes.value = importedNodes
-        edges.value = workflow.edges || []
+        edges.value = serializeWorkflowEdges(workflow.edges || [])
         workflowName.value = workflow.name || '导入的工作流'
         currentWorkflowId.value = null
         addLog(`成功导入工作流: ${workflowName.value}`, 'info')

@@ -34,7 +34,7 @@ import Toast from 'primevue/toast'
 import { useToast } from 'primevue/usetoast'
 import UnsavedWorkflowDialog from './UnsavedWorkflowDialog.vue'
 
-const { onConnect, addEdges, project, findNode, fitView } = useVueFlow()
+const { onConnect, addEdges, project, findNode, fitView, getViewport, setViewport } = useVueFlow()
 const store = useWorkflowStore()
 const toast = useToast()
 
@@ -47,6 +47,7 @@ const isHelpCenterVisible = ref(false)
 const viewportWidth = ref(typeof window === 'undefined' ? 1920 : window.innerWidth)
 const isUnsavedDialogVisible = ref(false)
 const pendingWorkflowAction = ref<(() => Promise<void> | void) | null>(null)
+const isResettingView = ref(false)
 
 const layoutMetrics = computed(() => getWorkflowLayoutMetrics(viewportWidth.value))
 const logHeight = computed(() =>
@@ -123,15 +124,16 @@ const runWorkflowActionWithGuard = async (action: () => Promise<void> | void) =>
 
 const handleCreateWorkflow = async () => {
   await runWorkflowActionWithGuard(async () => {
-    store.createNewWorkflow()
     isWorkflowListVisible.value = false
+    store.createNewWorkflow()
   })
 }
 
 const handleLoadWorkflow = async (id: string) => {
   await runWorkflowActionWithGuard(async () => {
-    await store.loadWorkflow(id)
     isWorkflowListVisible.value = false
+    await nextTick()
+    await store.loadWorkflow(id)
   })
 }
 
@@ -165,11 +167,14 @@ const handleBeforeUnload = (event: BeforeUnloadEvent) => {
 onMounted(async () => {
   window.addEventListener('resize', onWindowResize)
   window.addEventListener('beforeunload', handleBeforeUnload)
-  const workflows = await store.getSavedWorkflows()
-  // 如果没有工作流，自动打开管理中心
-  if (workflows.length === 0) {
-    isWorkflowListVisible.value = true
+  await store.getSavedWorkflows()
+
+  if (store.nodes.length > 0) {
+    store.needsViewReset = true
+    return
   }
+
+  openWorkflowList()
 })
 
 // 深度分析弹窗状态
@@ -179,18 +184,44 @@ const openWorkflowList = async () => {
   isWorkflowListVisible.value = true
 }
 
-const resetView = async () => {
+const waitForViewportStabilized = async () => {
   await nextTick()
-  fitView({ padding: 0.2, duration: 800 })
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+}
+
+const resetView = async () => {
+  if (isResettingView.value) return
+
+  isResettingView.value = true
+  try {
+    await waitForViewportStabilized()
+    const initialViewport = getViewport()
+
+    await fitView({ padding: 0.2, duration: 0 })
+
+    const fittedViewport = getViewport()
+    const targetViewport = isSidebarVisible.value
+      ? {
+          ...fittedViewport,
+          x: fittedViewport.x - layoutMetrics.value.sidebarWidth / 2,
+        }
+      : fittedViewport
+
+    await setViewport(initialViewport, { duration: 0 })
+    await setViewport(targetViewport, { duration: 800 })
+  } finally {
+    isResettingView.value = false
+  }
 }
 
 // 监听视图复位信号
 watch(
-  () => store.needsViewReset,
-  (val: boolean) => {
-    if (val) {
-      resetView()
+  [() => store.needsViewReset, () => isWorkflowListVisible.value],
+  async ([needsViewReset, workflowListVisible]) => {
+    if (needsViewReset && !workflowListVisible) {
       store.needsViewReset = false
+      await resetView()
     }
   },
 )
@@ -271,14 +302,6 @@ const onDropLocal = (event: DragEvent) => {
   const position = project({ x: event.clientX - left, y: event.clientY - top })
   store.addAndConnectNode(type, label, position)
 }
-
-onMounted(() => {
-  if (store.nodes.length > 0) {
-    resetView()
-  } else {
-    openWorkflowList()
-  }
-})
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', onWindowResize)
