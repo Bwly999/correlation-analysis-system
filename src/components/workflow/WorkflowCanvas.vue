@@ -56,6 +56,21 @@ const runBarBottom = computed(() => logHeight.value + 20)
 const sidebarRightOffset = computed(() =>
   isSidebarVisible.value ? `${layoutMetrics.value.sidebarWidth}px` : '0',
 )
+const runBarState = computed<'idle' | 'running' | 'pending'>(() => {
+  if (store.pendingExecution) return 'pending'
+  if (store.isRunning) return 'running'
+  return 'idle'
+})
+const runButtonTitle = computed(() => {
+  if (runBarState.value === 'pending') return '等待继续执行'
+  if (runBarState.value === 'running') return '工作流运行中'
+  return '开始运行工作流'
+})
+const runButtonSubtitle = computed(() => {
+  if (runBarState.value === 'pending') return '请先补全缺失输入再继续当前链路'
+  if (runBarState.value === 'running') return '系统正在按顺序执行整条工作流'
+  return '从触发节点启动整条链路'
+})
 
 const onWindowResize = () => {
   viewportWidth.value = window.innerWidth
@@ -400,26 +415,35 @@ onBeforeUnmount(() => {
 
     <div
       v-if="!store.isHistoryMode"
-      class="absolute left-1/2 -translate-x-1/2 z-[90] transition-all duration-500 flex gap-3"
+      class="absolute left-1/2 -translate-x-1/2 z-[90] transition-all duration-500 flex items-center gap-3"
       :style="{ bottom: `${runBarBottom}px` }"
     >
-      <Button
-        :disabled="store.isRunning || !!store.pendingExecution"
-        class="n8n-execute-bar w-[280px] h-[52px] rounded-2xl shadow-[0_20px_50px_-10px_rgba(16,185,129,0.4)] hover:shadow-emerald-400/60 transform hover:-translate-y-1 transition-all active:scale-[0.97] border-none flex items-center justify-center text-white"
-        @click="store.runGlobal"
-      >
-        <Play :size="20" fill="currentColor" class="mr-3" />
-        <span class="text-[14px] font-black tracking-widest uppercase">开始运行工作流</span>
-      </Button>
-      <Button
-        v-if="store.isRunning || !!store.pendingExecution"
-        v-tooltip.top="'停止执行'"
-        severity="danger"
-        class="w-[52px] h-[52px] rounded-2xl shadow-xl flex items-center justify-center animate-in fade-in zoom-in-75 duration-300"
-        @click="store.stopExecution"
-      >
-        <Square :size="20" fill="currentColor" />
-      </Button>
+      <div class="workflow-run-shell" :class="`workflow-run-shell--${runBarState}`">
+        <button
+          type="button"
+          :disabled="store.isRunning || !!store.pendingExecution"
+          class="workflow-run-bar"
+          :class="`workflow-run-bar--${runBarState}`"
+          @click="store.runGlobal"
+        >
+          <span class="workflow-run-bar__icon">
+            <Play :size="18" fill="currentColor" />
+          </span>
+          <span class="workflow-run-bar__copy">
+            <strong>{{ runButtonTitle }}</strong>
+            <span>{{ runButtonSubtitle }}</span>
+          </span>
+        </button>
+        <button
+          v-if="store.isRunning || !!store.pendingExecution"
+          type="button"
+          v-tooltip.top="'停止执行'"
+          class="workflow-run-stop animate-in fade-in zoom-in-75 duration-300"
+          @click="store.stopExecution"
+        >
+          <Square :size="18" fill="currentColor" />
+        </button>
+      </div>
     </div>
 
     <footer
@@ -509,12 +533,171 @@ onBeforeUnmount(() => {
   padding: 0;
   background: transparent;
 }
-.n8n-execute-bar {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+
+.workflow-run-shell {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(191, 219, 254, 0.78);
+  box-shadow: 0 20px 54px rgba(37, 99, 235, 0.14);
+  backdrop-filter: blur(10px);
 }
-.n8n-execute-bar:disabled {
-  opacity: 0.4;
+
+.workflow-run-shell--idle {
+  border-color: rgba(226, 232, 240, 0.95);
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.1);
+}
+
+.workflow-run-shell--running {
+  border-color: rgba(191, 219, 254, 0.78);
+  box-shadow: 0 20px 54px rgba(37, 99, 235, 0.14);
+}
+
+.workflow-run-shell--pending {
+  border-color: rgba(253, 230, 138, 0.9);
+  box-shadow: 0 20px 54px rgba(245, 158, 11, 0.16);
+}
+
+.workflow-run-bar {
+  min-width: 244px;
+  min-height: 54px;
+  padding: 0 18px 0 16px;
+  border-radius: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  border: 1px solid transparent;
+  color: #ffffff;
+  box-shadow: 0 16px 34px rgba(37, 99, 235, 0.26);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    opacity 0.2s ease,
+    background 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease;
+  cursor: pointer;
+}
+
+.workflow-run-bar--idle {
+  color: #0f172a;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  border-color: rgba(148, 163, 184, 0.22);
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.08);
+}
+
+.workflow-run-bar--running {
+  color: #ffffff;
+  background: linear-gradient(90deg, #2563eb 0 36%, #0f172a 36% 100%);
+  box-shadow: 0 16px 34px rgba(37, 99, 235, 0.26);
+}
+
+.workflow-run-bar--pending {
+  color: #422006;
+  background: linear-gradient(180deg, #fffaf0 0%, #fef3c7 100%);
+  border-color: rgba(245, 158, 11, 0.24);
+  box-shadow: 0 16px 32px rgba(245, 158, 11, 0.16);
+}
+
+.workflow-run-bar:not(:disabled):hover {
+  transform: translateY(-1px);
+}
+
+.workflow-run-bar--idle:not(:disabled):hover {
+  box-shadow: 0 18px 32px rgba(15, 23, 42, 0.12);
+}
+
+.workflow-run-bar--running:not(:disabled):hover {
+  box-shadow: 0 18px 38px rgba(37, 99, 235, 0.3);
+}
+
+.workflow-run-bar--pending:not(:disabled):hover {
+  box-shadow: 0 18px 36px rgba(245, 158, 11, 0.22);
+}
+
+.workflow-run-bar__icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  flex: none;
+}
+
+.workflow-run-bar--idle .workflow-run-bar__icon {
+  color: #ffffff;
+  background: #2563eb;
+  border: 1px solid rgba(37, 99, 235, 0.12);
+}
+
+.workflow-run-bar--running .workflow-run-bar__icon {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.workflow-run-bar--pending .workflow-run-bar__icon {
+  color: #ffffff;
+  background: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.18);
+}
+
+.workflow-run-bar__copy {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.1;
+  text-align: left;
+}
+
+.workflow-run-bar__copy strong {
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 0.01em;
+}
+
+.workflow-run-bar__copy span {
+  margin-top: 2px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.workflow-run-bar--idle .workflow-run-bar__copy span {
+  color: #64748b;
+}
+
+.workflow-run-bar--running .workflow-run-bar__copy span {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.workflow-run-bar--pending .workflow-run-bar__copy span {
+  color: rgba(66, 32, 6, 0.72);
+}
+
+.workflow-run-bar:disabled {
+  opacity: 0.6;
   cursor: not-allowed;
   transform: none;
+}
+
+.workflow-run-stop {
+  width: 54px;
+  height: 54px;
+  border-radius: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #dc2626 !important;
+  background: #ffffff !important;
+  border: 1px solid rgba(148, 163, 184, 0.24) !important;
+  box-shadow: none;
 }
 </style>

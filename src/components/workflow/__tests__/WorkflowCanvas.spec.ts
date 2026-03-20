@@ -177,4 +177,70 @@ describe('WorkflowCanvas', () => {
 
     expect(event.defaultPrevented).toBe(true)
   })
+
+  it('renders the global run button with a title and helper copy', () => {
+    const wrapper = mount(WorkflowCanvas, {
+      global: {
+        stubs: {
+          Background: { template: '<div />' },
+          Controls: { template: '<div />' },
+          NodeSidebar: { template: '<div />' },
+          WorkflowHeader: { template: '<div />' },
+          BaseNode: { template: '<div />' },
+          LogPanel: { template: '<div />' },
+          NodeConfigModal: { template: '<div />' },
+          RuntimeInputModal: runtimeInputModalStub,
+          DataAnalysisModal: { template: '<div />' },
+          WorkflowManagerModal: { template: '<div />' },
+          UnsavedWorkflowDialog: { template: '<div />' },
+          ConfirmDialog: { template: '<div />' },
+          Toast: { template: '<div />' },
+          Button: { template: '<button><slot /></button>' },
+          N8nEdge: { template: '<div />' },
+        },
+        directives: {
+          tooltip: () => undefined,
+        },
+      },
+    })
+
+    const text = wrapper.text()
+    expect(text).toContain('开始运行工作流')
+    expect(text).toContain('从触发节点启动整条链路')
+  })
+
+  it('uses native buttons for the run bar and keeps the idle state visually neutral', () => {
+    const wrapper = mount(WorkflowCanvas, {
+      global: {
+        stubs: {
+          Background: { template: '<div />' },
+          Controls: { template: '<div />' },
+          NodeSidebar: { template: '<div />' },
+          WorkflowHeader: { template: '<div />' },
+          BaseNode: { template: '<div />' },
+          LogPanel: { template: '<div />' },
+          NodeConfigModal: { template: '<div />' },
+          RuntimeInputModal: runtimeInputModalStub,
+          DataAnalysisModal: { template: '<div />' },
+          WorkflowManagerModal: { template: '<div />' },
+          UnsavedWorkflowDialog: { template: '<div />' },
+          ConfirmDialog: { template: '<div />' },
+          Toast: { template: '<div />' },
+          Button: { template: '<button><slot /></button>' },
+          N8nEdge: { template: '<div />' },
+        },
+        directives: {
+          tooltip: () => undefined,
+        },
+      },
+    })
+
+    const runShell = wrapper.find('.workflow-run-shell')
+    const runButton = wrapper.find('button.workflow-run-bar')
+
+    expect(runShell.exists()).toBe(true)
+    expect(runButton.exists()).toBe(true)
+    expect(runShell.classes()).toContain('workflow-run-shell--idle')
+    expect(runButton.classes()).toContain('workflow-run-bar--idle')
+  })
 })
