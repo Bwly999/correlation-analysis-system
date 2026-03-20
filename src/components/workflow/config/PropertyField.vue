@@ -27,6 +27,8 @@ const props = defineProps<{
   modelValue: any
   upstreamFactors: Array<{ name: string; value: string }>
   configContext?: Record<string, any>
+  nodeId?: string | null
+  inputData?: unknown
 }>()
 
 const emit = defineEmits(['update:modelValue', 'save'])
@@ -34,9 +36,12 @@ const store = useWorkflowStore()
 const autoCompleteRef = ref<any>(null)
 const filteredFactors = ref<string[]>([])
 const treeFilterQuery = ref('')
+const multiOptionsFilterQuery = ref('')
+const multiOptionsRegexEnabled = ref(false)
 const remoteOptions = ref<any[]>([])
 const isOptionsLoading = ref(false)
 const optionsError = ref('')
+const multiOptionsFilterError = ref('')
 
 const configValue = computed({
   get: () => props.modelValue,
@@ -44,7 +49,11 @@ const configValue = computed({
 })
 
 const dependencyKey = computed(() =>
-  JSON.stringify((props.prop.dependencies || []).map((key) => props.configContext?.[key] ?? null)),
+  JSON.stringify({
+    dependencies: (props.prop.dependencies || []).map((key) => props.configContext?.[key] ?? null),
+    nodeId: props.nodeId ?? null,
+    inputData: props.inputData ?? null,
+  }),
 )
 
 const loadOptions = async () => {
@@ -61,6 +70,8 @@ const loadOptions = async () => {
       (await props.prop.resolveOptions({
         config: props.configContext || {},
         property: props.prop,
+        nodeId: props.nodeId,
+        inputData: props.inputData,
       })) || []
   } catch (error: any) {
     remoteOptions.value = []
@@ -172,6 +183,38 @@ const filterTreeNodes = (nodes: any[], query: string): any[] => {
 const filteredTreeOptions = computed(() =>
   filterTreeNodes(optionSource.value, treeFilterQuery.value),
 )
+
+const normalizeOptionLabel = (option: any) =>
+  String(option?.name ?? option?.label ?? option?.value ?? '')
+
+const filteredMultiOptions = computed(() => {
+  if (props.prop.type !== 'multi-options' || !props.prop.filterable) {
+    multiOptionsFilterError.value = ''
+    return optionSource.value
+  }
+
+  const query = multiOptionsFilterQuery.value.trim()
+  if (!query) {
+    multiOptionsFilterError.value = ''
+    return optionSource.value
+  }
+
+  if (props.prop.allowRegexSearch && multiOptionsRegexEnabled.value) {
+    try {
+      const regex = new RegExp(query, 'i')
+      multiOptionsFilterError.value = ''
+      return optionSource.value.filter((option) => regex.test(normalizeOptionLabel(option)))
+    } catch {
+      multiOptionsFilterError.value = '正则表达式无效，请检查输入格式'
+      return []
+    }
+  }
+
+  multiOptionsFilterError.value = ''
+  return optionSource.value.filter((option) =>
+    normalizeOptionLabel(option).toLowerCase().includes(query.toLowerCase()),
+  )
+})
 </script>
 
 <template>
@@ -222,6 +265,8 @@ const filteredTreeOptions = computed(() =>
             :model-value="item[subProp.name]"
             :upstream-factors="upstreamFactors"
             :config-context="item"
+            :node-id="nodeId"
+            :input-data="inputData"
             @update:model-value="(val) => updateSubItem(Number(idx), subProp.name, val)"
             @save="emit('save')"
           />
@@ -277,13 +322,51 @@ const filteredTreeOptions = computed(() =>
     <MultiSelect
       v-else-if="prop.type === 'multi-options'"
       v-model="configValue"
-      :options="optionSource"
+      :options="filteredMultiOptions"
       option-label="name"
       option-value="value"
       display="chip"
       :placeholder="prop.placeholder"
       class="w-full text-xs ndv-input"
-    />
+    >
+      <template v-if="prop.filterable" #header>
+        <div class="space-y-2 border-b border-slate-100 bg-slate-50/80 p-3">
+          <div class="relative">
+            <Search
+              :size="14"
+              class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+            />
+            <InputText
+              v-model="multiOptionsFilterQuery"
+              class="w-full !h-9 !rounded-lg !border-slate-200 !bg-white !pl-9 !text-xs"
+              :placeholder="prop.filterPlaceholder || '搜索选项'"
+            />
+          </div>
+          <div
+            v-if="prop.allowRegexSearch"
+            class="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2"
+          >
+            <span class="text-[11px] font-semibold text-slate-500">正则搜索</span>
+            <button
+              type="button"
+              data-testid="multi-options-regex-toggle"
+              class="rounded-md border px-2 py-1 text-[11px] font-semibold transition-colors"
+              :class="
+                multiOptionsRegexEnabled
+                  ? 'border-blue-200 bg-blue-50 text-blue-600'
+                  : 'border-slate-200 bg-slate-50 text-slate-500'
+              "
+              @click="multiOptionsRegexEnabled = !multiOptionsRegexEnabled"
+            >
+              {{ multiOptionsRegexEnabled ? '已开启' : '未开启' }}
+            </button>
+          </div>
+          <div v-if="multiOptionsFilterError" class="text-[11px] text-rose-500">
+            {{ multiOptionsFilterError }}
+          </div>
+        </div>
+      </template>
+    </MultiSelect>
 
     <InputNumber
       v-else-if="prop.type === 'number'"

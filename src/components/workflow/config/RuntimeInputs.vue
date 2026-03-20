@@ -7,6 +7,8 @@ const props = defineProps<{
   properties: NodeProperty[]
   config: any
   upstreamFactors: Array<{ name: string; value: string }>
+  nodeId?: string | null
+  inputData?: unknown
 }>()
 
 const emit = defineEmits(['update:config'])
@@ -43,6 +45,8 @@ const updateConfig = (propName: string, value: any) => {
             :model-value="config[prop.name]"
             :upstream-factors="upstreamFactors"
             :config-context="config"
+            :node-id="nodeId"
+            :input-data="inputData"
             @update:model-value="(val) => updateConfig(prop.name, val)"
           />
         </div>

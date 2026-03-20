@@ -31,9 +31,13 @@ vi.mock('@/services/kanbanIntegration', () => ({
 import { manualJsonImportNode } from '../definitions/manualJsonImport'
 import { dataAggregationNode } from '../definitions/dataAggregation'
 import { dataFilterNode } from '../definitions/dataFilter'
+import { dataKeyMergeNode } from '../definitions/dataKeyMerge'
+import { dataLimitNode } from '../definitions/dataLimit'
 import { xgboostShapNode } from '../definitions/xgboostShap'
 import { lassoNode } from '../definitions/lasso'
 import { pearsonNode } from '../definitions/pearson'
+import { fieldSelectionNode } from '../definitions/fieldSelection'
+import { sortNode } from '../definitions/sort'
 import { spearmanNode } from '../definitions/spearman'
 import { kendallNode } from '../definitions/kendall'
 import { dataExportNode } from '../definitions/dataExport'
@@ -103,6 +107,105 @@ describe('remaining nodes standardized result protocol', () => {
       originalCount: 3,
       filteredCount: 1,
     })
+  })
+
+  it('field-selection should return a standardized table result with field stats', async () => {
+    const result = await fieldSelectionNode.execute(
+      createTableResult([
+        { id: 1, city: '上海', score: 91 },
+        { id: 2, city: '北京', score: 77 },
+      ]),
+      {
+        mode: 'include',
+        fields: ['city'],
+      },
+    )
+
+    expect(result.kind).toBe('table')
+    expect(result.payload).toEqual([{ city: '上海' }, { city: '北京' }])
+    expect(result.meta?.stats).toMatchObject({
+      originalFieldCount: 3,
+      outputFieldCount: 1,
+      mode: 'include',
+    })
+  })
+
+  it('sort should return a standardized table result with rule stats', async () => {
+    const result = await sortNode.execute(
+      createTableResult([
+        { city: '上海', score: 82 },
+        { city: '北京', score: 91 },
+        { city: '上海', score: 91 },
+      ]),
+      {
+        sortRules: [
+          { field: 'score', direction: 'desc' },
+          { field: 'city', direction: 'asc' },
+        ],
+      },
+    )
+
+    expect(result.kind).toBe('table')
+    expect(result.payload).toEqual([
+      { city: '北京', score: 91 },
+      { city: '上海', score: 91 },
+      { city: '上海', score: 82 },
+    ])
+    expect(result.meta?.stats).toMatchObject({
+      ruleCount: 2,
+    })
+  })
+
+  it('data-limit should return a standardized table result with row limit stats', async () => {
+    const result = await dataLimitNode.execute(
+      createTableResult([{ id: 1 }, { id: 2 }, { id: 3 }]),
+      {
+        mode: 'head',
+        limit: 2,
+      },
+    )
+
+    expect(result.kind).toBe('table')
+    expect(result.payload).toEqual([{ id: 1 }, { id: 2 }])
+    expect(result.meta?.stats).toMatchObject({
+      originalCount: 3,
+      outputCount: 2,
+      mode: 'head',
+    })
+  })
+
+  it('data-key-merge should return a standardized table result with union key stats and lineage', async () => {
+    const result = await dataKeyMergeNode.execute(
+      {
+        inputs: [
+          {
+            sourceNodeId: 'source-a',
+            sourceNodeLabel: '来源A',
+            result: createTableResult([{ sku: 'A001', city: '上海' }]),
+          },
+          {
+            sourceNodeId: 'source-b',
+            sourceNodeLabel: '来源B',
+            result: createTableResult([{ code: 'A001', target: 1 }]),
+          },
+        ],
+      },
+      {
+        keyMappings: [
+          { sourceNodeId: 'source-a', mergeKey: 'sku', renamedKey: '样本编号' },
+          { sourceNodeId: 'source-b', mergeKey: 'code', renamedKey: '样本编号' },
+        ],
+      },
+    )
+
+    expect(result.kind).toBe('table')
+    expect(result.payload).toEqual([{ 样本编号: 'A001', city: '上海', target: 1 }])
+    expect(result.meta?.stats).toMatchObject({
+      inputCount: 2,
+      unionKeyCount: 1,
+      outputRows: 1,
+    })
+    expect(result.lineage?.fields?.target?.[0]?.sourceNodeId).toBe('source-b')
   })
 
   it('xgboost-shap should return a report result with metrics in meta', async () => {

@@ -251,6 +251,130 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       recommendedNextNodes: ['chart-display', 'pearson', 'data-profiling'],
     },
   ),
+  'field-selection': createEntry(
+    {
+      summary: '在进入算法或图表前，按字段名保留或排除你真正需要的列。',
+      whenToUse: ['上游表格字段很多，但下游算法或图表只需要其中一部分。'],
+      inputGuide: ['需要上游提供表格数据。', '字段名来自上游结果，可通过搜索或正则快速筛选。'],
+      parameterGuide: [
+        {
+          property: 'mode',
+          title: '选择模式',
+          content: '包含表示只保留选中字段，不包含表示从当前表格中删除选中字段。',
+        },
+      ],
+      outputGuide: ['输出结果仍是表格数据，但字段集合会缩减。'],
+      nextSteps: ['通常接相关性分析、图表展示或导出节点。'],
+      commonIssues: [
+        {
+          title: '输出字段为空',
+          resolution: '先确认字段选择模式是否正确，再检查搜索结果和已选字段是否匹配上游字段名。',
+        },
+      ],
+    },
+    {
+      useCases: ['为算法保留关键字段', '图表前裁剪字段', '按字段名做列级筛选'],
+      keywords: ['字段选择', '列筛选', '字段裁剪', '正则搜索'],
+      workflowRoles: ['数据准备'],
+      inputKinds: ['table'],
+      outputKinds: ['table'],
+      recommendedPrevNodes: ['file-import', 'data-cleaning', 'data-filter'],
+      recommendedNextNodes: ['pearson', 'chart-display', 'data-export'],
+    },
+  ),
+  sort: createEntry(
+    {
+      summary: '按多个优先级规则对数据行排序，支持升序和倒序组合。',
+      whenToUse: ['你需要先按分数、时间或类别顺序整理数据，再送入后续节点。'],
+      inputGuide: ['需要上游提供表格数据。', '排序规则的先后顺序就是优先级顺序。'],
+      parameterGuide: [
+        {
+          property: 'sortRules',
+          title: '排序规则',
+          content: '越靠前的规则优先级越高，当前规则相同的记录才会继续比较下一条规则。',
+        },
+      ],
+      outputGuide: ['输出结果是排序后的表格数据，字段结构保持不变。'],
+      nextSteps: ['排序后可继续接数据量限制、图表展示或导出。'],
+      commonIssues: [
+        {
+          title: '排序结果看起来不稳定',
+          resolution: '建议补充更细的后续排序规则，避免大量记录在前几条规则上完全相同。',
+        },
+      ],
+    },
+    {
+      useCases: ['按分数排序', '按多字段优先级排序', '结果展示前整理顺序'],
+      keywords: ['排序', '升序', '倒序', '多字段排序'],
+      workflowRoles: ['数据准备'],
+      inputKinds: ['table'],
+      outputKinds: ['table'],
+      recommendedPrevNodes: ['data-filter', 'field-selection'],
+      recommendedNextNodes: ['data-limit', 'chart-display', 'data-export'],
+    },
+  ),
+  'data-limit': createEntry(
+    {
+      summary: '截断表格数据量，只保留最前面或最后面的 n 条记录。',
+      whenToUse: ['你只想看头部样本、尾部样本，或在图表前控制数据规模。'],
+      inputGuide: ['需要上游提供表格数据。', '保留数量超过总行数时会直接返回全部数据。'],
+      parameterGuide: [
+        {
+          property: 'mode',
+          title: '保留方式',
+          content: '保留前 n 条适合看头部样本，保留后 n 条适合看尾部样本或最近记录。',
+        },
+      ],
+      outputGuide: ['输出结果是截断后的表格数据。'],
+      nextSteps: ['通常接图表展示、导出，或作为调试用的数据裁剪节点。'],
+      commonIssues: [
+        {
+          title: '结果条数少于预期',
+          resolution: '先检查上游是否已经筛选过数据，再确认保留数量是否设置正确。',
+        },
+      ],
+    },
+    {
+      useCases: ['截断大表', '保留头部样本', '保留尾部样本'],
+      keywords: ['限制数据量', '截断', '前 n 条', '后 n 条'],
+      workflowRoles: ['数据准备'],
+      inputKinds: ['table'],
+      outputKinds: ['table'],
+      recommendedPrevNodes: ['sort', 'data-filter'],
+      recommendedNextNodes: ['chart-display', 'data-export'],
+    },
+  ),
+  'data-key-merge': createEntry(
+    {
+      summary: '为每个上游输入指定自己的键字段，再按所有键的并集做对象级合并。',
+      whenToUse: ['多个来源的键字段名称不同，但你仍想按业务键把记录并成一张宽表。'],
+      inputGuide: ['这是一个多输入节点，至少需要两个上游输入。', '必须为每个来源配置自己的合并键和统一键名称。'],
+      parameterGuide: [
+        {
+          property: 'keyMappings',
+          title: '合并键配置',
+          content: '每个来源节点都要单独配置来源键字段。统一键名称会作为合并后的公共主键列。',
+        },
+      ],
+      outputGuide: ['输出结果是表格数据，所有来源字段会按键并到同一行，未命中的字段补 null。'],
+      nextSteps: ['合并后通常接字段选择、图表展示、相关性分析或导出。'],
+      commonIssues: [
+        {
+          title: '合并后很多字段是空值',
+          resolution: '通常是来源键字段选错，或不同来源的键值体系本身不一致。',
+        },
+      ],
+    },
+    {
+      useCases: ['不同键名的数据合并', '多输入宽表拼接', '按业务主键汇总多来源数据'],
+      keywords: ['按键合并', '多输入', '对象级合并', '键并集'],
+      workflowRoles: ['数据准备'],
+      inputKinds: ['table'],
+      outputKinds: ['table'],
+      recommendedPrevNodes: ['file-import', 'neighbor-system', 'data-cleaning'],
+      recommendedNextNodes: ['field-selection', 'pearson', 'chart-display', 'data-export'],
+    },
+  ),
   'data-profiling': createEntry(
     {
       summary: '自动识别字段类型和风险，快速看懂当前数据质量。',

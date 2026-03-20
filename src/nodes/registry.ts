@@ -8,6 +8,10 @@ import { dataProfilingNode } from './definitions/dataProfiling'
 import { dataAggregationNode } from './definitions/dataAggregation'
 import { dataMergeNode } from './definitions/dataMerge'
 import { dataFilterNode } from './definitions/dataFilter'
+import { fieldSelectionNode } from './definitions/fieldSelection'
+import { sortNode } from './definitions/sort'
+import { dataLimitNode } from './definitions/dataLimit'
+import { dataKeyMergeNode } from './definitions/dataKeyMerge'
 import { xgboostShapNode } from './definitions/xgboostShap'
 import { lassoNode } from './definitions/lasso'
 import { pearsonNode } from './definitions/pearson'
@@ -25,6 +29,10 @@ const rawNodeDefinitions: NodeDefinition[] = [
   dataAggregationNode,
   dataMergeNode,
   dataFilterNode,
+  fieldSelectionNode,
+  sortNode,
+  dataLimitNode,
+  dataKeyMergeNode,
   xgboostShapNode,
   lassoNode,
   pearsonNode,

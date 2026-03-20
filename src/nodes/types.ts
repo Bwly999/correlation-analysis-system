@@ -31,6 +31,8 @@ export type NodeExecuteFunction<TInput, TConfig, TOutput> = {
 export interface NodePropertyContext {
   config: Record<string, any>
   property: NodeProperty
+  nodeId?: string | null
+  inputData?: unknown
 }
 
 export interface NodeProperty {
@@ -60,6 +62,8 @@ export interface NodeProperty {
   useUpstreamFactors?: boolean
   editable?: boolean
   filterable?: boolean
+  allowRegexSearch?: boolean
+  filterPlaceholder?: string
   dateOnly?: boolean
   emptyMessage?: string
   dependencies?: string[]

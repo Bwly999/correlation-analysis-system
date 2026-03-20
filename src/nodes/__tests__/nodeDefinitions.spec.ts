@@ -35,12 +35,16 @@ import { dataCleaningNode } from '../definitions/dataCleaning'
 import { dataProfilingNode } from '../definitions/dataProfiling'
 import { dataAggregationNode } from '../definitions/dataAggregation'
 import { dataFilterNode } from '../definitions/dataFilter'
+import { dataKeyMergeNode } from '../definitions/dataKeyMerge'
+import { dataLimitNode } from '../definitions/dataLimit'
 import { xgboostShapNode } from '../definitions/xgboostShap'
 import { neighborSystemNode } from '../definitions/neighborSystem'
 import { chartDisplayNode } from '../definitions/chartDisplay'
 import { dataExportNode } from '../definitions/dataExport'
+import { fieldSelectionNode } from '../definitions/fieldSelection'
 import { lassoNode } from '../definitions/lasso'
 import { pearsonNode } from '../definitions/pearson'
+import { sortNode } from '../definitions/sort'
 import { spearmanNode } from '../definitions/spearman'
 import { kendallNode } from '../definitions/kendall'
 import { nodeDefinitions } from '../registry'
@@ -471,6 +475,186 @@ describe('Node Definitions Execution Logic', () => {
 
       expect(legacy.data).toHaveLength(2)
       expect(legacy.data.map((row: any) => row.city)).toEqual(['北京', '深圳'])
+    })
+  })
+
+  describe('field-selection', () => {
+    it('should keep only selected fields in include mode', async () => {
+      const input = createTableResult([
+        { id: 1, city: '上海', score: 91, target: 1 },
+        { id: 2, city: '北京', score: 77, target: 0 },
+      ])
+
+      const result = await fieldSelectionNode.execute(input, {
+        mode: 'include',
+        fields: ['city', 'score'],
+      })
+
+      const legacy = asLegacy(result)
+
+      expect(legacy.data).toEqual([
+        { city: '上海', score: 91 },
+        { city: '北京', score: 77 },
+      ])
+      expect(legacy.stats.originalFieldCount).toBe(4)
+      expect(legacy.stats.outputFieldCount).toBe(2)
+      expect(legacy.stats.mode).toBe('include')
+    })
+
+    it('should remove selected fields in exclude mode', async () => {
+      const input = createTableResult([
+        { id: 1, city: '上海', score: 91, target: 1 },
+        { id: 2, city: '北京', score: 77, target: 0 },
+      ])
+
+      const result = await fieldSelectionNode.execute(input, {
+        mode: 'exclude',
+        fields: ['target'],
+      })
+
+      const legacy = asLegacy(result)
+
+      expect(legacy.data).toEqual([
+        { id: 1, city: '上海', score: 91 },
+        { id: 2, city: '北京', score: 77 },
+      ])
+      expect(legacy.stats.outputFieldCount).toBe(3)
+    })
+  })
+
+  describe('sort', () => {
+    it('should sort rows by multiple priority rules', async () => {
+      const input = createTableResult([
+        { city: '上海', score: 82, order: 3 },
+        { city: '北京', score: 91, order: 2 },
+        { city: '上海', score: 91, order: 1 },
+        { city: '北京', score: 91, order: 4 },
+      ])
+
+      const result = await sortNode.execute(input, {
+        sortRules: [
+          { field: 'score', direction: 'desc' },
+          { field: 'city', direction: 'asc' },
+          { field: 'order', direction: 'asc' },
+        ],
+      })
+
+      const legacy = asLegacy(result)
+
+      expect(legacy.data).toEqual([
+        { city: '北京', score: 91, order: 2 },
+        { city: '北京', score: 91, order: 4 },
+        { city: '上海', score: 91, order: 1 },
+        { city: '上海', score: 82, order: 3 },
+      ])
+      expect(legacy.stats.ruleCount).toBe(3)
+    })
+  })
+
+  describe('data-limit', () => {
+    it('should keep the last n rows in tail mode', async () => {
+      const input = createTableResult([
+        { id: 1 },
+        { id: 2 },
+        { id: 3 },
+        { id: 4 },
+      ])
+
+      const result = await dataLimitNode.execute(input, {
+        mode: 'tail',
+        limit: 2,
+      })
+
+      const legacy = asLegacy(result)
+
+      expect(legacy.data).toEqual([{ id: 3 }, { id: 4 }])
+      expect(legacy.stats.originalCount).toBe(4)
+      expect(legacy.stats.outputCount).toBe(2)
+      expect(legacy.stats.mode).toBe('tail')
+    })
+  })
+
+  describe('data-key-merge', () => {
+    it('should merge multiple inputs by the union of configured keys and keep all fields', async () => {
+      const result = await dataKeyMergeNode.execute(
+        {
+          inputs: [
+            {
+              sourceNodeId: 'source-a',
+              sourceNodeLabel: '来源A',
+              result: createTableResult([
+                { sku: 'A001', city: '上海', score: 91 },
+                { sku: 'A002', city: '北京', score: 77 },
+              ]),
+            },
+            {
+              sourceNodeId: 'source-b',
+              sourceNodeLabel: '来源B',
+              result: createTableResult([
+                { code: 'A001', target: 1 },
+                { code: 'A003', target: 0 },
+              ]),
+            },
+            {
+              sourceNodeId: 'source-c',
+              sourceNodeLabel: '来源C',
+              result: createTableResult([
+                { batchNo: 'A002', level: '高' },
+                { batchNo: 'A004', level: '低' },
+              ]),
+            },
+          ],
+        },
+        {
+          keyMappings: [
+            { sourceNodeId: 'source-a', mergeKey: 'sku', renamedKey: '样本编号' },
+            { sourceNodeId: 'source-b', mergeKey: 'code', renamedKey: '样本编号' },
+            { sourceNodeId: 'source-c', mergeKey: 'batchNo', renamedKey: '样本编号' },
+          ],
+        },
+      )
+
+      const legacy = asLegacy(result)
+
+      expect(legacy.data).toEqual([
+        { 样本编号: 'A001', city: '上海', score: 91, target: 1, level: null },
+        { 样本编号: 'A002', city: '北京', score: 77, target: null, level: '高' },
+        { 样本编号: 'A003', city: null, score: null, target: 0, level: null },
+        { 样本编号: 'A004', city: null, score: null, target: null, level: '低' },
+      ])
+      expect(legacy.stats.inputCount).toBe(3)
+      expect(legacy.stats.outputRows).toBe(4)
+      expect(legacy.stats.unionKeyCount).toBe(4)
+    })
+
+    it('should suffix conflicting non-key fields from later inputs', async () => {
+      const result = await dataKeyMergeNode.execute(
+        {
+          inputs: [
+            {
+              sourceNodeId: 'source-a',
+              sourceNodeLabel: '来源A',
+              result: createTableResult([{ id: 'A001', value: 1 }]),
+            },
+            {
+              sourceNodeId: 'source-b',
+              sourceNodeLabel: '来源B',
+              result: createTableResult([{ code: 'A001', value: 2 }]),
+            },
+          ],
+        },
+        {
+          keyMappings: [
+            { sourceNodeId: 'source-a', mergeKey: 'id', renamedKey: '统一编号' },
+            { sourceNodeId: 'source-b', mergeKey: 'code', renamedKey: '统一编号' },
+          ],
+        },
+      )
+
+      const legacy = asLegacy(result)
+
+      expect(legacy.data).toEqual([{ 统一编号: 'A001', value: 1, value_来源B: 2 }])
+      expect(legacy.stats.conflictFieldCount).toBe(1)
     })
   })
 

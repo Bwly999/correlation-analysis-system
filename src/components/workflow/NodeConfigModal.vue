@@ -286,6 +286,8 @@ const openAnalysis = (title: string, data: any) => {
             v-model:config="config"
             :properties="runtimeProperties"
             :upstream-factors="upstreamFactors"
+            :node-id="node?.id"
+            :input-data="inputData"
           />
         </div>
       </div>
@@ -372,6 +374,8 @@ const openAnalysis = (title: string, data: any) => {
               v-model:config="config"
               :properties="staticProperties"
               :upstream-factors="upstreamFactors"
+              :node-id="node?.id"
+              :input-data="inputData"
               @save="saveAndClose"
             />
           </div>
