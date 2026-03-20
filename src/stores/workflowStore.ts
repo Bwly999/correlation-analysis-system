@@ -93,6 +93,8 @@ export const useWorkflowStore = defineStore('workflow', () => {
     return refreshWorkflows()
   }
 
+  const getDuplicatedWorkflowName = (name: string) => `${name} (副本)`
+
   const deleteWorkflow = async (id: string) => {
     await storageProvider.deleteWorkflow(id)
     const updated = await refreshWorkflows()
@@ -206,14 +208,15 @@ export const useWorkflowStore = defineStore('workflow', () => {
     }
   }
 
-  const duplicateWorkflow = async (id: string) => {
+  const duplicateWorkflow = async (id: string, name?: string) => {
     const original = await storageProvider.getWorkflow(id)
     if (original) {
       const newId = `wf_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`
+      const duplicatedName = name?.trim() || getDuplicatedWorkflowName(original.name)
       const duplicated: SavedWorkflow = {
         ...original,
         id: newId,
-        name: `${original.name} (副本)`,
+        name: duplicatedName,
         nodes: serializeWorkflowNodes(resetWorkflowNodeRuntimeState(original.nodes)),
         updatedAt: Date.now(),
       }
@@ -937,6 +940,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     loadWorkflow,
     deleteWorkflow,
     duplicateWorkflow,
+    getDuplicatedWorkflowName,
     duplicateNode,
     removeNode,
     removeEdge,

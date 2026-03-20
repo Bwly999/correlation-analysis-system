@@ -4,6 +4,7 @@ import { useWorkflowStore } from '@/stores/workflowStore'
 import { type SavedWorkflow, type ExecutionRecord } from '@/utils/storage'
 import Dialog from 'primevue/dialog'
 import Button from 'primevue/button'
+import InputText from 'primevue/inputtext'
 import Tabs from 'primevue/tabs'
 import TabList from 'primevue/tablist'
 import Tab from 'primevue/tab'
@@ -35,6 +36,9 @@ const store = useWorkflowStore()
 const confirm = useConfirm()
 
 const activeTab = ref('0')
+const duplicateDialogVisible = ref(false)
+const duplicateSourceWorkflowId = ref<string | null>(null)
+const duplicateWorkflowName = ref('')
 
 const loadData = async () => {
   await store.getSavedWorkflows()
@@ -61,8 +65,24 @@ const handleLoadWorkflow = async (id: string) => {
   emit('load-workflow', id)
 }
 
-const handleDuplicateWorkflow = async (id: string) => {
-  await store.duplicateWorkflow(id)
+const openDuplicateWorkflowDialog = (workflow: SavedWorkflow) => {
+  duplicateSourceWorkflowId.value = workflow.id
+  duplicateWorkflowName.value = store.getDuplicatedWorkflowName(workflow.name)
+  duplicateDialogVisible.value = true
+}
+
+const closeDuplicateWorkflowDialog = () => {
+  duplicateDialogVisible.value = false
+  duplicateSourceWorkflowId.value = null
+  duplicateWorkflowName.value = ''
+}
+
+const duplicateWorkflowNameTrimmed = computed(() => duplicateWorkflowName.value.trim())
+
+const handleDuplicateWorkflow = async () => {
+  if (!duplicateSourceWorkflowId.value || !duplicateWorkflowNameTrimmed.value) return
+  await store.duplicateWorkflow(duplicateSourceWorkflowId.value, duplicateWorkflowNameTrimmed.value)
+  closeDuplicateWorkflowDialog()
 }
 
 const handleDeleteWorkflow = (id: string) => {
@@ -185,8 +205,9 @@ const handleClearHistory = async () => {
                       severity="secondary"
                       text
                       size="small"
+                      data-testid="duplicate-workflow-button"
                       class="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50"
-                      @click="handleDuplicateWorkflow(wf.id)"
+                      @click="openDuplicateWorkflowDialog(wf)"
                       ><Copy :size="16"
                     /></Button>
                     <Button
@@ -280,6 +301,46 @@ const handleClearHistory = async () => {
         </TabPanels>
       </Tabs>
     </div>
+  </Dialog>
+
+  <Dialog
+    :visible="duplicateDialogVisible"
+    modal
+    :closable="false"
+    :style="{ width: '420px' }"
+    @update:visible="(value) => !value && closeDuplicateWorkflowDialog()"
+  >
+    <template #header>
+      <div class="flex flex-col gap-1">
+        <span class="text-base font-bold text-slate-900">设置新工作流名称</span>
+        <span class="text-sm text-slate-500">复制后将以新名称创建一份独立工作流。</span>
+      </div>
+    </template>
+
+    <div class="flex flex-col gap-3 py-2">
+      <label for="duplicate-workflow-name" class="text-sm font-medium text-slate-700">
+        新工作流名称
+      </label>
+      <InputText
+        id="duplicate-workflow-name"
+        v-model="duplicateWorkflowName"
+        autofocus
+        placeholder="请输入工作流名称"
+      />
+      <p class="text-xs text-slate-500">默认名称已自动生成，你也可以按需修改。</p>
+    </div>
+
+    <template #footer>
+      <div class="flex justify-end gap-3 pt-2">
+        <Button label="取消" severity="secondary" outlined @click="closeDuplicateWorkflowDialog" />
+        <Button
+          data-testid="confirm-duplicate-workflow-button"
+          label="确认复制"
+          :disabled="!duplicateWorkflowNameTrimmed"
+          @click="handleDuplicateWorkflow"
+        />
+      </div>
+    </template>
   </Dialog>
 </template>
 

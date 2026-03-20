@@ -758,5 +758,18 @@ describe('Workflow Store', () => {
     expect(duplicated.data.status).toBe('idle')
     expect(duplicated.data.output).toBeNull()
   })
+
+  it('should duplicate a workflow with a custom name', async () => {
+    const store = useWorkflowStore()
+
+    await store.saveWorkflow('原始工作流')
+
+    const duplicated = await store.duplicateWorkflow(store.currentWorkflowId!, '新的工作流名称')
+
+    expect(duplicated).not.toBeNull()
+    expect(store.savedWorkflows).toHaveLength(2)
+    expect(store.savedWorkflows.some((workflow) => workflow.name === '新的工作流名称')).toBe(true)
+    expect(store.logs.some((log) => log.message.includes('新的工作流名称'))).toBe(true)
+  })
 })
 
