@@ -191,9 +191,10 @@ describe('remaining nodes standardized result protocol', () => {
         ],
       },
       {
+        unifiedKeyName: '样本编号',
         keyMappings: [
-          { sourceNodeId: 'source-a', mergeKey: 'sku', renamedKey: '样本编号' },
-          { sourceNodeId: 'source-b', mergeKey: 'code', renamedKey: '样本编号' },
+          { sourceNodeId: 'source-a', mergeKey: 'sku' },
+          { sourceNodeId: 'source-b', mergeKey: 'code' },
         ],
       },
     )

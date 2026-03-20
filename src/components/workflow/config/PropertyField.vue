@@ -3,6 +3,7 @@ import { computed, ref, watch, defineAsyncComponent } from 'vue'
 import { HelpCircle, Trash2, Settings, FileType, Search, LoaderCircle } from 'lucide-vue-next'
 import { type NodeProperty } from '@/nodes/types'
 import { useWorkflowStore } from '@/stores/workflowStore'
+import { FilterService } from '@primevue/core/api'
 
 import Select from 'primevue/select'
 import MultiSelect from 'primevue/multiselect'
@@ -17,6 +18,29 @@ import SelectButton from 'primevue/selectbutton'
 import Textarea from 'primevue/textarea'
 
 const MonacoEditor = defineAsyncComponent(() => import('../MonacoEditor.vue'))
+
+const REGEX_FILTER_MODE = 'custom_regex'
+const primeFilterService = FilterService as typeof FilterService & {
+  filters: Record<string, unknown>
+  register: (rule: string, fn: (value: unknown, filter: unknown) => boolean) => void
+}
+
+if (!(REGEX_FILTER_MODE in primeFilterService.filters)) {
+  primeFilterService.register(REGEX_FILTER_MODE, (value: unknown, filter: unknown) => {
+    if (filter === undefined || filter === null || filter === '') {
+      return true
+    }
+    if (value === undefined || value === null) {
+      return false
+    }
+
+    try {
+      return new RegExp(String(filter), 'i').test(String(value))
+    } catch {
+      return false
+    }
+  })
+}
 
 defineOptions({
   name: 'PropertyField',
@@ -36,8 +60,10 @@ const store = useWorkflowStore()
 const autoCompleteRef = ref<any>(null)
 const filteredFactors = ref<string[]>([])
 const treeFilterQuery = ref('')
-const multiOptionsFilterQuery = ref('')
+const optionsRegexEnabled = ref(false)
+const optionsFilterQuery = ref('')
 const multiOptionsRegexEnabled = ref(false)
+const multiOptionsFilterQuery = ref('')
 const remoteOptions = ref<any[]>([])
 const isOptionsLoading = ref(false)
 const optionsError = ref('')
@@ -184,37 +210,113 @@ const filteredTreeOptions = computed(() =>
   filterTreeNodes(optionSource.value, treeFilterQuery.value),
 )
 
-const normalizeOptionLabel = (option: any) =>
-  String(option?.name ?? option?.label ?? option?.value ?? '')
+const confirmEditableMultiOption = (event?: KeyboardEvent) => {
+  const target = event?.target as HTMLInputElement | null
+  const value = (target?.value ?? multiOptionsFilterQuery.value).trim()
+  if (!value) return
 
-const filteredMultiOptions = computed(() => {
-  if (props.prop.type !== 'multi-options' || !props.prop.filterable) {
-    multiOptionsFilterError.value = ''
-    return optionSource.value
+  const nextValues = Array.isArray(configValue.value) ? [...configValue.value] : []
+  if (!nextValues.includes(value)) {
+    nextValues.push(value)
+    configValue.value = nextValues
   }
 
-  const query = multiOptionsFilterQuery.value.trim()
-  if (!query) {
-    multiOptionsFilterError.value = ''
-    return optionSource.value
-  }
-
-  if (props.prop.allowRegexSearch && multiOptionsRegexEnabled.value) {
-    try {
-      const regex = new RegExp(query, 'i')
-      multiOptionsFilterError.value = ''
-      return optionSource.value.filter((option) => regex.test(normalizeOptionLabel(option)))
-    } catch {
-      multiOptionsFilterError.value = '正则表达式无效，请检查输入格式'
-      return []
-    }
-  }
-
+  multiOptionsFilterQuery.value = ''
   multiOptionsFilterError.value = ''
-  return optionSource.value.filter((option) =>
-    normalizeOptionLabel(option).toLowerCase().includes(query.toLowerCase()),
-  )
+  if (target) target.value = ''
+  event?.preventDefault()
+}
+
+const updateRegexError = (query: string, enabled: boolean, setter: (value: string) => void) => {
+  if (!enabled || !query.trim()) {
+    setter('')
+    return
+  }
+
+  try {
+    void new RegExp(query, 'i')
+    setter('')
+  } catch {
+    setter('正则表达式无效，请检查输入格式')
+  }
+}
+
+const onOptionsFilterInput = (event: Event) => {
+  const value = (event.target as HTMLInputElement | null)?.value ?? ''
+  optionsFilterQuery.value = value
+  updateRegexError(value, optionsRegexEnabled.value, (next) => {
+    optionsError.value = next
+  })
+}
+
+const onMultiOptionsFilterInput = (event: Event) => {
+  const value = (event.target as HTMLInputElement | null)?.value ?? ''
+  multiOptionsFilterQuery.value = value
+  updateRegexError(value, multiOptionsRegexEnabled.value, (next) => {
+    multiOptionsFilterError.value = next
+  })
+}
+
+const optionsFilterInputProps = computed(() => {
+  return {
+    onInput: onOptionsFilterInput,
+    'data-testid': 'options-filter-input',
+  }
 })
+
+const multiOptionsFilterInputProps = computed(() => {
+  return {
+    onInput: onMultiOptionsFilterInput,
+    onKeydown: (event: KeyboardEvent) => {
+      if (event.key === 'Enter') {
+        confirmEditableMultiOption(event)
+      }
+    },
+    'data-testid': 'multi-options-filter-input',
+  }
+})
+
+const optionFilterMatchMode = computed(() =>
+  optionsRegexEnabled.value ? REGEX_FILTER_MODE : 'contains',
+)
+
+const multiOptionsFilterMatchMode = computed(() =>
+  multiOptionsRegexEnabled.value ? REGEX_FILTER_MODE : 'contains',
+)
+
+const toggleOptionsRegexMode = (event?: Event) => {
+  event?.preventDefault()
+  event?.stopPropagation()
+  optionsRegexEnabled.value = !optionsRegexEnabled.value
+  updateRegexError(optionsFilterQuery.value, optionsRegexEnabled.value, (next) => {
+    optionsError.value = next
+  })
+}
+
+const toggleMultiOptionsRegexMode = (event?: Event) => {
+  event?.preventDefault()
+  event?.stopPropagation()
+  multiOptionsRegexEnabled.value = !multiOptionsRegexEnabled.value
+  updateRegexError(multiOptionsFilterQuery.value, multiOptionsRegexEnabled.value, (next) => {
+    multiOptionsFilterError.value = next
+  })
+}
+
+const getRegexToggleClass = (enabled: boolean) => [
+  'flex',
+  'h-6',
+  'w-6',
+  'items-center',
+  'justify-center',
+  'rounded-md',
+  'border',
+  'text-[10px]',
+  'font-bold',
+  'transition-all',
+  enabled
+    ? '!border-blue-300 !bg-blue-50 !text-blue-600 shadow-sm'
+    : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:bg-slate-50',
+]
 </script>
 
 <template>
@@ -314,57 +416,51 @@ const filteredMultiOptions = computed(() => {
       :options="optionSource"
       option-label="name"
       option-value="value"
+      :filter="true"
+      :filter-match-mode="optionFilterMatchMode"
+      :filter-input-props="optionsFilterInputProps"
       :editable="prop.editable"
+      :empty-filter-message="optionsError || undefined"
       :placeholder="prop.placeholder"
       class="w-full ndv-input"
-    />
+    >
+      <template v-if="prop.allowRegexSearch" #filtericon>
+        <button
+          type="button"
+          data-testid="options-regex-toggle"
+          :class="getRegexToggleClass(optionsRegexEnabled)"
+          @mousedown.prevent
+          @click="toggleOptionsRegexMode"
+        >
+          .*
+        </button>
+      </template>
+    </Select>
 
     <MultiSelect
       v-else-if="prop.type === 'multi-options'"
       v-model="configValue"
-      :options="filteredMultiOptions"
+      :options="optionSource"
       option-label="name"
       option-value="value"
+      :filter="true"
+      :filter-match-mode="multiOptionsFilterMatchMode"
+      :filter-input-props="multiOptionsFilterInputProps"
+      :empty-filter-message="multiOptionsFilterError || undefined"
       display="chip"
       :placeholder="prop.placeholder"
-      class="w-full text-xs ndv-input"
+      class="w-full text-xs ndv-input ndv-multi-options"
     >
-      <template v-if="prop.filterable" #header>
-        <div class="space-y-2 border-b border-slate-100 bg-slate-50/80 p-3">
-          <div class="relative">
-            <Search
-              :size="14"
-              class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-            />
-            <InputText
-              v-model="multiOptionsFilterQuery"
-              class="w-full !h-9 !rounded-lg !border-slate-200 !bg-white !pl-9 !text-xs"
-              :placeholder="prop.filterPlaceholder || '搜索选项'"
-            />
-          </div>
-          <div
-            v-if="prop.allowRegexSearch"
-            class="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2"
-          >
-            <span class="text-[11px] font-semibold text-slate-500">正则搜索</span>
-            <button
-              type="button"
-              data-testid="multi-options-regex-toggle"
-              class="rounded-md border px-2 py-1 text-[11px] font-semibold transition-colors"
-              :class="
-                multiOptionsRegexEnabled
-                  ? 'border-blue-200 bg-blue-50 text-blue-600'
-                  : 'border-slate-200 bg-slate-50 text-slate-500'
-              "
-              @click="multiOptionsRegexEnabled = !multiOptionsRegexEnabled"
-            >
-              {{ multiOptionsRegexEnabled ? '已开启' : '未开启' }}
-            </button>
-          </div>
-          <div v-if="multiOptionsFilterError" class="text-[11px] text-rose-500">
-            {{ multiOptionsFilterError }}
-          </div>
-        </div>
+      <template v-if="prop.allowRegexSearch" #filtericon>
+        <button
+          type="button"
+          data-testid="multi-options-regex-toggle"
+          :class="getRegexToggleClass(multiOptionsRegexEnabled)"
+          @mousedown.prevent
+          @click="toggleMultiOptionsRegexMode"
+        >
+          .*
+        </button>
       </template>
     </MultiSelect>
 
@@ -511,6 +607,28 @@ const filteredMultiOptions = computed(() => {
   border-color: #e2e8f0 !important;
   background-color: #ffffff !important;
   border-radius: 12px !important;
+}
+
+:deep(.ndv-multi-options) {
+  min-height: 42px;
+}
+
+:deep(.ndv-multi-options .p-multiselect-label-container) {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+}
+
+:deep(.ndv-multi-options .p-multiselect-label) {
+  min-height: 42px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+}
+
+:deep(.ndv-multi-options .p-multiselect-dropdown) {
+  width: 42px;
 }
 
 .custom-textarea::-webkit-scrollbar {

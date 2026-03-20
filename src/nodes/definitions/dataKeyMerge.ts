@@ -8,10 +8,10 @@ type KeyMergeInput = MultipleNodeExecutionInput
 type KeyMapping = {
   sourceNodeId?: string
   mergeKey?: string
-  renamedKey?: string
 }
 
 type KeyMergeConfig = {
+  unifiedKeyName?: string
   keyMappings?: KeyMapping[]
 }
 
@@ -19,11 +19,13 @@ type DatasetContext = {
   item: KeyMergeItem
   rows: Array<Record<string, unknown>>
   mergeKey: string
-  renamedKey: string
   suffix: string
 }
 
 const normalizeKey = (value: unknown) => String(value ?? '')
+
+const rowValueOrNull = (row: Record<string, unknown>, field: string) =>
+  field in row ? row[field] : null
 
 const getRows = (item: KeyMergeItem) => {
   const rows = extractTableRows(item.result)
@@ -51,20 +53,27 @@ const getSourceOptions = (inputData: unknown) => {
 
 export const dataKeyMergeNode: NodeDefinition<KeyMergeInput | null, KeyMergeConfig> = {
   name: 'data-key-merge',
-  displayName: '按键合并',
+  displayName: '字段合并',
   icon: 'combine',
   category: 'action',
-  description: '按各输入节点指定的键字段做对象级合并，并保留所有键的并集。',
+  description: '按各输入节点指定的来源键字段做对象级合并，并在结果中统一输出一个字段名作为合并键。',
   inputMode: 'multiple',
   minInputs: 2,
   maxInputs: null,
   properties: [
     {
+      name: 'unifiedKeyName',
+      displayName: '统一键名称',
+      type: 'string',
+      default: '合并键',
+      description: '合并后输出结果中统一保留的键字段名称，原始各来源键字段会被移除。',
+    },
+    {
       name: 'keyMappings',
-      displayName: '合并键配置',
+      displayName: '来源键配置',
       type: 'collection',
       default: [],
-      description: '为每个上游输入配置自己的合并键与统一键名。',
+      description: '为每个上游输入配置自己的来源键字段。',
       properties: [
         {
           name: 'sourceNodeId',
@@ -84,20 +93,13 @@ export const dataKeyMergeNode: NodeDefinition<KeyMergeInput | null, KeyMergeConf
           editable: true,
           description: '该来源中用于匹配的字段名。',
         },
-        {
-          name: 'renamedKey',
-          displayName: '统一键名称',
-          type: 'string',
-          default: '合并键',
-          description: '合并后输出表中的统一键字段名称。',
-        },
       ],
     },
   ],
   execute: async (input, config) => {
     const items = Array.isArray(input?.inputs) ? input.inputs : []
     if (items.length < 2) {
-      throw new Error('按键合并至少需要 2 个输入')
+      throw new Error('字段合并至少需要 2 个输入')
     }
 
     const keyMappings = Array.isArray(config.keyMappings) ? config.keyMappings : []
@@ -108,25 +110,24 @@ export const dataKeyMergeNode: NodeDefinition<KeyMergeInput | null, KeyMergeConf
         typeof mapping?.mergeKey === 'string' && mapping.mergeKey.trim()
           ? mapping.mergeKey.trim()
           : ''
-      const renamedKey =
-        typeof mapping?.renamedKey === 'string' && mapping.renamedKey.trim()
-          ? mapping.renamedKey.trim()
-          : '合并键'
 
       if (!mergeKey) {
-        throw new Error(`请为节点 ${item.sourceNodeLabel} 配置合并键`)
+        throw new Error(`请为节点 ${item.sourceNodeLabel} 配置来源键字段`)
       }
 
       return {
         item,
         rows,
         mergeKey,
-        renamedKey,
         suffix: sanitizeSuffix(item.sourceNodeLabel, `来源${index + 1}`),
       }
     })
 
-    const unifiedKeyName = datasetContexts[0]?.renamedKey ?? '合并键'
+    const unifiedKeyName =
+      typeof config.unifiedKeyName === 'string' && config.unifiedKeyName.trim()
+        ? config.unifiedKeyName.trim()
+        : '合并键'
+
     const unionKeys = [
       ...new Set(
         datasetContexts.flatMap(({ rows, mergeKey }) =>
@@ -137,7 +138,9 @@ export const dataKeyMergeNode: NodeDefinition<KeyMergeInput | null, KeyMergeConf
 
     const fieldsBySource = new Map<string, string[]>()
     datasetContexts.forEach(({ item, rows, mergeKey }) => {
-      const fields = [...new Set(rows.flatMap((row) => Object.keys(row).filter((field) => field !== mergeKey)))]
+      const fields = [
+        ...new Set(rows.flatMap((row) => Object.keys(row).filter((field) => field !== mergeKey))),
+      ]
       fieldsBySource.set(item.sourceNodeId, fields)
     })
 
@@ -155,8 +158,7 @@ export const dataKeyMergeNode: NodeDefinition<KeyMergeInput | null, KeyMergeConf
 
         fields.forEach((field) => {
           const incomingValue = matchedRow ? rowValueOrNull(matchedRow, field) : null
-          const targetField =
-            field in mergedRow ? `${field}_${suffix}` : field
+          const targetField = field in mergedRow ? `${field}_${suffix}` : field
 
           if (field in mergedRow) {
             conflicts.add(field)
@@ -164,6 +166,7 @@ export const dataKeyMergeNode: NodeDefinition<KeyMergeInput | null, KeyMergeConf
 
           mergedRow[targetField] = incomingValue
           lineageFields[targetField] ??= []
+
           if (
             !lineageFields[targetField].some(
               (entry) => entry.sourceNodeId === item.sourceNodeId && entry.sourceField === field,
@@ -199,6 +202,3 @@ export const dataKeyMergeNode: NodeDefinition<KeyMergeInput | null, KeyMergeConf
     })
   },
 }
-
-const rowValueOrNull = (row: Record<string, unknown>, field: string) =>
-  field in row ? row[field] : null

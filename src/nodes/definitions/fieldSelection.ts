@@ -34,6 +34,7 @@ export const fieldSelectionNode: NodeDefinition<unknown, FieldSelectionConfig> =
       displayName: '目标字段',
       type: 'multi-options',
       default: [],
+      editable: true,
       useUpstreamFactors: true,
       filterable: true,
       allowRegexSearch: true,

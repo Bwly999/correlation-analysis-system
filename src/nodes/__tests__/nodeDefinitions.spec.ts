@@ -575,6 +575,10 @@ describe('Node Definitions Execution Logic', () => {
   })
 
   describe('data-key-merge', () => {
+    it('should expose field merge display name', () => {
+      expect(dataKeyMergeNode.displayName).toBe('字段合并')
+    })
+
     it('should merge multiple inputs by the union of configured keys and keep all fields', async () => {
       const result = await dataKeyMergeNode.execute(
         {
@@ -606,10 +610,11 @@ describe('Node Definitions Execution Logic', () => {
           ],
         },
         {
+          unifiedKeyName: '样本编号',
           keyMappings: [
-            { sourceNodeId: 'source-a', mergeKey: 'sku', renamedKey: '样本编号' },
-            { sourceNodeId: 'source-b', mergeKey: 'code', renamedKey: '样本编号' },
-            { sourceNodeId: 'source-c', mergeKey: 'batchNo', renamedKey: '样本编号' },
+            { sourceNodeId: 'source-a', mergeKey: 'sku' },
+            { sourceNodeId: 'source-b', mergeKey: 'code' },
+            { sourceNodeId: 'source-c', mergeKey: 'batchNo' },
           ],
         },
       )
@@ -644,9 +649,10 @@ describe('Node Definitions Execution Logic', () => {
           ],
         },
         {
+          unifiedKeyName: '统一编号',
           keyMappings: [
-            { sourceNodeId: 'source-a', mergeKey: 'id', renamedKey: '统一编号' },
-            { sourceNodeId: 'source-b', mergeKey: 'code', renamedKey: '统一编号' },
+            { sourceNodeId: 'source-a', mergeKey: 'id' },
+            { sourceNodeId: 'source-b', mergeKey: 'code' },
           ],
         },
       )
