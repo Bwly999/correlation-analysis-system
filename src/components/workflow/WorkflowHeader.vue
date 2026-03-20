@@ -15,13 +15,14 @@ import {
   Clock,
   CheckCircle2,
   AlertCircle,
+  HelpCircle,
 } from 'lucide-vue-next'
 import Button from 'primevue/button'
 import Menu from 'primevue/menu'
 import Popover from 'primevue/popover'
 import { useToast } from 'primevue/usetoast'
 
-const emit = defineEmits(['open-projects', 'new-workflow', 'import-workflow'])
+const emit = defineEmits(['open-projects', 'new-workflow', 'import-workflow', 'open-help'])
 const store = useWorkflowStore()
 const toast = useToast()
 
@@ -227,6 +228,11 @@ const formatDuration = (ms: number) => {
         <span>保存</span>
       </Button>
 
+      <Button v-if="!store.isHistoryMode" class="help-btn" @click="emit('open-help')">
+        <HelpCircle :size="14" />
+        <span>帮助</span>
+      </Button>
+
       <button v-if="!store.isHistoryMode" class="file-btn" @click="toggleMenu">
         <FileUp :size="14" />
         <span>文件</span>
@@ -334,6 +340,27 @@ const formatDuration = (ms: number) => {
   border-color: #b8c7da;
   background: #f8fafc;
   color: #0f172a;
+}
+
+.help-btn {
+  height: 2rem;
+  padding: 0 0.875rem;
+  border-radius: 0.625rem;
+  border: 1px solid #cbd5e1;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  color: #334155;
+  font-size: 12px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  transition: all 0.2s ease;
+}
+
+.help-btn:hover {
+  border-color: #93c5fd;
+  background: #eff6ff;
+  color: #1d4ed8;
 }
 
 .file-btn {

@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest'
 
 const files = [
   path.resolve(__dirname, '../RuntimeInputModal.vue'),
+  path.resolve(__dirname, '../HelpCenterModal.vue'),
+  path.resolve(__dirname, '../help/NodeHelpPanel.vue'),
   path.resolve(__dirname, '../config/RuntimeInputs.vue'),
   path.resolve(__dirname, '../config/PropertyField.vue'),
 ]

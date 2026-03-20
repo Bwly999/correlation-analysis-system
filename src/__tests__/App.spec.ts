@@ -5,6 +5,12 @@ import PrimeVue from 'primevue/config'
 import Tooltip from 'primevue/tooltip'
 import App from '../App.vue'
 
+vi.mock('primevue/usetoast', () => ({
+  useToast: () => ({
+    add: vi.fn(),
+  }),
+}))
+
 // Mock Monaco Editor
 vi.mock('monaco-editor', () => ({
   editor: {
@@ -40,12 +46,7 @@ describe('App', () => {
           tooltip: Tooltip,
         },
         stubs: {
-          // Stub out complex canvas to avoid deep DOM issues in unit tests
-          VueFlow: true,
-          NodeSidebar: true,
-          LogPanel: true,
-          MonacoEditor: true,
-          WorkflowManagerModal: true, // Stub out newly created modal
+          WorkflowCanvas: { template: '<div class="workflow-canvas-stub" />' },
         },
       },
       attachTo: document.getElementById('app') as HTMLElement,

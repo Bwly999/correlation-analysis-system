@@ -1,4 +1,5 @@
 import type { NodeResult } from './result'
+import type { NodeAssistantHints, NodeHelpDoc } from '@/help/types'
 
 export type NodeCategory = 'trigger' | 'action' | 'terminal'
 export type NodeInputMode = 'single' | 'multiple'
@@ -76,6 +77,8 @@ export interface NodeDefinition<
   icon: string
   category: NodeCategory
   description: string
+  help?: NodeHelpDoc
+  assistantHints?: NodeAssistantHints
   properties: NodeProperty[]
   inputMode?: NodeInputMode
   minInputs?: number

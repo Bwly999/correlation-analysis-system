@@ -1,7 +1,7 @@
 ﻿<script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import type { Edge } from '@vue-flow/core'
-import { Loader2, Bug } from 'lucide-vue-next'
+import { Loader2, Bug, HelpCircle } from 'lucide-vue-next'
 import { useWorkflowStore } from '@/stores/workflowStore'
 import { getNodeDefinition } from '@/nodes/registry'
 import type { WorkflowNode } from '@/utils/storage'
@@ -13,6 +13,7 @@ import ConfigHeader from './config/ConfigHeader.vue'
 import ConfigFooter from './config/ConfigFooter.vue'
 import ConfigForm from './config/ConfigForm.vue'
 import RuntimeInputs from './config/RuntimeInputs.vue'
+import NodeHelpPanel from './help/NodeHelpPanel.vue'
 import {
   getResultRows,
   getResultSchemaFields,
@@ -47,6 +48,7 @@ const editedName = ref('')
 const localIsPinned = ref(false)
 const localUseManualInput = ref(false)
 const localManualInput = ref('')
+const isHelpDialogVisible = ref(false)
 
 // 深度分析弹窗状态
 const analysisModal = ref({ visible: false, title: '', data: null })
@@ -78,7 +80,22 @@ const startResizingLeft = (e: MouseEvent) => {
 }
 
 // 获取当前节点的定义
-const nodeDefinition = computed(() => (node.value ? getNodeDefinition(node.value.data.type) : null))
+const nodeDefinition = computed(() => (node.value ? getNodeDefinition(node.value.data.type) ?? null : null))
+const nodeHelpSummary = computed(() => {
+  if (!nodeDefinition.value) {
+    return {
+      title: '未找到节点定义',
+      summary: '暂时无法展示帮助，请先检查节点类型是否有效。',
+      tone: 'warning',
+    } as const
+  }
+
+  return {
+    title: '节点简介',
+    summary: nodeDefinition.value.help?.summary ?? nodeDefinition.value.description,
+    tone: 'default',
+  } as const
+})
 
 const runtimeProperties = computed(
   () => nodeDefinition.value?.properties.filter((p) => p.isRuntimeInput) || [],
@@ -97,6 +114,7 @@ watch(
       localUseManualInput.value = node.value.data.useManualInput || false
       localManualInput.value = node.value.data.manualInput || ''
       activeTab.value = 'parameters'
+      isHelpDialogVisible.value = false
 
       const baseConfig = { ...node.value.data.config }
       nodeDefinition.value?.properties.forEach((p) => {
@@ -313,13 +331,50 @@ const openAnalysis = (title: string, data: any) => {
         </div>
 
         <div class="flex-1 p-8 overflow-y-auto custom-scrollbar bg-white min-h-0">
-          <ConfigForm
-            v-if="activeTab === 'parameters'"
-            v-model:config="config"
-            :properties="staticProperties"
-            :upstream-factors="upstreamFactors"
-            @save="saveAndClose"
-          />
+          <div v-if="activeTab === 'parameters'" class="mx-auto max-w-3xl space-y-6">
+            <div
+              class="flex items-center gap-3 rounded-2xl border px-4 py-3"
+              :class="
+                nodeHelpSummary.tone === 'warning'
+                  ? 'border-amber-200 bg-amber-50'
+                  : 'border-slate-200 bg-slate-50/85'
+              "
+            >
+              <div
+                class="shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em]"
+                :class="
+                  nodeHelpSummary.tone === 'warning'
+                    ? 'bg-amber-100 text-amber-700'
+                    : 'bg-white text-slate-500 border border-slate-200'
+                "
+              >
+                {{ nodeHelpSummary.title }}
+              </div>
+
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-sm font-medium text-slate-700">
+                  <span class="text-slate-900">{{ nodeDefinition?.displayName ?? node?.data.label }}</span>
+                  <span class="mx-2 text-slate-300">·</span>
+                  <span>{{ nodeHelpSummary.summary }}</span>
+                </p>
+              </div>
+
+              <button
+                v-if="nodeDefinition"
+                data-testid="node-help-trigger"
+                class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:border-blue-200 hover:text-blue-600"
+                @click="isHelpDialogVisible = true"
+              >
+                <HelpCircle :size="16" />
+              </button>
+            </div>
+            <ConfigForm
+              v-model:config="config"
+              :properties="staticProperties"
+              :upstream-factors="upstreamFactors"
+              @save="saveAndClose"
+            />
+          </div>
           <div
             v-else
             class="flex flex-col items-center justify-center h-full text-slate-400 italic"
@@ -351,6 +406,32 @@ const openAnalysis = (title: string, data: any) => {
       :data="analysisModal.data"
       @close="analysisModal.visible = false"
     />
+
+    <Dialog
+      :visible="isHelpDialogVisible"
+      modal
+      class="node-help-dialog"
+      :style="{ width: 'min(840px, 88vw)', maxHeight: '80vh' }"
+      @update:visible="isHelpDialogVisible = false"
+    >
+      <template #header>
+        <div class="flex items-center gap-3">
+          <div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+            <HelpCircle :size="18" />
+          </div>
+          <div>
+            <div class="text-base font-semibold text-slate-900">节点使用帮助</div>
+            <p class="mt-1 text-sm text-slate-500">
+              {{ nodeDefinition?.displayName ?? node?.data.label }}
+            </p>
+          </div>
+        </div>
+      </template>
+
+      <div class="max-h-[62vh] overflow-y-auto pr-1">
+        <NodeHelpPanel :node-definition="nodeDefinition" />
+      </div>
+    </Dialog>
   </Dialog>
 </template>
 

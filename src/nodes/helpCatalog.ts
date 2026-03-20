@@ -1,0 +1,491 @@
+import type { NodeAssistantHints, NodeHelpDoc } from '@/help/types'
+import type { NodeDefinition } from './types'
+
+type NodeHelpCatalogEntry = {
+  help: NodeHelpDoc
+  assistantHints?: NodeAssistantHints
+}
+
+const createEntry = (
+  help: NodeHelpDoc,
+  assistantHints?: NodeAssistantHints,
+): NodeHelpCatalogEntry => ({
+  help,
+  assistantHints,
+})
+
+export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
+  'file-import': createEntry(
+    {
+      summary: '从本地 CSV、Excel 或 JSON 文件导入一份原始表格数据。',
+      whenToUse: ['你已经有本地数据文件，需要把它作为工作流起点。'],
+      inputGuide: ['该节点是起点节点，不需要上游输入。', '运行时必须重新选择要导入的数据文件。'],
+      parameterGuide: [
+        {
+          property: 'format',
+          title: '文件格式',
+          content: '通常保持自动识别即可，只有识别失败时再手动指定格式。',
+        },
+        {
+          property: 'autoClean',
+          title: '自动转换数字',
+          content: '建议开启，这样数字字符串会被转换为数值，便于后续统计分析。',
+        },
+      ],
+      outputGuide: ['输出结果是表格数据，通常接数据清洗、数据筛选或分析节点。'],
+      nextSteps: ['如果字段脏乱，先接数据清洗。', '如果只需部分记录，可先接数据筛选。'],
+      commonIssues: [
+        {
+          title: '文件选择后仍无法运行',
+          resolution: '刷新页面后文件对象可能失效，重新选择一次文件即可。',
+        },
+      ],
+    },
+    {
+      useCases: ['导入本地 Excel', '导入 CSV 数据', '读取 JSON 文件'],
+      keywords: ['文件导入', '上传数据', 'Excel', 'CSV', 'JSON'],
+      workflowRoles: ['数据入口'],
+      inputKinds: [],
+      outputKinds: ['table'],
+      requiredConfig: ['fileData'],
+      recommendedConfigPatterns: ['默认自动识别格式并开启自动转换数字。'],
+      commonMistakes: ['忘记重新选择文件导致运行时文件对象失效。'],
+      recommendedNextNodes: ['data-cleaning', 'data-filter', 'data-profiling'],
+    },
+  ),
+  'manual-json-import': createEntry(
+    {
+      summary: '手动粘贴 JSON 数据，适合快速调试和构造最小样例。',
+      whenToUse: ['你还没有正式文件，想先用一小段样例数据验证流程。'],
+      inputGuide: ['该节点是起点节点，不需要上游输入。', '输入内容必须是合法 JSON。'],
+      parameterGuide: [
+        {
+          property: 'jsonData',
+          title: 'JSON 数据内容',
+          content: '可以输入数组，或包含 data 数组的对象。表格型数组最适合后续分析节点。',
+        },
+      ],
+      outputGuide: ['对象数组会输出为表格；其他合法 JSON 会作为结构化 JSON 输出。'],
+      nextSteps: ['如果要验证整条分析链路，通常下一步接数据清洗或相关性分析。'],
+      commonIssues: [
+        {
+          title: 'JSON 解析失败',
+          resolution: '先检查是否缺少逗号、引号或括号，确保整体是合法 JSON。',
+        },
+      ],
+    },
+    {
+      useCases: ['手工录入样例数据', '快速调试工作流', '构造测试输入'],
+      keywords: ['JSON', '手动输入', '样例数据', '调试'],
+      workflowRoles: ['数据入口'],
+      outputKinds: ['table', 'json'],
+      requiredConfig: ['jsonData'],
+      recommendedConfigPatterns: ['优先使用对象数组，便于后续节点直接消费。'],
+      commonMistakes: ['输入非 JSON 文本导致解析失败。'],
+      recommendedNextNodes: ['data-cleaning', 'data-filter', 'pearson'],
+    },
+  ),
+  'neighbor-system': createEntry(
+    {
+      summary: '从宿主看板系统拉取业务数据，直接作为工作流输入。',
+      whenToUse: ['数据不在本地文件里，而是需要从外部看板系统按条件查询。'],
+      inputGuide: ['该节点是起点节点，不需要上游输入。', '必须先拿到宿主系统传入的访问凭证。'],
+      parameterGuide: [
+        {
+          property: 'fetchMode',
+          title: '启动方式',
+          content: '决定你按时间、方案、SN 还是任务令去拉取数据，后面的运行时参数会跟着变化。',
+        },
+      ],
+      outputGuide: ['输出结果是表格数据，适合继续做清洗、合并和分析。'],
+      nextSteps: ['如果因子很多，建议先用数据体检或数据清洗确认字段质量。'],
+      commonIssues: [
+        {
+          title: '无法获取数据',
+          resolution: '先确认产品、因子和运行时条件都已选择，并检查宿主系统是否已传入 token。',
+        },
+      ],
+    },
+    {
+      useCases: ['从看板系统获取因子数据', '按 SN 或时间拉取业务数据'],
+      keywords: ['看板', '宿主系统', '相邻系统', 'SN', '任务令'],
+      workflowRoles: ['数据入口'],
+      outputKinds: ['table'],
+      requiredConfig: ['productName', 'selectedFactors', 'fetchMode'],
+      recommendedConfigPatterns: ['先选产品和因子，再补运行时查询条件。'],
+      commonMistakes: ['未收到宿主系统 token。', '未选择任何因子。'],
+      recommendedNextNodes: ['data-cleaning', 'data-merge', 'data-profiling'],
+    },
+  ),
+  'data-cleaning': createEntry(
+    {
+      summary: '统一处理缺失值、异常值、缩放和分类编码，让数据更适合分析。',
+      whenToUse: ['原始数据存在空值、异常值、字符型字段或量纲差异明显时。'],
+      inputGuide: ['需要上游提供表格数据。', '留空目标字段时会自动处理可识别的数值字段。'],
+      parameterGuide: [
+        {
+          property: 'missingValueStrategy',
+          title: '缺失值处理',
+          content: '优先决定空值如何补齐或删除，这是最常见的预处理步骤。',
+        },
+        {
+          property: 'scaling',
+          title: '特征缩放',
+          content: '做回归或模型分析前，若字段量纲差异大，建议使用归一化或标准化。',
+        },
+      ],
+      outputGuide: ['输出结果仍是表格数据，但会附带清洗统计信息。'],
+      nextSteps: ['清洗后可继续筛选、聚合，或直接进入相关性/建模节点。'],
+      commonIssues: [
+        {
+          title: '清洗后数据行数变少',
+          resolution: '通常是因为缺失值处理选择了直接删除，或异常值处理剔除了样本。',
+        },
+      ],
+    },
+    {
+      useCases: ['处理缺失值', '做异常值清理', '标准化特征', '编码类别字段'],
+      keywords: ['数据清洗', '缺失值', '异常值', '标准化', '编码'],
+      workflowRoles: ['数据准备'],
+      inputKinds: ['table'],
+      outputKinds: ['table'],
+      recommendedPrevNodes: ['file-import', 'manual-json-import', 'neighbor-system'],
+      recommendedNextNodes: ['data-filter', 'data-aggregation', 'pearson', 'xgboost-shap'],
+    },
+  ),
+  'data-filter': createEntry(
+    {
+      summary: '按多个条件筛选数据行，快速保留你真正关心的样本。',
+      whenToUse: ['你只想分析某些范围、某些标签或非空记录。'],
+      inputGuide: ['需要上游提供表格数据。', '每个筛选条件都依赖具体字段名。'],
+      parameterGuide: [
+        {
+          property: 'matchMode',
+          title: '条件关系',
+          content: '全部满足适合做精确筛选；任一满足适合做宽松召回。',
+        },
+      ],
+      outputGuide: ['输出结果是过滤后的表格数据。'],
+      nextSteps: ['筛选后可继续聚合、分析或导出。'],
+      commonIssues: [
+        {
+          title: '筛选后没有数据',
+          resolution: '先检查字段名是否正确，再确认比较值类型和条件关系是否过严。',
+        },
+      ],
+    },
+    {
+      useCases: ['筛选指定城市数据', '筛选高分样本', '过滤空值'],
+      keywords: ['筛选', '过滤', '条件', '包含', '为空'],
+      workflowRoles: ['数据准备'],
+      inputKinds: ['table'],
+      outputKinds: ['table'],
+      recommendedPrevNodes: ['data-cleaning', 'file-import'],
+      recommendedNextNodes: ['data-aggregation', 'pearson', 'data-export'],
+    },
+  ),
+  'data-aggregation': createEntry(
+    {
+      summary: '把多列值聚成新指标，或按分组、窗口生成统计特征。',
+      whenToUse: ['需要构造综合指标、按维度汇总，或为时序数据做窗口特征。'],
+      inputGuide: ['需要上游提供表格数据。', '聚合模式决定你是在行内合并、分组统计还是滑动窗口。'],
+      parameterGuide: [
+        {
+          property: 'mode',
+          title: '聚合模式',
+          content: '先决定是生成新字段、做分组摘要，还是做滚动窗口统计。',
+        },
+      ],
+      outputGuide: ['输出结果是新的表格数据，字段结构会按聚合模式变化。'],
+      nextSteps: ['聚合后通常继续分析、绘图或导出。'],
+      commonIssues: [
+        {
+          title: '聚合结果为空或字段不存在',
+          resolution: '先确认参与聚合的字段名真实存在，且字段内容适合对应聚合算法。',
+        },
+      ],
+    },
+    {
+      useCases: ['构造综合特征', '按分组做统计汇总', '生成滚动窗口特征'],
+      keywords: ['聚合', '汇总', '分组统计', '滚动窗口'],
+      workflowRoles: ['数据准备'],
+      inputKinds: ['table'],
+      outputKinds: ['table'],
+      recommendedPrevNodes: ['data-cleaning', 'data-filter'],
+      recommendedNextNodes: ['pearson', 'chart-display', 'data-export'],
+    },
+  ),
+  'data-merge': createEntry(
+    {
+      summary: '把多个上游数据集纵向追加、横向关联，或组合成分组集合。',
+      whenToUse: ['你需要合并多个来源的数据，或把多组数据并行送入后续分析。'],
+      inputGuide: ['这是一个多输入节点，至少需要两个上游输入。', '不同合并模式对字段对齐和关联键要求不同。'],
+      parameterGuide: [
+        {
+          property: 'mergeMode',
+          title: '合并模式',
+          content: '追加适合堆叠行，关联适合按键拼列，分组集合适合做多组对比。',
+        },
+        {
+          property: 'baseJoinKey',
+          title: '关联键',
+          content: '横向关联时必须确认各数据集使用同一键值体系，否则结果会出现大量空值。',
+        },
+      ],
+      outputGuide: ['追加或关联会输出表格；分组集合会输出多组表格集合。'],
+      nextSteps: ['合并后的表格可继续分析；分组集合适合接图表展示。'],
+      commonIssues: [
+        {
+          title: '关联后大量空值',
+          resolution: '通常是关联键不一致、连接方式选择不当，或某个数据集缺少对应键值。',
+        },
+      ],
+    },
+    {
+      useCases: ['多表追加', '按 ID 关联两张表', '构造分组对比输入'],
+      keywords: ['数据合并', 'join', 'append', '多输入', '分组集合'],
+      workflowRoles: ['数据准备'],
+      inputKinds: ['table'],
+      outputKinds: ['table', 'tableCollection'],
+      recommendedPrevNodes: ['file-import', 'neighbor-system', 'data-cleaning'],
+      recommendedNextNodes: ['chart-display', 'pearson', 'data-profiling'],
+    },
+  ),
+  'data-profiling': createEntry(
+    {
+      summary: '自动识别字段类型和风险，快速看懂当前数据质量。',
+      whenToUse: ['你想在正式分析前先检查缺失率、常量列、疑似 ID 和异常值风险。'],
+      inputGuide: ['需要上游提供表格数据。', '可选目标字段后，报告会额外提示目标字段是否适合建模。'],
+      outputGuide: ['输出结果是报告，包含摘要、风险字段和图表。'],
+      nextSteps: ['如果发现风险字段，通常返回数据清洗；如果质量可用，可以进入分析节点。'],
+      commonIssues: [
+        {
+          title: '报告里风险字段较多',
+          resolution: '说明当前数据仍需整理，优先回到数据清洗或筛选节点做预处理。',
+        },
+      ],
+    },
+    {
+      useCases: ['做数据体检', '检查字段风险', '判断目标字段是否可用'],
+      keywords: ['数据体检', '字段画像', '风险', '缺失率'],
+      workflowRoles: ['数据准备'],
+      inputKinds: ['table'],
+      outputKinds: ['report'],
+      recommendedPrevNodes: ['file-import', 'neighbor-system', 'data-merge'],
+      recommendedNextNodes: ['data-cleaning', 'pearson', 'xgboost-shap'],
+    },
+  ),
+  pearson: createEntry(
+    {
+      summary: '计算数值字段之间的 Pearson 线性相关性，并重点解读目标变量关系。',
+      whenToUse: ['你关心线性相关强弱，希望快速找出与目标变量最相关的因子。'],
+      inputGuide: ['需要上游提供表格数据。', '输入字段最好已经清洗为数值型。'],
+      parameterGuide: [
+        {
+          property: 'targetField',
+          title: '目标变量',
+          content: '用于重点排序和报告摘要。若未正确指定，报告重点会偏离你真正关注的字段。',
+        },
+      ],
+      outputGuide: ['输出结果是相关性分析报告，含热力图和重点因子排序。'],
+      nextSteps: ['如果想看可视化对比，可继续接图表展示；若结果满意，也可直接导出。'],
+      commonIssues: [
+        {
+          title: '提示至少需要 2 个数值字段',
+          resolution: '先确认输入中是否真的有两个以上可识别为数值的字段，必要时先做数据清洗。',
+        },
+      ],
+    },
+    {
+      useCases: ['线性相关分析', '目标因子排序', '相关矩阵分析'],
+      keywords: ['Pearson', '相关系数', '线性相关', '热力图'],
+      workflowRoles: ['分析终点'],
+      inputKinds: ['table'],
+      outputKinds: ['report'],
+      recommendedPrevNodes: ['data-cleaning', 'data-filter', 'data-aggregation'],
+      recommendedNextNodes: ['chart-display', 'data-export'],
+    },
+  ),
+  spearman: createEntry(
+    {
+      summary: '计算单调关系更稳健的 Spearman 秩相关性，适合非线性但单调的场景。',
+      whenToUse: ['你怀疑字段之间不是线性关系，但排序趋势依然明显。'],
+      inputGuide: ['需要上游提供表格数据。', '输入字段最好能转成数值。'],
+      outputGuide: ['输出结果是秩相关报告，适合与 Pearson 结果做对比。'],
+      nextSteps: ['如需和其他方法对照，可并行跑 Pearson 或 Kendall。'],
+      commonIssues: [
+        {
+          title: '结果与 Pearson 不一致',
+          resolution: '这是正常现象，Spearman 更关注排序和单调趋势，不强调严格线性。',
+        },
+      ],
+    },
+    {
+      useCases: ['单调关系分析', '非线性相关探索'],
+      keywords: ['Spearman', '秩相关', '单调关系'],
+      workflowRoles: ['分析终点'],
+      inputKinds: ['table'],
+      outputKinds: ['report'],
+      recommendedPrevNodes: ['data-cleaning', 'data-filter'],
+      recommendedNextNodes: ['data-export'],
+    },
+  ),
+  kendall: createEntry(
+    {
+      summary: '计算 Kendall 秩相关，适合样本较小或更重视排序一致性的分析。',
+      whenToUse: ['你更关心秩次一致性，或想用更稳健的方法辅助判断。'],
+      inputGuide: ['需要上游提供表格数据。', '输入字段最好已经清洗为数值字段。'],
+      outputGuide: ['输出结果是 Kendall 相关分析报告。'],
+      nextSteps: ['常用于和 Pearson、Spearman 交叉验证结论。'],
+      commonIssues: [
+        {
+          title: '数值字段太少无法运行',
+          resolution: '先补充数值型因子，或对可编码字段先做数据清洗中的标签编码。',
+        },
+      ],
+    },
+    {
+      useCases: ['小样本秩相关分析', '排序一致性验证'],
+      keywords: ['Kendall', '秩相关', '排序一致性'],
+      workflowRoles: ['分析终点'],
+      inputKinds: ['table'],
+      outputKinds: ['report'],
+      recommendedPrevNodes: ['data-cleaning', 'data-filter'],
+      recommendedNextNodes: ['data-export'],
+    },
+  ),
+  lasso: createEntry(
+    {
+      summary: '用 Lasso 回归做特征筛选，快速查看哪些因子更值得保留。',
+      whenToUse: ['你希望从多个候选因子中做一次简单的筛选排序。'],
+      inputGuide: ['需要上游提供表格数据。', '输入字段应尽量为数值型，且指定目标变量。'],
+      outputGuide: ['输出结果是回归分析报告，包含简要系数图。'],
+      nextSteps: ['若想做更强解释，可进一步尝试 Xgboost + SHAP。'],
+      commonIssues: [
+        {
+          title: '目标字段选择不正确',
+          resolution: '先确认目标变量字段名来自上游真实字段，而不是手动输入错误名称。',
+        },
+      ],
+    },
+    {
+      useCases: ['特征筛选', '回归预分析'],
+      keywords: ['Lasso', '回归', '特征筛选'],
+      workflowRoles: ['分析终点'],
+      inputKinds: ['table'],
+      outputKinds: ['report'],
+      recommendedPrevNodes: ['data-cleaning', 'data-aggregation'],
+      recommendedNextNodes: ['data-export'],
+    },
+  ),
+  'xgboost-shap': createEntry(
+    {
+      summary: '通过 Xgboost 结合 SHAP 值解释模型，查看各因子对目标的贡献和趋势。',
+      whenToUse: ['你希望得到更强的特征贡献解释，而不仅是简单相关性。'],
+      inputGuide: ['需要上游提供表格数据。', '依赖本地后端分析服务，且输入应尽量为数值型。'],
+      parameterGuide: [
+        {
+          property: 'targetField',
+          title: '目标变量',
+          content: '这是建模的核心配置，必须准确指向你要预测或解释的字段。',
+        },
+      ],
+      outputGuide: ['输出结果是带图表和补充图片的分析报告。'],
+      nextSteps: ['若结果需要归档或分享，可直接接数据导出。'],
+      commonIssues: [
+        {
+          title: '后端请求失败',
+          resolution: '先确认本地后端服务已经启动，并检查输入数据是否满足建模要求。',
+        },
+      ],
+    },
+    {
+      useCases: ['特征贡献解释', '模型可解释性分析', 'SHAP 报告'],
+      keywords: ['Xgboost', 'SHAP', '特征重要性', '模型解释'],
+      workflowRoles: ['分析终点'],
+      inputKinds: ['table'],
+      outputKinds: ['report'],
+      recommendedPrevNodes: ['data-cleaning', 'data-aggregation'],
+      recommendedNextNodes: ['data-export'],
+    },
+  ),
+  'chart-display': createEntry(
+    {
+      summary: '把表格或分组数据快速转换成散点图、柱状图或箱线图。',
+      whenToUse: ['你想先看趋势和分布，而不是直接看文本报告。'],
+      inputGuide: ['可接单表数据，也可接分组集合数据。', '图表类型不同，对字段要求也不同。'],
+      parameterGuide: [
+        {
+          property: 'chartType',
+          title: '图表类型',
+          content: '散点图适合看双变量关系，柱状图适合分类对比，箱线图适合分布对比。',
+        },
+      ],
+      outputGuide: ['输出结果是图表，可直接查看，也可作为结果展示节点。'],
+      nextSteps: ['如果图表满意，可以接数据导出或保留为终端节点。'],
+      commonIssues: [
+        {
+          title: '图表无法生成',
+          resolution: '先确认所选 X/Y 字段存在，且用于数值轴的字段可以被识别为数值。',
+        },
+      ],
+    },
+    {
+      useCases: ['快速画散点图', '做分类柱状图', '比较多组分布'],
+      keywords: ['图表', '可视化', '散点图', '柱状图', '箱线图'],
+      workflowRoles: ['分析终点'],
+      inputKinds: ['table', 'tableCollection'],
+      outputKinds: ['chart'],
+      recommendedPrevNodes: ['data-merge', 'data-aggregation', 'data-filter'],
+      recommendedNextNodes: ['data-export'],
+    },
+  ),
+  'data-export': createEntry(
+    {
+      summary: '把当前表格结果导出成 CSV、Excel 或 JSON 文件。',
+      whenToUse: ['你需要把工作流结果交给其他人，或保存到本地继续处理。'],
+      inputGuide: ['需要上游提供表格数据。', '当前节点通常放在流程末尾作为导出终点。'],
+      parameterGuide: [
+        {
+          property: 'format',
+          title: '导出格式',
+          content: 'CSV 适合轻量交换，Excel 适合业务查看，JSON 适合程序继续消费。',
+        },
+      ],
+      outputGuide: ['输出结果是可下载文件信息，而不是继续流转的数据表。'],
+      nextSteps: ['这是终端节点，通常作为流程最后一步。'],
+      commonIssues: [
+        {
+          title: '没有可导出的内容',
+          resolution: '说明上游没有产生表格数据，先返回检查输入和筛选结果。',
+        },
+      ],
+    },
+    {
+      useCases: ['导出结果为 CSV', '导出 Excel 报表', '导出 JSON 数据'],
+      keywords: ['导出', '下载', 'CSV', 'Excel', 'JSON'],
+      workflowRoles: ['分析终点'],
+      inputKinds: ['table'],
+      outputKinds: ['file'],
+      recommendedPrevNodes: ['pearson', 'chart-display', 'data-filter'],
+    },
+  ),
+}
+
+const fallbackHelpEntry = (definition: NodeDefinition): NodeHelpCatalogEntry => ({
+  help: {
+    summary: definition.description,
+    whenToUse: ['该节点帮助正在补充中，请先结合节点名称和参数说明使用。'],
+    inputGuide: ['请根据当前节点连接关系确认输入类型是否正确。'],
+    outputGuide: ['请运行节点后在输出区查看实际结果。'],
+  },
+})
+
+export const attachNodeHelp = <T extends NodeDefinition>(definition: T): T => {
+  const entry = nodeHelpCatalog[definition.name] ?? fallbackHelpEntry(definition)
+  return {
+    ...definition,
+    help: entry.help,
+    assistantHints: entry.assistantHints ?? definition.assistantHints,
+  }
+}

@@ -43,6 +43,7 @@ ref/
 
 # Local git worktrees
 .worktrees/
+.superpowers/
 
 # Python cache
 __pycache__/

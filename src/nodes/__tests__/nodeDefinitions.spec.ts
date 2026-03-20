@@ -116,6 +116,15 @@ const asLegacy = (result: unknown): any => {
 }
 
 describe('Node Definitions Execution Logic', () => {
+  it('should provide the minimum help metadata for every node definition', () => {
+    for (const definition of nodeDefinitions) {
+      expect(definition.help?.summary).toBeTruthy()
+      expect(definition.help?.whenToUse?.length).toBeGreaterThan(0)
+      expect(definition.help?.inputGuide?.length).toBeGreaterThan(0)
+      expect(definition.help?.outputGuide?.length).toBeGreaterThan(0)
+    }
+  })
+
   it('should expose readable Chinese labels for the board integration node', () => {
     expect(neighborSystemNode.displayName).toBe('看板数据对接')
     expect(

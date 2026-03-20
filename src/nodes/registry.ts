@@ -1,4 +1,5 @@
 import type { NodeDefinition } from './types'
+import { attachNodeHelp } from './helpCatalog'
 import { fileImportNode } from './definitions/fileImport'
 import { manualJsonImportNode } from './definitions/manualJsonImport'
 import { neighborSystemNode } from './definitions/neighborSystem'
@@ -15,7 +16,7 @@ import { kendallNode } from './definitions/kendall'
 import { dataExportNode } from './definitions/dataExport'
 import { chartDisplayNode } from './definitions/chartDisplay'
 
-export const nodeDefinitions: NodeDefinition[] = [
+const rawNodeDefinitions: NodeDefinition[] = [
   fileImportNode,
   manualJsonImportNode,
   neighborSystemNode,
@@ -32,6 +33,10 @@ export const nodeDefinitions: NodeDefinition[] = [
   dataExportNode,
   chartDisplayNode,
 ]
+
+export const nodeDefinitions: NodeDefinition[] = rawNodeDefinitions.map((definition) =>
+  attachNodeHelp(definition),
+)
 
 export const getNodeDefinition = (name: string) => {
   return nodeDefinitions.find((d) => d.name === name)

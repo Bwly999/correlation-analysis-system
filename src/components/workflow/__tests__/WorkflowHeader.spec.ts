@@ -98,4 +98,24 @@ describe('WorkflowHeader', () => {
       }),
     )
   })
+
+  it('renders the help button and emits open-help when clicked', async () => {
+    const wrapper = mount(WorkflowHeader, {
+      global: {
+        stubs: {
+          Button: { template: '<button @click="$emit(\'click\')"><slot /></button>' },
+          Menu: { template: '<div />' },
+          Popover: { template: '<div><slot /></div>' },
+        },
+      },
+    })
+
+    const helpButton = wrapper.findAll('button').find((node) => node.text().includes('帮助'))
+
+    expect(helpButton).toBeTruthy()
+
+    await helpButton!.trigger('click')
+
+    expect(wrapper.emitted('open-help')).toBeTruthy()
+  })
 })

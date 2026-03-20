@@ -13,6 +13,7 @@ import NodeConfigModal from './NodeConfigModal.vue'
 import RuntimeInputModal from './RuntimeInputModal.vue'
 import DataAnalysisModal from './DataAnalysisModal.vue'
 import WorkflowManagerModal from './WorkflowManagerModal.vue'
+import HelpCenterModal from './HelpCenterModal.vue'
 import { getWorkflowLayoutMetrics } from './layout'
 import Button from 'primevue/button'
 import N8nEdge from './edges/N8nEdge.vue'
@@ -42,6 +43,7 @@ const isConfigVisible = ref(false)
 const isLogExpanded = ref(true)
 const isWorkflowListVisible = ref(false)
 const isSidebarVisible = ref(true)
+const isHelpCenterVisible = ref(false)
 const viewportWidth = ref(typeof window === 'undefined' ? 1920 : window.innerWidth)
 const isUnsavedDialogVisible = ref(false)
 const pendingWorkflowAction = ref<(() => Promise<void> | void) | null>(null)
@@ -277,6 +279,7 @@ onBeforeUnmount(() => {
       @open-projects="openWorkflowList"
       @new-workflow="handleCreateWorkflow"
       @import-workflow="handleImportWorkflow"
+      @open-help="isHelpCenterVisible = true"
     />
 
     <main
@@ -491,6 +494,7 @@ onBeforeUnmount(() => {
       @discard="handleDiscardBeforeContinue"
       @cancel="handleCancelWorkflowTransition"
     />
+    <HelpCenterModal :visible="isHelpCenterVisible" @close="isHelpCenterVisible = false" />
     <ConfirmDialog />
     <Toast />
   </div>
