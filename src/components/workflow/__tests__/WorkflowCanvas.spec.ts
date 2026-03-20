@@ -18,6 +18,12 @@ const runtimeInputModalStub = defineComponent({
   template: '<div class="runtime-input-modal-stub"></div>',
 })
 
+vi.mock('primevue/usetoast', () => ({
+  useToast: () => ({
+    add: vi.fn(),
+  }),
+}))
+
 vi.mock('@vue-flow/core', () => ({
   VueFlow: {
     name: 'VueFlow',
@@ -134,5 +140,41 @@ describe('WorkflowCanvas', () => {
     await wrapper.vm.$nextTick()
 
     expect(resumeSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('prompts before browser unload when the workflow has unsaved changes', async () => {
+    const store = useWorkflowStore()
+    store.addAndConnectNode('file-import', '导入数据', { x: 0, y: 0 })
+
+    mount(WorkflowCanvas, {
+      global: {
+        stubs: {
+          Background: { template: '<div />' },
+          Controls: { template: '<div />' },
+          NodeSidebar: { template: '<div />' },
+          WorkflowHeader: { template: '<div />' },
+          BaseNode: { template: '<div />' },
+          LogPanel: { template: '<div />' },
+          NodeConfigModal: { template: '<div />' },
+          RuntimeInputModal: runtimeInputModalStub,
+          DataAnalysisModal: { template: '<div />' },
+          WorkflowManagerModal: { template: '<div />' },
+          UnsavedWorkflowDialog: { template: '<div />' },
+          ConfirmDialog: { template: '<div />' },
+          Toast: { template: '<div />' },
+          Button: { template: '<button><slot /></button>' },
+          N8nEdge: { template: '<div />' },
+        },
+        directives: {
+          tooltip: () => undefined,
+        },
+      },
+    })
+
+    const event = new Event('beforeunload', { cancelable: true }) as BeforeUnloadEvent
+
+    window.dispatchEvent(event)
+
+    expect(event.defaultPrevented).toBe(true)
   })
 })

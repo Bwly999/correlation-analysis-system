@@ -29,7 +29,7 @@ const _props = defineProps<{
   visible: boolean
 }>()
 
-const emit = defineEmits(['close'])
+const emit = defineEmits(['close', 'load-workflow', 'create-workflow'])
 
 const store = useWorkflowStore()
 const confirm = useConfirm()
@@ -58,8 +58,7 @@ const currentWorkflowHistory = computed<ExecutionRecord[]>(() => {
 })
 
 const handleLoadWorkflow = async (id: string) => {
-  await store.loadWorkflow(id)
-  emit('close')
+  emit('load-workflow', id)
 }
 
 const handleDuplicateWorkflow = async (id: string) => {
@@ -92,8 +91,7 @@ const handleRestoreExecution = (record: ExecutionRecord) => {
 }
 
 const handleCreateNew = () => {
-  store.createNewWorkflow()
-  emit('close')
+  emit('create-workflow')
 }
 
 const handleClearHistory = async () => {

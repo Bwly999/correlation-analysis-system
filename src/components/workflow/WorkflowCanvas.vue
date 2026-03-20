@@ -29,9 +29,13 @@ import {
   ChevronRight,
 } from 'lucide-vue-next'
 import ConfirmDialog from 'primevue/confirmdialog'
+import Toast from 'primevue/toast'
+import { useToast } from 'primevue/usetoast'
+import UnsavedWorkflowDialog from './UnsavedWorkflowDialog.vue'
 
 const { onConnect, addEdges, project, findNode, fitView } = useVueFlow()
 const store = useWorkflowStore()
+const toast = useToast()
 
 const selectedNode = ref<WorkflowNode | null>(null)
 const isConfigVisible = ref(false)
@@ -39,6 +43,8 @@ const isLogExpanded = ref(true)
 const isWorkflowListVisible = ref(false)
 const isSidebarVisible = ref(true)
 const viewportWidth = ref(typeof window === 'undefined' ? 1920 : window.innerWidth)
+const isUnsavedDialogVisible = ref(false)
+const pendingWorkflowAction = ref<(() => Promise<void> | void) | null>(null)
 
 const layoutMetrics = computed(() => getWorkflowLayoutMetrics(viewportWidth.value))
 const logHeight = computed(() =>
@@ -53,9 +59,95 @@ const onWindowResize = () => {
   viewportWidth.value = window.innerWidth
 }
 
+const saveWorkflowWithToast = async () => {
+  try {
+    await store.saveWorkflow()
+    toast.add({
+      severity: 'success',
+      summary: '保存成功',
+      detail: `工作流“${store.workflowName}”已保存。`,
+      life: 2500,
+    })
+    return true
+  } catch (error) {
+    console.error('保存工作流失败:', error)
+    toast.add({
+      severity: 'error',
+      summary: '保存失败',
+      detail: '保存当前工作流时发生错误，请稍后重试。',
+      life: 4000,
+    })
+    return false
+  }
+}
+
+const clearPendingWorkflowAction = () => {
+  pendingWorkflowAction.value = null
+  isUnsavedDialogVisible.value = false
+}
+
+const executePendingWorkflowAction = async () => {
+  const action = pendingWorkflowAction.value
+  clearPendingWorkflowAction()
+  if (action) {
+    await action()
+  }
+}
+
+const runWorkflowActionWithGuard = async (action: () => Promise<void> | void) => {
+  if (store.isHistoryMode || !store.hasUnsavedChanges) {
+    await action()
+    return
+  }
+
+  pendingWorkflowAction.value = action
+  isUnsavedDialogVisible.value = true
+}
+
+const handleCreateWorkflow = async () => {
+  await runWorkflowActionWithGuard(async () => {
+    store.createNewWorkflow()
+    isWorkflowListVisible.value = false
+  })
+}
+
+const handleLoadWorkflow = async (id: string) => {
+  await runWorkflowActionWithGuard(async () => {
+    await store.loadWorkflow(id)
+    isWorkflowListVisible.value = false
+  })
+}
+
+const handleImportWorkflow = async (file: File) => {
+  await runWorkflowActionWithGuard(async () => {
+    store.importWorkflow(file)
+  })
+}
+
+const handleSaveBeforeContinue = async () => {
+  const saved = await saveWorkflowWithToast()
+  if (!saved) return
+  await executePendingWorkflowAction()
+}
+
+const handleDiscardBeforeContinue = async () => {
+  await executePendingWorkflowAction()
+}
+
+const handleCancelWorkflowTransition = () => {
+  clearPendingWorkflowAction()
+}
+
+const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+  if (store.isHistoryMode || !store.hasUnsavedChanges) return
+  event.preventDefault()
+  event.returnValue = ''
+}
+
 // 初始化加载
 onMounted(async () => {
   window.addEventListener('resize', onWindowResize)
+  window.addEventListener('beforeunload', handleBeforeUnload)
   const workflows = await store.getSavedWorkflows()
   // 如果没有工作流，自动打开管理中心
   if (workflows.length === 0) {
@@ -173,6 +265,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', onWindowResize)
+  window.removeEventListener('beforeunload', handleBeforeUnload)
 })
 </script>
 
@@ -180,7 +273,11 @@ onBeforeUnmount(() => {
   <div
     class="flex h-screen w-full bg-[#f1f5f9] text-[#1a1f36] overflow-hidden relative font-sans text-[13px] selection:bg-indigo-100"
   >
-    <WorkflowHeader @open-projects="openWorkflowList" />
+    <WorkflowHeader
+      @open-projects="openWorkflowList"
+      @new-workflow="handleCreateWorkflow"
+      @import-workflow="handleImportWorkflow"
+    />
 
     <main
       :style="{ bottom: `${logHeight}px` }"
@@ -365,7 +462,12 @@ onBeforeUnmount(() => {
       </div>
     </footer>
 
-    <WorkflowManagerModal :visible="isWorkflowListVisible" @close="isWorkflowListVisible = false" />
+    <WorkflowManagerModal
+      :visible="isWorkflowListVisible"
+      @close="isWorkflowListVisible = false"
+      @create-workflow="handleCreateWorkflow"
+      @load-workflow="handleLoadWorkflow"
+    />
     <NodeConfigModal
       :visible="isConfigVisible"
       :node-id="store.activeConfigNodeId"
@@ -383,7 +485,14 @@ onBeforeUnmount(() => {
       :data="analysisModal.data"
       @close="analysisModal.visible = false"
     />
+    <UnsavedWorkflowDialog
+      :visible="isUnsavedDialogVisible"
+      @save="handleSaveBeforeContinue"
+      @discard="handleDiscardBeforeContinue"
+      @cancel="handleCancelWorkflowTransition"
+    />
     <ConfirmDialog />
+    <Toast />
   </div>
 </template>
 

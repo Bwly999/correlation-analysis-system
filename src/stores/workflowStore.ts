@@ -1,5 +1,5 @@
 ﻿import { defineStore } from 'pinia'
-import { ref, markRaw } from 'vue'
+import { computed, ref, markRaw } from 'vue'
 import type { Ref } from 'vue'
 import { type Node, type Edge } from '@vue-flow/core'
 import { getNodeDefinition } from '@/nodes/registry'
@@ -61,6 +61,8 @@ export const useWorkflowStore = defineStore('workflow', () => {
   const lastExecutedTerminalNodeId = ref<string | null>(null)
   const executionHistory = ref([]) as Ref<ExecutionRecord[]>
   const savedWorkflows = ref([]) as Ref<SavedWorkflow[]>
+  const lastSavedWorkflowSignature = ref('')
+  const hasExplicitUnsavedChanges = ref(false)
 
   // 历史模式相关状态
   const isHistoryMode = ref(false)
@@ -122,6 +124,29 @@ export const useWorkflowStore = defineStore('workflow', () => {
       }),
     )
 
+  const getWorkflowPersistenceSignature = () =>
+    JSON.stringify({
+      id: currentWorkflowId.value,
+      name: workflowName.value,
+      nodes: serializeWorkflowNodes(getCurrentNodes()),
+      edges: cloneWorkflowEdges(getCurrentEdges()),
+    })
+
+  const syncSavedWorkflowSignature = () => {
+    lastSavedWorkflowSignature.value = getWorkflowPersistenceSignature()
+    hasExplicitUnsavedChanges.value = false
+  }
+
+  const markWorkflowAsExplicitlyUnsaved = () => {
+    hasExplicitUnsavedChanges.value = true
+  }
+
+  const hasUnsavedChanges = computed(
+    () =>
+      hasExplicitUnsavedChanges.value ||
+      getWorkflowPersistenceSignature() !== lastSavedWorkflowSignature.value,
+  )
+
   const resetWorkflowNodeRuntimeState = (sourceNodes: Array<WorkflowNode | WorkflowNodeSnapshot>): WorkflowNode[] =>
     sourceNodes.map((node) => {
       const nextNode: WorkflowNode = {
@@ -144,6 +169,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     isHistoryMode.value = false
     originalWorkflowState.value = null
     addLog('已创建新工作流', 'info')
+    syncSavedWorkflowSignature()
   }
 
   const saveWorkflow = async (name?: string) => {
@@ -163,6 +189,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     await storageProvider.saveWorkflow(workflow)
     await refreshWorkflows()
     addLog(`工作流 "${workflow.name}" 已保存`, 'info')
+    syncSavedWorkflowSignature()
     return workflow
   }
 
@@ -175,6 +202,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
       currentWorkflowId.value = workflow.id
       addLog(`已加载工作流: ${workflow.name}`, 'info')
       needsViewReset.value = true
+      syncSavedWorkflowSignature()
     }
   }
 
@@ -223,6 +251,8 @@ export const useWorkflowStore = defineStore('workflow', () => {
         workflowName.value = workflow.name || '导入的工作流'
         currentWorkflowId.value = null
         addLog(`成功导入工作流: ${workflowName.value}`, 'info')
+        lastSavedWorkflowSignature.value = getWorkflowPersistenceSignature()
+        markWorkflowAsExplicitlyUnsaved()
       } catch (_err) {
         addLog(`导入失败: 格式错误`, 'error')
       }
@@ -875,6 +905,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
   }
 
   loadHistory()
+  syncSavedWorkflowSignature()
 
   return {
     nodes,
@@ -892,6 +923,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     executionHistory,
     savedWorkflows,
     isHistoryMode,
+    hasUnsavedChanges,
     addLog,
     stopExecution,
     getCategoryByType,
@@ -917,6 +949,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     createNewWorkflow,
     setPendingConnection,
     setActiveConfigNodeId,
+    markWorkflowAsExplicitlyUnsaved,
   }
 })
 

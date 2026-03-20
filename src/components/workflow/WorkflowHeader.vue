@@ -19,9 +19,11 @@ import {
 import Button from 'primevue/button'
 import Menu from 'primevue/menu'
 import Popover from 'primevue/popover'
+import { useToast } from 'primevue/usetoast'
 
-const emit = defineEmits(['open-projects'])
+const emit = defineEmits(['open-projects', 'new-workflow', 'import-workflow'])
 const store = useWorkflowStore()
+const toast = useToast()
 
 // 过滤当前工作流的历史记录
 const filteredHistory = computed<ExecutionRecord[]>(() => {
@@ -64,7 +66,28 @@ const triggerImport = () => fileInput.value?.click()
 const handleImport = (event: any) => {
   const file = event.target.files[0]
   if (file) {
-    store.importWorkflow(file)
+    emit('import-workflow', file)
+  }
+  event.target.value = ''
+}
+
+const handleSave = async () => {
+  try {
+    await store.saveWorkflow()
+    toast.add({
+      severity: 'success',
+      summary: '保存成功',
+      detail: `工作流“${store.workflowName}”已保存。`,
+      life: 2500,
+    })
+  } catch (error) {
+    console.error('保存工作流失败:', error)
+    toast.add({
+      severity: 'error',
+      summary: '保存失败',
+      detail: '保存当前工作流时发生错误，请稍后重试。',
+      life: 4000,
+    })
   }
 }
 
@@ -195,7 +218,11 @@ const formatDuration = (ms: number) => {
 
       <div class="deck-divider"></div>
 
-      <Button v-if="!store.isHistoryMode" class="save-btn" @click="async () => await store.saveWorkflow()">
+      <Button v-if="!store.isHistoryMode" class="new-btn" @click="emit('new-workflow')">
+        <span>新建</span>
+      </Button>
+
+      <Button v-if="!store.isHistoryMode" class="save-btn" @click="handleSave">
         <Save :size="14" />
         <span>保存</span>
       </Button>
@@ -287,6 +314,26 @@ const formatDuration = (ms: number) => {
 .save-btn:hover {
   transform: translateY(-0.5px);
   filter: saturate(1.08);
+}
+
+.new-btn {
+  height: 2rem;
+  padding: 0 0.875rem;
+  border-radius: 0.625rem;
+  border: 1px solid #d1dbe8;
+  background: #ffffff;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  transition: all 0.2s ease;
+}
+
+.new-btn:hover {
+  border-color: #b8c7da;
+  background: #f8fafc;
+  color: #0f172a;
 }
 
 .file-btn {
