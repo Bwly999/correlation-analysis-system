@@ -1,5 +1,31 @@
+import type { NodeResult } from './result'
+
 export type NodeCategory = 'trigger' | 'action' | 'terminal'
 export type NodeInputMode = 'single' | 'multiple'
+
+export type NodeExecutionJsonPrimitive = string | number | boolean | null
+export type NodeExecutionJsonValue =
+  | NodeExecutionJsonPrimitive
+  | NodeExecutionJsonValue[]
+  | { [key: string]: NodeExecutionJsonValue }
+
+export type NodeExecutionValue = NodeResult | NodeExecutionJsonValue | File | undefined
+
+export interface MultipleNodeExecutionItem<TResult = NodeResult | null> {
+  sourceNodeId: string
+  sourceNodeLabel: string
+  edgeId?: string
+  order?: number
+  result: TResult
+}
+
+export interface MultipleNodeExecutionInput<TResult = NodeResult | null> {
+  inputs?: Array<MultipleNodeExecutionItem<TResult>>
+}
+
+export type NodeExecuteFunction<TInput, TConfig, TOutput> = {
+  bivarianceHack(input: TInput, config: TConfig): Promise<TOutput> | TOutput
+}['bivarianceHack']
 
 export interface NodePropertyContext {
   config: Record<string, any>
@@ -40,7 +66,11 @@ export interface NodeProperty {
   displayIf?: (config: any) => boolean
 }
 
-export interface NodeDefinition {
+export interface NodeDefinition<
+  TInput = any,
+  TConfig = Record<string, any>,
+  TOutput = any,
+> {
   name: string
   displayName: string
   icon: string
@@ -50,5 +80,5 @@ export interface NodeDefinition {
   inputMode?: NodeInputMode
   minInputs?: number
   maxInputs?: number | null
-  execute: (input: any, config: any) => Promise<any> | any
+  execute: NodeExecuteFunction<TInput, TConfig, TOutput>
 }

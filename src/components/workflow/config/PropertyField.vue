@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, defineAsyncComponent } from 'vue'
 import { HelpCircle, Trash2, Settings, FileType, Search, LoaderCircle } from 'lucide-vue-next'
 import { type NodeProperty } from '@/nodes/types'
 import { useWorkflowStore } from '@/stores/workflowStore'
-import MonacoEditor from '../MonacoEditor.vue'
 
 import Select from 'primevue/select'
 import MultiSelect from 'primevue/multiselect'
@@ -16,6 +15,8 @@ import DatePicker from 'primevue/datepicker'
 import Button from 'primevue/button'
 import SelectButton from 'primevue/selectbutton'
 import Textarea from 'primevue/textarea'
+
+const MonacoEditor = defineAsyncComponent(() => import('../MonacoEditor.vue'))
 
 defineOptions({
   name: 'PropertyField',
@@ -122,6 +123,32 @@ const onFileSelect = (event: Event) => {
   target.value = ''
 }
 
+const reopenAutoComplete = (delay = 0) => {
+  window.setTimeout(() => autoCompleteRef.value?.show?.(), delay)
+}
+
+const onTagsFocus = (event: Event) => {
+  if (!(event.target instanceof HTMLInputElement)) return
+  if (props.prop.useUpstreamFactors && props.upstreamFactors.length > 0) {
+    searchFactors({ query: event.target.value || '' })
+    reopenAutoComplete(50)
+  }
+}
+
+const onTagsEnter = (event: KeyboardEvent) => {
+  const target = event.target as HTMLInputElement | null
+  const value = target?.value?.trim()
+  if (!value) return
+  const nextTags = Array.isArray(configValue.value) ? [...configValue.value] : []
+  if (!nextTags.includes(value)) {
+    nextTags.push(value)
+    configValue.value = nextTags
+  }
+  if (target) target.value = ''
+  event.preventDefault()
+  searchFactors({ query: '' })
+}
+
 const filterTreeNodes = (nodes: any[], query: string): any[] => {
   if (!query.trim()) return nodes
 
@@ -176,12 +203,12 @@ const filteredTreeOptions = computed(() =>
             <span
               class="text-[10px] font-bold uppercase tracking-wider text-slate-500 group-hover/item:text-blue-600"
             >
-              {{ prop.displayName }} #{{ idx + 1 }}
+              {{ prop.displayName }} #{{ Number(idx) + 1 }}
             </span>
           </div>
           <button
             class="cursor-pointer rounded-md p-1.5 text-slate-300 transition-all hover:bg-rose-50 hover:text-rose-500"
-            @click="removeCollectionItem(idx)"
+            @click="removeCollectionItem(Number(idx))"
           >
             <Trash2 :size="14" />
           </button>
@@ -195,7 +222,7 @@ const filteredTreeOptions = computed(() =>
             :model-value="item[subProp.name]"
             :upstream-factors="upstreamFactors"
             :config-context="item"
-            @update:model-value="(val) => updateSubItem(idx, subProp.name, val)"
+            @update:model-value="(val) => updateSubItem(Number(idx), subProp.name, val)"
             @save="emit('save')"
           />
         </div>
@@ -301,30 +328,9 @@ const filteredTreeOptions = computed(() =>
         removeTokenIcon: { class: 'text-[10px] hover:text-rose-500' },
       }"
       @complete="searchFactors"
-      @focus="
-        (event) => {
-          if (prop.useUpstreamFactors && upstreamFactors.length > 0) {
-            searchFactors({ query: (event.target as HTMLInputElement).value || '' })
-            window.setTimeout(() => autoCompleteRef?.show(), 50)
-          }
-        }
-      "
-      @item-select="() => window.setTimeout(() => autoCompleteRef?.show(), 0)"
-      @keydown.enter="
-        (event) => {
-          const target = event.target as HTMLInputElement
-          const value = target.value?.trim()
-          if (!value) return
-          const nextTags = Array.isArray(configValue) ? [...configValue] : []
-          if (!nextTags.includes(value)) {
-            nextTags.push(value)
-            configValue = nextTags
-          }
-          target.value = ''
-          event.preventDefault()
-          searchFactors({ query: '' })
-        }
-      "
+      @focus="onTagsFocus"
+      @item-select="() => reopenAutoComplete()"
+      @keydown.enter="onTagsEnter"
     />
 
     <MonacoEditor v-else-if="prop.type === 'json'" v-model="configValue" height="400px" />

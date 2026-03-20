@@ -1,5 +1,6 @@
 import { markRaw } from 'vue'
 import type { NodeDefinition } from '../types'
+import { createTableResult, extractTableRows } from '../result'
 
 type FilterOperator =
   | 'equals'
@@ -64,7 +65,7 @@ export const dataFilterNode: NodeDefinition = {
   displayName: '数据筛选',
   icon: 'filter',
   category: 'action',
-  description: '根据多个条件筛选数据行，支持数值比较、文本匹配以及空值判断。',
+  description: '按多个条件筛选数据行，支持数值比较、文本包含和空值判断。',
   properties: [
     {
       name: 'matchMode',
@@ -75,14 +76,14 @@ export const dataFilterNode: NodeDefinition = {
         { name: '全部满足', value: 'all' },
         { name: '任一满足', value: 'any' },
       ],
-      description: '控制多条筛选条件之间是“且”关系还是“或”关系。',
+      description: '控制多个条件之间是“且”还是“或”的关系。',
     },
     {
       name: 'conditions',
       displayName: '筛选条件',
       type: 'collection',
       default: [],
-      description: '按顺序定义筛选规则。字段可从上游选择，也可手动输入。',
+      description: '按顺序定义筛选规则，字段可从上游自动带入。',
       properties: [
         {
           name: 'field',
@@ -114,31 +115,30 @@ export const dataFilterNode: NodeDefinition = {
           displayName: '比较值',
           type: 'string',
           default: '',
-          description: '数值比较时会自动尝试转成数字。',
+          description: '数值比较时会自动尝试转换为数字。',
         },
       ],
     },
   ],
   execute: async (input, config) => {
-    if (!input || !Array.isArray(input.data)) {
+    const rows = extractTableRows(input)
+    if (!rows) {
       throw new Error('输入数据格式不正确')
     }
 
-    const rows = input.data.filter((row: unknown) => row && typeof row === 'object') as Array<
-      Record<string, unknown>
-    >
     const conditions = Array.isArray(config.conditions)
       ? (config.conditions as FilterCondition[]).filter((item) => item && item.field)
       : []
 
     if (conditions.length === 0) {
-      return {
-        data: markRaw(rows),
-        stats: {
-          originalCount: rows.length,
-          filteredCount: rows.length,
+      return createTableResult(markRaw(rows), {
+        meta: {
+          stats: {
+            originalCount: rows.length,
+            filteredCount: rows.length,
+          },
         },
-      }
+      })
     }
 
     const matchMode = config.matchMode === 'any' ? 'any' : 'all'
@@ -147,12 +147,15 @@ export const dataFilterNode: NodeDefinition = {
       return matchMode === 'any' ? results.some(Boolean) : results.every(Boolean)
     })
 
-    return {
-      data: markRaw(filteredRows),
-      stats: {
-        originalCount: rows.length,
-        filteredCount: filteredRows.length,
+    return createTableResult(markRaw(filteredRows), {
+      meta: {
+        stats: {
+          originalCount: rows.length,
+          filteredCount: filteredRows.length,
+          conditionCount: conditions.length,
+          matchMode,
+        },
       },
-    }
+    })
   },
 }

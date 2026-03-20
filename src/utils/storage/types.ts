@@ -1,18 +1,46 @@
-import { type Node, type Edge } from '@vue-flow/core'
+import type { Edge } from '@vue-flow/core'
+import type { NodeResult } from '@/nodes/result'
 
-export interface WorkflowNode extends Node {
-  data: {
-    label: string
-    type: string
-    category: 'trigger' | 'action' | 'terminal'
-    config: any
-    status: 'idle' | 'running' | 'success' | 'error'
-    output?: any
-    manualInput?: any
-    useManualInput?: boolean
-    isPinned?: boolean
-    logs: string[]
-  }
+export type WorkflowSerializablePrimitive = string | number | boolean | null
+export type WorkflowSerializableValue =
+  | WorkflowSerializablePrimitive
+  | WorkflowSerializableValue[]
+  | { [key: string]: WorkflowSerializableValue }
+
+export type WorkflowNodeOutput = NodeResult | WorkflowSerializableValue | null
+
+export interface WorkflowNodeData {
+  label: string
+  type: string
+  category: 'trigger' | 'action' | 'terminal'
+  config: Record<string, unknown>
+  status: 'idle' | 'running' | 'success' | 'error'
+  output?: WorkflowNodeOutput
+  manualInput?: string
+  useManualInput?: boolean
+  isPinned?: boolean
+  logs: string[]
+  error?: string
+}
+
+export interface WorkflowNode {
+  id: string
+  type?: string
+  label?: string
+  position: { x: number; y: number }
+  selected?: boolean
+  dragging?: boolean
+  data: WorkflowNodeData
+}
+
+export interface WorkflowNodeSnapshot {
+  id: string
+  type?: string
+  position: { x: number; y: number }
+  label?: string
+  selected?: boolean
+  dragging?: boolean
+  data: WorkflowNodeData
 }
 
 /**
@@ -28,7 +56,7 @@ export interface WorkflowMetadata {
  * 完整保存的工作流数据
  */
 export interface SavedWorkflow extends WorkflowMetadata {
-  nodes: WorkflowNode[]
+  nodes: WorkflowNodeSnapshot[]
   edges: Edge[]
 }
 
@@ -42,8 +70,8 @@ export interface ExecutionRecord {
   startTime: number
   duration: number
   status: 'success' | 'error' | 'stopped'
-  nodes: any[]
-  edges: any[]
+  nodes: WorkflowNodeSnapshot[]
+  edges: Edge[]
 }
 
 /**

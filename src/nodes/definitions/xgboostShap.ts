@@ -1,4 +1,5 @@
-﻿import type { NodeDefinition } from '../types'
+import type { NodeDefinition } from '../types'
+import { createReportResult, extractTableRows } from '../result'
 
 type ShapSummary = {
   targetField: string
@@ -143,7 +144,8 @@ export const xgboostShapNode: NodeDefinition = {
     },
   ],
   execute: async (input, config) => {
-    if (!input || !input.data) {
+    const rows = extractTableRows(input)
+    if (!rows || rows.length === 0) {
       throw new Error('无输入数据')
     }
 
@@ -151,7 +153,7 @@ export const xgboostShapNode: NodeDefinition = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        data: input.data,
+        data: rows,
         target: config.targetField || 'target',
         config,
       }),
@@ -175,9 +177,8 @@ export const xgboostShapNode: NodeDefinition = {
     const { summary, importance, dependence, assets } = normalized
     const visibleDependence = dependence.slice(0, DEFAULT_VISIBLE_FEATURES)
 
-    return {
-      viewType: 'report',
-      report: {
+    return createReportResult(
+      {
         title: 'Xgboost + SHAP 因子贡献度分析报告',
         metadata: {
           targetField: summary.targetField,
@@ -243,6 +244,18 @@ export const xgboostShapNode: NodeDefinition = {
           })),
         },
       },
-    }
+      {
+        meta: {
+          sourceData: rows,
+          metrics: {
+            targetField: summary.targetField,
+            sampleCount: summary.sampleCount,
+            featureCount: summary.featureCount || importance.length,
+            r2: summary.r2,
+            mae: summary.mae,
+          },
+        },
+      },
+    )
   },
 }

@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { computed, ref } from 'vue'
 import { useWorkflowStore } from '@/stores/workflowStore'
+import type { ExecutionRecord } from '@/utils/storage'
 import {
   LayoutGrid,
   ChevronRight,
@@ -22,12 +24,13 @@ const emit = defineEmits(['open-projects'])
 const store = useWorkflowStore()
 
 // 过滤当前工作流的历史记录
-const filteredHistory = computed(() => {
+const filteredHistory = computed<ExecutionRecord[]>(() => {
+  const currentHistory = store.executionHistory as ExecutionRecord[]
   if (store.currentWorkflowId) {
-    return store.executionHistory.filter((r) => r.workflowId === store.currentWorkflowId)
+    return currentHistory.filter((record) => record.workflowId === store.currentWorkflowId)
   }
   // 如果当前没有选中的工作流（如新建工作流时），展示所有历史以方便回溯
-  return store.executionHistory
+  return currentHistory
 })
 
 const menu = ref()
@@ -88,9 +91,9 @@ const formatDuration = (ms: number) => {
         class="flex items-center gap-2 text-slate-500 hover:text-slate-900 transition-colors cursor-pointer group px-2 py-1.5 rounded-md hover:bg-slate-100"
         @click="emit('open-projects')"
       >
-        <LayoutGrid size="16" class="opacity-70 group-hover:opacity-100" />
-        <span class="text-[13px] font-medium">Projects</span>
-        <ChevronRight size="14" class="opacity-40" />
+        <LayoutGrid :size="16" class="opacity-70 group-hover:opacity-100" />
+        <span class="text-[13px] font-medium">项目</span>
+        <ChevronRight :size="14" class="opacity-40" />
       </div>
 
       <!-- 项目名称编辑 -->
@@ -99,11 +102,11 @@ const formatDuration = (ms: number) => {
           v-model="store.workflowName"
           :disabled="store.isHistoryMode"
           class="font-semibold text-[14px] text-slate-900 border border-transparent hover:border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 bg-transparent focus:bg-white rounded-md px-2.5 py-1 transition-all w-[300px] outline-none disabled:opacity-70 disabled:cursor-not-allowed"
-          placeholder="Untitled Workflow"
+          placeholder="未命名工作流"
         />
         <Edit2
           v-if="!store.isHistoryMode"
-          size="12"
+          :size="12"
           class="text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity absolute right-2 pointer-events-none"
         />
 
@@ -186,7 +189,7 @@ const formatDuration = (ms: number) => {
           :class="store.isHistoryMode ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'"
         ></div>
         <span class="text-[10px] font-bold tracking-wide">
-          {{ store.isHistoryMode ? 'HISTORY VIEW' : 'Connected' }}
+          {{ store.isHistoryMode ? '历史视图' : '已连接' }}
         </span>
       </div>
 

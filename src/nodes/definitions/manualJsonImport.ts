@@ -1,4 +1,5 @@
 import type { NodeDefinition } from '../types'
+import { createJsonResult, createTableResult, isPlainObject } from '../result'
 
 export const manualJsonImportNode: NodeDefinition = {
   name: 'manual-json-import',
@@ -90,9 +91,25 @@ export const manualJsonImportNode: NodeDefinition = {
       }
 
       const cleaned = cleanData(finalData)
-      return { data: cleaned, filename: 'manual_input.json', type: 'manual' }
+      const allRowsAreObjects = cleaned.every((row) => isPlainObject(row))
+
+      if (allRowsAreObjects) {
+        return createTableResult(cleaned as Array<Record<string, unknown>>, {
+          meta: {
+            filename: 'manual_input.json',
+            sourceType: 'manual',
+          },
+        })
+      }
+
+      return createJsonResult(cleaned, {
+        meta: {
+          filename: 'manual_input.json',
+          sourceType: 'manual',
+        },
+      })
     } catch (err: any) {
-      throw new Error(`JSON 解析失败: ${err.message}`, { cause: err })
+      throw new Error(`JSON 解析失败: ${err.message}`)
     }
   },
 }

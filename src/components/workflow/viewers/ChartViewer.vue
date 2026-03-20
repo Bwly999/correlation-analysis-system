@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
@@ -19,6 +20,7 @@ import {
   TransformComponent,
   VisualMapComponent,
 } from 'echarts/components'
+import { getResultChartOption } from '../resultView'
 
 use([
   CanvasRenderer,
@@ -37,15 +39,17 @@ use([
   VisualMapComponent,
 ])
 
-const _props = defineProps<{
+const props = defineProps<{
   data: any
 }>()
+
+const chartOption = computed(() => getResultChartOption(props.data))
 </script>
 
 <template>
   <div class="h-full w-full p-4">
     <div class="h-full w-full bg-white rounded-xl border border-slate-100 shadow-sm p-4">
-      <VChart v-if="data.chartOption" :option="data.chartOption" autoresize />
+      <VChart v-if="chartOption" :option="chartOption" autoresize />
       <div v-else class="h-full flex items-center justify-center text-slate-400">
         无图表配置数据
       </div>

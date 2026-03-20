@@ -1,5 +1,6 @@
 import type { NodeDefinition } from '../types'
 import { markRaw } from 'vue'
+import { createTableResult, extractTableRows } from '../result'
 
 export const dataCleaningNode: NodeDefinition = {
   name: 'data-cleaning',
@@ -90,13 +91,20 @@ export const dataCleaningNode: NodeDefinition = {
     },
   ],
   execute: async (input, config) => {
-    if (!input || !input.data || !Array.isArray(input.data)) {
+    const inputRows = extractTableRows(input)
+    if (!inputRows) {
       throw new Error('输入数据格式不正确')
     }
 
-    let data = JSON.parse(JSON.stringify(input.data)) // 深拷贝避免污染
+    let data = JSON.parse(JSON.stringify(inputRows))
     const originalCount = data.length
-    if (originalCount === 0) return { data: [], stats: {} }
+    if (originalCount === 0) {
+      return createTableResult([], {
+        meta: {
+          stats: {},
+        },
+      })
+    }
 
     const allFields = Object.keys(data[0])
     const targetFields =
@@ -231,17 +239,17 @@ export const dataCleaningNode: NodeDefinition = {
       })
     }
 
-    return {
-      data: markRaw(data),
-      stats: {
+    return createTableResult(markRaw(data), {
+      meta: {
+        stats: {
+          originalCount,
+          finalCount: data.length,
+          ...stats,
+        },
         originalCount,
-        finalCount: data.length,
-        ...stats,
+        cleanedCount: data.length,
+        removedCount: originalCount - data.length,
       },
-      // 兼容旧版输出
-      originalCount,
-      cleanedCount: data.length,
-      removedCount: originalCount - data.length,
-    }
+    })
   },
 }

@@ -2,6 +2,7 @@
 import { setActivePinia, createPinia } from 'pinia'
 import { useWorkflowStore } from '../workflowStore'
 import { nodeDefinitions } from '../../nodes/registry'
+import { createJsonResult, createTableResult } from '../../nodes/result'
 
 describe('Workflow Store', () => {
   beforeEach(() => {
@@ -79,7 +80,7 @@ describe('Workflow Store', () => {
     expect(store.validateConnection(trigger2.id, target.id).valid).toBe(false)
   })
 
-  it('should pass all upstream payloads to a multiple-input node', async () => {
+  it('should pass normalized node results to a multiple-input node without legacy aliases', async () => {
     const tempNodeDefinition = {
       name: 'test-multi-input',
       displayName: 'Test Multi Input',
@@ -90,9 +91,17 @@ describe('Workflow Store', () => {
       inputMode: 'multiple' as const,
       minInputs: 2,
       maxInputs: null,
-      execute: async (input: { inputs: Array<{ payload: { data: Array<Record<string, unknown>> } }> }) => ({
+      execute: async (input: {
+        inputs: Array<{
+          result: {
+            kind: string
+            payload: Array<{ value: string }>
+          } | null
+        }>
+      }) => ({
         inputCount: input.inputs.length,
-        values: input.inputs.map((item) => item.payload.data[0]!.value),
+        values: input.inputs.map((item) => item.result?.payload[0]!.value ?? 'missing'),
+        kinds: input.inputs.map((item) => item.result?.kind ?? 'missing'),
       }),
     }
 
@@ -126,13 +135,102 @@ describe('Workflow Store', () => {
 
       expect(result.inputCount).toBe(2)
       expect(result.values).toEqual(['A', 'B'])
+      expect(result.kinds).toEqual(['table', 'table'])
     } finally {
       const index = nodeDefinitions.findIndex((definition) => definition.name === 'test-multi-input')
       if (index >= 0) nodeDefinitions.splice(index, 1)
     }
   })
 
-  it('should honor node definition defaults during global execution for legacy multi-input nodes', async () => {
+  it('should pass standardized upstream node results to a multiple-input node', async () => {
+    const triggerDefinition = {
+      name: 'test-result-trigger',
+      displayName: 'Test Result Trigger',
+      icon: 'database',
+      category: 'trigger' as const,
+      description: 'test',
+      properties: [],
+      execute: async (_input: null, config: { value: string }) => ({
+        kind: 'table' as const,
+        payload: [{ value: config.value }],
+      }),
+    }
+
+    const consumerDefinition = {
+      name: 'test-result-consumer',
+      displayName: 'Test Result Consumer',
+      icon: 'merge',
+      category: 'action' as const,
+      description: 'test',
+      properties: [],
+      inputMode: 'multiple' as const,
+      minInputs: 2,
+      maxInputs: null,
+      execute: async (input: {
+        inputs: Array<{
+          result: {
+            kind: string
+            payload: Array<{ value: string }>
+          }
+        }>
+      }) => ({
+        kind: 'json' as const,
+        payload: {
+          kinds: input.inputs.map((item) => item.result.kind),
+          values: input.inputs.map((item) => item.result.payload[0]!.value),
+        },
+      }),
+    }
+
+    nodeDefinitions.push(triggerDefinition, consumerDefinition)
+
+    try {
+      const store = useWorkflowStore()
+      const trigger1 = store.addAndConnectNode('test-result-trigger', 'Source 1', { x: 0, y: 0 })!
+      const trigger2 = store.addAndConnectNode('test-result-trigger', 'Source 2', { x: 0, y: 120 })!
+      const consumer = store.addAndConnectNode('test-result-consumer', 'Consumer', { x: 300, y: 0 })!
+
+      trigger1.data.config.value = 'A'
+      trigger2.data.config.value = 'B'
+
+      store.edges.push(
+        {
+          id: 'e_result_t1_consumer',
+          source: trigger1.id,
+          target: consumer.id,
+          type: 'n8n',
+          animated: true,
+        },
+        {
+          id: 'e_result_t2_consumer',
+          source: trigger2.id,
+          target: consumer.id,
+          type: 'n8n',
+          animated: true,
+        },
+      )
+
+      const result = await store.executeNode(consumer.id, true)
+
+      expect(result.kind).toBe('json')
+      expect(result.payload).toEqual({
+        kinds: ['table', 'table'],
+        values: ['A', 'B'],
+      })
+    } finally {
+      const triggerIndex = nodeDefinitions.findIndex(
+        (definition) => definition.name === 'test-result-trigger',
+      )
+      if (triggerIndex >= 0) nodeDefinitions.splice(triggerIndex, 1)
+
+      const consumerIndex = nodeDefinitions.findIndex(
+        (definition) => definition.name === 'test-result-consumer',
+      )
+      if (consumerIndex >= 0) nodeDefinitions.splice(consumerIndex, 1)
+    }
+  })
+
+  it('should honor node definition defaults during global execution for protocol multi-input nodes', async () => {
     const store = useWorkflowStore()
     const trigger1 = store.addAndConnectNode('manual-json-import', '来源一', { x: 0, y: 0 })!
     const trigger2 = store.addAndConnectNode('manual-json-import', '来源二', { x: 0, y: 120 })!
@@ -171,9 +269,12 @@ describe('Workflow Store', () => {
 
     await store.runGlobal()
 
-    expect(mergeNode.data.output?.stats?.inputCount).toBe(2)
-    expect(mergeNode.data.output?.stats?.outputRows).toBe(2)
-    expect(mergeNode.data.output?.data).toEqual([
+    const mergeOutput = mergeNode.data.output as any
+
+    expect(mergeOutput?.kind).toBe('table')
+    expect(mergeOutput?.meta?.stats?.inputCount).toBe(2)
+    expect(mergeOutput?.meta?.stats?.outputRows).toBe(2)
+    expect(mergeOutput?.payload).toEqual([
       { id: 1, city: '上海', score: null },
       { id: 2, city: null, score: 98 },
     ])
@@ -232,12 +333,15 @@ describe('Workflow Store', () => {
 
     await store.runGlobal()
 
-    expect(mergeNode.data.output?.data).toEqual([
+    const mergeOutput = mergeNode.data.output as any
+
+    expect(mergeOutput?.kind).toBe('tableCollection')
+    expect(mergeOutput?.payload).toEqual([
       { name: '手动输入数据1', data: sharedRows },
       { name: '手动输入数据2', data: sharedRows },
       { name: '手动输入数据3', data: sharedRows },
     ])
-    expect(mergeNode.data.output?.stats).toEqual({
+    expect(mergeOutput?.meta?.stats).toEqual({
       inputCount: 3,
       groupCount: 3,
       totalRows: 6,
@@ -254,8 +358,9 @@ describe('Workflow Store', () => {
     const result = await store.executeNode(node.id)
 
     expect(node.data.status).toBe('success')
-    expect(result.data).toBeDefined()
-    expect(result.data.length).toBeGreaterThan(0)
+    expect(result.kind).toBe('table')
+    expect(result.payload).toBeDefined()
+    expect(result.payload.length).toBeGreaterThan(0)
   })
 
   it('should support workflow persistence (save/load)', async () => {
@@ -315,7 +420,8 @@ describe('Workflow Store', () => {
 
     const resumed = await store.resumePendingExecution()
 
-    expect(resumed?.data).toBeDefined()
+    expect(resumed?.kind).toBe('table')
+    expect(resumed?.payload).toBeDefined()
     expect(node.data.status).toBe('success')
     expect(store.pendingExecution).toBeNull()
     expect(store.logs.some((l) => l.message.includes('未找到分析模型'))).toBe(false)
@@ -518,6 +624,87 @@ describe('Workflow Store', () => {
     expect(store.executionHistory.length).toBe(1)
     expect(store.executionHistory[0]!.status).toBe('success')
     expect(store.executionHistory[0]!.workflowName).toBe('未命名工作流')
+    expect(store.executionHistory[0]!.edges[0]).toMatchObject({
+      source: triggerNode.id,
+      target: modelNode.id,
+    })
+    expect(
+      store.executionHistory[0]!.nodes.find((node) => node.id === triggerNode.id)?.data.output,
+    ).toMatchObject({
+      kind: 'table',
+    })
+  })
+
+  it('should truncate oversized table outputs in history snapshots while preserving result metadata', async () => {
+    const largeTriggerDefinition = {
+      name: 'test-large-history-trigger',
+      displayName: 'Large Trigger',
+      icon: 'database',
+      category: 'trigger' as const,
+      description: 'test',
+      properties: [],
+      execute: async () =>
+        createTableResult(
+          Array.from({ length: 120 }, (_, index) => ({
+            index,
+            value: index * 2,
+          })),
+        ),
+    }
+
+    const terminalDefinition = {
+      name: 'test-history-terminal',
+      displayName: 'History Terminal',
+      icon: 'file-json',
+      category: 'terminal' as const,
+      description: 'test',
+      properties: [],
+      execute: async (input: unknown) => createJsonResult({ received: input !== null }),
+    }
+
+    nodeDefinitions.push(largeTriggerDefinition, terminalDefinition)
+
+    try {
+      const store = useWorkflowStore()
+      const triggerNode = store.addAndConnectNode(
+        'test-large-history-trigger',
+        'Large Trigger',
+        { x: 0, y: 0 },
+      )!
+      const terminalNode = store.addAndConnectNode('test-history-terminal', 'Terminal', {
+        x: 300,
+        y: 0,
+      })!
+
+      store.edges.push({
+        id: 'e_large_history_terminal',
+        source: triggerNode.id,
+        target: terminalNode.id,
+        type: 'n8n',
+        animated: true,
+      })
+
+      await store.runGlobal()
+
+      const triggerSnapshot = store.executionHistory[0]!.nodes.find(
+        (node) => node.id === triggerNode.id,
+      )!.data.output as any
+
+      expect(triggerSnapshot.kind).toBe('table')
+      expect(triggerSnapshot.payload).toHaveLength(10)
+      expect(triggerSnapshot.meta?.historyTruncated).toBe(true)
+      expect(triggerSnapshot.meta?.originalRowCount).toBe(120)
+    } finally {
+      const triggerIndex = nodeDefinitions.findIndex(
+        (definition) => definition.name === 'test-large-history-trigger',
+      )
+      if (triggerIndex >= 0) nodeDefinitions.splice(triggerIndex, 1)
+
+      const terminalIndex = nodeDefinitions.findIndex(
+        (definition) => definition.name === 'test-history-terminal',
+      )
+      if (terminalIndex >= 0) nodeDefinitions.splice(terminalIndex, 1)
+    }
   })
 
   it('should run successfully without terminal nodes by executing leaf nodes', async () => {

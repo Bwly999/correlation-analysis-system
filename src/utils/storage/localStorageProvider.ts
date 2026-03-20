@@ -28,16 +28,16 @@ export class LocalStorageProvider implements IStorageProvider {
     return db.transaction([this.workflowStoreName], mode).objectStore(this.workflowStoreName)
   }
 
-  private async migrateLegacyWorkflowsToIndexedDB() {
+  private async migrateLegacyWorkflowsToIndexedDB(): Promise<void> {
     if (!this.canUseIndexedDB()) return
     if (this.workflowMigrationPromise) return this.workflowMigrationPromise
 
     const legacyWorkflows = this.getLocalWorkflows()
     if (legacyWorkflows.length === 0) return
 
-    this.workflowMigrationPromise = new Promise(async (resolve, reject) => {
-      try {
-        const db = await this.getDB()
+    this.workflowMigrationPromise = new Promise<void>((resolve, reject) => {
+      this.getDB()
+        .then((db) => {
         const transaction = db.transaction([this.workflowStoreName], 'readwrite')
         const store = transaction.objectStore(this.workflowStoreName)
 
@@ -48,9 +48,8 @@ export class LocalStorageProvider implements IStorageProvider {
           resolve()
         }
         transaction.onerror = () => reject(transaction.error)
-      } catch (error) {
-        reject(error)
-      }
+        })
+        .catch(reject)
     }).finally(() => {
       this.workflowMigrationPromise = null
     })

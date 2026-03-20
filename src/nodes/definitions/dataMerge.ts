@@ -1,24 +1,31 @@
 import { markRaw } from 'vue'
-import type { NodeDefinition } from '../types'
+import type { MultipleNodeExecutionInput, MultipleNodeExecutionItem, NodeDefinition } from '../types'
 import { calculateBoxValues } from '../../utils/stats'
+import { createTableCollectionResult, createTableResult, extractTableRows } from '../result'
 
-type MergeInputItem = {
-  sourceNodeId: string
-  sourceNodeLabel: string
-  payload: { data?: Array<Record<string, unknown>> } | null
-}
+type MergeInputItem = MultipleNodeExecutionItem
+type MergeExecutionInput = MultipleNodeExecutionInput
 
-type MergeExecutionInput = {
-  inputs?: MergeInputItem[]
+type MergeConfig = {
+  mergeMode?: 'append' | 'join' | 'collection'
+  alignFieldsMode?: 'union' | 'intersection'
+  fillMissingValue?: 'null' | 'empty_string'
+  addSourceTag?: boolean
+  sourceTagName?: string
+  joinType?: 'left' | 'inner' | 'full'
+  baseJoinKey?: string
+  conflictStrategy?: 'prefer_first' | 'prefer_last' | 'suffix'
+  suffixMode?: 'source_label' | 'source_index'
+  dropDuplicateKeyFields?: boolean
 }
 
 const getRows = (item: MergeInputItem) => {
-  const rows = item.payload?.data
-  if (!Array.isArray(rows)) {
+  const rows = extractTableRows(item.result)
+  if (!rows) {
     throw new Error(`节点 ${item.sourceNodeLabel} 的输出不是表格数据`)
   }
 
-  return rows.filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === 'object')
+  return rows
 }
 
 const normalizeKey = (value: unknown) => String(value ?? '')
@@ -35,7 +42,7 @@ const buildFieldList = (datasets: Array<Array<Record<string, unknown>>>, mode: '
   return [...new Set(datasets.flatMap((rows) => rows.flatMap((row) => Object.keys(row))))]
 }
 
-export const dataMergeNode: NodeDefinition = {
+export const dataMergeNode: NodeDefinition<MergeExecutionInput | null, MergeConfig> = {
   name: 'data-merge',
   displayName: '数据合并',
   icon: 'git-merge',
@@ -144,7 +151,7 @@ export const dataMergeNode: NodeDefinition = {
       displayIf: (config) => config.mergeMode === 'join',
     },
   ],
-  execute: async (input: MergeExecutionInput | null, config) => {
+  execute: async (input, config) => {
     const items = Array.isArray(input?.inputs) ? input.inputs : []
     if (items.length < 2) {
       throw new Error('数据合并至少需要 2 个输入')
@@ -153,7 +160,7 @@ export const dataMergeNode: NodeDefinition = {
     if (config.mergeMode === 'collection') {
       const outputData = items.map((item) => ({
         name: item.sourceNodeLabel,
-        data: item.payload?.data || [],
+        data: getRows(item),
       }))
 
       // Auto-generate boxplot chart option if all groups have numeric data
@@ -162,8 +169,10 @@ export const dataMergeNode: NodeDefinition = {
         const groups = outputData.filter((g) => g.data.length > 0)
         if (groups.length >= 1) {
           // Find common numeric fields
-          const firstGroupFields = Object.keys(groups[0].data[0] || {}).filter(
-            (k) => typeof groups[0].data[0][k] === 'number',
+          const firstGroup = groups[0]!
+          const firstGroupRow = firstGroup.data[0] ?? {}
+          const firstGroupFields = Object.keys(firstGroupRow).filter(
+            (k) => typeof firstGroupRow[k] === 'number',
           )
 
           if (firstGroupFields.length > 0) {
@@ -207,18 +216,22 @@ export const dataMergeNode: NodeDefinition = {
         console.warn('Failed to generate preview chart for collection', e)
       }
 
-      return {
-        data: markRaw(outputData),
-        chartOption: chartOption ? markRaw(chartOption) : null,
-        stats: {
-          inputCount: items.length,
-          groupCount: items.length,
-          totalRows: outputData.reduce((acc, curr) => acc + curr.data.length, 0),
+      return createTableCollectionResult(markRaw(outputData), {
+        meta: {
+          chartOption: chartOption ? markRaw(chartOption) : null,
+          stats: {
+            inputCount: items.length,
+            groupCount: items.length,
+            totalRows: outputData.reduce((acc, curr) => acc + curr.data.length, 0),
+          },
         },
         lineage: {
-          groups: items.map((item) => ({ sourceNodeId: item.sourceNodeId, name: item.sourceNodeLabel })),
+          groups: items.map((item) => ({
+            sourceNodeId: item.sourceNodeId,
+            name: item.sourceNodeLabel,
+          })),
         },
-      }
+      })
     }
 
     if (config.mergeMode === 'append') {
@@ -264,23 +277,24 @@ export const dataMergeNode: NodeDefinition = {
         lineageFields[sourceTagName] = items.map((item) => ({ sourceNodeId: item.sourceNodeId, sourceField: sourceTagName }))
       }
 
-      return {
-        data: markRaw(outputRows),
-        stats: {
-          inputCount: items.length,
-          inputRows: datasets.map(({ rows }) => rows.length),
-          outputRows: outputRows.length,
-          fieldMode: alignMode,
-          fieldCount: fields.length,
-          filledCellCount,
-        },
-        diagnostics: {
-          warnings: [],
+      return createTableResult(markRaw(outputRows), {
+        meta: {
+          stats: {
+            inputCount: items.length,
+            inputRows: datasets.map(({ rows }) => rows.length),
+            outputRows: outputRows.length,
+            fieldMode: alignMode,
+            fieldCount: fields.length,
+            filledCellCount,
+          },
+          diagnostics: {
+            warnings: [],
+          },
         },
         lineage: {
           fields: lineageFields,
         },
-      }
+      })
     } else {
       // Logic from objectMerge.ts (join mode)
       const baseJoinKey = typeof config.baseJoinKey === 'string' && config.baseJoinKey.trim() ? config.baseJoinKey : 'id'
@@ -380,23 +394,27 @@ export const dataMergeNode: NodeDefinition = {
         return mergedRow
       })
 
-      return {
-        data: markRaw(outputRows),
-        stats: {
-          inputCount: items.length,
-          outputRows: outputRows.length,
-          matchedRows: Math.min(matchedRows, outputRows.length),
-          unmatchedRows: Math.max(outputRows.length - Math.min(matchedRows, outputRows.length), 0),
-          conflictFieldCount: conflicts.length,
-        },
-        diagnostics: {
-          warnings: [],
-          conflicts,
+      return createTableResult(markRaw(outputRows), {
+        meta: {
+          stats: {
+            inputCount: items.length,
+            outputRows: outputRows.length,
+            matchedRows: Math.min(matchedRows, outputRows.length),
+            unmatchedRows: Math.max(
+              outputRows.length - Math.min(matchedRows, outputRows.length),
+              0,
+            ),
+            conflictFieldCount: conflicts.length,
+          },
+          diagnostics: {
+            warnings: [],
+            conflicts,
+          },
         },
         lineage: {
           fields: lineageFields,
         },
-      }
+      })
     }
   },
 }

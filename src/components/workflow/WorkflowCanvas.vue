@@ -1,8 +1,10 @@
 <script setup lang="ts">
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { VueFlow, useVueFlow, type Connection } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
-import { useWorkflowStore, type WorkflowNode } from '@/stores/workflowStore'
+import { useWorkflowStore } from '@/stores/workflowStore'
+import type { WorkflowNode } from '@/utils/storage'
 import NodeSidebar from './NodeSidebar.vue'
 import WorkflowHeader from './WorkflowHeader.vue'
 import BaseNode from './nodes/BaseNode.vue'
@@ -76,7 +78,7 @@ const resetView = async () => {
 // 监听视图复位信号
 watch(
   () => store.needsViewReset,
-  (val) => {
+  (val: boolean) => {
     if (val) {
       resetView()
       store.needsViewReset = false
@@ -96,7 +98,7 @@ const resumeExecution = async (runtimeConfig?: Record<string, any>) => {
 
 watch(
   () => store.lastExecutedTerminalNodeId,
-  (nodeId) => {
+  (nodeId: string | null) => {
     if (nodeId) {
       const node = findNode(nodeId) as WorkflowNode
       if (node && node.data.output) {
@@ -113,7 +115,7 @@ watch(
 
 watch(
   () => store.activeConfigNodeId,
-  (nodeId) => {
+  (nodeId: string | null) => {
     if (nodeId) {
       const node = findNode(nodeId)
       if (node) {
@@ -126,7 +128,7 @@ watch(
 
 watch(
   () => store.pendingConnection,
-  (pending) => {
+  (pending: any) => {
     if (pending) {
       isSidebarVisible.value = true
     }
@@ -137,7 +139,7 @@ const toggleSidebar = () => {
   isSidebarVisible.value = !isSidebarVisible.value
 }
 
-watch(isConfigVisible, (visible) => {
+watch(isConfigVisible, (visible: boolean) => {
   if (!visible) store.activeConfigNodeId = null
 })
 
@@ -191,7 +193,7 @@ onBeforeUnmount(() => {
       >
         <div class="flex items-center gap-3">
           <div class="p-1.5 bg-white/20 rounded-lg">
-            <AlertTriangle size="18" class="text-white" />
+            <AlertTriangle :size="18" class="text-white" />
           </div>
           <div class="flex flex-col">
             <span class="font-bold text-[13px] tracking-tight">历史记录查看模式</span>
@@ -203,7 +205,7 @@ onBeforeUnmount(() => {
           class="h-8 px-4 text-[11px] font-bold bg-white/20 hover:bg-white/30 border-none text-white rounded-lg flex items-center gap-2 transition-all active:scale-95"
           @click="store.exitHistoryMode()"
         >
-          <Undo2 size="14" />
+          <Undo2 :size="14" />
           返回编辑模式
         </Button>
       </div>
@@ -266,8 +268,8 @@ onBeforeUnmount(() => {
           >
             <component
               :is="isSidebarVisible ? ChevronRight : ChevronLeft"
-              size="16"
-              stroke-width="3"
+              :size="16"
+              :stroke-width="3"
             />
           </button>
         </div>
@@ -281,7 +283,7 @@ onBeforeUnmount(() => {
             class="w-10 h-10 bg-white border border-[#efefef] rounded-xl shadow-xl flex items-center justify-center text-[#3c4257] hover:text-indigo-600 transition-all active:scale-90 group cursor-pointer"
             @click="resetView"
           >
-            <Focus size="18" />
+            <Focus :size="18" />
           </button>
         </div>
       </VueFlow>
@@ -306,7 +308,7 @@ onBeforeUnmount(() => {
         class="n8n-execute-bar w-[280px] h-[52px] rounded-2xl shadow-[0_20px_50px_-10px_rgba(16,185,129,0.4)] hover:shadow-emerald-400/60 transform hover:-translate-y-1 transition-all active:scale-[0.97] border-none flex items-center justify-center text-white"
         @click="store.runGlobal"
       >
-        <Play size="20" fill="currentColor" class="mr-3" />
+        <Play :size="20" fill="currentColor" class="mr-3" />
         <span class="text-[14px] font-black tracking-widest uppercase">开始运行工作流</span>
       </Button>
       <Button
@@ -316,7 +318,7 @@ onBeforeUnmount(() => {
         class="w-[52px] h-[52px] rounded-2xl shadow-xl flex items-center justify-center animate-in fade-in zoom-in-75 duration-300"
         @click="store.stopExecution"
       >
-        <Square size="20" fill="currentColor" />
+        <Square :size="20" fill="currentColor" />
       </Button>
     </div>
 
@@ -334,11 +336,11 @@ onBeforeUnmount(() => {
           >
             <component
               :is="isLogExpanded ? ChevronDown : ChevronUp"
-              size="16"
+              :size="16"
               class="text-indigo-600 transition-transform duration-300"
             />
             <div class="flex items-center gap-2.5">
-              <Terminal size="14" :class="isLogExpanded ? 'text-indigo-600' : 'text-[#a3acb9]'" />
+              <Terminal :size="14" :class="isLogExpanded ? 'text-indigo-600' : 'text-[#a3acb9]'" />
               <span
                 class="text-[11px] font-black uppercase tracking-[0.1em]"
                 :class="isLogExpanded ? 'text-[#1a1f36]' : 'text-[#8792a2]'"

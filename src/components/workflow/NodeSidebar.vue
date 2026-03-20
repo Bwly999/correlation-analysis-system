@@ -1,24 +1,50 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, type Component } from 'vue'
 import { Search, ChevronRight, X, Info, Box, Layout } from 'lucide-vue-next'
 
 import NodeIcon from './nodes/NodeIcon.vue'
-import { useWorkflowStore, CONNECTION_RULES } from '@/stores/workflowStore'
+import {
+  useWorkflowStore,
+  CONNECTION_RULES,
+  type PendingConnectionState,
+} from '@/stores/workflowStore'
 import { nodeDefinitions } from '@/nodes/registry'
+import type { WorkflowNode } from '@/utils/storage'
 
 const store = useWorkflowStore()
 const searchQuery = ref('')
 
 const emit = defineEmits(['close'])
 
-const categoryMetadata = [
+type SidebarCategory = {
+  name: string
+  category: 'trigger' | 'action' | 'terminal'
+  label: string
+  icon: Component
+}
+
+type SidebarNode = {
+  type: string
+  label: string
+  desc: string
+  isClickable: boolean
+}
+
+const workflowNodes = computed<WorkflowNode[]>(() => store.nodes as WorkflowNode[])
+const pendingConnection = computed<PendingConnectionState>(() => store.pendingConnection)
+const normalizedSearchQuery = computed(() => searchQuery.value.toLowerCase())
+
+const categoryMetadata: SidebarCategory[] = [
   { name: '数据接入', category: 'trigger', label: '数据接入', icon: Box },
   { name: '数据准备', category: 'action', label: '数据准备', icon: Layout },
   { name: '分析输出', category: 'terminal', label: '分析输出', icon: Box },
 ]
 
 const filteredCategories = computed(() => {
-  const pendingSourceNode = store.nodes.find((n) => n.id === store.pendingConnection?.sourceNodeId)
+  const currentNodes = workflowNodes.value
+  const currentPendingConnection = pendingConnection.value
+  const searchTerm = normalizedSearchQuery.value
+  const pendingSourceNode = currentNodes.find((n) => n.id === currentPendingConnection?.sourceNodeId)
   const sourceCat = pendingSourceNode?.data?.category
   const allowedCategories = sourceCat
     ? CONNECTION_RULES[sourceCat] || []
@@ -26,7 +52,7 @@ const filteredCategories = computed(() => {
 
   return categoryMetadata
     .map((catMeta) => {
-      const nodes = nodeDefinitions
+      const nodes: SidebarNode[] = nodeDefinitions
         .filter((definition) => definition.category === catMeta.category)
         .map((definition) => ({
           type: definition.name,
@@ -36,9 +62,9 @@ const filteredCategories = computed(() => {
         }))
         .filter(
           (node) =>
-            !searchQuery.value ||
-            node.label.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-            node.desc.toLowerCase().includes(searchQuery.value.toLowerCase()),
+            !searchTerm ||
+            node.label.toLowerCase().includes(searchTerm) ||
+            node.desc.toLowerCase().includes(searchTerm),
         )
 
       return { ...catMeta, nodes }
@@ -73,9 +99,11 @@ const categoryTone = (category: string) => {
 }
 
 const onNodeClick = (node: { type: string; label: string }) => {
-  if (store.pendingConnection) {
-    const pendingSourceNode = store.nodes.find(
-      (currentNode) => currentNode.id === store.pendingConnection?.sourceNodeId,
+  const currentPendingConnection = pendingConnection.value
+  if (currentPendingConnection) {
+    const currentNodes = workflowNodes.value
+    const pendingSourceNode = currentNodes.find(
+      (currentNode) => currentNode.id === currentPendingConnection.sourceNodeId,
     )
     const position = pendingSourceNode
       ? { x: pendingSourceNode.position.x + 300, y: pendingSourceNode.position.y }
@@ -85,6 +113,10 @@ const onNodeClick = (node: { type: string; label: string }) => {
   }
 
   store.addAndConnectNode(node.type, node.label, { x: 200, y: 200 })
+}
+
+const clearPendingConnection = () => {
+  store.setPendingConnection(null)
 }
 
 const onDragStart = (event: DragEvent, node: { type: string; label: string }) => {
@@ -104,7 +136,7 @@ const onDragStart = (event: DragEvent, node: { type: string; label: string }) =>
           <div
             class="h-7 w-7 rounded-lg border border-slate-200 bg-white shadow-sm flex items-center justify-center"
           >
-            <Box size="14" class="text-slate-700" />
+            <Box :size="14" class="text-slate-700" />
           </div>
           <div>
             <h2 class="text-[14px] font-semibold text-slate-900 tracking-tight">节点库</h2>
@@ -115,7 +147,7 @@ const onDragStart = (event: DragEvent, node: { type: string; label: string }) =>
           class="p-1.5 text-[#a3acb9] hover:text-[#ef4444] hover:bg-red-50 rounded-lg transition-all duration-200 cursor-pointer"
           @click="emit('close')"
         >
-          <X size="18" stroke-width="2.5" />
+          <X :size="18" :stroke-width="2.5" />
         </button>
       </div>
 
@@ -134,9 +166,9 @@ const onDragStart = (event: DragEvent, node: { type: string; label: string }) =>
       <div class="relative group">
         <div class="absolute left-3.5 top-1/2 -translate-y-1/2 z-10 pointer-events-none">
           <Search
-            size="16"
+            :size="16"
             class="text-[#94a3b8] group-focus-within:text-slate-900 transition-colors duration-200"
-            stroke-width="2.5"
+            :stroke-width="2.5"
           />
         </div>
         <input
@@ -150,7 +182,7 @@ const onDragStart = (event: DragEvent, node: { type: string; label: string }) =>
           class="absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer text-[#94a3b8] hover:text-[#64748b]"
           @click="searchQuery = ''"
         >
-          <X size="14" />
+          <X :size="14" />
         </div>
       </div>
     </div>
@@ -162,7 +194,7 @@ const onDragStart = (event: DragEvent, node: { type: string; label: string }) =>
       >
         <div class="relative z-10 flex items-start gap-3">
           <div class="p-1.5 bg-white/10 rounded-lg text-white ring-1 ring-white/20">
-            <Info size="14" />
+            <Info :size="14" />
           </div>
           <div class="flex-1">
             <p class="text-[12px] font-bold text-white leading-tight">选择连接目标</p>
@@ -172,13 +204,13 @@ const onDragStart = (event: DragEvent, node: { type: string; label: string }) =>
           </div>
           <button
             class="text-white/40 hover:text-white transition-colors cursor-pointer"
-            @click="store.pendingConnection = null"
+            @click="clearPendingConnection"
           >
-            <X size="14" />
+            <X :size="14" />
           </button>
         </div>
         <div class="absolute -right-4 -bottom-4 opacity-5 rotate-12 text-white">
-          <Box size="80" />
+          <Box :size="80" />
         </div>
       </div>
 
@@ -194,7 +226,7 @@ const onDragStart = (event: DragEvent, node: { type: string; label: string }) =>
               <div
                 class="w-5 h-5 rounded-md border border-white/70 shadow-sm flex items-center justify-center bg-white/70"
               >
-                <component :is="category.icon" size="12" class="text-slate-600" />
+                <component :is="category.icon" :size="12" class="text-slate-600" />
               </div>
               <span class="text-[11px] font-bold text-slate-700 tracking-wide truncate">
                 {{ category.label }}
@@ -242,7 +274,7 @@ const onDragStart = (event: DragEvent, node: { type: string; label: string }) =>
                   </span>
                 </div>
                 <ChevronRight
-                  size="13"
+                  :size="13"
                   class="text-slate-300 opacity-0 group-hover:opacity-100 -translate-x-1 group-hover:translate-x-0 transition-all duration-300"
                 />
               </div>

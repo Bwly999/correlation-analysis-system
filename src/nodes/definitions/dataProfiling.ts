@@ -1,5 +1,6 @@
 import { markRaw } from 'vue'
 import type { NodeDefinition } from '../types'
+import { createReportResult, extractTableRows } from '../result'
 
 type FieldType = 'numeric' | 'categorical' | 'datetime' | 'empty'
 type RiskLevel = 'high' | 'medium' | 'low'
@@ -225,11 +226,12 @@ export const dataProfilingNode: NodeDefinition = {
     },
   ],
   execute: async (input, config) => {
-    if (!input || !Array.isArray(input.data) || input.data.length === 0) {
+    const inputRows = extractTableRows(input)
+    if (!inputRows || inputRows.length === 0) {
       throw new Error('无可体检的数据')
     }
 
-    const rows = input.data.filter((row: unknown) => row && typeof row === 'object') as Record<
+    const rows = inputRows.filter((row: unknown) => row && typeof row === 'object') as Record<
       string,
       unknown
     >[]
@@ -410,24 +412,8 @@ export const dataProfilingNode: NodeDefinition = {
       建议: profile.suggestions.join('；'),
     }))
 
-    return {
-      ...input,
-      data: markRaw(rows),
-      profile: markRaw(fieldProfiles),
-      metrics: {
-        rowCount: totalRows,
-        fieldCount: fields.length,
-        numericFieldCount: numericFields.length,
-        categoricalFieldCount: categoricalFields.length,
-        datetimeFieldCount: datetimeFields.length,
-        riskFieldCount: riskFields.length,
-        constantFieldCount: constantFields.length,
-        duplicateRowCount,
-        duplicateRowRate,
-        targetFieldUsability,
-      },
-      viewType: 'report',
-      report: {
+    return createReportResult(
+      {
         title: '数据体检与字段画像',
         sections: [
           {
@@ -451,6 +437,24 @@ export const dataProfilingNode: NodeDefinition = {
           },
         ],
       },
-    }
+      {
+        meta: {
+          sourceData: markRaw(rows),
+          profile: markRaw(fieldProfiles),
+          metrics: {
+            rowCount: totalRows,
+            fieldCount: fields.length,
+            numericFieldCount: numericFields.length,
+            categoricalFieldCount: categoricalFields.length,
+            datetimeFieldCount: datetimeFields.length,
+            riskFieldCount: riskFields.length,
+            constantFieldCount: constantFields.length,
+            duplicateRowCount,
+            duplicateRowRate,
+            targetFieldUsability,
+          },
+        },
+      },
+    )
   },
 }

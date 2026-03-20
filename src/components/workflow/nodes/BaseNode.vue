@@ -15,8 +15,9 @@ import {
   Pin,
   PinOff,
 } from 'lucide-vue-next'
-import { useWorkflowStore } from '@/stores/workflowStore'
+import { useWorkflowStore, type PendingConnectionState } from '@/stores/workflowStore'
 import { getNodeDefinition } from '@/nodes/registry'
+import type { WorkflowNode } from '@/utils/storage'
 import NodeIcon from './NodeIcon.vue'
 
 const props = defineProps<NodeProps>()
@@ -29,15 +30,20 @@ const editedLabel = ref(props.data.label)
 const nameInputRef = ref<HTMLInputElement | null>(null)
 let hoverTimeout: any = null
 
+const workflowNodes = computed<WorkflowNode[]>(() => store.nodes as WorkflowNode[])
+const currentNode = computed<WorkflowNode | undefined>(() =>
+  workflowNodes.value.find((node) => node.id === props.id),
+)
+const pendingConnection = computed<PendingConnectionState>(() => store.pendingConnection)
+const isPendingConnectionSource = computed(() => pendingConnection.value?.sourceNodeId === props.id)
+
 // 从 Store 获取最新的 Label 确保同步
 const currentLabel = computed(() => {
-  const nodeInStore = store.nodes.find((n) => n.id === props.id)
-  return nodeInStore?.data.label || props.data.label
+  return currentNode.value?.data.label || props.data.label
 })
 
 const isPinned = computed(() => {
-  const nodeInStore = store.nodes.find((n) => n.id === props.id)
-  return nodeInStore?.data.isPinned || false
+  return currentNode.value?.data.isPinned || false
 })
 
 const onMouseEnter = () => {
@@ -52,7 +58,7 @@ const onMouseLeave = () => {
 }
 
 const togglePin = () => {
-  const nodeInStore = store.nodes.find((n) => n.id === props.id)
+  const nodeInStore = currentNode.value
   if (nodeInStore) {
     nodeInStore.data.isPinned = !nodeInStore.data.isPinned
     store.addLog(
@@ -76,7 +82,7 @@ const saveName = () => {
   isEditingName.value = false
   const newName = editedLabel.value.trim()
   if (newName) {
-    const nodeInStore = store.nodes.find((n) => n.id === props.id)
+    const nodeInStore = currentNode.value
     if (nodeInStore) {
       nodeInStore.data.label = newName
       store.addLog(`节点重命名为: ${newName}`, 'info', props.id)
@@ -89,7 +95,7 @@ const runNode = (force: boolean) => {
 }
 
 const openConfig = () => {
-  store.activeConfigNodeId = props.id
+  store.setActiveConfigNodeId(props.id)
   store.addLog(`打开配置: ${currentLabel.value}`, 'info', props.id)
 }
 
@@ -98,9 +104,11 @@ const duplicateNode = () => {
 }
 
 const deleteNode = () => {
-  store.nodes = store.nodes.filter((n) => n.id !== props.id)
-  store.edges = store.edges.filter((e) => e.source !== props.id && e.target !== props.id)
-  store.addLog(`已删除节点: ${currentLabel.value}`, 'warn')
+  store.removeNode(props.id)
+}
+
+const startPendingConnection = () => {
+  store.setPendingConnection({ sourceNodeId: props.id })
 }
 
 const statusColors = computed(() => {
@@ -161,7 +169,7 @@ const isMultipleInput = computed(() => {
         v-if="isPinned"
         class="absolute -top-2 -right-2 bg-amber-100 text-amber-600 rounded-full p-1.5 border border-amber-200 shadow-sm z-20"
       >
-        <Pin size="12" fill="currentColor" />
+        <Pin :size="12" fill="currentColor" />
       </div>
 
       <!-- 状态指示器 -->
@@ -172,19 +180,19 @@ const isMultipleInput = computed(() => {
         <Loader2
           v-if="props.data.status === 'running'"
           v-tooltip.bottom="'正在执行...'"
-          size="18"
+          :size="18"
           class="text-indigo-600 animate-spin"
         />
         <CheckCircle
           v-else-if="props.data.status === 'success'"
           v-tooltip.bottom="'执行成功'"
-          size="18"
+          :size="18"
           class="text-emerald-500"
         />
         <AlertTriangle
           v-else-if="props.data.status === 'error'"
           v-tooltip.bottom="props.data.error || '执行失败'"
-          size="18"
+          :size="18"
           class="text-rose-500"
         />
       </div>
@@ -246,11 +254,11 @@ const isMultipleInput = computed(() => {
         class="w-6 h-6 bg-white border border-slate-200 rounded-full flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:border-indigo-400 hover:bg-indigo-50 shadow-sm transition-all -ml-0.5 pointer-events-auto active:scale-90 cursor-pointer"
         :class="{
           'ring-2 ring-indigo-100 border-indigo-500 text-indigo-600 opacity-100 bg-indigo-50':
-            store.pendingConnection?.sourceNodeId === props.id,
+            isPendingConnectionSource,
         }"
-        @click.stop="store.pendingConnection = { sourceNodeId: props.id }"
+        @click.stop="startPendingConnection"
       >
-        <Plus size="14" stroke-width="2.5" />
+        <Plus :size="14" :stroke-width="2.5" />
       </button>
     </div>
 
@@ -267,7 +275,7 @@ const isMultipleInput = computed(() => {
         class="p-1.5 hover:bg-slate-50 rounded-lg text-indigo-600 transition-colors cursor-pointer"
         @click.stop="runNode(true)"
       >
-        <Play size="14" fill="currentColor" />
+        <Play :size="14" fill="currentColor" />
       </button>
       <button
         v-tooltip.top="isPinned ? '取消冻结数据' : '冻结当前数据 (Pin)'"
@@ -275,8 +283,8 @@ const isMultipleInput = computed(() => {
         :class="isPinned ? 'text-amber-500' : 'text-slate-400'"
         @click.stop="togglePin"
       >
-        <Pin v-if="!isPinned" size="14" />
-        <PinOff v-else size="14" />
+        <Pin v-if="!isPinned" :size="14" />
+        <PinOff v-else :size="14" />
       </button>
       <div class="w-[1px] h-4 bg-slate-200 self-center mx-1"></div>
       <button
@@ -284,28 +292,28 @@ const isMultipleInput = computed(() => {
         class="p-1.5 hover:bg-slate-50 rounded-lg text-slate-500 transition-colors cursor-pointer"
         @click.stop="duplicateNode"
       >
-        <Copy size="14" />
+        <Copy :size="14" />
       </button>
       <button
         v-tooltip.top="'重命名'"
         class="p-1.5 hover:bg-slate-50 rounded-lg text-slate-500 transition-colors cursor-pointer"
         @click.stop="startEditing"
       >
-        <Pencil size="14" />
+        <Pencil :size="14" />
       </button>
       <button
         v-tooltip.top="'节点设置'"
         class="p-1.5 hover:bg-slate-50 rounded-lg text-slate-500 transition-colors cursor-pointer"
         @click.stop="openConfig"
       >
-        <Settings size="14" />
+        <Settings :size="14" />
       </button>
       <button
         v-tooltip.top="'删除节点'"
         class="p-1.5 hover:bg-rose-50 rounded-lg text-rose-500 transition-colors cursor-pointer"
         @click.stop="deleteNode"
       >
-        <Trash2 size="14" />
+        <Trash2 :size="14" />
       </button>
     </NodeToolbar>
   </div>

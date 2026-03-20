@@ -36,7 +36,7 @@ describe('Storage Abstraction Extensibility', () => {
 
     const workflows = await serverProvider.getWorkflows()
     expect(workflows.length).toBe(1)
-    expect(workflows[0].name).toBe('Cloud Workflow')
+    expect(workflows[0]?.name).toBe('Cloud Workflow')
 
     const saveSpy = vi.spyOn(serverProvider, 'saveWorkflow')
     await serverProvider.saveWorkflow({

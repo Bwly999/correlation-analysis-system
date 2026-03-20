@@ -3,27 +3,31 @@ import { ref, computed } from 'vue'
 import { EdgeLabelRenderer, getSmoothStepPath, type EdgeProps } from '@vue-flow/core'
 import { Plus, Trash2 } from 'lucide-vue-next'
 import { useWorkflowStore } from '@/stores/workflowStore'
+import type { WorkflowNode } from '@/utils/storage'
 
 const props = defineProps<EdgeProps>()
 const store = useWorkflowStore()
 
 const isHovered = ref(false)
 const path = computed(() => getSmoothStepPath(props))
+const workflowNodes = computed<WorkflowNode[]>(() => store.nodes as WorkflowNode[])
 
 const onAddNode = () => {
-  store.pendingConnection = {
+  store.setPendingConnection({
     sourceNodeId: props.source,
     edgeId: props.id,
-  }
-  store.addLog('Select a node to insert between', 'info')
+  })
+  store.addLog('请选择要插入到中间的节点', 'info')
 }
 
 const onDeleteEdge = () => {
-  store.edges = store.edges.filter((e) => e.id !== props.id)
-  store.addLog('Edge deleted', 'info')
+  store.removeEdge(props.id)
+  store.addLog('连线已删除', 'info')
 }
 
-const sourceNode = computed(() => store.nodes.find((n) => n.id === props.source))
+const sourceNode = computed<WorkflowNode | undefined>(() =>
+  workflowNodes.value.find((node) => node.id === props.source),
+)
 </script>
 
 <template>
@@ -49,7 +53,7 @@ const sourceNode = computed(() => store.nodes.find((n) => n.id === props.source)
     :d="path[0]"
     fill="none"
     stroke="transparent"
-    stroke-width="20"
+    :stroke-width="20"
     class="cursor-pointer"
     @mouseenter="isHovered = true"
     @mouseleave="isHovered = false"
@@ -75,7 +79,7 @@ const sourceNode = computed(() => store.nodes.find((n) => n.id === props.source)
           title="在中间插入节点"
           @click.stop="onAddNode"
         >
-          <Plus size="14" />
+          <Plus :size="14" />
         </button>
         <div class="w-[1px] h-3 bg-slate-100"></div>
         <button
@@ -83,7 +87,7 @@ const sourceNode = computed(() => store.nodes.find((n) => n.id === props.source)
           title="删除连线"
           @click.stop="onDeleteEdge"
         >
-          <Trash2 size="14" />
+          <Trash2 :size="14" />
         </button>
       </div>
 
