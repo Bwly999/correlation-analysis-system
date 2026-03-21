@@ -419,7 +419,6 @@ const formatDuration = (duration: number) => {
               >
                 <WorkflowResultPanel
                   :node="node"
-                  free-grid
                   show-drag-handle
                   @open-detail="openDetail"
                 />

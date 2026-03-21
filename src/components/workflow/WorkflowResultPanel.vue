@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { defineAsyncComponent } from 'vue'
+import { computed, defineAsyncComponent } from 'vue'
 import { Maximize2, GripVertical } from 'lucide-vue-next'
 import { workflowViewerRegistry } from './viewers/registry'
 import { getResultViewerKey, normalizeWorkflowResult } from './resultView'
@@ -11,15 +10,10 @@ const JsonViewer = defineAsyncComponent(() => import('./viewers/JsonViewer.vue')
 const props = defineProps<{
   node: ResultDashboardNode
   showDragHandle?: boolean
-  freeGrid?: boolean
-  colSpan?: number
-  rowSpan?: number
 }>()
 
 const emit = defineEmits<{
   openDetail: [node: ResultDashboardNode]
-  widthChange: [nodeId: string, nextSpan: number]
-  heightChange: [nodeId: string, nextSpan: number]
 }>()
 
 const normalizedResult = computed(() => normalizeWorkflowResult(props.node.output))
@@ -54,37 +48,6 @@ const activeViewer = computed(() => {
       </div>
 
       <div class="flex items-center gap-2 shrink-0">
-        <div v-if="freeGrid" class="flex items-center gap-1">
-          <button
-            type="button"
-            class="panel-size-button"
-            @click="emit('widthChange', node.nodeId, Math.max(1, (colSpan ?? 1) - 1))"
-          >
-            宽-
-          </button>
-          <button
-            type="button"
-            class="panel-size-button"
-            @click="emit('widthChange', node.nodeId, Math.min(4, (colSpan ?? 1) + 1))"
-          >
-            宽+
-          </button>
-          <button
-            type="button"
-            class="panel-size-button"
-            @click="emit('heightChange', node.nodeId, Math.max(1, (rowSpan ?? 1) - 1))"
-          >
-            高-
-          </button>
-          <button
-            type="button"
-            class="panel-size-button"
-            @click="emit('heightChange', node.nodeId, Math.min(3, (rowSpan ?? 1) + 1))"
-          >
-            高+
-          </button>
-        </div>
-
         <button
           type="button"
           class="w-8 h-8 rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-slate-900 hover:border-slate-300 transition-colors cursor-pointer"
@@ -114,24 +77,3 @@ const activeViewer = computed(() => {
     </div>
   </article>
 </template>
-
-<style scoped>
-.panel-size-button {
-  padding: 4px 6px;
-  border-radius: 10px;
-  border: 1px solid #e2e8f0;
-  background: #fff;
-  font-size: 10px;
-  font-weight: 700;
-  color: #475569;
-  cursor: pointer;
-  transition:
-    border-color 0.2s ease,
-    color 0.2s ease;
-}
-
-.panel-size-button:hover {
-  border-color: #94a3b8;
-  color: #0f172a;
-}
-</style>
