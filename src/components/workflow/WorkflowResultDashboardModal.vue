@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { VueDraggable } from 'vue-draggable-plus'
 import Dialog from 'primevue/dialog'
 import Button from 'primevue/button'
-import { LayoutGrid, Grip, BarChart3, AlertTriangle, Clock3, SquareDashedMousePointer } from 'lucide-vue-next'
+import { LayoutGrid, Grip, BarChart3, AlertTriangle, Clock3, SquareDashedMousePointer, X } from 'lucide-vue-next'
 import DataAnalysisModal from './DataAnalysisModal.vue'
 import WorkflowResultPanel from './WorkflowResultPanel.vue'
 import {
@@ -221,7 +221,9 @@ const formatDuration = (duration: number) => {
           </h2>
         </div>
         <div class="flex items-center gap-2">
-          <Button label="关闭" severity="secondary" outlined @click="emit('close')" />
+          <button type="button" class="dashboard-close-button" aria-label="关闭结果看板" @click="emit('close')">
+            <X :size="18" />
+          </button>
         </div>
       </div>
     </template>
@@ -551,6 +553,29 @@ const formatDuration = (duration: number) => {
   border-color: #2563eb;
   background: #eff6ff;
   color: #2563eb;
+}
+
+.dashboard-close-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #475569;
+  cursor: pointer;
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.dashboard-close-button:hover {
+  border-color: #94a3b8;
+  background: #f8fafc;
+  color: #0f172a;
 }
 
 .dashboard-grid {

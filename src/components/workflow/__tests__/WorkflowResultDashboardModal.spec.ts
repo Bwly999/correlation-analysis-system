@@ -93,6 +93,18 @@ const createWrapper = () =>
   })
 
 describe('WorkflowResultDashboardModal', () => {
+  it('renders a top-right X icon close button and emits close on click', async () => {
+    const wrapper = createWrapper()
+
+    const closeButton = wrapper.find('button[aria-label="关闭结果看板"]')
+    expect(closeButton.exists()).toBe(true)
+    expect(closeButton.find('svg').exists()).toBe(true)
+
+    await closeButton.trigger('click')
+
+    expect(wrapper.emitted('close')).toHaveLength(1)
+  })
+
   it('uses vue-draggable-plus with grip-only handle and animated reorder in grid mode', async () => {
     const wrapper = createWrapper()
     const getPanelLabels = () => wrapper.findAll('.panel-stub').map((item) => item.text())
