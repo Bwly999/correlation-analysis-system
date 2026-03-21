@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { VueDraggable } from 'vue-draggable-plus'
 import Dialog from 'primevue/dialog'
 import Button from 'primevue/button'
 import { LayoutGrid, Grip, BarChart3, AlertTriangle, Clock3, SquareDashedMousePointer } from 'lucide-vue-next'
@@ -31,7 +32,6 @@ const gridColumns = ref(2)
 const layoutMode = ref<LayoutMode>('grid')
 const freeGridOrder = ref<string[]>([])
 const freeGridLayouts = ref<Record<string, FreeGridItemLayout>>({})
-const dragNodeId = ref<string | null>(null)
 const detailNode = ref<ResultDashboardNode | null>(null)
 const resizeState = ref<{
   nodeId: string
@@ -70,6 +70,13 @@ const selectedNodes = computed(() => {
     }
   })
   return ordered
+})
+
+const orderedSelectedNodes = computed<ResultDashboardNode[]>({
+  get: () => selectedNodes.value,
+  set: (nextNodes) => {
+    freeGridOrder.value = nextNodes.map((node) => node.nodeId)
+  },
 })
 
 const createDefaultFreeGridLayout = (_index: number): FreeGridItemLayout => {
@@ -131,25 +138,6 @@ const openDetail = (node: ResultDashboardNode) => {
   detailNode.value = node
 }
 
-const setDragNode = (nodeId: string) => {
-  dragNodeId.value = nodeId
-}
-
-const reorderPanels = (targetNodeId: string) => {
-  const sourceNodeId = dragNodeId.value
-  if (!sourceNodeId || sourceNodeId === targetNodeId) return
-
-  const nextOrder = [...freeGridOrder.value]
-  const sourceIndex = nextOrder.indexOf(sourceNodeId)
-  const targetIndex = nextOrder.indexOf(targetNodeId)
-  if (sourceIndex < 0 || targetIndex < 0) return
-
-  nextOrder.splice(sourceIndex, 1)
-  nextOrder.splice(targetIndex, 0, sourceNodeId)
-  freeGridOrder.value = nextOrder
-  dragNodeId.value = null
-}
-
 const handleResizeMove = (event: MouseEvent) => {
   if (!resizeState.value) return
 
@@ -175,7 +163,6 @@ const stopResize = () => {
 const startResize = (nodeId: string, event: MouseEvent) => {
   event.preventDefault()
   event.stopPropagation()
-  dragNodeId.value = null
 
   const currentLayout = freeGridLayouts.value[nodeId] ?? createDefaultFreeGridLayout(0)
   resizeState.value = {
@@ -378,19 +365,23 @@ const formatDuration = (duration: number) => {
               <p class="mt-2 text-sm text-slate-500">请从左侧勾选至少一个有结果节点，右侧会自动加入对应分析面板。</p>
             </div>
 
-            <div
+            <VueDraggable
               v-else-if="layoutMode === 'grid'"
+              v-model="orderedSelectedNodes"
               class="dashboard-grid"
+              item-key="nodeId"
+              tag="div"
+              handle=".dashboard-panel__drag-handle"
+              :animation="180"
+              ghost-class="dashboard-sort-ghost"
+              chosen-class="dashboard-sort-chosen"
+              drag-class="dashboard-sort-drag"
               :style="{ gridTemplateColumns: `repeat(${gridColumns}, minmax(0, 1fr))` }"
             >
               <div
-                v-for="node in selectedNodes"
+                v-for="node in orderedSelectedNodes"
                 :key="node.nodeId"
                 class="dashboard-grid__item"
-                draggable="true"
-                @dragstart="setDragNode(node.nodeId)"
-                @dragover.prevent
-                @drop="reorderPanels(node.nodeId)"
               >
                 <WorkflowResultPanel
                   :node="node"
@@ -398,24 +389,28 @@ const formatDuration = (duration: number) => {
                   @open-detail="openDetail"
                 />
               </div>
-            </div>
+            </VueDraggable>
 
-            <div
+            <VueDraggable
               v-else
+              v-model="orderedSelectedNodes"
               class="dashboard-free-grid"
+              item-key="nodeId"
+              tag="div"
+              handle=".dashboard-panel__drag-handle"
+              :animation="180"
+              ghost-class="dashboard-sort-ghost"
+              chosen-class="dashboard-sort-chosen"
+              drag-class="dashboard-sort-drag"
             >
               <div
-                v-for="node in selectedNodes"
+                v-for="node in orderedSelectedNodes"
                 :key="node.nodeId"
                 class="dashboard-free-grid__item"
-                draggable="true"
                 :style="{
                   width: `${freeGridLayouts[node.nodeId]?.width ?? FREE_GRID_DEFAULT_WIDTH}px`,
                   height: `${freeGridLayouts[node.nodeId]?.height ?? FREE_GRID_DEFAULT_HEIGHT}px`,
                 }"
-                @dragstart="setDragNode(node.nodeId)"
-                @dragover.prevent
-                @drop="reorderPanels(node.nodeId)"
               >
                 <WorkflowResultPanel
                   :node="node"
@@ -428,7 +423,7 @@ const formatDuration = (duration: number) => {
                   @mousedown="startResize(node.nodeId, $event)"
                 />
               </div>
-            </div>
+            </VueDraggable>
           </div>
         </section>
       </div>
@@ -582,6 +577,19 @@ const formatDuration = (duration: number) => {
   min-height: 0;
   position: relative;
   flex: 0 0 auto;
+}
+
+.dashboard-sort-ghost {
+  opacity: 0.35;
+}
+
+.dashboard-sort-chosen {
+  z-index: 2;
+}
+
+.dashboard-sort-drag {
+  transform: rotate(1deg);
+  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.18);
 }
 
 .dashboard-free-grid__resize-handle {

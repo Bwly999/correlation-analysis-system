@@ -1,7 +1,20 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import WorkflowResultDashboardModal from '../WorkflowResultDashboardModal.vue'
 import type { WorkflowResultDashboardSummary } from '../resultDashboard'
+
+vi.mock('vue-draggable-plus', () => ({
+  VueDraggable: {
+    name: 'VueDraggable',
+    props: ['modelValue', 'handle', 'animation', 'itemKey', 'tag'],
+    emits: ['update:modelValue'],
+    template: `
+      <component :is="tag || 'div'" data-testid="draggable-root">
+        <slot />
+      </component>
+    `,
+  },
+}))
 
 const summary: WorkflowResultDashboardSummary = {
   workflowName: '测试工作流',
@@ -55,68 +68,59 @@ const summary: WorkflowResultDashboardSummary = {
   ],
 }
 
-describe('WorkflowResultDashboardModal', () => {
-  it('supports drag reorder in grid mode', async () => {
-    const wrapper = mount(WorkflowResultDashboardModal, {
-      props: {
-        visible: true,
-        summary,
-      },
-      global: {
-        stubs: {
-          Dialog: {
-            template: '<div><slot name="header" /><slot /></div>',
-          },
-          Button: {
-            template: '<button><slot />{{ label }}</button>',
-            props: ['label'],
-          },
-          WorkflowResultPanel: {
-            props: ['node'],
-            template: '<div class="panel-stub">{{ node.label }}</div>',
-          },
-          DataAnalysisModal: true,
+const createWrapper = () =>
+  mount(WorkflowResultDashboardModal, {
+    props: {
+      visible: true,
+      summary,
+    },
+    global: {
+      stubs: {
+        Dialog: {
+          template: '<div><slot name="header" /><slot /></div>',
         },
+        Button: {
+          template: '<button><slot />{{ label }}</button>',
+          props: ['label'],
+        },
+        WorkflowResultPanel: {
+          props: ['node'],
+          template: '<div class="panel-stub">{{ node.label }}</div>',
+        },
+        DataAnalysisModal: true,
       },
-    })
+    },
+  })
 
+describe('WorkflowResultDashboardModal', () => {
+  it('uses vue-draggable-plus with grip-only handle and animated reorder in grid mode', async () => {
+    const wrapper = createWrapper()
     const getPanelLabels = () => wrapper.findAll('.panel-stub').map((item) => item.text())
 
     expect(getPanelLabels()).toEqual(['报告 A', '报告 B'])
 
-    const gridItems = wrapper.findAll('.dashboard-grid__item')
-    await gridItems[0]!.trigger('dragstart')
-    await gridItems[1]!.trigger('drop')
+    const draggable = wrapper.findComponent({ name: 'VueDraggable' })
+    expect(draggable.exists()).toBe(true)
+    expect(draggable.props('handle')).toBe('.dashboard-panel__drag-handle')
+    expect(draggable.props('animation')).toBe(180)
+
+    await draggable.vm.$emit('update:modelValue', [summary.nodes[1], summary.nodes[0]])
+    await wrapper.vm.$nextTick()
 
     expect(getPanelLabels()).toEqual(['报告 B', '报告 A'])
   })
 
-  it('resizes free-grid cards by dragging the bottom-right handle', async () => {
-    const wrapper = mount(WorkflowResultDashboardModal, {
-      props: {
-        visible: true,
-        summary,
-      },
-      global: {
-        stubs: {
-          Dialog: {
-            template: '<div><slot name="header" /><slot /></div>',
-          },
-          Button: {
-            template: '<button><slot />{{ label }}</button>',
-            props: ['label'],
-          },
-          WorkflowResultPanel: {
-            props: ['node'],
-            template: '<div class="panel-stub">{{ node.label }}</div>',
-          },
-          DataAnalysisModal: true,
-        },
-      },
-    })
+  it('uses vue-draggable-plus in free-grid mode and keeps bottom-right resize behavior', async () => {
+    const wrapper = createWrapper()
 
     const freeGridModeButton = wrapper.findAll('.toolbar-button')[1]
     await freeGridModeButton!.trigger('click')
+
+    const draggables = wrapper.findAllComponents({ name: 'VueDraggable' })
+    const freeGridDraggable = draggables[0]
+    expect(freeGridDraggable).toBeTruthy()
+    expect(freeGridDraggable!.props('handle')).toBe('.dashboard-panel__drag-handle')
+    expect(freeGridDraggable!.props('animation')).toBe(180)
 
     const firstItem = wrapper.find('.dashboard-free-grid__item')
     expect(firstItem.attributes('style')).not.toContain('left:')

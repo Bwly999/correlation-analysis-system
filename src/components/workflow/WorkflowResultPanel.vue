@@ -29,9 +29,16 @@ const activeViewer = computed(() => {
     class="h-full min-h-0 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col"
   >
     <header class="px-4 py-3 border-b border-slate-100 bg-slate-50/80 flex items-start justify-between gap-3">
-      <div class="min-w-0">
+      <div class="min-w-0 flex-1">
         <div class="flex items-center gap-2 min-w-0">
-          <GripVertical v-if="showDragHandle" :size="14" class="text-slate-400 shrink-0 cursor-move" />
+          <button
+            v-if="showDragHandle"
+            type="button"
+            class="dashboard-panel__drag-handle shrink-0 text-slate-400 hover:text-slate-600 transition-colors"
+            aria-label="拖拽排序"
+          >
+            <GripVertical :size="14" />
+          </button>
           <h3 class="text-sm font-black text-slate-800 truncate">{{ node.label }}</h3>
           <span
             class="px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0"
@@ -77,3 +84,21 @@ const activeViewer = computed(() => {
     </div>
   </article>
 </template>
+
+<style scoped>
+.dashboard-panel__drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  cursor: grab;
+}
+
+.dashboard-panel__drag-handle:active {
+  cursor: grabbing;
+}
+</style>
