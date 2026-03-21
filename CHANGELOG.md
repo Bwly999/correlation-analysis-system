@@ -2,6 +2,12 @@
 
 ## [2026-03-21]
 
+### 文档 (Docs)
+
+- **Agent 约束补充**:
+  - 在根目录 `AGENTS.md` 中新增 PrimeVue 文档入口说明，明确 `ref/primeVue` 下 `llms.txt`、`llms-full.txt` 与 `multiSelect.txt` 的使用方式。
+  - 补充中文写入后的编码检查要求，涉及中文内容写入时必须检查是否出现乱码，若有乱码需先修复。
+
 ### 新增
 
 - **JS代码执行节点**:

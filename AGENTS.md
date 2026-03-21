@@ -40,12 +40,28 @@ pnpm build
 - 提交前至少应跑与改动相关的测试
 - 若改动影响工作流链路、节点协议、viewer 或持久化，默认需要补跑 `pnpm test:unit` 与 `pnpm build`
 
+## 3.1 PrimeVue 文档入口
+
+PrimeVue 相关参考文档统一放在 `./ref/primeVue/` 目录下，按以下方式使用：
+
+- `./ref/primeVue/llms.txt`：PrimeVue 文档总索引，适合先快速定位指南页、组件页与专题页
+- `./ref/primeVue/llms-full.txt`：PrimeVue 完整文档导出，适合在已知主题后继续查找完整说明、示例与配置细节
+- `./ref/primeVue/multiSelect.txt`：`MultiSelect` 相关专题补充资料
+
+要求：
+
+- 涉及 PrimeVue 用法、属性、事件、插槽、样式方案、表单能力、Pass Through、Tailwind 集成时，优先参考 `./ref/primeVue/` 下文档
+- 推荐先看 `./ref/primeVue/llms.txt`，确认目标主题后再到 `./ref/primeVue/llms-full.txt` 搜索完整正文
+- 若索引内容与完整正文存在信息粒度差异，以 `./ref/primeVue/llms-full.txt` 为准
+- 修改基于 PrimeVue 的实现时，应先核对仓库内已有封装、样式约束和中文文案约束，不要直接照搬外部示例
+
 ## 4. 开发约束
 
 ### 4.1 文案与交互
 
 - 所有用户可见文案必须使用中文
 - 大模型写入或修改中文内容时必须特别注意编码正确性，严禁产生乱码；若发现乱码，必须先修复后再提交
+- 写入任意文件时只要涉及中文内容，必须在写入后检查是否出现乱码；若发现乱码，必须先修复再继续后续工作
 - 工作流、节点、弹窗、提示语、占位符都应保持中文一致性
 - 若新增工作流相关能力，请同步检查 `工作流系统.md` 与 `工作流节点说明.md` 是否需要更新
 
