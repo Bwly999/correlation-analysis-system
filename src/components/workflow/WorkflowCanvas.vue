@@ -11,13 +11,15 @@ import BaseNode from './nodes/BaseNode.vue'
 import LogPanel from './LogPanel.vue'
 import NodeConfigModal from './NodeConfigModal.vue'
 import RuntimeInputModal from './RuntimeInputModal.vue'
-import DataAnalysisModal from './DataAnalysisModal.vue'
+import WorkflowResultDashboardModal from './WorkflowResultDashboardModal.vue'
 import WorkflowManagerModal from './WorkflowManagerModal.vue'
 import HelpCenterModal from './HelpCenterModal.vue'
 import { getWorkflowLayoutMetrics } from './layout'
+import { buildResultDashboardSummary, type WorkflowResultDashboardSummary } from './resultDashboard'
 import Button from 'primevue/button'
 import N8nEdge from './edges/N8nEdge.vue'
 import {
+  BarChart3,
   ChevronUp,
   ChevronDown,
   Play,
@@ -177,8 +179,13 @@ onMounted(async () => {
   openWorkflowList()
 })
 
-// 深度分析弹窗状态
-const analysisModal = ref({ visible: false, title: '', data: null as any })
+const resultDashboardModal = ref<{
+  visible: boolean
+  summary: WorkflowResultDashboardSummary | null
+}>({
+  visible: false,
+  summary: null,
+})
 
 const openWorkflowList = async () => {
   isWorkflowListVisible.value = true
@@ -237,18 +244,25 @@ const resumeExecution = async (runtimeConfig?: Record<string, any>) => {
 }
 
 watch(
-  () => store.lastExecutedTerminalNodeId,
-  (nodeId: string | null) => {
-    if (nodeId) {
-      const node = findNode(nodeId) as WorkflowNode
-      if (node && node.data.output) {
-        analysisModal.value = {
-          visible: true,
-          title: `${node.data.label} 分析结果`,
-          data: node.data.output,
-        }
-        store.lastExecutedTerminalNodeId = null
-      }
+  () => store.lastRunDashboard,
+  (dashboard) => {
+    if (!dashboard) return
+
+    const scopedNodes = store.nodes.filter((node) =>
+      dashboard.executionScopeNodeIds.includes(node.id),
+    )
+
+    resultDashboardModal.value = {
+      visible: true,
+      summary: buildResultDashboardSummary({
+        workflowName: dashboard.workflowName,
+        status: dashboard.status,
+        startTime: dashboard.startTime,
+        duration: dashboard.duration,
+        executionTargetIds: dashboard.executionTargetIds,
+        terminalNodeIds: dashboard.terminalNodeIds,
+        nodes: scopedNodes,
+      }),
     }
   },
 )
@@ -466,6 +480,15 @@ onBeforeUnmount(() => {
         >
           <Square :size="18" fill="currentColor" />
         </button>
+        <button
+          v-if="resultDashboardModal.summary"
+          type="button"
+          class="workflow-dashboard-entry"
+          @click="resultDashboardModal.visible = true"
+        >
+          <BarChart3 :size="16" />
+          <span>结果看板</span>
+        </button>
       </div>
     </div>
 
@@ -529,11 +552,10 @@ onBeforeUnmount(() => {
       @close="store.pendingExecution = null"
       @confirm="resumeExecution"
     />
-    <DataAnalysisModal
-      :visible="analysisModal.visible"
-      :title="analysisModal.title"
-      :data="analysisModal.data"
-      @close="analysisModal.visible = false"
+    <WorkflowResultDashboardModal
+      :visible="resultDashboardModal.visible"
+      :summary="resultDashboardModal.summary"
+      @close="resultDashboardModal.visible = false"
     />
     <UnsavedWorkflowDialog
       :visible="isUnsavedDialogVisible"
@@ -722,5 +744,31 @@ onBeforeUnmount(() => {
   background: #ffffff !important;
   border: 1px solid rgba(148, 163, 184, 0.24) !important;
   box-shadow: none;
+}
+
+.workflow-dashboard-entry {
+  min-height: 54px;
+  padding: 0 16px;
+  border-radius: 18px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  background: rgba(255, 255, 255, 0.95);
+  color: #0f172a;
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+  transition:
+    border-color 0.2s ease,
+    color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.workflow-dashboard-entry:hover {
+  border-color: rgba(37, 99, 235, 0.28);
+  color: #2563eb;
+  transform: translateY(-1px);
 }
 </style>

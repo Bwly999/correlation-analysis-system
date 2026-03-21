@@ -33,6 +33,17 @@ type OriginalWorkflowState = {
   id: string | null
 }
 
+export type WorkflowRunDashboardState = {
+  id: string
+  workflowName: string
+  status: 'success' | 'error' | 'stopped'
+  startTime: number
+  duration: number
+  executionTargetIds: string[]
+  executionScopeNodeIds: string[]
+  terminalNodeIds: string[]
+}
+
 export const useWorkflowStore = defineStore('workflow', () => {
   const nodes = ref([]) as Ref<WorkflowNode[]>
   const edges = ref([]) as Ref<Edge[]>
@@ -59,6 +70,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
   let pendingExecutionResolver: ((result: 'RESUMED' | 'STOPPED') => void) | null = null
   let globalRuntimeQueueNodeIds: string[] = []
   const lastExecutedTerminalNodeId = ref<string | null>(null)
+  const lastRunDashboard = ref<WorkflowRunDashboardState | null>(null)
   const executionHistory = ref([]) as Ref<ExecutionRecord[]>
   const savedWorkflows = ref([]) as Ref<SavedWorkflow[]>
   const lastSavedWorkflowSignature = ref('')
@@ -203,6 +215,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     currentWorkflowId.value = null
     isHistoryMode.value = false
     originalWorkflowState.value = null
+    lastRunDashboard.value = null
     addLog('已创建新工作流', 'info')
     syncSavedWorkflowSignature()
   }
@@ -237,6 +250,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
       currentWorkflowId.value = workflow.id
       addLog(`已加载工作流: ${workflow.name}`, 'info')
       needsViewReset.value = true
+      lastRunDashboard.value = null
       syncSavedWorkflowSignature()
     }
   }
@@ -286,6 +300,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
         edges.value = serializeWorkflowEdges(workflow.edges || [])
         workflowName.value = workflow.name || '导入的工作流'
         currentWorkflowId.value = null
+        lastRunDashboard.value = null
         addLog(`成功导入工作流: ${workflowName.value}`, 'info')
         lastSavedWorkflowSignature.value = getWorkflowPersistenceSignature()
         markWorkflowAsExplicitlyUnsaved()
@@ -717,6 +732,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
 
       if (node.data.useManualInput) {
         addLog(`节点 ${node.data.label} 使用手动模拟输入运行`, 'info', nodeId)
+        node.data.error = undefined
         let parsedInput = node.data.manualInput
         if (typeof parsedInput === 'string' && parsedInput.trim()) {
           try {
@@ -728,12 +744,14 @@ export const useWorkflowStore = defineStore('workflow', () => {
         const result = await definition.execute(parsedInput, resolvedConfig)
         node.data.output = markRaw(toStoredOutput(result))
         node.data.status = 'success'
+        node.data.error = undefined
         return node.data.output
       }
 
       if (!forceUpdate && node.data.output) return node.data.output
 
       node.data.status = 'running'
+      node.data.error = undefined
 
       const currentEdges = getCurrentEdges()
       const incomingEdges = currentEdges.filter((e) => e.target === nodeId)
@@ -781,10 +799,14 @@ export const useWorkflowStore = defineStore('workflow', () => {
 
       node.data.output = markRaw(toStoredOutput(result))
       node.data.status = 'success'
+      node.data.error = undefined
       addLog(`执行成功: ${node.data.label}`, 'info', nodeId)
       return node.data.output
     } catch (error: any) {
-      if (node) node.data.status = error.message === 'User Aborted' ? 'idle' : 'error'
+      if (node) {
+        node.data.status = error.message === 'User Aborted' ? 'idle' : 'error'
+        node.data.error = error.message === 'User Aborted' ? undefined : error.message
+      }
       if (error.message !== 'User Aborted') {
         addLog(`执行失败: ${error.message}`, 'error', nodeId)
         throw error
@@ -819,6 +841,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
 
     isRunning.value = true
     isStopping.value = false
+    lastRunDashboard.value = null
     const startTime = Date.now()
     addLog('开始全局运行...', 'info')
 
@@ -843,12 +866,13 @@ export const useWorkflowStore = defineStore('workflow', () => {
       if (!node.data.isPinned) {
         node.data.status = 'idle'
         node.data.output = null
+        node.data.error = undefined
       }
     })
 
     let finalStatus: 'success' | 'error' | 'stopped' = 'success'
+    const executionScopeNodeIds = new Set<string>()
     try {
-      const executionScopeNodeIds = new Set<string>()
       executionTargets.forEach((node) => {
         collectUpstreamNodeIds(node.id, executionScopeNodeIds)
       })
@@ -893,6 +917,17 @@ export const useWorkflowStore = defineStore('workflow', () => {
         '工作流运行结束',
         finalStatus === 'stopped' ? 'warn' : finalStatus === 'error' ? 'error' : 'info',
       )
+
+      lastRunDashboard.value = {
+        id: `run_${startTime}`,
+        workflowName: workflowName.value,
+        status: finalStatus,
+        startTime,
+        duration,
+        executionTargetIds: executionTargets.map((node) => node.id),
+        executionScopeNodeIds: [...executionScopeNodeIds],
+        terminalNodeIds: terminalNodes.map((node) => node.id),
+      }
 
       const record: ExecutionRecord = {
         id: `exec_${Date.now()}`,
@@ -956,6 +991,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     activeConfigNodeId,
     pendingExecution,
     lastExecutedTerminalNodeId,
+    lastRunDashboard,
     executionHistory,
     savedWorkflows,
     isHistoryMode,

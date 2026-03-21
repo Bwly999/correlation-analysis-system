@@ -27,6 +27,15 @@ const workflowManagerModalStub = defineComponent({
   emits: ['close', 'load-workflow', 'create-workflow'],
   template: '<div class="workflow-manager-modal-stub" :data-visible="visible"></div>',
 })
+const workflowResultDashboardModalStub = defineComponent({
+  name: 'WorkflowResultDashboardModal',
+  props: {
+    visible: Boolean,
+    summary: Object,
+  },
+  template:
+    '<div class="workflow-result-dashboard-modal-stub" :data-visible="visible">{{ summary?.workflowName }}</div>',
+})
 
 const flushAsyncWork = async () => {
   await Promise.resolve()
@@ -95,7 +104,7 @@ describe('WorkflowCanvas', () => {
           LogPanel: { template: '<div />' },
           NodeConfigModal: { template: '<div />' },
           RuntimeInputModal: runtimeInputModalStub,
-          DataAnalysisModal: { template: '<div />' },
+          WorkflowResultDashboardModal: { template: '<div />' },
           WorkflowManagerModal: workflowManagerModalStub,
           ConfirmDialog: { template: '<div />' },
           Button: { template: '<button><slot /></button>' },
@@ -148,7 +157,7 @@ describe('WorkflowCanvas', () => {
           LogPanel: { template: '<div />' },
           NodeConfigModal: { template: '<div />' },
           RuntimeInputModal: runtimeInputModalStub,
-          DataAnalysisModal: { template: '<div />' },
+          WorkflowResultDashboardModal: { template: '<div />' },
           WorkflowManagerModal: workflowManagerModalStub,
           ConfirmDialog: { template: '<div />' },
           Button: { template: '<button><slot /></button>' },
@@ -166,6 +175,73 @@ describe('WorkflowCanvas', () => {
     expect(resumeSpy).toHaveBeenCalledTimes(1)
   })
 
+  it('opens the result dashboard when a run dashboard summary is published', async () => {
+    const store = useWorkflowStore()
+    store.nodes = [
+      {
+        id: 'terminal_1',
+        type: 'custom',
+        position: { x: 0, y: 0 },
+        label: '相关性分析',
+        data: {
+          label: '相关性分析',
+          type: 'pearson',
+          category: 'terminal',
+          status: 'success',
+          config: {},
+          logs: [],
+          output: {
+            kind: 'report',
+            payload: { title: '相关性结果', sections: [] },
+            preview: { viewer: 'report-viewer' },
+          },
+        },
+      } as any,
+    ]
+    const wrapper = mount(WorkflowCanvas, {
+      global: {
+        stubs: {
+          Background: { template: '<div />' },
+          Controls: { template: '<div />' },
+          NodeSidebar: { template: '<div />' },
+          WorkflowHeader: { template: '<div />' },
+          BaseNode: { template: '<div />' },
+          LogPanel: { template: '<div />' },
+          NodeConfigModal: { template: '<div />' },
+          RuntimeInputModal: runtimeInputModalStub,
+          WorkflowResultDashboardModal: workflowResultDashboardModalStub,
+          WorkflowManagerModal: workflowManagerModalStub,
+          UnsavedWorkflowDialog: { template: '<div />' },
+          ConfirmDialog: { template: '<div />' },
+          Toast: { template: '<div />' },
+          Button: { template: '<button><slot /></button>' },
+          N8nEdge: { template: '<div />' },
+        },
+        directives: {
+          tooltip: () => undefined,
+        },
+      },
+    })
+
+    store.lastRunDashboard = {
+      id: 'run_1',
+      workflowName: '测试工作流',
+      status: 'success',
+      startTime: Date.now(),
+      duration: 1000,
+      executionTargetIds: ['terminal_1'],
+      executionScopeNodeIds: ['terminal_1'],
+      terminalNodeIds: ['terminal_1'],
+    }
+
+    await flushAsyncWork()
+
+    const dashboardModal = wrapper.findComponent(workflowResultDashboardModalStub)
+    expect(dashboardModal.exists()).toBe(true)
+    expect(dashboardModal.attributes('data-visible')).toBe('true')
+    expect(dashboardModal.text()).toContain('测试工作流')
+  })
+
   it('prompts before browser unload when the workflow has unsaved changes', async () => {
     const store = useWorkflowStore()
     store.addAndConnectNode('file-import', '导入数据', { x: 0, y: 0 })
@@ -181,7 +257,7 @@ describe('WorkflowCanvas', () => {
           LogPanel: { template: '<div />' },
           NodeConfigModal: { template: '<div />' },
           RuntimeInputModal: runtimeInputModalStub,
-          DataAnalysisModal: { template: '<div />' },
+          WorkflowResultDashboardModal: { template: '<div />' },
           WorkflowManagerModal: workflowManagerModalStub,
           UnsavedWorkflowDialog: { template: '<div />' },
           ConfirmDialog: { template: '<div />' },
@@ -214,7 +290,7 @@ describe('WorkflowCanvas', () => {
           LogPanel: { template: '<div />' },
           NodeConfigModal: { template: '<div />' },
           RuntimeInputModal: runtimeInputModalStub,
-          DataAnalysisModal: { template: '<div />' },
+          WorkflowResultDashboardModal: { template: '<div />' },
           WorkflowManagerModal: workflowManagerModalStub,
           UnsavedWorkflowDialog: { template: '<div />' },
           ConfirmDialog: { template: '<div />' },
@@ -245,7 +321,7 @@ describe('WorkflowCanvas', () => {
           LogPanel: { template: '<div />' },
           NodeConfigModal: { template: '<div />' },
           RuntimeInputModal: runtimeInputModalStub,
-          DataAnalysisModal: { template: '<div />' },
+          WorkflowResultDashboardModal: { template: '<div />' },
           WorkflowManagerModal: { template: '<div />' },
           UnsavedWorkflowDialog: { template: '<div />' },
           ConfirmDialog: { template: '<div />' },
@@ -283,7 +359,7 @@ describe('WorkflowCanvas', () => {
           LogPanel: { template: '<div />' },
           NodeConfigModal: { template: '<div />' },
           RuntimeInputModal: runtimeInputModalStub,
-          DataAnalysisModal: { template: '<div />' },
+          WorkflowResultDashboardModal: { template: '<div />' },
           WorkflowManagerModal: workflowManagerModalStub,
           UnsavedWorkflowDialog: { template: '<div />' },
           HelpCenterModal: { template: '<div />' },
@@ -339,7 +415,7 @@ describe('WorkflowCanvas', () => {
           LogPanel: { template: '<div />' },
           NodeConfigModal: { template: '<div />' },
           RuntimeInputModal: runtimeInputModalStub,
-          DataAnalysisModal: { template: '<div />' },
+          WorkflowResultDashboardModal: { template: '<div />' },
           WorkflowManagerModal: workflowManagerModalStub,
           UnsavedWorkflowDialog: { template: '<div />' },
           HelpCenterModal: { template: '<div />' },
