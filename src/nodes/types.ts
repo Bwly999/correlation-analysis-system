@@ -55,6 +55,9 @@ export interface NodeProperty {
   default?: any
   description?: string
   placeholder?: string
+  editorLanguage?: 'json' | 'javascript' | 'typescript'
+  editorDeclarations?: string
+  editorHeight?: string
   options?: any[]
   properties?: NodeProperty[]
   required?: boolean

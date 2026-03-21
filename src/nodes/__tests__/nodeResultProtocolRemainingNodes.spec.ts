@@ -31,6 +31,7 @@ vi.mock('@/services/kanbanIntegration', () => ({
 import { manualJsonImportNode } from '../definitions/manualJsonImport'
 import { dataAggregationNode } from '../definitions/dataAggregation'
 import { dataFilterNode } from '../definitions/dataFilter'
+import { jsTransformNode } from '../definitions/jsTransform'
 import { dataKeyMergeNode } from '../definitions/dataKeyMerge'
 import { dataLimitNode } from '../definitions/dataLimit'
 import { xgboostShapNode } from '../definitions/xgboostShap'
@@ -107,6 +108,28 @@ describe('remaining nodes standardized result protocol', () => {
       originalCount: 3,
       filteredCount: 1,
     })
+  })
+
+  it('js-transform should return a standardized table result with transform stats', async () => {
+    const result = await jsTransformNode.execute(
+      createTableResult([
+        { city: '上海', score: 91 },
+        { city: '北京', score: 77 },
+      ]),
+      {
+        code: `return rows
+          .filter((row) => row.score >= 80)
+          .map((row) => ({ 城市: row.city, 得分: row.score }))`,
+      },
+    )
+
+    expect(result.kind).toBe('table')
+    expect(result.payload).toEqual([{ 城市: '上海', 得分: 91 }])
+    expect(result.meta?.stats).toMatchObject({
+      inputCount: 2,
+      outputCount: 1,
+    })
+    expect(result.preview?.viewer).toBe('table-preview')
   })
 
   it('field-selection should return a standardized table result with field stats', async () => {

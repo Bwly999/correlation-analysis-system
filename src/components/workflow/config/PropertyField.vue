@@ -512,7 +512,13 @@ const getRegexToggleClass = (enabled: boolean) => [
       @keydown.enter="onTagsEnter"
     />
 
-    <MonacoEditor v-else-if="prop.type === 'json'" v-model="configValue" height="400px" />
+    <MonacoEditor
+      v-else-if="prop.type === 'json'"
+      v-model="configValue"
+      :height="prop.editorHeight || '400px'"
+      :language="prop.editorLanguage || 'json'"
+      :declarations="prop.editorDeclarations"
+    />
 
     <ToggleSwitch v-else-if="prop.type === 'boolean'" v-model="configValue" />
 

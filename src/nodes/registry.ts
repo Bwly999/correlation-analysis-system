@@ -8,6 +8,7 @@ import { dataProfilingNode } from './definitions/dataProfiling'
 import { dataAggregationNode } from './definitions/dataAggregation'
 import { dataMergeNode } from './definitions/dataMerge'
 import { dataFilterNode } from './definitions/dataFilter'
+import { jsTransformNode } from './definitions/jsTransform'
 import { fieldSelectionNode } from './definitions/fieldSelection'
 import { sortNode } from './definitions/sort'
 import { dataLimitNode } from './definitions/dataLimit'
@@ -29,6 +30,7 @@ const rawNodeDefinitions: NodeDefinition[] = [
   dataAggregationNode,
   dataMergeNode,
   dataFilterNode,
+  jsTransformNode,
   fieldSelectionNode,
   sortNode,
   dataLimitNode,

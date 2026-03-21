@@ -3,7 +3,13 @@ import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import PropertyField from '../PropertyField.vue'
 
-vi.mock('../../MonacoEditor.vue', () => ({ default: { template: '<div />' } }))
+vi.mock('../../MonacoEditor.vue', () => ({
+  default: {
+    name: 'MonacoEditor',
+    props: ['language', 'declarations'],
+    template: '<div class="monaco-mock">{{ language }}|{{ declarations }}</div>',
+  },
+}))
 
 describe('PropertyField', () => {
   it('为 options 使用 Select 的 editable 和内置过滤', async () => {

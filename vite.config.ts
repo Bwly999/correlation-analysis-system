@@ -71,7 +71,7 @@ export default defineConfig({
     }),
     // 配置 Monaco Editor 插件，不走 CDN，仅启用 JSON 支持以减小体积
     (monacoEditorPlugin as any).default({
-      languageWorkers: ['json', 'editorWorkerService']
+      languageWorkers: ['json', 'typescript', 'editorWorkerService']
     })
   ],
   resolve: {

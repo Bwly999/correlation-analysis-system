@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onBeforeUnmount, ref, watch } from 'vue'
 import { VueMonacoEditor, loader } from '@guolao/vue-monaco-editor'
 import * as monaco from 'monaco-editor'
 
@@ -11,17 +11,36 @@ const _props = defineProps<{
   language?: string
   height?: string
   readOnly?: boolean
+  declarations?: string
 }>()
 
 const emit = defineEmits(['update:modelValue', 'change'])
 
 const editorRef = ref<any>(null)
+let declarationDisposable: monaco.IDisposable | null = null
+type MonacoLanguageServiceDefaults = {
+  addExtraLib: (content: string, filePath?: string) => monaco.IDisposable
+}
+const javascriptDefaults = (
+  monaco.languages as typeof monaco.languages & {
+    typescript: {
+      javascriptDefaults: MonacoLanguageServiceDefaults
+    }
+  }
+).typescript.javascriptDefaults
 
 const MONACO_OPTIONS: monaco.editor.IStandaloneEditorConstructionOptions = {
   automaticLayout: true,
   formatOnPaste: true,
   formatOnType: true,
   scrollBeyondLastLine: false,
+  quickSuggestions: {
+    other: true,
+    comments: false,
+    strings: false,
+  },
+  suggestOnTriggerCharacters: true,
+  acceptSuggestionOnEnter: 'on',
   minimap: { enabled: false },
   fontSize: 12,
   fontFamily: 'JetBrains Mono, Menlo, Monaco, Consolas, monospace',
@@ -30,6 +49,7 @@ const MONACO_OPTIONS: monaco.editor.IStandaloneEditorConstructionOptions = {
   renderLineHighlight: 'all',
   theme: 'vs',
   readOnly: _props.readOnly || false,
+  editContext: false,
   folding: true,
   tabSize: 2,
   wordWrap: 'on',
@@ -47,6 +67,32 @@ const onChange = (value: string | undefined) => {
   emit('update:modelValue', value || '')
   emit('change', value || '')
 }
+
+const syncDeclarations = (declarations?: string) => {
+  declarationDisposable?.dispose()
+  declarationDisposable = null
+
+  if (!declarations?.trim()) {
+    return
+  }
+
+  declarationDisposable = javascriptDefaults.addExtraLib(
+    declarations,
+    `ts:js-transform-${btoa(unescape(encodeURIComponent(declarations))).replace(/=+$/g, '')}.d.ts`,
+  )
+}
+
+watch(
+  () => _props.declarations,
+  (nextDeclarations) => {
+    syncDeclarations(nextDeclarations)
+  },
+  { immediate: true },
+)
+
+onBeforeUnmount(() => {
+  declarationDisposable?.dispose()
+})
 </script>
 
 <template>

@@ -35,6 +35,7 @@ import { dataCleaningNode } from '../definitions/dataCleaning'
 import { dataProfilingNode } from '../definitions/dataProfiling'
 import { dataAggregationNode } from '../definitions/dataAggregation'
 import { dataFilterNode } from '../definitions/dataFilter'
+import { jsTransformNode } from '../definitions/jsTransform'
 import { dataKeyMergeNode } from '../definitions/dataKeyMerge'
 import { dataLimitNode } from '../definitions/dataLimit'
 import { xgboostShapNode } from '../definitions/xgboostShap'
@@ -475,6 +476,56 @@ describe('Node Definitions Execution Logic', () => {
 
       expect(legacy.data).toHaveLength(2)
       expect(legacy.data.map((row: any) => row.city)).toEqual(['北京', '深圳'])
+    })
+  })
+
+  describe('js-transform', () => {
+    it('should expose the JS transform node with Chinese labels and code defaults', () => {
+      expect(jsTransformNode.displayName).toBe('JS代码执行')
+      expect(jsTransformNode.category).toBe('action')
+      expect(jsTransformNode.properties.find((property) => property.name === 'code')?.type).toBe(
+        'json',
+      )
+      expect(
+        jsTransformNode.properties.find((property) => property.name === 'code')?.editorLanguage,
+      ).toBe('javascript')
+      expect(
+        jsTransformNode.properties.find((property) => property.name === 'code')?.editorDeclarations,
+      ).toContain('declare const rows')
+    })
+
+    it('should transform table rows and keep standardized table output', async () => {
+      const result = await jsTransformNode.execute(
+        createTableResult([
+          { city: '上海', score: 91 },
+          { city: '北京', score: 77 },
+        ]),
+        {
+          code: `return rows.map((row) => ({
+            城市: row.city,
+            得分: row.score,
+            是否达标: row.score >= 80,
+          }))`,
+        },
+      )
+
+      const legacy = asLegacy(result)
+
+      expect(legacy.data).toEqual([
+        { 城市: '上海', 得分: 91, 是否达标: true },
+        { 城市: '北京', 得分: 77, 是否达标: false },
+      ])
+      expect(legacy.stats.inputCount).toBe(2)
+      expect(legacy.stats.outputCount).toBe(2)
+      expect(legacy.lineage.transform).toBe('js-transform')
+    })
+
+    it('should reject non-array return values with readable Chinese errors', async () => {
+      await expect(
+        jsTransformNode.execute(createTableResult([{ score: 91 }]), {
+          code: 'return { score: 91 }',
+        }),
+      ).rejects.toThrow('JS代码执行节点必须返回数组对象列表')
     })
   })
 

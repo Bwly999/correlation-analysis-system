@@ -184,6 +184,50 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       recommendedNextNodes: ['data-aggregation', 'pearson', 'data-export'],
     },
   ),
+  'js-transform': createEntry(
+    {
+      summary: '使用同步 JS 代码对上游表格数据做字段重组、派生和格式转换。',
+      whenToUse: [
+        '内置清洗、筛选、聚合节点还不够灵活时，可以用少量同步 JS 快速完成定制转换。',
+      ],
+      inputGuide: [
+        '需要上游提供表格数据。',
+        '代码里只有 rows 可用，rows 是数组对象列表。',
+      ],
+      parameterGuide: [
+        {
+          property: 'code',
+          title: '转换代码',
+          content:
+            '必须显式 return 数组对象列表。只支持同步 JS，不要使用 async、await 或外部变量。',
+        },
+      ],
+      outputGuide: ['固定输出表格结果，适合继续接字段选择、图表展示、相关性分析或导出节点。'],
+      nextSteps: ['转换后可继续接字段选择、排序、图表展示、相关性分析或数据导出。'],
+      commonIssues: [
+        {
+          title: '运行时报返回值错误',
+          resolution: '请确认代码最后 return 的是数组，且数组里的每一项都是对象。',
+        },
+        {
+          title: '代码里找不到变量',
+          resolution: '当前节点只暴露 rows 一个变量，其他上下文对象不会传入执行环境。',
+        },
+      ],
+    },
+    {
+      useCases: ['字段重命名', '派生新字段', '行级格式转换', '复杂表格映射'],
+      keywords: ['JS', 'JavaScript', '代码执行', '数据转换', '字段映射'],
+      workflowRoles: ['数据准备'],
+      inputKinds: ['table'],
+      outputKinds: ['table'],
+      requiredConfig: ['code'],
+      recommendedConfigPatterns: ['优先用 rows.map 或 rows.filter + rows.map，保持输出为数组对象列表。'],
+      commonMistakes: ['返回普通对象而不是数组', '在代码里使用 async/await', '尝试访问 rows 之外的变量'],
+      recommendedPrevNodes: ['file-import', 'manual-json-import', 'data-cleaning', 'data-filter'],
+      recommendedNextNodes: ['field-selection', 'sort', 'chart-display', 'pearson', 'data-export'],
+    },
+  ),
   'data-aggregation': createEntry(
     {
       summary: '把多列值聚成新指标，或按分组、窗口生成统计特征。',
