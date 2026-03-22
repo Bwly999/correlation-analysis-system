@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { VueFlow, useVueFlow, type Connection } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
@@ -14,6 +14,7 @@ import RuntimeInputModal from './RuntimeInputModal.vue'
 import WorkflowResultDashboardModal from './WorkflowResultDashboardModal.vue'
 import WorkflowManagerModal from './WorkflowManagerModal.vue'
 import HelpCenterModal from './HelpCenterModal.vue'
+import WorkflowAiPanel from './WorkflowAiPanel.vue'
 import { getWorkflowLayoutMetrics } from './layout'
 import { buildResultDashboardSummary, type WorkflowResultDashboardSummary } from './resultDashboard'
 import Button from 'primevue/button'
@@ -30,6 +31,7 @@ import {
   Undo2,
   ChevronLeft,
   ChevronRight,
+  Bot,
 } from 'lucide-vue-next'
 import ConfirmDialog from 'primevue/confirmdialog'
 import Toast from 'primevue/toast'
@@ -45,20 +47,26 @@ const isConfigVisible = ref(false)
 const isLogExpanded = ref(true)
 const isWorkflowListVisible = ref(false)
 const isSidebarVisible = ref(true)
+const isAiPanelVisible = ref(false)
 const isHelpCenterVisible = ref(false)
 const viewportWidth = ref(typeof window === 'undefined' ? 1920 : window.innerWidth)
 const isUnsavedDialogVisible = ref(false)
 const pendingWorkflowAction = ref<(() => Promise<void> | void) | null>(null)
 const isResettingView = ref(false)
+const aiPanelWidth = 380
 
 const layoutMetrics = computed(() => getWorkflowLayoutMetrics(viewportWidth.value))
 const logHeight = computed(() =>
   isLogExpanded.value ? layoutMetrics.value.logExpandedHeight : layoutMetrics.value.logCollapsedHeight,
 )
 const runBarBottom = computed(() => logHeight.value + 20)
-const sidebarRightOffset = computed(() =>
-  isSidebarVisible.value ? `${layoutMetrics.value.sidebarWidth}px` : '0',
-)
+const sidebarPanelRight = computed(() => (isAiPanelVisible.value ? `${aiPanelWidth}px` : '0'))
+const sidebarRightOffset = computed(() => {
+  const aiOffset = isAiPanelVisible.value ? aiPanelWidth : 0
+  return isSidebarVisible.value
+    ? `${layoutMetrics.value.sidebarWidth + aiOffset}px`
+    : `${aiOffset}px`
+})
 const runBarState = computed<'idle' | 'running' | 'pending'>(() => {
   if (store.pendingExecution) return 'pending'
   if (store.isRunning) return 'running'
@@ -70,9 +78,9 @@ const runButtonTitle = computed(() => {
   return '开始运行工作流'
 })
 const runButtonSubtitle = computed(() => {
-  if (runBarState.value === 'pending') return '请先补全缺失输入再继续当前链路'
+  if (runBarState.value === 'pending') return '请先补全缺失输入后继续执行当前链路'
   if (runBarState.value === 'running') return '系统正在按顺序执行整条工作流'
-  return '从触发节点启动整条链路'
+  return '从触发节点启动整条工作流链路'
 })
 
 const onWindowResize = () => {
@@ -90,7 +98,7 @@ const saveWorkflowWithToast = async () => {
     })
     return true
   } catch (error) {
-    console.error('保存工作流失败:', error)
+    console.error('保存工作流失败', error)
     toast.add({
       severity: 'error',
       summary: '保存失败',
@@ -293,6 +301,10 @@ const toggleSidebar = () => {
   isSidebarVisible.value = !isSidebarVisible.value
 }
 
+const toggleAiPanel = () => {
+  isAiPanelVisible.value = !isAiPanelVisible.value
+}
+
 watch(isConfigVisible, (visible: boolean) => {
   if (!visible) store.activeConfigNodeId = null
 })
@@ -338,7 +350,7 @@ onBeforeUnmount(() => {
       :style="{ bottom: `${logHeight}px` }"
       class="absolute inset-0 top-[56px] overflow-hidden shadow-[inset_0_2px_10px_rgba(0,0,0,0.05)] border-t border-slate-200 transition-all duration-300 ease-in-out"
     >
-      <!-- 历史模式提示条 -->
+      <!-- 鍘嗗彶妯″紡鎻愮ず鏉?-->
       <div
         v-if="store.isHistoryMode"
         class="absolute top-0 left-0 right-0 z-[110] bg-amber-500 text-white px-6 py-2.5 flex items-center justify-between shadow-lg animate-in slide-in-from-top duration-300"
@@ -348,7 +360,7 @@ onBeforeUnmount(() => {
             <AlertTriangle :size="18" class="text-white" />
           </div>
           <div class="flex flex-col">
-            <span class="font-bold text-[13px] tracking-tight">历史记录查看模式</span>
+            <span class="font-bold text-[13px] tracking-tight">鍘嗗彶璁板綍鏌ョ湅妯″紡</span>
             <span class="text-[11px] opacity-90">当前工作流处于只读状态，编辑与运行功能已禁用</span>
           </div>
         </div>
@@ -358,7 +370,7 @@ onBeforeUnmount(() => {
           @click="store.exitHistoryMode()"
         >
           <Undo2 :size="14" />
-          返回编辑模式
+          杩斿洖缂栬緫妯″紡
         </Button>
       </div>
 
@@ -414,7 +426,7 @@ onBeforeUnmount(() => {
           :style="{ right: sidebarRightOffset }"
         >
           <button
-            v-tooltip.left="isSidebarVisible ? '关闭节点库' : '打开节点库'"
+            v-tooltip.left="isSidebarVisible ? '收起节点库' : '打开节点库'"
             class="w-6 h-14 bg-white border border-[#efefef] border-r-0 rounded-l-xl shadow-[-5px_0_15px_rgba(0,0,0,0.05)] flex items-center justify-center text-[#3c4257] hover:text-indigo-600 hover:bg-indigo-50 transition-all cursor-pointer group"
             @click="toggleSidebar"
           >
@@ -445,10 +457,31 @@ onBeforeUnmount(() => {
       v-if="!store.isHistoryMode"
       class="absolute right-0 top-[56px] z-[130] transition-all duration-500 ease-in-out shadow-[-20px_0_50px_rgba(0,0,0,0.03)]"
       :class="isSidebarVisible ? 'translate-x-0' : 'translate-x-full'"
-      :style="{ width: `${layoutMetrics.sidebarWidth}px`, bottom: `${logHeight}px` }"
+      :style="{ width: `${layoutMetrics.sidebarWidth}px`, bottom: `${logHeight}px`, right: sidebarPanelRight }"
     >
       <NodeSidebar @close="isSidebarVisible = false" />
     </aside>
+
+    <aside
+      v-if="!store.isHistoryMode"
+      class="absolute top-[56px] right-0 z-[135] transition-all duration-500 ease-in-out shadow-[-20px_0_50px_rgba(15,23,42,0.08)]"
+      :class="isAiPanelVisible ? 'translate-x-0' : 'translate-x-full'"
+      :style="{ width: `${aiPanelWidth}px`, bottom: `${logHeight}px` }"
+    >
+      <WorkflowAiPanel :visible="isAiPanelVisible" @close="isAiPanelVisible = false" />
+    </aside>
+
+    <button
+      v-if="!store.isHistoryMode"
+      data-testid="workflow-ai-toggle"
+      class="workflow-ai-toggle"
+      :class="{ 'workflow-ai-toggle--open': isAiPanelVisible }"
+      :style="{ bottom: `${runBarBottom + 76}px` }"
+      @click="toggleAiPanel"
+    >
+      <Bot :size="16" />
+      <span>{{ isAiPanelVisible ? '收起 AI' : 'AI 编排' }}</span>
+    </button>
 
     <div
       v-if="!store.isHistoryMode"
@@ -524,7 +557,7 @@ onBeforeUnmount(() => {
         >
           <span class="flex items-center gap-1.5"
             ><div class="w-1.5 h-1.5 bg-emerald-500 rounded-full"></div>
-            系统状态: 运行正常</span
+            系统状态 · 运行正常</span
           >
           <div class="w-[1px] h-3 bg-[#f1f4f8]"></div>
           <span>版本 v1.0.5</span>
@@ -771,4 +804,53 @@ onBeforeUnmount(() => {
   color: #2563eb;
   transform: translateY(-1px);
 }
+
+.workflow-ai-toggle {
+  position: absolute;
+  right: 0;
+  z-index: 140;
+  width: 108px;
+  height: 40px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-right: 0;
+  border-radius: 14px 0 0 14px;
+  background: rgba(255, 255, 255, 0.96);
+  color: #0f172a;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 800;
+  box-shadow: -10px 14px 28px rgba(15, 23, 42, 0.08);
+  cursor: pointer;
+  transition:
+    transform 0.2s ease,
+    color 0.2s ease,
+    background 0.2s ease,
+    right 0.3s ease;
+}
+
+.workflow-ai-toggle:hover {
+  color: #1d4ed8;
+  background: #eff6ff;
+}
+
+.workflow-ai-toggle--open {
+  right: 380px;
+}
 </style>
+
+
+
+
+
+
+
+
+
+
+
+
+
+

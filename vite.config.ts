@@ -1,4 +1,4 @@
-import { fileURLToPath, URL } from 'node:url'
+﻿import { fileURLToPath, URL } from 'node:url'
 
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
@@ -7,8 +7,18 @@ import tailwindcss from '@tailwindcss/vite'
 import monacoEditorPlugin from 'vite-plugin-monaco-editor'
 import AutoImport from 'unplugin-auto-import/vite'
 
+const workflowAiServerTarget = process.env.WORKFLOW_AI_SERVER_TARGET || 'http://127.0.0.1:8787'
+
 // https://vite.dev/config/
 export default defineConfig({
+  server: {
+    proxy: {
+      '/api/workflow-ai': {
+        target: workflowAiServerTarget,
+        changeOrigin: true,
+      },
+    },
+  },
   build: {
     rollupOptions: {
       output: {
@@ -37,11 +47,7 @@ export default defineConfig({
           ) {
             return 'vendor-ui'
           }
-          if (
-            id.includes('/vue/') ||
-            id.includes('\\vue\\') ||
-            id.includes('pinia')
-          ) {
+          if (id.includes('/vue/') || id.includes('\\vue\\') || id.includes('pinia')) {
             return 'vendor-vue'
           }
           if (id.includes('@vue-flow')) {
@@ -69,10 +75,9 @@ export default defineConfig({
         enabled: true,
       },
     }),
-    // 配置 Monaco Editor 插件，不走 CDN，仅启用 JSON 支持以减小体积
     (monacoEditorPlugin as any).default({
-      languageWorkers: ['json', 'typescript', 'editorWorkerService']
-    })
+      languageWorkers: ['json', 'typescript', 'editorWorkerService'],
+    }),
   ],
   resolve: {
     alias: {

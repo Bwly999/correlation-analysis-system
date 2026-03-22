@@ -13,6 +13,13 @@ import {
   type WorkflowNodeOutput,
   type WorkflowNodeSnapshot,
 } from '@/utils/storage'
+import type {
+  WorkflowAiEditableSnapshot,
+  WorkflowAiOperation,
+  WorkflowAiPlan,
+  WorkflowAiPlanApplyResult,
+  WorkflowAiPlanValidationResult,
+} from '@/ai/types'
 
 export const CONNECTION_RULES: Record<string, string[]> = {
   trigger: ['action', 'terminal'],
@@ -73,6 +80,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
   const lastRunDashboard = ref<WorkflowRunDashboardState | null>(null)
   const executionHistory = ref([]) as Ref<ExecutionRecord[]>
   const savedWorkflows = ref([]) as Ref<SavedWorkflow[]>
+  const editableSnapshots = ref([]) as Ref<WorkflowAiEditableSnapshot[]>
   const lastSavedWorkflowSignature = ref('')
   const hasExplicitUnsavedChanges = ref(false)
 
@@ -139,6 +147,9 @@ export const useWorkflowStore = defineStore('workflow', () => {
 
   const cloneWorkflowEdges = (sourceEdges: Edge[]): Edge[] => serializeWorkflowEdges(sourceEdges)
 
+  const generateNodeId = () => `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  const generateEdgeId = () => `e_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+
   const normalizeNodeConfigWithDefaults = (node: WorkflowNode): WorkflowNode => {
     const nextNode = cloneJsonValue(node)
     const definition = getNodeDefinition(nextNode.data.type)
@@ -154,6 +165,17 @@ export const useWorkflowStore = defineStore('workflow', () => {
     nextNode.data.config = nextConfig
 
     return nextNode
+  }
+
+  const getDefaultConfigForType = (type: string) => {
+    const definition = getNodeDefinition(type)
+    const defaultConfig: Record<string, unknown> = {}
+    definition?.properties.forEach((property) => {
+      if (property.default !== undefined) {
+        defaultConfig[property.name] = cloneJsonValue(property.default)
+      }
+    })
+    return defaultConfig
   }
 
   const serializeWorkflowNodes = (sourceNodes: WorkflowNode[]): WorkflowNodeSnapshot[] =>
@@ -469,14 +491,10 @@ export const useWorkflowStore = defineStore('workflow', () => {
   }
 
   const addAndConnectNode = (type: string, label: string, position: { x: number; y: number }) => {
-    const definition = getNodeDefinition(type)
     const category = getCategoryByType(type)
-    const defaultConfig: Record<string, unknown> = {}
-    definition?.properties.forEach((p) => {
-      if (p.default !== undefined) defaultConfig[p.name] = p.default
-    })
+    const defaultConfig = getDefaultConfigForType(type)
     const newNode: WorkflowNode = {
-      id: `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      id: generateNodeId(),
       type: 'custom',
       position,
       label,
@@ -507,14 +525,14 @@ export const useWorkflowStore = defineStore('workflow', () => {
           const nextEdges: Edge[] = [
             ...currentEdges.filter((e) => e.id !== edgeId),
             {
-              id: `e_${Date.now()}_1`,
+              id: generateEdgeId(),
               source: sourceNodeId,
               target: newNode.id,
               type: 'n8n',
               animated: true,
             },
             {
-              id: `e_${Date.now()}_2`,
+              id: generateEdgeId(),
               source: newNode.id,
               target: targetNodeId,
               type: 'n8n',
@@ -527,7 +545,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
         const nextEdges: Edge[] = [
           ...currentEdges,
           {
-            id: `e_${Date.now()}`,
+            id: generateEdgeId(),
             source: sourceNodeId,
             target: newNode.id,
             sourceHandle: sourceHandleId,
@@ -540,6 +558,249 @@ export const useWorkflowStore = defineStore('workflow', () => {
       pendingConnection.value = null
     }
     return newNode
+  }
+
+  const createNodeFromDefinition = (
+    type: string,
+    label?: string,
+    position: { x: number; y: number } = { x: 200, y: 200 },
+    config?: Record<string, unknown>,
+  ) => {
+    const definition = getNodeDefinition(type)
+    if (!definition) {
+      throw new Error(`未找到节点定义: ${type}`)
+    }
+
+    const node = addAndConnectNode(type, label || definition.displayName, position)
+    if (!node) {
+      throw new Error(`创建节点失败: ${type}`)
+    }
+
+    if (config) {
+      node.data.config = {
+        ...node.data.config,
+        ...cloneJsonValue(config),
+      }
+    }
+
+    return node
+  }
+
+  const updateNodeConfigById = (nodeId: string, config: Record<string, unknown>) => {
+    const node = findNodeById(nodeId)
+    if (!node) {
+      throw new Error(`未找到节点: ${nodeId}`)
+    }
+    node.data.config = {
+      ...node.data.config,
+      ...cloneJsonValue(config),
+    }
+    return node
+  }
+
+  const renameNodeById = (nodeId: string, label: string) => {
+    const node = findNodeById(nodeId)
+    if (!node) {
+      throw new Error(`未找到节点: ${nodeId}`)
+    }
+    node.data.label = label
+    node.label = label
+    return node
+  }
+
+  const setNodePositionById = (nodeId: string, position: { x: number; y: number }) => {
+    const node = findNodeById(nodeId)
+    if (!node) {
+      throw new Error(`未找到节点: ${nodeId}`)
+    }
+    node.position = cloneJsonValue(position)
+    return node
+  }
+
+  const connectNodesById = (
+    sourceNodeId: string,
+    targetNodeId: string,
+    options?: { sourceHandle?: string; targetHandle?: string },
+  ) => {
+    const validation = validateConnection(sourceNodeId, targetNodeId)
+    if (!validation.valid) {
+      throw new Error(validation.message ?? '节点连接不合法')
+    }
+
+    const currentEdges = getCurrentEdges()
+    const duplicatedEdge = currentEdges.find(
+      (edge) =>
+        edge.source === sourceNodeId &&
+        edge.target === targetNodeId &&
+        edge.sourceHandle === options?.sourceHandle &&
+        edge.targetHandle === options?.targetHandle,
+    )
+    if (duplicatedEdge) {
+      return duplicatedEdge
+    }
+
+    const nextEdge: Edge = {
+      id: generateEdgeId(),
+      source: sourceNodeId,
+      target: targetNodeId,
+      sourceHandle: options?.sourceHandle,
+      targetHandle: options?.targetHandle,
+      type: 'n8n',
+      animated: true,
+    }
+    edges.value = [...currentEdges, nextEdge]
+    return nextEdge
+  }
+
+  const resolvePlanNodeRef = (refId: string, nodeIdMap: Record<string, string>) => {
+    return nodeIdMap[refId] ?? refId
+  }
+
+  const createEditableSnapshot = () => {
+    const snapshotId = `ai_snapshot_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+    editableSnapshots.value = [
+      {
+        id: snapshotId,
+        workflowName: workflowName.value,
+        workflowId: currentWorkflowId.value,
+        nodes: cloneWorkflowNodes(getCurrentNodes()),
+        edges: cloneWorkflowEdges(getCurrentEdges()),
+      },
+      ...editableSnapshots.value,
+    ].slice(0, 10)
+    return snapshotId
+  }
+
+  const restoreEditableSnapshot = (snapshotId: string) => {
+    const snapshot = editableSnapshots.value.find((entry) => entry.id === snapshotId)
+    if (!snapshot) return false
+
+    nodes.value = cloneJsonValue(snapshot.nodes) as WorkflowNode[]
+    edges.value = cloneJsonValue(snapshot.edges) as Edge[]
+    workflowName.value = snapshot.workflowName
+    currentWorkflowId.value = snapshot.workflowId
+    needsViewReset.value = true
+    return true
+  }
+
+  const validateWorkflowAiPlan = (plan: WorkflowAiPlan): WorkflowAiPlanValidationResult => {
+    const issues: WorkflowAiPlanValidationResult['issues'] = []
+    const plannedNodeRefs = new Set(
+      plan.operations
+        .filter((operation): operation is Extract<WorkflowAiOperation, { type: 'createNode' }> => operation.type === 'createNode')
+        .map((operation) => operation.id),
+    )
+    const hasNodeRef = (refId: string) => plannedNodeRefs.has(refId) || Boolean(findNodeById(refId))
+
+    plan.operations.forEach((operation) => {
+      try {
+        if (operation.type === 'createNode') {
+          const definition = getNodeDefinition(operation.nodeType)
+          if (!definition) {
+            issues.push({
+              operationId: operation.id,
+              message: `未找到节点定义: ${operation.nodeType}`,
+            })
+          }
+          return
+        }
+
+        if (operation.type === 'connectNodes') {
+          if (!hasNodeRef(operation.sourceRef) || !hasNodeRef(operation.targetRef)) {
+            issues.push({
+              operationId: operation.id,
+              message: '连接引用了不存在的节点',
+            })
+          }
+          return
+        }
+
+        if ('nodeRef' in operation && !hasNodeRef(operation.nodeRef)) {
+          issues.push({
+            operationId: operation.id,
+            message: '操作引用了不存在的节点',
+          })
+        }
+      } catch (error: any) {
+        issues.push({
+          operationId: operation.id,
+          message: error.message ?? 'AI 计划校验失败',
+        })
+      }
+    })
+
+    return {
+      valid: issues.length === 0,
+      issues,
+    }
+  }
+
+  const applyWorkflowAiPlan = (plan: WorkflowAiPlan): WorkflowAiPlanApplyResult => {
+    const validation = validateWorkflowAiPlan(plan)
+    if (!validation.valid) {
+      throw new Error(validation.issues.map((issue) => issue.message).join('；'))
+    }
+
+    const snapshotId = createEditableSnapshot()
+    const nodeIdMap: Record<string, string> = {}
+
+    for (const operation of plan.operations) {
+      if (operation.type === 'createNode') {
+        const createdNode = createNodeFromDefinition(
+          operation.nodeType,
+          operation.nodeLabel,
+          operation.position,
+          operation.config,
+        )
+        nodeIdMap[operation.id] = createdNode.id
+        continue
+      }
+
+      if (operation.type === 'updateNodeConfig') {
+        updateNodeConfigById(resolvePlanNodeRef(operation.nodeRef, nodeIdMap), operation.config)
+        continue
+      }
+
+      if (operation.type === 'renameNode') {
+        renameNodeById(resolvePlanNodeRef(operation.nodeRef, nodeIdMap), operation.label)
+        continue
+      }
+
+      if (operation.type === 'removeNode') {
+        removeNode(resolvePlanNodeRef(operation.nodeRef, nodeIdMap))
+        continue
+      }
+
+      if (operation.type === 'connectNodes') {
+        connectNodesById(
+          resolvePlanNodeRef(operation.sourceRef, nodeIdMap),
+          resolvePlanNodeRef(operation.targetRef, nodeIdMap),
+          {
+            sourceHandle: operation.sourceHandle,
+            targetHandle: operation.targetHandle,
+          },
+        )
+        continue
+      }
+
+      if (operation.type === 'disconnectEdge') {
+        removeEdge(operation.edgeRef)
+        continue
+      }
+
+      if (operation.type === 'moveNode') {
+        setNodePositionById(resolvePlanNodeRef(operation.nodeRef, nodeIdMap), operation.position)
+      }
+    }
+
+    markWorkflowAsExplicitlyUnsaved()
+    addLog(`AI 计划已应用: ${plan.summary}`, 'info')
+
+    return {
+      applied: true,
+      snapshotId,
+      nodeIdMap,
+    }
   }
 
   const duplicateNode = (nodeId: string) => {
@@ -994,6 +1255,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     lastRunDashboard,
     executionHistory,
     savedWorkflows,
+    editableSnapshots,
     isHistoryMode,
     hasUnsavedChanges,
     addLog,
@@ -1001,6 +1263,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     getCategoryByType,
     validateConnection,
     addAndConnectNode,
+    createNodeFromDefinition,
     executeNode,
     resumePendingExecution,
     runGlobal,
@@ -1011,6 +1274,10 @@ export const useWorkflowStore = defineStore('workflow', () => {
     duplicateWorkflow,
     getDuplicatedWorkflowName,
     duplicateNode,
+    updateNodeConfigById,
+    renameNodeById,
+    setNodePositionById,
+    connectNodesById,
     removeNode,
     removeEdge,
     exportWorkflow,
@@ -1023,7 +1290,12 @@ export const useWorkflowStore = defineStore('workflow', () => {
     setPendingConnection,
     setActiveConfigNodeId,
     markWorkflowAsExplicitlyUnsaved,
+    createEditableSnapshot,
+    restoreEditableSnapshot,
+    validateWorkflowAiPlan,
+    applyWorkflowAiPlan,
   }
 })
+
 
 

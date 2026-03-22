@@ -1,10 +1,11 @@
 ﻿from fastapi import FastAPI, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
-import pandas as pd
-import numpy as np
 import os
 import sys
 from typing import List, Dict, Any
+
+import numpy as np
+import pandas as pd
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from algorithm.robust_insight_tool import DataEngine, ModelCore, InsightEngine, VisualStudio, SystemContext
@@ -23,8 +24,6 @@ app.add_middleware(
 @app.get('/')
 async def root():
     return {'message': 'Correlation Analysis API is running'}
-
-
 @app.post('/analyze/xgboost-shap')
 async def analyze_xgboost_shap(
     data: List[Dict[str, Any]] = Body(...),
@@ -148,3 +147,4 @@ if __name__ == '__main__':
     import uvicorn
 
     uvicorn.run(app, host='0.0.0.0', port=8000)
+

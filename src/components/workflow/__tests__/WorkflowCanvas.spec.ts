@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+﻿import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { defineComponent } from 'vue'
@@ -36,6 +36,21 @@ const workflowResultDashboardModalStub = defineComponent({
   template:
     '<div class="workflow-result-dashboard-modal-stub" :data-visible="visible">{{ summary?.workflowName }}</div>',
 })
+const workflowAiPanelStub = defineComponent({
+  name: 'WorkflowAiPanel',
+  props: {
+    visible: Boolean,
+  },
+  template: '<div class="workflow-ai-panel-stub" :data-visible="visible"></div>',
+})
+
+vi.mock('../WorkflowAiPanel.vue', () => ({
+  default: {
+    name: 'WorkflowAiPanel',
+    props: ['visible'],
+    template: '<div class="workflow-ai-panel-stub" :data-visible="visible"></div>',
+  },
+}))
 
 const flushAsyncWork = async () => {
   await Promise.resolve()
@@ -306,7 +321,7 @@ describe('WorkflowCanvas', () => {
 
     const text = wrapper.text()
     expect(text).toContain('开始运行工作流')
-    expect(text).toContain('从触发节点启动整条链路')
+    expect(text).toContain('从触发节点启动整条工作流链路')
   })
 
   it('uses native buttons for the run bar and keeps the idle state visually neutral', () => {
@@ -461,4 +476,47 @@ describe('WorkflowCanvas', () => {
       { duration: 800 },
     )
   })
+
+  it('keeps the ai panel collapsed by default and expands it from the right edge toggle', async () => {
+    const wrapper = mount(WorkflowCanvas, {
+      global: {
+        stubs: {
+          Background: { template: '<div />' },
+          Controls: { template: '<div />' },
+          NodeSidebar: { template: '<div />' },
+          WorkflowHeader: { template: '<div />' },
+          BaseNode: { template: '<div />' },
+          LogPanel: { template: '<div />' },
+          NodeConfigModal: { template: '<div />' },
+          RuntimeInputModal: runtimeInputModalStub,
+          WorkflowResultDashboardModal: { template: '<div />' },
+          WorkflowManagerModal: workflowManagerModalStub,
+          UnsavedWorkflowDialog: { template: '<div />' },
+          HelpCenterModal: { template: '<div />' },
+          ConfirmDialog: { template: '<div />' },
+          Toast: { template: '<div />' },
+          Button: { template: '<button><slot /></button>' },
+          N8nEdge: { template: '<div />' },
+        },
+        directives: {
+          tooltip: () => undefined,
+        },
+      },
+    })
+
+    const aiPanel = wrapper.findComponent({ name: 'WorkflowAiPanel' })
+    expect(aiPanel.exists()).toBe(true)
+    expect(aiPanel.attributes('data-visible')).toBe('false')
+
+    const toggle = wrapper.find('[data-testid="workflow-ai-toggle"]')
+    expect(toggle.exists()).toBe(true)
+
+    await toggle.trigger('click')
+
+    expect(wrapper.findComponent({ name: 'WorkflowAiPanel' }).attributes('data-visible')).toBe('true')
+  })
 })
+
+
+
+

@@ -771,5 +771,101 @@ describe('Workflow Store', () => {
     expect(store.savedWorkflows.some((workflow) => workflow.name === '新的工作流名称')).toBe(true)
     expect(store.logs.some((log) => log.message.includes('新的工作流名称'))).toBe(true)
   })
+
+  it('should create and restore an editable snapshot for ai-assisted changes', () => {
+    const store = useWorkflowStore()
+    const trigger = store.addAndConnectNode('manual-json-import', '数据输入', { x: 0, y: 0 })!
+
+    const snapshotId = store.createEditableSnapshot()
+
+    trigger.data.label = '已修改的数据输入'
+    store.addAndConnectNode('data-cleaning', '数据清洗', { x: 320, y: 0 })
+
+    expect(store.nodes).toHaveLength(2)
+
+    const restored = store.restoreEditableSnapshot(snapshotId)
+
+    expect(restored).toBe(true)
+    expect(store.nodes).toHaveLength(1)
+    expect(store.nodes[0]!.data.label).toBe('数据输入')
+  })
+
+  it('should apply a validated ai plan with node creation, config updates, connections and layout', () => {
+    const store = useWorkflowStore()
+
+    const result = store.applyWorkflowAiPlan({
+      summary: '导入数据后做清洗和 Pearson 分析',
+      assumptions: [],
+      warnings: [],
+      operations: [
+        {
+          id: 'create-trigger',
+          type: 'createNode',
+          nodeType: 'manual-json-import',
+          nodeLabel: '手动输入',
+          position: { x: 40, y: 40 },
+          config: {
+            jsonData: JSON.stringify([{ x: 1, y: 2 }]),
+          },
+        },
+        {
+          id: 'create-cleaning',
+          type: 'createNode',
+          nodeType: 'data-cleaning',
+          nodeLabel: '数据清洗',
+          position: { x: 320, y: 40 },
+        },
+        {
+          id: 'create-terminal',
+          type: 'createNode',
+          nodeType: 'pearson',
+          nodeLabel: 'Pearson 分析',
+          position: { x: 640, y: 40 },
+        },
+        {
+          id: 'connect-trigger-cleaning',
+          type: 'connectNodes',
+          sourceRef: 'create-trigger',
+          targetRef: 'create-cleaning',
+        },
+        {
+          id: 'connect-cleaning-terminal',
+          type: 'connectNodes',
+          sourceRef: 'create-cleaning',
+          targetRef: 'create-terminal',
+        },
+        {
+          id: 'rename-terminal',
+          type: 'renameNode',
+          nodeRef: 'create-terminal',
+          label: '线性相关分析',
+        },
+        {
+          id: 'update-terminal-config',
+          type: 'updateNodeConfig',
+          nodeRef: 'create-terminal',
+          config: {
+            targetField: 'y',
+          },
+        },
+      ],
+    } as any)
+
+    expect(result.applied).toBe(true)
+    expect(store.nodes).toHaveLength(3)
+    expect(store.edges).toHaveLength(2)
+    expect(store.nodes.map((node) => node.data.label)).toEqual(
+      expect.arrayContaining(['手动输入', '数据清洗', '线性相关分析']),
+    )
+    const terminalNode = store.nodes.find((node) => node.data.label === '线性相关分析')!
+    expect(terminalNode.data.config.targetField).toBe('y')
+    expect(
+      store.edges.some(
+        (edge) =>
+          edge.source === store.nodes.find((node) => node.data.label === '手动输入')!.id &&
+          edge.target === store.nodes.find((node) => node.data.label === '数据清洗')!.id,
+      ),
+    ).toBe(true)
+  })
 })
 
