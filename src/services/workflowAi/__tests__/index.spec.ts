@@ -1,4 +1,4 @@
-﻿import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { requestWorkflowAiPlan } from '../index'
 import type { WorkflowAiPlanRequest } from '@/ai/types'
 
@@ -56,7 +56,7 @@ describe('workflowAi service', () => {
 
     await requestWorkflowAiPlan(request)
 
-    expect(globalThis.fetch).toHaveBeenCalledWith('http://localhost:8000/workflow-ai/plan', {
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/workflow-ai/plan', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

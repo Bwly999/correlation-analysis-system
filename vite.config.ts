@@ -1,13 +1,34 @@
-﻿import { fileURLToPath, URL } from 'node:url'
+import { fileURLToPath, URL } from 'node:url'
 
 import { defineConfig } from 'vite'
+import type { Plugin } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
 import tailwindcss from '@tailwindcss/vite'
 import monacoEditorPlugin from 'vite-plugin-monaco-editor'
 import AutoImport from 'unplugin-auto-import/vite'
+import { createServerHandler } from './src/server/app.js'
 
 const workflowAiServerTarget = process.env.WORKFLOW_AI_SERVER_TARGET || 'http://127.0.0.1:8787'
+
+const workflowAiDevMiddleware = (): Plugin => {
+  const handler = createServerHandler()
+
+  return {
+    name: 'workflow-ai-dev-middleware',
+    apply: 'serve',
+    configureServer(server) {
+      server.middlewares.use((request, response, next) => {
+        if (!request.url?.startsWith('/api/workflow-ai')) {
+          next()
+          return
+        }
+
+        void handler(request, response)
+      })
+    },
+  }
+}
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -78,6 +99,7 @@ export default defineConfig({
     (monacoEditorPlugin as any).default({
       languageWorkers: ['json', 'typescript', 'editorWorkerService'],
     }),
+    workflowAiDevMiddleware(),
   ],
   resolve: {
     alias: {

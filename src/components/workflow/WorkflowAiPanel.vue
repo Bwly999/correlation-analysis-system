@@ -45,8 +45,13 @@ const handleGenerate = async () => {
   await aiStore.generatePlan(workflowStore as any)
 }
 
-const handleApply = () => {
-  aiStore.applyCurrentPlan(workflowStore as any)
+const handleApply = async () => {
+  try {
+    aiStore.errorMessage = ''
+    aiStore.applyCurrentPlan(workflowStore as any)
+  } catch (error: any) {
+    aiStore.errorMessage = error.message ?? '应用 AI 计划失败'
+  }
 }
 
 const handleRestore = () => {

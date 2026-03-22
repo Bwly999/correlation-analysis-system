@@ -1,7 +1,12 @@
-﻿import { buildWorkflowAiNodeCatalog } from '@/ai/catalog'
-import type { WorkflowAiModelProfile, WorkflowAiModelTestResult, WorkflowAiPlan, WorkflowAiPlanRequest } from '@/ai/types'
+import { buildWorkflowAiNodeCatalog } from '@/ai/catalog'
+import type {
+  WorkflowAiModelProfile,
+  WorkflowAiModelTestResult,
+  WorkflowAiPlan,
+  WorkflowAiPlanRequest,
+} from '@/ai/types'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
+const WORKFLOW_AI_API_BASE_URL = import.meta.env.VITE_WORKFLOW_AI_API_BASE_URL || '/api'
 
 const readErrorMessage = async (response: Response, fallbackMessage: string) => {
   try {
@@ -17,7 +22,7 @@ export const requestWorkflowAiPlan = async (request: WorkflowAiPlanRequest) => {
     throw new Error('当前模型配置不可用，请先检查模型设置')
   }
 
-  const response = await fetch(`${API_BASE_URL}/workflow-ai/plan`, {
+  const response = await fetch(`${WORKFLOW_AI_API_BASE_URL}/workflow-ai/plan`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -36,7 +41,7 @@ export const requestWorkflowAiPlan = async (request: WorkflowAiPlanRequest) => {
 }
 
 export const fetchSystemModelProfiles = async (): Promise<WorkflowAiModelProfile[]> => {
-  const response = await fetch(`${API_BASE_URL}/workflow-ai/model-profiles`)
+  const response = await fetch(`${WORKFLOW_AI_API_BASE_URL}/workflow-ai/model-profiles`)
   if (!response.ok) {
     throw new Error(await readErrorMessage(response, '加载系统模型配置失败'))
   }
@@ -47,7 +52,7 @@ export const fetchSystemModelProfiles = async (): Promise<WorkflowAiModelProfile
 export const testWorkflowAiModelProfile = async (
   profile: WorkflowAiModelProfile,
 ): Promise<WorkflowAiModelTestResult> => {
-  const response = await fetch(`${API_BASE_URL}/workflow-ai/model-profiles/test`, {
+  const response = await fetch(`${WORKFLOW_AI_API_BASE_URL}/workflow-ai/model-profiles/test`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
