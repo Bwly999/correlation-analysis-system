@@ -20,7 +20,7 @@ describe('core nodes standardized result protocol', () => {
     expect(Array.isArray(result.payload)).toBe(true)
     expect(result.schema?.fields?.length).toBeGreaterThan(0)
     expect(result.meta?.filename).toBe('test_data.csv')
-    expect(result.preview?.viewer).toBe('table-preview')
+    expect(result.preview?.viewer).toBe('table-chart-combo-viewer')
   })
 
   it('data-cleaning should return a table result and move stats into meta', async () => {
@@ -35,7 +35,7 @@ describe('core nodes standardized result protocol', () => {
       originalCount: 3,
       missingFilled: 1,
     })
-    expect(result.preview?.viewer).toBe('table-preview')
+    expect(result.preview?.viewer).toBe('table-chart-combo-viewer')
   })
 
   it('data-merge should return a standardized table result and keep lineage', async () => {
@@ -70,7 +70,7 @@ describe('core nodes standardized result protocol', () => {
     ])
     expect(result.meta?.stats?.outputRows).toBe(2)
     expect(result.lineage?.fields?.score?.[0]?.sourceNodeId).toBe('n2')
-    expect(result.preview?.viewer).toBe('table-preview')
+    expect(result.preview?.viewer).toBe('table-chart-combo-viewer')
   })
 
   it('data-profiling should return a report result with report payload and metrics meta', async () => {

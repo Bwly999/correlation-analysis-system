@@ -64,6 +64,10 @@ export const getResultChartOption = (value: unknown) => {
     return normalized.payload
   }
 
+  if (normalized?.meta && isPlainObject(normalized.meta.chartOption)) {
+    return normalized.meta.chartOption
+  }
+
   if (isPlainObject(value) && isPlainObject(value.chartOption)) {
     return value.chartOption
   }

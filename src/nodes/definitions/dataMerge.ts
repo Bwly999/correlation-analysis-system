@@ -231,6 +231,10 @@ export const dataMergeNode: NodeDefinition<MergeExecutionInput | null, MergeConf
             name: item.sourceNodeLabel,
           })),
         },
+        preview: {
+          viewer: chartOption ? 'table-chart-combo-viewer' : 'table-collection-preview',
+          summary: `共 ${items.length} 组，${outputData.reduce((acc, curr) => acc + curr.data.length, 0)} 行样本`,
+        },
       })
     }
 

@@ -83,7 +83,7 @@ export const inferSchemaFromRows = (rows: Array<Record<string, unknown>>): NodeS
 }
 
 const defaultViewerByKind: Partial<Record<DataKind, string>> = {
-  table: 'table-preview',
+  table: 'table-chart-combo-viewer',
   tableCollection: 'table-collection-preview',
   report: 'report-viewer',
   chart: 'chart-viewer',

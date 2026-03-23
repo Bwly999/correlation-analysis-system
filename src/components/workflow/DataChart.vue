@@ -1,27 +1,31 @@
 <script setup lang="ts">
-import { ref, computed, watch, markRaw, shallowRef } from 'vue'
+import { computed, markRaw, ref, shallowRef, watch } from 'vue'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
-import { LineChart, BoxplotChart } from 'echarts/charts'
+import { BoxplotChart, LineChart } from 'echarts/charts'
 import {
-  GridComponent,
-  TooltipComponent,
-  TitleComponent,
-  LegendComponent,
   DataZoomComponent,
   DatasetComponent,
+  GridComponent,
+  LegendComponent,
+  TitleComponent,
+  TooltipComponent,
   TransformComponent,
 } from 'echarts/components'
-import Select from 'primevue/select'
-import MultiSelect from 'primevue/multiselect'
 import InputNumber from 'primevue/inputnumber'
+import MultiSelect from 'primevue/multiselect'
+import Select from 'primevue/select'
 import {
-  Settings2,
-  ListChecks,
-  LineChart as LineChartIcon,
+  Check,
+  Bookmark,
   BoxSelect,
   Layers,
+  LineChart as LineChartIcon,
+  ListChecks,
+  PanelRightOpen,
+  Settings2,
+  Trash2,
 } from 'lucide-vue-next'
 import { calculateBoxValues } from '@/utils/stats'
 
@@ -38,16 +42,158 @@ use([
   TransformComponent,
 ])
 
+type ChartRow = Record<string, unknown>
+type ChartGroup = {
+  name: string
+  data: ChartRow[]
+}
+
+type ChartFilterPreset = {
+  id: string
+  name: string
+  lowerBound: number | null
+  upperBound: number | null
+  updatedAt: number
+}
+
+const FILTER_PRESETS_STORAGE_KEY = 'workflow-data-chart-filter-presets'
+const FILTER_PRESETS_DEFAULT_KEY = 'workflow-data-chart-default-preset'
+const LINE_CHART_RENDER_LIMIT = 1200
+
 const props = defineProps<{
-  data: any[]
+  data: ChartRow[] | ChartGroup[]
 }>()
 
 const chartType = ref('line')
 const maxPoints = ref(5000)
 const selectedKeys = ref<string[]>([])
+const lowerBound = ref<number | null>(null)
+const upperBound = ref<number | null>(null)
+const isPresetPanelOpen = ref(false)
+const presetNameInput = ref('')
+const selectedPresetId = ref<string | null>(null)
+const savedPresets = ref<ChartFilterPreset[]>([])
+const defaultPresetId = ref<string | 'none' | null>(null)
 const chartRef = shallowRef<any>(null)
 
-// 检查是否为 Parallel Collection 格式
+const isBrowser = typeof window !== 'undefined'
+
+const isFiniteNumber = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value)
+
+const createDefaultPresetName = () => {
+  const now = new Date()
+  const pad = (value: number) => String(value).padStart(2, '0')
+  return `过滤条件 ${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`
+}
+
+const persistPresets = () => {
+  if (!isBrowser) return
+  localStorage.setItem(FILTER_PRESETS_STORAGE_KEY, JSON.stringify(savedPresets.value))
+}
+
+const persistDefaultPreset = () => {
+  if (!isBrowser) return
+  if (defaultPresetId.value === null) {
+    localStorage.removeItem(FILTER_PRESETS_DEFAULT_KEY)
+    return
+  }
+  localStorage.setItem(FILTER_PRESETS_DEFAULT_KEY, defaultPresetId.value)
+}
+
+const loadPresetState = () => {
+  if (!isBrowser) return
+
+  try {
+    const rawPresets = localStorage.getItem(FILTER_PRESETS_STORAGE_KEY)
+    const parsedPresets = rawPresets ? JSON.parse(rawPresets) : []
+    savedPresets.value = Array.isArray(parsedPresets)
+      ? parsedPresets.filter((item): item is ChartFilterPreset => Boolean(item?.id))
+      : []
+  } catch {
+    savedPresets.value = []
+  }
+
+  const rawDefault = localStorage.getItem(FILTER_PRESETS_DEFAULT_KEY)
+  defaultPresetId.value = rawDefault === 'none' ? 'none' : rawDefault
+}
+
+const applyPreset = (preset: ChartFilterPreset | null) => {
+  lowerBound.value = preset?.lowerBound ?? null
+  upperBound.value = preset?.upperBound ?? null
+  selectedPresetId.value = preset?.id ?? null
+  presetNameInput.value = preset?.name ?? ''
+}
+
+const applyDefaultPreset = () => {
+  if (defaultPresetId.value === 'none') {
+    applyPreset(null)
+    return
+  }
+
+  const preset = savedPresets.value.find((item) => item.id === defaultPresetId.value) ?? null
+  if (!preset) {
+    defaultPresetId.value = null
+    persistDefaultPreset()
+    applyPreset(null)
+    return
+  }
+
+  applyPreset(preset)
+}
+
+const rowMatchesBounds = (row: ChartRow, keys: string[]) => {
+  if (keys.length === 0) return true
+
+  return keys.some((key) => {
+    const value = row[key]
+    if (!isFiniteNumber(value)) return false
+    if (lowerBound.value !== null && value < lowerBound.value) return false
+    if (upperBound.value !== null && value > upperBound.value) return false
+    return true
+  })
+}
+
+const downsampleLineRows = (rows: ChartRow[], keys: string[], limit: number) => {
+  if (rows.length <= limit || limit <= 2) return rows
+
+  const primaryKey = keys[0]
+  if (!primaryKey) return rows.slice(0, limit)
+
+  const bucketSize = Math.max(1, Math.ceil(rows.length / Math.max(2, Math.floor(limit / 2))))
+  const sampled: ChartRow[] = []
+
+  for (let start = 0; start < rows.length; start += bucketSize) {
+    const bucket = rows.slice(start, start + bucketSize)
+    if (bucket.length === 0) continue
+
+    const first = bucket[0]
+    const last = bucket[bucket.length - 1]
+    let minRow = first
+    let maxRow = first
+
+    for (const row of bucket) {
+      const currentValue = row[primaryKey]
+      const minValue = minRow?.[primaryKey]
+      const maxValue = maxRow?.[primaryKey]
+
+      if (isFiniteNumber(currentValue) && isFiniteNumber(minValue) && currentValue < minValue) {
+        minRow = row
+      }
+      if (isFiniteNumber(currentValue) && isFiniteNumber(maxValue) && currentValue > maxValue) {
+        maxRow = row
+      }
+    }
+
+    const candidates = [first, minRow, maxRow, last].filter(
+      (row, index, list) => row && list.indexOf(row) === index,
+    )
+    sampled.push(...candidates)
+  }
+
+  return sampled.slice(0, limit)
+}
+
 const isGroupedData = computed(() => {
   return (
     Array.isArray(props.data) &&
@@ -69,7 +215,6 @@ const chartTypes = computed(() => {
   ]
 })
 
-// 初始化时，如果数据是分组的，强制设为 boxplot
 watch(
   isGroupedData,
   (grouped) => {
@@ -82,20 +227,20 @@ const availableKeys = computed(() => {
   if (!Array.isArray(props.data) || props.data.length === 0) return []
 
   if (isGroupedData.value) {
-    // 提取所有分组中共同拥有的数值字段
-    const groupFields = props.data
-      .map((g) => {
-        const firstRow = Array.isArray(g.data) ? g.data[0] : null
-        return firstRow ? Object.keys(firstRow).filter((k) => typeof firstRow[k] === 'number') : []
+    const groupFields = (props.data as ChartGroup[])
+      .map((group) => {
+        const firstRow = Array.isArray(group.data) ? group.data[0] : null
+        return firstRow ? Object.keys(firstRow).filter((key) => typeof firstRow[key] === 'number') : []
       })
       .filter((fields) => fields.length > 0)
 
     if (groupFields.length === 0) return []
-    // 取交集
-    return groupFields.reduce((a, b) => a.filter((c) => b.includes(c)))
+    return groupFields.reduce((left, right) => left.filter((field) => right.includes(field)))
   }
 
-  return Object.keys(props.data[0]).filter((k) => typeof props.data[0][k] === 'number')
+  return Object.keys((props.data as ChartRow[])[0] ?? {}).filter(
+    (key) => typeof (props.data as ChartRow[])[0]?.[key] === 'number',
+  )
 })
 
 watch(
@@ -108,9 +253,112 @@ watch(
   { immediate: true },
 )
 
-const chartOption = computed(() => {
+watch(
+  () => [lowerBound.value, upperBound.value] as const,
+  () => {
+    if (!selectedPresetId.value) return
+    const selectedPreset = savedPresets.value.find((item) => item.id === selectedPresetId.value)
+    if (!selectedPreset) {
+      selectedPresetId.value = null
+      return
+    }
+
+    const unchanged =
+      selectedPreset.lowerBound === lowerBound.value && selectedPreset.upperBound === upperBound.value
+
+    if (!unchanged) {
+      selectedPresetId.value = null
+    }
+  },
+)
+
+const normalizedKeys = computed(() =>
+  selectedKeys.value.length > 0 ? selectedKeys.value : availableKeys.value.slice(0, 1),
+)
+
+const filteredData = computed(() => {
   const sourceData = props.data || []
-  const keys = selectedKeys.value.length > 0 ? selectedKeys.value : availableKeys.value.slice(0, 1)
+  const keys = normalizedKeys.value
+
+  if (lowerBound.value === null && upperBound.value === null) {
+    return sourceData
+  }
+
+  if (isGroupedData.value) {
+    return (sourceData as ChartGroup[]).map((group) => ({
+      ...group,
+      data: Array.isArray(group.data) ? group.data.filter((row) => rowMatchesBounds(row, keys)) : [],
+    }))
+  }
+
+  return (sourceData as ChartRow[]).filter((row) => rowMatchesBounds(row, keys))
+})
+
+const filteredSummary = computed(() => {
+  if (isGroupedData.value) {
+    return (filteredData.value as ChartGroup[]).reduce((sum, group) => sum + group.data.length, 0)
+  }
+
+  return Array.isArray(filteredData.value) ? (filteredData.value as ChartRow[]).length : 0
+})
+
+const sortedPresets = computed(() =>
+  [...savedPresets.value].sort((left, right) => right.updatedAt - left.updatedAt),
+)
+
+const selectedPreset = computed(
+  () => savedPresets.value.find((item) => item.id === selectedPresetId.value) ?? null,
+)
+
+const saveCurrentPreset = () => {
+  const preset: ChartFilterPreset = {
+    id: `chart_filter_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    name: presetNameInput.value.trim() || createDefaultPresetName(),
+    lowerBound: lowerBound.value,
+    upperBound: upperBound.value,
+    updatedAt: Date.now(),
+  }
+
+  savedPresets.value = [preset, ...savedPresets.value]
+  selectedPresetId.value = preset.id
+  presetNameInput.value = preset.name
+  persistPresets()
+}
+
+const markCurrentSelectionAsDefault = () => {
+  if (!selectedPresetId.value) return
+  defaultPresetId.value = selectedPresetId.value
+  persistDefaultPreset()
+}
+
+const setNoFilterAsDefault = () => {
+  defaultPresetId.value = 'none'
+  persistDefaultPreset()
+}
+
+const deletePreset = (presetId: string) => {
+  savedPresets.value = savedPresets.value.filter((item) => item.id !== presetId)
+  if (selectedPresetId.value === presetId) selectedPresetId.value = null
+  if (defaultPresetId.value === presetId) {
+    defaultPresetId.value = null
+    persistDefaultPreset()
+  }
+  persistPresets()
+}
+
+const selectAndApplyPreset = (preset: ChartFilterPreset) => {
+  applyPreset(preset)
+}
+
+const presetSummaryText = (preset: ChartFilterPreset) => {
+  const lower = preset.lowerBound === null ? '无下限' : `>= ${preset.lowerBound}`
+  const upper = preset.upperBound === null ? '无上限' : `<= ${preset.upperBound}`
+  return `${lower}，${upper}`
+}
+
+const chartOption = computed(() => {
+  const sourceData = filteredData.value || []
+  const keys = normalizedKeys.value
   if (keys.length === 0) return {}
 
   const option: any = {
@@ -122,6 +370,7 @@ const chartOption = computed(() => {
     tooltip: {
       trigger: 'item',
       confine: true,
+      transitionDuration: 0,
       extraCssText: 'box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); border-radius: 12px;',
     },
     legend: {
@@ -147,7 +396,7 @@ const chartOption = computed(() => {
     ],
     xAxis: {
       type: 'category',
-      data: keys, // X轴显示选中的因子
+      data: keys,
       axisLabel: { fontSize: 11, color: '#64748b', fontWeight: '500' },
       axisLine: { lineStyle: { color: '#e2e8f0' } },
     },
@@ -162,8 +411,7 @@ const chartOption = computed(() => {
   }
 
   if (isGroupedData.value) {
-    // 分组模式：每个数据源一个 Series
-    option.series = sourceData.map((group: any) => ({
+    option.series = (sourceData as ChartGroup[]).map((group) => ({
       name: group.name,
       type: 'boxplot',
       data: keys.map((key) => calculateBoxValues(group.data || [], key)),
@@ -178,54 +426,59 @@ const chartOption = computed(() => {
         },
       },
     }))
+  } else if (chartType.value === 'boxplot') {
+    option.series = [
+      {
+        name: '数据分布',
+        type: 'boxplot',
+        data: keys.map((key) => calculateBoxValues(sourceData as ChartRow[], key)),
+        itemStyle: { color: '#f8fafc', borderColor: '#4f46e5', borderWidth: 1.5 },
+      },
+    ]
   } else {
-    // 单表模式
-    if (chartType.value === 'boxplot') {
-      option.series = [
-        {
-          name: '数据分布',
-          type: 'boxplot',
-          data: keys.map((key) => calculateBoxValues(sourceData, key)),
-          itemStyle: { color: '#f8fafc', borderColor: '#4f46e5', borderWidth: 1.5 },
-        },
-      ]
-    } else {
-      // 折线模式
-      const rows = sourceData.slice(0, maxPoints.value)
-      option.tooltip.trigger = 'axis'
-      option.xAxis.data = Array.from({ length: rows.length }, (_, i) => i + 1)
-      option.series = keys.map((key) => ({
-        name: key,
-        type: 'line',
-        data: rows.map((r) => (typeof r[key] === 'number' ? r[key] : 0)),
-        showSymbol: false,
-        lineStyle: { width: 2.5 },
-        sampling: 'lttb',
-        large: true,
-      }))
+    const rows = (sourceData as ChartRow[]).slice(0, maxPoints.value)
+    const renderLimit = Math.min(maxPoints.value, LINE_CHART_RENDER_LIMIT)
+    const sampledRows = downsampleLineRows(rows, keys, renderLimit)
+
+    option.tooltip.trigger = 'axis'
+    option.tooltip.axisPointer = {
+      type: 'line',
+      animation: false,
+      snap: false,
     }
+    option.tooltip.triggerOn = 'mousemove'
+    option.xAxis.data = Array.from({ length: sampledRows.length }, (_, index) => index + 1)
+    option.series = keys.map((key) => ({
+      name: key,
+      type: 'line',
+      data: sampledRows.map((row) => (typeof row[key] === 'number' ? row[key] : 0)),
+      showSymbol: false,
+      lineStyle: { width: 2.5 },
+      sampling: 'lttb',
+      large: true,
+      progressive: 800,
+      progressiveThreshold: 1200,
+      hoverAnimation: false,
+      emphasis: {
+        disabled: true,
+      },
+    }))
   }
 
   return markRaw(option)
 })
+
+loadPresetState()
+applyDefaultPreset()
 </script>
 
 <template>
-  <div
-    class="flex flex-col h-full bg-white rounded-2xl overflow-hidden border border-slate-100 shadow-sm"
-  >
-    <!-- Toolbar -->
-    <div
-      class="flex items-center justify-between px-6 py-4 border-b border-slate-50 bg-slate-50/30"
-    >
-      <div class="flex items-center gap-4">
-        <div
-          class="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-100 rounded-lg shadow-sm"
-        >
+  <div class="flex flex-col h-full bg-white rounded-2xl overflow-hidden border border-slate-100 shadow-sm">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-50 bg-slate-50/30">
+      <div class="flex items-center gap-4 flex-wrap">
+        <div class="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-100 rounded-lg shadow-sm">
           <ListChecks :size="14" class="text-indigo-500" />
-          <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest"
-            >分析因子</span
-          >
+          <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">分析因子</span>
           <MultiSelect
             v-model="selectedKeys"
             :options="availableKeys"
@@ -250,6 +503,34 @@ const chartOption = computed(() => {
             :use-grouping="false"
           />
         </div>
+
+        <div class="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-100 rounded-lg shadow-sm">
+          <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">过滤</span>
+          <InputNumber
+            v-model="lowerBound"
+            input-id="chart-lower-bound"
+            class="filter-input w-24"
+            :use-grouping="false"
+            placeholder="下限"
+          />
+          <span class="text-xs font-bold text-slate-300">~</span>
+          <InputNumber
+            v-model="upperBound"
+            input-id="chart-upper-bound"
+            class="filter-input w-24"
+            :use-grouping="false"
+            placeholder="上限"
+          />
+          <span class="text-[10px] font-bold text-slate-400 whitespace-nowrap">{{ filteredSummary }} 条</span>
+          <button
+            data-test="chart-filter-presets-trigger"
+            class="preset-trigger-button"
+            type="button"
+            @click="isPresetPanelOpen = !isPresetPanelOpen"
+          >
+            <PanelRightOpen :size="14" />
+          </button>
+        </div>
       </div>
 
       <Select
@@ -263,17 +544,15 @@ const chartOption = computed(() => {
         <template #value="slotProps">
           <div v-if="slotProps.value" class="flex items-center gap-2 text-slate-800">
             <component
-              :is="chartTypes.find((c) => c.value === slotProps.value)?.icon"
+              :is="chartTypes.find((item) => item.value === slotProps.value)?.icon"
               :size="14"
               :stroke-width="2.5"
             />
-            <span>{{ chartTypes.find((c) => c.value === slotProps.value)?.label }}</span>
+            <span>{{ chartTypes.find((item) => item.value === slotProps.value)?.label }}</span>
           </div>
         </template>
         <template #option="slotProps">
-          <div
-            class="flex items-center gap-2 font-bold text-[11px] uppercase tracking-widest text-slate-500 w-full"
-          >
+          <div class="flex items-center gap-2 font-bold text-[11px] uppercase tracking-widest text-slate-500 w-full">
             <component :is="slotProps.option.icon" :size="14" class="text-slate-700" />
             <span>{{ slotProps.option.label }}</span>
           </div>
@@ -281,16 +560,123 @@ const chartOption = computed(() => {
       </Select>
     </div>
 
-    <!-- Chart -->
-    <div class="flex-1 p-4 relative">
-      <div v-if="isGroupedData || (props.data && props.data.length > 0)" class="h-full w-full">
-        <VChart ref="chartRef" :option="chartOption" autoresize />
+    <div class="flex-1 p-4 relative min-h-0">
+      <div class="h-full flex gap-4 min-h-0">
+        <div class="flex-1 min-w-0">
+          <div v-if="isGroupedData || (props.data && props.data.length > 0)" class="h-full w-full">
+            <VChart ref="chartRef" :option="chartOption" autoresize />
+          </div>
+        </div>
+
+        <aside
+          v-if="isPresetPanelOpen"
+          data-test="chart-preset-panel"
+          class="chart-preset-popover absolute right-0 top-0 z-20 w-[280px] bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden flex flex-col"
+        >
+          <div class="px-4 py-4 border-b border-slate-100">
+            <div class="flex items-center gap-2 text-slate-700">
+              <Bookmark :size="15" />
+              <h3 class="text-sm font-black">过滤条件</h3>
+            </div>
+            <p class="mt-2 text-xs text-slate-500">保存、应用和设置默认过滤条件。默认也可以设为不过滤。</p>
+          </div>
+
+          <div class="px-4 py-4 border-b border-slate-100 space-y-3">
+            <input
+              v-model="presetNameInput"
+              data-test="chart-preset-name"
+              type="text"
+              class="preset-name-input"
+              placeholder="输入名称，可留空自动生成"
+            />
+
+            <button
+              data-test="chart-preset-save"
+              class="preset-primary-button w-full"
+              type="button"
+              @click="saveCurrentPreset"
+            >
+              保存当前条件
+            </button>
+
+            <div class="flex gap-2">
+              <button
+                data-test="chart-preset-mark-default"
+                class="preset-secondary-button flex-1"
+                :class="{ 'preset-secondary-button--active': defaultPresetId === selectedPresetId && selectedPresetId !== null }"
+                type="button"
+                :disabled="!selectedPresetId"
+                @click="markCurrentSelectionAsDefault"
+              >
+                默认应用当前条件
+              </button>
+              <button
+                data-test="chart-preset-set-no-default"
+                class="preset-secondary-button flex-1"
+                :class="{ 'preset-secondary-button--active': defaultPresetId === 'none' }"
+                type="button"
+                @click="setNoFilterAsDefault"
+              >
+                默认不过滤
+              </button>
+            </div>
+          </div>
+
+          <div class="flex-1 min-h-0 overflow-y-auto preset-scroll px-4 py-4 space-y-3">
+            <div
+              v-for="preset in sortedPresets"
+              :key="preset.id"
+              class="preset-card"
+              :class="{ 'preset-card--active': defaultPresetId === preset.id }"
+            >
+              <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                  <span class="text-sm font-bold text-slate-800 truncate block">{{ preset.name }}</span>
+                  <p class="mt-1 text-xs text-slate-500">{{ presetSummaryText(preset) }}</p>
+                </div>
+
+                <div class="flex items-center gap-2 shrink-0">
+                  <button
+                    data-test="chart-preset-apply"
+                    class="preset-action-button"
+                    type="button"
+                    @click="selectAndApplyPreset(preset)"
+                  >
+                    <Check :size="14" />
+                  </button>
+                  <button class="preset-action-button" type="button" @click.stop="deletePreset(preset.id)">
+                    <Trash2 :size="14" />
+                  </button>
+                </div>
+              </div>
+
+              <div
+                v-if="selectedPresetId === preset.id"
+                class="mt-3 text-[10px] font-bold text-blue-600 bg-blue-50 rounded-full px-2 py-1 inline-flex"
+              >
+                当前已应用
+              </div>
+            </div>
+
+            <div v-if="sortedPresets.length === 0" class="text-xs text-slate-400 leading-6">
+              还没有保存的过滤条件。设置好上下限后即可在这里保存。
+            </div>
+          </div>
+        </aside>
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
+.chart-preset-popover {
+  margin-top: 2px;
+}
+
+:deep(.filter-input) {
+  width: 88px;
+}
+
 :deep(.filter-input .p-inputnumber-input) {
   padding: 2px 8px;
   font-size: 11px;
@@ -300,6 +686,7 @@ const chartOption = computed(() => {
   border-radius: 4px;
   font-family: monospace;
 }
+
 :deep(.chart-type-select) {
   height: 32px;
   font-size: 11px;
@@ -312,19 +699,23 @@ const chartOption = computed(() => {
   background: #fdfdfe;
   transition: all 0.2s ease;
 }
+
 :deep(.chart-type-select:hover:not(.p-disabled)) {
   border-color: #94a3b8;
   background: #f8fafc;
 }
+
 :deep(.chart-type-select .p-select-label) {
   padding: 4px 12px;
   display: flex;
   align-items: center;
 }
+
 :deep(.chart-type-select .p-select-dropdown) {
   width: 28px;
   color: #94a3b8;
 }
+
 :deep(.property-select) {
   height: 28px;
   min-width: 160px;
@@ -334,9 +725,110 @@ const chartOption = computed(() => {
   border-color: #f1f5f9;
   background: #f8fafc;
 }
+
 :deep(.property-select .p-multiselect-label) {
   padding: 2px 8px;
   display: flex;
   align-items: center;
+}
+
+.preset-trigger-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #2563eb;
+  cursor: pointer;
+}
+
+.preset-name-input {
+  width: 100%;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 9px 12px;
+  font-size: 12px;
+  color: #334155;
+  background: #fff;
+}
+
+.preset-primary-button,
+.preset-secondary-button {
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.preset-primary-button {
+  border: 1px solid #2563eb;
+  background: #2563eb;
+  color: #fff;
+  padding: 9px 12px;
+}
+
+.preset-secondary-button {
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #475569;
+  padding: 9px 12px;
+}
+
+.preset-secondary-button--active {
+  border-color: #2563eb;
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.preset-secondary-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.preset-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.preset-scroll::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
+}
+
+.preset-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 12px;
+  background: #fff;
+}
+
+.preset-card--active {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+.preset-action-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+  color: #94a3b8;
+  cursor: pointer;
+  transition:
+    color 0.2s ease,
+    border-color 0.2s ease,
+    background-color 0.2s ease;
+}
+
+.preset-action-button:hover {
+  color: #2563eb;
+  border-color: #bfdbfe;
+  background: #eff6ff;
 }
 </style>

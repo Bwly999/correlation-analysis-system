@@ -44,7 +44,7 @@ describe('result protocol helpers', () => {
     })
 
     expect(result.kind).toBe('table')
-    expect(result.preview?.viewer).toBe('table-preview')
+    expect(result.preview?.viewer).toBe('table-chart-combo-viewer')
     expect(result.meta?.rowCount).toBe(2)
     expect(result.schema?.fields).toEqual([
       { name: 'factor', type: 'string', nullable: false },

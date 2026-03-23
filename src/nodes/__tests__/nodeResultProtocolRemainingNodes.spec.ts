@@ -57,7 +57,7 @@ describe('remaining nodes standardized result protocol', () => {
     expect(result.kind).toBe('table')
     expect(result.payload).toEqual([{ f1: 10, tag: 'A' }])
     expect(result.meta?.sourceType).toBe('manual')
-    expect(result.preview?.viewer).toBe('table-preview')
+    expect(result.preview?.viewer).toBe('table-chart-combo-viewer')
   })
 
   it('data-aggregation should return a standardized table result', async () => {
@@ -129,7 +129,7 @@ describe('remaining nodes standardized result protocol', () => {
       inputCount: 2,
       outputCount: 1,
     })
-    expect(result.preview?.viewer).toBe('table-preview')
+    expect(result.preview?.viewer).toBe('table-chart-combo-viewer')
   })
 
   it('field-selection should return a standardized table result with field stats', async () => {
