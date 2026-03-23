@@ -12,6 +12,7 @@ import type {
 
 const DEFAULT_BASE_URL = 'https://open.bigmodel.cn/api/paas/v4'
 const DEFAULT_MODEL = 'glm-4.7'
+// API Key 必须通过环境变量 OPENAI_API_KEY 提供，不再提供默认值
 const DEFAULT_API_KEY = ''
 
 const stripCodeFence = (value: string) =>
@@ -301,19 +302,26 @@ const createProvider = (profile: WorkflowAiModelProfile) =>
     supportsStructuredOutputs: false,
   })
 
-export const getSystemModelProfiles = (): WorkflowAiModelProfile[] => [
-  {
-    id: 'system-default-zhipu-glm-4-7',
-    name: '默认智谱 GLM-4.7',
-    baseUrl: process.env.OPENAI_COMPAT_BASE_URL?.trim() || DEFAULT_BASE_URL,
-    model: process.env.WORKFLOW_AI_DEFAULT_MODEL?.trim() || DEFAULT_MODEL,
-    apiKey: process.env.OPENAI_API_KEY?.trim() || DEFAULT_API_KEY,
-    enabled: true,
-    isDefault: true,
-    source: 'system',
-    capabilities: { create: true, edit: true },
-  },
-]
+export const getSystemModelProfiles = (): WorkflowAiModelProfile[] => {
+  const apiKey = process.env.OPENAI_API_KEY?.trim()
+  if (!apiKey) {
+    console.warn('[WorkflowAI] OPENAI_API_KEY 环境变量未设置，系统默认模型配置将不可用')
+  }
+
+  return [
+    {
+      id: 'system-default-zhipu-glm-4-7',
+      name: '默认智谱 GLM-4.7',
+      baseUrl: process.env.OPENAI_COMPAT_BASE_URL?.trim() || DEFAULT_BASE_URL,
+      model: process.env.WORKFLOW_AI_DEFAULT_MODEL?.trim() || DEFAULT_MODEL,
+      apiKey,
+      enabled: true,
+      isDefault: true,
+      source: 'system',
+      capabilities: { create: true, edit: true },
+    },
+  ]
+}
 
 export const toPublicModelProfile = (profile: WorkflowAiModelProfile): WorkflowAiModelProfile => ({
   id: profile.id,
@@ -390,5 +398,6 @@ export const generateWorkflowAiPlan = async (request: WorkflowAiPlanRequest): Pr
 
   return normalizePlanWithCatalog(parsePlan(result.text), request.nodeCatalog)
 }
+
 
 
