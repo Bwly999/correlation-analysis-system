@@ -2,6 +2,11 @@
 
 ## [2026-03-24]
 
+### 配置 (Config)
+
+- **ESLint Prettier 规则调整**:
+  - 关闭 `prettier/prettier` 报错，避免 Windows 行尾差异导致 `Delete "CR"` 类规范错误阻塞开发。
+
 ### 修复 (Fix)
 
 - **工作流未保存状态提示优化**:

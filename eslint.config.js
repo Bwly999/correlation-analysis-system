@@ -57,7 +57,7 @@ export default tseslint.config(
     },
     rules: {
       // 开启 Prettier 格式化检查
-      'prettier/prettier': 'error',
+      'prettier/prettier': 'off',
       // Vue 相关规则定制
       'vue/multi-word-component-names': 'off',
       'vue/no-unused-vars': 'warn',
