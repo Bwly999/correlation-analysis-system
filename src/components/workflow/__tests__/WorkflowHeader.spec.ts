@@ -118,4 +118,24 @@ describe('WorkflowHeader', () => {
 
     expect(wrapper.emitted('open-help')).toBeTruthy()
   })
+
+  it('shows unsaved status beside the workflow name and highlights the save action', () => {
+    const store = useWorkflowStore()
+    store.workflowName = '测试工作流'
+    store.markWorkflowAsExplicitlyUnsaved()
+
+    const wrapper = mount(WorkflowHeader, {
+      global: {
+        stubs: {
+          Button: { template: '<button @click="$emit(\'click\')"><slot /></button>' },
+          Menu: { template: '<div />' },
+          Popover: { template: '<div><slot /></div>' },
+        },
+      },
+    })
+
+    expect(wrapper.find('[data-testid="workflow-unsaved-indicator"]').text()).toContain('未保存')
+    expect(wrapper.find('[data-testid="workflow-save-button"]').text()).toContain('保存更改')
+    expect(wrapper.find('[data-testid="workflow-save-button"]').classes()).toContain('save-btn--unsaved')
+  })
 })

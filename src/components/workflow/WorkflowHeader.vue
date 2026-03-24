@@ -25,6 +25,7 @@ import { useToast } from 'primevue/usetoast'
 const emit = defineEmits(['open-projects', 'new-workflow', 'import-workflow', 'open-help'])
 const store = useWorkflowStore()
 const toast = useToast()
+const showUnsavedIndicator = computed(() => !store.isHistoryMode && store.hasUnsavedChanges)
 
 // 过滤当前工作流的历史记录
 const filteredHistory = computed<ExecutionRecord[]>(() => {
@@ -128,6 +129,14 @@ const formatDuration = (ms: number) => {
           class="font-semibold text-[14px] text-slate-900 border border-transparent hover:border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 bg-transparent focus:bg-white rounded-md px-2.5 py-1 transition-all w-[300px] outline-none disabled:opacity-70 disabled:cursor-not-allowed"
           placeholder="未命名工作流"
         />
+        <span
+          v-if="showUnsavedIndicator"
+          data-testid="workflow-unsaved-indicator"
+          class="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-1 text-[10px] font-bold tracking-wide text-blue-600"
+        >
+          <span class="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
+          未保存
+        </span>
         <Edit2
           v-if="!store.isHistoryMode"
           :size="12"
@@ -223,9 +232,14 @@ const formatDuration = (ms: number) => {
         <span>新建</span>
       </Button>
 
-      <Button v-if="!store.isHistoryMode" class="save-btn" @click="handleSave">
+      <Button
+        v-if="!store.isHistoryMode"
+        data-testid="workflow-save-button"
+        :class="['save-btn', { 'save-btn--unsaved': store.hasUnsavedChanges }]"
+        @click="handleSave"
+      >
         <Save :size="14" />
-        <span>保存</span>
+        <span>{{ store.hasUnsavedChanges ? '保存更改' : '保存' }}</span>
       </Button>
 
       <Button v-if="!store.isHistoryMode" class="help-btn" @click="emit('open-help')">
@@ -320,6 +334,14 @@ const formatDuration = (ms: number) => {
 .save-btn:hover {
   transform: translateY(-0.5px);
   filter: saturate(1.08);
+}
+
+.save-btn--unsaved {
+  border-color: #1d4ed8;
+  background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+  box-shadow:
+    0 10px 22px -12px rgba(37, 99, 235, 0.95),
+    0 0 0 3px rgba(37, 99, 235, 0.12);
 }
 
 .new-btn {
