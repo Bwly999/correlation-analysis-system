@@ -376,10 +376,10 @@ const getRegexToggleClass = (enabled: boolean) => [
       </div>
 
       <Button
-        variant="text"
+        outlined
         :label="`添加${prop.displayName}`"
         icon="pi pi-plus"
-        class="w-full border border-dashed border-slate-300 py-3 text-[12px] font-bold !text-slate-500 hover:!border-blue-400 hover:!bg-blue-50 hover:!text-blue-600 active:scale-[0.98]"
+        class="w-full !border-2 !border-dashed !border-slate-300 !bg-white py-3 text-[12px] font-bold !text-slate-600 shadow-sm hover:!border-blue-400 hover:!bg-blue-50 hover:!text-blue-600 active:scale-[0.98]"
         @click="addCollectionItem"
       />
     </div>
