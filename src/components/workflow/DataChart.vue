@@ -186,7 +186,7 @@ const downsampleLineRows = (rows: ChartRow[], keys: string[], limit: number) => 
     }
 
     const candidates = [first, minRow, maxRow, last].filter(
-      (row, index, list) => row && list.indexOf(row) === index,
+      (row, index, list): row is ChartRow => Boolean(row) && list.indexOf(row) === index,
     )
     sampled.push(...candidates)
   }

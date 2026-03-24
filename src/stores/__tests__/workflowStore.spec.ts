@@ -1,8 +1,10 @@
 ﻿import { describe, it, expect, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
+import { vi } from 'vitest'
 import { useWorkflowStore } from '../workflowStore'
 import { nodeDefinitions } from '../../nodes/registry'
 import { createJsonResult, createTableResult } from '../../nodes/result'
+import { storageProvider } from '../../utils/storage'
 
 describe('Workflow Store', () => {
   beforeEach(() => {
@@ -14,6 +16,21 @@ describe('Workflow Store', () => {
     const store = useWorkflowStore()
     expect(store.nodes).toEqual([])
     expect(store.edges).toEqual([])
+  })
+
+  it('should load current storage user from the storage provider', async () => {
+    vi.spyOn(storageProvider, 'getCurrentUser').mockResolvedValue({
+      id: 'server-user-1',
+      name: '服务端用户',
+    })
+
+    const store = useWorkflowStore()
+    await store.loadCurrentStorageUser()
+
+    expect(store.currentStorageUser).toEqual({
+      id: 'server-user-1',
+      name: '服务端用户',
+    })
   })
 
   it('should add a node correctly', () => {

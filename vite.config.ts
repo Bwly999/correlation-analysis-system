@@ -19,7 +19,7 @@ const workflowAiDevMiddleware = (): Plugin => {
     apply: 'serve',
     configureServer(server) {
       server.middlewares.use((request, response, next) => {
-        if (!request.url?.startsWith('/api/workflow-ai')) {
+        if (!request.url?.startsWith('/api/')) {
           next()
           return
         }

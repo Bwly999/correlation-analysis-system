@@ -1,11 +1,15 @@
 import { describe, it, expect, vi } from 'vitest'
-import { type IStorageProvider, type SavedWorkflow } from '../types'
+import { type IStorageProvider, type SavedWorkflow, type StorageUser } from '../types'
 
 /**
  * 这是一个用于演示的 Mock Server Provider
  * 它模拟了未来通过 Axios/Fetch 调用后端 API 的行为
  */
 class MockServerStorageProvider implements IStorageProvider {
+  async getCurrentUser(): Promise<StorageUser | null> {
+    return { id: 'user_1', name: '测试用户' }
+  }
+
   async getWorkflows(): Promise<SavedWorkflow[]> {
     // 模拟 API 请求
     return [{ id: 'server_wf', name: 'Cloud Workflow', updatedAt: 123, nodes: [], edges: [] }]
@@ -33,6 +37,10 @@ class MockServerStorageProvider implements IStorageProvider {
 describe('Storage Abstraction Extensibility', () => {
   it('should allow plugging in a server-based provider', async () => {
     const serverProvider: IStorageProvider = new MockServerStorageProvider()
+    await expect(serverProvider.getCurrentUser()).resolves.toEqual({
+      id: 'user_1',
+      name: '测试用户',
+    })
 
     const workflows = await serverProvider.getWorkflows()
     expect(workflows.length).toBe(1)

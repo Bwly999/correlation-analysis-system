@@ -10,6 +10,10 @@ export class LocalStorageProvider implements IStorageProvider {
   private db: IDBDatabase | null = null
   private workflowMigrationPromise: Promise<void> | null = null
 
+  async getCurrentUser() {
+    return null
+  }
+
   private getLocalWorkflows(): SavedWorkflow[] {
     const raw = localStorage.getItem(this.workflowKey)
     return raw ? (JSON.parse(raw) as SavedWorkflow[]) : []

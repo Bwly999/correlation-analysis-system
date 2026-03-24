@@ -12,6 +12,7 @@ import {
   type ExecutionRecord,
   type WorkflowNodeOutput,
   type WorkflowNodeSnapshot,
+  type StorageUser,
 } from '@/utils/storage'
 import type {
   WorkflowAiEditableSnapshot,
@@ -80,6 +81,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
   const lastRunDashboard = ref<WorkflowRunDashboardState | null>(null)
   const executionHistory = ref([]) as Ref<ExecutionRecord[]>
   const savedWorkflows = ref([]) as Ref<SavedWorkflow[]>
+  const currentStorageUser = ref<StorageUser | null>(null)
   const editableSnapshots = ref([]) as Ref<WorkflowAiEditableSnapshot[]>
   const lastSavedWorkflowSignature = ref('')
   const hasExplicitUnsavedChanges = ref(false)
@@ -111,6 +113,18 @@ export const useWorkflowStore = defineStore('workflow', () => {
 
   const getSavedWorkflows = async (): Promise<SavedWorkflow[]> => {
     return refreshWorkflows()
+  }
+
+  const loadCurrentStorageUser = async (): Promise<StorageUser | null> => {
+    try {
+      const user = await storageProvider.getCurrentUser()
+      currentStorageUser.value = user
+      return user
+    } catch (error) {
+      currentStorageUser.value = null
+      console.warn('Failed to load current storage user:', error)
+      return null
+    }
   }
 
   const getDuplicatedWorkflowName = (name: string) => `${name} (副本)`
@@ -1237,6 +1251,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
   }
 
   loadHistory()
+  void loadCurrentStorageUser()
   syncSavedWorkflowSignature()
 
   return {
@@ -1255,6 +1270,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     lastRunDashboard,
     executionHistory,
     savedWorkflows,
+    currentStorageUser,
     editableSnapshots,
     isHistoryMode,
     hasUnsavedChanges,
@@ -1268,6 +1284,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     resumePendingExecution,
     runGlobal,
     getSavedWorkflows,
+    loadCurrentStorageUser,
     saveWorkflow,
     loadWorkflow,
     deleteWorkflow,

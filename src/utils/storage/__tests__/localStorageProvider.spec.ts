@@ -115,6 +115,10 @@ describe('LocalStorageProvider', () => {
 
       setItemSpy.mockRestore()
     })
+
+    it('should not expose a current user in local mode', async () => {
+      await expect(provider.getCurrentUser()).resolves.toBeNull()
+    })
   })
 
   describe('Execution History (IndexedDB Abstraction)', () => {
