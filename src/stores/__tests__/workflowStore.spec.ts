@@ -425,6 +425,66 @@ describe('Workflow Store', () => {
     expect(store.pendingExecution?.nodeId).toBe(node.id)
   })
 
+  it('should default trigger nodes to not reuse previous runtime inputs', () => {
+    const store = useWorkflowStore()
+
+    const fileNode = store.addAndConnectNode('file-import', '文件导入', { x: 0, y: 0 })!
+    const neighborNode = store.addAndConnectNode('neighbor-system', '看板数据对接', { x: 0, y: 120 })!
+
+    expect(fileNode.data.reuseLastRuntimeInputs).toBe(false)
+    expect(neighborNode.data.reuseLastRuntimeInputs).toBe(false)
+  })
+
+  it('should require runtime input again on the next run when reuse is disabled', async () => {
+    const store = useWorkflowStore()
+    const node = store.addAndConnectNode('file-import', 'Trigger', { x: 0, y: 0 })!
+
+    const waitingResult = await store.executeNode(node.id, true)
+    expect(waitingResult).toBe('WAIT_INPUT')
+    expect(store.pendingExecution?.nodeId).toBe(node.id)
+
+    node.data.config.fileData = new File(['a,b\n1,2'], 'test.csv')
+    const firstResult = await store.resumePendingExecution()
+
+    expect(firstResult?.kind).toBe('table')
+    expect(store.pendingExecution).toBeNull()
+
+    node.data.output = null
+    node.data.status = 'idle'
+
+    const secondResult = await store.executeNode(node.id, true)
+
+    expect(secondResult).toBe('WAIT_INPUT')
+    expect(store.pendingExecution?.nodeId).toBe(node.id)
+    expect(node.data.status).toBe('idle')
+  })
+
+  it('should reuse previous runtime inputs on the next run when reuse is enabled', async () => {
+    const store = useWorkflowStore()
+    const node = store.addAndConnectNode('file-import', 'Trigger', { x: 0, y: 0 })!
+
+    node.data.reuseLastRuntimeInputs = true
+
+    const waitingResult = await store.executeNode(node.id, true)
+    expect(waitingResult).toBe('WAIT_INPUT')
+    expect(store.pendingExecution?.nodeId).toBe(node.id)
+
+    node.data.config.fileData = new File(['a,b\n1,2'], 'test.csv')
+    const firstResult = await store.resumePendingExecution()
+
+    expect(firstResult?.kind).toBe('table')
+    expect(store.pendingExecution).toBeNull()
+
+    node.data.output = null
+    node.data.status = 'idle'
+
+    const secondResult = await store.executeNode(node.id, true)
+
+    expect(secondResult?.kind).toBe('table')
+    expect(store.pendingExecution).toBeNull()
+    expect(node.data.status).toBe('success')
+  })
+
   it('should resume pending debug execution for a trigger node without requiring a terminal model', async () => {
     const store = useWorkflowStore()
     const node = store.addAndConnectNode('file-import', 'Trigger', { x: 0, y: 0 })!

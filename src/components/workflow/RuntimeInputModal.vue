@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { Info, Settings } from 'lucide-vue-next'
 import Dialog from 'primevue/dialog'
 import Button from 'primevue/button'
+import ToggleSwitch from 'primevue/toggleswitch'
 import PropertyField from './config/PropertyField.vue'
 import { type WorkflowNode } from '@/utils/storage'
 import { getNodeDefinition } from '@/nodes/registry'
@@ -15,6 +16,7 @@ const props = defineProps<{
 
 const emit = defineEmits(['close', 'confirm'])
 const config = ref<Record<string, any>>({})
+const reuseLastRuntimeInputs = ref(false)
 const store = useWorkflowStore()
 
 // 分割线逻辑
@@ -52,6 +54,12 @@ const runtimeProperties = computed(
 const firstProperty = computed(() => runtimeProperties.value[0] || null)
 const otherProperties = computed(() => runtimeProperties.value.slice(1))
 const hasSplitLayout = computed(() => otherProperties.value.length > 0)
+const singlePaneProperties = computed(() =>
+  !hasSplitLayout.value && firstProperty.value ? [firstProperty.value] : [],
+)
+const splitPaneProperties = computed(() =>
+  hasSplitLayout.value && firstProperty.value ? [firstProperty.value] : [],
+)
 const isGlobalContinuation = computed(() => store.pendingExecution?.executionScope === 'global')
 const globalPromptProgressText = computed(() => {
   if (!isGlobalContinuation.value) return ''
@@ -61,6 +69,11 @@ const globalPromptProgressText = computed(() => {
   return `${current}/${total}`
 })
 const currentNodeLabel = computed(() => props.node?.data.label || '当前节点')
+const reuseToggleHint = computed(() =>
+  reuseLastRuntimeInputs.value
+    ? '开启后，下次启动会默认沿用当前确认过的运行时参数。'
+    : '关闭后，每次启动都会要求重新输入本次运行参数。',
+)
 
 const isValueValid = (value: any, type: string) => {
   if (value === undefined || value === null) return false
@@ -105,31 +118,50 @@ const confirmLabel = computed(() => {
   return '确认并继续下一项'
 })
 
+const buildRuntimeConfig = (node: WorkflowNode, reusePreviousValues: boolean) => {
+  const nextConfig = { ...node.data.config }
+  runtimeProperties.value.forEach((property) => {
+    if (!reusePreviousValues) {
+      nextConfig[property.name] = property.default ?? null
+      return
+    }
+
+    if (nextConfig[property.name] === undefined) {
+      nextConfig[property.name] = property.default
+    }
+  })
+  return nextConfig
+}
+
 watch(
   () => props.node,
   (node) => {
     if (!node) {
       config.value = {}
+      reuseLastRuntimeInputs.value = false
       return
     }
 
-    const nextConfig = { ...node.data.config }
-    runtimeProperties.value.forEach((property) => {
-      if (nextConfig[property.name] === undefined) {
-        nextConfig[property.name] = property.default
-      }
-    })
-    config.value = nextConfig
+    reuseLastRuntimeInputs.value = node.data.reuseLastRuntimeInputs ?? false
+    config.value = buildRuntimeConfig(node, reuseLastRuntimeInputs.value)
   },
   { immediate: true },
 )
+
+watch(reuseLastRuntimeInputs, (value) => {
+  if (!props.node) return
+  config.value = buildRuntimeConfig(props.node, value)
+})
 
 const updateConfig = (propName: string, value: any) => {
   config.value = { ...config.value, [propName]: value }
 }
 
 const handleConfirm = () => {
-  emit('confirm', config.value)
+  emit('confirm', {
+    config: config.value,
+    reuseLastRuntimeInputs: reuseLastRuntimeInputs.value,
+  })
 }
 </script>
 
@@ -166,7 +198,7 @@ const handleConfirm = () => {
         <p class="text-[13px] font-medium leading-relaxed text-slate-600">
           请为节点
           <span class="font-bold text-blue-700">{{ currentNodeLabel }}</span>
-          补充本次运行所需的动态参数。这些设置仅对本次运行有效。
+          补充本次运行所需的动态参数。
           <span v-if="isGlobalContinuation" class="mt-1 block text-[12px] text-blue-700">
             提交后系统会自动继续执行；若还有其他启动节点缺少参数，将继续弹出下一项。
           </span>
@@ -189,33 +221,49 @@ const handleConfirm = () => {
       </div>
 
       <div v-else class="flex flex-col min-h-0">
+        <div class="mb-4 rounded-xl border border-slate-200 bg-white px-4 py-3">
+          <div class="flex items-center justify-between gap-4">
+            <div class="min-w-0">
+              <div class="text-sm font-semibold text-slate-900">沿用上次启动参数</div>
+              <p class="mt-1 text-[12px] leading-relaxed text-slate-500">
+                {{ reuseToggleHint }}
+              </p>
+            </div>
+            <ToggleSwitch v-model="reuseLastRuntimeInputs" class="shrink-0 !scale-[0.72]" />
+          </div>
+        </div>
+
         <div
-          v-if="firstProperty && !hasSplitLayout"
+          v-if="singlePaneProperties.length > 0"
           data-testid="runtime-input-single-pane"
           class="min-h-0"
         >
           <PropertyField
-            :prop="firstProperty"
-            :model-value="config[firstProperty.name]"
+            v-for="prop in singlePaneProperties"
+            :key="prop.name"
+            :prop="prop"
+            :model-value="config[prop.name]"
             :upstream-factors="[]"
             :config-context="config"
-            @update:model-value="(val) => updateConfig(firstProperty.name, val)"
+            @update:model-value="(val) => updateConfig(prop.name, val)"
           />
         </div>
 
         <!-- 顶部固定区域：通常是启动方式 -->
         <div
-          v-if="firstProperty && hasSplitLayout"
+          v-if="splitPaneProperties.length > 0"
           data-testid="runtime-input-first-pane"
           class="mb-2 shrink-0 overflow-hidden"
           :style="{ height: topHeight + 'px' }"
         >
           <PropertyField
-            :prop="firstProperty"
-            :model-value="config[firstProperty.name]"
+            v-for="prop in splitPaneProperties"
+            :key="prop.name"
+            :prop="prop"
+            :model-value="config[prop.name]"
             :upstream-factors="[]"
             :config-context="config"
-            @update:model-value="(val) => updateConfig(firstProperty.name, val)"
+            @update:model-value="(val) => updateConfig(prop.name, val)"
           />
         </div>
 

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import WorkflowResultDashboardModal from '../WorkflowResultDashboardModal.vue'
 import type { WorkflowResultDashboardSummary } from '../resultDashboard'
@@ -93,6 +93,14 @@ const createWrapper = () =>
   })
 
 describe('WorkflowResultDashboardModal', () => {
+  beforeEach(() => {
+    Object.defineProperty(document, 'fullscreenElement', {
+      configurable: true,
+      value: null,
+      writable: true,
+    })
+  })
+
   it('renders a top-right X icon close button and emits close on click', async () => {
     const wrapper = createWrapper()
 
@@ -159,6 +167,9 @@ describe('WorkflowResultDashboardModal', () => {
     const wrapper = createWrapper()
 
     const secondCheckbox = wrapper.findAll('input[type="checkbox"]')[1]
+    if (!secondCheckbox) {
+      throw new Error('未找到第二个节点选择复选框')
+    }
     await secondCheckbox.setValue(false)
 
     const draggable = wrapper.findComponent({ name: 'VueDraggable' })
@@ -168,5 +179,63 @@ describe('WorkflowResultDashboardModal', () => {
     const gridItem = wrapper.find('.dashboard-grid__item')
     expect(gridItem.exists()).toBe(true)
     expect(gridItem.attributes('style')).toContain('min-height: 320px;')
+  })
+
+  it('toggles the node selector sidebar and expands the workspace width', async () => {
+    const wrapper = createWrapper()
+
+    const collapseButton = wrapper.find('button[aria-label="收起节点选择"]')
+    expect(collapseButton.exists()).toBe(true)
+
+    await collapseButton.trigger('click')
+
+    expect(wrapper.find('.dashboard-sidebar--collapsed').exists()).toBe(true)
+    expect(wrapper.findAll('button[aria-label="展开节点选择"]')).toHaveLength(1)
+  })
+
+  it('enters focus mode on fullscreen and hides overview and expanded sidebar by default', async () => {
+    const requestFullscreen = vi.fn(async function (this: HTMLElement) {
+      Object.defineProperty(document, 'fullscreenElement', {
+        configurable: true,
+        value: this,
+      })
+      document.dispatchEvent(new Event('fullscreenchange'))
+    })
+
+    Object.defineProperty(HTMLElement.prototype, 'requestFullscreen', {
+      configurable: true,
+      value: requestFullscreen,
+    })
+
+    const exitFullscreen = vi.fn(async () => {
+      Object.defineProperty(document, 'fullscreenElement', {
+        configurable: true,
+        value: null,
+      })
+      document.dispatchEvent(new Event('fullscreenchange'))
+    })
+
+    Object.defineProperty(document, 'exitFullscreen', {
+      configurable: true,
+      value: exitFullscreen,
+    })
+
+    const wrapper = createWrapper()
+
+    await wrapper.find('button[aria-label="进入全屏专注模式"]').trigger('click')
+    await wrapper.vm.$nextTick()
+
+    expect(requestFullscreen).toHaveBeenCalledTimes(1)
+    expect(wrapper.find('.dashboard-shell--focus').exists()).toBe(true)
+    expect(wrapper.find('.dashboard-overview').exists()).toBe(false)
+    expect(wrapper.find('.dashboard-sidebar--collapsed').exists()).toBe(true)
+    expect(wrapper.find('.focus-mode-banner').exists()).toBe(true)
+    expect(wrapper.find('button[aria-label="退出全屏专注模式"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('按 Esc 退出全屏模式')
+    expect(wrapper.text()).toContain('显示运行概览')
+
+    await wrapper.find('button[aria-label="退出全屏专注模式"]').trigger('click')
+
+    expect(exitFullscreen).toHaveBeenCalledTimes(1)
   })
 })

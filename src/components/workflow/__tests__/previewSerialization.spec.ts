@@ -21,7 +21,7 @@ describe('previewSerialization', () => {
       text: 'x'.repeat(DEFAULT_PREVIEW_SERIALIZE_OPTIONS.maxStringLength + 40),
     })
 
-    const preview = createSafeJsonPreview(data)
+    const preview = createSafeJsonPreview(data) as ReturnType<typeof createJsonResult>
     const json = stringifySafePreview(preview)
 
     expect(preview.meta?.previewTruncated).toBe(true)
@@ -49,7 +49,7 @@ describe('previewSerialization', () => {
       },
     })
 
-    const preview = createSafeJsonPreview(data)
+    const preview = createSafeJsonPreview(data) as ReturnType<typeof createReportResult>
     const json = stringifySafePreview(preview)
 
     expect(preview.kind).toBe('report')

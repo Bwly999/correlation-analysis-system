@@ -444,19 +444,40 @@ export const useWorkflowStore = defineStore('workflow', () => {
     }
   }
 
-  const hasMissingRequiredRuntimeInput = (node: WorkflowNode) => {
+  const getVisibleRuntimeProperties = (node: WorkflowNode) => {
     const resolvedNode = applyNodeConfigDefaults(node)
     const definition = resolvedNode?.definition
     const resolvedConfig = resolvedNode?.config ?? node.data.config
-    if (!definition || definition.category !== 'trigger') return false
+    if (!definition || definition.category !== 'trigger') return []
 
-    return definition.properties.some(
+    return definition.properties.filter(
+      (property) => property.isRuntimeInput && (!property.displayIf || property.displayIf(resolvedConfig)),
+    )
+  }
+
+  const shouldPromptForRuntimeInput = (node: WorkflowNode) => {
+    const visibleRuntimeProperties = getVisibleRuntimeProperties(node)
+    if (visibleRuntimeProperties.length === 0) return false
+
+    const resolvedConfig = node.data.config
+    return visibleRuntimeProperties.some(
       (property) =>
-        property.isRuntimeInput &&
         property.required &&
-        (!property.displayIf || property.displayIf(resolvedConfig)) &&
         !isValueValid(resolvedConfig[property.name], property.type),
     )
+  }
+
+  const resetRuntimeInputValues = (node: WorkflowNode) => {
+    const resolvedNode = applyNodeConfigDefaults(node)
+    const definition = resolvedNode?.definition
+    if (!definition || definition.category !== 'trigger' || node.data.reuseLastRuntimeInputs) return
+
+    const nextConfig = { ...(resolvedNode?.config ?? node.data.config) }
+    definition.properties.forEach((property) => {
+      if (!property.isRuntimeInput) return
+      nextConfig[property.name] = property.default ?? null
+    })
+    node.data.config = nextConfig
   }
 
   const collectUpstreamNodeIds = (targetNodeId: string, acc = new Set<string>()) => {
@@ -518,6 +539,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
         category,
         status: 'idle',
         config: defaultConfig,
+        reuseLastRuntimeInputs: false,
         logs: [],
         useManualInput: false,
         manualInput: '',
@@ -976,15 +998,10 @@ export const useWorkflowStore = defineStore('workflow', () => {
       }
       const definition = resolvedNode.definition
 
+      if (!forceUpdate && node.data.output) return node.data.output
+
       if (definition.category === 'trigger') {
-        const missingRuntimeProps = definition.properties.filter(
-          (p) =>
-            p.isRuntimeInput &&
-            p.required &&
-            (!p.displayIf || p.displayIf(resolvedConfig)) &&
-            !isValueValid(resolvedConfig[p.name], p.type),
-        )
-        if (missingRuntimeProps.length > 0) {
+        if (shouldPromptForRuntimeInput(node)) {
           addLog(`节点 ${node.data.label} 缺少运行时输入`, 'info', nodeId)
           const queueIndex =
             executionScope === 'global' ? globalRuntimeQueueNodeIds.indexOf(nodeId) : -1
@@ -1022,8 +1039,6 @@ export const useWorkflowStore = defineStore('workflow', () => {
         node.data.error = undefined
         return node.data.output
       }
-
-      if (!forceUpdate && node.data.output) return node.data.output
 
       node.data.status = 'running'
       node.data.error = undefined
@@ -1075,6 +1090,9 @@ export const useWorkflowStore = defineStore('workflow', () => {
       node.data.output = markRaw(toStoredOutput(result))
       node.data.status = 'success'
       node.data.error = undefined
+      if (definition.category === 'trigger') {
+        resetRuntimeInputValues(node)
+      }
       addLog(`执行成功: ${node.data.label}`, 'info', nodeId)
       return node.data.output
     } catch (error: any) {
@@ -1153,7 +1171,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
       })
       globalRuntimeQueueNodeIds = currentNodes
         .filter((node) => executionScopeNodeIds.has(node.id))
-        .filter((node) => hasMissingRequiredRuntimeInput(node))
+        .filter((node) => shouldPromptForRuntimeInput(node))
         .map((node) => node.id)
 
       let lastResultId = null

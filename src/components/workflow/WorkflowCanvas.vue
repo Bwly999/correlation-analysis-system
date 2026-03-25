@@ -234,11 +234,15 @@ watch(
   },
 )
 
-const resumeExecution = async (runtimeConfig?: Record<string, any>) => {
+const resumeExecution = async (payload?: {
+  config: Record<string, any>
+  reuseLastRuntimeInputs: boolean
+}) => {
   if (store.pendingExecution) {
     const pendingNode = store.nodes.find((node) => node.id === store.pendingExecution?.nodeId)
-    if (pendingNode && runtimeConfig) {
-      pendingNode.data.config = { ...pendingNode.data.config, ...runtimeConfig }
+    if (pendingNode && payload) {
+      pendingNode.data.config = { ...pendingNode.data.config, ...payload.config }
+      pendingNode.data.reuseLastRuntimeInputs = payload.reuseLastRuntimeInputs
     }
     await store.resumePendingExecution()
   }
