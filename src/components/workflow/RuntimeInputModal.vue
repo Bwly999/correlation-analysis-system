@@ -172,6 +172,11 @@ const handleConfirm = () => {
     modal
     dismissableMask
     :style="{ width: '560px' }"
+    :pt="{
+      mask: {
+        class: 'runtime-input-dialog-mask',
+      },
+    }"
     :closable="true"
     class="runtime-input-dialog"
   >
@@ -322,6 +327,11 @@ const handleConfirm = () => {
 </template>
 
 <style>
+.runtime-input-dialog-mask {
+  align-items: flex-start !important;
+  padding-top: clamp(2rem, 8vh, 5rem);
+}
+
 .runtime-input-dialog .p-dialog-header {
   border-bottom: 1px solid #f1f5f9;
   padding: 1.5rem;

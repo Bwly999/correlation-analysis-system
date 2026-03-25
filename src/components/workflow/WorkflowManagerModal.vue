@@ -124,6 +124,11 @@ const handleClearHistory = async () => {
     :visible="visible"
     modal
     :style="{ width: '640px' }"
+    :pt="{
+      mask: {
+        class: 'workflow-manager-dialog-mask',
+      },
+    }"
     class="n8n-modern-dialog"
     :closable="false"
     @update:visible="(val) => !val && emit('close')"
@@ -345,6 +350,11 @@ const handleClearHistory = async () => {
 </template>
 
 <style scoped>
+:global(.workflow-manager-dialog-mask) {
+  align-items: flex-start !important;
+  padding-top: clamp(2rem, 8vh, 5rem);
+}
+
 .n8n-modern-dialog :deep(.p-dialog-header) {
   border-bottom: 1px solid #f1f4f8;
   padding: 1rem 1.5rem;
