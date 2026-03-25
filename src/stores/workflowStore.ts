@@ -69,6 +69,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
   const pendingExecution = ref<
     {
       nodeId: string
+      resumeNodeId?: string
       forceUpdate: boolean
       executionScope?: 'single' | 'global'
       promptIndex?: number
@@ -1007,6 +1008,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
             executionScope === 'global' ? globalRuntimeQueueNodeIds.indexOf(nodeId) : -1
           pendingExecution.value = {
             nodeId,
+            resumeNodeId: executionScope === 'single' ? nodeId : undefined,
             forceUpdate,
             executionScope,
             promptIndex: queueIndex >= 0 ? queueIndex + 1 : undefined,
@@ -1052,6 +1054,12 @@ export const useWorkflowStore = defineStore('workflow', () => {
         const shouldForceUpstream = executionScope === 'global' ? forceUpdate : false
         const result = await executeNode(edge.source, shouldForceUpstream, executionScope)
         if (result === 'WAIT_INPUT' || result === 'STOPPED') {
+          if (result === 'WAIT_INPUT' && executionScope === 'single' && pendingExecution.value) {
+            pendingExecution.value = {
+              ...pendingExecution.value,
+              resumeNodeId: nodeId,
+            }
+          }
           node.data.status = 'idle'
           return result
         }
@@ -1117,7 +1125,9 @@ export const useWorkflowStore = defineStore('workflow', () => {
 
     pendingExecution.value = null
     const result = await executeNode(
-      pending.nodeId,
+      pending.executionScope === 'single'
+        ? (pending.resumeNodeId ?? pending.nodeId)
+        : pending.nodeId,
       pending.forceUpdate,
       pending.executionScope ?? 'single',
     )

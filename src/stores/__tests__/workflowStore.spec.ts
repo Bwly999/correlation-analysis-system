@@ -562,6 +562,86 @@ describe('Workflow Store', () => {
     }
   })
 
+  it('should continue the current debug node after filling upstream runtime inputs', async () => {
+    const triggerDefinition = {
+      name: 'test-debug-runtime-trigger',
+      displayName: 'Test Debug Runtime Trigger',
+      icon: 'test',
+      category: 'trigger' as const,
+      description: 'test',
+      properties: [
+        {
+          name: 'token',
+          displayName: '启动参数',
+          type: 'string' as const,
+          default: '',
+          required: true,
+          isRuntimeInput: true,
+        },
+      ],
+      execute: async (_input: null, config: { token: string }) =>
+        createTableResult([{ token: config.token }]),
+    }
+
+    const actionDefinition = {
+      name: 'test-debug-runtime-consumer',
+      displayName: 'Test Debug Runtime Consumer',
+      icon: 'test',
+      category: 'action' as const,
+      description: 'test',
+      properties: [],
+      execute: async (input: { kind: string; payload: Array<{ token: string }> } | null) =>
+        createJsonResult({
+          kind: input?.kind ?? null,
+          token: input?.payload?.[0]?.token ?? null,
+          autoResumed: true,
+        }),
+    }
+
+    nodeDefinitions.push(triggerDefinition, actionDefinition)
+
+    try {
+      const store = useWorkflowStore()
+      const trigger = store.addAndConnectNode('test-debug-runtime-trigger', '运行时触发器', { x: 0, y: 0 })!
+      const action = store.addAndConnectNode('test-debug-runtime-consumer', '调试节点', { x: 300, y: 0 })!
+
+      store.edges.push({
+        id: 'e_debug_runtime_trigger_action',
+        source: trigger.id,
+        target: action.id,
+        type: 'n8n',
+        animated: true,
+      })
+
+      const waitingResult = await store.executeNode(action.id, true)
+
+      expect(waitingResult).toBe('WAIT_INPUT')
+      expect(store.pendingExecution?.nodeId).toBe(trigger.id)
+      expect(store.pendingExecution?.resumeNodeId).toBe(action.id)
+
+      trigger.data.config.token = 'runtime-token'
+
+      const resumedResult = await store.resumePendingExecution()
+
+      expect(resumedResult?.kind).toBe('json')
+      expect(resumedResult?.payload).toEqual({
+        kind: 'table',
+        token: 'runtime-token',
+        autoResumed: true,
+      })
+      expect(action.data.output).toEqual(resumedResult)
+      expect(action.data.status).toBe('success')
+      expect(trigger.data.status).toBe('success')
+      expect(store.pendingExecution).toBeNull()
+    } finally {
+      const triggerIndex = nodeDefinitions.findIndex((definition) => definition.name === 'test-debug-runtime-trigger')
+      if (triggerIndex >= 0) nodeDefinitions.splice(triggerIndex, 1)
+
+      const actionIndex = nodeDefinitions.findIndex((definition) => definition.name === 'test-debug-runtime-consumer')
+      if (actionIndex >= 0) nodeDefinitions.splice(actionIndex, 1)
+    }
+  })
+
   it('should resume pending debug execution for a trigger node without requiring a terminal model', async () => {
     const store = useWorkflowStore()
     const node = store.addAndConnectNode('file-import', 'Trigger', { x: 0, y: 0 })!
