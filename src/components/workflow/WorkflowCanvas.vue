@@ -251,7 +251,13 @@ const resumeExecution = async (payload?: {
 watch(
   () => store.lastRunDashboard,
   (dashboard) => {
-    if (!dashboard) return
+    if (!dashboard) {
+      resultDashboardModal.value = {
+        visible: false,
+        summary: null,
+      }
+      return
+    }
 
     const scopedNodes = store.nodes.filter((node) =>
       dashboard.executionScopeNodeIds.includes(node.id),
