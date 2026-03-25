@@ -16,6 +16,7 @@ import {
   CheckCircle2,
   AlertCircle,
   HelpCircle,
+  Bot,
 } from 'lucide-vue-next'
 import Button from 'primevue/button'
 import Menu from 'primevue/menu'
@@ -27,10 +28,14 @@ const emit = defineEmits<{
   newWorkflow: []
   importWorkflow: [file: File]
   openHelp: []
+  toggleAi: []
 }>()
 const store = useWorkflowStore()
 const toast = useToast()
 const showUnsavedIndicator = computed(() => !store.isHistoryMode && store.hasUnsavedChanges)
+const props = defineProps<{
+  isAiPanelVisible?: boolean
+}>()
 
 // 过滤当前工作流的历史记录
 const filteredHistory = computed<ExecutionRecord[]>(() => {
@@ -252,6 +257,16 @@ const formatDuration = (ms: number) => {
         <span>帮助</span>
       </Button>
 
+      <button
+        v-if="!store.isHistoryMode"
+        data-testid="workflow-header-ai-toggle"
+        :class="['ai-btn', { 'ai-btn--active': props.isAiPanelVisible }]"
+        @click="emit('toggleAi')"
+      >
+        <Bot :size="14" />
+        <span>{{ props.isAiPanelVisible ? '收起 AI' : 'AI 编排' }}</span>
+      </button>
+
       <button v-if="!store.isHistoryMode" class="file-btn" @click="toggleMenu">
         <FileUp :size="14" />
         <span>文件</span>
@@ -388,6 +403,38 @@ const formatDuration = (ms: number) => {
   border-color: #93c5fd;
   background: #eff6ff;
   color: #1d4ed8;
+}
+
+.ai-btn {
+  height: 2rem;
+  padding: 0 0.875rem;
+  border-radius: 0.625rem;
+  border: 1px solid #bfdbfe;
+  background: linear-gradient(180deg, #ffffff 0%, #eff6ff 100%);
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 6px 16px -12px rgba(37, 99, 235, 0.65);
+}
+
+.ai-btn:hover {
+  border-color: #93c5fd;
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.ai-btn--active {
+  border-color: #2563eb;
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  color: #ffffff;
+  box-shadow:
+    0 10px 22px -12px rgba(37, 99, 235, 0.95),
+    0 0 0 3px rgba(37, 99, 235, 0.12);
 }
 
 .file-btn {

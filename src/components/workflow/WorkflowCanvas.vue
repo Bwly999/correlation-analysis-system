@@ -342,10 +342,12 @@ onBeforeUnmount(() => {
     class="flex h-screen w-full bg-[#f1f5f9] text-[#1a1f36] overflow-hidden relative font-sans text-[13px] selection:bg-indigo-100"
   >
     <WorkflowHeader
+      :is-ai-panel-visible="isAiPanelVisible"
       @open-projects="openWorkflowList"
       @new-workflow="handleCreateWorkflow"
       @import-workflow="handleImportWorkflow"
       @open-help="isHelpCenterVisible = true"
+      @toggle-ai="toggleAiPanel"
     />
 
     <main
@@ -453,7 +455,6 @@ onBeforeUnmount(() => {
 
     <WorkflowFloatingControls
       :visible="!store.isHistoryMode"
-      :is-ai-panel-visible="isAiPanelVisible"
       :is-running="store.isRunning"
       :has-pending-execution="!!store.pendingExecution"
       :has-result-dashboard="!!resultDashboardModal.summary"
@@ -461,7 +462,6 @@ onBeforeUnmount(() => {
       :run-button-title="runButtonTitle"
       :run-button-subtitle="runButtonSubtitle"
       :run-bar-state="runBarState"
-      @toggle-ai="toggleAiPanel"
       @run="store.runGlobal"
       @stop="store.stopExecution"
       @open-dashboard="resultDashboardModal.visible = true"

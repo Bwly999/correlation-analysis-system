@@ -589,7 +589,7 @@ describe('WorkflowCanvas', () => {
     )
   })
 
-  it('keeps the ai panel collapsed by default and expands it from the right edge toggle', async () => {
+  it('keeps the ai panel collapsed by default', async () => {
     const wrapper = mount(WorkflowCanvas, {
       global: {
         stubs: {
@@ -619,11 +619,45 @@ describe('WorkflowCanvas', () => {
     const aiPanel = wrapper.findComponent({ name: 'WorkflowAiPanel' })
     expect(aiPanel.exists()).toBe(true)
     expect(aiPanel.attributes('data-visible')).toBe('false')
+  })
 
-    const toggle = wrapper.find('[data-testid="workflow-ai-toggle"]')
-    expect(toggle.exists()).toBe(true)
+  it('opens the ai panel from the header action entry', async () => {
+    const workflowHeaderStub = defineComponent({
+      name: 'WorkflowHeader',
+      emits: ['toggle-ai'],
+      template:
+        '<button data-testid="workflow-header-ai-toggle" @click="$emit(\'toggle-ai\')">AI 编排</button>',
+    })
 
-    await toggle.trigger('click')
+    const wrapper = mount(WorkflowCanvas, {
+      global: {
+        stubs: {
+          Background: { template: '<div />' },
+          Controls: { template: '<div />' },
+          NodeSidebar: { template: '<div />' },
+          WorkflowHeader: workflowHeaderStub,
+          BaseNode: { template: '<div />' },
+          LogPanel: { template: '<div />' },
+          NodeConfigModal: { template: '<div />' },
+          RuntimeInputModal: runtimeInputModalStub,
+          WorkflowResultDashboardModal: { template: '<div />' },
+          WorkflowManagerModal: workflowManagerModalStub,
+          UnsavedWorkflowDialog: { template: '<div />' },
+          HelpCenterModal: { template: '<div />' },
+          ConfirmDialog: { template: '<div />' },
+          Toast: { template: '<div />' },
+          Button: { template: '<button><slot /></button>' },
+          N8nEdge: { template: '<div />' },
+        },
+        directives: {
+          tooltip: () => undefined,
+        },
+      },
+    })
+
+    expect(wrapper.findComponent({ name: 'WorkflowAiPanel' }).attributes('data-visible')).toBe('false')
+
+    await wrapper.find('[data-testid="workflow-header-ai-toggle"]').trigger('click')
 
     expect(wrapper.findComponent({ name: 'WorkflowAiPanel' }).attributes('data-visible')).toBe('true')
   })

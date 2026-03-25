@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import { BarChart3, Bot, Play, Square } from 'lucide-vue-next'
+import { BarChart3, Play, Square } from 'lucide-vue-next'
 
 const props = defineProps<{
   visible: boolean
-  isAiPanelVisible: boolean
   isRunning: boolean
   hasPendingExecution: boolean
   hasResultDashboard: boolean
@@ -14,7 +13,6 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  toggleAi: []
   run: []
   stop: []
   openDashboard: []
@@ -23,17 +21,6 @@ const emit = defineEmits<{
 
 <template>
   <template v-if="visible">
-    <button
-      data-testid="workflow-ai-toggle"
-      class="workflow-ai-toggle"
-      :class="{ 'workflow-ai-toggle--open': props.isAiPanelVisible }"
-      :style="{ bottom: `${props.runBarBottom + 76}px` }"
-      @click="emit('toggleAi')"
-    >
-      <Bot :size="16" />
-      <span>{{ props.isAiPanelVisible ? '收起 AI' : 'AI 编排' }}</span>
-    </button>
-
     <div
       class="absolute left-1/2 -translate-x-1/2 z-[90] transition-all duration-500 flex items-center gap-3"
       :style="{ bottom: `${props.runBarBottom}px` }"
@@ -269,40 +256,5 @@ const emit = defineEmits<{
   border-color: rgba(37, 99, 235, 0.28);
   color: #2563eb;
   transform: translateY(-1px);
-}
-
-.workflow-ai-toggle {
-  position: absolute;
-  right: 0;
-  z-index: 140;
-  width: 108px;
-  height: 40px;
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  border-right: 0;
-  border-radius: 14px 0 0 14px;
-  background: rgba(255, 255, 255, 0.96);
-  color: #0f172a;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  font-size: 12px;
-  font-weight: 800;
-  box-shadow: -10px 14px 28px rgba(15, 23, 42, 0.08);
-  cursor: pointer;
-  transition:
-    transform 0.2s ease,
-    color 0.2s ease,
-    background 0.2s ease,
-    right 0.3s ease;
-}
-
-.workflow-ai-toggle:hover {
-  color: #1d4ed8;
-  background: #eff6ff;
-}
-
-.workflow-ai-toggle--open {
-  right: 380px;
 }
 </style>
