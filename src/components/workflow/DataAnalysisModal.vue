@@ -4,6 +4,7 @@ import Dialog from 'primevue/dialog'
 import InputNumber from 'primevue/inputnumber'
 import { X, BarChart3, Database, Download, FileJson, Layers, ChevronRight } from 'lucide-vue-next'
 import DataChart from './DataChart.vue'
+import { createSafeJsonPreview, stringifySafePreview } from './previewSerialization'
 import { workflowViewerRegistry } from './viewers/registry'
 import {
   getResultGroups,
@@ -56,14 +57,14 @@ const previewJson = computed(() => {
   }
 
   if (normalizedResult.value) {
-    return normalizedResult.value
+    return createSafeJsonPreview(normalizedResult.value)
   }
 
   if (Array.isArray(props.data)) {
     return props.data.slice(0, previewLimit.value)
   }
 
-  return props.data
+  return createSafeJsonPreview(props.data)
 })
 
 const previewCount = computed(() => {
@@ -82,6 +83,7 @@ const fallbackChartData = computed(() => {
 })
 
 const viewLabel = computed(() => getResultKindLabel(props.data))
+const previewText = computed(() => stringifySafePreview(previewJson.value))
 
 const exportData = () => {
   const blob = new Blob([JSON.stringify(props.data, null, 2)], { type: 'application/json' })
@@ -180,7 +182,7 @@ const exportData = () => {
           <div
             class="flex-1 overflow-auto p-5 font-mono text-[11px] leading-relaxed text-slate-600 custom-scrollbar bg-[#fafafa]"
           >
-            <pre>{{ JSON.stringify(previewJson, null, 2) }}</pre>
+            <pre>{{ previewText }}</pre>
           </div>
           <div
             v-if="previewCount > 0"
