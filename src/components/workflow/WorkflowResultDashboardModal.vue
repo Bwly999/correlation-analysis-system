@@ -1,9 +1,21 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue'
 import { VueDraggable } from 'vue-draggable-plus'
 import Dialog from 'primevue/dialog'
-import Button from 'primevue/button'
-import { LayoutGrid, Grip, BarChart3, AlertTriangle, Clock3, SquareDashedMousePointer, X } from 'lucide-vue-next'
+import {
+  LayoutGrid,
+  Grip,
+  BarChart3,
+  AlertTriangle,
+  Clock3,
+  SquareDashedMousePointer,
+  X,
+  Maximize2,
+  Minimize2,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Rows3,
+} from 'lucide-vue-next'
 import DataAnalysisModal from './DataAnalysisModal.vue'
 import WorkflowResultPanel from './WorkflowResultPanel.vue'
 import {
@@ -33,6 +45,9 @@ const layoutMode = ref<LayoutMode>('grid')
 const freeGridOrder = ref<string[]>([])
 const freeGridLayouts = ref<Record<string, FreeGridItemLayout>>({})
 const detailNode = ref<ResultDashboardNode | null>(null)
+const isFullscreen = ref(false)
+const isNodeSidebarCollapsed = ref(false)
+const showOverviewInFullscreen = ref(false)
 const resizeState = ref<{
   nodeId: string
   startX: number
@@ -47,10 +62,22 @@ const FREE_GRID_GAP = 16
 const FREE_GRID_MIN_WIDTH = 280
 const FREE_GRID_MIN_HEIGHT = 220
 const GRID_PANEL_MIN_HEIGHT = 320
+const dashboardShellRef = useTemplateRef<HTMLElement>('dashboardShell')
 
 const dashboardGroups = computed(() =>
   props.summary ? buildResultDashboardGroups(props.summary.nodes) : { withOutput: [], withError: [], withoutOutput: [] },
 )
+
+const isFocusMode = computed(() => isFullscreen.value)
+const showOverview = computed(() => !isFocusMode.value || showOverviewInFullscreen.value)
+const workspaceHint = computed(() => {
+  if (layoutMode.value === 'free-grid') {
+    return `自由栅格 | ${selectedNodes.value.length} 个结果面板`
+  }
+  return `标准网格 | ${selectedNodes.value.length} 个结果面板 | ${gridColumns.value} 列`
+})
+const canShowOverviewToggle = computed(() => isFocusMode.value)
+const nodeSidebarWidthClass = computed(() => (isNodeSidebarCollapsed.value ? 'w-[72px]' : 'w-[280px]'))
 
 const selectedNodes = computed(() => {
   const allNodes = props.summary?.nodes ?? []
@@ -102,6 +129,9 @@ const initializeSessionState = (summary: WorkflowResultDashboardSummary | null) 
     freeGridOrder.value = []
     freeGridLayouts.value = {}
     detailNode.value = null
+    isFullscreen.value = false
+    isNodeSidebarCollapsed.value = false
+    showOverviewInFullscreen.value = false
     return
   }
 
@@ -112,6 +142,9 @@ const initializeSessionState = (summary: WorkflowResultDashboardSummary | null) 
   )
   gridColumns.value = 2
   layoutMode.value = 'grid'
+  isFullscreen.value = false
+  isNodeSidebarCollapsed.value = false
+  showOverviewInFullscreen.value = false
 }
 
 watch(
@@ -146,6 +179,45 @@ const toggleNodeSelection = (nodeId: string, checked: boolean) => {
 
 const openDetail = (node: ResultDashboardNode) => {
   detailNode.value = node
+}
+
+const enterFocusMode = () => {
+  isFullscreen.value = true
+  isNodeSidebarCollapsed.value = true
+  showOverviewInFullscreen.value = false
+}
+
+const exitFocusMode = () => {
+  isFullscreen.value = false
+  isNodeSidebarCollapsed.value = false
+  showOverviewInFullscreen.value = false
+}
+
+const toggleNodeSidebar = () => {
+  isNodeSidebarCollapsed.value = !isNodeSidebarCollapsed.value
+}
+
+const syncFullscreenState = () => {
+  const active = document.fullscreenElement === dashboardShellRef.value
+  if (active) {
+    enterFocusMode()
+    return
+  }
+  exitFocusMode()
+}
+
+const toggleFullscreen = async () => {
+  const shell = dashboardShellRef.value
+  if (!shell) return
+
+  if (document.fullscreenElement === shell) {
+    exitFocusMode()
+    await document.exitFullscreen?.()
+    return
+  }
+
+  enterFocusMode()
+  await shell.requestFullscreen?.()
 }
 
 const handleResizeMove = (event: MouseEvent) => {
@@ -202,7 +274,30 @@ watch(
 onBeforeUnmount(() => {
   window.removeEventListener('mousemove', handleResizeMove)
   window.removeEventListener('mouseup', stopResize)
+  document.removeEventListener('fullscreenchange', syncFullscreenState)
 })
+
+watch(
+  () => props.visible,
+  (visible) => {
+    if (!visible && document.fullscreenElement === dashboardShellRef.value) {
+      document.exitFullscreen?.()
+    }
+  },
+)
+
+watch(
+  () => dashboardShellRef.value,
+  (shell, previous) => {
+    if (previous) {
+      document.removeEventListener('fullscreenchange', syncFullscreenState)
+    }
+    if (shell) {
+      document.addEventListener('fullscreenchange', syncFullscreenState)
+    }
+  },
+  { immediate: true },
+)
 
 const formatDuration = (duration: number) => {
   if (duration < 1000) return `${duration}ms`
@@ -220,17 +315,29 @@ const formatDuration = (duration: number) => {
     @update:visible="emit('close')"
   >
     <template #header>
-      <div class="w-full px-6 py-4 flex items-center justify-between gap-4">
+      <div class="w-full px-5 py-3 flex items-center justify-between gap-4">
         <div>
           <div class="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-slate-400 font-black">
             <BarChart3 :size="13" />
             <span>工作流结果看板</span>
           </div>
-          <h2 class="mt-1 text-2xl font-black text-slate-900">
+          <h2 class="mt-0.5 text-[22px] font-black text-slate-900 leading-tight">
             {{ summary?.workflowName || '当前工作流' }}
           </h2>
+          <p v-if="isFullscreen" class="mt-1 text-[11px] font-semibold text-blue-600">
+            按 Esc 退出全屏模式
+          </p>
         </div>
         <div class="flex items-center gap-2">
+          <button
+            type="button"
+            class="dashboard-close-button"
+            :aria-label="isFullscreen ? '退出全屏专注模式' : '进入全屏专注模式'"
+            @click="toggleFullscreen"
+          >
+            <Minimize2 v-if="isFullscreen" :size="18" />
+            <Maximize2 v-else :size="18" />
+          </button>
           <button type="button" class="dashboard-close-button" aria-label="关闭结果看板" @click="emit('close')">
             <X :size="18" />
           </button>
@@ -238,8 +345,31 @@ const formatDuration = (duration: number) => {
       </div>
     </template>
 
-    <div class="h-full min-h-0 flex flex-col bg-slate-50">
-      <section class="px-6 py-4 border-b border-slate-200 bg-white">
+    <div
+      ref="dashboardShell"
+      class="dashboard-shell h-full min-h-0 flex flex-col bg-slate-50"
+      :class="{ 'dashboard-shell--focus': isFocusMode }"
+    >
+      <section
+        v-if="isFullscreen"
+        class="focus-mode-banner px-4 py-2 border-b border-blue-100 bg-blue-50/90 flex items-center justify-between gap-3"
+      >
+        <div class="min-w-0">
+          <p class="text-[11px] font-bold text-blue-700">按 Esc 退出全屏模式</p>
+          <p class="text-[11px] text-blue-600/80 truncate">当前处于专注模式，已优先为分析报告释放展示空间。</p>
+        </div>
+        <button
+          type="button"
+          class="focus-mode-exit-button"
+          aria-label="退出全屏专注模式"
+          @click="toggleFullscreen"
+        >
+          <Minimize2 :size="14" />
+          退出全屏
+        </button>
+      </section>
+
+      <section v-if="showOverview" class="dashboard-overview px-5 py-2.5 border-b border-slate-200 bg-white">
         <div class="grid gap-3 dashboard-overview-grid">
           <div class="overview-card">
             <span class="overview-label">运行状态</span>
@@ -276,13 +406,35 @@ const formatDuration = (duration: number) => {
       </section>
 
       <div class="flex-1 min-h-0 flex">
-        <aside class="w-[320px] border-r border-slate-200 bg-white flex flex-col min-h-0">
-          <div class="px-5 py-4 border-b border-slate-100">
-            <h3 class="text-sm font-black text-slate-900">节点选择</h3>
-            <p class="mt-1 text-xs text-slate-500">默认选中所有终止节点，可手动加入其他节点结果。</p>
+        <aside
+          class="dashboard-sidebar border-r border-slate-200 bg-white flex flex-col min-h-0 transition-all duration-200"
+          :class="[nodeSidebarWidthClass, { 'dashboard-sidebar--collapsed': isNodeSidebarCollapsed }]"
+        >
+          <div class="px-4 py-3 border-b border-slate-100">
+            <div class="flex items-center justify-between gap-3">
+              <div v-if="!isNodeSidebarCollapsed" class="min-w-0">
+                <h3 class="text-sm font-black text-slate-900">节点选择</h3>
+                <p class="mt-1 text-[11px] text-slate-500">默认选中终止节点，可手动加入其他节点结果。</p>
+              </div>
+              <div v-else class="mx-auto">
+                <span class="sidebar-rail-label">节点</span>
+              </div>
+              <button
+                type="button"
+                class="sidebar-toggle-button"
+                :aria-label="isNodeSidebarCollapsed ? '展开节点选择' : '收起节点选择'"
+                @click="toggleNodeSidebar"
+              >
+                <PanelLeftOpen v-if="isNodeSidebarCollapsed" :size="16" />
+                <PanelLeftClose v-else :size="16" />
+              </button>
+            </div>
           </div>
 
-          <div class="flex-1 overflow-auto px-4 py-4 space-y-5 custom-scrollbar">
+          <div
+            v-if="!isNodeSidebarCollapsed"
+            class="flex-1 overflow-auto px-4 py-4 space-y-5 custom-scrollbar"
+          >
             <section>
               <div class="group-title">有结果节点</div>
               <label
@@ -322,18 +474,32 @@ const formatDuration = (duration: number) => {
               </div>
             </section>
           </div>
+
+          <div v-else class="flex-1 flex flex-col items-center gap-3 px-2 py-4">
+            <div class="sidebar-rail-count">{{ selectedNodes.length }}</div>
+          </div>
         </aside>
 
         <section class="flex-1 min-w-0 flex flex-col">
-          <div class="px-5 py-4 border-b border-slate-200 bg-white flex items-center justify-between gap-3">
-            <div>
+          <div class="px-4 py-3 border-b border-slate-200 bg-white flex items-center justify-between gap-3">
+            <div class="min-w-0">
               <h3 class="text-sm font-black text-slate-900">聚合分析工作台</h3>
-              <p class="mt-1 text-xs text-slate-500">
-                右侧同时展示 {{ selectedNodes.length }} 个已选节点结果，可切换标准网格与自由栅格布局。
+              <p class="mt-1 text-[11px] text-slate-500 truncate">
+                {{ workspaceHint }}
               </p>
             </div>
 
-            <div class="flex items-center gap-2 shrink-0">
+            <div class="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+              <button
+                v-if="canShowOverviewToggle"
+                type="button"
+                class="toolbar-button"
+                :class="{ 'toolbar-button--active': showOverviewInFullscreen }"
+                @click="showOverviewInFullscreen = !showOverviewInFullscreen"
+              >
+                <Rows3 :size="14" />
+                {{ showOverviewInFullscreen ? '隐藏运行概览' : '显示运行概览' }}
+              </button>
               <button
                 type="button"
                 class="toolbar-button"
@@ -364,14 +530,14 @@ const formatDuration = (duration: number) => {
                   {{ count }}列
                 </button>
               </div>
-              <div v-else class="ml-2 text-xs text-slate-500 flex items-center gap-1">
+              <div v-else class="ml-2 text-[11px] text-slate-500 flex items-center gap-1">
                 <Grip :size="14" />
-                拖拽卡片可重排，面板右上角可调整宽高
+                拖拽重排，右下角调尺寸
               </div>
             </div>
           </div>
 
-          <div class="flex-1 min-h-0 overflow-auto p-5 custom-scrollbar">
+          <div class="flex-1 min-h-0 overflow-auto p-4 custom-scrollbar">
             <div v-if="selectedNodes.length === 0" class="empty-state">
               <p class="text-lg font-black text-slate-700">当前还没有选中要展示的节点</p>
               <p class="mt-2 text-sm text-slate-500">请从左侧勾选至少一个有结果节点，右侧会自动加入对应分析面板。</p>
@@ -459,14 +625,51 @@ const formatDuration = (duration: number) => {
   overflow: hidden;
 }
 
+.dashboard-shell {
+  min-height: 0;
+}
+
+.dashboard-shell--focus {
+  background: #f8fafc;
+}
+
 .dashboard-overview-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.focus-mode-banner {
+  backdrop-filter: blur(10px);
+}
+
+.focus-mode-exit-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  padding: 7px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(37, 99, 235, 0.18);
+  background: #ffffff;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.focus-mode-exit-button:hover {
+  border-color: rgba(37, 99, 235, 0.35);
+  background: #eff6ff;
+  color: #1e40af;
+}
+
 .overview-card {
   border: 1px solid #e2e8f0;
-  border-radius: 18px;
-  padding: 16px 18px;
+  border-radius: 16px;
+  padding: 12px 14px;
   background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
 }
 
@@ -482,9 +685,56 @@ const formatDuration = (duration: number) => {
 .overview-value {
   display: inline-flex;
   align-items: center;
-  margin-top: 10px;
-  font-size: 22px;
+  margin-top: 6px;
+  font-size: 20px;
   font-weight: 900;
+}
+
+.dashboard-sidebar {
+  flex: 0 0 auto;
+}
+
+.sidebar-toggle-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #475569;
+  cursor: pointer;
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.sidebar-toggle-button:hover {
+  border-color: #94a3b8;
+  color: #0f172a;
+  background: #f8fafc;
+}
+
+.sidebar-rail-label {
+  writing-mode: vertical-rl;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  color: #94a3b8;
+  text-transform: uppercase;
+}
+
+.sidebar-rail-count {
+  min-width: 28px;
+  padding: 6px 8px;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #2563eb;
+  font-size: 11px;
+  font-weight: 900;
+  text-align: center;
 }
 
 .group-title {
@@ -591,7 +841,7 @@ const formatDuration = (duration: number) => {
 
 .dashboard-grid {
   display: grid;
-  gap: 16px;
+  gap: 14px;
   align-items: stretch;
 }
 
@@ -604,7 +854,7 @@ const formatDuration = (duration: number) => {
   display: flex;
   flex-wrap: wrap;
   align-content: flex-start;
-  gap: 16px;
+  gap: 14px;
   min-height: 320px;
 }
 
