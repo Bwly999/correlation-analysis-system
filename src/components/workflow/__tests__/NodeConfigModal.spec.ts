@@ -194,4 +194,56 @@ describe('NodeConfigModal', () => {
     expect(wrapper.text()).toContain('暂时无法展示帮助')
     expect(wrapper.find('[data-testid="node-help-trigger"]').exists()).toBe(false)
   })
+
+  it('cleans up document drag listeners when unmounted during resize', async () => {
+    const store = useWorkflowStore()
+    store.nodes = [
+      {
+        id: 'file-import-node',
+        type: 'custom',
+        position: { x: 0, y: 0 },
+        label: '文件导入',
+        data: {
+          label: '文件导入',
+          type: 'file-import',
+          category: 'trigger',
+          status: 'idle',
+          config: {},
+          logs: [],
+          useManualInput: false,
+          manualInput: '',
+          isPinned: false,
+        },
+      } as any,
+    ]
+
+    const addEventListenerSpy = vi.spyOn(document, 'addEventListener')
+    const removeEventListenerSpy = vi.spyOn(document, 'removeEventListener')
+
+    const wrapper = mount(NodeConfigModal, {
+      props: { visible: true, nodeId: 'file-import-node' },
+      global: {
+        stubs: {
+          Dialog: dialogStub,
+          DataDisplayPanel: true,
+          DataAnalysisModal: true,
+          ConfigHeader: { template: '<div />', props: ['nodeLabel', 'isPinned', 'nodeType'] },
+          ConfigFooter: { template: '<div />' },
+          ConfigForm: { template: '<div />', props: ['config', 'properties', 'upstreamFactors'] },
+          RuntimeInputs: { template: '<div />', props: ['config', 'properties', 'upstreamFactors'] },
+        },
+      },
+    })
+
+    await wrapper.find('.cursor-row-resize').trigger('mousedown', { clientY: 320 })
+    wrapper.unmount()
+
+    const mouseMoveHandler = addEventListenerSpy.mock.calls.find(([eventName]) => eventName === 'mousemove')?.[1]
+    const mouseUpHandler = addEventListenerSpy.mock.calls.find(([eventName]) => eventName === 'mouseup')?.[1]
+
+    expect(mouseMoveHandler).toBeTypeOf('function')
+    expect(mouseUpHandler).toBeTypeOf('function')
+    expect(removeEventListenerSpy).toHaveBeenCalledWith('mousemove', mouseMoveHandler)
+    expect(removeEventListenerSpy).toHaveBeenCalledWith('mouseup', mouseUpHandler)
+  })
 })

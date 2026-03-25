@@ -19,6 +19,7 @@ import {
   getResultSchemaFields,
   normalizeWorkflowResult,
 } from './resultView'
+import { useVerticalResize } from './composables/useVerticalResize'
 
 // PrimeVue Components
 import Dialog from 'primevue/dialog'
@@ -28,7 +29,9 @@ const props = defineProps<{
   visible: boolean
 }>()
 
-const emit = defineEmits(['close'])
+const emit = defineEmits<{
+  close: []
+}>()
 const store = useWorkflowStore()
 const workflowNodes = computed<WorkflowNode[]>(() => store.nodes as WorkflowNode[])
 const workflowEdges = computed<Edge[]>(() => store.edges as Edge[])
@@ -54,30 +57,8 @@ const isHelpDialogVisible = ref(false)
 const analysisModal = ref({ visible: false, title: '', data: null })
 
 // 左侧边栏比例调节逻辑
-const topPaneHeight = ref(400) // 默认输入数据面板高度
-const isResizingLeft = ref(false)
-
-const startResizingLeft = (e: MouseEvent) => {
-  isResizingLeft.value = true
-  const startY = e.clientY
-  const startHeight = topPaneHeight.value
-
-  const onMouseMove = (moveEvent: MouseEvent) => {
-    if (!isResizingLeft.value) return
-    const deltaY = moveEvent.clientY - startY
-    // 限制高度范围
-    topPaneHeight.value = Math.max(150, Math.min(600, startHeight + deltaY))
-  }
-
-  const onMouseUp = () => {
-    isResizingLeft.value = false
-    document.removeEventListener('mousemove', onMouseMove)
-    document.removeEventListener('mouseup', onMouseUp)
-  }
-
-  document.addEventListener('mousemove', onMouseMove)
-  document.addEventListener('mouseup', onMouseUp)
-}
+const { paneHeight: topPaneHeight, isResizing: isResizingLeft, startResizing: startResizingLeft } =
+  useVerticalResize(400, { min: 150, max: 600 })
 
 // 获取当前节点的定义
 const nodeDefinition = computed(() => (node.value ? getNodeDefinition(node.value.data.type) ?? null : null))

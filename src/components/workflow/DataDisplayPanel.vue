@@ -27,7 +27,10 @@ const props = defineProps<{
 const useManualInput = defineModel<boolean>('useManualInput', { default: false })
 const manualInputStr = defineModel<string>('manualInputStr', { default: '' })
 
-const emit = defineEmits(['openDetail', 'generateMock'])
+const emit = defineEmits<{
+  openDetail: []
+  generateMock: []
+}>()
 
 const normalizedResult = computed(() => normalizeWorkflowResult(props.data))
 

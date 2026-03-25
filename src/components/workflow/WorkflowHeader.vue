@@ -22,7 +22,12 @@ import Menu from 'primevue/menu'
 import Popover from 'primevue/popover'
 import { useToast } from 'primevue/usetoast'
 
-const emit = defineEmits(['open-projects', 'new-workflow', 'import-workflow', 'open-help'])
+const emit = defineEmits<{
+  openProjects: []
+  newWorkflow: []
+  importWorkflow: [file: File]
+  openHelp: []
+}>()
 const store = useWorkflowStore()
 const toast = useToast()
 const showUnsavedIndicator = computed(() => !store.isHistoryMode && store.hasUnsavedChanges)
@@ -68,7 +73,7 @@ const triggerImport = () => fileInput.value?.click()
 const handleImport = (event: any) => {
   const file = event.target.files[0]
   if (file) {
-    emit('import-workflow', file)
+    emit('importWorkflow', file)
   }
   event.target.value = ''
 }
@@ -114,7 +119,7 @@ const formatDuration = (ms: number) => {
       <!-- 导航/面包屑 -->
       <div
         class="flex items-center gap-2 text-slate-500 hover:text-slate-900 transition-colors cursor-pointer group px-2 py-1.5 rounded-md hover:bg-slate-100"
-        @click="emit('open-projects')"
+        @click="emit('openProjects')"
       >
         <LayoutGrid :size="16" class="opacity-70 group-hover:opacity-100" />
         <span class="text-[13px] font-medium">项目</span>
@@ -228,7 +233,7 @@ const formatDuration = (ms: number) => {
 
       <div class="deck-divider"></div>
 
-      <Button v-if="!store.isHistoryMode" class="new-btn" @click="emit('new-workflow')">
+      <Button v-if="!store.isHistoryMode" class="new-btn" @click="emit('newWorkflow')">
         <span>新建</span>
       </Button>
 
@@ -242,7 +247,7 @@ const formatDuration = (ms: number) => {
         <span>{{ store.hasUnsavedChanges ? '保存更改' : '保存' }}</span>
       </Button>
 
-      <Button v-if="!store.isHistoryMode" class="help-btn" @click="emit('open-help')">
+      <Button v-if="!store.isHistoryMode" class="help-btn" @click="emit('openHelp')">
         <HelpCircle :size="14" />
         <span>帮助</span>
       </Button>

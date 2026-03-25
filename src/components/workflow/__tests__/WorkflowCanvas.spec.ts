@@ -137,6 +137,41 @@ describe('WorkflowCanvas', () => {
     expect(vueFlow.props('elementsSelectable')).toBe(true)
   })
 
+  it('renders readable chinese copy in history mode', () => {
+    const store = useWorkflowStore()
+    store.isHistoryMode = true
+
+    const wrapper = mount(WorkflowCanvas, {
+      global: {
+        stubs: {
+          Background: { template: '<div />' },
+          Controls: { template: '<div />' },
+          NodeSidebar: { template: '<div />' },
+          WorkflowHeader: { template: '<div />' },
+          BaseNode: { template: '<div />' },
+          LogPanel: { template: '<div />' },
+          NodeConfigModal: { template: '<div />' },
+          RuntimeInputModal: runtimeInputModalStub,
+          WorkflowResultDashboardModal: { template: '<div />' },
+          WorkflowManagerModal: workflowManagerModalStub,
+          ConfirmDialog: { template: '<div />' },
+          Toast: { template: '<div />' },
+          Button: { template: '<button><slot /></button>' },
+          N8nEdge: { template: '<div />' },
+        },
+        directives: {
+          tooltip: () => undefined,
+        },
+      },
+    })
+
+    const text = wrapper.text()
+    expect(text).toContain('历史记录查看模式')
+    expect(text).toContain('返回编辑模式')
+    expect(text).not.toContain('鍘')
+    expect(text).not.toContain('杩')
+  })
+
   it('resumes the pending node execution after runtime input confirmation', async () => {
     const store = useWorkflowStore()
     const resumeSpy = vi.spyOn(store, 'resumePendingExecution').mockResolvedValue(null as any)

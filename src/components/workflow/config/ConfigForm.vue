@@ -10,7 +10,10 @@ const props = defineProps<{
   inputData?: unknown
 }>()
 
-const emit = defineEmits(['update:config', 'save'])
+const emit = defineEmits<{
+  'update:config': [value: Record<string, unknown>]
+  save: []
+}>()
 
 const updateConfig = (propName: string, value: any) => {
   emit('update:config', { ...props.config, [propName]: value })
