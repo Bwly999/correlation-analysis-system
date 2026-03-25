@@ -51,6 +51,7 @@ const runtimeProperties = computed(
 // 将属性拆分为首个属性（启动方式）和其余属性
 const firstProperty = computed(() => runtimeProperties.value[0] || null)
 const otherProperties = computed(() => runtimeProperties.value.slice(1))
+const hasSplitLayout = computed(() => otherProperties.value.length > 0)
 const isGlobalContinuation = computed(() => store.pendingExecution?.executionScope === 'global')
 const globalPromptProgressText = computed(() => {
   if (!isGlobalContinuation.value) return ''
@@ -188,24 +189,39 @@ const handleConfirm = () => {
       </div>
 
       <div v-else class="flex flex-col min-h-0">
+        <div
+          v-if="firstProperty && !hasSplitLayout"
+          data-testid="runtime-input-single-pane"
+          class="min-h-0"
+        >
+          <PropertyField
+            :prop="firstProperty"
+            :model-value="config[firstProperty.name]"
+            :upstream-factors="[]"
+            :config-context="config"
+            @update:model-value="(val) => updateConfig(firstProperty.name, val)"
+          />
+        </div>
+
         <!-- 顶部固定区域：通常是启动方式 -->
         <div
-          v-if="firstProperty"
-          class="shrink-0 mb-2 overflow-hidden"
+          v-if="firstProperty && hasSplitLayout"
+          data-testid="runtime-input-first-pane"
+          class="mb-2 shrink-0 overflow-hidden"
           :style="{ height: topHeight + 'px' }"
         >
           <PropertyField
             :prop="firstProperty"
-            :model-value="config[firstProperty!.name]"
+            :model-value="config[firstProperty.name]"
             :upstream-factors="[]"
             :config-context="config"
-            @update:model-value="(val) => updateConfig(firstProperty!.name, val)"
+            @update:model-value="(val) => updateConfig(firstProperty.name, val)"
           />
         </div>
 
         <!-- 可调节分割线 -->
         <div
-          v-if="otherProperties.length > 0"
+          v-if="hasSplitLayout"
           class="group flex items-center justify-center h-4 cursor-row-resize select-none my-1"
           @mousedown="startResizing"
         >
@@ -213,7 +229,11 @@ const handleConfirm = () => {
         </div>
 
         <!-- 底部滚动区域：其余属性 -->
-        <div class="space-y-6 flex-1 overflow-y-auto pr-2 custom-scrollbar">
+        <div
+          v-if="hasSplitLayout"
+          data-testid="runtime-input-scroll-pane"
+          class="custom-scrollbar flex-1 overflow-y-auto pr-2 pb-8 space-y-6"
+        >
           <div
             v-for="prop in otherProperties"
             v-show="!prop.displayIf || prop.displayIf(config)"

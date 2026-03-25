@@ -21,7 +21,10 @@ const updateConfig = (propName: string, value: any) => {
 </script>
 
 <template>
-  <div class="flex min-h-0 flex-1 flex-col overflow-hidden border-t border-slate-200 bg-[#f1f5f9]">
+  <div
+    data-testid="runtime-inputs-root"
+    class="flex h-full min-h-0 flex-1 flex-col overflow-hidden border-t border-slate-200 bg-[#f1f5f9]"
+  >
     <div class="flex items-center justify-between px-4 py-3">
       <span
         class="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.1em] text-slate-500"
@@ -29,7 +32,10 @@ const updateConfig = (propName: string, value: any) => {
         <Zap :size="12" class="text-amber-500" /> 运行时输入
       </span>
     </div>
-    <div class="custom-scrollbar flex-1 overflow-y-auto px-4 pb-4">
+    <div
+      data-testid="runtime-inputs-scroll"
+      class="custom-scrollbar flex-1 overflow-y-auto px-4 pb-8"
+    >
       <div
         v-if="properties.length === 0"
         class="flex h-full flex-col items-center justify-center text-[11px] italic text-slate-400"

@@ -1,0 +1,133 @@
+import { beforeEach, describe, expect, it } from 'vitest'
+import { mount } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
+import RuntimeInputModal from '../RuntimeInputModal.vue'
+
+const dialogStub = {
+  props: ['visible'],
+  template: '<div><template v-if="visible"><slot name="header" /><slot /><slot name="footer" /></template></div>',
+}
+
+describe('RuntimeInputModal', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('does not clamp a single runtime field into the resizable top pane', () => {
+    const wrapper = mount(RuntimeInputModal, {
+      props: {
+        visible: true,
+        node: {
+          id: 'file-import-node',
+          type: 'custom',
+          position: { x: 0, y: 0 },
+          label: '文件导入',
+          data: {
+            label: '文件导入',
+            type: 'file-import',
+            category: 'trigger',
+            status: 'idle',
+            config: {},
+            logs: [],
+            useManualInput: false,
+            manualInput: '',
+            isPinned: false,
+          },
+        } as any,
+      },
+      global: {
+        stubs: {
+          Dialog: dialogStub,
+          Button: true,
+          PropertyField: {
+            props: ['prop'],
+            template: '<div class="property-field-stub">{{ prop.displayName }}</div>',
+          },
+        },
+      },
+    })
+
+    expect(wrapper.find('[data-testid="runtime-input-first-pane"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="runtime-input-single-pane"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('选择数据文件')
+  })
+
+  it('adds bottom-safe scroll space when runtime inputs use the split layout', () => {
+    const wrapper = mount(RuntimeInputModal, {
+      props: {
+        visible: true,
+        node: {
+          id: 'neighbor-system-node',
+          type: 'custom',
+          position: { x: 0, y: 0 },
+          label: '看板数据对接',
+          data: {
+            label: '看板数据对接',
+            type: 'neighbor-system',
+            category: 'trigger',
+            status: 'idle',
+            config: {},
+            logs: [],
+            useManualInput: false,
+            manualInput: '',
+            isPinned: false,
+          },
+        } as any,
+      },
+      global: {
+        stubs: {
+          Dialog: dialogStub,
+          Button: true,
+          PropertyField: {
+            props: ['prop'],
+            template: '<div class="property-field-stub">{{ prop.displayName }}</div>',
+          },
+        },
+      },
+    })
+
+    const scrollPane = wrapper.get('[data-testid="runtime-input-scroll-pane"]')
+
+    expect(wrapper.find('[data-testid="runtime-input-first-pane"]').exists()).toBe(true)
+    expect(scrollPane.classes()).toContain('pb-8')
+  })
+
+  it('shows the runtime input reuse toggle and defaults it to disabled', () => {
+    const wrapper = mount(RuntimeInputModal, {
+      props: {
+        visible: true,
+        node: {
+          id: 'file-import-node',
+          type: 'custom',
+          position: { x: 0, y: 0 },
+          label: '文件导入',
+          data: {
+            label: '文件导入',
+            type: 'file-import',
+            category: 'trigger',
+            status: 'idle',
+            config: {},
+            logs: [],
+            useManualInput: false,
+            manualInput: '',
+            isPinned: false,
+            reuseLastRuntimeInputs: false,
+          },
+        } as any,
+      },
+      global: {
+        stubs: {
+          Dialog: dialogStub,
+          Button: true,
+          PropertyField: {
+            props: ['prop'],
+            template: '<div class="property-field-stub">{{ prop.displayName }}</div>',
+          },
+        },
+      },
+    })
+
+    expect(wrapper.text()).toContain('沿用上次启动参数')
+    expect(wrapper.text()).toContain('关闭后，每次启动都会要求重新输入本次运行参数')
+  })
+})

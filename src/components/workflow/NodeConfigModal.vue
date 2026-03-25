@@ -262,7 +262,7 @@ const openAnalysis = (title: string, data: any) => {
         </div>
 
         <!-- 下部分：运行时输入 -->
-        <div class="flex-1 min-h-0 overflow-hidden">
+        <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
           <RuntimeInputs
             v-model:config="config"
             :properties="runtimeProperties"
