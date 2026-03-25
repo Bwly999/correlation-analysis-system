@@ -154,4 +154,19 @@ describe('WorkflowResultDashboardModal', () => {
 
     window.dispatchEvent(new MouseEvent('mouseup'))
   })
+
+  it('keeps a usable minimum panel height in grid mode when only one node is selected', async () => {
+    const wrapper = createWrapper()
+
+    const secondCheckbox = wrapper.findAll('input[type="checkbox"]')[1]
+    await secondCheckbox.setValue(false)
+
+    const draggable = wrapper.findComponent({ name: 'VueDraggable' })
+    expect(draggable.exists()).toBe(true)
+    expect(draggable.attributes('style')).toContain('grid-auto-rows: minmax(320px, auto);')
+
+    const gridItem = wrapper.find('.dashboard-grid__item')
+    expect(gridItem.exists()).toBe(true)
+    expect(gridItem.attributes('style')).toContain('min-height: 320px;')
+  })
 })
