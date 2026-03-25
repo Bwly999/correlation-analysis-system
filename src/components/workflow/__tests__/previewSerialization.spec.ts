@@ -58,4 +58,23 @@ describe('previewSerialization', () => {
     expect(json).toContain('"itemCount": 50')
     expect(json).not.toContain('"values"')
   })
+
+  it('falls back early when a plain object exceeds the global preview budget', () => {
+    const hugeObject = Object.fromEntries(
+      Array.from({ length: 5000 }, (_, index) => [
+        `field_${index}`,
+        {
+          nested: `value-${index}`,
+          payload: 'x'.repeat(120),
+        },
+      ]),
+    )
+
+    const preview = createSafeJsonPreview(hugeObject)
+    const json = stringifySafePreview(preview)
+
+    expect(json).toContain('"__reason": "budgetExceeded"')
+    expect(json).toContain('"__previewTruncated": true')
+    expect(json).not.toContain('field_4999')
+  })
 })

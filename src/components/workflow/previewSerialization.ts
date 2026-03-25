@@ -14,6 +14,8 @@ export interface PreviewSerializeOptions {
   maxArrayItems: number
   maxObjectKeys: number
   maxStringLength: number
+  maxVisitedNodes: number
+  maxEstimatedChars: number
 }
 
 export const DEFAULT_PREVIEW_SERIALIZE_OPTIONS: PreviewSerializeOptions = {
@@ -21,23 +23,63 @@ export const DEFAULT_PREVIEW_SERIALIZE_OPTIONS: PreviewSerializeOptions = {
   maxArrayItems: 20,
   maxObjectKeys: 20,
   maxStringLength: 240,
+  maxVisitedNodes: 400,
+  maxEstimatedChars: 8000,
 }
 
 type PreviewSerializeState = {
   truncated: boolean
+  visitedNodes: number
+  estimatedChars: number
   seen: WeakSet<object>
 }
 
 const createPreviewState = (): PreviewSerializeState => ({
   truncated: false,
+  visitedNodes: 0,
+  estimatedChars: 0,
   seen: new WeakSet<object>(),
 })
+
+const createBudgetExceededPlaceholder = (
+  type: 'array' | 'object' | 'value',
+  extra: Record<string, unknown> = {},
+) => ({
+  __truncated: true,
+  __reason: 'budgetExceeded',
+  __type: type,
+  ...extra,
+})
+
+const consumeEstimatedChars = (
+  amount: number,
+  state: PreviewSerializeState,
+  options: PreviewSerializeOptions,
+) => {
+  state.estimatedChars += amount
+  if (state.estimatedChars <= options.maxEstimatedChars) return false
+
+  state.truncated = true
+  return true
+}
+
+const touchNode = (state: PreviewSerializeState, options: PreviewSerializeOptions) => {
+  state.visitedNodes += 1
+  if (state.visitedNodes <= options.maxVisitedNodes) return false
+
+  state.truncated = true
+  return true
+}
 
 const sanitizeString = (
   value: string,
   options: PreviewSerializeOptions,
   state: PreviewSerializeState,
 ) => {
+  if (consumeEstimatedChars(Math.min(value.length, options.maxStringLength), state, options)) {
+    return createBudgetExceededPlaceholder('value', { __originalLength: value.length })
+  }
+
   if (value.length <= options.maxStringLength) return value
 
   state.truncated = true
@@ -53,9 +95,16 @@ const sanitizeArray = (
   options: PreviewSerializeOptions,
   state: PreviewSerializeState,
 ) => {
-  const items = value
-    .slice(0, options.maxArrayItems)
-    .map((item) => sanitizePreviewValue(item, depth + 1, options, state))
+  if (consumeEstimatedChars(Math.min(value.length, options.maxArrayItems) * 4, state, options)) {
+    return createBudgetExceededPlaceholder('array', { __originalLength: value.length })
+  }
+
+  const items: unknown[] = []
+  const visibleCount = Math.min(value.length, options.maxArrayItems)
+
+  for (let index = 0; index < visibleCount; index += 1) {
+    items.push(sanitizePreviewValue(value[index], depth + 1, options, state))
+  }
 
   if (value.length <= options.maxArrayItems) return items
 
@@ -75,19 +124,40 @@ const sanitizeObject = (
   options: PreviewSerializeOptions,
   state: PreviewSerializeState,
 ) => {
-  const entries = Object.entries(value)
-  const limitedEntries = entries.slice(0, options.maxObjectKeys)
   const nextValue: Record<string, unknown> = {}
+  let keyCount = 0
 
-  limitedEntries.forEach(([key, nestedValue]) => {
-    nextValue[key] = sanitizePreviewValue(nestedValue, depth + 1, options, state)
-  })
+  for (const key in value) {
+    if (!Object.prototype.hasOwnProperty.call(value, key)) continue
 
-  if (entries.length > options.maxObjectKeys) {
+    keyCount += 1
+
+    // 根层普通大对象会先在这里快速降级，避免继续深挖造成卡顿。
+    if (depth === 0 && keyCount > options.maxObjectKeys) {
+      state.truncated = true
+      return createBudgetExceededPlaceholder('object', {
+        __processedKeys: options.maxObjectKeys,
+        __minimumOriginalKeyCount: keyCount,
+      })
+    }
+
+    if (keyCount > options.maxObjectKeys) break
+
+    if (consumeEstimatedChars(key.length, state, options)) {
+      return createBudgetExceededPlaceholder('object', {
+        __processedKeys: keyCount - 1,
+        __minimumOriginalKeyCount: keyCount,
+      })
+    }
+
+    nextValue[key] = sanitizePreviewValue(value[key], depth + 1, options, state)
+  }
+
+  if (keyCount > options.maxObjectKeys) {
     state.truncated = true
     nextValue.__truncated = true
-    nextValue.__omittedKeys = entries.length - options.maxObjectKeys
-    nextValue.__originalKeyCount = entries.length
+    nextValue.__omittedKeys = keyCount - options.maxObjectKeys
+    nextValue.__originalKeyCount = keyCount
   }
 
   return nextValue
@@ -99,6 +169,10 @@ const sanitizePreviewValue = (
   options: PreviewSerializeOptions,
   state: PreviewSerializeState,
 ): unknown => {
+  if (touchNode(state, options)) {
+    return createBudgetExceededPlaceholder('value')
+  }
+
   if (value === null || value === undefined) return value
   if (typeof value === 'string') return sanitizeString(value, options, state)
   if (typeof value === 'number' || typeof value === 'boolean') return value

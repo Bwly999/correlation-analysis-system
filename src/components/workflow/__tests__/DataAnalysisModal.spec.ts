@@ -99,4 +99,43 @@ describe('DataAnalysisModal', () => {
     expect(previewText).toContain('sampleCount')
     expect(previewText).not.toContain('values')
   })
+
+  it('shows a guarded fallback preview for oversized plain json objects', () => {
+    const data = Object.fromEntries(
+      Array.from({ length: 5000 }, (_, index) => [
+        `field_${index}`,
+        {
+          nested: index,
+          payload: 'y'.repeat(120),
+        },
+      ]),
+    )
+
+    const wrapper = mount(DataAnalysisModal, {
+      props: {
+        visible: true,
+        title: '超大对象',
+        data,
+      },
+      global: {
+        stubs: {
+          Dialog: {
+            props: ['visible'],
+            template: '<div class="dialog-stub"><slot name="header" /><slot /></div>',
+          },
+          InputNumber: {
+            props: ['modelValue'],
+            emits: ['update:modelValue'],
+            template: '<input class="input-number-stub" :value="modelValue" />',
+          },
+          DataChart: true,
+        },
+      },
+    })
+
+    const previewText = wrapper.get('pre').text()
+    expect(previewText).toContain('budgetExceeded')
+    expect(previewText).toContain('__previewTruncated')
+    expect(previewText).not.toContain('field_4999')
+  })
 })
