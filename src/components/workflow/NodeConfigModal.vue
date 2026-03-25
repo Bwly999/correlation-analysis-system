@@ -204,13 +204,17 @@ const runCurrentNode = async () => {
   }
 }
 
-const saveAndClose = () => {
+const saveConfig = () => {
   if (node.value) {
     node.value.data.label = editedName.value
     node.value.data.config = { ...config.value }
     node.value.data.useManualInput = localUseManualInput.value
     node.value.data.manualInput = localManualInput.value
   }
+}
+
+const saveAndClose = () => {
+  saveConfig()
   emit('close')
 }
 
@@ -441,7 +445,7 @@ const buildManualInputTemplate = () => {
               :upstream-factors="upstreamFactors"
               :node-id="node?.id"
               :input-data="inputData"
-              @save="saveAndClose"
+              @save="saveConfig"
             />
           </div>
           <div
@@ -452,7 +456,7 @@ const buildManualInputTemplate = () => {
           </div>
         </div>
 
-        <ConfigFooter class="shrink-0" @close="emit('close')" @save="saveAndClose" />
+        <ConfigFooter class="shrink-0" @close="emit('close')" @save="saveConfig" />
       </div>
 
       <!-- 右侧边栏 -->

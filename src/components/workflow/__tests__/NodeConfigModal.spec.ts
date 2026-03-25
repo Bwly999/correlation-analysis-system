@@ -366,6 +366,58 @@ describe('NodeConfigModal', () => {
     expect(wrapper.find('[data-testid="node-help-trigger"]').exists()).toBe(false)
   })
 
+  it('saves config without closing the modal when applying changes', async () => {
+    const store = useWorkflowStore()
+    store.nodes = [
+      {
+        id: 'data-cleaning-node',
+        type: 'custom',
+        position: { x: 300, y: 0 },
+        label: '数据清洗',
+        data: {
+          label: '数据清洗',
+          type: 'data-cleaning',
+          category: 'action',
+          status: 'idle',
+          config: { scaling: 'none' },
+          logs: [],
+          useManualInput: false,
+          manualInput: '',
+          isPinned: false,
+        },
+      } as any,
+    ]
+
+    const wrapper = mount(NodeConfigModal, {
+      props: { visible: true, nodeId: 'data-cleaning-node' },
+      global: {
+        stubs: {
+          Dialog: dialogStub,
+          DataDisplayPanel: true,
+          DataAnalysisModal: true,
+          ConfigHeader: { template: '<div />', props: ['nodeLabel', 'isPinned', 'nodeType'] },
+          ConfigFooter: {
+            template: '<button class="apply-btn" @click="$emit(\'save\')">应用</button>',
+          },
+          ConfigForm: {
+            props: ['config', 'properties', 'upstreamFactors'],
+            emits: ['update:config', 'save'],
+            template:
+              '<div><button class="change-config-btn" @click="$emit(\'update:config\', { ...config, scaling: \'minmax\' })">改配置</button></div>',
+          },
+          RuntimeInputs: { template: '<div />', props: ['config', 'properties', 'upstreamFactors'] },
+        },
+      },
+    })
+
+    const closeCountBeforeSave = wrapper.emitted('close')?.length ?? 0
+    await wrapper.get('.change-config-btn').trigger('click')
+    await wrapper.get('.apply-btn').trigger('click')
+
+    expect(store.nodes[0]?.data.config.scaling).toBe('minmax')
+    expect(wrapper.emitted('close')?.length ?? 0).toBe(closeCountBeforeSave)
+  })
+
   it('cleans up document drag listeners when unmounted during resize', async () => {
     const store = useWorkflowStore()
     store.nodes = [

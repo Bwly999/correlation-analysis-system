@@ -15,6 +15,6 @@ const emit = defineEmits(['close', 'save'])
       <span class="text-[11px] font-medium tracking-tight">确认添加标签</span>
     </div>
     <Button label="取消" severity="secondary" text class="cursor-pointer" @click="emit('close')" />
-    <Button label="应用并保存" class="cursor-pointer" @click="emit('save')" />
+    <Button label="应用" class="cursor-pointer" @click="emit('save')" />
   </div>
 </template>
