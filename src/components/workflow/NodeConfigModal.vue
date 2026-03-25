@@ -4,6 +4,12 @@ import type { Edge } from '@vue-flow/core'
 import { Loader2, Bug, HelpCircle } from 'lucide-vue-next'
 import { useWorkflowStore } from '@/stores/workflowStore'
 import { getNodeDefinition } from '@/nodes/registry'
+import {
+  createJsonResult,
+  createTableCollectionResult,
+  createTableResult,
+  isPlainObject,
+} from '@/nodes/result'
 import type { WorkflowNode } from '@/utils/storage'
 
 // Sub Components
@@ -15,6 +21,7 @@ import ConfigForm from './config/ConfigForm.vue'
 import RuntimeInputs from './config/RuntimeInputs.vue'
 import NodeHelpPanel from './help/NodeHelpPanel.vue'
 import {
+  getResultGroups,
   getResultRows,
   getResultSchemaFields,
   normalizeWorkflowResult,
@@ -210,6 +217,70 @@ const saveAndClose = () => {
 const openAnalysis = (title: string, data: any) => {
   analysisModal.value = { visible: true, title, data }
 }
+
+const defaultMockRows = () => [{ f1: 10, f2: 20, target: 1 }]
+
+const resolveStandardMockResult = (value: unknown) => {
+  const normalized = normalizeWorkflowResult(value)
+  if (normalized) return normalized
+
+  const rows = getResultRows(value)
+  if (rows.length > 0) {
+    return createTableResult(rows)
+  }
+
+  const groups = getResultGroups(value)
+  if (groups.length > 0) {
+    return createTableCollectionResult(groups)
+  }
+
+  if (isPlainObject(value) && Array.isArray(value.data)) {
+    const legacyRows = value.data.filter((row): row is Record<string, unknown> => isPlainObject(row))
+    if (legacyRows.length > 0) {
+      return createTableResult(legacyRows)
+    }
+  }
+
+  if (value !== null && value !== undefined) {
+    return createJsonResult(value)
+  }
+
+  return createTableResult(defaultMockRows())
+}
+
+const buildManualInputTemplate = () => {
+  if (nodeDefinition.value?.inputMode === 'multiple') {
+    const structuredInput = inputData.value
+    const items = Array.isArray(structuredInput?.inputs) ? structuredInput.inputs : []
+    const normalizedItems =
+      items.length > 0
+        ? items.map((item, index) => ({
+            sourceNodeId: item.sourceNodeId ?? `source-${index + 1}`,
+            sourceNodeLabel: item.sourceNodeLabel ?? `来源 ${index + 1}`,
+            edgeId: item.edgeId,
+            order: item.order ?? index,
+            result: resolveStandardMockResult(item.result ?? item.payload ?? null),
+          }))
+        : [
+            {
+              sourceNodeId: 'source-1',
+              sourceNodeLabel: '来源 1',
+              order: 0,
+              result: createTableResult(defaultMockRows()),
+            },
+            {
+              sourceNodeId: 'source-2',
+              sourceNodeLabel: '来源 2',
+              order: 1,
+              result: createTableResult(defaultMockRows()),
+            },
+          ]
+
+    return JSON.stringify({ inputs: normalizedItems }, null, 2)
+  }
+
+  return JSON.stringify(resolveStandardMockResult(inputData.value), null, 2)
+}
 </script>
 
 <template>
@@ -247,9 +318,7 @@ const openAnalysis = (title: string, data: any) => {
             @open-detail="
               openAnalysis('输入数据', localUseManualInput ? localManualInput : inputData)
             "
-            @generate-mock="
-              localManualInput = JSON.stringify({ data: [{ f1: 10, f2: 20, target: 1 }] }, null, 2)
-            "
+            @generate-mock="localManualInput = buildManualInputTemplate()"
           />
         </div>
 

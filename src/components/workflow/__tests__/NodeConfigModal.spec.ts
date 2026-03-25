@@ -103,6 +103,177 @@ describe('NodeConfigModal', () => {
     expect(inputPanel.text()).toContain('来源二')
   })
 
+  it('generates a standard table result template for single-input debugging', async () => {
+    const store = useWorkflowStore()
+    store.nodes = [
+      {
+        id: 'source-1',
+        type: 'custom',
+        position: { x: 0, y: 0 },
+        label: '来源一',
+        data: {
+          label: '来源一',
+          type: 'manual-json-import',
+          category: 'trigger',
+          status: 'success',
+          config: {},
+          logs: [],
+          useManualInput: false,
+          manualInput: '',
+          isPinned: false,
+          output: {
+            kind: 'table',
+            payload: [{ id: 1, city: '上海', score: 95 }],
+          },
+        },
+      } as any,
+      {
+        id: 'data-cleaning-node',
+        type: 'custom',
+        position: { x: 300, y: 0 },
+        label: '数据清洗',
+        data: {
+          label: '数据清洗',
+          type: 'data-cleaning',
+          category: 'action',
+          status: 'idle',
+          config: {},
+          logs: [],
+          useManualInput: true,
+          manualInput: '',
+          isPinned: false,
+        },
+      } as any,
+    ]
+    store.edges = [
+      { id: 'e1', source: 'source-1', target: 'data-cleaning-node', type: 'n8n', animated: true },
+    ] as any
+
+    const wrapper = mount(NodeConfigModal, {
+      props: { visible: true, nodeId: 'data-cleaning-node' },
+      global: {
+        stubs: {
+          Dialog: dialogStub,
+          DataDisplayPanel: {
+            props: ['title', 'manualInputStr'],
+            emits: ['generateMock'],
+            template:
+              '<div class="data-display-panel">{{ title }}::{{ manualInputStr }}<button class="generate-mock-btn" @click="$emit(\'generateMock\')">生成</button></div>',
+          },
+          DataAnalysisModal: true,
+          ConfigHeader: { template: '<div />', props: ['nodeLabel', 'isPinned', 'nodeType'] },
+          ConfigFooter: { template: '<div />' },
+          ConfigForm: { template: '<div />', props: ['config', 'properties', 'upstreamFactors'] },
+          RuntimeInputs: { template: '<div />', props: ['config', 'properties', 'upstreamFactors'] },
+        },
+      },
+    })
+
+    await wrapper.find('.generate-mock-btn').trigger('click')
+
+    const inputPanel = wrapper.findAll('.data-display-panel')[0]!
+    expect(inputPanel.text()).toContain('"kind": "table"')
+    expect(inputPanel.text()).toContain('"payload"')
+    expect(inputPanel.text()).not.toContain('"data":')
+  })
+
+  it('generates a multi-input execution template with standard results', async () => {
+    const store = useWorkflowStore()
+    store.nodes = [
+      {
+        id: 'source-1',
+        type: 'custom',
+        position: { x: 0, y: 0 },
+        label: '来源一',
+        data: {
+          label: '来源一',
+          type: 'manual-json-import',
+          category: 'trigger',
+          status: 'success',
+          config: {},
+          logs: [],
+          useManualInput: false,
+          manualInput: '',
+          isPinned: false,
+          output: {
+            kind: 'table',
+            payload: [{ id: 1, city: '上海' }],
+          },
+        },
+      } as any,
+      {
+        id: 'source-2',
+        type: 'custom',
+        position: { x: 0, y: 120 },
+        label: '来源二',
+        data: {
+          label: '来源二',
+          type: 'manual-json-import',
+          category: 'trigger',
+          status: 'success',
+          config: {},
+          logs: [],
+          useManualInput: false,
+          manualInput: '',
+          isPinned: false,
+          output: {
+            kind: 'table',
+            payload: [{ id: 2, score: 88 }],
+          },
+        },
+      } as any,
+      {
+        id: 'data-merge-node',
+        type: 'custom',
+        position: { x: 300, y: 0 },
+        label: '数据合并',
+        data: {
+          label: '数据合并',
+          type: 'data-merge',
+          category: 'action',
+          status: 'idle',
+          config: { mergeMode: 'append' },
+          logs: [],
+          useManualInput: true,
+          manualInput: '',
+          isPinned: false,
+        },
+      } as any,
+    ]
+    store.edges = [
+      { id: 'e1', source: 'source-1', target: 'data-merge-node', type: 'n8n', animated: true },
+      { id: 'e2', source: 'source-2', target: 'data-merge-node', type: 'n8n', animated: true },
+    ] as any
+
+    const wrapper = mount(NodeConfigModal, {
+      props: { visible: true, nodeId: 'data-merge-node' },
+      global: {
+        stubs: {
+          Dialog: dialogStub,
+          DataDisplayPanel: {
+            props: ['title', 'manualInputStr'],
+            emits: ['generateMock'],
+            template:
+              '<div class="data-display-panel">{{ title }}::{{ manualInputStr }}<button class="generate-mock-btn" @click="$emit(\'generateMock\')">生成</button></div>',
+          },
+          DataAnalysisModal: true,
+          ConfigHeader: { template: '<div />', props: ['nodeLabel', 'isPinned', 'nodeType'] },
+          ConfigFooter: { template: '<div />' },
+          ConfigForm: { template: '<div />', props: ['config', 'properties', 'upstreamFactors'] },
+          RuntimeInputs: { template: '<div />', props: ['config', 'properties', 'upstreamFactors'] },
+        },
+      },
+    })
+
+    await wrapper.find('.generate-mock-btn').trigger('click')
+
+    const inputPanel = wrapper.findAll('.data-display-panel')[0]!
+    expect(inputPanel.text()).toContain('"inputs"')
+    expect(inputPanel.text()).toContain('"result"')
+    expect(inputPanel.text()).toContain('"kind": "table"')
+    expect(inputPanel.text()).not.toContain('"data":')
+  })
+
   it('renders a compact node summary and opens full help in a dialog', async () => {
     const store = useWorkflowStore()
     store.nodes = [
