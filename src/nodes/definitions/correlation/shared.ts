@@ -612,6 +612,13 @@ export const executeCorrelationAnalysis = async (
           title: '相关性热力图',
           type: 'chart',
           option: heatmapOption,
+          controls: {
+            labelTruncate: {
+              label: '标签截断',
+              modelKey: 'labelTruncateLength',
+              defaultValue: 12,
+            },
+          },
         },
         {
           key: 'ranking',

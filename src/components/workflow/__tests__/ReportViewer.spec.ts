@@ -115,6 +115,13 @@ const createCorrelationReport = () => ({
         key: 'matrix',
         type: 'chart',
         title: 'X / Y 相关矩阵',
+        controls: {
+          labelTruncate: {
+            label: '标签截断',
+            modelKey: 'labelTruncateLength',
+            defaultValue: 6,
+          },
+        },
         option: {
           visualMap: { top: 8, bottom: 'auto' },
           xAxis: { data: ['超长字段名称ABCDEF', '另一个超长字段123456'] },
@@ -200,6 +207,7 @@ describe('ReportViewer', () => {
     const charts = wrapper.findAll('.chart-stub')
     expect(charts).toHaveLength(2)
     expect(charts[0]?.attributes('data-option')).toContain('"top":8')
+    expect(charts[0]?.attributes('data-preview-label')).toContain('产线温度标签...')
     expect(charts[1]?.attributes('data-option')).toContain('超长字段')
     expect(charts[1]?.attributes('data-preview-label')).toContain('超长字段名称...')
 
@@ -210,8 +218,12 @@ describe('ReportViewer', () => {
     const updatedCharts = wrapper.findAll('.chart-stub')
     expect(updatedCharts[1]?.attributes('data-option')).toContain('"value":0.61')
 
-    const truncateInput = wrapper.get('[data-test="report-label-truncate-input"]')
-    await truncateInput.setValue('4')
+    const truncateInputs = wrapper.findAll('[data-test="report-label-truncate-input"]')
+    expect(truncateInputs).toHaveLength(2)
+    await truncateInputs[0]!.setValue('4')
+    expect(wrapper.findAll('.chart-stub')[0]?.attributes('data-preview-label')).toContain('产线温度...')
+
+    await truncateInputs[1]!.setValue('4')
     expect(wrapper.findAll('.chart-stub')[1]?.attributes('data-preview-label')).toContain('超长字段...')
   })
 })
