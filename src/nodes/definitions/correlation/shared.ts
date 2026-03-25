@@ -19,7 +19,10 @@ type PairDetail = {
 type CorrelationMetrics = {
   numericFieldCount: number
   rowCount: number
-  targetField: string
+  xFields: string[]
+  yFields: string[]
+  xFieldCount: number
+  yFieldCount: number
   significantRelationCount: number
   strongRelationCount: number
 }
@@ -66,20 +69,31 @@ const methodMeta: Record<CorrelationMethod, CorrelationMethodMeta> = {
 
 const commonProperties: NodeProperty[] = [
   {
-    name: 'targetField',
-    displayName: '目标变量 (Y)',
-    type: 'options',
-    default: 'target',
+    name: 'xFields',
+    displayName: 'X 字段',
+    type: 'multi-options',
+    default: [],
     useUpstreamFactors: true,
     editable: true,
-    description: '用于重点排序和摘要解读的目标字段名称。',
+    required: true,
+    description: '选择参与相关性计算的 X 字段集合，只计算这些字段与 Y 字段的交叉相关。',
+  },
+  {
+    name: 'yFields',
+    displayName: 'Y 字段',
+    type: 'multi-options',
+    default: [],
+    useUpstreamFactors: true,
+    editable: true,
+    required: true,
+    description: '选择参与相关性计算的 Y 字段集合，结果区的排行图可在这些字段间切换。',
   },
   {
     name: 'topN',
     displayName: '重点展示因子数',
     type: 'number',
     default: 8,
-    description: '按与目标变量的相关绝对值排序，展示前 N 个重点因子。',
+    description: '每个 Y 字段按相关绝对值排序后，展示前 N 个 X 字段。',
   },
 ]
 
@@ -307,28 +321,100 @@ const calculateCorrelation = (
 const createSummaryLines = (
   numericKeys: string[],
   rowCount: number,
-  targetField: string,
+  xFields: string[],
+  yFields: string[],
   significantRelationCount: number,
   strongRelationCount: number,
   incompleteFieldCount: number,
-  topTargetRelations: PairDetail[],
+  strongestByY: Array<{ yField: string; detail: PairDetail | null }>,
 ) => {
   const lines = [
-    `本次共识别 ${numericKeys.length} 个数值字段，基于 ${rowCount} 行样本计算相关矩阵。`,
-    `目标字段使用 "${targetField}"。与目标变量相关性显著（近似 p < 0.05）的字段共 ${significantRelationCount} 个，强相关（|r| >= 0.60）的字段共 ${strongRelationCount} 个。`,
+    `本次共识别 ${numericKeys.length} 个数值字段，基于 ${rowCount} 行样本计算 X × Y 交叉相关矩阵。`,
+    `本次纳入 ${xFields.length} 个 X 字段、${yFields.length} 个 Y 字段；显著相关（近似 p < 0.05）的字段对共 ${significantRelationCount} 个，强相关（|r| >= 0.60）的字段对共 ${strongRelationCount} 个。`,
     `数值字段缺失单元格共 ${incompleteFieldCount} 个；相关分析采用成对可用样本计算，不同字段对的样本量可能不同。`,
   ]
 
-  const strongest = topTargetRelations[0]
-  if (strongest) {
-    const focusField = strongest.xField === targetField ? strongest.yField : strongest.xField
+  strongestByY.forEach(({ yField, detail }) => {
+    if (!detail) return
     lines.push(
-      `当前最值得优先关注的因子是 "${focusField}"，与目标变量呈 ${directionLabel(strongest.correlation)}，强度为 ${strengthLabel(strongest.correlation)}（r=${strongest.correlation.toFixed(3)}，近似 p ${formatPValue(strongest.pValue)}）。`,
+      `Y 字段 "${yField}" 当前最强相关的 X 字段是 "${detail.xField}"，呈 ${directionLabel(detail.correlation)}，强度为 ${strengthLabel(detail.correlation)}（r=${detail.correlation.toFixed(3)}，近似 p ${formatPValue(detail.pValue)}）。`,
     )
-  }
+  })
 
   return lines
 }
+
+const normalizeSelectedFields = (
+  selected: unknown,
+  numericKeys: string[],
+) => {
+  const rawFields = Array.isArray(selected)
+    ? selected.filter((item): item is string => typeof item === 'string')
+    : typeof selected === 'string'
+      ? [selected]
+      : []
+
+  return rawFields.filter((field, index) => numericKeys.includes(field) && rawFields.indexOf(field) === index)
+}
+
+const buildRankingOption = (
+  method: CorrelationMethodMeta,
+  yField: string,
+  rankingRows: Array<{
+    field: string
+    correlation: number
+    sampleSize: number
+    pValue: number | null
+  }>,
+) => ({
+  tooltip: {
+    trigger: 'axis',
+    axisPointer: { type: 'shadow' },
+    formatter: (params: Array<{ dataIndex: number }>) => {
+      const index = params[0]?.dataIndex ?? 0
+      const row = rankingRows[index]
+      if (!row) return ''
+
+      return [
+        row.field,
+        `r = ${row.correlation.toFixed(3)}`,
+        `样本量 = ${row.sampleSize}`,
+        `近似 p ${formatPValue(row.pValue)}`,
+      ].join('<br/>')
+    },
+  },
+  grid: { top: 20, left: 90, right: 20, bottom: 20, containLabel: true },
+  xAxis: {
+    type: 'value',
+    min: -1,
+    max: 1,
+    name: method.axisName,
+  },
+  yAxis: {
+    type: 'category',
+    data: rankingRows.map((item) => item.field),
+  },
+  series: [
+    {
+      type: 'bar',
+      data: rankingRows.map((item) => ({
+        value: item.correlation,
+        itemStyle: {
+          color: item.correlation >= 0 ? '#2563eb' : '#ef4444',
+        },
+      })),
+      label: {
+        show: true,
+        position: 'right',
+        formatter: ({ value }: { value: number }) => value.toFixed(2),
+        color: '#334155',
+      },
+    },
+  ],
+  metadata: {
+    yField,
+  },
+})
 
 export const executeCorrelationAnalysis = async (
   method: CorrelationMethod,
@@ -346,13 +432,20 @@ export const executeCorrelationAnalysis = async (
   }
 
   const meta = methodMeta[method]
-  const rawTargetField = typeof config.targetField === 'string' ? config.targetField : ''
-  const targetField = numericKeys.includes(rawTargetField) ? rawTargetField : numericKeys[0]!
+  const xFields = normalizeSelectedFields(config.xFields, numericKeys)
+  const yFields = normalizeSelectedFields(config.yFields, numericKeys)
+  if (xFields.length === 0) {
+    throw new Error('至少需要选择 1 个有效的 X 字段')
+  }
+  if (yFields.length === 0) {
+    throw new Error('至少需要选择 1 个有效的 Y 字段')
+  }
+
   const matrixData: Array<[number, number, number]> = []
   const pairDetails: PairDetail[] = []
 
-  numericKeys.forEach((xField, xIndex) => {
-    numericKeys.forEach((yField, yIndex) => {
+  xFields.forEach((xField, xIndex) => {
+    yFields.forEach((yField, yIndex) => {
       const { xValues, yValues } = getPairSeries(normalizedRows, xField, yField)
       const stats = calculateCorrelation(method, xValues, yValues)
       const correlation = xField === yField ? 1 : stats.correlation
@@ -361,90 +454,95 @@ export const executeCorrelationAnalysis = async (
 
       matrixData.push([xIndex, yIndex, Number(correlation.toFixed(4))])
 
-      if (xIndex < yIndex) {
-        pairDetails.push({
-          xField,
-          yField,
-          correlation: Number(correlation.toFixed(4)),
-          sampleSize,
-          pValue,
-        })
-      }
+      pairDetails.push({
+        xField,
+        yField,
+        correlation: Number(correlation.toFixed(4)),
+        sampleSize,
+        pValue,
+      })
     })
   })
 
-  const targetRelations = numericKeys
-    .filter((field) => field !== targetField)
-    .map((field) => {
-      const detail =
-        pairDetails.find(
-          (item) =>
-            (item.xField === targetField && item.yField === field) ||
-            (item.xField === field && item.yField === targetField),
-        ) ?? null
-
-      return {
-        field,
-        correlation: detail?.correlation ?? 0,
-        sampleSize: detail?.sampleSize ?? 0,
-        pValue: detail?.pValue ?? null,
-      }
-    })
-    .sort((left, right) => Math.abs(right.correlation) - Math.abs(left.correlation))
-
   const topNValue = typeof config.topN === 'number' ? config.topN : Number(config.topN ?? 8)
   const topN = Math.max(3, Number.isFinite(topNValue) ? topNValue : 8)
-  const topTargetRelations = targetRelations.slice(0, topN)
-  const validTargetRelations = targetRelations.filter((item) => item.sampleSize >= 4)
-  const strongRelationCount = validTargetRelations.filter((item) => Math.abs(item.correlation) >= 0.6).length
-  const significantRelationCount = validTargetRelations.filter(
+  const rankingMap = Object.fromEntries(
+    yFields.map((yField) => {
+      const rankingRows = pairDetails
+        .filter((item) => item.yField === yField && item.xField !== yField)
+        .map((item) => ({
+          field: item.xField,
+          correlation: item.correlation,
+          sampleSize: item.sampleSize,
+          pValue: item.pValue,
+        }))
+        .sort((left, right) => Math.abs(right.correlation) - Math.abs(left.correlation))
+        .slice(0, topN)
+
+      return [yField, rankingRows]
+    }),
+  ) as Record<string, Array<{ field: string; correlation: number; sampleSize: number; pValue: number | null }>>
+
+  const validPairs = pairDetails.filter((item) => item.sampleSize >= 4)
+  const strongRelationCount = validPairs.filter((item) => Math.abs(item.correlation) >= 0.6).length
+  const significantRelationCount = validPairs.filter(
     (item) => item.pValue !== null && item.pValue < 0.05,
   ).length
   const incompleteFieldCount = normalizedRows.reduce((count, row) => {
-    return count + numericKeys.filter((key) => row[key] === null).length
+    const relatedKeys = [...new Set([...xFields, ...yFields])]
+    return count + relatedKeys.filter((key) => row[key] === null).length
   }, 0)
+
+  const strongestByY = yFields.map((yField) => ({
+    yField,
+    detail:
+      pairDetails
+        .filter((item) => item.yField === yField && item.xField !== yField)
+        .sort((left, right) => Math.abs(right.correlation) - Math.abs(left.correlation))[0] ?? null,
+  }))
 
   const summaryLines = createSummaryLines(
     numericKeys,
     normalizedRows.length,
-    targetField,
+    xFields,
+    yFields,
     significantRelationCount,
     strongRelationCount,
     incompleteFieldCount,
-    pairDetails
-      .filter((item) => item.xField === targetField || item.yField === targetField)
-      .sort((left, right) => Math.abs(right.correlation) - Math.abs(left.correlation))
-      .slice(0, topN),
+    strongestByY,
   )
 
-  const topTableRows = topTargetRelations.map((item) => ({
-    因子: item.field,
-    相关系数: item.correlation,
-    方向: directionLabel(item.correlation),
-    强度: strengthLabel(item.correlation),
-    样本量: item.sampleSize,
-    显著性: formatPValue(item.pValue),
-  }))
+  const detailRows = yFields.flatMap((yField) =>
+    (rankingMap[yField] ?? []).map((item) => ({
+      Y字段: yField,
+      X字段: item.field,
+      相关系数: item.correlation,
+      方向: directionLabel(item.correlation),
+      强度: strengthLabel(item.correlation),
+      样本量: item.sampleSize,
+      显著性: formatPValue(item.pValue),
+    })),
+  )
 
   const heatmapOption = {
     tooltip: {
       position: 'top',
       formatter: (params: { data: [number, number, number] }) => {
         const [xIndex, yIndex, value] = params.data
-        const xLabel = numericKeys[xIndex] ?? ''
-        const yLabel = numericKeys[yIndex] ?? ''
+        const xLabel = xFields[xIndex] ?? ''
+        const yLabel = yFields[yIndex] ?? ''
         return `${yLabel} vs ${xLabel}<br/>r = ${value}`
       },
     },
-    grid: { top: 40, left: 90, right: 20, bottom: 70 },
+    grid: { top: 72, left: 90, right: 20, bottom: 70 },
     xAxis: {
       type: 'category',
-      data: numericKeys,
-      axisLabel: { interval: 0, rotate: numericKeys.length > 8 ? 40 : 0 },
+      data: xFields,
+      axisLabel: { interval: 0, rotate: xFields.length > 8 ? 40 : 0 },
     },
     yAxis: {
       type: 'category',
-      data: numericKeys,
+      data: yFields,
     },
     visualMap: {
       min: -1,
@@ -452,7 +550,8 @@ export const executeCorrelationAnalysis = async (
       calculable: true,
       orient: 'horizontal',
       left: 'center',
-      bottom: 10,
+      top: 8,
+      bottom: 'auto',
       inRange: {
         color: ['#0f172a', '#60a5fa', '#f8fafc', '#fca5a5', '#991b1b'],
       },
@@ -478,83 +577,65 @@ export const executeCorrelationAnalysis = async (
     ],
   }
 
-  const rankingOption = {
-    tooltip: {
-      trigger: 'axis',
-      axisPointer: { type: 'shadow' },
-      formatter: (params: Array<{ dataIndex: number }>) => {
-        const index = params[0]?.dataIndex ?? 0
-        const row = topTargetRelations[index]
-        if (!row) return ''
-
-        return [
-          row.field,
-          `r = ${row.correlation.toFixed(3)}`,
-          `样本量 = ${row.sampleSize}`,
-          `近似 p ${formatPValue(row.pValue)}`,
-        ].join('<br/>')
-      },
-    },
-    grid: { top: 20, left: 90, right: 20, bottom: 20, containLabel: true },
-    xAxis: {
-      type: 'value',
-      min: -1,
-      max: 1,
-      name: meta.axisName,
-    },
-    yAxis: {
-      type: 'category',
-      data: topTargetRelations.map((item) => item.field),
-    },
-    series: [
-      {
-        type: 'bar',
-        data: topTargetRelations.map((item) => ({
-          value: item.correlation,
-          itemStyle: {
-            color: item.correlation >= 0 ? '#2563eb' : '#ef4444',
-          },
-        })),
-        label: {
-          show: true,
-          position: 'right',
-          formatter: ({ value }: { value: number }) => value.toFixed(2),
-          color: '#334155',
-        },
-      },
-    ],
-  }
-
   const metrics: CorrelationMetrics = {
     numericFieldCount: numericKeys.length,
     rowCount: normalizedRows.length,
-    targetField,
+    xFields,
+    yFields,
+    xFieldCount: xFields.length,
+    yFieldCount: yFields.length,
     significantRelationCount,
     strongRelationCount,
   }
 
+  const defaultYField = yFields[0]!
+  const rankingOptionMap = Object.fromEntries(
+    yFields.map((yField) => [yField, buildRankingOption(meta, yField, rankingMap[yField] ?? [])]),
+  )
+
   return createReportResult(
     {
       title: meta.reportTitle,
+      metadata: {
+        xFields,
+        yFields,
+        currentYField: defaultYField,
+      },
       sections: [
         {
+          title: '分析摘要',
           type: 'text',
           content: summaryLines.join('\n'),
         },
         {
+          key: 'matrix',
           title: '相关性热力图',
           type: 'chart',
           option: heatmapOption,
         },
         {
-          title: `目标变量 "${targetField}" 重点相关因子`,
+          key: 'ranking',
+          title: 'Y 字段相关性排行',
           type: 'chart',
-          option: rankingOption,
+          option: rankingOptionMap[defaultYField],
+          optionMap: rankingOptionMap,
+          controls: {
+            select: {
+              label: '当前 Y',
+              modelKey: 'rankingYField',
+              options: yFields,
+            },
+            labelTruncate: {
+              label: '标签截断',
+              modelKey: 'labelTruncateLength',
+              defaultValue: 12,
+            },
+          },
         },
         {
-          title: '目标变量重点因子摘要',
+          title: 'X / Y 字段相关明细',
           type: 'text',
-          content: JSON.stringify(topTableRows, null, 2),
+          content: JSON.stringify(detailRows, null, 2),
         },
       ],
     },

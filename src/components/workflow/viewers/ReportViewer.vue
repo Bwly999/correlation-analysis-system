@@ -21,6 +21,19 @@ type ReportSection = {
   type?: string
   title?: string
   option?: Record<string, unknown>
+  optionMap?: Record<string, Record<string, unknown>>
+  controls?: {
+    select?: {
+      label?: string
+      modelKey?: string
+      options?: string[]
+    }
+    labelTruncate?: {
+      label?: string
+      modelKey?: string
+      defaultValue?: number
+    }
+  }
   items?: any[]
   allItems?: any[]
   cards?: Array<{ label: string; value: unknown }>
@@ -60,6 +73,8 @@ const isExporting = ref(false)
 const reportRef = ref<HTMLElement | null>(null)
 const featureSearch = ref('')
 const expandedDetailCount = ref(0)
+const chartSelectState = ref<Record<string, string>>({})
+const labelTruncateState = ref<Record<string, number>>({})
 
 const report = computed<ReportPayload>(() => (getResultReport(props.data) ?? {}) as ReportPayload)
 const sections = computed<ReportSection[]>(() =>
@@ -128,6 +143,73 @@ const hasMoreDetails = computed(() => {
   const limit = expandedDetailCount.value || section.defaultVisibleCount || items.length
   return items.length > limit
 })
+
+const getSectionKey = (section: ReportSection, index: number) => section.key || `section-${index}`
+
+const getChartSelectedValue = (section: ReportSection, index: number) => {
+  const stateKey = getSectionKey(section, index)
+  const options = section.controls?.select?.options ?? []
+  const selectedValue = chartSelectState.value[stateKey]
+  if (selectedValue && options.includes(selectedValue)) return selectedValue
+
+  const modelKey = section.controls?.select?.modelKey
+  if (typeof modelKey === 'string' && typeof metadata.value[modelKey] === 'string') {
+    const metadataValue = String(metadata.value[modelKey])
+    if (options.includes(metadataValue)) return metadataValue
+  }
+
+  return options[0] ?? ''
+}
+
+const getLabelTruncateLength = (section: ReportSection, index: number) => {
+  const stateKey = getSectionKey(section, index)
+  const stateValue = labelTruncateState.value[stateKey]
+  if (typeof stateValue === 'number' && Number.isFinite(stateValue)) {
+    return Math.max(0, Math.trunc(stateValue))
+  }
+  return Math.max(0, Math.trunc(section.controls?.labelTruncate?.defaultValue ?? 12))
+}
+
+const truncateLabel = (label: string, length: number) => {
+  if (length <= 0 || label.length <= length) return label
+  return `${label.slice(0, length)}...`
+}
+
+const withAxisLabelTruncation = (axis: unknown, truncateLength: number): unknown => {
+  if (Array.isArray(axis)) {
+    return axis.map((item) => withAxisLabelTruncation(item, truncateLength))
+  }
+
+  if (!axis || typeof axis !== 'object') return axis
+
+  const baseAxis = axis as Record<string, unknown>
+  return {
+    ...baseAxis,
+    axisLabel: {
+      ...((baseAxis.axisLabel as Record<string, unknown> | undefined) ?? {}),
+      formatter: (value: string) => truncateLabel(String(value), truncateLength),
+    },
+  }
+}
+
+const resolveChartOption = (section: ReportSection, index: number) => {
+  const selectedValue = getChartSelectedValue(section, index)
+  const optionMap = section.optionMap ?? {}
+  const baseOption =
+    (selectedValue ? optionMap[selectedValue] : undefined) ??
+    optionMap[Object.keys(optionMap)[0] ?? ''] ??
+    section.option
+
+  if (!baseOption) return {}
+
+  const truncateLength = getLabelTruncateLength(section, index)
+
+  return {
+    ...baseOption,
+    xAxis: withAxisLabelTruncation(baseOption.xAxis, truncateLength),
+    yAxis: withAxisLabelTruncation(baseOption.yAxis, truncateLength),
+  }
+}
 
 const exportCurrentReport = async () => {
   if (!reportRef.value || isExporting.value) return
@@ -246,14 +328,55 @@ const exportOriginalImage = () => {
           </section>
 
           <section v-else-if="section.type === 'chart'" class="space-y-4">
-            <div>
-              <h2 class="text-lg font-bold text-slate-800">{{ section.title }}</h2>
-              <p v-if="section.key === 'importance'" class="mt-1 text-sm text-slate-500">
-                默认按 SHAP 重要性从高到低排序，可作为浏览全量因子的导航入口。
-              </p>
+            <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <div>
+                <h2 class="text-lg font-bold text-slate-800">{{ section.title }}</h2>
+                <p v-if="section.key === 'importance'" class="mt-1 text-sm text-slate-500">
+                  默认按 SHAP 重要性从高到低排序，可作为浏览全量因子的导航入口。
+                </p>
+              </div>
+              <div
+                v-if="section.controls?.select || section.controls?.labelTruncate"
+                class="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2"
+              >
+                <label
+                  v-if="section.controls?.select"
+                  class="flex items-center gap-2 text-sm font-medium text-slate-600"
+                >
+                  <span>{{ section.controls.select.label || '切换维度' }}</span>
+                  <select
+                    data-test="report-select"
+                    class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none"
+                    :value="getChartSelectedValue(section, idx)"
+                    @change="chartSelectState[getSectionKey(section, idx)] = String(($event.target as HTMLSelectElement).value)"
+                  >
+                    <option
+                      v-for="option in section.controls.select.options || []"
+                      :key="option"
+                      :value="option"
+                    >
+                      {{ option }}
+                    </option>
+                  </select>
+                </label>
+                <label
+                  v-if="section.controls?.labelTruncate"
+                  class="flex items-center gap-2 text-sm font-medium text-slate-600"
+                >
+                  <span>{{ section.controls.labelTruncate.label || '标签截断' }}</span>
+                  <input
+                    data-test="report-label-truncate-input"
+                    type="number"
+                    min="1"
+                    class="w-20 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none"
+                    :value="getLabelTruncateLength(section, idx)"
+                    @input="labelTruncateState[getSectionKey(section, idx)] = Number(($event.target as HTMLInputElement).value || 0)"
+                  />
+                </label>
+              </div>
             </div>
             <div class="h-[400px] w-full rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-              <VChart :option="section.option" autoresize />
+              <VChart :option="resolveChartOption(section, idx)" autoresize />
             </div>
           </section>
 

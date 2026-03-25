@@ -1,12 +1,23 @@
 ﻿import { describe, it, expect, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { defineComponent } from 'vue'
 import ReportViewer from '../viewers/ReportViewer.vue'
 
 vi.mock('vue-echarts', () => ({
-  default: {
+  default: defineComponent({
     props: ['option'],
-    template: '<div class="chart-stub">{{ option.series?.[0]?.type }}</div>',
-  },
+    computed: {
+      previewLabel(this: any): string {
+        const yAxis = this.option?.yAxis
+        const axis = Array.isArray(yAxis) ? yAxis[0] : yAxis
+        const firstLabel = axis?.data?.[0]
+        const formatter = axis?.axisLabel?.formatter
+        return typeof formatter === 'function' ? String(formatter(firstLabel)) : String(firstLabel ?? '')
+      },
+    },
+    template:
+      '<div class="chart-stub" :data-option="JSON.stringify(option)" :data-preview-label="previewLabel">{{ option.series?.[0]?.type }}</div>',
+  }),
 }))
 
 vi.mock('primevue/usetoast', () => ({
@@ -87,6 +98,63 @@ const createShapReport = () => ({
   },
 })
 
+const createCorrelationReport = () => ({
+  report: {
+    title: 'Pearson 相关系数矩阵分析',
+    metadata: {
+      currentYField: '产线温度标签超长字段',
+    },
+    sections: [
+      {
+        key: 'summary',
+        type: 'text',
+        title: '分析摘要',
+        content: '本次共分析 2 个 X 字段与 2 个 Y 字段。',
+      },
+      {
+        key: 'matrix',
+        type: 'chart',
+        title: 'X / Y 相关矩阵',
+        option: {
+          visualMap: { top: 8, bottom: 'auto' },
+          xAxis: { data: ['超长字段名称ABCDEF', '另一个超长字段123456'] },
+          yAxis: { data: ['产线温度标签超长字段', '压力标签超长字段'] },
+          series: [{ type: 'heatmap', data: [[0, 0, 0.91]] }],
+        },
+      },
+      {
+        key: 'ranking',
+        type: 'chart',
+        title: 'Y 字段相关性排行',
+        controls: {
+          select: {
+            label: '当前 Y',
+            modelKey: 'rankingYField',
+            options: ['产线温度标签超长字段', '压力标签超长字段'],
+          },
+          labelTruncate: {
+            label: '标签截断',
+            modelKey: 'labelTruncateLength',
+            defaultValue: 6,
+          },
+        },
+        optionMap: {
+          产线温度标签超长字段: {
+            xAxis: { type: 'value', name: 'Pearson r' },
+            yAxis: { type: 'category', data: ['超长字段名称ABCDEF', '另一个超长字段123456'] },
+            series: [{ type: 'bar', data: [{ value: 0.91 }, { value: -0.82 }] }],
+          },
+          压力标签超长字段: {
+            xAxis: { type: 'value', name: 'Pearson r' },
+            yAxis: { type: 'category', data: ['超长字段名称ABCDEF', '另一个超长字段123456'] },
+            series: [{ type: 'bar', data: [{ value: 0.25 }, { value: 0.61 }] }],
+          },
+        },
+      },
+    ],
+  },
+})
+
 describe('ReportViewer', () => {
   it('renders shap main report sections and supplement panel', () => {
     const wrapper = mount(ReportViewer, {
@@ -112,5 +180,38 @@ describe('ReportViewer', () => {
     await searchInput.setValue('f3')
 
     expect(wrapper.text()).toContain('因子趋势: f3')
+  })
+
+  it('supports correlation chart Y switching and axis label truncation', async () => {
+    const wrapper = mount(ReportViewer, {
+      props: { data: createCorrelationReport() },
+      global: {
+        stubs: {
+          Select: {
+            props: ['modelValue', 'options', 'optionLabel', 'optionValue'],
+            emits: ['update:modelValue'],
+            template:
+              '<select data-test="report-select" :value="modelValue" @change="$emit(\'update:modelValue\', $event.target.value)"><option v-for="option in options" :key="typeof option === \'string\' ? option : option.value" :value="typeof option === \'string\' ? option : option.value">{{ typeof option === \'string\' ? option : option.label }}</option></select>',
+          },
+        },
+      },
+    })
+
+    const charts = wrapper.findAll('.chart-stub')
+    expect(charts).toHaveLength(2)
+    expect(charts[0]?.attributes('data-option')).toContain('"top":8')
+    expect(charts[1]?.attributes('data-option')).toContain('超长字段')
+    expect(charts[1]?.attributes('data-preview-label')).toContain('超长字段名称...')
+
+    const selects = wrapper.findAll('[data-test="report-select"]')
+    expect(selects).toHaveLength(1)
+    await selects[0]!.setValue('压力标签超长字段')
+
+    const updatedCharts = wrapper.findAll('.chart-stub')
+    expect(updatedCharts[1]?.attributes('data-option')).toContain('"value":0.61')
+
+    const truncateInput = wrapper.get('[data-test="report-label-truncate-input"]')
+    await truncateInput.setValue('4')
+    expect(wrapper.findAll('.chart-stub')[1]?.attributes('data-preview-label')).toContain('超长字段...')
   })
 })
