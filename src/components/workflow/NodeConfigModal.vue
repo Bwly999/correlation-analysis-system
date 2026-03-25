@@ -220,6 +220,21 @@ const openAnalysis = (title: string, data: any) => {
 
 const defaultMockRows = () => [{ f1: 10, f2: 20, target: 1 }]
 
+type StructuredManualInputItem = {
+  sourceNodeId?: string
+  sourceNodeLabel?: string
+  edgeId?: string
+  order?: number
+  result?: unknown
+  payload?: unknown
+}
+
+const hasStructuredInputs = (
+  value: unknown,
+): value is {
+  inputs: StructuredManualInputItem[]
+} => isPlainObject(value) && Array.isArray(value.inputs)
+
 const resolveStandardMockResult = (value: unknown) => {
   const normalized = normalizeWorkflowResult(value)
   if (normalized) return normalized
@@ -251,10 +266,10 @@ const resolveStandardMockResult = (value: unknown) => {
 const buildManualInputTemplate = () => {
   if (nodeDefinition.value?.inputMode === 'multiple') {
     const structuredInput = inputData.value
-    const items = Array.isArray(structuredInput?.inputs) ? structuredInput.inputs : []
+    const items = hasStructuredInputs(structuredInput) ? structuredInput.inputs : []
     const normalizedItems =
       items.length > 0
-        ? items.map((item, index) => ({
+        ? items.map((item: StructuredManualInputItem, index: number) => ({
             sourceNodeId: item.sourceNodeId ?? `source-${index + 1}`,
             sourceNodeLabel: item.sourceNodeLabel ?? `来源 ${index + 1}`,
             edgeId: item.edgeId,

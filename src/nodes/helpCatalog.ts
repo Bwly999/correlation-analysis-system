@@ -524,10 +524,10 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
   ),
   lasso: createEntry(
     {
-      summary: '用 Lasso 回归做特征筛选，快速查看哪些因子更值得保留。',
+      summary: '用真实 Lasso 回归做特征筛选，查看系数排序、入选因子和正则路径。',
       whenToUse: ['你希望从多个候选因子中做一次简单的筛选排序。'],
-      inputGuide: ['需要上游提供表格数据。', '输入字段应尽量为数值型，且指定目标变量。'],
-      outputGuide: ['输出结果是回归分析报告，包含简要系数图。'],
+      inputGuide: ['需要上游提供表格数据。', '输入字段应尽量为数值型，且指定目标变量。', '依赖本地 Python 后端分析服务。'],
+      outputGuide: ['输出结果是回归分析报告，包含模型摘要、特征系数排序和正则路径。'],
       nextSteps: ['若想做更强解释，可进一步尝试 Xgboost + SHAP。'],
       commonIssues: [
         {

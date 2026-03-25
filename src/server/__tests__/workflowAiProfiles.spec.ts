@@ -1,4 +1,4 @@
-﻿import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   getSystemModelProfiles,
   normalizePlanWithCatalog,
@@ -7,6 +7,10 @@ import {
 } from '../workflowAi/profiles.js'
 
 describe('workflowAi profiles', () => {
+  beforeEach(() => {
+    vi.stubEnv('OPENAI_API_KEY', 'test-system-key')
+  })
+
   it('provides zhipu glm-4.7 as the default system profile', () => {
     const profiles = getSystemModelProfiles()
 
@@ -33,6 +37,7 @@ describe('workflowAi profiles', () => {
     })
 
     expect(profile.apiKey).toBeTruthy()
+    expect(profile.apiKey).toBe('test-system-key')
     expect(profile.model).toBe('glm-4.7')
   })
 
@@ -160,4 +165,3 @@ describe('workflowAi profiles', () => {
     ])
   })
 })
-

@@ -277,9 +277,53 @@ describe('remaining nodes standardized result protocol', () => {
     expect(result.preview?.viewer).toBe('report-viewer')
   })
 
-  it('lasso should return a report result', async () => {
+  it('lasso should return a real report result from backend payload', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        results: {
+          summary: {
+            targetField: 'target',
+            sampleCount: 24,
+            featureCount: 2,
+            selectedFeatureCount: 1,
+            alpha: 0.0312,
+            r2: 0.9123,
+            mae: 0.2876,
+          },
+          coefficients: [
+            {
+              name: 'f1',
+              coefficient: 1.23,
+              absCoefficient: 1.23,
+              selected: true,
+              rank: 1,
+            },
+            {
+              name: 'f2',
+              coefficient: 0,
+              absCoefficient: 0,
+              selected: false,
+              rank: 2,
+            },
+          ],
+          selectedFeatures: ['f1'],
+          path: {
+            alphas: [1, 0.1, 0.01],
+            series: [
+              { feature: 'f1', coefficients: [0, 0.8, 1.23] },
+              { feature: 'f2', coefficients: [0, 0.02, 0] },
+            ],
+          },
+        },
+      }),
+    }) as any
+
     const result = await lassoNode.execute(
-      createTableResult([{ target: 1, f1: 2 }]),
+      createTableResult([
+        { target: 1, f1: 2, f2: 3 },
+        { target: 2, f1: 3, f2: 4 },
+      ]),
       { targetField: 'target' },
     )
 
@@ -287,8 +331,15 @@ describe('remaining nodes standardized result protocol', () => {
     expect(result.payload.title).toBe('Lasso 回归分析')
     expect(result.meta?.metrics).toMatchObject({
       targetField: 'target',
-      rowCount: 1,
+      sampleCount: 24,
+      featureCount: 2,
+      selectedFeatureCount: 1,
+      alpha: 0.0312,
+      r2: 0.9123,
     })
+    expect(result.payload.sections[0].type).toBe('summary')
+    expect(result.payload.sections[1].option.series[0].type).toBe('bar')
+    expect(result.payload.sections[2].option.series[0].type).toBe('line')
   })
 
   it('correlation nodes should return standardized report results', async () => {
@@ -300,13 +351,15 @@ describe('remaining nodes standardized result protocol', () => {
       { target: 5, f1: 5, f2: 2 },
     ])
 
-    const pearson = await pearsonNode.execute(input, { targetField: 'target', topN: 5 })
-    const spearman = await spearmanNode.execute(input, { targetField: 'target', topN: 5 })
-    const kendall = await kendallNode.execute(input, { targetField: 'target', topN: 5 })
+    const config = { xFields: ['f1', 'f2'], yFields: ['target'], topN: 5 }
+    const pearson = await pearsonNode.execute(input, config)
+    const spearman = await spearmanNode.execute(input, config)
+    const kendall = await kendallNode.execute(input, config)
 
     expect(pearson.kind).toBe('report')
     expect(pearson.payload.title).toBe('Pearson 相关系数矩阵分析')
-    expect(pearson.meta?.metrics?.targetField).toBe('target')
+    expect(pearson.meta?.metrics?.yFields).toEqual(['target'])
+    expect(pearson.payload.sections?.[2]?.controls?.select?.options).toEqual(['target'])
 
     expect(spearman.kind).toBe('report')
     expect(spearman.payload.sections[1].option.series[0].name).toBe('Spearman ρ')

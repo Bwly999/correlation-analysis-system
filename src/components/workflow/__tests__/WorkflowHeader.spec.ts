@@ -36,7 +36,7 @@ describe('WorkflowHeader', () => {
 
     await createButton!.trigger('click')
 
-    expect(wrapper.emitted('new-workflow')).toBeTruthy()
+    expect(wrapper.emitted('newWorkflow')).toBeTruthy()
   })
 
   it('shows a success toast after saving the workflow', async () => {
@@ -116,7 +116,7 @@ describe('WorkflowHeader', () => {
 
     await helpButton!.trigger('click')
 
-    expect(wrapper.emitted('open-help')).toBeTruthy()
+    expect(wrapper.emitted('openHelp')).toBeTruthy()
   })
 
   it('shows unsaved status beside the workflow name and highlights the save action', () => {

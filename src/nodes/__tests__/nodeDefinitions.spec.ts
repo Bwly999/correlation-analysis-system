@@ -779,9 +779,53 @@ describe('Node Definitions Execution Logic', () => {
       expect(legacy.report.supplements.beeswarmImage).toBe('data:image/png;base64,base64_beeswarm')
     })
 
-    it('should simulate lasso result', async () => {
-      const input = createTableResult([{ target: 1, f1: 2 }])
-      const config = { targetLabel: 'target' }
+    it('should normalize real lasso backend results', async () => {
+      const input = createTableResult([
+        { target: 1, f1: 2, f2: 1 },
+        { target: 2, f1: 3, f2: 1 },
+      ])
+      const config = { targetField: 'target' }
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          results: {
+            summary: {
+              targetField: 'target',
+              sampleCount: 32,
+              featureCount: 2,
+              selectedFeatureCount: 1,
+              alpha: 0.018,
+              r2: 0.9521,
+              mae: 0.1022,
+            },
+            coefficients: [
+              {
+                name: 'f1',
+                coefficient: 2.3,
+                absCoefficient: 2.3,
+                selected: true,
+                rank: 1,
+              },
+              {
+                name: 'f2',
+                coefficient: 0,
+                absCoefficient: 0,
+                selected: false,
+                rank: 2,
+              },
+            ],
+            selectedFeatures: ['f1'],
+            path: {
+              alphas: [1, 0.1, 0.01],
+              series: [
+                { feature: 'f1', coefficients: [0, 1.2, 2.3] },
+                { feature: 'f2', coefficients: [0, 0, 0] },
+              ],
+            },
+          },
+        }),
+      }) as any
 
       const result = await lassoNode.execute(input, config)
 
@@ -789,6 +833,11 @@ describe('Node Definitions Execution Logic', () => {
 
       expect(legacy.viewType).toBe('report')
       expect(legacy.report.title).toBe('Lasso 回归分析')
+      expect(legacy.metrics.alpha).toBe(0.018)
+      expect(legacy.metrics.selectedFeatureCount).toBe(1)
+      expect(legacy.report.sections[0].type).toBe('summary')
+      expect(legacy.report.sections[1].title).toBe('特征系数排序')
+      expect(legacy.report.sections[2].title).toBe('正则路径')
     })
 
     it('should calculate pearson correlations from numeric data', async () => {
@@ -800,18 +849,25 @@ describe('Node Definitions Execution Logic', () => {
         { target: 5, f1: 5, f2: 2 },
       ])
 
-      const result = await pearsonNode.execute(input, { targetField: 'target', topN: 5 })
+      const result = await pearsonNode.execute(input, {
+        xFields: ['f1', 'f2'],
+        yFields: ['target'],
+        topN: 5,
+      })
 
       const legacy = asLegacy(result)
 
       expect(legacy.viewType).toBe('report')
       expect(legacy.report.title).toBe('Pearson 相关系数矩阵分析')
-      expect(legacy.metrics.targetField).toBe('target')
+      expect(legacy.metrics.xFieldCount).toBe(2)
+      expect(legacy.metrics.yFieldCount).toBe(1)
       expect(legacy.metrics.numericFieldCount).toBe(3)
       expect(legacy.report.sections).toHaveLength(4)
       expect(legacy.report.sections[1].option.series[0].type).toBe('heatmap')
+      expect(legacy.report.sections[1].option.visualMap.top).toBe(8)
+      expect(legacy.report.sections[2].controls.select.options).toEqual(['target'])
       expect(legacy.report.sections[2].option.series[0].data[0].value).toBe(1)
-      expect(legacy.report.sections[3].content).toContain('因子')
+      expect(legacy.report.sections[3].content).toContain('Y 字段')
     })
 
     it('should calculate spearman correlations for monotonic but non-linear data', async () => {
@@ -823,18 +879,22 @@ describe('Node Definitions Execution Logic', () => {
         { target: 5, f1: 25, f2: 5 },
       ])
 
-      const result = await spearmanNode.execute(input, { targetField: 'target', topN: 5 })
+      const result = await spearmanNode.execute(input, {
+        xFields: ['f1', 'f2'],
+        yFields: ['target'],
+        topN: 5,
+      })
 
       const legacy = asLegacy(result)
 
       expect(legacy.viewType).toBe('report')
       expect(legacy.report.title).toBe('Spearman 秩相关矩阵分析')
-      expect(legacy.metrics.targetField).toBe('target')
+      expect(legacy.metrics.yFields).toEqual(['target'])
       expect(legacy.report.sections[1].option.series[0].name).toBe('Spearman ρ')
       expect(legacy.report.sections[2].option.xAxis.name).toBe('Spearman ρ')
       expect(legacy.report.sections[2].option.series[0].data[0].value).toBe(1)
       expect(legacy.report.sections[2].option.series[0].data[1].value).toBe(-1)
-      expect(legacy.report.sections[3].content).toContain('因子')
+      expect(legacy.report.sections[3].content).toContain('target')
     })
 
     it('should calculate kendall correlations and rank inverse monotonic fields', async () => {
@@ -846,18 +906,22 @@ describe('Node Definitions Execution Logic', () => {
         { target: 5, f1: 1, f2: 5 },
       ])
 
-      const result = await kendallNode.execute(input, { targetField: 'target', topN: 5 })
+      const result = await kendallNode.execute(input, {
+        xFields: ['f1', 'f2'],
+        yFields: ['target'],
+        topN: 5,
+      })
 
       const legacy = asLegacy(result)
 
       expect(legacy.viewType).toBe('report')
       expect(legacy.report.title).toBe('Kendall 秩相关矩阵分析')
-      expect(legacy.metrics.targetField).toBe('target')
+      expect(legacy.metrics.xFields).toEqual(['f1', 'f2'])
       expect(legacy.report.sections[1].option.series[0].name).toBe('Kendall τ')
       expect(legacy.report.sections[2].option.xAxis.name).toBe('Kendall τ')
       expect(legacy.report.sections[2].option.series[0].data[0].value).toBe(-1)
       expect(legacy.report.sections[2].option.series[0].data[1].value).toBe(1)
-      expect(legacy.report.sections[3].content).toContain('因子')
+      expect(legacy.report.sections[3].content).toContain('f1')
     })
   })
 
