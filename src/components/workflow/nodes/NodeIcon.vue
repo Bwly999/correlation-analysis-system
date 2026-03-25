@@ -21,7 +21,6 @@ import {
   ListFilter,
   ArrowUpDown,
   ScissorsLineDashed,
-  Combine,
 } from 'lucide-vue-next'
 
 const props = defineProps<{
@@ -42,7 +41,6 @@ const iconMap: Record<string, any> = {
   'field-selection': { icon: ListFilter, color: 'text-amber-600', bg: 'bg-amber-50' },
   sort: { icon: ArrowUpDown, color: 'text-slate-600', bg: 'bg-slate-100' },
   'data-limit': { icon: ScissorsLineDashed, color: 'text-orange-600', bg: 'bg-orange-50' },
-  'data-key-merge': { icon: Combine, color: 'text-blue-700', bg: 'bg-blue-50' },
   'xgboost-shap': { icon: Brain, color: 'text-rose-500', bg: 'bg-rose-50' },
   lasso: { icon: Spline, color: 'text-sky-600', bg: 'bg-sky-50' },
   pearson: { icon: ChartScatter, color: 'text-blue-600', bg: 'bg-blue-50' },

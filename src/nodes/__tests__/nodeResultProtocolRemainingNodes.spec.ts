@@ -31,8 +31,8 @@ vi.mock('@/services/kanbanIntegration', () => ({
 import { manualJsonImportNode } from '../definitions/manualJsonImport'
 import { dataAggregationNode } from '../definitions/dataAggregation'
 import { dataFilterNode } from '../definitions/dataFilter'
+import { dataMergeNode } from '../definitions/dataMerge'
 import { jsTransformNode } from '../definitions/jsTransform'
-import { dataKeyMergeNode } from '../definitions/dataKeyMerge'
 import { dataLimitNode } from '../definitions/dataLimit'
 import { xgboostShapNode } from '../definitions/xgboostShap'
 import { lassoNode } from '../definitions/lasso'
@@ -197,8 +197,8 @@ describe('remaining nodes standardized result protocol', () => {
     })
   })
 
-  it('data-key-merge should return a standardized table result with union key stats and lineage', async () => {
-    const result = await dataKeyMergeNode.execute(
+  it('data-merge join mode should return a standardized table result with union key stats and lineage', async () => {
+    const result = await dataMergeNode.execute(
       {
         inputs: [
           {
@@ -214,12 +214,13 @@ describe('remaining nodes standardized result protocol', () => {
         ],
       },
       {
+        mergeMode: 'join',
         unifiedKeyName: '样本编号',
         keyMappings: [
           { sourceNodeId: 'source-a', mergeKey: 'sku' },
           { sourceNodeId: 'source-b', mergeKey: 'code' },
         ],
-      },
+      } as any,
     )
 
     expect(result.kind).toBe('table')

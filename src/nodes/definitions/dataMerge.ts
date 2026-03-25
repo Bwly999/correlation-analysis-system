@@ -12,11 +12,11 @@ type MergeConfig = {
   fillMissingValue?: 'null' | 'empty_string'
   addSourceTag?: boolean
   sourceTagName?: string
-  joinType?: 'left' | 'inner' | 'full'
-  baseJoinKey?: string
-  conflictStrategy?: 'prefer_first' | 'prefer_last' | 'suffix'
-  suffixMode?: 'source_label' | 'source_index'
-  dropDuplicateKeyFields?: boolean
+  unifiedKeyName?: string
+  keyMappings?: Array<{
+    sourceNodeId?: string
+    mergeKey?: string
+  }>
 }
 
 const getRows = (item: MergeInputItem) => {
@@ -29,6 +29,25 @@ const getRows = (item: MergeInputItem) => {
 }
 
 const normalizeKey = (value: unknown) => String(value ?? '')
+
+const rowValueOrNull = (row: Record<string, unknown>, field: string) =>
+  field in row ? row[field] : null
+
+const sanitizeSuffix = (label: string, fallback: string) => {
+  const sanitized = label.replace(/[^\p{L}\p{N}_]+/gu, '_').replace(/^_+|_+$/g, '')
+  return sanitized || fallback
+}
+
+const getSourceOptions = (inputData: unknown) => {
+  const inputs = Array.isArray((inputData as MergeExecutionInput | null | undefined)?.inputs)
+    ? (inputData as MergeExecutionInput).inputs!
+    : []
+
+  return inputs.map((item) => ({
+    name: item.sourceNodeLabel || item.sourceNodeId,
+    value: item.sourceNodeId,
+  }))
+}
 
 const buildFieldList = (datasets: Array<Array<Record<string, unknown>>>, mode: 'union' | 'intersection') => {
   if (datasets.length === 0) return []
@@ -102,52 +121,39 @@ export const dataMergeNode: NodeDefinition<MergeExecutionInput | null, MergeConf
     },
     // Join Columns Properties
     {
-      name: 'joinType',
-      displayName: '连接方式',
-      type: 'options',
-      default: 'left',
-      options: [
-        { name: '左连接', value: 'left' },
-        { name: '内连接', value: 'inner' },
-        { name: '全连接', value: 'full' },
-      ],
-      displayIf: (config) => config.mergeMode === 'join',
-    },
-    {
-      name: 'baseJoinKey',
-      displayName: '关联键',
+      name: 'unifiedKeyName',
+      displayName: '统一键名称',
       type: 'string',
-      default: 'id',
+      default: '合并键',
+      description: '横向关联后统一保留的主键字段名称，各来源原始键字段会被移除。',
       displayIf: (config) => config.mergeMode === 'join',
     },
     {
-      name: 'conflictStrategy',
-      displayName: '冲突处理策略',
-      type: 'options',
-      default: 'suffix',
-      options: [
-        { name: '保留首个值', value: 'prefer_first' },
-        { name: '后者覆盖前者', value: 'prefer_last' },
-        { name: '追加来源后缀', value: 'suffix' },
+      name: 'keyMappings',
+      displayName: '来源键配置',
+      type: 'collection',
+      default: [],
+      description: '为每个上游输入单独指定来源键字段。',
+      properties: [
+        {
+          name: 'sourceNodeId',
+          displayName: '来源节点',
+          type: 'options',
+          default: '',
+          placeholder: '请选择来源节点',
+          resolveOptions: ({ inputData }) => getSourceOptions(inputData),
+          description: '按连接到当前节点的上游来源进行选择。',
+        },
+        {
+          name: 'mergeKey',
+          displayName: '来源键字段',
+          type: 'options',
+          default: '',
+          useUpstreamFactors: true,
+          editable: true,
+          description: '该来源中用于匹配的字段名。',
+        },
       ],
-      displayIf: (config) => config.mergeMode === 'join',
-    },
-    {
-      name: 'suffixMode',
-      displayName: '后缀生成方式',
-      type: 'options',
-      default: 'source_label',
-      options: [
-        { name: '来源标签', value: 'source_label' },
-        { name: '来源序号', value: 'source_index' },
-      ],
-      displayIf: (config) => config.mergeMode === 'join' && config.conflictStrategy === 'suffix',
-    },
-    {
-      name: 'dropDuplicateKeyFields',
-      displayName: '丢弃重复关联键',
-      type: 'boolean',
-      default: true,
       displayIf: (config) => config.mergeMode === 'join',
     },
   ],
@@ -300,100 +306,80 @@ export const dataMergeNode: NodeDefinition<MergeExecutionInput | null, MergeConf
         },
       })
     } else {
-      // Logic from objectMerge.ts (join mode)
-      const baseJoinKey = typeof config.baseJoinKey === 'string' && config.baseJoinKey.trim() ? config.baseJoinKey : 'id'
-      const joinType = config.joinType === 'inner' || config.joinType === 'full' ? config.joinType : 'left'
-      const conflictStrategy =
-        config.conflictStrategy === 'prefer_first' || config.conflictStrategy === 'prefer_last'
-          ? config.conflictStrategy
-          : 'suffix'
-      const suffixMode = config.suffixMode === 'source_index' ? 'source_index' : 'source_label'
-      const dropDuplicateKeyFields = config.dropDuplicateKeyFields !== false
+      const keyMappings = Array.isArray(config.keyMappings) ? config.keyMappings : []
+      const datasets = items.map((item, index) => {
+        const rows = getRows(item)
+        const mapping = keyMappings.find((current) => current.sourceNodeId === item.sourceNodeId)
+        const mergeKey =
+          typeof mapping?.mergeKey === 'string' && mapping.mergeKey.trim()
+            ? mapping.mergeKey.trim()
+            : ''
 
-      const datasets = items.map((item) => ({ item, rows: getRows(item) }))
-      const baseDataset = datasets[0]
-      if (!baseDataset) {
-        throw new Error('横向关联缺少基准数据集')
-      }
-      const restDatasets = datasets.slice(1)
-      const otherIndexes = restDatasets.map(({ item, rows }, datasetIndex) => ({
-        item,
-        rows,
-        index: datasetIndex + 1,
-        fields: [...new Set(rows.flatMap((row) => Object.keys(row)))],
-        map: new Map(rows.map((row) => [normalizeKey(row[baseJoinKey]), row])),
-      }))
+        if (!mergeKey) {
+          throw new Error(`请为节点 ${item.sourceNodeLabel} 配置来源键字段`)
+        }
 
-      let baseRows = [...baseDataset.rows]
-      if (joinType === 'inner') {
-        baseRows = baseRows.filter((row) =>
-          otherIndexes.every(({ map }) => map.has(normalizeKey(row[baseJoinKey]))),
-        )
-      }
+        return {
+          item,
+          rows,
+          mergeKey,
+          suffix: sanitizeSuffix(item.sourceNodeLabel, `来源${index + 1}`),
+        }
+      })
 
-      const additionalRows =
-        joinType === 'full'
-          ? otherIndexes.flatMap(({ rows }) =>
-              rows.filter(
-                (row) =>
-                  !baseDataset.rows.some((baseRow) => normalizeKey(baseRow[baseJoinKey]) === normalizeKey(row[baseJoinKey])),
-              ),
-            )
-          : []
+      const unifiedKeyName =
+        typeof config.unifiedKeyName === 'string' && config.unifiedKeyName.trim()
+          ? config.unifiedKeyName.trim()
+          : '合并键'
 
-      const workingRows = [...baseRows, ...additionalRows]
+      const unionKeys = [
+        ...new Set(
+          datasets.flatMap(({ rows, mergeKey }) => rows.map((row) => normalizeKey(row[mergeKey]))),
+        ),
+      ]
+
+      const fieldsBySource = new Map<string, string[]>()
+      datasets.forEach(({ item, rows, mergeKey }) => {
+        const fields = [
+          ...new Set(rows.flatMap((row) => Object.keys(row).filter((field) => field !== mergeKey))),
+        ]
+        fieldsBySource.set(item.sourceNodeId, fields)
+      })
+
       const lineageFields: Record<string, Array<{ sourceNodeId: string; sourceField: string }>> = {}
-      const conflicts: Array<{ field: string; sources: string[] }> = []
-      let matchedRows = 0
+      const conflicts = new Set<string>()
 
-      const outputRows = workingRows.map((baseRow) => {
-        const mergedRow: Record<string, unknown> = { ...baseRow }
-        const baseKey = normalizeKey(baseRow[baseJoinKey])
-
-        for (const field of Object.keys(baseRow)) {
-          lineageFields[field] ??= []
-          if (!lineageFields[field].some((entry) => entry.sourceNodeId === baseDataset.item.sourceNodeId && entry.sourceField === field)) {
-            lineageFields[field]!.push({ sourceNodeId: baseDataset.item.sourceNodeId, sourceField: field })
-          }
+      const outputRows = unionKeys.map((currentKey) => {
+        const mergedRow: Record<string, unknown> = {
+          [unifiedKeyName]: currentKey,
         }
 
-        for (const { item, map, index, fields } of otherIndexes) {
-          const matchedRow = map.get(baseKey)
-          if (matchedRow) matchedRows += 1
+        datasets.forEach(({ item, rows, mergeKey, suffix }) => {
+          const matchedRow = rows.find((row) => normalizeKey(row[mergeKey]) === currentKey) ?? null
+          const fields = fieldsBySource.get(item.sourceNodeId) ?? []
 
-          const sourceSuffix = suffixMode === 'source_index' ? String(index + 1) : item.sourceNodeLabel.replace(/\s+/g, '_')
-          const matchedKeys = matchedRow ? Object.keys(matchedRow) : []
-          const allFields = new Set<string>([...fields, ...matchedKeys])
+          fields.forEach((field) => {
+            const incomingValue = matchedRow ? rowValueOrNull(matchedRow, field) : null
+            const targetField = field in mergedRow ? `${field}_${suffix}` : field
 
-          for (const field of allFields) {
-            if (field === baseJoinKey && dropDuplicateKeyFields) continue
-
-            const incomingValue = matchedRow ? matchedRow[field] : null
-            const hasConflict = field in mergedRow && field !== baseJoinKey
-
-            if (hasConflict) {
-              if (!conflicts.some((itemConflict) => itemConflict.field === field)) {
-                conflicts.push({ field, sources: [baseDataset.item.sourceNodeLabel, item.sourceNodeLabel] })
-              }
-
-              if (conflictStrategy === 'prefer_last') {
-                mergedRow[field] = incomingValue
-              } else if (conflictStrategy === 'suffix') {
-                mergedRow[`${field}_${sourceSuffix}`] = incomingValue
-                lineageFields[`${field}_${sourceSuffix}`] ??= []
-                lineageFields[`${field}_${sourceSuffix}`]!.push({ sourceNodeId: item.sourceNodeId, sourceField: field })
-              }
-            } else {
-              mergedRow[field] = incomingValue
+            if (field in mergedRow) {
+              conflicts.add(field)
             }
 
-            const lineageKey = hasConflict && conflictStrategy === 'suffix' ? `${field}_${sourceSuffix}` : field
-            lineageFields[lineageKey] ??= []
-            if (!lineageFields[lineageKey].some((entry) => entry.sourceNodeId === item.sourceNodeId && entry.sourceField === field)) {
-              lineageFields[lineageKey]!.push({ sourceNodeId: item.sourceNodeId, sourceField: field })
+            mergedRow[targetField] = incomingValue
+            lineageFields[targetField] ??= []
+            if (
+              !lineageFields[targetField].some(
+                (entry) => entry.sourceNodeId === item.sourceNodeId && entry.sourceField === field,
+              )
+            ) {
+              lineageFields[targetField].push({
+                sourceNodeId: item.sourceNodeId,
+                sourceField: field,
+              })
             }
-          }
-        }
+          })
+        })
 
         return mergedRow
       })
@@ -402,17 +388,13 @@ export const dataMergeNode: NodeDefinition<MergeExecutionInput | null, MergeConf
         meta: {
           stats: {
             inputCount: items.length,
+            unionKeyCount: unionKeys.length,
             outputRows: outputRows.length,
-            matchedRows: Math.min(matchedRows, outputRows.length),
-            unmatchedRows: Math.max(
-              outputRows.length - Math.min(matchedRows, outputRows.length),
-              0,
-            ),
-            conflictFieldCount: conflicts.length,
+            outputFieldCount: outputRows[0] ? Object.keys(outputRows[0]).length : 0,
+            conflictFieldCount: conflicts.size,
           },
           diagnostics: {
-            warnings: [],
-            conflicts,
+            conflicts: [...conflicts],
           },
         },
         lineage: {

@@ -271,9 +271,14 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
           content: '追加适合堆叠行，关联适合按键拼列，分组集合适合做多组对比。',
         },
         {
-          property: 'baseJoinKey',
-          title: '关联键',
-          content: '横向关联时必须确认各数据集使用同一键值体系，否则结果会出现大量空值。',
+          property: 'keyMappings',
+          title: '来源键配置',
+          content: '横向关联时需要为每个来源分别指定来源键字段，系统会按所有键值并集做宽表合并。',
+        },
+        {
+          property: 'unifiedKeyName',
+          title: '统一键名称',
+          content: '横向关联后只保留这一列作为统一主键，各来源原始键字段会从结果中移除。',
         },
       ],
       outputGuide: ['追加或关联会输出表格；分组集合会输出多组表格集合。'],
@@ -281,13 +286,13 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       commonIssues: [
         {
           title: '关联后大量空值',
-          resolution: '通常是关联键不一致、连接方式选择不当，或某个数据集缺少对应键值。',
+          resolution: '通常是来源键字段选择错误，或不同来源的键值体系本身不一致。',
         },
       ],
     },
     {
-      useCases: ['多表追加', '按 ID 关联两张表', '构造分组对比输入'],
-      keywords: ['数据合并', 'join', 'append', '多输入', '分组集合'],
+      useCases: ['多表追加', '不同键名的宽表合并', '构造分组对比输入'],
+      keywords: ['数据合并', 'join', 'append', '多输入', '分组集合', '字段合并'],
       workflowRoles: ['数据准备'],
       inputKinds: ['table'],
       outputKinds: ['table', 'tableCollection'],
@@ -388,37 +393,6 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       recommendedNextNodes: ['chart-display', 'data-export'],
     },
   ),
-  'data-key-merge': createEntry(
-    {
-      summary: '为每个上游输入指定自己的键字段，再按所有键的并集做对象级合并。',
-      whenToUse: ['多个来源的键字段名称不同，但你仍想按业务键把记录并成一张宽表。'],
-      inputGuide: ['这是一个多输入节点，至少需要两个上游输入。', '必须为每个来源配置自己的合并键和统一键名称。'],
-      parameterGuide: [
-        {
-          property: 'keyMappings',
-          title: '合并键配置',
-          content: '每个来源节点都要单独配置来源键字段。统一键名称会作为合并后的公共主键列。',
-        },
-      ],
-      outputGuide: ['输出结果是表格数据，所有来源字段会按键并到同一行，未命中的字段补 null。'],
-      nextSteps: ['合并后通常接字段选择、图表展示、相关性分析或导出。'],
-      commonIssues: [
-        {
-          title: '合并后很多字段是空值',
-          resolution: '通常是来源键字段选错，或不同来源的键值体系本身不一致。',
-        },
-      ],
-    },
-    {
-      useCases: ['不同键名的数据合并', '多输入宽表拼接', '按业务主键汇总多来源数据'],
-      keywords: ['按键合并', '多输入', '对象级合并', '键并集'],
-      workflowRoles: ['数据准备'],
-      inputKinds: ['table'],
-      outputKinds: ['table'],
-      recommendedPrevNodes: ['file-import', 'neighbor-system', 'data-cleaning'],
-      recommendedNextNodes: ['field-selection', 'pearson', 'chart-display', 'data-export'],
-    },
-  ),
   'data-profiling': createEntry(
     {
       summary: '自动识别字段类型和风险，快速看懂当前数据质量。',
@@ -445,22 +419,27 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
   ),
   pearson: createEntry(
     {
-      summary: '计算数值字段之间的 Pearson 线性相关性，并重点解读目标变量关系。',
-      whenToUse: ['你关心线性相关强弱，希望快速找出与目标变量最相关的因子。'],
-      inputGuide: ['需要上游提供表格数据。', '输入字段最好已经清洗为数值型。'],
+      summary: '计算指定 X / Y 数值字段之间的 Pearson 线性相关性，并支持按 Y 字段切换排行。',
+      whenToUse: ['你关心线性相关强弱，希望比较多组 X 字段与一个或多个 Y 字段之间的关系。'],
+      inputGuide: ['需要上游提供表格数据。', '输入字段最好已经清洗为数值型。', '节点只会计算已选择的 X / Y 字段交叉相关。'],
       parameterGuide: [
         {
-          property: 'targetField',
-          title: '目标变量',
-          content: '用于重点排序和报告摘要。若未正确指定，报告重点会偏离你真正关注的字段。',
+          property: 'xFields',
+          title: 'X 字段',
+          content: '作为横轴因子集合参与计算。只会输出这些字段与 Y 字段之间的相关性结果。',
+        },
+        {
+          property: 'yFields',
+          title: 'Y 字段',
+          content: '作为重点观察对象参与计算。结果区的排行图可以在这些 Y 字段之间切换查看。',
         },
       ],
-      outputGuide: ['输出结果是相关性分析报告，含热力图和重点因子排序。'],
+      outputGuide: ['输出结果是相关性分析报告，含 X / Y 热力图、按 Y 切换的相关性排行和交叉明细。'],
       nextSteps: ['如果想看可视化对比，可继续接图表展示；若结果满意，也可直接导出。'],
       commonIssues: [
         {
-          title: '提示至少需要 2 个数值字段',
-          resolution: '先确认输入中是否真的有两个以上可识别为数值的字段，必要时先做数据清洗。',
+          title: '运行后没有结果或字段很少',
+          resolution: '先确认 X / Y 字段都已选择，且这些字段确实能被识别为数值型，必要时先做数据清洗。',
         },
       ],
     },
@@ -476,10 +455,10 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
   ),
   spearman: createEntry(
     {
-      summary: '计算单调关系更稳健的 Spearman 秩相关性，适合非线性但单调的场景。',
+      summary: '计算指定 X / Y 字段之间更稳健的 Spearman 秩相关性，适合非线性但单调的场景。',
       whenToUse: ['你怀疑字段之间不是线性关系，但排序趋势依然明显。'],
-      inputGuide: ['需要上游提供表格数据。', '输入字段最好能转成数值。'],
-      outputGuide: ['输出结果是秩相关报告，适合与 Pearson 结果做对比。'],
+      inputGuide: ['需要上游提供表格数据。', '输入字段最好能转成数值。', '节点只计算已选择的 X / Y 交叉关系。'],
+      outputGuide: ['输出结果是秩相关报告，适合与 Pearson 结果做对比，并支持切换不同 Y 字段排行。'],
       nextSteps: ['如需和其他方法对照，可并行跑 Pearson 或 Kendall。'],
       commonIssues: [
         {
@@ -500,10 +479,10 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
   ),
   kendall: createEntry(
     {
-      summary: '计算 Kendall 秩相关，适合样本较小或更重视排序一致性的分析。',
+      summary: '计算指定 X / Y 字段之间的 Kendall 秩相关，适合样本较小或更重视排序一致性的分析。',
       whenToUse: ['你更关心秩次一致性，或想用更稳健的方法辅助判断。'],
-      inputGuide: ['需要上游提供表格数据。', '输入字段最好已经清洗为数值字段。'],
-      outputGuide: ['输出结果是 Kendall 相关分析报告。'],
+      inputGuide: ['需要上游提供表格数据。', '输入字段最好已经清洗为数值字段。', '节点只计算已选择的 X / Y 交叉关系。'],
+      outputGuide: ['输出结果是 Kendall 相关分析报告，包含热力图、Y 切换排行与交叉明细。'],
       nextSteps: ['常用于和 Pearson、Spearman 交叉验证结论。'],
       commonIssues: [
         {

@@ -36,7 +36,6 @@ import { dataProfilingNode } from '../definitions/dataProfiling'
 import { dataAggregationNode } from '../definitions/dataAggregation'
 import { dataFilterNode } from '../definitions/dataFilter'
 import { jsTransformNode } from '../definitions/jsTransform'
-import { dataKeyMergeNode } from '../definitions/dataKeyMerge'
 import { dataLimitNode } from '../definitions/dataLimit'
 import { xgboostShapNode } from '../definitions/xgboostShap'
 import { neighborSystemNode } from '../definitions/neighborSystem'
@@ -343,57 +342,97 @@ describe('Node Definitions Execution Logic', () => {
       expect(legacy.lineage.fields.score[0].sourceNodeId).toBe('n2')
     })
 
-    it('should left-join datasets and suffix conflicting fields', async () => {
+    it('should merge multiple inputs by configured source keys in join mode', async () => {
       const mergeNode = nodeDefinitions.find((definition) => definition.name === 'data-merge')
 
       const result = await mergeNode!.execute(
         {
           inputs: [
             {
-              sourceNodeId: 'base',
-              sourceNodeLabel: 'Base',
+              sourceNodeId: 'source-a',
+              sourceNodeLabel: '来源A',
               result: createTableResult([
-                { id: 1, city: '上海', value: 10 },
-                { id: 2, city: '北京', value: 20 },
+                { sku: 'A001', city: '上海', score: 91 },
+                { sku: 'A002', city: '北京', score: 77 },
               ]),
             },
             {
-              sourceNodeId: 'extra',
-              sourceNodeLabel: 'Extra',
+              sourceNodeId: 'source-b',
+              sourceNodeLabel: '来源B',
               result: createTableResult([
-                { id: 1, value: 99, score: 90 },
-                { id: 3, value: 88, score: 70 },
+                { code: 'A001', target: 1 },
+                { code: 'A003', target: 0 },
+              ]),
+            },
+            {
+              sourceNodeId: 'source-c',
+              sourceNodeLabel: '来源C',
+              result: createTableResult([
+                { batchNo: 'A002', level: '高' },
+                { batchNo: 'A004', level: '低' },
               ]),
             },
           ],
         },
         {
           mergeMode: 'join',
-          joinType: 'left',
-          baseJoinKey: 'id',
-          conflictStrategy: 'suffix',
-          suffixMode: 'source_label',
-          dropDuplicateKeyFields: true,
-        },
+          unifiedKeyName: '样本编号',
+          keyMappings: [
+            { sourceNodeId: 'source-a', mergeKey: 'sku' },
+            { sourceNodeId: 'source-b', mergeKey: 'code' },
+            { sourceNodeId: 'source-c', mergeKey: 'batchNo' },
+          ],
+        } as any,
       )
 
       const legacy = asLegacy(result)
 
       expect(mergeNode).toBeDefined()
-      expect(legacy.data).toHaveLength(2)
-      expect(legacy.data[0]).toEqual({ id: 1, city: '上海', value: 10, value_Extra: 99, score: 90 })
-      expect(legacy.data[1]).toEqual({
-        id: 2,
-        city: '北京',
-        value: 20,
-        value_Extra: null,
-        score: null,
-      })
-      expect(legacy.stats.outputRows).toBe(2)
-      expect(legacy.stats.matchedRows).toBe(1)
+      expect(legacy.data).toEqual([
+        { 样本编号: 'A001', city: '上海', score: 91, target: 1, level: null },
+        { 样本编号: 'A002', city: '北京', score: 77, target: null, level: '高' },
+        { 样本编号: 'A003', city: null, score: null, target: 0, level: null },
+        { 样本编号: 'A004', city: null, score: null, target: null, level: '低' },
+      ])
+      expect(legacy.stats.inputCount).toBe(3)
+      expect(legacy.stats.outputRows).toBe(4)
+      expect(legacy.stats.unionKeyCount).toBe(4)
+      expect(legacy.lineage.fields.target[0].sourceNodeId).toBe('source-b')
+    })
+
+    it('should suffix conflicting non-key fields from later inputs in join mode', async () => {
+      const mergeNode = nodeDefinitions.find((definition) => definition.name === 'data-merge')
+
+      const result = await mergeNode!.execute(
+        {
+          inputs: [
+            {
+              sourceNodeId: 'source-a',
+              sourceNodeLabel: '来源A',
+              result: createTableResult([{ id: 'A001', value: 1 }]),
+            },
+            {
+              sourceNodeId: 'source-b',
+              sourceNodeLabel: '来源B',
+              result: createTableResult([{ code: 'A001', value: 2 }]),
+            },
+          ],
+        },
+        {
+          mergeMode: 'join',
+          unifiedKeyName: '统一编号',
+          keyMappings: [
+            { sourceNodeId: 'source-a', mergeKey: 'id' },
+            { sourceNodeId: 'source-b', mergeKey: 'code' },
+          ],
+        } as any,
+      )
+
+      const legacy = asLegacy(result)
+
+      expect(legacy.data).toEqual([{ 统一编号: 'A001', value: 1, value_来源B: 2 }])
       expect(legacy.stats.conflictFieldCount).toBe(1)
-      expect(legacy.diagnostics.conflicts[0].field).toBe('value')
-      expect(legacy.lineage.fields.score[0].sourceNodeId).toBe('extra')
+      expect(legacy.diagnostics.conflicts).toEqual(['value'])
     })
 
     it('should package multiple datasets into a collection for parallel analysis', async () => {
@@ -625,96 +664,6 @@ describe('Node Definitions Execution Logic', () => {
     })
   })
 
-  describe('data-key-merge', () => {
-    it('should expose field merge display name', () => {
-      expect(dataKeyMergeNode.displayName).toBe('字段合并')
-    })
-
-    it('should merge multiple inputs by the union of configured keys and keep all fields', async () => {
-      const result = await dataKeyMergeNode.execute(
-        {
-          inputs: [
-            {
-              sourceNodeId: 'source-a',
-              sourceNodeLabel: '来源A',
-              result: createTableResult([
-                { sku: 'A001', city: '上海', score: 91 },
-                { sku: 'A002', city: '北京', score: 77 },
-              ]),
-            },
-            {
-              sourceNodeId: 'source-b',
-              sourceNodeLabel: '来源B',
-              result: createTableResult([
-                { code: 'A001', target: 1 },
-                { code: 'A003', target: 0 },
-              ]),
-            },
-            {
-              sourceNodeId: 'source-c',
-              sourceNodeLabel: '来源C',
-              result: createTableResult([
-                { batchNo: 'A002', level: '高' },
-                { batchNo: 'A004', level: '低' },
-              ]),
-            },
-          ],
-        },
-        {
-          unifiedKeyName: '样本编号',
-          keyMappings: [
-            { sourceNodeId: 'source-a', mergeKey: 'sku' },
-            { sourceNodeId: 'source-b', mergeKey: 'code' },
-            { sourceNodeId: 'source-c', mergeKey: 'batchNo' },
-          ],
-        },
-      )
-
-      const legacy = asLegacy(result)
-
-      expect(legacy.data).toEqual([
-        { 样本编号: 'A001', city: '上海', score: 91, target: 1, level: null },
-        { 样本编号: 'A002', city: '北京', score: 77, target: null, level: '高' },
-        { 样本编号: 'A003', city: null, score: null, target: 0, level: null },
-        { 样本编号: 'A004', city: null, score: null, target: null, level: '低' },
-      ])
-      expect(legacy.stats.inputCount).toBe(3)
-      expect(legacy.stats.outputRows).toBe(4)
-      expect(legacy.stats.unionKeyCount).toBe(4)
-    })
-
-    it('should suffix conflicting non-key fields from later inputs', async () => {
-      const result = await dataKeyMergeNode.execute(
-        {
-          inputs: [
-            {
-              sourceNodeId: 'source-a',
-              sourceNodeLabel: '来源A',
-              result: createTableResult([{ id: 'A001', value: 1 }]),
-            },
-            {
-              sourceNodeId: 'source-b',
-              sourceNodeLabel: '来源B',
-              result: createTableResult([{ code: 'A001', value: 2 }]),
-            },
-          ],
-        },
-        {
-          unifiedKeyName: '统一编号',
-          keyMappings: [
-            { sourceNodeId: 'source-a', mergeKey: 'id' },
-            { sourceNodeId: 'source-b', mergeKey: 'code' },
-          ],
-        },
-      )
-
-      const legacy = asLegacy(result)
-
-      expect(legacy.data).toEqual([{ 统一编号: 'A001', value: 1, value_来源B: 2 }])
-      expect(legacy.stats.conflictFieldCount).toBe(1)
-    })
-  })
-
   describe('algorithms', () => {
     it('should build shap report with summary, all features, and supplement assets', async () => {
       const input = createTableResult([
@@ -867,7 +816,7 @@ describe('Node Definitions Execution Logic', () => {
       expect(legacy.report.sections[1].option.visualMap.top).toBe(8)
       expect(legacy.report.sections[2].controls.select.options).toEqual(['target'])
       expect(legacy.report.sections[2].option.series[0].data[0].value).toBe(1)
-      expect(legacy.report.sections[3].content).toContain('Y 字段')
+      expect(legacy.report.sections[3].content).toContain('Y字段')
     })
 
     it('should calculate spearman correlations for monotonic but non-linear data', async () => {

@@ -12,7 +12,6 @@ import { jsTransformNode } from './definitions/jsTransform'
 import { fieldSelectionNode } from './definitions/fieldSelection'
 import { sortNode } from './definitions/sort'
 import { dataLimitNode } from './definitions/dataLimit'
-import { dataKeyMergeNode } from './definitions/dataKeyMerge'
 import { xgboostShapNode } from './definitions/xgboostShap'
 import { lassoNode } from './definitions/lasso'
 import { pearsonNode } from './definitions/pearson'
@@ -34,7 +33,6 @@ const rawNodeDefinitions: NodeDefinition[] = [
   fieldSelectionNode,
   sortNode,
   dataLimitNode,
-  dataKeyMergeNode,
   xgboostShapNode,
   lassoNode,
   pearsonNode,
