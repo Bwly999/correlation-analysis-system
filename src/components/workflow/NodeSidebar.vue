@@ -261,9 +261,9 @@ const onDragStart = (event: DragEvent, node: { type: string; label: string }) =>
                 class="n8n-node-item-inner flex items-center gap-3 p-2.5 rounded-xl transition-all border border-transparent"
               >
                 <div
-                  class="n8n-icon-box p-2.5 bg-white rounded-lg shadow-sm border border-slate-200/80 group-hover:border-blue-200 transition-colors duration-300"
+                  class="n8n-icon-box p-1.5 bg-white rounded-lg shadow-sm border border-slate-200/80 group-hover:border-blue-200 transition-colors duration-300"
                 >
-                  <NodeIcon :type="node.type" :size="22" />
+                  <NodeIcon :type="node.type" :size="30" />
                 </div>
                 <div class="flex flex-col flex-1 min-w-0">
                   <span class="text-[12px] font-semibold text-slate-800 truncate tracking-tight">
