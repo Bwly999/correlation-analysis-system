@@ -7,6 +7,7 @@
 - **结果预览大 JSON 全局托底修复**:
   - 为左侧结果预览序列化增加统一预算保护，限制遍历节点数与预估输出体积，避免超大 JSON 在 `DataAnalysisModal` 中触发主线程卡顿。
   - 为根层超大普通对象增加快速降级路径，超过预算后直接返回 `budgetExceeded` 安全占位摘要，不再继续深度展开。
+  - 补强 `report` 结果的预览兜底范围，`meta`、`lineage` 与 `preview.props` 也会参与安全序列化，修复 Pearson 节点输出仍可能在左侧预览中完整展开超大 JSON 的问题。
   - 补充 `previewSerialization` 与 `DataAnalysisModal` 回归测试，覆盖超大普通对象的全局托底场景。
 
 - **AI 编排入口遮挡节点库修复**:

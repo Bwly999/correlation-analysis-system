@@ -138,4 +138,56 @@ describe('DataAnalysisModal', () => {
     expect(previewText).toContain('__previewTruncated')
     expect(previewText).not.toContain('field_4999')
   })
+
+  it('does not dump oversized report meta blocks into the preview text', () => {
+    const data = createReportResult(
+      {
+        title: 'Pearson 结果',
+        sections: [
+          {
+            type: 'text',
+            content: '报告摘要',
+          },
+        ],
+      },
+      {
+        meta: {
+          sourceData: Array.from({ length: 200 }, (_, index) => ({ id: index, feature: `f${index}` })),
+          pairDetails: Array.from({ length: 400 }, (_, index) => ({
+            pair: `f${index}-target`,
+            value: index / 100,
+          })),
+          matrixData: Array.from({ length: 80 }, (_, rowIndex) =>
+            Array.from({ length: 80 }, (_, colIndex) => rowIndex + colIndex),
+          ),
+        },
+      },
+    )
+
+    const wrapper = mount(DataAnalysisModal, {
+      props: {
+        visible: true,
+        title: 'Pearson 节点',
+        data,
+      },
+      global: {
+        stubs: {
+          Dialog: {
+            props: ['visible'],
+            template: '<div class="dialog-stub"><slot name="header" /><slot /></div>',
+          },
+          InputNumber: {
+            props: ['modelValue'],
+            emits: ['update:modelValue'],
+            template: '<input class="input-number-stub" :value="modelValue" />',
+          },
+          DataChart: true,
+        },
+      },
+    })
+
+    const previewText = wrapper.get('pre').text()
+    expect(previewText).toContain('budgetExceeded')
+    expect(previewText).not.toContain('f399-target')
+  })
 })

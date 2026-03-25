@@ -59,6 +59,44 @@ describe('previewSerialization', () => {
     expect(json).not.toContain('"values"')
   })
 
+  it('sanitizes oversized report metadata instead of keeping the raw meta payload', () => {
+    const data = createReportResult(
+      {
+        title: 'Pearson 相关系数矩阵分析',
+        sections: [
+          {
+            type: 'text',
+            content: '摘要',
+          },
+        ],
+      },
+      {
+        meta: {
+          sourceData: Array.from({ length: 200 }, (_, index) => ({ id: index, feature: `f${index}` })),
+          pairDetails: Array.from({ length: 400 }, (_, index) => ({
+            pair: `f${index}-target`,
+            value: index / 100,
+          })),
+          matrixData: Array.from({ length: 100 }, (_, rowIndex) =>
+            Array.from({ length: 100 }, (_, colIndex) => rowIndex * colIndex),
+          ),
+          metrics: {
+            sampleCount: 4096,
+          },
+        },
+      },
+    )
+
+    const preview = createSafeJsonPreview(data) as ReturnType<typeof createReportResult>
+    const json = stringifySafePreview(preview)
+
+    expect(json).toContain('"__reason": "budgetExceeded"')
+    expect(json).toContain('"pairDetails"')
+    expect(json).not.toContain('"pair": "f399-target"')
+    expect(json).not.toContain('"sourceData": [')
+    expect(json).not.toContain('"matrixData": [')
+  })
+
   it('falls back early when a plain object exceeds the global preview budget', () => {
     const hugeObject = Object.fromEntries(
       Array.from({ length: 5000 }, (_, index) => [

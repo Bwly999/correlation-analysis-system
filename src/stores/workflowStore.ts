@@ -1049,7 +1049,8 @@ export const useWorkflowStore = defineStore('workflow', () => {
       const structuredInputs: MultipleNodeExecutionItem[] = []
       for (const [index, edge] of incomingEdges.entries()) {
         if (isStopping.value) throw new Error('User Aborted')
-        const result = await executeNode(edge.source, forceUpdate, executionScope)
+        const shouldForceUpstream = executionScope === 'global' ? forceUpdate : false
+        const result = await executeNode(edge.source, shouldForceUpstream, executionScope)
         if (result === 'WAIT_INPUT' || result === 'STOPPED') {
           node.data.status = 'idle'
           return result

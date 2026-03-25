@@ -229,14 +229,22 @@ const sanitizePreviewValue = (
 const createPreviewNodeResult = (
   result: NodeResult,
   payload: unknown,
+  meta: unknown,
+  lineage: unknown,
+  previewProps: unknown,
   truncated: boolean,
 ): NodeResult => ({
   kind: result.kind,
   schema: result.schema,
-  lineage: result.lineage,
-  preview: result.preview,
+  lineage: isPlainObject(lineage) ? lineage : undefined,
+  preview: result.preview
+    ? {
+        ...result.preview,
+        props: isPlainObject(previewProps) ? previewProps : undefined,
+      }
+    : undefined,
   meta: {
-    ...(result.meta ?? {}),
+    ...(isPlainObject(meta) ? meta : {}),
     previewTruncated: truncated,
   },
   payload,
@@ -270,7 +278,17 @@ const createReportPreview = (
   }
 
   state.truncated = true
-  return createPreviewNodeResult(result, summary, true)
+  const sanitizedMeta = sanitizePreviewValue(result.meta ?? {}, 0, options, state)
+  const sanitizedLineage = sanitizePreviewValue(result.lineage ?? {}, 0, options, state)
+  const sanitizedPreviewProps = sanitizePreviewValue(result.preview?.props ?? {}, 0, options, state)
+  return createPreviewNodeResult(
+    result,
+    summary,
+    sanitizedMeta,
+    sanitizedLineage,
+    sanitizedPreviewProps,
+    true,
+  )
 }
 
 export const createSafeJsonPreview = (
@@ -286,7 +304,17 @@ export const createSafeJsonPreview = (
 
   if (normalizedResult) {
     const payload = sanitizePreviewValue(normalizedResult.payload, 0, options, state)
-    return createPreviewNodeResult(normalizedResult, payload, state.truncated)
+    const meta = sanitizePreviewValue(normalizedResult.meta ?? {}, 0, options, state)
+    const lineage = sanitizePreviewValue(normalizedResult.lineage ?? {}, 0, options, state)
+    const previewProps = sanitizePreviewValue(normalizedResult.preview?.props ?? {}, 0, options, state)
+    return createPreviewNodeResult(
+      normalizedResult,
+      payload,
+      meta,
+      lineage,
+      previewProps,
+      state.truncated,
+    )
   }
 
   const sanitized = sanitizePreviewValue(value, 0, options, state)
