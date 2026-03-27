@@ -1,0 +1,14 @@
+[Unit]
+Description=correlation-analysis-node
+After=network.target
+
+[Service]
+WorkingDirectory=/data/apps/correlation-analysis-system
+EnvironmentFile=/data/apps/correlation-analysis-system/deploy/env/server.env
+ExecStart=/usr/bin/node /data/apps/correlation-analysis-system/dist-server/server/index.js
+Restart=always
+RestartSec=3
+User=www-data
+
+[Install]
+WantedBy=multi-user.target
