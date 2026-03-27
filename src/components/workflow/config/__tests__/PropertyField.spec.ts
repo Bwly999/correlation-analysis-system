@@ -127,8 +127,9 @@ describe('PropertyField', () => {
         },
         stubs: {
           MultiSelect: {
-            props: ['filterInputProps'],
-            template: '<input class="multi-options-filter-input" v-bind="filterInputProps" />',
+            props: ['filterInputProps', 'pt'],
+            template:
+              '<input class="multi-options-filter-input" v-bind="{ ...(filterInputProps || {}), ...(pt?.pcFilter?.root || {}) }" />',
           },
         },
       },
@@ -139,5 +140,81 @@ describe('PropertyField', () => {
 
     const emitted = wrapper.emitted('update:modelValue') || []
     expect(emitted[emitted.length - 1]).toEqual([['manual_field']])
+  })
+
+  it('为开启 forceInput 的 multi-options 在空选项时提供强制输入提示并允许回车写入', async () => {
+    setActivePinia(createPinia())
+
+    const wrapper = mount(PropertyField, {
+      props: {
+        prop: {
+          name: 'fields',
+          displayName: '字段列表',
+          type: 'multi-options',
+          default: [],
+          editable: true,
+          forceInput: true,
+          options: [],
+        },
+        modelValue: [],
+        upstreamFactors: [],
+      },
+      global: {
+        directives: {
+          tooltip: () => undefined,
+        },
+        stubs: {
+          MultiSelect: {
+            props: ['filterInputProps', 'emptyFilterMessage', 'emptyMessage', 'pt'],
+            template:
+              '<div><input class="multi-options-filter-input" v-bind="{ ...(filterInputProps || {}), ...(pt?.pcFilter?.root || {}) }" /><div class="multi-options-empty-message">{{ emptyFilterMessage || emptyMessage }}</div></div>',
+          },
+        },
+      },
+    })
+
+    expect(wrapper.find('.multi-options-empty-message').text()).toContain(
+      '暂无可选项，可直接输入后按回车添加',
+    )
+
+    await wrapper.get('.multi-options-filter-input').setValue('manual_field')
+    await wrapper.get('.multi-options-filter-input').trigger('keydown', { key: 'Enter' })
+
+    const emitted = wrapper.emitted('update:modelValue') || []
+    expect(emitted[emitted.length - 1]).toEqual([['manual_field']])
+  })
+
+  it('为 forceInput 的 multi-options 补充手工输入值的展示标签', () => {
+    setActivePinia(createPinia())
+
+    const wrapper = mount(PropertyField, {
+      props: {
+        prop: {
+          name: 'fields',
+          displayName: '字段列表',
+          type: 'multi-options',
+          default: [],
+          editable: true,
+          forceInput: true,
+          options: [],
+        },
+        modelValue: ['manual_field'],
+        upstreamFactors: [],
+      },
+      global: {
+        directives: {
+          tooltip: () => undefined,
+        },
+        stubs: {
+          MultiSelect: {
+            props: ['options'],
+            template:
+              '<div class="multi-options-options">{{ options.map((item) => `${item.name}:${item.value}`).join("|") }}</div>',
+          },
+        },
+      },
+    })
+
+    expect(wrapper.find('.multi-options-options').text()).toContain('manual_field:manual_field')
   })
 })

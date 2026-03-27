@@ -121,6 +121,27 @@ const optionSource = computed(() => {
   return props.prop.options || []
 })
 
+const normalizedMultiOptionsSource = computed(() => {
+  const baseOptions = Array.isArray(optionSource.value) ? [...optionSource.value] : []
+  const selectedValues = Array.isArray(configValue.value) ? configValue.value : []
+  const existingValues = new Set(
+    baseOptions.map((option) =>
+      option && typeof option === 'object' && 'value' in option ? option.value : option,
+    ),
+  )
+
+  selectedValues.forEach((value) => {
+    if (existingValues.has(value)) return
+    baseOptions.push({
+      name: String(value),
+      value,
+    })
+    existingValues.add(value)
+  })
+
+  return baseOptions
+})
+
 const searchFactors = (event: any) => {
   const query = String(event.query || '').toLowerCase()
   filteredFactors.value = props.upstreamFactors
@@ -267,14 +288,21 @@ const optionsFilterInputProps = computed(() => {
 const multiOptionsFilterInputProps = computed(() => {
   return {
     onInput: onMultiOptionsFilterInput,
-    onKeydown: (event: KeyboardEvent) => {
-      if (event.key === 'Enter') {
-        confirmEditableMultiOption(event)
-      }
-    },
     'data-testid': 'multi-options-filter-input',
   }
 })
+
+const multiOptionsPassThrough = computed(() => ({
+  pcFilter: {
+    root: {
+      onKeydown: (event: KeyboardEvent) => {
+        if (event.key === 'Enter') {
+          confirmEditableMultiOption(event)
+        }
+      },
+    },
+  },
+}))
 
 const optionFilterMatchMode = computed(() =>
   optionsRegexEnabled.value ? REGEX_FILTER_MODE : 'contains',
@@ -283,6 +311,13 @@ const optionFilterMatchMode = computed(() =>
 const multiOptionsFilterMatchMode = computed(() =>
   multiOptionsRegexEnabled.value ? REGEX_FILTER_MODE : 'contains',
 )
+
+const multiOptionsForceInputHint = computed(() => {
+  if (multiOptionsFilterError.value) return multiOptionsFilterError.value
+  if (!props.prop.forceInput) return undefined
+  if (optionSource.value.length > 0) return undefined
+  return '暂无可选项，可直接输入后按回车添加'
+})
 
 const toggleOptionsRegexMode = (event?: Event) => {
   event?.preventDefault()
@@ -440,13 +475,15 @@ const getRegexToggleClass = (enabled: boolean) => [
     <MultiSelect
       v-else-if="prop.type === 'multi-options'"
       v-model="configValue"
-      :options="optionSource"
+      :options="normalizedMultiOptionsSource"
       option-label="name"
       option-value="value"
       :filter="true"
       :filter-match-mode="multiOptionsFilterMatchMode"
       :filter-input-props="multiOptionsFilterInputProps"
-      :empty-filter-message="multiOptionsFilterError || undefined"
+      :empty-filter-message="multiOptionsForceInputHint"
+      :empty-message="multiOptionsForceInputHint"
+      :pt="multiOptionsPassThrough"
       display="chip"
       :placeholder="prop.placeholder"
       class="w-full text-xs ndv-input ndv-multi-options"

@@ -35,6 +35,7 @@ export const fieldSelectionNode: NodeDefinition<unknown, FieldSelectionConfig> =
       type: 'multi-options',
       default: [],
       editable: true,
+      forceInput: true,
       useUpstreamFactors: true,
       filterable: true,
       allowRegexSearch: true,

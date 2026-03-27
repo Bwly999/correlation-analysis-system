@@ -64,6 +64,7 @@ export interface NodeProperty {
   isRuntimeInput?: boolean
   useUpstreamFactors?: boolean
   editable?: boolean
+  forceInput?: boolean
   filterable?: boolean
   allowRegexSearch?: boolean
   filterPlaceholder?: string
