@@ -276,6 +276,7 @@ describe('remaining nodes standardized result protocol', () => {
       featureCount: 2,
     })
     expect(result.preview?.viewer).toBe('report-viewer')
+    expect(global.fetch).toHaveBeenCalledWith('/api/analysis/xgboost-shap', expect.any(Object))
   })
 
   it('lasso should return a real report result from backend payload', async () => {
@@ -341,6 +342,7 @@ describe('remaining nodes standardized result protocol', () => {
     expect(result.payload.sections[0].type).toBe('summary')
     expect(result.payload.sections[1].option.series[0].type).toBe('bar')
     expect(result.payload.sections[2].option.series[0].type).toBe('line')
+    expect(global.fetch).toHaveBeenCalledWith('/api/analysis/lasso', expect.any(Object))
   })
 
   it('correlation nodes should return standardized report results', async () => {

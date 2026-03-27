@@ -4,6 +4,13 @@
 
 ### 修复 (Fix)
 
+- **Node 统一代理 Python 算法接口**:
+  - 为 `Lasso` 与 `Xgboost + SHAP` 节点新增 Node 侧 `/api/analysis/*` 代理接口，前端不再直接请求 Python 服务。
+  - 新增前端算法服务层，统一通过 `VITE_API_BASE_URL` 访问 Node API，并由 Node 使用 `PYTHON_ANALYSIS_API_BASE_URL` 转发到 Python 算法后端。
+  - 补充 Node 路由测试、算法节点请求路径断言，以及 Node + Python 的部署手册与工作流系统文档说明。
+
+### 修复 (Fix)
+
 - **节点调试弹层期间画布快捷键误触修复**:
   - 修复打开节点调试界面后按 `Backspace` 会误删底层选中节点、导致界面空白的问题。
   - 在节点配置、运行时输入、结果看板、工作流管理、帮助中心与未保存确认等前台弹层打开期间，统一禁用画布删除、框选、多选、缩放和平移相关键盘快捷键。

@@ -1,5 +1,6 @@
 import type { NodeDefinition } from '../types'
 import { createReportResult, extractTableRows } from '../result'
+import { requestLassoAnalysis } from '@/services/analysis'
 
 type LassoSummary = {
   targetField: string
@@ -173,22 +174,11 @@ export const lassoNode: NodeDefinition = {
       throw new Error('无输入数据')
     }
 
-    const response = await fetch('http://localhost:8000/analyze/lasso', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        data: rows,
-        target: config.targetField || 'target',
-        config,
-      }),
+    const result = await requestLassoAnalysis<{ results?: Partial<LassoResults> }>({
+      data: rows,
+      target: config.targetField || 'target',
+      config,
     })
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ detail: '后端服务响应异常' }))
-      throw new Error(errorData.detail || `后端请求失败: ${response.statusText}`)
-    }
-
-    const result = await response.json()
     const normalized = normalizeResults(result.results ?? {})
 
     return createReportResult(

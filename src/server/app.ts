@@ -6,6 +6,7 @@ import {
   toPublicModelProfile,
 } from './workflowAi/profiles.js'
 import type { WorkflowAiModelProfile, WorkflowAiPlanRequest } from '../ai/types.js'
+import { proxyAnalysisRequest } from './analysisProxy.js'
 import {
   clearUserHistory,
   deleteUserWorkflow,
@@ -116,6 +117,16 @@ export const createServerHandler = () => async (request: IncomingMessage, respon
     if (request.method === 'DELETE' && url.pathname === '/api/storage/history') {
       clearUserHistory(currentUser.id)
       sendJson(response, 200, { ok: true })
+      return
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/analysis/lasso') {
+      await proxyAnalysisRequest(request, response, 'lasso', setCorsHeaders)
+      return
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/analysis/xgboost-shap') {
+      await proxyAnalysisRequest(request, response, 'xgboost-shap', setCorsHeaders)
       return
     }
 

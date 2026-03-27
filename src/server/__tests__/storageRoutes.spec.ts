@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Readable } from 'node:stream'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { createServerHandler } from '../app.js'
@@ -35,6 +35,11 @@ const createResponse = () => {
 
   return response
 }
+
+afterEach(() => {
+  vi.unstubAllEnvs()
+  vi.restoreAllMocks()
+})
 
 describe('storage routes', () => {
   it('should expose the current storage user', async () => {
@@ -87,5 +92,69 @@ describe('storage routes', () => {
         name: '用户A工作流',
       }),
     ])
+  })
+
+  it('should proxy lasso analysis requests to the python backend', async () => {
+    vi.stubEnv('PYTHON_ANALYSIS_API_BASE_URL', 'http://127.0.0.1:9000')
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ status: 'success', results: { summary: { ok: true } } }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const handler = createServerHandler()
+    const response = createResponse()
+
+    await handler(
+      createRequest('POST', '/api/analysis/lasso', {
+        data: [{ target: 1, f1: 2 }],
+        target: 'target',
+        config: { alpha: 0.1 },
+      }),
+      response,
+    )
+
+    expect(fetchMock).toHaveBeenCalledWith('http://127.0.0.1:9000/analyze/lasso', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        data: [{ target: 1, f1: 2 }],
+        target: 'target',
+        config: { alpha: 0.1 },
+      }),
+    })
+    expect(response.statusCode).toBe(200)
+    expect(JSON.parse(response.body)).toEqual({
+      status: 'success',
+      results: { summary: { ok: true } },
+    })
+  })
+
+  it('should return python backend errors for analysis requests', async () => {
+    vi.stubEnv('PYTHON_ANALYSIS_API_BASE_URL', 'http://127.0.0.1:9000')
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+      text: async () => JSON.stringify({ detail: '目标字段不存在' }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const handler = createServerHandler()
+    const response = createResponse()
+
+    await handler(
+      createRequest('POST', '/api/analysis/xgboost-shap', {
+        data: [{ target: 1, f1: 2 }],
+        target: 'missing_target',
+        config: {},
+      }),
+      response,
+    )
+
+    expect(response.statusCode).toBe(400)
+    expect(JSON.parse(response.body)).toEqual({ detail: '目标字段不存在' })
   })
 })

@@ -1,5 +1,6 @@
 import type { NodeDefinition } from '../types'
 import { createReportResult, extractTableRows } from '../result'
+import { requestXgboostShapAnalysis } from '@/services/analysis'
 
 type ShapSummary = {
   targetField: string
@@ -149,22 +150,11 @@ export const xgboostShapNode: NodeDefinition = {
       throw new Error('无输入数据')
     }
 
-    const response = await fetch('http://localhost:8000/analyze/xgboost-shap', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        data: rows,
-        target: config.targetField || 'target',
-        config,
-      }),
+    const result = await requestXgboostShapAnalysis<{ results?: Record<string, any> }>({
+      data: rows,
+      target: config.targetField || 'target',
+      config,
     })
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ detail: '后端服务响应异常' }))
-      throw new Error(errorData.detail || `后端请求失败: ${response.statusText}`)
-    }
-
-    const result = await response.json()
     const normalized = result.results?.summary
       ? {
           summary: result.results.summary as ShapSummary,

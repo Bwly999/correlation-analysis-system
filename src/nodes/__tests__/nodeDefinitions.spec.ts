@@ -726,6 +726,7 @@ describe('Node Definitions Execution Logic', () => {
       ).toHaveLength(3)
       expect(legacy.report.supplements.fullReportImage).toBe('data:image/png;base64,base64_full')
       expect(legacy.report.supplements.beeswarmImage).toBe('data:image/png;base64,base64_beeswarm')
+      expect(global.fetch).toHaveBeenCalledWith('/api/analysis/xgboost-shap', expect.any(Object))
     })
 
     it('should normalize real lasso backend results', async () => {
@@ -787,6 +788,7 @@ describe('Node Definitions Execution Logic', () => {
       expect(legacy.report.sections[0].type).toBe('summary')
       expect(legacy.report.sections[1].title).toBe('特征系数排序')
       expect(legacy.report.sections[2].title).toBe('正则路径')
+      expect(global.fetch).toHaveBeenCalledWith('/api/analysis/lasso', expect.any(Object))
     })
 
     it('should calculate pearson correlations from numeric data', async () => {
