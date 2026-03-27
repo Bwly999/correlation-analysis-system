@@ -481,6 +481,24 @@ export const useWorkflowStore = defineStore('workflow', () => {
     node.data.config = nextConfig
   }
 
+  const resetNodeRuntimeInputs = (nodeId: string) => {
+    const node = findNodeById(nodeId)
+    if (!node) return
+
+    const resolvedNode = applyNodeConfigDefaults(node)
+    const definition = resolvedNode?.definition
+    if (!definition || definition.category !== 'trigger') return
+
+    const nextConfig = { ...(resolvedNode?.config ?? node.data.config) }
+    definition.properties.forEach((property) => {
+      if (!property.isRuntimeInput) return
+      nextConfig[property.name] = property.default ?? null
+    })
+
+    node.data.reuseLastRuntimeInputs = false
+    node.data.config = nextConfig
+  }
+
   const collectUpstreamNodeIds = (targetNodeId: string, acc = new Set<string>()) => {
     if (acc.has(targetNodeId)) return acc
     acc.add(targetNodeId)
@@ -1338,6 +1356,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     markWorkflowAsExplicitlyUnsaved,
     createEditableSnapshot,
     restoreEditableSnapshot,
+    resetNodeRuntimeInputs,
     validateWorkflowAiPlan,
     applyWorkflowAiPlan,
   }

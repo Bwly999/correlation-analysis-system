@@ -19,6 +19,7 @@ import ConfigHeader from './config/ConfigHeader.vue'
 import ConfigFooter from './config/ConfigFooter.vue'
 import ConfigForm from './config/ConfigForm.vue'
 import RuntimeInputs from './config/RuntimeInputs.vue'
+import RuntimeSettingsPanel from './config/RuntimeSettingsPanel.vue'
 import NodeHelpPanel from './help/NodeHelpPanel.vue'
 import {
   getResultGroups,
@@ -58,6 +59,7 @@ const editedName = ref('')
 const localIsPinned = ref(false)
 const localUseManualInput = ref(false)
 const localManualInput = ref('')
+const localReuseLastRuntimeInputs = ref(false)
 const isHelpDialogVisible = ref(false)
 
 // 深度分析弹窗状态
@@ -101,6 +103,7 @@ watch(
       localIsPinned.value = node.value.data.isPinned || false
       localUseManualInput.value = node.value.data.useManualInput || false
       localManualInput.value = node.value.data.manualInput || ''
+      localReuseLastRuntimeInputs.value = node.value.data.reuseLastRuntimeInputs || false
       activeTab.value = 'parameters'
       isHelpDialogVisible.value = false
 
@@ -125,6 +128,9 @@ watch(localUseManualInput, (val) => {
 })
 watch(localManualInput, (val) => {
   if (node.value) node.value.data.manualInput = val
+})
+watch(localReuseLastRuntimeInputs, (val) => {
+  if (node.value) node.value.data.reuseLastRuntimeInputs = val
 })
 
 const inputData = computed(() => {
@@ -200,6 +206,7 @@ const runCurrentNode = async () => {
     node.value.data.label = editedName.value
     node.value.data.useManualInput = localUseManualInput.value
     node.value.data.manualInput = localManualInput.value
+    node.value.data.reuseLastRuntimeInputs = localReuseLastRuntimeInputs.value
     await store.executeNode(node.value.id, true)
   }
 }
@@ -210,7 +217,15 @@ const saveConfig = () => {
     node.value.data.config = { ...config.value }
     node.value.data.useManualInput = localUseManualInput.value
     node.value.data.manualInput = localManualInput.value
+    node.value.data.reuseLastRuntimeInputs = localReuseLastRuntimeInputs.value
   }
+}
+
+const resetSavedRuntimeInputs = () => {
+  if (!node.value) return
+  store.resetNodeRuntimeInputs(node.value.id)
+  localReuseLastRuntimeInputs.value = node.value.data.reuseLastRuntimeInputs ?? false
+  config.value = { ...node.value.data.config }
 }
 
 const saveAndClose = () => {
@@ -370,7 +385,7 @@ const buildManualInputTemplate = () => {
             <button
               v-for="tab in [
                 { id: 'parameters', label: '参数设置' },
-                { id: 'settings', label: '系统选项' },
+                { id: 'settings', label: '运行设置' },
               ]"
               :key="tab.id"
               :class="[
@@ -450,9 +465,14 @@ const buildManualInputTemplate = () => {
           </div>
           <div
             v-else
-            class="flex flex-col items-center justify-center h-full text-slate-400 italic"
+            class="mx-auto h-full w-full max-w-3xl"
           >
-            暂无系统选项配置
+            <RuntimeSettingsPanel
+              :is-trigger="node.data.category === 'trigger'"
+              :reuse-last-runtime-inputs="localReuseLastRuntimeInputs"
+              @update:reuse-last-runtime-inputs="localReuseLastRuntimeInputs = $event"
+              @reset-runtime-inputs="resetSavedRuntimeInputs"
+            />
           </div>
         </div>
 

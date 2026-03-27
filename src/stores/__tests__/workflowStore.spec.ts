@@ -485,6 +485,22 @@ describe('Workflow Store', () => {
     expect(node.data.status).toBe('success')
   })
 
+  it('should allow explicitly resetting saved runtime inputs and disable reuse', () => {
+    const store = useWorkflowStore()
+    const node = store.addAndConnectNode('file-import', 'Trigger', { x: 0, y: 0 })!
+    const file = new File(['a,b\n1,2'], 'test.csv')
+
+    node.data.reuseLastRuntimeInputs = true
+    node.data.config.fileData = file
+    node.data.config.format = 'csv'
+
+    store.resetNodeRuntimeInputs(node.id)
+
+    expect(node.data.reuseLastRuntimeInputs).toBe(false)
+    expect(node.data.config.fileData).toBeNull()
+    expect(node.data.config.format).toBe('csv')
+  })
+
   it('should reuse cached upstream trigger output during downstream debug runs', async () => {
     const triggerDefinition = {
       name: 'test-runtime-trigger',

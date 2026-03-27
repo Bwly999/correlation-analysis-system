@@ -3,6 +3,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
+import { nextTick } from 'vue'
 import NodeConfigModal from '../NodeConfigModal.vue'
 import { useWorkflowStore } from '@/stores/workflowStore'
 
@@ -468,5 +469,71 @@ describe('NodeConfigModal', () => {
     expect(mouseUpHandler).toBeTypeOf('function')
     expect(removeEventListenerSpy).toHaveBeenCalledWith('mousemove', mouseMoveHandler)
     expect(removeEventListenerSpy).toHaveBeenCalledWith('mouseup', mouseUpHandler)
+  })
+
+  it('shows runtime settings for trigger nodes and allows resetting saved runtime inputs', async () => {
+    const store = useWorkflowStore()
+    const file = new File(['a,b\n1,2'], 'test.csv')
+    store.nodes = [
+      {
+        id: 'file-import-node',
+        type: 'custom',
+        position: { x: 0, y: 0 },
+        label: '文件导入',
+        data: {
+          label: '文件导入',
+          type: 'file-import',
+          category: 'trigger',
+          status: 'idle',
+          config: {
+            fileData: file,
+            format: 'csv',
+          },
+          logs: [],
+          useManualInput: false,
+          manualInput: '',
+          isPinned: false,
+          reuseLastRuntimeInputs: true,
+        },
+      } as any,
+    ]
+
+    const wrapper = mount(NodeConfigModal, {
+      props: { visible: true, nodeId: 'file-import-node' },
+      global: {
+        stubs: {
+          Dialog: dialogStub,
+          DataDisplayPanel: true,
+          DataAnalysisModal: true,
+          ConfigHeader: { template: '<div />', props: ['nodeLabel', 'isPinned', 'nodeType'] },
+          ConfigFooter: { template: '<div />' },
+          ConfigForm: { template: '<div />', props: ['config', 'properties', 'upstreamFactors'] },
+          RuntimeInputs: { template: '<div />', props: ['config', 'properties', 'upstreamFactors'] },
+        },
+      },
+    })
+
+    expect(wrapper.text()).toContain('运行设置')
+    expect(wrapper.text()).not.toContain('系统选项')
+
+    const runtimeSettingsTab = wrapper.findAll('button').find((button) => button.text() === '运行设置')
+    expect(runtimeSettingsTab).toBeTruthy()
+
+    await runtimeSettingsTab!.trigger('click')
+    await nextTick()
+
+    expect(wrapper.text()).toContain('沿用上次启动参数')
+    expect(wrapper.text()).toContain('重置已保存启动参数')
+
+    const resetButton = wrapper
+      .findAll('button')
+      .find((button) => button.text().includes('重置已保存启动参数'))
+    expect(resetButton).toBeTruthy()
+
+    await resetButton!.trigger('click')
+
+    expect(store.nodes[0]?.data.reuseLastRuntimeInputs).toBe(false)
+    expect(store.nodes[0]?.data.config.fileData).toBeNull()
+    expect(store.nodes[0]?.data.config.format).toBe('csv')
   })
 })
