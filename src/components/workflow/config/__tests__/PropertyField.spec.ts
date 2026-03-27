@@ -101,6 +101,41 @@ describe('PropertyField', () => {
     expect(wrapper.get('[data-testid="multi-options-regex-toggle"]').classes()).toContain('!bg-blue-50')
   })
 
+  it('为启动方式提供独立的强调样式容器', () => {
+    setActivePinia(createPinia())
+
+    const wrapper = mount(PropertyField, {
+      props: {
+        prop: {
+          name: 'fetchMode',
+          displayName: '启动方式',
+          type: 'select-button',
+          default: 'time',
+          options: [
+            { name: '按时间查询', value: 'time' },
+            { name: '按方案查询', value: 'scheme' },
+          ],
+        },
+        modelValue: 'time',
+        upstreamFactors: [],
+      },
+      global: {
+        directives: {
+          tooltip: () => undefined,
+        },
+        stubs: {
+          SelectButton: {
+            props: ['class'],
+            template: '<div class="select-button-stub" :class="$attrs.class"></div>',
+          },
+        },
+      },
+    })
+
+    expect(wrapper.find('.select-button-hero').exists()).toBe(true)
+    expect(wrapper.find('.select-button-hero__eyebrow').text()).toContain('查询策略')
+  })
+
   it('为 multi-options 允许在过滤框回车确认自定义字段', async () => {
     setActivePinia(createPinia())
 

@@ -102,6 +102,7 @@ describe('NodeConfigModal', () => {
     expect(inputPanel.text()).toContain('inputs')
     expect(inputPanel.text()).toContain('来源一')
     expect(inputPanel.text()).toContain('来源二')
+    expect(wrapper.find('[data-testid="runtime-inputs-panel-shell"]').exists()).toBe(true)
   })
 
   it('generates a standard table result template for single-input debugging', async () => {

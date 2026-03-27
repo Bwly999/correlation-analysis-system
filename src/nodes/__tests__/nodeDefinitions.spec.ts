@@ -9,6 +9,7 @@ const {
   mockGetSchemeTree,
   mockListAuthorizedProducts,
   mockListMaterialTypes,
+  mockListProcessOptions,
   mockListTaskOrderTypes,
 } = vi.hoisted(() => ({
   mockFetchKanbanData: vi.fn(),
@@ -17,6 +18,7 @@ const {
   mockGetSchemeTree: vi.fn(),
   mockListAuthorizedProducts: vi.fn(),
   mockListMaterialTypes: vi.fn(),
+  mockListProcessOptions: vi.fn(),
   mockListTaskOrderTypes: vi.fn(),
 }))
 
@@ -27,6 +29,7 @@ vi.mock('@/services/kanbanIntegration', () => ({
   getSchemeTree: mockGetSchemeTree,
   listAuthorizedProducts: mockListAuthorizedProducts,
   listMaterialTypes: mockListMaterialTypes,
+  listProcessOptions: mockListProcessOptions,
   listTaskOrderTypes: mockListTaskOrderTypes,
 }))
 
@@ -139,6 +142,16 @@ describe('Node Definitions Execution Logic', () => {
       neighborSystemNode.properties.find((property) => property.name === 'selectedFactors')
         ?.displayName,
     ).toBe('因子全集')
+    expect(
+      neighborSystemNode.properties.find((property) => property.name === 'selectedProcesses')
+        ?.displayName,
+    ).toBe('工序')
+
+    const runtimePropertyNames = neighborSystemNode.properties
+      .filter((property) => property.isRuntimeInput)
+      .map((property) => property.name)
+
+    expect(runtimePropertyNames[runtimePropertyNames.length - 1]).toBe('selectedProcesses')
   })
   describe('file-import', () => {
     it('should parse a CSV file correctly', async () => {
@@ -892,38 +905,13 @@ describe('Node Definitions Execution Logic', () => {
       const config = {
         productName: '试制产品 A1',
         fetchMode: 'time',
-        factorTreeOptions: [
-          {
-            key: 'scene_all',
-            label: '全场景/全场景',
-            data: { nodeType: 'scene' },
-            children: [
-              {
-                key: 'PROC_A',
-                label: '涂布',
-                data: { nodeType: 'process', process: '涂布' },
-                children: [
-                  {
-                    key: 'F_TEMP',
-                    label: '温度',
-                    data: { nodeType: 'factor', factorKey: 'F_TEMP', process: '涂布' },
-                  },
-                  {
-                    key: 'F_PRESS',
-                    label: '压力',
-                    data: { nodeType: 'factor', factorKey: 'F_PRESS', process: '涂布' },
-                  },
-                ],
-              },
-            ],
-          },
-        ],
         timeRange: [new Date('2026-03-01'), new Date('2026-03-10')],
         materialType: '正极',
         selectedFactors: {
           'factor:涂布::F_TEMP': { checked: true },
           'factor:涂布::F_PRESS': { checked: true },
         },
+        selectedProcesses: ['装配'],
       }
 
       const result = await neighborSystemNode.execute(null, config)
@@ -937,7 +925,7 @@ describe('Node Definitions Execution Logic', () => {
           fetchMode: 'time',
           materialType: '正极',
           factorKeys: ['F_TEMP', 'F_PRESS'],
-          processList: ['涂布'],
+          processList: ['装配'],
         }),
       )
       expect(legacy.data).toEqual([
@@ -955,6 +943,7 @@ describe('Node Definitions Execution Logic', () => {
         fetchMode: 'sn',
         snList: 'SN001',
         productName: '试制产品 A1',
+        selectedProcesses: ['涂布'],
         selectedFactors: {},
       }
 
@@ -971,30 +960,24 @@ describe('Node Definitions Execution Logic', () => {
           productName: '试制产品 A1',
           fetchMode: 'sn',
           snList: 'SN001',
-          factorTreeOptions: [
-            {
-              key: 'scene_all',
-              label: '全场景/全场景',
-              data: { nodeType: 'scene' },
-              children: [
-                {
-                  key: 'PROC_A',
-                  label: '涂布',
-                  data: { nodeType: 'process', process: '涂布' },
-                  children: [
-                    {
-                      key: 'F_TEMP',
-                      label: '温度',
-                      data: { nodeType: 'factor', factorKey: 'F_TEMP', process: '涂布' },
-                    },
-                  ],
-                },
-              ],
-            },
-          ],
+          selectedProcesses: ['涂布'],
           selectedFactors: { 'factor:涂布::F_TEMP': { checked: true } },
         }),
       ).rejects.toThrow('未接收到宿主系统传入的访问凭证')
+    })
+
+    it('should require explicit processes from runtime input instead of inferring them from factors', async () => {
+      mockGetKanbanAuthToken.mockReturnValue('token-from-host')
+
+      await expect(
+        neighborSystemNode.execute(null, {
+          productName: '试制产品 A1',
+          fetchMode: 'sn',
+          snList: 'SN001',
+          selectedFactors: { 'factor:涂布::F_TEMP': { checked: true } },
+          selectedProcesses: [],
+        }),
+      ).rejects.toThrow('请至少选择一个工序')
     })
   })
 

@@ -5,6 +5,7 @@ import Dialog from 'primevue/dialog'
 import Button from 'primevue/button'
 import ToggleSwitch from 'primevue/toggleswitch'
 import PropertyField from './config/PropertyField.vue'
+import { applyDependencyReset } from './config/configDependencies'
 import { type WorkflowNode } from '@/utils/storage'
 import { getNodeDefinition } from '@/nodes/registry'
 import { useWorkflowStore } from '@/stores/workflowStore'
@@ -20,7 +21,7 @@ const reuseLastRuntimeInputs = ref(false)
 const store = useWorkflowStore()
 
 // 分割线逻辑
-const topHeight = ref(100)
+const topHeight = ref(228)
 const isResizing = ref(false)
 
 const startResizing = (e: MouseEvent) => {
@@ -31,8 +32,8 @@ const startResizing = (e: MouseEvent) => {
   const onMouseMove = (moveEvent: MouseEvent) => {
     if (!isResizing.value) return
     const deltaY = moveEvent.clientY - startY
-    // 限制高度范围：80px 到 400px
-    topHeight.value = Math.max(80, Math.min(400, startHeight + deltaY))
+    // 限制高度范围：180px 到 420px
+    topHeight.value = Math.max(180, Math.min(420, startHeight + deltaY))
   }
 
   const onMouseUp = () => {
@@ -154,7 +155,12 @@ watch(reuseLastRuntimeInputs, (value) => {
 })
 
 const updateConfig = (propName: string, value: any) => {
-  config.value = { ...config.value, [propName]: value }
+  config.value = applyDependencyReset({
+    properties: runtimeProperties.value,
+    previousConfig: config.value,
+    propName,
+    value,
+  })
 }
 
 const handleConfirm = () => {
@@ -258,7 +264,7 @@ const handleConfirm = () => {
         <div
           v-if="splitPaneProperties.length > 0"
           data-testid="runtime-input-first-pane"
-          class="mb-2 shrink-0 overflow-hidden"
+          class="mb-3 shrink-0 overflow-hidden"
           :style="{ height: topHeight + 'px' }"
         >
           <PropertyField

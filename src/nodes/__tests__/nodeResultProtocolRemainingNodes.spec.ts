@@ -7,6 +7,7 @@ const {
   mockGetSchemeTree,
   mockListAuthorizedProducts,
   mockListMaterialTypes,
+  mockListProcessOptions,
   mockListTaskOrderTypes,
 } = vi.hoisted(() => ({
   mockFetchKanbanData: vi.fn(),
@@ -15,6 +16,7 @@ const {
   mockGetSchemeTree: vi.fn(),
   mockListAuthorizedProducts: vi.fn(),
   mockListMaterialTypes: vi.fn(),
+  mockListProcessOptions: vi.fn(),
   mockListTaskOrderTypes: vi.fn(),
 }))
 
@@ -25,6 +27,7 @@ vi.mock('@/services/kanbanIntegration', () => ({
   getSchemeTree: mockGetSchemeTree,
   listAuthorizedProducts: mockListAuthorizedProducts,
   listMaterialTypes: mockListMaterialTypes,
+  listProcessOptions: mockListProcessOptions,
   listTaskOrderTypes: mockListTaskOrderTypes,
 }))
 
@@ -388,6 +391,7 @@ describe('remaining nodes standardized result protocol', () => {
       fetchMode: 'time',
       timeRange: [new Date('2026-03-01'), new Date('2026-03-10')],
       materialType: '正极',
+      selectedProcesses: ['涂布'],
       selectedFactors: {
         'factor:涂布::F_TEMP': { checked: true },
         'factor:涂布::F_PRESS': { checked: true },

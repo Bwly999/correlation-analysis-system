@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { type NodeProperty } from '@/nodes/types'
 import PropertyField from './PropertyField.vue'
+import { applyDependencyReset } from './configDependencies'
 
 const props = defineProps<{
   properties: NodeProperty[]
+  resetProperties?: NodeProperty[]
   config: any
   upstreamFactors: Array<{ name: string; value: string }>
   nodeId?: string | null
@@ -16,7 +18,15 @@ const emit = defineEmits<{
 }>()
 
 const updateConfig = (propName: string, value: any) => {
-  emit('update:config', { ...props.config, [propName]: value })
+  emit(
+    'update:config',
+    applyDependencyReset({
+      properties: props.resetProperties || props.properties,
+      previousConfig: props.config,
+      propName,
+      value,
+    }),
+  )
 }
 </script>
 

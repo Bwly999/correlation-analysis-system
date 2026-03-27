@@ -24,10 +24,12 @@ describe('RuntimeInputs', () => {
     })
 
     const root = wrapper.get('[data-testid="runtime-inputs-root"]')
+    const card = wrapper.get('[data-testid="runtime-inputs-card"]')
     const scrollArea = wrapper.get('[data-testid="runtime-inputs-scroll"]')
 
     expect(root.classes()).toContain('h-full')
     expect(root.classes()).toContain('min-h-0')
+    expect(card.classes()).toContain('bg-white')
     expect(scrollArea.classes()).toContain('pb-8')
   })
 })

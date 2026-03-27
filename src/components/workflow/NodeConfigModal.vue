@@ -365,14 +365,20 @@ const buildManualInputTemplate = () => {
         </div>
 
         <!-- 下部分：运行时输入 -->
-        <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <RuntimeInputs
-            v-model:config="config"
-            :properties="runtimeProperties"
-            :upstream-factors="upstreamFactors"
-            :node-id="node?.id"
-            :input-data="inputData"
-          />
+        <div class="flex min-h-0 flex-1 flex-col overflow-hidden px-4 pb-4 pt-1">
+          <div
+            data-testid="runtime-inputs-panel-shell"
+            class="flex min-h-0 flex-1 flex-col rounded-[26px] border border-white/70 bg-white/40 p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur-sm"
+          >
+            <RuntimeInputs
+              v-model:config="config"
+              :properties="runtimeProperties"
+              :reset-properties="nodeDefinition?.properties"
+              :upstream-factors="upstreamFactors"
+              :node-id="node?.id"
+              :input-data="inputData"
+            />
+          </div>
         </div>
       </div>
 
@@ -457,6 +463,7 @@ const buildManualInputTemplate = () => {
             <ConfigForm
               v-model:config="config"
               :properties="staticProperties"
+              :reset-properties="nodeDefinition?.properties"
               :upstream-factors="upstreamFactors"
               :node-id="node?.id"
               :input-data="inputData"

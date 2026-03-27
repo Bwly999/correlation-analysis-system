@@ -6,6 +6,7 @@ import {
   getSchemeTree,
   listAuthorizedProducts,
   listMaterialTypes,
+  listProcessOptions,
   listTaskOrderTypes,
 } from '@/services/kanbanIntegration'
 import { createTableResult } from '../result'
@@ -30,27 +31,13 @@ const extractCheckedLeafKeys = (
 const parseFactorSelections = (selection: Record<string, { checked?: boolean }> | undefined) => {
   const factorSelections = extractCheckedLeafKeys(selection, FACTOR_KEY_PREFIX)
 
-  const factors = factorSelections.map((key) => {
-    const rawValue = key.slice(FACTOR_KEY_PREFIX.length)
-    const [process, factorKey] = rawValue.split('::')
-
-    return {
-      process,
-      factorKey,
-      selectionKey: key,
-    }
-  })
-
   return {
-    factors,
-    factorKeys: factors
-      .map((item) => item.factorKey)
+    factorKeys: factorSelections
+      .map((key) => {
+        const segments = key.slice(FACTOR_KEY_PREFIX.length).split('::')
+        return segments[segments.length - 1]
+      })
       .filter((value): value is string => Boolean(value)),
-    processList: [
-      ...new Set(
-        factors.map((item) => item.process).filter((value): value is string => Boolean(value)),
-      ),
-    ],
   }
 }
 
@@ -66,6 +53,9 @@ const ensureDateRange = (value: Date[] | undefined) => {
 
   return [value[0].toISOString(), value[1].toISOString()] as [string, string]
 }
+
+const parseProcessSelections = (value: string[] | undefined) =>
+  Array.from(new Set((value || []).map((item) => item.trim()).filter(Boolean)))
 
 const ensureToken = () => {
   const token = getKanbanAuthToken()
@@ -194,6 +184,21 @@ export const neighborSystemNode: NodeDefinition = {
       placeholder: '请输入任务令，支持换行、英文逗号或中文逗号分隔',
       displayIf: (config) => config.fetchMode === 'taskOrder',
     },
+    {
+      name: 'selectedProcesses',
+      displayName: '工序',
+      type: 'multi-options',
+      default: [],
+      required: true,
+      isRuntimeInput: true,
+      placeholder: '请选择工序',
+      dependencies: ['productName'],
+      description: '四种启动方式都会按这里选择的工序范围查询 SN 与因子数据。',
+      resolveOptions: async ({ config }) => {
+        if (!config.productName) return []
+        return listProcessOptions(ensureToken(), config.productName)
+      },
+    },
   ],
   execute: async (_input, config) => {
     const token = ensureToken()
@@ -202,12 +207,13 @@ export const neighborSystemNode: NodeDefinition = {
       throw new Error('请选择产品名称')
     }
 
-    const { factorKeys, processList } = parseFactorSelections(config.selectedFactors)
+    const { factorKeys } = parseFactorSelections(config.selectedFactors)
     if (factorKeys.length === 0) {
       throw new Error('请至少选择一个因子进行获取')
     }
+    const processList = parseProcessSelections(config.selectedProcesses)
     if (processList.length === 0) {
-      throw new Error('无法根据所选因子识别工序信息')
+      throw new Error('请至少选择一个工序')
     }
 
     let snList: string[] | undefined

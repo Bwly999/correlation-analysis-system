@@ -74,6 +74,10 @@ const configValue = computed({
   set: (val) => emit('update:modelValue', val),
 })
 
+const isHeroSelectButton = computed(
+  () => props.prop.type === 'select-button' && props.prop.name === 'fetchMode',
+)
+
 const dependencyKey = computed(() =>
   JSON.stringify({
     dependencies: (props.prop.dependencies || []).map((key) => props.configContext?.[key] ?? null),
@@ -356,7 +360,7 @@ const getRegexToggleClass = (enabled: boolean) => [
 
 <template>
   <div class="flex flex-col gap-3 shrink-0">
-    <label v-if="prop.type !== 'collection'" class="ndv-label shrink-0">
+    <label v-if="prop.type !== 'collection' && !isHeroSelectButton" class="ndv-label shrink-0">
       {{ prop.displayName }}
       <span v-if="prop.required" class="ml-1 text-rose-500">*</span>
       <HelpCircle
@@ -624,14 +628,39 @@ const getRegexToggleClass = (enabled: boolean) => [
       }"
     />
 
-    <SelectButton
-      v-else-if="prop.type === 'select-button'"
-      v-model="configValue"
-      :options="optionSource"
-      option-label="name"
-      option-value="value"
-      class="w-full select-button-custom"
-    />
+    <div v-else-if="prop.type === 'select-button'" class="space-y-3">
+      <div
+        v-if="isHeroSelectButton"
+        class="select-button-hero rounded-2xl border border-slate-200 bg-white p-3 shadow-[0_16px_40px_-28px_rgba(15,23,42,0.35)]"
+      >
+        <div class="flex items-center gap-2">
+          <span class="select-button-hero__eyebrow">查询策略</span>
+          <div class="text-[15px] font-semibold tracking-[0.01em] text-slate-900">
+            {{ prop.displayName }}
+          </div>
+          <span v-if="prop.required" class="text-[12px] font-semibold text-rose-500">*</span>
+        </div>
+
+        <div class="mt-3 rounded-[18px] border border-slate-200/80 bg-[linear-gradient(180deg,#f8fafc_0%,#eef4ff_100%)] p-2">
+          <SelectButton
+            v-model="configValue"
+            :options="optionSource"
+            option-label="name"
+            option-value="value"
+            class="w-full select-button-custom select-button-custom--hero"
+          />
+        </div>
+      </div>
+
+      <SelectButton
+        v-else
+        v-model="configValue"
+        :options="optionSource"
+        option-label="name"
+        option-value="value"
+        class="w-full select-button-custom"
+      />
+    </div>
   </div>
 </template>
 
@@ -699,6 +728,35 @@ const getRegexToggleClass = (enabled: boolean) => [
   padding: 4px;
 }
 
+.select-button-hero {
+  position: relative;
+  overflow: hidden;
+}
+
+.select-button-hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at top right, rgba(37, 99, 235, 0.12), transparent 38%),
+    linear-gradient(135deg, rgba(15, 23, 42, 0.02), transparent 50%);
+  pointer-events: none;
+}
+
+.select-button-hero__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(248, 250, 252, 0.9);
+  padding: 0.2rem 0.5rem;
+  color: #2563eb;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 :deep(.select-button-custom .p-togglebutton) {
   flex: 1;
   border: none !important;
@@ -719,5 +777,38 @@ const getRegexToggleClass = (enabled: boolean) => [
 
 :deep(.select-button-custom .p-togglebutton::before) {
   display: none !important;
+}
+
+:deep(.select-button-custom--hero) {
+  gap: 8px;
+  background: transparent;
+  padding: 0;
+}
+
+:deep(.select-button-custom--hero .p-togglebutton) {
+  min-height: 58px;
+  border: 1px solid rgba(148, 163, 184, 0.28) !important;
+  background: rgba(255, 255, 255, 0.92) !important;
+  color: #475569 !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.01em;
+  border-radius: 16px !important;
+  box-shadow: 0 12px 24px -24px rgba(15, 23, 42, 0.55);
+}
+
+:deep(.select-button-custom--hero .p-togglebutton:hover) {
+  border-color: rgba(37, 99, 235, 0.24) !important;
+  background: rgba(255, 255, 255, 1) !important;
+  color: #0f172a !important;
+}
+
+:deep(.select-button-custom--hero .p-togglebutton.p-togglebutton-selected) {
+  border-color: rgba(37, 99, 235, 0.4) !important;
+  background: linear-gradient(135deg, #ffffff 0%, #eff6ff 100%) !important;
+  color: #0f172a !important;
+  box-shadow:
+    0 18px 32px -24px rgba(37, 99, 235, 0.65),
+    inset 0 0 0 1px rgba(37, 99, 235, 0.1) !important;
 }
 </style>
