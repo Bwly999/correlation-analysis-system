@@ -75,6 +75,26 @@ const runButtonSubtitle = computed(() => {
   if (runBarState.value === 'running') return '系统正在按顺序执行整条工作流'
   return '从触发节点启动整条工作流链路'
 })
+const isMacLikePlatform =
+  typeof navigator !== 'undefined' && /(Mac|iPhone|iPod|iPad)/i.test(navigator.platform)
+const isCanvasShortcutBlocked = computed(
+  () =>
+    isConfigVisible.value ||
+    !!store.pendingExecution ||
+    resultDashboardModal.value.visible ||
+    isWorkflowListVisible.value ||
+    isUnsavedDialogVisible.value ||
+    isHelpCenterVisible.value,
+)
+const deleteKeyCode = computed(() => (isCanvasShortcutBlocked.value ? null : 'Backspace'))
+const selectionKeyCode = computed(() => (isCanvasShortcutBlocked.value ? false : 'Shift'))
+const multiSelectionKeyCode = computed(() =>
+  isCanvasShortcutBlocked.value ? null : isMacLikePlatform ? 'Meta' : 'Control',
+)
+const zoomActivationKeyCode = computed(() =>
+  isCanvasShortcutBlocked.value ? null : isMacLikePlatform ? 'Meta' : 'Control',
+)
+const panActivationKeyCode = computed(() => (isCanvasShortcutBlocked.value ? null : 'Space'))
 
 const onWindowResize = () => {
   viewportWidth.value = window.innerWidth
@@ -370,6 +390,11 @@ onBeforeUnmount(() => {
         :select-nodes-on-drag="!store.isHistoryMode"
         :pan-on-drag="true"
         :zoom-on-scroll="true"
+        :delete-key-code="deleteKeyCode"
+        :selection-key-code="selectionKeyCode"
+        :multi-selection-key-code="multiSelectionKeyCode"
+        :zoom-activation-key-code="zoomActivationKeyCode"
+        :pan-activation-key-code="panActivationKeyCode"
         class="bg-[#f4f7fa] transition-colors duration-500"
         :class="{ 'grayscale-[0.2] sepia-[0.1]': store.isHistoryMode }"
         @dragover="onDragOverLocal"

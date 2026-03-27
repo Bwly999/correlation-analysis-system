@@ -77,6 +77,11 @@ vi.mock('@vue-flow/core', () => ({
       'selectNodesOnDrag',
       'panOnDrag',
       'zoomOnScroll',
+      'deleteKeyCode',
+      'selectionKeyCode',
+      'multiSelectionKeyCode',
+      'zoomActivationKeyCode',
+      'panActivationKeyCode',
     ],
     template: '<div class="vue-flow-stub"><slot /></div>',
   },
@@ -135,6 +140,65 @@ describe('WorkflowCanvas', () => {
     expect(vueFlow.props('nodesDraggable')).toBe(false)
     expect(vueFlow.props('nodesConnectable')).toBe(false)
     expect(vueFlow.props('elementsSelectable')).toBe(true)
+  })
+
+  it('disables canvas keyboard shortcuts while the node config modal is open', async () => {
+    const store = useWorkflowStore()
+    findNode.mockReturnValue({ id: 'node_1' })
+    store.nodes = [
+      {
+        id: 'node_1',
+        type: 'custom',
+        position: { x: 0, y: 0 },
+        label: '数据清洗',
+        data: {
+          label: '数据清洗',
+          type: 'data-cleaning',
+          category: 'action',
+          status: 'idle',
+          config: {},
+          logs: [],
+          useManualInput: false,
+          manualInput: '',
+          isPinned: false,
+        },
+      } as any,
+    ]
+    const wrapper = mount(WorkflowCanvas, {
+      global: {
+        stubs: {
+          Background: { template: '<div />' },
+          Controls: { template: '<div />' },
+          NodeSidebar: { template: '<div />' },
+          WorkflowHeader: { template: '<div />' },
+          BaseNode: { template: '<div />' },
+          LogPanel: { template: '<div />' },
+          NodeConfigModal: { template: '<div />' },
+          RuntimeInputModal: runtimeInputModalStub,
+          WorkflowResultDashboardModal: { template: '<div />' },
+          WorkflowManagerModal: workflowManagerModalStub,
+          UnsavedWorkflowDialog: { template: '<div />' },
+          HelpCenterModal: { template: '<div />' },
+          ConfirmDialog: { template: '<div />' },
+          Toast: { template: '<div />' },
+          Button: { template: '<button><slot /></button>' },
+          N8nEdge: { template: '<div />' },
+        },
+        directives: {
+          tooltip: () => undefined,
+        },
+      },
+    })
+
+    store.activeConfigNodeId = 'node_1'
+    await flushAsyncWork()
+
+    const vueFlow = wrapper.findComponent({ name: 'VueFlow' })
+    expect(vueFlow.props('deleteKeyCode')).toBe(null)
+    expect(vueFlow.props('selectionKeyCode')).toBe(false)
+    expect(vueFlow.props('multiSelectionKeyCode')).toBe(null)
+    expect(vueFlow.props('zoomActivationKeyCode')).toBe(null)
+    expect(vueFlow.props('panActivationKeyCode')).toBe(null)
   })
 
   it('renders readable chinese copy in history mode', () => {
