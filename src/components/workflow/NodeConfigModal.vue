@@ -27,6 +27,7 @@ import {
   getResultSchemaFields,
   normalizeWorkflowResult,
 } from './resultView'
+import { useHorizontalResize } from './composables/useHorizontalResize'
 import { useVerticalResize } from './composables/useVerticalResize'
 
 // PrimeVue Components
@@ -68,6 +69,19 @@ const analysisModal = ref({ visible: false, title: '', data: null })
 // 左侧边栏比例调节逻辑
 const { paneHeight: topPaneHeight, isResizing: isResizingLeft, startResizing: startResizingLeft } =
   useVerticalResize(400, { min: 150, max: 600 })
+const {
+  paneWidth: leftPaneWidth,
+  isResizing: isResizingLeftPaneWidth,
+  startResizing: startResizingLeftPaneWidth,
+} = useHorizontalResize(320, { min: 260, max: 460 })
+const {
+  paneWidth: rightPaneWidth,
+  isResizing: isResizingRightPaneWidth,
+  startResizing: startResizingRightPaneWidth,
+} = useHorizontalResize(320, { min: 260, max: 460 }, -1)
+const isResizingHorizontally = computed(
+  () => isResizingLeftPaneWidth.value || isResizingRightPaneWidth.value,
+)
 
 // 获取当前节点的定义
 const nodeDefinition = computed(() => (node.value ? getNodeDefinition(node.value.data.type) ?? null : null))
@@ -337,9 +351,20 @@ const buildManualInputTemplate = () => {
       />
     </template>
 
-    <div v-if="node" class="ndv-body flex h-full bg-white border-t -mx-6 overflow-hidden" :class="{ 'cursor-row-resize select-none': isResizingLeft }">
+    <div
+      v-if="node"
+      class="ndv-body flex h-full bg-white border-t -mx-6 overflow-hidden"
+      :class="{
+        'cursor-row-resize select-none': isResizingLeft,
+        'cursor-col-resize select-none': isResizingHorizontally,
+      }"
+    >
       <!-- 左侧边栏 -->
-      <div class="w-[320px] bg-[#f1f5f9] border-r flex flex-col overflow-hidden shrink-0">
+      <div
+        data-testid="debug-left-pane"
+        class="bg-[#f1f5f9] flex flex-col overflow-hidden shrink-0"
+        :style="{ width: `${leftPaneWidth}px` }"
+      >
         <!-- 上部分：输入数据 -->
         <div class="shrink-0 min-h-0 p-4 pb-2 flex flex-col" :style="{ height: topPaneHeight + 'px' }">
           <DataDisplayPanel
@@ -357,7 +382,8 @@ const buildManualInputTemplate = () => {
         </div>
 
         <!-- 拖拽分割线 -->
-        <div 
+        <div
+          data-testid="left-pane-vertical-resizer"
           class="group flex items-center justify-center h-4 cursor-row-resize select-none shrink-0"
           @mousedown="startResizingLeft"
         >
@@ -382,8 +408,17 @@ const buildManualInputTemplate = () => {
         </div>
       </div>
 
+      <div
+        data-testid="left-pane-horizontal-resizer"
+        class="debug-column-resizer shrink-0 cursor-col-resize"
+        :class="{ 'debug-column-resizer--active': isResizingHorizontally }"
+        @mousedown="startResizingLeftPaneWidth"
+      >
+        <div class="debug-column-resizer__grip" />
+      </div>
+
       <!-- 中心配置区域 -->
-      <div class="flex-1 flex flex-col bg-white border-r relative min-w-0">
+      <div class="flex-1 flex flex-col bg-white relative min-w-0">
         <div
           class="flex items-center justify-between border-b px-4 bg-white sticky top-0 z-10 shrink-0"
         >
@@ -486,8 +521,21 @@ const buildManualInputTemplate = () => {
         <ConfigFooter class="shrink-0" @close="emit('close')" @save="saveConfig" />
       </div>
 
+      <div
+        data-testid="right-pane-horizontal-resizer"
+        class="debug-column-resizer shrink-0 cursor-col-resize"
+        :class="{ 'debug-column-resizer--active': isResizingHorizontally }"
+        @mousedown="startResizingRightPaneWidth"
+      >
+        <div class="debug-column-resizer__grip" />
+      </div>
+
       <!-- 右侧边栏 -->
-      <div class="w-[320px] bg-[#f1f5f9] flex flex-col overflow-hidden shrink-0">
+      <div
+        data-testid="debug-right-pane"
+        class="bg-[#f1f5f9] flex flex-col overflow-hidden shrink-0"
+        :style="{ width: `${rightPaneWidth}px` }"
+      >
         <div class="flex-1 p-4 flex flex-col min-h-0">
           <DataDisplayPanel
             title="节点输出 (OUTPUT)"
@@ -548,6 +596,80 @@ const buildManualInputTemplate = () => {
 }
 .n8n-debug-btn:hover {
   background: #ff523d !important;
+}
+
+.debug-column-resizer {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  background: rgba(248, 250, 252, 0.34);
+  transition:
+    background 0.18s ease,
+    box-shadow 0.18s ease,
+    opacity 0.18s ease;
+}
+
+.debug-column-resizer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  transform: translateX(-50%);
+  background: linear-gradient(
+    180deg,
+    rgba(203, 213, 225, 0.14) 0%,
+    rgba(148, 163, 184, 0.55) 12%,
+    rgba(148, 163, 184, 0.55) 88%,
+    rgba(203, 213, 225, 0.14) 100%
+  );
+}
+
+.debug-column-resizer:hover {
+  background: rgba(239, 246, 255, 0.68);
+}
+
+.debug-column-resizer:hover::before,
+.debug-column-resizer--active::before {
+  background: linear-gradient(
+    180deg,
+    rgba(147, 197, 253, 0.12) 0%,
+    rgba(59, 130, 246, 0.74) 12%,
+    rgba(59, 130, 246, 0.74) 88%,
+    rgba(147, 197, 253, 0.12) 100%
+  );
+}
+
+.debug-column-resizer__grip {
+  position: relative;
+  z-index: 1;
+  width: 4px;
+  height: 34px;
+  border-radius: 999px;
+  background: repeating-linear-gradient(
+    180deg,
+    rgba(148, 163, 184, 0.92) 0 4px,
+    transparent 4px 8px
+  );
+  opacity: 0.72;
+  transition:
+    opacity 0.18s ease,
+    background 0.18s ease,
+    transform 0.18s ease;
+}
+
+.debug-column-resizer:hover .debug-column-resizer__grip,
+.debug-column-resizer--active .debug-column-resizer__grip {
+  opacity: 1;
+  transform: scaleY(1.02);
+  background: repeating-linear-gradient(
+    180deg,
+    rgba(59, 130, 246, 0.92) 0 4px,
+    transparent 4px 8px
+  );
 }
 </style>
 

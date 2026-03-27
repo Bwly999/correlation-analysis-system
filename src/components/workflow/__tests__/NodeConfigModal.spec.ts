@@ -460,7 +460,7 @@ describe('NodeConfigModal', () => {
       },
     })
 
-    await wrapper.find('.cursor-row-resize').trigger('mousedown', { clientY: 320 })
+    await wrapper.find('[data-testid="left-pane-vertical-resizer"]').trigger('mousedown', { clientY: 320 })
     wrapper.unmount()
 
     const mouseMoveHandler = addEventListenerSpy.mock.calls.find(([eventName]) => eventName === 'mousemove')?.[1]
@@ -470,6 +470,68 @@ describe('NodeConfigModal', () => {
     expect(mouseUpHandler).toBeTypeOf('function')
     expect(removeEventListenerSpy).toHaveBeenCalledWith('mousemove', mouseMoveHandler)
     expect(removeEventListenerSpy).toHaveBeenCalledWith('mouseup', mouseUpHandler)
+  })
+
+  it('allows dragging both horizontal dividers to resize the three-column debug layout', async () => {
+    const store = useWorkflowStore()
+    store.nodes = [
+      {
+        id: 'file-import-node',
+        type: 'custom',
+        position: { x: 0, y: 0 },
+        label: '文件导入',
+        data: {
+          label: '文件导入',
+          type: 'file-import',
+          category: 'trigger',
+          status: 'idle',
+          config: {},
+          logs: [],
+          useManualInput: false,
+          manualInput: '',
+          isPinned: false,
+        },
+      } as any,
+    ]
+
+    const wrapper = mount(NodeConfigModal, {
+      props: { visible: true, nodeId: 'file-import-node' },
+      global: {
+        stubs: {
+          Dialog: dialogStub,
+          DataDisplayPanel: true,
+          DataAnalysisModal: true,
+          ConfigHeader: { template: '<div />', props: ['nodeLabel', 'isPinned', 'nodeType'] },
+          ConfigFooter: { template: '<div />' },
+          ConfigForm: { template: '<div />', props: ['config', 'properties', 'upstreamFactors'] },
+          RuntimeInputs: { template: '<div />', props: ['config', 'properties', 'upstreamFactors'] },
+        },
+      },
+    })
+
+    const leftPane = wrapper.get('[data-testid="debug-left-pane"]')
+    const rightPane = wrapper.get('[data-testid="debug-right-pane"]')
+
+    expect(leftPane.attributes('style')).toContain('width: 320px;')
+    expect(rightPane.attributes('style')).toContain('width: 320px;')
+
+    await wrapper.find('[data-testid="left-pane-horizontal-resizer"]').trigger('mousedown', {
+      clientX: 320,
+    })
+    document.dispatchEvent(new MouseEvent('mousemove', { clientX: 420 }))
+    document.dispatchEvent(new MouseEvent('mouseup'))
+    await nextTick()
+
+    expect(leftPane.attributes('style')).toContain('width: 420px;')
+
+    await wrapper.find('[data-testid="right-pane-horizontal-resizer"]').trigger('mousedown', {
+      clientX: 960,
+    })
+    document.dispatchEvent(new MouseEvent('mousemove', { clientX: 880 }))
+    document.dispatchEvent(new MouseEvent('mouseup'))
+    await nextTick()
+
+    expect(rightPane.attributes('style')).toContain('width: 400px;')
   })
 
   it('shows runtime settings for trigger nodes and allows resetting saved runtime inputs', async () => {

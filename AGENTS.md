@@ -39,6 +39,7 @@ pnpm build
 
 - 提交前至少应跑与改动相关的测试
 - 若改动影响工作流链路、节点协议、viewer 或持久化，默认需要补跑 `pnpm test:unit` 与 `pnpm build`
+- 纯 UI / 视觉样式优化默认不要求执行 TDD 测试；此类改动优先做最小必要验证，例如 `pnpm build`、局部交互检查或定向界面核对
 
 ## 3.1 PrimeVue 文档入口
 
