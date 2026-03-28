@@ -943,6 +943,32 @@ describe('Node Definitions Execution Logic', () => {
       ).rejects.toThrow('所选字段缺少足够的有效样本，无法完成相关性分析')
     })
 
+    it('should flag high collinearity between x fields when they are strongly correlated', async () => {
+      const input = createTableResult([
+        { target: 10, f1: 1, f2: 2, f3: 8 },
+        { target: 12, f1: 2, f2: 4, f3: 7 },
+        { target: 14, f1: 3, f2: 6, f3: 6 },
+        { target: 16, f1: 4, f2: 8, f3: 5 },
+        { target: 18, f1: 5, f2: 10, f3: 4 },
+        { target: 20, f1: 6, f2: 12, f3: 3 },
+      ])
+
+      const result = await pearsonNode.execute(input, {
+        xFields: ['f1', 'f2', 'f3'],
+        yFields: ['target'],
+        topN: 5,
+      })
+
+      const legacy = asLegacy(result)
+      const collinearityRisk = legacy.meta?.risks?.find(
+        (risk: any) => risk.code === 'high_collinearity',
+      )
+
+      expect(collinearityRisk).toBeDefined()
+      expect(collinearityRisk.title).toBe('字段高度共线')
+      expect(collinearityRisk.message).toContain('f1 / f2')
+    })
+
     describe('correlation validation for other methods', () => {
       it('spearman rejects non-numeric selected fields', async () => {
         const input = createTableResult([

@@ -507,12 +507,39 @@ const collectOutlierSensitiveFields = (rows: NumericRow[], fields: string[]) => 
   })
 }
 
+const collectCollinearPairs = (
+  method: CorrelationMethod,
+  rows: NumericRow[],
+  xFields: string[],
+) => {
+  const pairs: string[] = []
+
+  for (let leftIndex = 0; leftIndex < xFields.length - 1; leftIndex += 1) {
+    const leftField = xFields[leftIndex]
+    if (!leftField) continue
+
+    for (let rightIndex = leftIndex + 1; rightIndex < xFields.length; rightIndex += 1) {
+      const rightField = xFields[rightIndex]
+      if (!rightField) continue
+
+      const { xValues, yValues } = getPairSeries(rows, leftField, rightField)
+      const stats = calculateCorrelation(method, xValues, yValues)
+
+      if (stats.sampleSize >= 4 && Math.abs(stats.correlation) >= 0.85) {
+        pairs.push(`${leftField} / ${rightField}`)
+      }
+    }
+  }
+
+  return pairs
+}
+
 const buildCorrelationRisks = (
+  method: CorrelationMethod,
   rows: NumericRow[],
   xFields: string[],
   yFields: string[],
   metrics: CorrelationMetrics,
-  pairDetails: PairDetail[],
 ) => {
   const risks: CorrelationRisk[] = []
   const relatedFields = [...new Set([...xFields, ...yFields])]
@@ -547,16 +574,7 @@ const buildCorrelationRisks = (
     })
   }
 
-  const collinearPairs = pairDetails
-    .filter(
-      (item) =>
-        item.sampleSize >= 4 &&
-        item.xField !== item.yField &&
-        xFields.includes(item.xField) &&
-        xFields.includes(item.yField) &&
-        Math.abs(item.correlation) >= 0.85,
-    )
-    .map((item) => `${item.xField} / ${item.yField}`)
+  const collinearPairs = collectCollinearPairs(method, rows, xFields)
 
   if (collinearPairs.length > 0) {
     risks.push({
@@ -762,7 +780,7 @@ export const executeCorrelationAnalysis = async (
     missingCellCount: incompleteFieldCount,
     missingCellRatio: Number(missingCellRatio.toFixed(4)),
   }
-  const risks = buildCorrelationRisks(normalizedRows, xFields, yFields, metrics, pairDetails)
+  const risks = buildCorrelationRisks(method, normalizedRows, xFields, yFields, metrics)
   const riskLines =
     risks.length > 0
       ? risks.map((risk) => `${risk.title}：${risk.message}`)
