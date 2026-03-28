@@ -32,5 +32,8 @@ const postAnalysis = async <T>(path: string, body: AnalysisRequestBody): Promise
 export const requestLassoAnalysis = <T>(body: AnalysisRequestBody) =>
   postAnalysis<T>('/analysis/lasso', body)
 
+export const requestMultipleLinearRegressionAnalysis = <T>(body: AnalysisRequestBody) =>
+  postAnalysis<T>('/analysis/multiple-linear-regression', body)
+
 export const requestXgboostShapAnalysis = <T>(body: AnalysisRequestBody) =>
   postAnalysis<T>('/analysis/xgboost-shap', body)

@@ -46,6 +46,7 @@ import { chartDisplayNode } from '../definitions/chartDisplay'
 import { dataExportNode } from '../definitions/dataExport'
 import { fieldSelectionNode } from '../definitions/fieldSelection'
 import { lassoNode } from '../definitions/lasso'
+import { multipleLinearRegressionNode } from '../definitions/multipleLinearRegression'
 import { pearsonNode } from '../definitions/pearson'
 import { sortNode } from '../definitions/sort'
 import { spearmanNode } from '../definitions/spearman'
@@ -802,6 +803,61 @@ describe('Node Definitions Execution Logic', () => {
       expect(legacy.report.sections[1].title).toBe('特征系数排序')
       expect(legacy.report.sections[2].title).toBe('正则路径')
       expect(global.fetch).toHaveBeenCalledWith('/api/analysis/lasso', expect.any(Object))
+    })
+
+    it('should normalize multiple linear regression backend results', async () => {
+      const input = createTableResult([
+        { target: 10, f1: 1, f2: 3 },
+        { target: 14, f1: 2, f2: 4 },
+        { target: 18, f1: 3, f2: 5 },
+      ])
+      const config = { targetField: 'target', factorNames: ['f1', 'f2'] }
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          results: {
+            summary: {
+              targetField: 'target',
+              sampleCount: 36,
+              featureCount: 2,
+              r2: 0.9821,
+              adjustedR2: 0.9803,
+              mae: 0.3562,
+              intercept: 1.245,
+            },
+            coefficients: [
+              { name: 'f1', coefficient: 2.5, absCoefficient: 2.5, pValue: 0.0001, rank: 1 },
+              { name: 'f2', coefficient: 1.1, absCoefficient: 1.1, pValue: 0.0132, rank: 2 },
+            ],
+            predictions: {
+              actual: [10, 14, 18],
+              predicted: [10.2, 13.8, 18.1],
+            },
+            residuals: {
+              fitted: [10.2, 13.8, 18.1],
+              residuals: [-0.2, 0.2, -0.1],
+            },
+          },
+        }),
+      }) as any
+
+      const result = await multipleLinearRegressionNode.execute(input, config)
+
+      const legacy = asLegacy(result)
+
+      expect(legacy.viewType).toBe('report')
+      expect(legacy.report.title).toBe('多元线性回归分析')
+      expect(legacy.metrics.adjustedR2).toBe(0.9803)
+      expect(legacy.metrics.intercept).toBe(1.245)
+      expect(legacy.report.sections[0].type).toBe('summary')
+      expect(legacy.report.sections[1].title).toBe('回归系数排序')
+      expect(legacy.report.sections[2].title).toBe('预测值对比')
+      expect(legacy.report.sections[3].title).toBe('残差分布')
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/analysis/multiple-linear-regression',
+        expect.any(Object),
+      )
     })
 
     it('should calculate pearson correlations from numeric data', async () => {

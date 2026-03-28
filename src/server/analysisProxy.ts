@@ -4,6 +4,7 @@ const DEFAULT_PYTHON_ANALYSIS_API_BASE_URL = 'http://127.0.0.1:8000'
 
 const ANALYSIS_ROUTE_MAP = {
   lasso: '/analyze/lasso',
+  'multiple-linear-regression': '/analyze/multiple-linear-regression',
   'xgboost-shap': '/analyze/xgboost-shap',
 } as const
 

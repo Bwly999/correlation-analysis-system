@@ -5,11 +5,17 @@ from fastapi.middleware.cors import CORSMiddleware
 
 try:
     from backend.algorithms.lasso_analysis import analyze_lasso as run_lasso_analysis
+    from backend.algorithms.multiple_linear_regression_analysis import (
+        analyze_multiple_linear_regression as run_multiple_linear_regression_analysis,
+    )
     from backend.algorithms.xgboost_shap_analysis import (
         analyze_xgboost_shap as run_xgboost_shap_analysis,
     )
 except ImportError:
     from algorithms.lasso_analysis import analyze_lasso as run_lasso_analysis
+    from algorithms.multiple_linear_regression_analysis import (
+        analyze_multiple_linear_regression as run_multiple_linear_regression_analysis,
+    )
     from algorithms.xgboost_shap_analysis import (
         analyze_xgboost_shap as run_xgboost_shap_analysis,
     )
@@ -65,6 +71,25 @@ async def analyze_lasso(
 ):
     try:
         return _success_response(run_lasso_analysis(data, target, config))
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error))
+    except HTTPException as error:
+        raise error
+    except Exception as error:
+        import traceback
+
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f'算法执行失败: {str(error)}')
+
+
+@app.post('/analyze/multiple-linear-regression')
+async def analyze_multiple_linear_regression(
+    data: List[Dict[str, Any]] = Body(...),
+    target: str = Body(...),
+    config: Dict[str, Any] = Body({}),
+):
+    try:
+        return _success_response(run_multiple_linear_regression_analysis(data, target, config))
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error))
     except HTTPException as error:

@@ -530,6 +530,42 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       recommendedNextNodes: ['data-export'],
     },
   ),
+  'multiple-linear-regression': createEntry(
+    {
+      summary: '对多个数值因子做多元线性回归，查看拟合质量、系数排序和残差表现。',
+      whenToUse: ['你需要同时评估多个因子对目标字段的线性解释能力，而不是只看两两相关。'],
+      inputGuide: ['需要上游提供表格数据。', '输入字段应尽量为数值型，并明确目标变量字段。', '依赖本地 Python 后端分析服务。'],
+      parameterGuide: [
+        {
+          property: 'targetField',
+          title: '目标变量',
+          content: '选择要被解释的目标字段，通常是产出指标、评分或连续数值结果。',
+        },
+        {
+          property: 'factorNames',
+          title: '影响因子',
+          content: '建议优先选择已完成清洗和缩放的数值字段，避免把明显无效字段直接送入回归。',
+        },
+      ],
+      outputGuide: ['输出结果是回归分析报告，包含模型摘要、回归系数排序、预测值对比和残差分布。'],
+      nextSteps: ['如果发现共线性明显，建议继续做 VIF 检测。', '如果想验证非线性关系，可继续尝试 Xgboost + SHAP。'],
+      commonIssues: [
+        {
+          title: '模型无法运行或指标很差',
+          resolution: '先检查目标字段是否有足够波动，再确认影响因子是否为数值字段，并尽量先做数据清洗。',
+        },
+      ],
+    },
+    {
+      useCases: ['多因子线性解释', '回归基线分析', '多元线性建模'],
+      keywords: ['多元线性回归', '线性回归', '回归系数', '残差'],
+      workflowRoles: ['分析终点'],
+      inputKinds: ['table'],
+      outputKinds: ['report'],
+      recommendedPrevNodes: ['data-cleaning', 'field-selection', 'data-aggregation'],
+      recommendedNextNodes: ['data-export'],
+    },
+  ),
   'xgboost-shap': createEntry(
     {
       summary: '通过 Xgboost 结合 SHAP 值解释模型，查看各因子对目标的贡献和趋势。',

@@ -185,6 +185,50 @@ const createCorrelationReport = () => ({
   },
 })
 
+const createRegressionReport = () => ({
+  report: {
+    title: '多元线性回归分析',
+    metadata: {
+      targetField: 'target',
+      sampleCount: 48,
+      featureCount: 2,
+      adjustedR2: 0.9524,
+    },
+    sections: [
+      {
+        key: 'summary',
+        type: 'summary',
+        title: '模型摘要',
+        cards: [
+          { label: '目标字段', value: 'target' },
+          { label: '样本量', value: 48 },
+          { label: '调整后 R²', value: 0.9524 },
+        ],
+      },
+      {
+        key: 'coefficients',
+        type: 'chart',
+        title: '回归系数排序',
+        option: {
+          xAxis: { type: 'value', name: '回归系数' },
+          yAxis: { type: 'category', data: ['f1', 'f2'] },
+          series: [{ type: 'bar', data: [{ value: 2.1 }, { value: 0.8 }] }],
+        },
+      },
+      {
+        key: 'predictions',
+        type: 'chart',
+        title: '预测值对比',
+        option: {
+          xAxis: { type: 'value', name: '实际值' },
+          yAxis: { type: 'value', name: '预测值' },
+          series: [{ type: 'scatter', data: [[10, 10.2], [12, 11.9]] }],
+        },
+      },
+    ],
+  },
+})
+
 describe('ReportViewer', () => {
   it('renders shap main report sections and supplement panel', () => {
     const wrapper = mount(ReportViewer, {
@@ -262,5 +306,18 @@ describe('ReportViewer', () => {
     expect(wrapper.text()).toContain('样本量偏少')
     expect(wrapper.text()).toContain('字段高度共线')
     expect(wrapper.findAll('[data-test="report-risk-item"]')).toHaveLength(2)
+  })
+
+  it('renders regression summary and chart sections with the generic report viewer', () => {
+    const wrapper = mount(ReportViewer, {
+      props: { data: createRegressionReport() },
+    })
+
+    expect(wrapper.text()).toContain('多元线性回归分析')
+    expect(wrapper.text()).toContain('模型摘要')
+    expect(wrapper.text()).toContain('调整后 R²')
+    expect(wrapper.text()).toContain('回归系数排序')
+    expect(wrapper.text()).toContain('预测值对比')
+    expect(wrapper.findAll('.chart-stub')).toHaveLength(2)
   })
 })

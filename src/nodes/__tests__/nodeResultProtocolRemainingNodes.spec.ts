@@ -39,6 +39,7 @@ import { jsTransformNode } from '../definitions/jsTransform'
 import { dataLimitNode } from '../definitions/dataLimit'
 import { xgboostShapNode } from '../definitions/xgboostShap'
 import { lassoNode } from '../definitions/lasso'
+import { multipleLinearRegressionNode } from '../definitions/multipleLinearRegression'
 import { pearsonNode } from '../definitions/pearson'
 import { fieldSelectionNode } from '../definitions/fieldSelection'
 import { sortNode } from '../definitions/sort'
@@ -346,6 +347,65 @@ describe('remaining nodes standardized result protocol', () => {
     expect(result.payload.sections[1].option.series[0].type).toBe('bar')
     expect(result.payload.sections[2].option.series[0].type).toBe('line')
     expect(global.fetch).toHaveBeenCalledWith('/api/analysis/lasso', expect.any(Object))
+  })
+
+  it('multiple-linear-regression should return a standardized report result from backend payload', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        results: {
+          summary: {
+            targetField: 'target',
+            sampleCount: 48,
+            featureCount: 2,
+            r2: 0.9561,
+            adjustedR2: 0.9524,
+            mae: 0.4182,
+            intercept: 0.9321,
+          },
+          coefficients: [
+            { name: 'f1', coefficient: 2.3, absCoefficient: 2.3, pValue: 0.0001, rank: 1 },
+            { name: 'f2', coefficient: 0.8, absCoefficient: 0.8, pValue: 0.0215, rank: 2 },
+          ],
+          predictions: {
+            actual: [10, 12, 14],
+            predicted: [10.1, 11.9, 13.8],
+          },
+          residuals: {
+            fitted: [10.1, 11.9, 13.8],
+            residuals: [-0.1, 0.1, 0.2],
+          },
+        },
+      }),
+    }) as any
+
+    const result = await multipleLinearRegressionNode.execute(
+      createTableResult([
+        { target: 10, f1: 1, f2: 2 },
+        { target: 12, f1: 2, f2: 3 },
+        { target: 14, f1: 3, f2: 4 },
+      ]),
+      { targetField: 'target', factorNames: ['f1', 'f2'] },
+    )
+
+    expect(result.kind).toBe('report')
+    expect(result.payload.title).toBe('多元线性回归分析')
+    expect(result.meta?.metrics).toMatchObject({
+      targetField: 'target',
+      sampleCount: 48,
+      featureCount: 2,
+      adjustedR2: 0.9524,
+      intercept: 0.9321,
+    })
+    expect(result.payload.sections[0].type).toBe('summary')
+    expect(result.payload.sections[1].option.series[0].type).toBe('bar')
+    expect(result.payload.sections[2].option.series[0].type).toBe('scatter')
+    expect(result.payload.sections[3].option.series[0].type).toBe('scatter')
+    expect(result.preview?.viewer).toBe('report-viewer')
+    expect(global.fetch).toHaveBeenCalledWith(
+      '/api/analysis/multiple-linear-regression',
+      expect.any(Object),
+    )
   })
 
   it('correlation nodes should return standardized report results', async () => {
