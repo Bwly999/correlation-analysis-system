@@ -826,12 +826,19 @@ describe('Node Definitions Execution Logic', () => {
       expect(legacy.metrics.xFieldCount).toBe(2)
       expect(legacy.metrics.yFieldCount).toBe(1)
       expect(legacy.metrics.numericFieldCount).toBe(3)
-      expect(legacy.report.sections).toHaveLength(4)
+      expect(legacy.metrics.minPairSampleSize).toBe(5)
+      expect(legacy.metrics.maxPairSampleSize).toBe(5)
+      expect(legacy.report.sections).toHaveLength(5)
       expect(legacy.report.sections[1].option.series[0].type).toBe('heatmap')
       expect(legacy.report.sections[1].option.visualMap.top).toBe(8)
       expect(legacy.report.sections[2].controls.select.options).toEqual(['target'])
       expect(legacy.report.sections[2].option.series[0].data[0].value).toBe(1)
-      expect(legacy.report.sections[3].content).toContain('Y字段')
+      expect(legacy.report.sections[0].type).toBe('summary')
+      expect(legacy.report.sections[0].cards[0].label).toBe('样本行数')
+      expect(legacy.report.sections[3].title).toBe('结果可信提示')
+      expect(legacy.report.sections[3].type).toBe('risk-list')
+      expect(legacy.report.sections[4].content).toContain('Y字段')
+      expect(Array.isArray(legacy.meta?.risks)).toBe(true)
     })
 
     it('should calculate spearman correlations for monotonic but non-linear data', async () => {
@@ -858,7 +865,7 @@ describe('Node Definitions Execution Logic', () => {
       expect(legacy.report.sections[2].option.xAxis.name).toBe('Spearman ρ')
       expect(legacy.report.sections[2].option.series[0].data[0].value).toBe(1)
       expect(legacy.report.sections[2].option.series[0].data[1].value).toBe(-1)
-      expect(legacy.report.sections[3].content).toContain('target')
+      expect(legacy.report.sections[4].content).toContain('target')
     })
 
     it('should calculate kendall correlations and rank inverse monotonic fields', async () => {
@@ -885,7 +892,153 @@ describe('Node Definitions Execution Logic', () => {
       expect(legacy.report.sections[2].option.xAxis.name).toBe('Kendall τ')
       expect(legacy.report.sections[2].option.series[0].data[0].value).toBe(-1)
       expect(legacy.report.sections[2].option.series[0].data[1].value).toBe(1)
-      expect(legacy.report.sections[3].content).toContain('f1')
+      expect(legacy.report.sections[4].content).toContain('f1')
+    })
+
+    it('should reject non-numeric selected fields for correlation analysis', async () => {
+      const input = createTableResult([
+        { target: 1, f1: 1, category: 'A' },
+        { target: 2, f1: 2, category: 'B' },
+        { target: 3, f1: 3, category: 'C' },
+      ])
+
+      await expect(
+        pearsonNode.execute(input, {
+          xFields: ['category'],
+          yFields: ['target'],
+          topN: 5,
+        }),
+      ).rejects.toThrow('X 字段中以下字段不支持相关性分析：category')
+    })
+
+    it('should reject missing selected fields for correlation analysis', async () => {
+      const input = createTableResult([
+        { target: 1, f1: 1 },
+        { target: 2, f1: 2 },
+        { target: 3, f1: 3 },
+      ])
+
+      await expect(
+        pearsonNode.execute(input, {
+          xFields: ['missingField'],
+          yFields: ['target'],
+          topN: 5,
+        }),
+      ).rejects.toThrow('X 字段中以下字段不存在：missingField')
+    })
+
+    it('should report insufficient data quality separately from field type errors', async () => {
+      const input = createTableResult([
+        { target: 1, f1: 1 },
+        { target: null, f1: 2 },
+        { target: 3, f1: null },
+      ])
+
+      await expect(
+        pearsonNode.execute(input, {
+          xFields: ['f1'],
+          yFields: ['target'],
+          topN: 5,
+        }),
+      ).rejects.toThrow('所选字段缺少足够的有效样本，无法完成相关性分析')
+    })
+
+    describe('correlation validation for other methods', () => {
+      it('spearman rejects non-numeric selected fields', async () => {
+        const input = createTableResult([
+          { target: 1, f1: 1, category: 'A' },
+          { target: 2, f1: 2, category: 'B' },
+          { target: 3, f1: 3, category: 'C' },
+        ])
+
+        await expect(
+          spearmanNode.execute(input, {
+            xFields: ['category'],
+            yFields: ['target'],
+            topN: 5,
+          }),
+        ).rejects.toThrow('X 字段中以下字段不支持相关性分析：category')
+      })
+
+      it('spearman rejects missing selected fields', async () => {
+        const input = createTableResult([
+          { target: 1, f1: 1 },
+          { target: 2, f1: 2 },
+          { target: 3, f1: 3 },
+        ])
+
+        await expect(
+          spearmanNode.execute(input, {
+            xFields: ['f1'],
+            yFields: ['missingField'],
+            topN: 5,
+          }),
+        ).rejects.toThrow('Y 字段中以下字段不存在：missingField')
+      })
+
+      it('spearman surfaces insufficient sample quality', async () => {
+        const input = createTableResult([
+          { target: 1, f1: 1 },
+          { target: null, f1: 2 },
+          { target: 3, f1: null },
+        ])
+
+        await expect(
+          spearmanNode.execute(input, {
+            xFields: ['f1'],
+            yFields: ['target'],
+            topN: 5,
+          }),
+        ).rejects.toThrow('所选字段缺少足够的有效样本，无法完成相关性分析')
+      })
+
+      it('kendall rejects non-numeric selected fields', async () => {
+        const input = createTableResult([
+          { target: 1, f1: 1, category: 'A' },
+          { target: 2, f1: 2, category: 'B' },
+          { target: 3, f1: 3, category: 'C' },
+        ])
+
+        await expect(
+          kendallNode.execute(input, {
+            xFields: ['category'],
+            yFields: ['target'],
+            topN: 5,
+          }),
+        ).rejects.toThrow('X 字段中以下字段不支持相关性分析：category')
+      })
+
+      it('kendall rejects missing selected fields', async () => {
+        const input = createTableResult([
+          { target: 1, f1: 1 },
+          { target: 2, f1: 2 },
+          { target: 3, f1: 3 },
+        ])
+
+        await expect(
+          kendallNode.execute(input, {
+            xFields: ['f1'],
+            yFields: ['missingField'],
+            topN: 5,
+          }),
+        ).rejects.toThrow('Y 字段中以下字段不存在：missingField')
+      })
+
+      it('kendall surfaces insufficient sample quality', async () => {
+        const input = createTableResult([
+          { target: 1, f1: 1 },
+          { target: null, f1: 2 },
+          { target: 3, f1: null },
+        ])
+
+        await expect(
+          kendallNode.execute(input, {
+            xFields: ['f1'],
+            yFields: ['target'],
+            topN: 5,
+          }),
+        ).rejects.toThrow('所选字段缺少足够的有效样本，无法完成相关性分析')
+      })
     })
   })
 

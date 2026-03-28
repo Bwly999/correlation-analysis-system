@@ -365,7 +365,12 @@ describe('remaining nodes standardized result protocol', () => {
     expect(pearson.kind).toBe('report')
     expect(pearson.payload.title).toBe('Pearson 相关系数矩阵分析')
     expect(pearson.meta?.metrics?.yFields).toEqual(['target'])
+    expect(pearson.meta?.metrics?.minPairSampleSize).toBe(5)
+    expect(pearson.payload.sections?.[0]?.type).toBe('summary')
     expect(pearson.payload.sections?.[2]?.controls?.select?.options).toEqual(['target'])
+    expect(pearson.payload.sections?.[3]?.title).toBe('结果可信提示')
+    expect(pearson.payload.sections?.[3]?.type).toBe('risk-list')
+    expect(Array.isArray(pearson.meta?.risks)).toBe(true)
 
     expect(spearman.kind).toBe('report')
     expect(spearman.payload.sections[1].option.series[0].name).toBe('Spearman ρ')

@@ -3,11 +3,18 @@ import { type NodeProperty } from '@/nodes/types'
 import PropertyField from './PropertyField.vue'
 import { applyDependencyReset } from './configDependencies'
 
+type UpstreamFactorOption = {
+  name: string
+  value: string
+  dataType?: string
+  nullable?: boolean
+}
+
 const props = defineProps<{
   properties: NodeProperty[]
   resetProperties?: NodeProperty[]
   config: any
-  upstreamFactors: Array<{ name: string; value: string }>
+  upstreamFactors: UpstreamFactorOption[]
   nodeId?: string | null
   inputData?: unknown
 }>()

@@ -198,17 +198,22 @@ const upstreamFactors = computed(() => {
   }
   const schemaFields = getResultSchemaFields(data)
   if (schemaFields.length > 0) {
-    return schemaFields.map((field) => ({ name: field.name, value: field.name }))
+    return schemaFields.map((field) => ({
+      name: field.name,
+      value: field.name,
+      dataType: field.type,
+      nullable: field.nullable,
+    }))
   }
 
   const rows = getResultRows(data)
   const sample = rows[0]
   if (sample && typeof sample === 'object') {
-    return Object.keys(sample).map((key) => ({ name: key, value: key }))
+    return Object.keys(sample).map((key) => ({ name: key, value: key, dataType: 'unknown' }))
   }
 
   if (Array.isArray(data) && data[0] && typeof data[0] === 'object') {
-    return Object.keys(data[0]).map((key) => ({ name: key, value: key }))
+    return Object.keys(data[0]).map((key) => ({ name: key, value: key, dataType: 'unknown' }))
   }
 
   return []

@@ -107,8 +107,14 @@ const createCorrelationReport = () => ({
     sections: [
       {
         key: 'summary',
-        type: 'text',
+        type: 'summary',
         title: '分析摘要',
+        cards: [
+          { label: '样本行数', value: 128 },
+          { label: 'X 字段数', value: 2 },
+          { label: 'Y 字段数', value: 2 },
+          { label: '风险提示数', value: 2 },
+        ],
         content: '本次共分析 2 个 X 字段与 2 个 Y 字段。',
       },
       {
@@ -157,6 +163,23 @@ const createCorrelationReport = () => ({
             series: [{ type: 'bar', data: [{ value: 0.25 }, { value: 0.61 }] }],
           },
         },
+      },
+      {
+        key: 'risks',
+        type: 'risk-list',
+        title: '结果可信提示',
+        items: [
+          {
+            level: 'warning',
+            title: '样本量偏少',
+            message: '当前最小成对样本量为 6，结果可能波动较大。',
+          },
+          {
+            level: 'warning',
+            title: '字段高度共线',
+            message: '部分 X 字段之间高度相关，进入回归前建议结合 VIF 继续检查。',
+          },
+        ],
       },
     ],
   },
@@ -225,5 +248,19 @@ describe('ReportViewer', () => {
 
     await truncateInputs[1]!.setValue('4')
     expect(wrapper.findAll('.chart-stub')[1]?.attributes('data-preview-label')).toContain('超长字段...')
+  })
+
+  it('renders correlation summary cards and risk list', () => {
+    const wrapper = mount(ReportViewer, {
+      props: { data: createCorrelationReport() },
+    })
+
+    expect(wrapper.text()).toContain('样本行数')
+    expect(wrapper.text()).toContain('128')
+    expect(wrapper.text()).toContain('风险提示数')
+    expect(wrapper.text()).toContain('结果可信提示')
+    expect(wrapper.text()).toContain('样本量偏少')
+    expect(wrapper.text()).toContain('字段高度共线')
+    expect(wrapper.findAll('[data-test="report-risk-item"]')).toHaveLength(2)
   })
 })

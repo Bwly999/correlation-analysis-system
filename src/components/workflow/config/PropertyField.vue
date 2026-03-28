@@ -49,7 +49,12 @@ defineOptions({
 const props = defineProps<{
   prop: NodeProperty
   modelValue: any
-  upstreamFactors: Array<{ name: string; value: string }>
+  upstreamFactors: Array<{
+    name: string
+    value: string
+    dataType?: string
+    nullable?: boolean
+  }>
   configContext?: Record<string, any>
   nodeId?: string | null
   inputData?: unknown
@@ -125,8 +130,32 @@ const optionSource = computed(() => {
   return props.prop.options || []
 })
 
+const requiresNumericAnalysisField = computed(() =>
+  ['xFields', 'yFields', 'targetField', 'factorNames'].includes(props.prop.name),
+)
+
+const normalizedOptionSource = computed(() => {
+  const rawOptions = Array.isArray(optionSource.value) ? optionSource.value : []
+  return rawOptions.map((option) => {
+    if (!option || typeof option !== 'object') return option
+
+    const normalizedOption = { ...(option as Record<string, any>) }
+    if (
+      requiresNumericAnalysisField.value &&
+      props.prop.useUpstreamFactors &&
+      normalizedOption.dataType &&
+      normalizedOption.dataType !== 'number'
+    ) {
+      normalizedOption.disabled = true
+      normalizedOption.hint = normalizedOption.hint || '仅支持数值字段参与当前分析'
+    }
+
+    return normalizedOption
+  })
+})
+
 const normalizedMultiOptionsSource = computed(() => {
-  const baseOptions = Array.isArray(optionSource.value) ? [...optionSource.value] : []
+  const baseOptions = Array.isArray(normalizedOptionSource.value) ? [...normalizedOptionSource.value] : []
   const selectedValues = Array.isArray(configValue.value) ? configValue.value : []
   const existingValues = new Set(
     baseOptions.map((option) =>
@@ -144,6 +173,18 @@ const normalizedMultiOptionsSource = computed(() => {
   })
 
   return baseOptions
+})
+
+const nonAnalyzableUpstreamFactors = computed(() => {
+  if (!requiresNumericAnalysisField.value || !props.prop.useUpstreamFactors) return []
+
+  return normalizedOptionSource.value.filter(
+    (option) =>
+      option &&
+      typeof option === 'object' &&
+      'disabled' in option &&
+      Boolean((option as Record<string, any>).disabled),
+  ) as Array<Record<string, any>>
 })
 
 const searchFactors = (event: any) => {
@@ -452,9 +493,10 @@ const getRegexToggleClass = (enabled: boolean) => [
     <Select
       v-else-if="prop.type === 'options'"
       v-model="configValue"
-      :options="optionSource"
+      :options="normalizedOptionSource"
       option-label="name"
       option-value="value"
+      option-disabled="disabled"
       :filter="true"
       :filter-match-mode="optionFilterMatchMode"
       :filter-input-props="optionsFilterInputProps"
@@ -482,6 +524,7 @@ const getRegexToggleClass = (enabled: boolean) => [
       :options="normalizedMultiOptionsSource"
       option-label="name"
       option-value="value"
+      option-disabled="disabled"
       :filter="true"
       :filter-match-mode="multiOptionsFilterMatchMode"
       :filter-input-props="multiOptionsFilterInputProps"
@@ -552,6 +595,14 @@ const getRegexToggleClass = (enabled: boolean) => [
       @item-select="() => reopenAutoComplete()"
       @keydown.enter="onTagsEnter"
     />
+
+    <div
+      v-if="nonAnalyzableUpstreamFactors.length > 0"
+      class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-700"
+    >
+      以下字段暂不支持当前分析：
+      {{ nonAnalyzableUpstreamFactors.map((item) => item.name).join('、') }}
+    </div>
 
     <MonacoEditor
       v-else-if="prop.type === 'json'"

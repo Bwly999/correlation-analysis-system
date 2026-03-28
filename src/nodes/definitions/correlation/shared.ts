@@ -25,6 +25,18 @@ type CorrelationMetrics = {
   yFieldCount: number
   significantRelationCount: number
   strongRelationCount: number
+  minPairSampleSize: number
+  maxPairSampleSize: number
+  missingCellCount: number
+  missingCellRatio: number
+}
+
+type CorrelationRisk = {
+  code: 'low_sample_size' | 'high_missing_ratio' | 'outlier_sensitive' | 'high_collinearity'
+  level: 'info' | 'warning' | 'danger'
+  title: string
+  message: string
+  fields?: string[]
 }
 
 type CorrelationMethodMeta = {
@@ -116,6 +128,35 @@ const mean = (values: number[]) => values.reduce((sum, value) => sum + value, 0)
 const variance = (values: number[], avg: number) => {
   if (values.length <= 1) return 0
   return values.reduce((sum, value) => sum + (value - avg) ** 2, 0) / (values.length - 1)
+}
+
+const getSortedNumbers = (values: number[]) => [...values].sort((left, right) => left - right)
+
+const getMedian = (values: number[]) => {
+  if (values.length === 0) return null
+  const sorted = getSortedNumbers(values)
+  const middle = Math.floor(sorted.length / 2)
+
+  if (sorted.length % 2 === 0) {
+    const left = sorted[middle - 1]
+    const right = sorted[middle]
+    if (left === undefined || right === undefined) return null
+    return (left + right) / 2
+  }
+
+  return sorted[middle] ?? null
+}
+
+const getQuartiles = (values: number[]) => {
+  if (values.length < 4) return null
+  const sorted = getSortedNumbers(values)
+  const middle = Math.floor(sorted.length / 2)
+  const lowerHalf = sorted.slice(0, middle)
+  const upperHalf = sorted.slice(sorted.length % 2 === 0 ? middle : middle + 1)
+  const q1 = getMedian(lowerHalf)
+  const q3 = getMedian(upperHalf)
+  if (q1 === null || q3 === null) return null
+  return { q1, q3 }
 }
 
 const rankValues = (values: number[]) => {
@@ -348,6 +389,7 @@ const createSummaryLines = (
 
 const normalizeSelectedFields = (
   selected: unknown,
+  allKeys: string[],
   numericKeys: string[],
 ) => {
   const rawFields = Array.isArray(selected)
@@ -356,7 +398,33 @@ const normalizeSelectedFields = (
       ? [selected]
       : []
 
-  return rawFields.filter((field, index) => numericKeys.includes(field) && rawFields.indexOf(field) === index)
+  const uniqueFields = rawFields.filter((field, index) => rawFields.indexOf(field) === index)
+  const missingFields = uniqueFields.filter((field) => !allKeys.includes(field))
+  const nonNumericFields = uniqueFields.filter(
+    (field) => allKeys.includes(field) && !numericKeys.includes(field),
+  )
+  const validFields = uniqueFields.filter((field) => numericKeys.includes(field))
+
+  return {
+    rawFields: uniqueFields,
+    validFields,
+    missingFields,
+    nonNumericFields,
+  }
+}
+
+const createSelectedFieldError = (
+  axisLabel: 'X' | 'Y',
+  missingFields: string[],
+  nonNumericFields: string[],
+) => {
+  if (missingFields.length > 0) {
+    throw new Error(`${axisLabel} 字段中以下字段不存在：${missingFields.join('、')}`)
+  }
+
+  if (nonNumericFields.length > 0) {
+    throw new Error(`${axisLabel} 字段中以下字段不支持相关性分析：${nonNumericFields.join('、')}`)
+  }
 }
 
 const buildRankingOption = (
@@ -418,6 +486,90 @@ const buildRankingOption = (
   },
 })
 
+const collectOutlierSensitiveFields = (rows: NumericRow[], fields: string[]) => {
+  return fields.filter((field) => {
+    const values = rows
+      .map((row) => row[field])
+      .filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
+
+    if (values.length < 8) return false
+    const quartiles = getQuartiles(values)
+    if (!quartiles) return false
+
+    const iqr = quartiles.q3 - quartiles.q1
+    if (iqr <= 0) return false
+
+    const lowerBound = quartiles.q1 - 1.5 * iqr
+    const upperBound = quartiles.q3 + 1.5 * iqr
+    const outlierCount = values.filter((value) => value < lowerBound || value > upperBound).length
+
+    return outlierCount / values.length >= 0.1
+  })
+}
+
+const buildCorrelationRisks = (
+  rows: NumericRow[],
+  xFields: string[],
+  yFields: string[],
+  metrics: CorrelationMetrics,
+  pairDetails: PairDetail[],
+) => {
+  const risks: CorrelationRisk[] = []
+  const relatedFields = [...new Set([...xFields, ...yFields])]
+
+  if (metrics.minPairSampleSize < 8 || metrics.rowCount < 20) {
+    risks.push({
+      code: 'low_sample_size',
+      level: 'warning',
+      title: '样本量偏少',
+      message: `当前最小成对样本量为 ${metrics.minPairSampleSize}，样本偏少时相关系数和显著性判断更容易波动。`,
+    })
+  }
+
+  if (metrics.missingCellRatio >= 0.15) {
+    risks.push({
+      code: 'high_missing_ratio',
+      level: 'warning',
+      title: '缺失值较多',
+      message: `所选字段缺失占比约 ${(metrics.missingCellRatio * 100).toFixed(1)}%，不同字段对使用的有效样本量可能差异较大。`,
+      fields: relatedFields,
+    })
+  }
+
+  const outlierSensitiveFields = collectOutlierSensitiveFields(rows, relatedFields)
+  if (outlierSensitiveFields.length > 0) {
+    risks.push({
+      code: 'outlier_sensitive',
+      level: 'warning',
+      title: '结果可能受异常值影响',
+      message: `字段 ${outlierSensitiveFields.join('、')} 存在较明显异常值，建议结合清洗或分布图进一步确认。`,
+      fields: outlierSensitiveFields,
+    })
+  }
+
+  const collinearPairs = pairDetails
+    .filter(
+      (item) =>
+        item.sampleSize >= 4 &&
+        item.xField !== item.yField &&
+        xFields.includes(item.xField) &&
+        xFields.includes(item.yField) &&
+        Math.abs(item.correlation) >= 0.85,
+    )
+    .map((item) => `${item.xField} / ${item.yField}`)
+
+  if (collinearPairs.length > 0) {
+    risks.push({
+      code: 'high_collinearity',
+      level: 'warning',
+      title: '字段高度共线',
+      message: `部分 X 字段之间高度相关：${collinearPairs.slice(0, 3).join('；')}。进入回归类分析前建议结合 VIF 或降维处理。`,
+    })
+  }
+
+  return risks
+}
+
 export const executeCorrelationAnalysis = async (
   method: CorrelationMethod,
   input: unknown,
@@ -428,14 +580,20 @@ export const executeCorrelationAnalysis = async (
     throw new Error('无可分析的输入数据')
   }
 
+  const allKeys = [...new Set(sourceRows.flatMap((row) => Object.keys(row)))]
   const { numericKeys, normalizedRows } = buildNumericDataset(sourceRows)
   if (numericKeys.length < 2) {
     throw new Error('至少需要 2 个数值字段才能进行相关性分析')
   }
 
   const meta = methodMeta[method]
-  const xFields = normalizeSelectedFields(config.xFields, numericKeys)
-  const yFields = normalizeSelectedFields(config.yFields, numericKeys)
+  const xSelection = normalizeSelectedFields(config.xFields, allKeys, numericKeys)
+  const ySelection = normalizeSelectedFields(config.yFields, allKeys, numericKeys)
+  createSelectedFieldError('X', xSelection.missingFields, xSelection.nonNumericFields)
+  createSelectedFieldError('Y', ySelection.missingFields, ySelection.nonNumericFields)
+
+  const xFields = xSelection.validFields
+  const yFields = ySelection.validFields
   if (xFields.length === 0) {
     throw new Error('至少需要选择 1 个有效的 X 字段')
   }
@@ -463,8 +621,13 @@ export const executeCorrelationAnalysis = async (
         sampleSize,
         pValue,
       })
-    })
+      })
   })
+
+  const analyzablePairs = pairDetails.filter((item) => item.sampleSize >= 2)
+  if (analyzablePairs.length === 0) {
+    throw new Error('所选字段缺少足够的有效样本，无法完成相关性分析')
+  }
 
   const topNValue = typeof config.topN === 'number' ? config.topN : Number(config.topN ?? 8)
   const topN = Math.max(3, Number.isFinite(topNValue) ? topNValue : 8)
@@ -494,6 +657,12 @@ export const executeCorrelationAnalysis = async (
     const relatedKeys = [...new Set([...xFields, ...yFields])]
     return count + relatedKeys.filter((key) => row[key] === null).length
   }, 0)
+  const relatedFieldCount = [...new Set([...xFields, ...yFields])].length
+  const missingCellRatio =
+    relatedFieldCount === 0 || normalizedRows.length === 0
+      ? 0
+      : incompleteFieldCount / (normalizedRows.length * relatedFieldCount)
+  const pairSampleSizes = pairDetails.map((item) => item.sampleSize)
 
   const strongestByY = yFields.map((yField) => ({
     yField,
@@ -588,7 +757,16 @@ export const executeCorrelationAnalysis = async (
     yFieldCount: yFields.length,
     significantRelationCount,
     strongRelationCount,
+    minPairSampleSize: Math.min(...pairSampleSizes),
+    maxPairSampleSize: Math.max(...pairSampleSizes),
+    missingCellCount: incompleteFieldCount,
+    missingCellRatio: Number(missingCellRatio.toFixed(4)),
   }
+  const risks = buildCorrelationRisks(normalizedRows, xFields, yFields, metrics, pairDetails)
+  const riskLines =
+    risks.length > 0
+      ? risks.map((risk) => `${risk.title}：${risk.message}`)
+      : ['当前未发现明显的样本量、缺失、异常值或高共线风险，可继续结合业务背景解读结果。']
 
   const defaultYField = yFields[0]!
   const rankingOptionMap = Object.fromEntries(
@@ -602,11 +780,19 @@ export const executeCorrelationAnalysis = async (
         xFields,
         yFields,
         currentYField: defaultYField,
+        riskCount: risks.length,
       },
       sections: [
         {
+          key: 'summary',
           title: '分析摘要',
-          type: 'text',
+          type: 'summary',
+          cards: [
+            { label: '样本行数', value: normalizedRows.length },
+            { label: 'X 字段数', value: xFields.length },
+            { label: 'Y 字段数', value: yFields.length },
+            { label: '风险提示数', value: risks.length },
+          ],
           content: summaryLines.join('\n'),
         },
         {
@@ -642,6 +828,18 @@ export const executeCorrelationAnalysis = async (
           },
         },
         {
+          key: 'risks',
+          title: '结果可信提示',
+          type: 'risk-list',
+          items: risks.map((risk) => ({
+            level: risk.level,
+            title: risk.title,
+            message: risk.message,
+            fields: risk.fields,
+          })),
+          content: riskLines.join('\n'),
+        },
+        {
           title: 'X / Y 字段相关明细',
           type: 'text',
           content: JSON.stringify(detailRows, null, 2),
@@ -654,6 +852,7 @@ export const executeCorrelationAnalysis = async (
         metrics,
         pairDetails,
         matrixData,
+        risks,
       },
     },
   )

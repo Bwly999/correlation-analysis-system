@@ -105,6 +105,82 @@ describe('NodeConfigModal', () => {
     expect(wrapper.find('[data-testid="runtime-inputs-panel-shell"]').exists()).toBe(true)
   })
 
+  it('exposes upstream factor schema metadata for analysis field hints', () => {
+    const store = useWorkflowStore()
+    store.nodes = [
+      {
+        id: 'source-1',
+        type: 'custom',
+        position: { x: 0, y: 0 },
+        label: '来源一',
+        data: {
+          label: '来源一',
+          type: 'manual-json-import',
+          category: 'trigger',
+          status: 'success',
+          config: {},
+          logs: [],
+          useManualInput: false,
+          manualInput: '',
+          isPinned: false,
+          output: {
+            kind: 'table',
+            payload: [{ temperature: 12.3, batchCode: 'A-01' }],
+            schema: {
+              fields: [
+                { name: 'temperature', type: 'number' },
+                { name: 'batchCode', type: 'string' },
+              ],
+            },
+          },
+        },
+      } as any,
+      {
+        id: 'pearson-node',
+        type: 'custom',
+        position: { x: 300, y: 0 },
+        label: 'Pearson 分析',
+        data: {
+          label: 'Pearson 分析',
+          type: 'pearson',
+          category: 'terminal',
+          status: 'idle',
+          config: { xFields: [], yFields: [] },
+          logs: [],
+          useManualInput: false,
+          manualInput: '',
+          isPinned: false,
+        },
+      } as any,
+    ]
+    store.edges = [
+      { id: 'e1', source: 'source-1', target: 'pearson-node', type: 'n8n', animated: true },
+    ] as any
+
+    const wrapper = mount(NodeConfigModal, {
+      props: { visible: true, nodeId: 'pearson-node' },
+      global: {
+        stubs: {
+          Dialog: dialogStub,
+          DataDisplayPanel: true,
+          DataAnalysisModal: true,
+          ConfigHeader: { template: '<div />', props: ['nodeLabel', 'isPinned', 'nodeType'] },
+          ConfigFooter: { template: '<div />' },
+          ConfigForm: {
+            props: ['upstreamFactors'],
+            template: '<div class="upstream-factors">{{ JSON.stringify(upstreamFactors) }}</div>',
+          },
+          RuntimeInputs: { template: '<div />', props: ['config', 'properties', 'upstreamFactors'] },
+        },
+      },
+    })
+
+    expect(wrapper.find('.upstream-factors').text()).toContain('"name":"temperature"')
+    expect(wrapper.find('.upstream-factors').text()).toContain('"dataType":"number"')
+    expect(wrapper.find('.upstream-factors').text()).toContain('"name":"batchCode"')
+    expect(wrapper.find('.upstream-factors').text()).toContain('"dataType":"string"')
+  })
+
   it('generates a standard table result template for single-input debugging', async () => {
     const store = useWorkflowStore()
     store.nodes = [

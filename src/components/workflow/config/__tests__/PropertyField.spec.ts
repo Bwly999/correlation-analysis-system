@@ -252,4 +252,43 @@ describe('PropertyField', () => {
 
     expect(wrapper.find('.multi-options-options').text()).toContain('manual_field:manual_field')
   })
+
+  it('为分析字段禁用非数值上游字段并展示提示', () => {
+    setActivePinia(createPinia())
+
+    const wrapper = mount(PropertyField, {
+      props: {
+        prop: {
+          name: 'xFields',
+          displayName: 'X 字段',
+          type: 'multi-options',
+          default: [],
+          useUpstreamFactors: true,
+        },
+        modelValue: [],
+        upstreamFactors: [
+          { name: '温度', value: 'temperature', dataType: 'number' },
+          { name: '批次', value: 'batchCode', dataType: 'string' },
+        ],
+      },
+      global: {
+        directives: {
+          tooltip: () => undefined,
+        },
+        stubs: {
+          MultiSelect: {
+            props: ['options', 'optionDisabled'],
+            template:
+              '<div><div class="multi-options-option-disabled">{{ optionDisabled }}</div><div class="multi-options-options">{{ options.map((item) => `${item.name}:${item.value}:${item.disabled ? "disabled" : "enabled"}:${item.hint || ""}`).join("|") }}</div></div>',
+          },
+        },
+      },
+    })
+
+    expect(wrapper.find('.multi-options-option-disabled').text()).toBe('disabled')
+    expect(wrapper.find('.multi-options-options').text()).toContain('温度:temperature:enabled')
+    expect(wrapper.find('.multi-options-options').text()).toContain('批次:batchCode:disabled:仅支持数值字段参与当前分析')
+    expect(wrapper.text()).toContain('以下字段暂不支持当前分析')
+    expect(wrapper.text()).toContain('批次')
+  })
 })
