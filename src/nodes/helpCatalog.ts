@@ -244,19 +244,28 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
   ),
   'data-aggregation': createEntry(
     {
-      summary: '把多列值聚成新指标，或按分组、窗口生成统计特征。',
-      whenToUse: ['需要构造综合指标、按维度汇总，或为时序数据做窗口特征。'],
-      inputGuide: ['需要上游提供表格数据。', '聚合模式决定你是在行内合并、分组统计还是滑动窗口。'],
+      summary: '把多列值聚成新指标，或按分组、行窗口、时间窗口生成统计结果。',
+      whenToUse: ['需要构造综合指标、按维度汇总，或为时序数据做窗口统计时。'],
+      inputGuide: ['需要上游提供表格数据。', '聚合模式决定你是在行内合并、分组统计、按行窗口，还是按时间分桶汇总。'],
       parameterGuide: [
         {
           property: 'mode',
           title: '聚合模式',
-          content: '先决定是生成新字段、做分组摘要，还是做滚动窗口统计。',
+          content: '先决定是生成新字段、做分组摘要、按前 N 行计算，还是按固定时间窗口输出新表。',
+        },
+        {
+          property: 'timeField',
+          title: '时间窗口',
+          content: '时间窗口模式会按固定分钟、小时或天进行分桶，并输出一张新的时间聚合表。',
         },
       ],
       outputGuide: ['输出结果是新的表格数据，字段结构会按聚合模式变化。'],
       nextSteps: ['聚合后通常继续分析、绘图或导出。'],
       commonIssues: [
+        {
+          title: '时间窗口没有产出结果',
+          resolution: '先检查时间字段是否存在，且字段值能被识别为合法时间。',
+        },
         {
           title: '聚合结果为空或字段不存在',
           resolution: '先确认参与聚合的字段名真实存在，且字段内容适合对应聚合算法。',
@@ -264,8 +273,8 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       ],
     },
     {
-      useCases: ['构造综合特征', '按分组做统计汇总', '生成滚动窗口特征'],
-      keywords: ['聚合', '汇总', '分组统计', '滚动窗口'],
+      useCases: ['构造综合特征', '按分组做统计汇总', '生成滚动窗口特征', '按时间窗口汇总新表'],
+      keywords: ['聚合', '汇总', '分组统计', '滚动窗口', '时间窗口', '时间分桶'],
       workflowRoles: ['数据准备'],
       inputKinds: ['table'],
       outputKinds: ['table'],

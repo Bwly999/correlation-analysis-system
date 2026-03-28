@@ -94,6 +94,55 @@ describe('remaining nodes standardized result protocol', () => {
     })
   })
 
+  it('data-aggregation time window mode should return a standardized summary table', async () => {
+    const result = await dataAggregationNode.execute(
+      createTableResult([
+        { ts: '2026-03-28T10:05:00Z', value: 10, temp: 30 },
+        { ts: '2026-03-28T10:40:00Z', value: 20, temp: 40 },
+        { ts: '2026-03-28T11:10:00Z', value: 15, temp: 50 },
+      ]),
+      {
+        mode: 'time_window',
+        timeField: 'ts',
+        timeWindowSize: 1,
+        timeWindowUnit: 'hour',
+        timeWindowMethods: ['mean', 'sum'],
+        targetColumns: ['value', 'temp'],
+      },
+    )
+
+    expect(result.kind).toBe('table')
+    expect(result.payload).toEqual([
+      {
+        window_start: '2026-03-28T10:00:00.000Z',
+        window_end: '2026-03-28T11:00:00.000Z',
+        row_count: 2,
+        value_mean: 15,
+        value_sum: 30,
+        temp_mean: 35,
+        temp_sum: 70,
+      },
+      {
+        window_start: '2026-03-28T11:00:00.000Z',
+        window_end: '2026-03-28T12:00:00.000Z',
+        row_count: 1,
+        value_mean: 15,
+        value_sum: 15,
+        temp_mean: 50,
+        temp_sum: 50,
+      },
+    ])
+    expect(result.meta?.stats).toMatchObject({
+      mode: 'time_window',
+      originalCount: 3,
+      outputCount: 2,
+      windowCount: 2,
+      timeField: 'ts',
+      windowSize: 1,
+      windowUnit: 'hour',
+    })
+  })
+
   it('data-filter should return a standardized table result with stats', async () => {
     const result = await dataFilterNode.execute(
       createTableResult([

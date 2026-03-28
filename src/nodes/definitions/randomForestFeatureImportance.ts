@@ -216,8 +216,11 @@ export const randomForestFeatureImportanceNode: NodeDefinition = {
     {
       name: 'factorNames',
       displayName: '影响因子 (X)',
-      type: 'tags',
+      type: 'multi-options',
+      default: [],
       useUpstreamFactors: true,
+      editable: true,
+      forceInput: true,
       description: '选择参与建模的因子列表；留空时默认使用除目标变量外的全部数值字段。',
     },
     {

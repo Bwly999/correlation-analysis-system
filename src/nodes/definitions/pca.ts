@@ -207,8 +207,11 @@ export const pcaNode: NodeDefinition = {
     {
       name: 'factorNames',
       displayName: '分析字段',
-      type: 'tags',
+      type: 'multi-options',
+      default: [],
       useUpstreamFactors: true,
+      editable: true,
+      forceInput: true,
       description: '选择参与 PCA 的数值字段；留空时默认使用全部数值字段。',
     },
     {

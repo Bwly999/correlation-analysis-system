@@ -246,8 +246,11 @@ export const vifNode: NodeDefinition = {
     {
       name: 'factorNames',
       displayName: '检测字段',
-      type: 'tags',
+      type: 'multi-options',
+      default: [],
       useUpstreamFactors: true,
+      editable: true,
+      forceInput: true,
       description: '选择需要评估共线性的数值字段；留空时默认使用当前表格中的全部数值字段。',
     },
   ],

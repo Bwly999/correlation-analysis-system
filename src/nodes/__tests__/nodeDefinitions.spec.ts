@@ -47,6 +47,7 @@ import { dataExportNode } from '../definitions/dataExport'
 import { fieldSelectionNode } from '../definitions/fieldSelection'
 import { lassoNode } from '../definitions/lasso'
 import { multipleLinearRegressionNode } from '../definitions/multipleLinearRegression'
+import { pcaNode } from '../definitions/pca'
 import { randomForestFeatureImportanceNode } from '../definitions/randomForestFeatureImportance'
 import { pearsonNode } from '../definitions/pearson'
 import { sortNode } from '../definitions/sort'
@@ -156,6 +157,28 @@ describe('Node Definitions Execution Logic', () => {
 
     expect(runtimePropertyNames[runtimePropertyNames.length - 1]).toBe('selectedProcesses')
   })
+
+  it('should use multi-options for analysis factorNames fields', () => {
+    const analysisNodes = [
+      multipleLinearRegressionNode,
+      pcaNode,
+      randomForestFeatureImportanceNode,
+      vifNode,
+      xgboostShapNode,
+    ]
+
+    analysisNodes.forEach((definition) => {
+      const factorNamesProperty = definition.properties.find((property) => property.name === 'factorNames')
+
+      expect(factorNamesProperty).toMatchObject({
+        type: 'multi-options',
+        useUpstreamFactors: true,
+        editable: true,
+        forceInput: true,
+      })
+    })
+  })
+
   describe('file-import', () => {
     it('should parse a CSV file correctly', async () => {
       const csvPath = path.resolve(__dirname, '../../../test/resource/test_data.csv')
@@ -363,6 +386,49 @@ describe('Node Definitions Execution Logic', () => {
 
       expect(legacy.data[0].total).toBe(60)
       expect(legacy.data[1].total).toBe(15)
+    })
+
+    it('should aggregate rows into fixed time windows and output a new summary table', async () => {
+      const input = createTableResult([
+        { ts: '2026-03-28T10:05:00Z', value: 10, temp: 30 },
+        { ts: '2026-03-28T10:40:00Z', value: 20, temp: 40 },
+        { ts: '2026-03-28T11:10:00Z', value: 15, temp: 50 },
+      ])
+
+      const result = await dataAggregationNode.execute(input, {
+        mode: 'time_window',
+        timeField: 'ts',
+        timeWindowSize: 1,
+        timeWindowUnit: 'hour',
+        timeWindowMethods: ['mean', 'sum'],
+        targetColumns: ['value', 'temp'],
+      })
+
+      const legacy = asLegacy(result)
+
+      expect(legacy.data).toEqual([
+        {
+          window_start: '2026-03-28T10:00:00.000Z',
+          window_end: '2026-03-28T11:00:00.000Z',
+          row_count: 2,
+          value_mean: 15,
+          value_sum: 30,
+          temp_mean: 35,
+          temp_sum: 70,
+        },
+        {
+          window_start: '2026-03-28T11:00:00.000Z',
+          window_end: '2026-03-28T12:00:00.000Z',
+          row_count: 1,
+          value_mean: 15,
+          value_sum: 15,
+          temp_mean: 50,
+          temp_sum: 50,
+        },
+      ])
+      expect(legacy.stats.mode).toBe('time_window')
+      expect(legacy.stats.windowCount).toBe(2)
+      expect(legacy.stats.timeField).toBe('ts')
     })
   })
 
