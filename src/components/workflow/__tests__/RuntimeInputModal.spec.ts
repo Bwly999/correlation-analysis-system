@@ -7,6 +7,9 @@ const dialogStub = {
   props: ['visible'],
   template: '<div><template v-if="visible"><slot name="header" /><slot /><slot name="footer" /></template></div>',
 }
+const tooltipDirectives = {
+  tooltip: () => undefined,
+}
 
 describe('RuntimeInputModal', () => {
   beforeEach(() => {
@@ -36,6 +39,7 @@ describe('RuntimeInputModal', () => {
         } as any,
       },
       global: {
+        directives: tooltipDirectives,
         stubs: {
           Dialog: dialogStub,
           Button: true,
@@ -75,6 +79,7 @@ describe('RuntimeInputModal', () => {
         } as any,
       },
       global: {
+        directives: tooltipDirectives,
         stubs: {
           Dialog: dialogStub,
           Button: true,
@@ -92,7 +97,7 @@ describe('RuntimeInputModal', () => {
     expect(scrollPane.classes()).toContain('pb-8')
   })
 
-  it('shows the runtime input reuse toggle and defaults it to disabled', () => {
+  it('shows the runtime input reuse toggle in a compact help layout', () => {
     const wrapper = mount(RuntimeInputModal, {
       props: {
         visible: true,
@@ -116,6 +121,7 @@ describe('RuntimeInputModal', () => {
         } as any,
       },
       global: {
+        directives: tooltipDirectives,
         stubs: {
           Dialog: dialogStub,
           Button: true,
@@ -128,6 +134,7 @@ describe('RuntimeInputModal', () => {
     })
 
     expect(wrapper.text()).toContain('沿用上次启动参数')
-    expect(wrapper.text()).toContain('关闭后，每次启动都会要求重新输入本次运行参数')
+    expect(wrapper.text()).toContain('文件导入')
+    expect(wrapper.text()).not.toContain('关闭后，每次启动都会要求重新输入本次运行参数')
   })
 })

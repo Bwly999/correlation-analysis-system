@@ -253,7 +253,7 @@ describe('PropertyField', () => {
     expect(wrapper.find('.multi-options-options').text()).toContain('manual_field:manual_field')
   })
 
-  it('为分析字段禁用非数值上游字段并展示提示', () => {
+  it('为分析字段禁用非数值上游字段并展示紧凑提示', () => {
     setActivePinia(createPinia())
 
     const wrapper = mount(PropertyField, {
@@ -288,11 +288,10 @@ describe('PropertyField', () => {
     expect(wrapper.find('.multi-options-option-disabled').text()).toBe('disabled')
     expect(wrapper.find('.multi-options-options').text()).toContain('温度:temperature:enabled')
     expect(wrapper.find('.multi-options-options').text()).toContain('批次:batchCode:disabled:仅支持数值字段参与当前分析')
-    expect(wrapper.text()).toContain('以下字段暂不支持当前分析')
-    expect(wrapper.text()).toContain('批次')
+    expect(wrapper.text()).toContain('字段受限')
   })
 
-  it('为必填字段显示未完成提示，并为默认值显示推荐提示', () => {
+  it('为必填字段显示紧凑提示，并为默认值显示推荐标签', () => {
     setActivePinia(createPinia())
 
     const wrapper = mount(PropertyField, {
@@ -320,7 +319,8 @@ describe('PropertyField', () => {
       },
     })
 
-    expect(wrapper.text()).toContain('当前使用推荐默认值：8')
+    expect(wrapper.text()).toContain('默认值')
+    expect(wrapper.text()).toContain('8')
 
     const requiredWrapper = mount(PropertyField, {
       props: {
@@ -347,10 +347,10 @@ describe('PropertyField', () => {
       },
     })
 
-    expect(requiredWrapper.text()).toContain('该项为必填，建议先完成配置再运行节点')
+    expect(requiredWrapper.text()).toContain('必填')
   })
 
-  it('为分析字段在缺少上游可选字段时展示空状态提示', () => {
+  it('为分析字段在缺少上游可选字段时展示紧凑空状态提示', () => {
     setActivePinia(createPinia())
 
     const wrapper = mount(PropertyField, {
@@ -379,6 +379,6 @@ describe('PropertyField', () => {
       },
     })
 
-    expect(wrapper.text()).toContain('当前没有可选字段，请先连接上游数据或使用左侧输入数据')
+    expect(wrapper.text()).toContain('缺少上游')
   })
 })

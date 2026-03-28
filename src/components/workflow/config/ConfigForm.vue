@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { HelpCircle } from 'lucide-vue-next'
 import { type NodeProperty } from '@/nodes/types'
 import PropertyField from './PropertyField.vue'
 import { applyDependencyReset } from './configDependencies'
@@ -76,9 +77,13 @@ const updateConfig = (propName: string, value: any) => {
 <template>
   <div class="mx-auto max-w-2xl space-y-10 py-4">
     <section v-if="primaryProperties.length > 0" class="space-y-6">
-      <div class="space-y-1">
+      <div class="flex items-center gap-2">
         <div class="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">核心参数</div>
-        <p class="text-sm text-slate-500">先完成这些配置，通常就能跑通当前节点。</p>
+        <HelpCircle
+          v-tooltip.right="'先完成这些配置，通常就能跑通当前节点。'"
+          :size="14"
+          class="cursor-help text-slate-300"
+        />
       </div>
 
       <div
@@ -100,9 +105,13 @@ const updateConfig = (propName: string, value: any) => {
     </section>
 
     <section v-if="secondaryProperties.length > 0" class="space-y-6">
-      <div class="space-y-1">
+      <div class="flex items-center gap-2">
         <div class="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">补充参数</div>
-        <p class="text-sm text-slate-500">这些参数用于微调展示或执行细节，可按需调整。</p>
+        <HelpCircle
+          v-tooltip.right="'这些参数用于微调展示或执行细节，可按需调整。'"
+          :size="14"
+          class="cursor-help text-slate-300"
+        />
       </div>
 
       <div

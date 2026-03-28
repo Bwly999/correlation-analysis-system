@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { Info, Settings } from 'lucide-vue-next'
+import { AlertCircle, HelpCircle, Settings } from 'lucide-vue-next'
 import Dialog from 'primevue/dialog'
 import Button from 'primevue/button'
 import ToggleSwitch from 'primevue/toggleswitch'
@@ -70,6 +70,17 @@ const globalPromptProgressText = computed(() => {
   return `${current}/${total}`
 })
 const currentNodeLabel = computed(() => props.node?.data.label || '当前节点')
+const runtimeInputHelpText = computed(() =>
+  [
+    `请为节点 ${currentNodeLabel.value} 补充本次运行所需的动态参数。`,
+    isGlobalContinuation.value
+      ? '提交后系统会自动继续执行；若还有其他启动节点缺少参数，将继续弹出下一项。'
+      : '',
+    hasMissingRequiredInputs.value ? missingRequiredHint.value : '',
+  ]
+    .filter(Boolean)
+    .join('\n'),
+)
 const reuseToggleHint = computed(() =>
   reuseLastRuntimeInputs.value
     ? '开启后，下次启动会默认沿用当前确认过的运行时参数。'
@@ -204,19 +215,27 @@ const handleConfirm = () => {
     </template>
 
     <div class="flex flex-col gap-4 py-2" :class="{ 'cursor-row-resize select-none': isResizing }">
-      <div class="flex gap-3 rounded-xl border border-blue-100 bg-blue-50/50 p-4 shadow-sm shrink-0">
-        <Info class="shrink-0 text-blue-500" :size="18" />
-        <p class="text-[13px] font-medium leading-relaxed text-slate-600">
-          请为节点
-          <span class="font-bold text-blue-700">{{ currentNodeLabel }}</span>
-          补充本次运行所需的动态参数。
-          <span v-if="isGlobalContinuation" class="mt-1 block text-[12px] text-blue-700">
-            提交后系统会自动继续执行；若还有其他启动节点缺少参数，将继续弹出下一项。
-          </span>
-          <span v-if="hasMissingRequiredInputs" class="mt-1 block text-[12px] text-rose-600">
-            {{ missingRequiredHint }}
-          </span>
-        </p>
+      <div class="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-3 shadow-sm shrink-0">
+        <div class="min-w-0">
+          <div class="text-sm font-semibold text-slate-900">{{ currentNodeLabel }}</div>
+          <div class="mt-1 text-[12px] text-slate-500">确认本次运行所需的动态参数</div>
+        </div>
+        <div class="flex items-center gap-2">
+          <div
+            v-if="hasMissingRequiredInputs"
+            class="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-[11px] font-semibold text-rose-600"
+          >
+            <AlertCircle :size="12" />
+            <span>{{ missingRequiredHint }}</span>
+          </div>
+          <button
+            v-tooltip.left="runtimeInputHelpText"
+            type="button"
+            class="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-400 transition hover:border-blue-200 hover:text-blue-600"
+          >
+            <HelpCircle :size="15" />
+          </button>
+        </div>
       </div>
 
       <div
@@ -234,11 +253,15 @@ const handleConfirm = () => {
       <div v-else class="flex flex-col min-h-0">
         <div class="mb-4 rounded-xl border border-slate-200 bg-white px-4 py-3">
           <div class="flex items-center justify-between gap-4">
-            <div class="min-w-0">
+            <div class="flex min-w-0 items-center gap-2">
               <div class="text-sm font-semibold text-slate-900">沿用上次启动参数</div>
-              <p class="mt-1 text-[12px] leading-relaxed text-slate-500">
-                {{ reuseToggleHint }}
-              </p>
+              <button
+                v-tooltip.bottom="reuseToggleHint"
+                type="button"
+                class="inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-slate-400 transition hover:border-blue-200 hover:bg-white hover:text-blue-600"
+              >
+                <HelpCircle :size="14" />
+              </button>
             </div>
             <ToggleSwitch v-model="reuseLastRuntimeInputs" class="shrink-0 !scale-[0.72]" />
           </div>

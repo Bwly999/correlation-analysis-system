@@ -1,7 +1,7 @@
 ﻿vi.mock('../MonacoEditor.vue', () => ({ default: { template: '<div />' } }))
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { config, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { nextTick } from 'vue'
 import NodeConfigModal from '../NodeConfigModal.vue'
@@ -11,6 +11,10 @@ describe('NodeConfigModal', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     document.queryCommandSupported = vi.fn(() => true) as any
+    config.global.directives = {
+      ...(config.global.directives || {}),
+      tooltip: () => undefined,
+    }
   })
 
   const dialogStub = {
@@ -181,7 +185,7 @@ describe('NodeConfigModal', () => {
     expect(wrapper.find('.upstream-factors').text()).toContain('"dataType":"string"')
   })
 
-  it('shows a correlation setup guide for first-time analysis configuration', () => {
+  it('shows a compact correlation setup guide entry for first-time analysis configuration', () => {
     const store = useWorkflowStore()
     store.nodes = [
       {
@@ -249,9 +253,9 @@ describe('NodeConfigModal', () => {
       },
     })
 
+    expect(wrapper.find('[data-testid="correlation-setup-guide"]').exists()).toBe(true)
     expect(wrapper.text()).toContain('相关性分析配置建议')
-    expect(wrapper.text()).toContain('先选择 1-3 个 Y 字段作为观察指标')
-    expect(wrapper.text()).toContain('当前可用数值字段 3 个')
+    expect(wrapper.text()).toContain('可用数值字段 3 个')
   })
 
   it('generates a standard table result template for single-input debugging', async () => {

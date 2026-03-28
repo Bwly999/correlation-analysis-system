@@ -22,13 +22,15 @@ describe('workflow ui copy', () => {
 
   it('keeps key debug and empty-state copy readable in workflow components', () => {
     const nodeConfigContent = fs.readFileSync(path.resolve(__dirname, '../NodeConfigModal.vue'), 'utf-8')
+    const runtimeInputContent = fs.readFileSync(path.resolve(__dirname, '../RuntimeInputModal.vue'), 'utf-8')
     const propertyFieldContent = fs.readFileSync(path.resolve(__dirname, '../config/PropertyField.vue'), 'utf-8')
     const baseNodeContent = fs.readFileSync(path.resolve(__dirname, '../nodes/BaseNode.vue'), 'utf-8')
 
     expect(nodeConfigContent).toContain('重跑上游后调试')
-    expect(nodeConfigContent).toContain('调试节点只重新执行当前节点')
-    expect(propertyFieldContent).toContain('当前没有可选字段，请先连接上游数据或使用左侧输入数据')
-    expect(propertyFieldContent).toContain('该项为必填，建议先完成配置再运行节点')
+    expect(nodeConfigContent).toContain('调试说明')
+    expect(runtimeInputContent).toContain('确认本次运行所需的动态参数')
+    expect(propertyFieldContent).toContain('缺少上游')
+    expect(propertyFieldContent).toContain('必填')
     expect(baseNodeContent).toContain('重跑上游后调试')
   })
 })

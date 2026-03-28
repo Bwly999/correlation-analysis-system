@@ -391,6 +391,15 @@ const defaultHintText = computed(() => {
   return String(configValue.value)
 })
 
+const nonAnalyzableHintText = computed(() => {
+  if (nonAnalyzableUpstreamFactors.value.length === 0) return ''
+  return `以下字段暂不支持当前分析：${nonAnalyzableUpstreamFactors.value.map((item) => item.name).join('、')}`
+})
+
+const upstreamEmptyHintText = '当前没有可选字段，请先连接上游数据或使用左侧输入数据。'
+const requiredHintText = '该项为必填，建议先完成配置再运行节点。'
+const defaultHintTooltip = computed(() => `当前使用推荐默认值：${defaultHintText.value}`)
+
 const toggleOptionsRegexMode = (event?: Event) => {
   event?.preventDefault()
   event?.stopPropagation()
@@ -732,33 +741,43 @@ const getRegexToggleClass = (enabled: boolean) => [
       />
     </div>
 
-    <div
-      v-if="nonAnalyzableUpstreamFactors.length > 0"
-      class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-700"
-    >
-      以下字段暂不支持当前分析：
-      {{ nonAnalyzableUpstreamFactors.map((item) => item.name).join('、') }}
-    </div>
+    <div v-if="nonAnalyzableUpstreamFactors.length > 0 || showUpstreamEmptyHint || showRequiredHint || showDefaultHint" class="flex flex-wrap items-center gap-2">
+      <div
+        v-if="nonAnalyzableUpstreamFactors.length > 0"
+        v-tooltip.top="nonAnalyzableHintText"
+        class="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-medium text-amber-700"
+      >
+        <HelpCircle :size="12" />
+        <span>字段受限</span>
+      </div>
 
-    <div
-      v-if="showUpstreamEmptyHint"
-      class="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs leading-relaxed text-blue-700"
-    >
-      当前没有可选字段，请先连接上游数据或使用左侧输入数据。
-    </div>
+      <div
+        v-if="showUpstreamEmptyHint"
+        v-tooltip.top="upstreamEmptyHintText"
+        class="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-700"
+      >
+        <HelpCircle :size="12" />
+        <span>缺少上游</span>
+      </div>
 
-    <div
-      v-if="showRequiredHint"
-      class="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs leading-relaxed text-rose-700"
-    >
-      该项为必填，建议先完成配置再运行节点。
-    </div>
+      <div
+        v-if="showRequiredHint"
+        v-tooltip.top="requiredHintText"
+        class="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-[11px] font-medium text-rose-700"
+      >
+        <HelpCircle :size="12" />
+        <span>必填</span>
+      </div>
 
-    <div
-      v-else-if="showDefaultHint"
-      class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-600"
-    >
-      当前使用推荐默认值：{{ defaultHintText }}
+      <div
+        v-else-if="showDefaultHint"
+        v-tooltip.top="defaultHintTooltip"
+        class="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-slate-600"
+      >
+        <HelpCircle :size="12" />
+        <span>默认值</span>
+        <span class="max-w-[220px] truncate text-slate-500">{{ defaultHintText }}</span>
+      </div>
     </div>
   </div>
 </template>
