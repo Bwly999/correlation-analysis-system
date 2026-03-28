@@ -137,4 +137,28 @@ describe('core nodes standardized result protocol', () => {
     expect(result.payload.series[0].type).toBe('scatter')
     expect(result.preview?.viewer).toBe('chart-viewer')
   })
+
+  it('chart-display should return histogram charts as standardized chart results', async () => {
+    const result = await chartDisplayNode.execute(
+      createTableResult([
+        { target: 1 },
+        { target: 2 },
+        { target: 2 },
+        { target: 3 },
+        { target: 5 },
+        { target: 8 },
+      ]),
+      {
+        chartType: 'histogram',
+        yAxis: 'target',
+      },
+    )
+
+    expect(result.kind).toBe('chart')
+    expect(result.payload.series[0].type).toBe('bar')
+    expect(result.payload.xAxis.name).toBe('target 分箱区间')
+    expect(result.meta?.chartType).toBe('histogram')
+    expect(result.meta?.binCount).toBeGreaterThan(1)
+    expect(result.preview?.viewer).toBe('chart-viewer')
+  })
 })

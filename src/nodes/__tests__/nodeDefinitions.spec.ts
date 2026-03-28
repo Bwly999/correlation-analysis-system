@@ -1466,6 +1466,34 @@ describe('Node Definitions Execution Logic', () => {
       expect(legacy.chartOption.series[0].type).toBe('bar')
     })
 
+    it('should generate histogram distribution chart option', async () => {
+      const input = createTableResult([
+        { score: 10 },
+        { score: 12 },
+        { score: 18 },
+        { score: 21 },
+        { score: 24 },
+        { score: 30 },
+      ])
+
+      const result = await chartDisplayNode.execute(input, {
+        chartType: 'histogram',
+        yAxis: 'score',
+      })
+
+      const legacy = asLegacy(result)
+
+      expect(legacy.viewType).toBe('chart')
+      expect(legacy.chartOption.series[0].type).toBe('bar')
+      expect(legacy.chartOption.xAxis.type).toBe('category')
+      expect(legacy.chartOption.xAxis.name).toBe('score 分箱区间')
+      expect(legacy.chartOption.yAxis.name).toBe('样本数')
+      expect(legacy.meta?.chartType).toBe('histogram')
+      expect(legacy.meta?.yAxis).toBe('score')
+      expect(legacy.meta?.binCount).toBeGreaterThan(1)
+      expect(legacy.chartOption.series[0].data).toHaveLength(legacy.meta?.binCount)
+    })
+
     it('should not mutate grouped collection input when rendering non-boxplot charts', async () => {
       const input = createTableCollectionResult([
         {

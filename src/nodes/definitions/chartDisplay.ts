@@ -14,12 +14,82 @@ const resolveRows = (input: unknown) => extractTableRows(input)
 
 const resolveGroups = (input: unknown) => extractTableCollectionGroups(input)
 
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
+
+const formatIntervalValue = (value: number) => {
+  if (!Number.isFinite(value)) return ''
+  if (Number.isInteger(value)) return String(value)
+  return value.toFixed(2).replace(/\.?0+$/, '')
+}
+
+const buildHistogramSeries = (rows: Array<Record<string, unknown>>, key: string) => {
+  const values = rows
+    .map((row) => row[key])
+    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
+
+  if (values.length === 0) {
+    throw new Error(`字段 ${key} 中没有可用于绘制分布图的数值数据`)
+  }
+
+  const min = Math.min(...values)
+  const max = Math.max(...values)
+
+  if (min === max) {
+    const label = `${formatIntervalValue(min)}`
+    return {
+      binCount: 1,
+      categories: [label],
+      seriesData: [
+        {
+          value: values.length,
+          intervalStart: min,
+          intervalEnd: max,
+          percentage: 1,
+          label,
+        },
+      ],
+    }
+  }
+
+  const binCount = clamp(Math.round(Math.sqrt(values.length)), 5, 16)
+  const binWidth = (max - min) / binCount
+  const counts = Array.from({ length: binCount }, () => 0)
+
+  values.forEach((value) => {
+    const rawIndex = Math.floor((value - min) / binWidth)
+    const index = Math.min(binCount - 1, Math.max(0, rawIndex))
+    counts[index] = (counts[index] ?? 0) + 1
+  })
+
+  const categories: string[] = []
+  const seriesData = counts.map((count, index) => {
+    const intervalStart = min + index * binWidth
+    const intervalEnd = index === binCount - 1 ? max : min + (index + 1) * binWidth
+    const label = `${formatIntervalValue(intervalStart)} - ${formatIntervalValue(intervalEnd)}`
+    categories.push(label)
+
+    return {
+      value: count,
+      intervalStart,
+      intervalEnd,
+      percentage: count / values.length,
+      label,
+    }
+  })
+
+  return {
+    binCount,
+    categories,
+    seriesData,
+  }
+}
+
 export const chartDisplayNode: NodeDefinition = {
   name: 'chart-display',
   displayName: '图表展示',
   icon: 'pie-chart',
   category: 'terminal',
-  description: '将输入数据转换为可视化图表，支持单表散点图、柱状图和多组箱线图。',
+  description: '将输入数据转换为可视化图表，支持散点图、柱状图、分布图和箱线图。',
   properties: [
     {
       name: 'chartType',
@@ -29,6 +99,7 @@ export const chartDisplayNode: NodeDefinition = {
       options: [
         { name: '散点图（双变量关系）', value: 'scatter' },
         { name: '柱状图（分类对比）', value: 'bar' },
+        { name: '分布图（直方图）', value: 'histogram' },
         { name: '箱线图（分布对比）', value: 'boxplot' },
       ],
     },
@@ -38,7 +109,7 @@ export const chartDisplayNode: NodeDefinition = {
       type: 'string',
       default: '',
       placeholder: '请输入 X 轴对应的字段名',
-      displayIf: (config) => config.chartType !== 'boxplot',
+      displayIf: (config) => !['boxplot', 'histogram'].includes(config.chartType),
     },
     {
       name: 'yAxis',
@@ -56,6 +127,10 @@ export const chartDisplayNode: NodeDefinition = {
       const validGroups = groupedData.filter((group) => Array.isArray(group.data) && group.data.length > 0)
       if (validGroups.length === 0) {
         throw new Error('分组集合中没有可用于绘图的数据')
+      }
+
+      if (config.chartType === 'histogram') {
+        throw new Error('分布图当前仅支持单表数据，请先选择单表输入再绘制')
       }
 
       const firstGroup = validGroups[0]!
@@ -166,6 +241,54 @@ export const chartDisplayNode: NodeDefinition = {
     }
 
     let option: Record<string, unknown>
+
+    if (config.chartType === 'histogram') {
+      const { binCount, categories, seriesData } = buildHistogramSeries(rows, targetYKey)
+      option = {
+        title: { text: `${targetYKey} 分布图`, left: 'center' },
+        tooltip: {
+          trigger: 'item',
+          formatter: (params: { data?: Record<string, unknown> }) => {
+            const data = params?.data ?? {}
+            const label = String(data.label ?? '')
+            const count = Number(data.value ?? 0)
+            const percentage = Number(data.percentage ?? 0)
+            return `${label}<br/>样本数：${count}<br/>占比：${(percentage * 100).toFixed(1)}%`
+          },
+        },
+        grid: { top: '15%', bottom: '15%', left: '10%', right: '10%', containLabel: true },
+        xAxis: {
+          type: 'category',
+          name: `${targetYKey} 分箱区间`,
+          data: categories,
+          boundaryGap: true,
+        },
+        yAxis: {
+          type: 'value',
+          name: '样本数',
+          minInterval: 1,
+        },
+        series: [
+          {
+            name: `${targetYKey} 分布`,
+            type: 'bar',
+            data: seriesData,
+            barMaxWidth: 44,
+            itemStyle: { color: '#2563eb' },
+          },
+        ],
+      }
+
+      return createChartResult(markRaw(option), {
+        meta: {
+          chartType: 'histogram',
+          sourceKind: 'table',
+          rowCount: rows.length,
+          yAxis: targetYKey,
+          binCount,
+        },
+      })
+    }
 
     if (config.chartType === 'scatter') {
       option = {

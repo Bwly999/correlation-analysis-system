@@ -780,14 +780,14 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
   ),
   'chart-display': createEntry(
     {
-      summary: '把表格或分组数据快速转换成散点图、柱状图或箱线图。',
+      summary: '把表格或分组数据快速转换成散点图、柱状图、分布图或箱线图。',
       whenToUse: ['你想先看趋势和分布，而不是直接看文本报告。'],
       inputGuide: ['可接单表数据，也可接分组集合数据。', '图表类型不同，对字段要求也不同。'],
       parameterGuide: [
         {
           property: 'chartType',
           title: '图表类型',
-          content: '散点图适合看双变量关系，柱状图适合分类对比，箱线图适合分布对比。',
+          content: '散点图适合看双变量关系，柱状图适合分类对比，分布图适合看单字段分布形状，箱线图适合看分位数和异常值。',
         },
       ],
       outputGuide: ['输出结果是图表，可直接查看，也可作为结果展示节点。'],
@@ -795,13 +795,13 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       commonIssues: [
         {
           title: '图表无法生成',
-          resolution: '先确认所选 X/Y 字段存在，且用于数值轴的字段可以被识别为数值。',
+          resolution: '先确认所选字段存在，且用于数值轴或分布图分析的字段可以被识别为数值。',
         },
       ],
     },
     {
-      useCases: ['快速画散点图', '做分类柱状图', '比较多组分布'],
-      keywords: ['图表', '可视化', '散点图', '柱状图', '箱线图'],
+      useCases: ['快速画散点图', '做分类柱状图', '查看单字段直方图分布', '比较多组分布'],
+      keywords: ['图表', '可视化', '散点图', '柱状图', '分布图', '直方图', '箱线图'],
       workflowRoles: ['分析终点'],
       inputKinds: ['table', 'tableCollection'],
       outputKinds: ['chart'],
