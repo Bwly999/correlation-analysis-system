@@ -566,6 +566,42 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       recommendedNextNodes: ['data-export'],
     },
   ),
+  anova: createEntry(
+    {
+      summary: '通过单因素方差分析判断不同分组在数值目标字段上的均值差异是否显著。',
+      whenToUse: ['你想比较不同批次、工艺段、实验条件或类别分组在某个数值指标上的差异。'],
+      inputGuide: ['需要上游提供表格数据。', '目标字段应为数值型，分组字段应能区分出至少两个有效分组。'],
+      parameterGuide: [
+        {
+          property: 'targetField',
+          title: '目标字段',
+          content: '选择要比较组间均值差异的数值字段，例如良率、评分、温度或时长。',
+        },
+        {
+          property: 'groupField',
+          title: '分组字段',
+          content: '选择用于分组的类别字段，例如批次、配方、产线或实验组别。',
+        },
+      ],
+      outputGuide: ['输出结果是方差分析报告，包含 F 值、P 值、分组均值对比、箱线图和分组明细。'],
+      nextSteps: ['如果差异显著，可继续结合图表或导出结果做业务复盘。', '若组间样本量不均衡，建议先补看结果可信提示。'],
+      commonIssues: [
+        {
+          title: '无法完成分析',
+          resolution: '先确认目标字段是数值字段，且至少有两个有效分组，每组最好都有足够样本。',
+        },
+      ],
+    },
+    {
+      useCases: ['比较不同分组的均值差异', '验证实验组与对照组差异', '分析批次或工艺段差异'],
+      keywords: ['方差分析', 'ANOVA', '分组差异', '显著性'],
+      workflowRoles: ['分析终点'],
+      inputKinds: ['table'],
+      outputKinds: ['report'],
+      recommendedPrevNodes: ['data-cleaning', 'field-selection', 'data-filter'],
+      recommendedNextNodes: ['chart-display', 'data-export'],
+    },
+  ),
   vif: createEntry(
     {
       summary: '检测多个数值字段之间的共线性风险，识别不适合一起进入回归的高冗余因子。',

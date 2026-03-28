@@ -40,6 +40,7 @@ import { dataLimitNode } from '../definitions/dataLimit'
 import { xgboostShapNode } from '../definitions/xgboostShap'
 import { lassoNode } from '../definitions/lasso'
 import { multipleLinearRegressionNode } from '../definitions/multipleLinearRegression'
+import { anovaNode } from '../definitions/anova'
 import { pearsonNode } from '../definitions/pearson'
 import { fieldSelectionNode } from '../definitions/fieldSelection'
 import { sortNode } from '../definitions/sort'
@@ -408,6 +409,36 @@ describe('remaining nodes standardized result protocol', () => {
       '/api/analysis/multiple-linear-regression',
       expect.any(Object),
     )
+  })
+
+  it('anova should return a standardized report result with significance metrics and group charts', async () => {
+    const result = await anovaNode.execute(
+      createTableResult([
+        { condition: 'A', target: 10 },
+        { condition: 'A', target: 11 },
+        { condition: 'A', target: 9 },
+        { condition: 'B', target: 20 },
+        { condition: 'B', target: 22 },
+        { condition: 'B', target: 21 },
+        { condition: 'C', target: 30 },
+        { condition: 'C', target: 31 },
+        { condition: 'C', target: 29 },
+      ]),
+      { targetField: 'target', groupField: 'condition' },
+    )
+
+    expect(result.kind).toBe('report')
+    expect(result.payload.title).toBe('单因素方差分析')
+    expect(result.meta?.metrics).toMatchObject({
+      groupCount: 3,
+      targetField: 'target',
+      groupField: 'condition',
+    })
+    expect(result.payload.sections[0].type).toBe('summary')
+    expect(result.payload.sections[1].option.series[0].type).toBe('bar')
+    expect(result.payload.sections[2].option.series[0].type).toBe('boxplot')
+    expect(result.payload.sections[3].type).toBe('risk-list')
+    expect(result.preview?.viewer).toBe('report-viewer')
   })
 
   it('correlation nodes should return standardized report results', async () => {
