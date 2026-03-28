@@ -291,4 +291,94 @@ describe('PropertyField', () => {
     expect(wrapper.text()).toContain('以下字段暂不支持当前分析')
     expect(wrapper.text()).toContain('批次')
   })
+
+  it('为必填字段显示未完成提示，并为默认值显示推荐提示', () => {
+    setActivePinia(createPinia())
+
+    const wrapper = mount(PropertyField, {
+      props: {
+        prop: {
+          name: 'topN',
+          displayName: '重点展示因子数',
+          type: 'number',
+          default: 8,
+          required: true,
+        },
+        modelValue: 8,
+        upstreamFactors: [],
+      },
+      global: {
+        directives: {
+          tooltip: () => undefined,
+        },
+        stubs: {
+          InputNumber: {
+            props: ['modelValue'],
+            template: '<div class="input-number-stub">{{ modelValue }}</div>',
+          },
+        },
+      },
+    })
+
+    expect(wrapper.text()).toContain('当前使用推荐默认值：8')
+
+    const requiredWrapper = mount(PropertyField, {
+      props: {
+        prop: {
+          name: 'targetField',
+          displayName: '目标字段',
+          type: 'string',
+          default: '',
+          required: true,
+        },
+        modelValue: '',
+        upstreamFactors: [],
+      },
+      global: {
+        directives: {
+          tooltip: () => undefined,
+        },
+        stubs: {
+          InputText: {
+            props: ['modelValue'],
+            template: '<div class="input-text-stub">{{ modelValue }}</div>',
+          },
+        },
+      },
+    })
+
+    expect(requiredWrapper.text()).toContain('该项为必填，建议先完成配置再运行节点')
+  })
+
+  it('为分析字段在缺少上游可选字段时展示空状态提示', () => {
+    setActivePinia(createPinia())
+
+    const wrapper = mount(PropertyField, {
+      props: {
+        prop: {
+          name: 'xFields',
+          displayName: 'X 字段',
+          type: 'multi-options',
+          default: [],
+          useUpstreamFactors: true,
+          required: true,
+        },
+        modelValue: [],
+        upstreamFactors: [],
+      },
+      global: {
+        directives: {
+          tooltip: () => undefined,
+        },
+        stubs: {
+          MultiSelect: {
+            props: ['options'],
+            template: '<div class="multi-options-options">{{ options.length }}</div>',
+          },
+        },
+      },
+    })
+
+    expect(wrapper.text()).toContain('当前没有可选字段，请先连接上游数据或使用左侧输入数据')
+  })
 })

@@ -19,7 +19,7 @@ export const helpCenterContent: HelpCenterContent = {
     {
       step: 3,
       title: '分析输出',
-      goal: '生成相关性报告、图表或导出文件，作为最终结果输出。',
+      goal: '第一次建议先跑通 Pearson 相关性报告，再决定是否继续扩展到图表或导出。',
       recommendedNodes: [
         'pearson',
         'spearman',
@@ -29,7 +29,9 @@ export const helpCenterContent: HelpCenterContent = {
         'chart-display',
         'data-export',
       ],
-      pitfalls: ['终端节点前尽量保证输入是清晰、可解释的表格数据。'],
+      pitfalls: [
+        '第一次做相关性分析时，建议先选 1-3 个 Y 字段，再补 3-10 个数值型 X 字段。',
+      ],
     },
   ],
   faqs: [
@@ -45,6 +47,11 @@ export const helpCenterContent: HelpCenterContent = {
       question: '什么时候用 Pearson / Spearman / Kendall？',
       answer:
         '线性关系优先用 Pearson；只关心单调关系时用 Spearman；样本较小或排序关系更重要时可用 Kendall。',
+    },
+    {
+      question: '第一次做相关性分析，字段应该怎么选？',
+      answer:
+        '先确认输入是表格数据，至少包含 2 个数值字段；Y 字段优先选你要观察的指标，X 字段再选候选因子，非数值字段建议先编码或清洗。',
     },
     {
       question: '什么时候需要先做数据清洗？',

@@ -181,6 +181,79 @@ describe('NodeConfigModal', () => {
     expect(wrapper.find('.upstream-factors').text()).toContain('"dataType":"string"')
   })
 
+  it('shows a correlation setup guide for first-time analysis configuration', () => {
+    const store = useWorkflowStore()
+    store.nodes = [
+      {
+        id: 'source-1',
+        type: 'custom',
+        position: { x: 0, y: 0 },
+        label: '来源一',
+        data: {
+          label: '来源一',
+          type: 'manual-json-import',
+          category: 'trigger',
+          status: 'success',
+          config: {},
+          logs: [],
+          useManualInput: false,
+          manualInput: '',
+          isPinned: false,
+          output: {
+            kind: 'table',
+            payload: [{ target: 12, f1: 1.2, f2: 3.4 }],
+            schema: {
+              fields: [
+                { name: 'target', type: 'number' },
+                { name: 'f1', type: 'number' },
+                { name: 'f2', type: 'number' },
+              ],
+            },
+          },
+        },
+      } as any,
+      {
+        id: 'pearson-node',
+        type: 'custom',
+        position: { x: 300, y: 0 },
+        label: 'Pearson 分析',
+        data: {
+          label: 'Pearson 分析',
+          type: 'pearson',
+          category: 'terminal',
+          status: 'idle',
+          config: { xFields: [], yFields: [], topN: 8 },
+          logs: [],
+          useManualInput: false,
+          manualInput: '',
+          isPinned: false,
+        },
+      } as any,
+    ]
+    store.edges = [
+      { id: 'e1', source: 'source-1', target: 'pearson-node', type: 'n8n', animated: true },
+    ] as any
+
+    const wrapper = mount(NodeConfigModal, {
+      props: { visible: true, nodeId: 'pearson-node' },
+      global: {
+        stubs: {
+          Dialog: dialogStub,
+          DataDisplayPanel: true,
+          DataAnalysisModal: true,
+          ConfigHeader: { template: '<div />', props: ['nodeLabel', 'isPinned', 'nodeType'] },
+          ConfigFooter: { template: '<div />' },
+          ConfigForm: { template: '<div />', props: ['config', 'properties', 'upstreamFactors'] },
+          RuntimeInputs: { template: '<div />', props: ['config', 'properties', 'upstreamFactors'] },
+        },
+      },
+    })
+
+    expect(wrapper.text()).toContain('相关性分析配置建议')
+    expect(wrapper.text()).toContain('先选择 1-3 个 Y 字段作为观察指标')
+    expect(wrapper.text()).toContain('当前可用数值字段 3 个')
+  })
+
   it('generates a standard table result template for single-input debugging', async () => {
     const store = useWorkflowStore()
     store.nodes = [

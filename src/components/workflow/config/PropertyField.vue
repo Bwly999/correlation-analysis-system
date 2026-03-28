@@ -364,6 +364,33 @@ const multiOptionsForceInputHint = computed(() => {
   return '暂无可选项，可直接输入后按回车添加'
 })
 
+const isEmptyValue = computed(() => {
+  if (Array.isArray(configValue.value)) return configValue.value.length === 0
+  if (typeof configValue.value === 'string') return configValue.value.trim() === ''
+  return configValue.value === null || configValue.value === undefined
+})
+
+const showRequiredHint = computed(() => props.prop.required && isEmptyValue.value)
+
+const showDefaultHint = computed(() => {
+  if (props.prop.default === undefined) return false
+  if (showRequiredHint.value) return false
+  return JSON.stringify(configValue.value) === JSON.stringify(props.prop.default)
+})
+
+const showUpstreamEmptyHint = computed(() => {
+  return (
+    props.prop.useUpstreamFactors &&
+    requiresNumericAnalysisField.value &&
+    optionSource.value.length === 0
+  )
+})
+
+const defaultHintText = computed(() => {
+  if (Array.isArray(configValue.value)) return configValue.value.join('、')
+  return String(configValue.value)
+})
+
 const toggleOptionsRegexMode = (event?: Event) => {
   event?.preventDefault()
   event?.stopPropagation()
@@ -596,14 +623,6 @@ const getRegexToggleClass = (enabled: boolean) => [
       @keydown.enter="onTagsEnter"
     />
 
-    <div
-      v-if="nonAnalyzableUpstreamFactors.length > 0"
-      class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-700"
-    >
-      以下字段暂不支持当前分析：
-      {{ nonAnalyzableUpstreamFactors.map((item) => item.name).join('、') }}
-    </div>
-
     <MonacoEditor
       v-else-if="prop.type === 'json'"
       v-model="configValue"
@@ -711,6 +730,35 @@ const getRegexToggleClass = (enabled: boolean) => [
         option-value="value"
         class="w-full select-button-custom"
       />
+    </div>
+
+    <div
+      v-if="nonAnalyzableUpstreamFactors.length > 0"
+      class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-700"
+    >
+      以下字段暂不支持当前分析：
+      {{ nonAnalyzableUpstreamFactors.map((item) => item.name).join('、') }}
+    </div>
+
+    <div
+      v-if="showUpstreamEmptyHint"
+      class="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs leading-relaxed text-blue-700"
+    >
+      当前没有可选字段，请先连接上游数据或使用左侧输入数据。
+    </div>
+
+    <div
+      v-if="showRequiredHint"
+      class="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs leading-relaxed text-rose-700"
+    >
+      该项为必填，建议先完成配置再运行节点。
+    </div>
+
+    <div
+      v-else-if="showDefaultHint"
+      class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-600"
+    >
+      当前使用推荐默认值：{{ defaultHintText }}
     </div>
   </div>
 </template>

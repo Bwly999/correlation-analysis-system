@@ -101,6 +101,10 @@ const nodeHelpSummary = computed(() => {
   } as const
 })
 
+const isCorrelationNode = computed(() =>
+  ['pearson', 'spearman', 'kendall'].includes(nodeDefinition.value?.name ?? ''),
+)
+
 const runtimeProperties = computed(
   () => nodeDefinition.value?.properties.filter((p) => p.isRuntimeInput) || [],
 )
@@ -217,6 +221,25 @@ const upstreamFactors = computed(() => {
   }
 
   return []
+})
+
+const availableNumericFactorCount = computed(() =>
+  upstreamFactors.value.filter((factor) => factor.dataType === 'number' || factor.dataType === 'unknown')
+    .length,
+)
+
+const correlationSetupGuide = computed(() => {
+  if (!isCorrelationNode.value) return null
+
+  return {
+    title: '相关性分析配置建议',
+    description: '第一次配置时，建议先跑通一版最小分析链路，再逐步扩大字段范围。',
+    items: [
+      '先选择 1-3 个 Y 字段作为观察指标，再补充 3-10 个 X 字段作为候选因子。',
+      '优先选择数值字段；类别字段进入相关性分析前，建议先做编码或清洗。',
+      `当前可用数值字段 ${availableNumericFactorCount.value} 个，可先从最关键的指标开始。`,
+    ],
+  }
 })
 
 const runCurrentNode = async () => {
@@ -499,6 +522,34 @@ const buildManualInputTemplate = () => {
               >
                 <HelpCircle :size="16" />
               </button>
+            </div>
+            <div
+              v-if="correlationSetupGuide"
+              class="rounded-3xl border border-blue-200 bg-gradient-to-br from-white via-blue-50 to-slate-50 p-5"
+            >
+              <div class="flex items-center justify-between gap-3">
+                <div>
+                  <h3 class="text-base font-semibold text-slate-900">{{ correlationSetupGuide.title }}</h3>
+                  <p class="mt-1 text-sm leading-6 text-slate-600">
+                    {{ correlationSetupGuide.description }}
+                  </p>
+                </div>
+                <span
+                  class="rounded-full border border-blue-200 bg-white px-3 py-1 text-[11px] font-bold text-blue-700"
+                >
+                  首次配置
+                </span>
+              </div>
+
+              <ul class="mt-4 space-y-2 text-sm leading-6 text-slate-700">
+                <li
+                  v-for="item in correlationSetupGuide.items"
+                  :key="item"
+                  class="rounded-2xl border border-white/80 bg-white/70 px-3 py-2"
+                >
+                  {{ item }}
+                </li>
+              </ul>
             </div>
             <ConfigForm
               v-model:config="config"
