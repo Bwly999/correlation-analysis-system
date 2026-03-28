@@ -18,6 +18,7 @@ import { multipleLinearRegressionNode } from './definitions/multipleLinearRegres
 import { pearsonNode } from './definitions/pearson'
 import { spearmanNode } from './definitions/spearman'
 import { kendallNode } from './definitions/kendall'
+import { vifNode } from './definitions/vif'
 import { dataExportNode } from './definitions/dataExport'
 import { chartDisplayNode } from './definitions/chartDisplay'
 
@@ -37,6 +38,7 @@ const rawNodeDefinitions: NodeDefinition[] = [
   xgboostShapNode,
   lassoNode,
   multipleLinearRegressionNode,
+  vifNode,
   pearsonNode,
   spearmanNode,
   kendallNode,

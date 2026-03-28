@@ -45,6 +45,7 @@ import { fieldSelectionNode } from '../definitions/fieldSelection'
 import { sortNode } from '../definitions/sort'
 import { spearmanNode } from '../definitions/spearman'
 import { kendallNode } from '../definitions/kendall'
+import { vifNode } from '../definitions/vif'
 import { dataExportNode } from '../definitions/dataExport'
 import { neighborSystemNode } from '../definitions/neighborSystem'
 import { createTableResult } from '../result'
@@ -437,6 +438,31 @@ describe('remaining nodes standardized result protocol', () => {
 
     expect(kendall.kind).toBe('report')
     expect(kendall.payload.sections[1].option.series[0].name).toBe('Kendall τ')
+  })
+
+  it('vif should return a standardized report result with vif metrics and risks', async () => {
+    const result = await vifNode.execute(
+      createTableResult([
+        { f1: 1, f2: 2.01, f3: 10 },
+        { f1: 2, f2: 4.02, f3: 8 },
+        { f1: 3, f2: 6.01, f3: 6 },
+        { f1: 4, f2: 8.03, f3: 4 },
+        { f1: 5, f2: 10.05, f3: 2 },
+        { f1: 6, f2: 12.04, f3: 1 },
+      ]),
+      { factorNames: ['f1', 'f2', 'f3'] },
+    )
+
+    expect(result.kind).toBe('report')
+    expect(result.payload.title).toBe('VIF 共线性检测')
+    expect(result.meta?.metrics).toMatchObject({
+      featureCount: 3,
+    })
+    expect(result.payload.sections[0].type).toBe('summary')
+    expect(result.payload.sections[1].option.series[0].type).toBe('bar')
+    expect(result.payload.sections[2].type).toBe('risk-list')
+    expect(result.preview?.viewer).toBe('report-viewer')
+    expect(Array.isArray(result.meta?.risks)).toBe(true)
   })
 
   it('neighbor-system should return a table result with upstream metadata in meta', async () => {

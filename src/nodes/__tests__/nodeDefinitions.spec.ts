@@ -51,6 +51,7 @@ import { pearsonNode } from '../definitions/pearson'
 import { sortNode } from '../definitions/sort'
 import { spearmanNode } from '../definitions/spearman'
 import { kendallNode } from '../definitions/kendall'
+import { vifNode } from '../definitions/vif'
 import { nodeDefinitions } from '../registry'
 import {
   createTableCollectionResult,
@@ -895,6 +896,34 @@ describe('Node Definitions Execution Logic', () => {
       expect(legacy.report.sections[3].type).toBe('risk-list')
       expect(legacy.report.sections[4].content).toContain('Y字段')
       expect(Array.isArray(legacy.meta?.risks)).toBe(true)
+    })
+
+    it('should calculate vif and flag highly collinear fields', async () => {
+      const input = createTableResult([
+        { f1: 1, f2: 2.01, f3: 10 },
+        { f1: 2, f2: 4.02, f3: 8 },
+        { f1: 3, f2: 6.01, f3: 6 },
+        { f1: 4, f2: 8.03, f3: 4 },
+        { f1: 5, f2: 10.05, f3: 2 },
+        { f1: 6, f2: 12.04, f3: 1 },
+      ])
+
+      const result = await vifNode.execute(input, {
+        factorNames: ['f1', 'f2', 'f3'],
+      })
+
+      const legacy = asLegacy(result)
+
+      expect(legacy.viewType).toBe('report')
+      expect(legacy.report.title).toBe('VIF 共线性检测')
+      expect(legacy.metrics.featureCount).toBe(3)
+      expect(legacy.report.sections[0].type).toBe('summary')
+      expect(legacy.report.sections[1].title).toBe('VIF 排序')
+      expect(legacy.report.sections[2].title).toBe('共线性风险提示')
+
+      const highRisk = legacy.meta?.risks?.find((risk: any) => risk.code === 'high_vif')
+      expect(highRisk).toBeDefined()
+      expect(highRisk.message).toContain('f1')
     })
 
     it('should calculate spearman correlations for monotonic but non-linear data', async () => {

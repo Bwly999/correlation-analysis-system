@@ -566,6 +566,37 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       recommendedNextNodes: ['data-export'],
     },
   ),
+  vif: createEntry(
+    {
+      summary: '检测多个数值字段之间的共线性风险，识别不适合一起进入回归的高冗余因子。',
+      whenToUse: ['你已经挑出一批候选因子，想先判断它们之间是否高度重叠，再进入回归或特征筛选。'],
+      inputGuide: ['需要上游提供表格数据。', '输入字段应尽量为数值型，且建议先完成缺失值处理。'],
+      parameterGuide: [
+        {
+          property: 'factorNames',
+          title: '检测字段',
+          content: '建议只放真正准备一起进入模型的候选因子，避免把明显无关字段一起带入诊断。',
+        },
+      ],
+      outputGuide: ['输出结果是诊断报告，包含 VIF 排序、风险提示和字段明细。'],
+      nextSteps: ['若高 VIF 字段较多，建议先删减字段、做聚合，或继续尝试 PCA。'],
+      commonIssues: [
+        {
+          title: '有效样本不足',
+          resolution: 'VIF 依赖完整样本矩阵，若多个字段缺失较多，建议先做清洗或缩小检测字段范围。',
+        },
+      ],
+    },
+    {
+      useCases: ['回归前共线性检查', '候选因子去冗余', '高相关字段诊断'],
+      keywords: ['VIF', '共线性', '多重共线性', '诊断'],
+      workflowRoles: ['分析终点'],
+      inputKinds: ['table'],
+      outputKinds: ['report'],
+      recommendedPrevNodes: ['data-cleaning', 'field-selection', 'multiple-linear-regression'],
+      recommendedNextNodes: ['multiple-linear-regression', 'data-export'],
+    },
+  ),
   'xgboost-shap': createEntry(
     {
       summary: '通过 Xgboost 结合 SHAP 值解释模型，查看各因子对目标的贡献和趋势。',
