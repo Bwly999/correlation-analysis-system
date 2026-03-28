@@ -24,6 +24,7 @@ Node 服务
        -> 转发到 Python 算法服务
 
 Python 服务
+  -> /analyze/random-forest-feature-importance
   -> /analyze/lasso
   -> /analyze/xgboost-shap
 ```
@@ -112,11 +113,13 @@ Node 服务当前统一提供以下接口：
 - `/api/storage/*`
 - `/api/workflow-ai/*`
 - `/api/analysis/lasso`
+- `/api/analysis/random-forest-feature-importance`
 - `/api/analysis/xgboost-shap`
 
 其中算法接口会继续转发到 Python：
 
 - `/api/analysis/lasso` -> `/analyze/lasso`
+- `/api/analysis/random-forest-feature-importance` -> `/analyze/random-forest-feature-importance`
 - `/api/analysis/xgboost-shap` -> `/analyze/xgboost-shap`
 
 ---
@@ -159,6 +162,7 @@ uvicorn backend.main:app --host 127.0.0.1 --port 8000
 Python 只负责算法执行：
 
 - `POST /analyze/lasso`
+- `POST /analyze/random-forest-feature-importance`
 - `POST /analyze/xgboost-shap`
 
 不建议再让浏览器直接访问 Python。
@@ -248,7 +252,7 @@ WantedBy=multi-user.target
 4. 启动 Python 服务并确认 `127.0.0.1:8000` 可访问
 5. 启动 Node 服务并确认 `127.0.0.1:8787/api/storage/me` 可访问
 6. 配置 Nginx 并重载
-7. 浏览器访问站点并验证工作流保存、AI 编排、Lasso、Xgboost + SHAP
+7. 浏览器访问站点并验证工作流保存、AI 编排、随机森林特征重要性、Lasso、Xgboost + SHAP
 
 ---
 
@@ -256,6 +260,7 @@ WantedBy=multi-user.target
 
 - 打开页面后无 `/analyze/*` 直连请求，浏览器只出现 `/api/*`
 - 执行 Lasso 时，浏览器请求为 `/api/analysis/lasso`
+- 执行随机森林特征重要性时，浏览器请求为 `/api/analysis/random-forest-feature-importance`
 - 执行 Xgboost + SHAP 时，浏览器请求为 `/api/analysis/xgboost-shap`
 - Node 日志正常，Python 日志能收到对应算法请求
 - 工作流保存/读取正常

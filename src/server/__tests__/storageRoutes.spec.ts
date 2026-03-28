@@ -175,6 +175,48 @@ describe('storage routes', () => {
     })
   })
 
+  it('should proxy random forest feature importance analysis requests to the python backend', async () => {
+    vi.stubEnv('PYTHON_ANALYSIS_API_BASE_URL', 'http://127.0.0.1:9000')
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ status: 'success', results: { summary: { ok: true } } }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const handler = createServerHandler()
+    const response = createResponse()
+
+    await handler(
+      createRequest('POST', '/api/analysis/random-forest-feature-importance', {
+        data: [{ target: 1, f1: 2 }],
+        target: 'target',
+        config: { factorNames: ['f1'], nEstimators: 200 },
+      }),
+      response,
+    )
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:9000/analyze/random-forest-feature-importance',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          data: [{ target: 1, f1: 2 }],
+          target: 'target',
+          config: { factorNames: ['f1'], nEstimators: 200 },
+        }),
+      },
+    )
+    expect(response.statusCode).toBe(200)
+    expect(JSON.parse(response.body)).toEqual({
+      status: 'success',
+      results: { summary: { ok: true } },
+    })
+  })
+
   it('should return python backend errors for analysis requests', async () => {
     vi.stubEnv('PYTHON_ANALYSIS_API_BASE_URL', 'http://127.0.0.1:9000')
     const fetchMock = vi.fn().mockResolvedValue({

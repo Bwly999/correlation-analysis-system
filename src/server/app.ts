@@ -130,6 +130,11 @@ export const createServerHandler = () => async (request: IncomingMessage, respon
       return
     }
 
+    if (request.method === 'POST' && url.pathname === '/api/analysis/random-forest-feature-importance') {
+      await proxyAnalysisRequest(request, response, 'random-forest-feature-importance', setCorsHeaders)
+      return
+    }
+
     if (request.method === 'POST' && url.pathname === '/api/analysis/xgboost-shap') {
       await proxyAnalysisRequest(request, response, 'xgboost-shap', setCorsHeaders)
       return

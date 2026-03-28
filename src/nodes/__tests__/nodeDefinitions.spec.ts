@@ -47,6 +47,7 @@ import { dataExportNode } from '../definitions/dataExport'
 import { fieldSelectionNode } from '../definitions/fieldSelection'
 import { lassoNode } from '../definitions/lasso'
 import { multipleLinearRegressionNode } from '../definitions/multipleLinearRegression'
+import { randomForestFeatureImportanceNode } from '../definitions/randomForestFeatureImportance'
 import { pearsonNode } from '../definitions/pearson'
 import { sortNode } from '../definitions/sort'
 import { spearmanNode } from '../definitions/spearman'
@@ -857,6 +858,72 @@ describe('Node Definitions Execution Logic', () => {
       expect(legacy.report.sections[3].title).toBe('残差分布')
       expect(global.fetch).toHaveBeenCalledWith(
         '/api/analysis/multiple-linear-regression',
+        expect.any(Object),
+      )
+    })
+
+    it('should normalize random forest feature importance backend results', async () => {
+      const input = createTableResult([
+        { target: 10, f1: 1, f2: 3, f3: 8 },
+        { target: 14, f1: 2, f2: 4, f3: 7 },
+        { target: 18, f1: 3, f2: 5, f3: 6 },
+      ])
+      const config = { targetField: 'target', factorNames: ['f1', 'f2', 'f3'] }
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          results: {
+            summary: {
+              targetField: 'target',
+              sampleCount: 48,
+              featureCount: 3,
+              r2: 0.9412,
+              mae: 0.4281,
+              nEstimators: 300,
+              maxDepth: 10,
+            },
+            importance: [
+              { name: 'f1', value: 0.58, rank: 1 },
+              { name: 'f2', value: 0.29, rank: 2 },
+              { name: 'f3', value: 0.13, rank: 3 },
+            ],
+            cumulativeImportance: [
+              { name: 'f1', cumulativeValue: 0.58, rank: 1 },
+              { name: 'f2', cumulativeValue: 0.87, rank: 2 },
+              { name: 'f3', cumulativeValue: 1, rank: 3 },
+            ],
+            predictions: {
+              actual: [10, 14, 18],
+              predicted: [10.3, 13.7, 18.5],
+            },
+            risks: [
+              {
+                code: 'top_feature_dominance',
+                level: 'low',
+                title: '头部因子贡献集中',
+                message: '前 1 个因子已覆盖主要解释度，可优先关注。',
+              },
+            ],
+          },
+        }),
+      }) as any
+
+      const result = await randomForestFeatureImportanceNode.execute(input, config)
+
+      const legacy = asLegacy(result)
+
+      expect(legacy.viewType).toBe('report')
+      expect(legacy.report.title).toBe('随机森林特征重要性')
+      expect(legacy.metrics.nEstimators).toBe(300)
+      expect(legacy.metrics.maxDepth).toBe(10)
+      expect(legacy.report.sections[0].type).toBe('summary')
+      expect(legacy.report.sections[1].title).toBe('特征重要性排行')
+      expect(legacy.report.sections[2].title).toBe('累计重要性')
+      expect(legacy.report.sections[3].title).toBe('预测值对比')
+      expect(legacy.report.sections[4].title).toBe('结果解读提示')
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/analysis/random-forest-feature-importance',
         expect.any(Object),
       )
     })

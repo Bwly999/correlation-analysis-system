@@ -35,5 +35,8 @@ export const requestLassoAnalysis = <T>(body: AnalysisRequestBody) =>
 export const requestMultipleLinearRegressionAnalysis = <T>(body: AnalysisRequestBody) =>
   postAnalysis<T>('/analysis/multiple-linear-regression', body)
 
+export const requestRandomForestFeatureImportanceAnalysis = <T>(body: AnalysisRequestBody) =>
+  postAnalysis<T>('/analysis/random-forest-feature-importance', body)
+
 export const requestXgboostShapAnalysis = <T>(body: AnalysisRequestBody) =>
   postAnalysis<T>('/analysis/xgboost-shap', body)

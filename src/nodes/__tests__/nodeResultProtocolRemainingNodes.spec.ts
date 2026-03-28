@@ -40,6 +40,7 @@ import { dataLimitNode } from '../definitions/dataLimit'
 import { xgboostShapNode } from '../definitions/xgboostShap'
 import { lassoNode } from '../definitions/lasso'
 import { multipleLinearRegressionNode } from '../definitions/multipleLinearRegression'
+import { randomForestFeatureImportanceNode } from '../definitions/randomForestFeatureImportance'
 import { anovaNode } from '../definitions/anova'
 import { pearsonNode } from '../definitions/pearson'
 import { fieldSelectionNode } from '../definitions/fieldSelection'
@@ -407,6 +408,76 @@ describe('remaining nodes standardized result protocol', () => {
     expect(result.preview?.viewer).toBe('report-viewer')
     expect(global.fetch).toHaveBeenCalledWith(
       '/api/analysis/multiple-linear-regression',
+      expect.any(Object),
+    )
+  })
+
+  it('random-forest-feature-importance should return a standardized report result from backend payload', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        results: {
+          summary: {
+            targetField: 'target',
+            sampleCount: 60,
+            featureCount: 3,
+            r2: 0.9321,
+            mae: 0.5124,
+            nEstimators: 200,
+            maxDepth: 8,
+          },
+          importance: [
+            { name: 'f1', value: 0.61, rank: 1 },
+            { name: 'f2', value: 0.27, rank: 2 },
+            { name: 'f3', value: 0.12, rank: 3 },
+          ],
+          cumulativeImportance: [
+            { name: 'f1', cumulativeValue: 0.61, rank: 1 },
+            { name: 'f2', cumulativeValue: 0.88, rank: 2 },
+            { name: 'f3', cumulativeValue: 1, rank: 3 },
+          ],
+          predictions: {
+            actual: [10, 12, 14],
+            predicted: [10.4, 11.7, 14.2],
+          },
+          risks: [
+            {
+              code: 'flat_importance_distribution',
+              level: 'medium',
+              title: '重要性分布较平',
+              message: '多个因子重要性接近，建议结合业务理解进一步筛选。',
+            },
+          ],
+        },
+      }),
+    }) as any
+
+    const result = await randomForestFeatureImportanceNode.execute(
+      createTableResult([
+        { target: 10, f1: 1, f2: 2, f3: 3 },
+        { target: 12, f1: 2, f2: 3, f3: 4 },
+        { target: 14, f1: 3, f2: 4, f3: 5 },
+      ]),
+      { targetField: 'target', factorNames: ['f1', 'f2', 'f3'] },
+    )
+
+    expect(result.kind).toBe('report')
+    expect(result.payload.title).toBe('随机森林特征重要性')
+    expect(result.meta?.metrics).toMatchObject({
+      targetField: 'target',
+      sampleCount: 60,
+      featureCount: 3,
+      nEstimators: 200,
+      maxDepth: 8,
+    })
+    expect(result.payload.sections[0].type).toBe('summary')
+    expect(result.payload.sections[1].option.series[0].type).toBe('bar')
+    expect(result.payload.sections[2].option.series[0].type).toBe('line')
+    expect(result.payload.sections[3].option.series[0].type).toBe('scatter')
+    expect(result.payload.sections[4].type).toBe('risk-list')
+    expect(result.preview?.viewer).toBe('report-viewer')
+    expect(global.fetch).toHaveBeenCalledWith(
+      '/api/analysis/random-forest-feature-importance',
       expect.any(Object),
     )
   })

@@ -9,6 +9,7 @@ class MainModuleTests(unittest.TestCase):
         self.assertTrue(hasattr(main, 'app'))
         self.assertTrue(hasattr(main, 'analyze_lasso'))
         self.assertTrue(hasattr(main, 'analyze_multiple_linear_regression'))
+        self.assertTrue(hasattr(main, 'analyze_random_forest_feature_importance'))
 
 
 if __name__ == '__main__':

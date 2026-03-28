@@ -566,6 +566,47 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       recommendedNextNodes: ['data-export'],
     },
   ),
+  'random-forest-feature-importance': createEntry(
+    {
+      summary: '使用随机森林评估各因子对目标字段的相对重要性，快速识别头部关键因子。',
+      whenToUse: ['你想在非线性关系场景下做一轮因子贡献排序，而不是只看线性回归系数。'],
+      inputGuide: ['需要上游提供表格数据。', '输入字段应尽量为数值型，并明确目标变量字段。', '依赖本地 Python 后端分析服务。'],
+      parameterGuide: [
+        {
+          property: 'targetField',
+          title: '目标变量',
+          content: '选择要解释或预测的核心目标字段，通常是连续数值指标。',
+        },
+        {
+          property: 'factorNames',
+          title: '影响因子',
+          content: '建议只保留已清洗完成的候选因子，避免无关字段稀释重要性排序。',
+        },
+        {
+          property: 'nEstimators',
+          title: '树数量',
+          content: '树越多结果通常越稳定，但计算也会更慢。P1 版本默认 200 棵树即可。',
+        },
+      ],
+      outputGuide: ['输出结果是分析报告，包含特征重要性排行、累计重要性、预测值对比和结果解读提示。'],
+      nextSteps: ['如果头部因子集中，可继续做多元线性回归或导出结果。', '如果重要性分布较平，建议先做字段筛选或结合业务规则再收敛。'],
+      commonIssues: [
+        {
+          title: '结果排序不稳定',
+          resolution: '先检查样本量和字段质量，再缩小候选因子范围，避免把大量弱相关字段同时送入模型。',
+        },
+      ],
+    },
+    {
+      useCases: ['非线性因子排序', '关键特征筛选', '建模前重要性预分析'],
+      keywords: ['随机森林', '特征重要性', '因子排序', '随机森林回归'],
+      workflowRoles: ['分析终点'],
+      inputKinds: ['table'],
+      outputKinds: ['report'],
+      recommendedPrevNodes: ['data-cleaning', 'field-selection', 'vif'],
+      recommendedNextNodes: ['multiple-linear-regression', 'data-export'],
+    },
+  ),
   anova: createEntry(
     {
       summary: '通过单因素方差分析判断不同分组在数值目标字段上的均值差异是否显著。',
