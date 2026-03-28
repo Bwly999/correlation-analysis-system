@@ -234,6 +234,53 @@ describe('Node Definitions Execution Logic', () => {
       expect(legacy.data[0].category).toBe(legacy.data[2].category)
       expect(legacy.data[0].category).not.toBe(legacy.data[1].category)
     })
+
+    it('should remove duplicate full rows and keep the first occurrence', async () => {
+      const input = createTableResult([
+        { id: 'A1', batch: 'B1', score: 10 },
+        { id: 'A1', batch: 'B1', score: 10 },
+        { id: 'A2', batch: 'B2', score: 20 },
+      ])
+
+      const result = await dataCleaningNode.execute(input, {
+        deduplicationMode: 'full_row',
+        deduplicationKeep: 'first',
+      })
+
+      const legacy = asLegacy(result)
+
+      expect(legacy.data).toEqual([
+        { id: 'A1', batch: 'B1', score: 10 },
+        { id: 'A2', batch: 'B2', score: 20 },
+      ])
+      expect(legacy.stats.duplicatesRemoved).toBe(1)
+      expect(legacy.stats.deduplicationMode).toBe('full_row')
+      expect(legacy.stats.deduplicationKeep).toBe('first')
+    })
+
+    it('should deduplicate by selected fields and keep the last occurrence', async () => {
+      const input = createTableResult([
+        { batch: 'B1', step: '涂布', score: 10, version: 1 },
+        { batch: 'B1', step: '涂布', score: 12, version: 2 },
+        { batch: 'B2', step: '辊压', score: 8, version: 1 },
+      ])
+
+      const result = await dataCleaningNode.execute(input, {
+        deduplicationMode: 'by_fields',
+        deduplicationFields: ['batch', 'step'],
+        deduplicationKeep: 'last',
+      })
+
+      const legacy = asLegacy(result)
+
+      expect(legacy.data).toEqual([
+        { batch: 'B1', step: '涂布', score: 12, version: 2 },
+        { batch: 'B2', step: '辊压', score: 8, version: 1 },
+      ])
+      expect(legacy.stats.duplicatesRemoved).toBe(1)
+      expect(legacy.stats.deduplicationMode).toBe('by_fields')
+      expect(legacy.stats.deduplicationKeep).toBe('last')
+    })
   })
 
   describe('data-profiling', () => {

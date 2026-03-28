@@ -38,6 +38,34 @@ describe('core nodes standardized result protocol', () => {
     expect(result.preview?.viewer).toBe('table-chart-combo-viewer')
   })
 
+  it('data-cleaning should expose deduplication stats in standardized meta', async () => {
+    const result = await dataCleaningNode.execute(
+      createTableResult([
+        { batch: 'B1', step: '涂布', score: 10, version: 1 },
+        { batch: 'B1', step: '涂布', score: 12, version: 2 },
+        { batch: 'B2', step: '辊压', score: 8, version: 1 },
+      ]),
+      {
+        deduplicationMode: 'by_fields',
+        deduplicationFields: ['batch', 'step'],
+        deduplicationKeep: 'last',
+      },
+    )
+
+    expect(result.kind).toBe('table')
+    expect(result.payload).toEqual([
+      { batch: 'B1', step: '涂布', score: 12, version: 2 },
+      { batch: 'B2', step: '辊压', score: 8, version: 1 },
+    ])
+    expect(result.meta?.stats).toMatchObject({
+      originalCount: 3,
+      finalCount: 2,
+      duplicatesRemoved: 1,
+      deduplicationMode: 'by_fields',
+      deduplicationKeep: 'last',
+    })
+  })
+
   it('data-merge should return a standardized table result and keep lineage', async () => {
     const result = await dataMergeNode.execute(
       {

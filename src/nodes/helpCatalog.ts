@@ -124,10 +124,15 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
   ),
   'data-cleaning': createEntry(
     {
-      summary: '统一处理缺失值、异常值、缩放和分类编码，让数据更适合分析。',
-      whenToUse: ['原始数据存在空值、异常值、字符型字段或量纲差异明显时。'],
+      summary: '统一处理缺失值、去重、异常值、缩放和分类编码，让数据更适合分析。',
+      whenToUse: ['原始数据存在重复记录、空值、异常值、字符型字段或量纲差异明显时。'],
       inputGuide: ['需要上游提供表格数据。', '留空目标字段时会自动处理可识别的数值字段。'],
       parameterGuide: [
+        {
+          property: 'deduplicationMode',
+          title: '去重方式',
+          content: '按当前数据顺序去重；如果想保留最早或最晚记录，请先用排序节点把顺序整理好。',
+        },
         {
           property: 'missingValueStrategy',
           title: '缺失值处理',
@@ -143,14 +148,18 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       nextSteps: ['清洗后可继续筛选、聚合，或直接进入相关性/建模节点。'],
       commonIssues: [
         {
+          title: '去重结果和预期不一致',
+          resolution: '去重只识别当前表格顺序中的首条或末条记录；若要按时间先后保留，请先接排序节点。',
+        },
+        {
           title: '清洗后数据行数变少',
           resolution: '通常是因为缺失值处理选择了直接删除，或异常值处理剔除了样本。',
         },
       ],
     },
     {
-      useCases: ['处理缺失值', '做异常值清理', '标准化特征', '编码类别字段'],
-      keywords: ['数据清洗', '缺失值', '异常值', '标准化', '编码'],
+      useCases: ['处理重复记录', '处理缺失值', '做异常值清理', '标准化特征', '编码类别字段'],
+      keywords: ['数据清洗', '去重', '缺失值', '异常值', '标准化', '编码'],
       workflowRoles: ['数据准备'],
       inputKinds: ['table'],
       outputKinds: ['table'],

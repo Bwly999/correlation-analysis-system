@@ -7,7 +7,7 @@ export const dataCleaningNode: NodeDefinition = {
   displayName: '数据清洗',
   icon: 'settings-2',
   category: 'action',
-  description: '处理缺失值、异常值，并执行数据标准化与分类变量编码，为相关性分析做好准备。',
+  description: '处理缺失值、去重、异常值，并执行数据标准化与分类变量编码，为相关性分析做好准备。',
   properties: [
     {
       name: 'targetColumns',
@@ -17,6 +17,39 @@ export const dataCleaningNode: NodeDefinition = {
       useUpstreamFactors: true,
       description:
         '选择或输入要执行清洗操作的字段名。留空则自动处理所有数值型字段，排除 ID 或日期类字段。',
+    },
+    {
+      name: 'deduplicationMode',
+      displayName: '去重方式',
+      type: 'options',
+      default: 'none',
+      options: [
+        { name: '不处理', value: 'none' },
+        { name: '按整行去重', value: 'full_row' },
+        { name: '按指定字段去重', value: 'by_fields' },
+      ],
+      description: '按当前数据顺序去重；若需要保留最早或最晚记录，请先用排序节点整理顺序。',
+    },
+    {
+      name: 'deduplicationFields',
+      displayName: '去重字段',
+      type: 'tags',
+      default: [],
+      useUpstreamFactors: true,
+      displayIf: (config) => config.deduplicationMode === 'by_fields',
+      description: '仅在“按指定字段去重”时生效。多个字段会组合成一组唯一键。',
+    },
+    {
+      name: 'deduplicationKeep',
+      displayName: '保留记录',
+      type: 'options',
+      default: 'first',
+      displayIf: (config) => config.deduplicationMode && config.deduplicationMode !== 'none',
+      options: [
+        { name: '保留首条', value: 'first' },
+        { name: '保留末条', value: 'last' },
+      ],
+      description: '基于当前表格顺序保留首条或末条记录。',
     },
     {
       name: 'missingValueStrategy',
@@ -116,10 +149,75 @@ export const dataCleaningNode: NodeDefinition = {
       missingFilled: 0,
       rowsRemoved: 0,
       outliersRemoved: 0,
+      duplicatesRemoved: 0,
+      deduplicationMode: config.deduplicationMode || 'none',
+      deduplicationKeep: config.deduplicationKeep || 'first',
       fieldsProcessed: [],
     }
 
-    // 1. 处理缺失值 (Missing Values)
+    const serializeDedupKey = (value: unknown): string => {
+      if (value instanceof Date) {
+        return value.toISOString()
+      }
+
+      if (Array.isArray(value)) {
+        return JSON.stringify(value.map((item) => serializeDedupKey(item)))
+      }
+
+      if (value && typeof value === 'object') {
+        const sortedEntries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) =>
+          a.localeCompare(b),
+        )
+        return JSON.stringify(
+          sortedEntries.map(([key, entryValue]) => [key, serializeDedupKey(entryValue)]),
+        )
+      }
+
+      return JSON.stringify(value)
+    }
+
+    const buildDedupKey = (row: Record<string, unknown>, fields: string[]) =>
+      fields.map((field) => `${field}:${serializeDedupKey(row[field])}`).join('|')
+
+    // 1. 去重
+    const deduplicationMode = config.deduplicationMode || 'none'
+    if (deduplicationMode !== 'none' && data.length > 0) {
+      const keepStrategy = config.deduplicationKeep || 'first'
+      const dedupFields =
+        deduplicationMode === 'full_row'
+          ? Array.from<string>(
+              data.reduce((fieldSet: Set<string>, row: Record<string, unknown>) => {
+                Object.keys(row).forEach((field) => fieldSet.add(field))
+                return fieldSet
+              }, new Set<string>()),
+            ).sort((a, b) => a.localeCompare(b))
+          : Array.isArray(config.deduplicationFields)
+            ? config.deduplicationFields.filter((field: string) =>
+                data.some((row: Record<string, unknown>) => field in row),
+              )
+            : []
+
+      if (deduplicationMode === 'full_row' || dedupFields.length > 0) {
+        const seen = new Set<string>()
+        const deduplicated: Array<Record<string, unknown>> = []
+        const sourceRows = keepStrategy === 'last' ? [...data].reverse() : data
+
+        sourceRows.forEach((row: Record<string, unknown>) => {
+          const dedupKey = buildDedupKey(row, dedupFields)
+          if (seen.has(dedupKey)) {
+            return
+          }
+
+          seen.add(dedupKey)
+          deduplicated.push(row)
+        })
+
+        data = keepStrategy === 'last' ? deduplicated.reverse() : deduplicated
+        stats.duplicatesRemoved = originalCount - data.length
+      }
+    }
+
+    // 2. 处理缺失值 (Missing Values)
     if (config.missingValueStrategy !== 'none') {
       if (config.missingValueStrategy === 'drop') {
         const prevCount = data.length
@@ -159,7 +257,7 @@ export const dataCleaningNode: NodeDefinition = {
       }
     }
 
-    // 2. 异常值处理 (Outliers)
+    // 3. 异常值处理 (Outliers)
     if (config.outlierMethod !== 'none' && data.length > 0) {
       const prevCount = data.length
       targetFields.forEach((f: string) => {
@@ -194,7 +292,7 @@ export const dataCleaningNode: NodeDefinition = {
       stats.outliersRemoved = prevCount - data.length
     }
 
-    // 3. 分类变量编码 (Categorical Encoding)
+    // 4. 分类变量编码 (Categorical Encoding)
     if (config.encoding === 'label') {
       targetFields.forEach((f: string) => {
         // 判断是否为非数值列
@@ -210,7 +308,7 @@ export const dataCleaningNode: NodeDefinition = {
       })
     }
 
-    // 4. 特征缩放 (Scaling)
+    // 5. 特征缩放 (Scaling)
     if (config.scaling !== 'none' && data.length > 0) {
       targetFields.forEach((f: string) => {
         const values = data.map((r: any) => parseFloat(r[f])).filter((v: number) => !isNaN(v))
