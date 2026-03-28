@@ -16,6 +16,11 @@
 
 ### 修复 (Fix)
 
+- **统一回归类分析节点的预测拟合图表达**:
+  - 将多元线性回归与随机森林特征重要性的“预测值对比”统一为标准回归拟合图，补齐 `实际值 / 预测值` 坐标语义与 `理想拟合线` 参考线。
+  - 抽取共享的回归拟合图配置生成逻辑，避免不同分析节点各自维护散点图细节。
+  - 补充节点执行测试，锁定回归拟合图的核心图形结构。
+
 - **统一分析节点的因子字段多选配置**:
   - 将 `multiple-linear-regression`、`pca`、`random-forest-feature-importance`、`vif`、`xgboost-shap` 的 `factorNames` 从 `tags` 收敛为 `multi-options`。
   - 统一补齐 `default`、`editable` 与 `forceInput` 配置，使分析类节点的因子选择交互与字段校验提示保持一致。

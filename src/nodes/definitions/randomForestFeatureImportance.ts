@@ -1,6 +1,7 @@
 import type { NodeDefinition } from '../types'
 import { createReportResult, extractTableRows } from '../result'
 import { requestRandomForestFeatureImportanceAnalysis } from '@/services/analysis'
+import { buildRegressionFitChartOption } from './regressionFitChart'
 
 type RandomForestSummary = {
   targetField: string
@@ -182,21 +183,6 @@ const buildCumulativeChartOption = (items: CumulativeImportanceItem[]) => ({
   ],
 })
 
-const buildPredictionChartOption = (predictions: PredictionSeries) => ({
-  tooltip: { trigger: 'item' },
-  grid: { top: 20, left: 56, right: 20, bottom: 40, containLabel: true },
-  xAxis: { type: 'value', name: '实际值' },
-  yAxis: { type: 'value', name: '预测值' },
-  series: [
-    {
-      name: '样本点',
-      type: 'scatter',
-      data: predictions.actual.map((value, index) => [value, predictions.predicted[index]]),
-      itemStyle: { color: '#2563eb', opacity: 0.75 },
-    },
-  ],
-})
-
 export const randomForestFeatureImportanceNode: NodeDefinition = {
   name: 'random-forest-feature-importance',
   displayName: '随机森林特征重要性',
@@ -290,7 +276,7 @@ export const randomForestFeatureImportanceNode: NodeDefinition = {
             key: 'predictions',
             title: '预测值对比',
             type: 'chart',
-            option: buildPredictionChartOption(normalized.predictions),
+            option: buildRegressionFitChartOption(normalized.predictions),
           },
           {
             key: 'risks',

@@ -969,6 +969,11 @@ describe('Node Definitions Execution Logic', () => {
       expect(legacy.report.sections[1].title).toBe('回归系数排序')
       expect(legacy.report.sections[2].title).toBe('预测值对比')
       expect(legacy.report.sections[3].title).toBe('残差分布')
+      expect(legacy.report.sections[2].option.xAxis.name).toBe('实际值')
+      expect(legacy.report.sections[2].option.yAxis.name).toBe('预测值')
+      expect(legacy.report.sections[2].option.series[0].type).toBe('scatter')
+      expect(legacy.report.sections[2].option.series[1].name).toBe('理想拟合线')
+      expect(legacy.report.sections[2].option.series[1].lineStyle.type).toBe('dashed')
       expect(global.fetch).toHaveBeenCalledWith(
         '/api/analysis/multiple-linear-regression',
         expect.any(Object),
@@ -1035,6 +1040,11 @@ describe('Node Definitions Execution Logic', () => {
       expect(legacy.report.sections[2].title).toBe('累计重要性')
       expect(legacy.report.sections[3].title).toBe('预测值对比')
       expect(legacy.report.sections[4].title).toBe('结果解读提示')
+      expect(legacy.report.sections[3].option.xAxis.name).toBe('实际值')
+      expect(legacy.report.sections[3].option.yAxis.name).toBe('预测值')
+      expect(legacy.report.sections[3].option.series[0].type).toBe('scatter')
+      expect(legacy.report.sections[3].option.series[1].name).toBe('理想拟合线')
+      expect(legacy.report.sections[3].option.series[1].lineStyle.type).toBe('dashed')
       expect(global.fetch).toHaveBeenCalledWith(
         '/api/analysis/random-forest-feature-importance',
         expect.any(Object),
