@@ -291,7 +291,7 @@ describe('PropertyField', () => {
     expect(wrapper.text()).toContain('字段受限')
   })
 
-  it('为必填字段显示紧凑提示，并为默认值显示推荐标签', () => {
+  it('继续通过红色星标表达必填，而不额外渲染默认值或必填提示标签', () => {
     setActivePinia(createPinia())
 
     const wrapper = mount(PropertyField, {
@@ -319,8 +319,8 @@ describe('PropertyField', () => {
       },
     })
 
-    expect(wrapper.text()).toContain('默认值')
-    expect(wrapper.text()).toContain('8')
+    expect(wrapper.text()).not.toContain('默认值')
+    expect(wrapper.text()).not.toContain('必填')
 
     const requiredWrapper = mount(PropertyField, {
       props: {
@@ -347,7 +347,8 @@ describe('PropertyField', () => {
       },
     })
 
-    expect(requiredWrapper.text()).toContain('必填')
+    expect(requiredWrapper.text()).not.toContain('必填')
+    expect(requiredWrapper.text()).toContain('*')
   })
 
   it('为分析字段在缺少上游可选字段时展示紧凑空状态提示', () => {

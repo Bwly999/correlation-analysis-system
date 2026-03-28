@@ -364,20 +364,6 @@ const multiOptionsForceInputHint = computed(() => {
   return '暂无可选项，可直接输入后按回车添加'
 })
 
-const isEmptyValue = computed(() => {
-  if (Array.isArray(configValue.value)) return configValue.value.length === 0
-  if (typeof configValue.value === 'string') return configValue.value.trim() === ''
-  return configValue.value === null || configValue.value === undefined
-})
-
-const showRequiredHint = computed(() => props.prop.required && isEmptyValue.value)
-
-const showDefaultHint = computed(() => {
-  if (props.prop.default === undefined) return false
-  if (showRequiredHint.value) return false
-  return JSON.stringify(configValue.value) === JSON.stringify(props.prop.default)
-})
-
 const showUpstreamEmptyHint = computed(() => {
   return (
     props.prop.useUpstreamFactors &&
@@ -386,19 +372,12 @@ const showUpstreamEmptyHint = computed(() => {
   )
 })
 
-const defaultHintText = computed(() => {
-  if (Array.isArray(configValue.value)) return configValue.value.join('、')
-  return String(configValue.value)
-})
-
 const nonAnalyzableHintText = computed(() => {
   if (nonAnalyzableUpstreamFactors.value.length === 0) return ''
   return `以下字段暂不支持当前分析：${nonAnalyzableUpstreamFactors.value.map((item) => item.name).join('、')}`
 })
 
 const upstreamEmptyHintText = '当前没有可选字段，请先连接上游数据或使用左侧输入数据。'
-const requiredHintText = '该项为必填，建议先完成配置再运行节点。'
-const defaultHintTooltip = computed(() => `当前使用推荐默认值：${defaultHintText.value}`)
 
 const toggleOptionsRegexMode = (event?: Event) => {
   event?.preventDefault()
@@ -741,7 +720,7 @@ const getRegexToggleClass = (enabled: boolean) => [
       />
     </div>
 
-    <div v-if="nonAnalyzableUpstreamFactors.length > 0 || showUpstreamEmptyHint || showRequiredHint || showDefaultHint" class="flex flex-wrap items-center gap-2">
+    <div v-if="nonAnalyzableUpstreamFactors.length > 0 || showUpstreamEmptyHint" class="flex flex-wrap items-center gap-2">
       <div
         v-if="nonAnalyzableUpstreamFactors.length > 0"
         v-tooltip.top="nonAnalyzableHintText"
@@ -758,25 +737,6 @@ const getRegexToggleClass = (enabled: boolean) => [
       >
         <HelpCircle :size="12" />
         <span>缺少上游</span>
-      </div>
-
-      <div
-        v-if="showRequiredHint"
-        v-tooltip.top="requiredHintText"
-        class="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-[11px] font-medium text-rose-700"
-      >
-        <HelpCircle :size="12" />
-        <span>必填</span>
-      </div>
-
-      <div
-        v-else-if="showDefaultHint"
-        v-tooltip.top="defaultHintTooltip"
-        class="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-slate-600"
-      >
-        <HelpCircle :size="12" />
-        <span>默认值</span>
-        <span class="max-w-[220px] truncate text-slate-500">{{ defaultHintText }}</span>
       </div>
     </div>
   </div>
