@@ -25,7 +25,15 @@ const emit = defineEmits<{
   save: []
 }>()
 
-const PRIMARY_PROPERTY_NAMES = new Set(['xFields', 'yFields', 'targetField', 'factorNames', 'topN'])
+const PRIMARY_PROPERTY_NAMES = new Set([
+  'xFields',
+  'yFields',
+  'targetField',
+  'factorNames',
+  'topN',
+  'deduplicationMode',
+  'deduplicationKeep',
+])
 
 const sortedProperties = computed(() => {
   return [...props.properties].sort((left, right) => {

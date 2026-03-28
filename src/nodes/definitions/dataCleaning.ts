@@ -10,15 +10,6 @@ export const dataCleaningNode: NodeDefinition = {
   description: '处理缺失值、去重、异常值，并执行数据标准化与分类变量编码，为相关性分析做好准备。',
   properties: [
     {
-      name: 'targetColumns',
-      displayName: '目标字段',
-      type: 'tags',
-      default: [],
-      useUpstreamFactors: true,
-      description:
-        '选择或输入要执行清洗操作的字段名。留空则自动处理所有数值型字段，排除 ID 或日期类字段。',
-    },
-    {
       name: 'deduplicationMode',
       displayName: '去重方式',
       type: 'options',
@@ -41,7 +32,7 @@ export const dataCleaningNode: NodeDefinition = {
     },
     {
       name: 'deduplicationKeep',
-      displayName: '保留记录',
+      displayName: '去重保留方式',
       type: 'options',
       default: 'first',
       displayIf: (config) => config.deduplicationMode && config.deduplicationMode !== 'none',
@@ -50,6 +41,15 @@ export const dataCleaningNode: NodeDefinition = {
         { name: '保留末条', value: 'last' },
       ],
       description: '基于当前表格顺序保留首条或末条记录。',
+    },
+    {
+      name: 'targetColumns',
+      displayName: '目标字段',
+      type: 'tags',
+      default: [],
+      useUpstreamFactors: true,
+      description:
+        '选择或输入要执行清洗操作的字段名。留空则自动处理所有数值型字段，排除 ID 或日期类字段。',
     },
     {
       name: 'missingValueStrategy',
