@@ -46,6 +46,7 @@ import { sortNode } from '../definitions/sort'
 import { spearmanNode } from '../definitions/spearman'
 import { kendallNode } from '../definitions/kendall'
 import { vifNode } from '../definitions/vif'
+import { pcaNode } from '../definitions/pca'
 import { dataExportNode } from '../definitions/dataExport'
 import { neighborSystemNode } from '../definitions/neighborSystem'
 import { createTableResult } from '../result'
@@ -463,6 +464,32 @@ describe('remaining nodes standardized result protocol', () => {
     expect(result.payload.sections[2].type).toBe('risk-list')
     expect(result.preview?.viewer).toBe('report-viewer')
     expect(Array.isArray(result.meta?.risks)).toBe(true)
+  })
+
+  it('pca should return a standardized report result with explained variance and loadings', async () => {
+    const result = await pcaNode.execute(
+      createTableResult([
+        { f1: 1, f2: 2, f3: 3, label: 'A' },
+        { f1: 2, f2: 4, f3: 6, label: 'B' },
+        { f1: 3, f2: 6, f3: 9, label: 'C' },
+        { f1: 4, f2: 8, f3: 12, label: 'D' },
+        { f1: 5, f2: 10, f3: 15, label: 'E' },
+        { f1: 6, f2: 12, f3: 18, label: 'F' },
+      ]),
+      { factorNames: ['f1', 'f2', 'f3'], componentCount: 2, standardize: true },
+    )
+
+    expect(result.kind).toBe('report')
+    expect(result.payload.title).toBe('PCA 主成分分析')
+    expect(result.meta?.metrics).toMatchObject({
+      featureCount: 3,
+      componentCount: 2,
+    })
+    expect(result.payload.sections[0].type).toBe('summary')
+    expect(result.payload.sections[1].option.series[0].type).toBe('bar')
+    expect(result.payload.sections[2].option.series[0].type).toBe('heatmap')
+    expect(result.preview?.viewer).toBe('report-viewer')
+    expect(Array.isArray(result.meta?.loadings)).toBe(true)
   })
 
   it('neighbor-system should return a table result with upstream metadata in meta', async () => {

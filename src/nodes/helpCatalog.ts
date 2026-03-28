@@ -597,6 +597,42 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       recommendedNextNodes: ['multiple-linear-regression', 'data-export'],
     },
   ),
+  pca: createEntry(
+    {
+      summary: '通过 PCA 主成分分析识别多因子中的主要方差方向，辅助做降维和字段压缩。',
+      whenToUse: ['你发现候选因子较多、共线性较强，想先判断能否压缩成少量主成分再继续分析。'],
+      inputGuide: ['需要上游提供表格数据。', '输入字段应为数值型，且建议先完成缺失值处理。'],
+      parameterGuide: [
+        {
+          property: 'factorNames',
+          title: '分析字段',
+          content: '建议只放真正需要参与降维的候选因子，避免无关字段稀释主成分结构。',
+        },
+        {
+          property: 'componentCount',
+          title: '主成分数量',
+          content: '通常先看前 2-3 个主成分即可，重点关注解释方差占比是否足够高。',
+        },
+      ],
+      outputGuide: ['输出结果是 PCA 分析报告，包含解释方差、字段载荷热力图和载荷明细。'],
+      nextSteps: ['若前几项解释方差较高，可考虑后续用更少的字段或主成分表达原始信息。'],
+      commonIssues: [
+        {
+          title: '解释方差不集中',
+          resolution: '说明当前字段结构较分散，PCA 未必适合直接做强压缩，建议结合业务分组重新建模。',
+        },
+      ],
+    },
+    {
+      useCases: ['多因子降维', '共线性后的结构诊断', '字段压缩前分析'],
+      keywords: ['PCA', '主成分分析', '降维', '载荷'],
+      workflowRoles: ['分析终点'],
+      inputKinds: ['table'],
+      outputKinds: ['report'],
+      recommendedPrevNodes: ['data-cleaning', 'field-selection', 'vif'],
+      recommendedNextNodes: ['multiple-linear-regression', 'data-export'],
+    },
+  ),
   'xgboost-shap': createEntry(
     {
       summary: '通过 Xgboost 结合 SHAP 值解释模型，查看各因子对目标的贡献和趋势。',

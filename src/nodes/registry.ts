@@ -15,6 +15,7 @@ import { dataLimitNode } from './definitions/dataLimit'
 import { xgboostShapNode } from './definitions/xgboostShap'
 import { lassoNode } from './definitions/lasso'
 import { multipleLinearRegressionNode } from './definitions/multipleLinearRegression'
+import { pcaNode } from './definitions/pca'
 import { pearsonNode } from './definitions/pearson'
 import { spearmanNode } from './definitions/spearman'
 import { kendallNode } from './definitions/kendall'
@@ -38,6 +39,7 @@ const rawNodeDefinitions: NodeDefinition[] = [
   xgboostShapNode,
   lassoNode,
   multipleLinearRegressionNode,
+  pcaNode,
   vifNode,
   pearsonNode,
   spearmanNode,
