@@ -1,5 +1,6 @@
 ﻿import { describe, it, expect, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import PrimeVue from 'primevue/config'
 import { Position } from '@vue-flow/core'
@@ -63,5 +64,78 @@ describe('BaseNode', () => {
     })
 
     expect(wrapper.text()).toContain('多输入')
+  })
+
+  it('shows separate debug actions for cache reuse and upstream rerun', () => {
+    const store = useWorkflowStore()
+    store.nodes = [
+      {
+        id: 'data-cleaning-node',
+        type: 'custom',
+        position: { x: 0, y: 0 },
+        label: '数据清洗',
+        data: {
+          label: '数据清洗',
+          type: 'data-cleaning',
+          category: 'action',
+          status: 'idle',
+          config: {},
+          logs: [],
+          useManualInput: false,
+          manualInput: '',
+          isPinned: false,
+        },
+      } as any,
+    ]
+
+    const executeSpy = vi.spyOn(store, 'executeNode').mockResolvedValue(null as any)
+
+    const wrapper = mount(BaseNode, {
+      props: {
+        id: 'data-cleaning-node',
+        type: 'custom',
+        selected: false,
+        dragging: false,
+        connectable: true,
+        resizing: false,
+        position: { x: 0, y: 0 },
+        dimensions: { width: 110, height: 110 },
+        isValidTargetPos: () => true,
+        isValidSourcePos: () => true,
+        zIndex: 1,
+        targetPosition: Position.Left,
+        sourcePosition: Position.Right,
+        data: store.nodes[0]!.data,
+        events: {} as any,
+      } as any,
+      global: {
+        plugins: [PrimeVue],
+        directives: { tooltip: () => undefined },
+        stubs: {
+          Handle: { template: '<div />' },
+          NodeToolbar: { template: '<div><slot /></div>' },
+          NodeIcon: { template: '<div>ICON</div>' },
+        },
+      },
+    })
+
+    wrapper.vm.$el.dispatchEvent(new MouseEvent('mouseenter'))
+
+    const buttons = wrapper.findAll('button')
+    const cacheDebugButton = buttons.find((button) => button.attributes('data-testid') === 'debug-node-button')
+    const rerunDebugButton = buttons.find((button) => button.attributes('data-testid') === 'debug-node-rerun-button')
+
+    expect(cacheDebugButton).toBeTruthy()
+    expect(rerunDebugButton).toBeTruthy()
+
+    cacheDebugButton!.trigger('click')
+    rerunDebugButton!.trigger('click')
+
+    expect(executeSpy).toHaveBeenNthCalledWith(1, 'data-cleaning-node', true, 'single', {
+      rerunUpstream: false,
+    })
+    expect(executeSpy).toHaveBeenNthCalledWith(2, 'data-cleaning-node', true, 'single', {
+      rerunUpstream: true,
+    })
   })
 })

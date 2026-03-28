@@ -91,7 +91,11 @@ const saveName = () => {
 }
 
 const runNode = (force: boolean) => {
-  store.executeNode(props.id, force)
+  store.executeNode(props.id, force, 'single', { rerunUpstream: false })
+}
+
+const rerunNodeWithUpstream = () => {
+  store.executeNode(props.id, true, 'single', { rerunUpstream: true })
 }
 
 const openConfig = () => {
@@ -272,10 +276,19 @@ const isMultipleInput = computed(() => {
     >
       <button
         v-tooltip.top="'调试运行'"
+        data-testid="debug-node-button"
         class="p-1.5 hover:bg-slate-50 rounded-lg text-indigo-600 transition-colors cursor-pointer"
         @click.stop="runNode(true)"
       >
         <Play :size="14" fill="currentColor" />
+      </button>
+      <button
+        v-tooltip.top="'重跑上游后调试'"
+        data-testid="debug-node-rerun-button"
+        class="p-1.5 hover:bg-amber-50 rounded-lg text-amber-600 transition-colors cursor-pointer"
+        @click.stop="rerunNodeWithUpstream"
+      >
+        <Loader2 :size="14" />
       </button>
       <button
         v-tooltip.top="isPinned ? '取消冻结数据' : '冻结当前数据 (Pin)'"

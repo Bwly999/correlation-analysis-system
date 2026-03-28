@@ -242,14 +242,14 @@ const correlationSetupGuide = computed(() => {
   }
 })
 
-const runCurrentNode = async () => {
+const runCurrentNode = async (rerunUpstream = false) => {
   if (node.value) {
     node.value.data.config = { ...config.value }
     node.value.data.label = editedName.value
     node.value.data.useManualInput = localUseManualInput.value
     node.value.data.manualInput = localManualInput.value
     node.value.data.reuseLastRuntimeInputs = localReuseLastRuntimeInputs.value
-    await store.executeNode(node.value.id, true)
+    await store.executeNode(node.value.id, true, 'single', { rerunUpstream })
   }
 }
 
@@ -468,25 +468,37 @@ const buildManualInputTemplate = () => {
               {{ tab.label }}
             </button>
           </div>
-          <button
-            :disabled="node.data.status === 'running'"
-            class="n8n-debug-btn h-9 px-5 rounded-lg border-none shadow-sm hover:shadow-md active:scale-95 transition-all flex items-center gap-2 cursor-pointer outline-none disabled:opacity-70"
-            @click="runCurrentNode"
-          >
-            <Loader2
-              v-if="node.data.status === 'running'"
-              :size="16"
-              class="text-white animate-spin"
-            />
-            <Bug v-else :size="16" class="text-white" />
-            <span class="text-[12px] font-bold text-white uppercase tracking-wider">
-              {{ node.data.status === 'running' ? '正在调试...' : '调试节点' }}
-            </span>
-          </button>
+          <div class="flex items-center gap-2">
+            <button
+              :disabled="node.data.status === 'running'"
+              class="rounded-lg border border-slate-200 bg-white px-4 py-2 text-[12px] font-bold text-slate-600 shadow-sm transition-all hover:border-amber-200 hover:bg-amber-50 hover:text-amber-700 active:scale-95 disabled:opacity-70"
+              @click="runCurrentNode(true)"
+            >
+              重跑上游后调试
+            </button>
+            <button
+              :disabled="node.data.status === 'running'"
+              class="n8n-debug-btn h-9 px-5 rounded-lg border-none shadow-sm hover:shadow-md active:scale-95 transition-all flex items-center gap-2 cursor-pointer outline-none disabled:opacity-70"
+              @click="runCurrentNode(false)"
+            >
+              <Loader2
+                v-if="node.data.status === 'running'"
+                :size="16"
+                class="text-white animate-spin"
+              />
+              <Bug v-else :size="16" class="text-white" />
+              <span class="text-[12px] font-bold text-white uppercase tracking-wider">
+                {{ node.data.status === 'running' ? '正在调试...' : '调试节点' }}
+              </span>
+            </button>
+          </div>
         </div>
 
         <div class="flex-1 p-8 overflow-y-auto custom-scrollbar bg-white min-h-0">
           <div v-if="activeTab === 'parameters'" class="mx-auto max-w-3xl space-y-6">
+            <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-600">
+              调试节点只重新执行当前节点，默认复用上游缓存；重跑上游后调试会沿当前链路重新执行上游节点，更适合校验最新输入。
+            </div>
             <div
               class="flex items-center gap-3 rounded-2xl border px-4 py-3"
               :class="

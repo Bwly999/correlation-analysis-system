@@ -568,12 +568,96 @@ describe('Workflow Store', () => {
         kind: 'table',
         token: 'cached-token',
       })
+      expect(
+        store.logs.some((log) => log.message.includes('调试策略: 复用上游缓存，仅重新执行节点')),
+      ).toBe(true)
       expect(store.pendingExecution).toBeNull()
     } finally {
       const triggerIndex = nodeDefinitions.findIndex((definition) => definition.name === 'test-runtime-trigger')
       if (triggerIndex >= 0) nodeDefinitions.splice(triggerIndex, 1)
 
       const actionIndex = nodeDefinitions.findIndex((definition) => definition.name === 'test-debug-consumer')
+      if (actionIndex >= 0) nodeDefinitions.splice(actionIndex, 1)
+    }
+  })
+
+  it('should rerun upstream nodes when downstream debug uses rerun-upstream strategy', async () => {
+    const triggerDefinition = {
+      name: 'test-rerun-trigger',
+      displayName: 'Test Rerun Trigger',
+      icon: 'test',
+      category: 'trigger' as const,
+      description: 'test',
+      properties: [
+        {
+          name: 'token',
+          displayName: '启动参数',
+          type: 'string' as const,
+          default: '',
+          required: true,
+          isRuntimeInput: true,
+        },
+      ],
+      execute: async (_input: null, config: { token: string }) =>
+        createTableResult([{ token: config.token }]),
+    }
+
+    const actionDefinition = {
+      name: 'test-rerun-consumer',
+      displayName: 'Test Rerun Consumer',
+      icon: 'test',
+      category: 'action' as const,
+      description: 'test',
+      properties: [],
+      execute: async (input: { kind: string; payload: Array<{ token: string }> } | null) =>
+        createJsonResult({
+          kind: input?.kind ?? null,
+          token: input?.payload?.[0]?.token ?? null,
+        }),
+    }
+
+    nodeDefinitions.push(triggerDefinition, actionDefinition)
+
+    try {
+      const store = useWorkflowStore()
+      const trigger = store.addAndConnectNode('test-rerun-trigger', '运行时触发器', { x: 0, y: 0 })!
+      const action = store.addAndConnectNode('test-rerun-consumer', '调试节点', { x: 300, y: 0 })!
+
+      store.edges.push({
+        id: 'e_rerun_trigger_action',
+        source: trigger.id,
+        target: action.id,
+        type: 'n8n',
+        animated: true,
+      })
+
+      const waitingResult = await store.executeNode(trigger.id, true)
+      expect(waitingResult).toBe('WAIT_INPUT')
+
+      trigger.data.config.token = 'cached-token'
+      await store.resumePendingExecution()
+      expect((trigger.data.output as any)?.payload?.[0]?.token).toBe('cached-token')
+
+      trigger.data.config.token = 'fresh-token'
+
+      const debugResult = await store.executeNode(action.id, true, 'single', {
+        rerunUpstream: true,
+      })
+
+      expect(debugResult?.kind).toBe('json')
+      expect(debugResult?.payload).toEqual({
+        kind: 'table',
+        token: 'fresh-token',
+      })
+      expect((trigger.data.output as any)?.payload?.[0]?.token).toBe('fresh-token')
+      expect(
+        store.logs.some((log) => log.message.includes('调试策略: 强制重跑上游后执行节点')),
+      ).toBe(true)
+    } finally {
+      const triggerIndex = nodeDefinitions.findIndex((definition) => definition.name === 'test-rerun-trigger')
+      if (triggerIndex >= 0) nodeDefinitions.splice(triggerIndex, 1)
+
+      const actionIndex = nodeDefinitions.findIndex((definition) => definition.name === 'test-rerun-consumer')
       if (actionIndex >= 0) nodeDefinitions.splice(actionIndex, 1)
     }
   })
@@ -675,6 +759,40 @@ describe('Workflow Store', () => {
     expect(node.data.status).toBe('success')
     expect(store.pendingExecution).toBeNull()
     expect(store.logs.some((l) => l.message.includes('未找到分析模型'))).toBe(false)
+  })
+
+  it('should map common execution errors to clearer chinese guidance', async () => {
+    const failingDefinition = {
+      name: 'test-readable-error-node',
+      displayName: 'Test Readable Error Node',
+      icon: 'test',
+      category: 'action' as const,
+      description: 'test',
+      properties: [],
+      execute: async () => {
+        throw new Error('无可分析的输入数据')
+      },
+    }
+
+    nodeDefinitions.push(failingDefinition)
+
+    try {
+      const store = useWorkflowStore()
+      const node = store.addAndConnectNode('test-readable-error-node', '失败节点', { x: 0, y: 0 })!
+
+      await expect(store.executeNode(node.id, true)).rejects.toThrow(
+        '当前节点没有可分析输入，请先检查上游输出或左侧模拟输入',
+      )
+      expect(node.data.error).toBe('当前节点没有可分析输入，请先检查上游输出或左侧模拟输入')
+      expect(
+        store.logs.some((log) =>
+          log.message.includes('执行失败: 当前节点没有可分析输入，请先检查上游输出或左侧模拟输入'),
+        ),
+      ).toBe(true)
+    } finally {
+      const failingIndex = nodeDefinitions.findIndex((definition) => definition.name === 'test-readable-error-node')
+      if (failingIndex >= 0) nodeDefinitions.splice(failingIndex, 1)
+    }
   })
 
   it('should keep global run alive and collect runtime inputs for multiple trigger nodes', async () => {

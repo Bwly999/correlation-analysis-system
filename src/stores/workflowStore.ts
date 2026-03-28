@@ -52,6 +52,11 @@ export type WorkflowRunDashboardState = {
   terminalNodeIds: string[]
 }
 
+type DebugExecutionOptions = {
+  rerunUpstream?: boolean
+  isNested?: boolean
+}
+
 export const useWorkflowStore = defineStore('workflow', () => {
   const nodes = ref([]) as Ref<WorkflowNode[]>
   const edges = ref([]) as Ref<Edge[]>
@@ -72,6 +77,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
       resumeNodeId?: string
       forceUpdate: boolean
       executionScope?: 'single' | 'global'
+      debugOptions?: DebugExecutionOptions
       promptIndex?: number
       promptTotal?: number
     } | null
@@ -393,6 +399,23 @@ export const useWorkflowStore = defineStore('workflow', () => {
       message,
       nodeId,
     })
+  }
+
+  const formatExecutionErrorMessage = (message: string) => {
+    if (message === '手动输入 JSON 格式错误') {
+      return '手动输入 JSON 格式错误，请检查逗号、引号和括号是否完整'
+    }
+    if (message === '无可分析的输入数据') {
+      return '当前节点没有可分析输入，请先检查上游输出或左侧模拟输入'
+    }
+    if (message === '至少需要 2 个数值字段才能进行相关性分析') {
+      return '可用于分析的数值字段不足，至少需要 2 个数值字段'
+    }
+    if (message === '所选字段缺少足够的有效样本，无法完成相关性分析') {
+      return '有效样本不足，请先检查缺失值、筛选条件或字段质量'
+    }
+
+    return message
   }
 
   const stopExecution = () => {
@@ -989,10 +1012,13 @@ export const useWorkflowStore = defineStore('workflow', () => {
     nodeId: string,
     forceUpdate = false,
     executionScope: 'single' | 'global' = 'single',
+    debugOptions: DebugExecutionOptions = {},
   ): Promise<any> => {
     const currentNodes = getCurrentNodes()
     const node = findNodeById(nodeId, currentNodes)
     if (!node) return
+    const rerunUpstream = debugOptions.rerunUpstream ?? false
+    const isNestedDebugExecution = debugOptions.isNested ?? false
 
     const wasRunning = isRunning.value
     if (!wasRunning) {
@@ -1019,6 +1045,16 @@ export const useWorkflowStore = defineStore('workflow', () => {
 
       if (!forceUpdate && node.data.output) return node.data.output
 
+      if (executionScope === 'single' && forceUpdate && !isNestedDebugExecution) {
+        addLog(
+          rerunUpstream
+            ? `调试策略: 强制重跑上游后执行节点 ${node.data.label}`
+            : `调试策略: 复用上游缓存，仅重新执行节点 ${node.data.label}`,
+          rerunUpstream ? 'warn' : 'info',
+          nodeId,
+        )
+      }
+
       if (definition.category === 'trigger') {
         if (shouldPromptForRuntimeInput(node)) {
           addLog(`节点 ${node.data.label} 缺少运行时输入`, 'info', nodeId)
@@ -1029,6 +1065,9 @@ export const useWorkflowStore = defineStore('workflow', () => {
             resumeNodeId: executionScope === 'single' ? nodeId : undefined,
             forceUpdate,
             executionScope,
+            debugOptions: {
+              rerunUpstream,
+            },
             promptIndex: queueIndex >= 0 ? queueIndex + 1 : undefined,
             promptTotal:
               executionScope === 'global' && globalRuntimeQueueNodeIds.length > 0
@@ -1069,13 +1108,20 @@ export const useWorkflowStore = defineStore('workflow', () => {
       const structuredInputs: MultipleNodeExecutionItem[] = []
       for (const [index, edge] of incomingEdges.entries()) {
         if (isStopping.value) throw new Error('User Aborted')
-        const shouldForceUpstream = executionScope === 'global' ? forceUpdate : false
-        const result = await executeNode(edge.source, shouldForceUpstream, executionScope)
+        const shouldForceUpstream =
+          executionScope === 'global' ? forceUpdate : rerunUpstream
+        const result = await executeNode(edge.source, shouldForceUpstream, executionScope, {
+          rerunUpstream,
+          isNested: true,
+        })
         if (result === 'WAIT_INPUT' || result === 'STOPPED') {
           if (result === 'WAIT_INPUT' && executionScope === 'single' && pendingExecution.value) {
             pendingExecution.value = {
               ...pendingExecution.value,
               resumeNodeId: nodeId,
+              debugOptions: {
+                rerunUpstream,
+              },
             }
           }
           node.data.status = 'idle'
@@ -1123,13 +1169,15 @@ export const useWorkflowStore = defineStore('workflow', () => {
       addLog(`执行成功: ${node.data.label}`, 'info', nodeId)
       return node.data.output
     } catch (error: any) {
+      const rawMessage = error?.message ?? '节点执行失败'
+      const readableMessage = formatExecutionErrorMessage(rawMessage)
       if (node) {
-        node.data.status = error.message === 'User Aborted' ? 'idle' : 'error'
-        node.data.error = error.message === 'User Aborted' ? undefined : error.message
+        node.data.status = rawMessage === 'User Aborted' ? 'idle' : 'error'
+        node.data.error = rawMessage === 'User Aborted' ? undefined : readableMessage
       }
-      if (error.message !== 'User Aborted') {
-        addLog(`执行失败: ${error.message}`, 'error', nodeId)
-        throw error
+      if (rawMessage !== 'User Aborted') {
+        addLog(`执行失败: ${readableMessage}`, 'error', nodeId)
+        throw new Error(readableMessage)
       }
       return 'STOPPED'
     } finally {
@@ -1148,6 +1196,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
         : pending.nodeId,
       pending.forceUpdate,
       pending.executionScope ?? 'single',
+      pending.debugOptions ?? {},
     )
 
     if (pending.executionScope === 'global' && pendingExecutionResolver) {
