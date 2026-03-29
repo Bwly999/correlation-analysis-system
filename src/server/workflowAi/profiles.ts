@@ -1,6 +1,8 @@
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import { generateText, streamText } from 'ai'
+import { buildRecoverableDraftPlanFromIssues } from '../../ai/draft/graph.js'
 import { validateWorkflowAiPlanAgainstContext } from '../../ai/planValidation.js'
+import { searchWorkflowRecipes } from '../../ai/recipes/search.js'
 import type {
   WorkflowAiGenerationAttempt,
   WorkflowAiGenerationDiagnostics,
@@ -44,6 +46,43 @@ type PromptNodeCatalogItem = {
     description: string
   }>
   keywords: string[]
+}
+
+type PromptRecipeItem = {
+  id: string
+  name: string
+  reason: string
+  minimalPattern: string[]
+  preferredEntryNodes: string[]
+  preferredTerminalNodes: string[]
+  requiresSchemaInspection: boolean
+}
+
+type PromptContextRecipeItem = {
+  id: string
+  name: string
+  reason: string
+  minimalPattern: string[]
+}
+
+type PromptContextSchemaItem = {
+  nodeId: string
+  nodeLabel: string
+  resultKind: 'table' | 'tableCollection' | 'json' | 'unknown'
+  rowCount?: number
+  numericColumns: string[]
+  categoricalColumns?: string[]
+  datetimeColumns?: string[]
+  candidateTargetColumns: string[]
+  candidateFeatureColumns: string[]
+  blockedReasons: string[]
+}
+
+type PromptContextUserAnswerItem = {
+  key: string
+  value: string
+  label?: string
+  reason?: string
 }
 
 const stripCodeFence = (value: string) =>
@@ -133,6 +172,46 @@ const buildPromptStrategyHints = (
   }
 
   return hints
+}
+
+const buildPromptRecipes = (request: WorkflowAiPlanRequest): PromptRecipeItem[] =>
+  searchWorkflowRecipes({
+    prompt: request.prompt,
+    mode: request.mode,
+  }).slice(0, 3)
+
+const buildRecipePromptBlock = (request: WorkflowAiPlanRequest) => {
+  const recipes = buildPromptRecipes(request)
+  if (!recipes.length) return []
+
+  return [
+    '以下是根据当前需求召回的候选编排模板，请优先参考其最小骨架，不要随意发散：',
+    `候选编排模板 JSON：\n${JSON.stringify(recipes, null, 2)}`,
+  ]
+}
+
+const buildContextHintPromptBlock = (request: WorkflowAiPlanRequest) => {
+  const recipes = (request.contextHints?.recipes ?? []) as PromptContextRecipeItem[]
+  const schemaSummaries = (request.contextHints?.schemaSummaries ?? []) as PromptContextSchemaItem[]
+  const userAnswers = (request.contextHints?.userAnswers ?? []) as PromptContextUserAnswerItem[]
+
+  if (!recipes.length && !schemaSummaries.length && !userAnswers.length) return []
+
+  return [
+    '应用内工具已提供以下上下文摘要，请优先基于这些事实决定骨架和最小配置，不要重复假设：',
+    ...(recipes.length
+      ? [`本地候选模板 JSON：\n${JSON.stringify(recipes, null, 2)}`]
+      : []),
+    ...(schemaSummaries.length
+      ? [`本地字段摘要 JSON：\n${JSON.stringify(schemaSummaries, null, 2)}`]
+      : []),
+    ...(userAnswers.length
+      ? [
+          '以下是用户针对上一轮缺失信息补充的明确答案，优先使用这些答案，不要继续追问相同问题：',
+          `用户补充信息 JSON：\n${JSON.stringify(userAnswers, null, 2)}`,
+        ]
+      : []),
+  ]
 }
 
 type RawPlanOperation = Record<string, unknown> & {
@@ -334,6 +413,8 @@ const buildSkeletonSystemPrompt = (request: WorkflowAiPlanRequest) => {
   const { nodeCatalog } = request
   const catalog = JSON.stringify(buildPromptNodeCatalog(nodeCatalog), null, 2)
   const strategyHints = buildPromptStrategyHints(request, 'skeleton', nodeCatalog)
+  const recipePromptBlock = buildRecipePromptBlock(request)
+  const contextHintPromptBlock = buildContextHintPromptBlock(request)
 
   return [
     '你是多因子相关性分析系统的工作流编排助手。',
@@ -348,6 +429,8 @@ const buildSkeletonSystemPrompt = (request: WorkflowAiPlanRequest) => {
     '如果关键信息不足，请在 questions 返回简短中文问题，并让 operations 为空数组或保持最小骨架。',
     '节点 label、summary、warnings、questions 都必须使用中文。',
     ...strategyHints,
+    ...recipePromptBlock,
+    ...contextHintPromptBlock,
     '以下是面向模型精简后的节点目录 JSON：',
     catalog,
     '骨架规划示例：{"summary":"创建一个最小相关性分析流程","assumptions":[],"warnings":[],"questions":[],"operations":[{"id":"node_import_1","type":"createNode","nodeType":"manual-json-import","nodeLabel":"手动输入数据"},{"id":"node_pearson_1","type":"createNode","nodeType":"pearson","nodeLabel":"Pearson 相关系数"},{"id":"edge_1","type":"connectNodes","sourceRef":"node_import_1","targetRef":"node_pearson_1"}]}',
@@ -364,6 +447,7 @@ const buildConfigurationSystemPrompt = (
     .map((operation) => operation.nodeType)
   const catalog = JSON.stringify(buildPromptNodeCatalog(request.nodeCatalog, usedNodeTypes), null, 2)
   const strategyHints = buildPromptStrategyHints(request, 'configuration', request.nodeCatalog)
+  const contextHintPromptBlock = buildContextHintPromptBlock(request)
 
   return [
     '你是多因子相关性分析系统的工作流编排助手。',
@@ -375,6 +459,7 @@ const buildConfigurationSystemPrompt = (
     'connectNodes 必须使用字段 id、type、sourceRef、targetRef。',
     '如信息不足，请优先在 questions 中指出；不要硬编复杂增强能力。',
     ...strategyHints,
+    ...contextHintPromptBlock,
     '以下是当前骨架中涉及节点的精简目录 JSON：',
     catalog,
   ].join('\n')
@@ -699,39 +784,6 @@ const validatePlan = (request: WorkflowAiPlanRequest, plan: WorkflowAiPlan, rawT
 
 const REQUIRED_CONFIG_ISSUE_PATTERN = /^节点 (.+) 缺少必填配置: (.+)$/
 
-const buildRecoverableDraftPlan = (
-  plan: WorkflowAiPlan,
-  issues: WorkflowAiGenerationIssue[],
-): WorkflowAiPlan => {
-  const missingConfigByNode = new Map<string, Set<string>>()
-
-  issues.forEach((issue) => {
-    const matched = issue.message.match(REQUIRED_CONFIG_ISSUE_PATTERN)
-    if (!matched) return
-    const nodeLabel = matched[1]?.trim()
-    const propertyLabel = matched[2]?.trim()
-    if (!nodeLabel || !propertyLabel) return
-    const existing = missingConfigByNode.get(nodeLabel) ?? new Set<string>()
-    existing.add(propertyLabel)
-    missingConfigByNode.set(nodeLabel, existing)
-  })
-
-  const warningLabels = [...missingConfigByNode.keys()]
-  const extraWarnings = warningLabels.length
-    ? [`以下节点仍需手动补充配置后才能运行：${warningLabels.join('、')}。`]
-    : []
-  const extraQuestions = [...missingConfigByNode.entries()].map(
-    ([nodeLabel, propertyLabels]) =>
-      `请为节点「${nodeLabel}」补充以下必填配置：${[...propertyLabels].join('、')}。`,
-  )
-
-  return {
-    ...plan,
-    warnings: [...new Set([...(plan.warnings ?? []), ...extraWarnings])],
-    questions: [...new Set([...(plan.questions ?? []), ...extraQuestions])],
-  }
-}
-
 const validateConfigurablePlan = (
   request: WorkflowAiPlanRequest,
   plan: WorkflowAiPlan,
@@ -760,7 +812,7 @@ const validateConfigurablePlan = (
       throw new WorkflowAiRecoverablePlanError('AI 计划仍需补充部分配置', 422, {
         status: 'failed',
         stage: 'validate',
-        attempts: [
+      attempts: [
           createAttemptRecord(
             context,
             'failed',
@@ -770,7 +822,7 @@ const validateConfigurablePlan = (
         ],
         issues: validation.issues,
         rawOutputExcerpt: truncateRawOutput(rawText),
-      }, buildRecoverableDraftPlan(plan, validation.issues))
+      }, buildRecoverableDraftPlanFromIssues(plan, validation.issues))
     }
 
     throw new WorkflowAiPlanningError('AI 计划校验失败', 422, {

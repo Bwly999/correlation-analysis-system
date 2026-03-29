@@ -2,9 +2,20 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Readable } from 'node:stream'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
-const { generateWorkflowAiPlanMock, streamWorkflowAiPlanMock } = vi.hoisted(() => ({
+const {
+  generateWorkflowAiPlanMock,
+  streamWorkflowAiPlanMock,
+  startWorkflowAiSessionMock,
+  submitWorkflowAiSessionInputMock,
+  runWorkflowAiSessionMock,
+  getWorkflowAiSessionMock,
+} = vi.hoisted(() => ({
   generateWorkflowAiPlanMock: vi.fn(),
   streamWorkflowAiPlanMock: vi.fn(),
+  startWorkflowAiSessionMock: vi.fn(),
+  submitWorkflowAiSessionInputMock: vi.fn(),
+  runWorkflowAiSessionMock: vi.fn(),
+  getWorkflowAiSessionMock: vi.fn(),
 }))
 
 vi.mock('../workflowAi/profiles.js', () => ({
@@ -13,6 +24,13 @@ vi.mock('../workflowAi/profiles.js', () => ({
   getSystemModelProfiles: vi.fn(() => []),
   testWorkflowAiModelProfile: vi.fn(),
   toPublicModelProfile: vi.fn((profile) => profile),
+}))
+
+vi.mock('../workflowAi/orchestrator.js', () => ({
+  startWorkflowAiSession: startWorkflowAiSessionMock,
+  submitWorkflowAiSessionInput: submitWorkflowAiSessionInputMock,
+  runWorkflowAiSession: runWorkflowAiSessionMock,
+  getWorkflowAiSession: getWorkflowAiSessionMock,
 }))
 
 import { createServerHandler } from '../app.js'
@@ -58,6 +76,10 @@ afterEach(() => {
   vi.restoreAllMocks()
   generateWorkflowAiPlanMock.mockReset()
   streamWorkflowAiPlanMock.mockReset()
+  startWorkflowAiSessionMock.mockReset()
+  submitWorkflowAiSessionInputMock.mockReset()
+  runWorkflowAiSessionMock.mockReset()
+  getWorkflowAiSessionMock.mockReset()
 })
 
 describe('workflow ai routes', () => {
@@ -185,5 +207,208 @@ describe('workflow ai routes', () => {
     const lines = response.body.trim().split('\n').map((line) => JSON.parse(line))
     expect(lines.map((line) => line.type)).toEqual(['started', 'text_delta', 'completed'])
     expect(lines[2].plan.summary).toBe('流式输出')
+  })
+
+  it('starts a workflow ai session from the dedicated session route', async () => {
+    startWorkflowAiSessionMock.mockReturnValueOnce({
+      sessionId: 'session_1',
+      mode: 'create',
+      status: 'idle',
+      prompt: '创建一个工作流',
+      draft: {
+        summary: '',
+        assumptions: [],
+        warnings: [],
+        questions: [],
+        nodes: [],
+        edges: [],
+      },
+      trace: [],
+      diagnostics: {
+        issues: [],
+      },
+      missingInfo: [],
+    })
+
+    const handler = createServerHandler()
+    const response = createResponse()
+
+    await handler(
+      createRequest('POST', '/api/workflow-ai/session/start', {
+        mode: 'create',
+        prompt: '创建一个工作流',
+        profile: { id: 'custom', name: '测试模型', baseUrl: 'http://example.com', model: 'test', enabled: true, source: 'custom' },
+        nodeCatalog: [],
+      }),
+      response,
+    )
+
+    expect(response.statusCode).toBe(200)
+    expect(JSON.parse(response.body)).toEqual({
+      session: expect.objectContaining({
+        sessionId: 'session_1',
+        status: 'idle',
+      }),
+    })
+  })
+
+  it('streams workflow ai session events from the session run route', async () => {
+    runWorkflowAiSessionMock.mockImplementationOnce(async (_sessionId, emitEvent) => {
+      emitEvent({ type: 'started', sessionId: 'session_1', message: 'AI 编排会话已开始' })
+      emitEvent({
+        type: 'recipe_selected',
+        recipeId: 'quick-json-demo',
+        recipeName: 'JSON 快速演示',
+        reason: '命中关键词：JSON、快速',
+      })
+      emitEvent({
+        type: 'completed',
+        plan: {
+          summary: '流式输出',
+          assumptions: [],
+          warnings: [],
+          questions: [],
+          operations: [],
+        },
+        draft: {
+          summary: '最小草稿',
+          assumptions: [],
+          warnings: [],
+          questions: [],
+          nodes: [],
+          edges: [],
+        },
+        diagnostics: {
+          status: 'success',
+          stage: 'validate',
+          attempts: [{ attempt: 1, trigger: 'initial', status: 'success', stage: 'validate' }],
+          issues: [],
+        },
+      })
+      return {
+        plan: {
+          summary: '流式输出',
+          assumptions: [],
+          warnings: [],
+          questions: [],
+          operations: [],
+        },
+        draft: {
+          summary: '最小草稿',
+          assumptions: [],
+          warnings: [],
+          questions: [],
+          nodes: [],
+          edges: [],
+        },
+        diagnostics: {
+          status: 'success',
+          stage: 'validate',
+          attempts: [{ attempt: 1, trigger: 'initial', status: 'success', stage: 'validate' }],
+          issues: [],
+        },
+      }
+    })
+
+    const handler = createServerHandler()
+    const response = createResponse()
+
+    await handler(createRequest('POST', '/api/workflow-ai/session/session_1/run'), response)
+
+    expect(response.statusCode).toBe(200)
+    expect(response.headersMap['Content-Type']).toContain('application/x-ndjson')
+    const lines = response.body.trim().split('\n').map((line) => JSON.parse(line))
+    expect(lines.map((line) => line.type)).toEqual(['started', 'recipe_selected', 'completed'])
+    expect(lines[2].draft.summary).toBe('最小草稿')
+  })
+
+  it('stores user-provided missing information through the session input route', async () => {
+    submitWorkflowAiSessionInputMock.mockResolvedValueOnce({
+      sessionId: 'session_1',
+      mode: 'create',
+      status: 'idle',
+      prompt: '创建一个工作流',
+      draft: {
+        summary: '最小草稿',
+        assumptions: [],
+        warnings: [],
+        questions: ['请确认目标字段'],
+        nodes: [],
+        edges: [],
+      },
+      trace: [],
+      diagnostics: {
+        issues: [],
+      },
+      missingInfo: [],
+      contextHints: {
+        userAnswers: [
+          {
+            key: 'question_1',
+            value: '目标字段就是 target',
+          },
+        ],
+      },
+    })
+
+    const handler = createServerHandler()
+    const response = createResponse()
+
+    await handler(
+      createRequest('POST', '/api/workflow-ai/session/session_1/input', {
+        answers: {
+          question_1: '目标字段就是 target',
+        },
+      }),
+      response,
+    )
+
+    expect(response.statusCode).toBe(200)
+    expect(submitWorkflowAiSessionInputMock).toHaveBeenCalledWith('session_1', {
+      answers: {
+        question_1: '目标字段就是 target',
+      },
+    })
+    expect(JSON.parse(response.body)).toEqual({
+      session: expect.objectContaining({
+        sessionId: 'session_1',
+        status: 'idle',
+      }),
+    })
+  })
+
+  it('returns the current workflow ai session snapshot', async () => {
+    getWorkflowAiSessionMock.mockReturnValueOnce({
+      sessionId: 'session_1',
+      mode: 'create',
+      status: 'running',
+      prompt: '创建一个工作流',
+      draft: {
+        summary: '',
+        assumptions: [],
+        warnings: [],
+        questions: [],
+        nodes: [],
+        edges: [],
+      },
+      trace: [],
+      diagnostics: {
+        issues: [],
+      },
+      missingInfo: [],
+    })
+
+    const handler = createServerHandler()
+    const response = createResponse()
+
+    await handler(createRequest('GET', '/api/workflow-ai/session/session_1'), response)
+
+    expect(response.statusCode).toBe(200)
+    expect(JSON.parse(response.body)).toEqual({
+      session: expect.objectContaining({
+        sessionId: 'session_1',
+        status: 'running',
+      }),
+    })
   })
 })

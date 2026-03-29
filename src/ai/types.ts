@@ -1,4 +1,6 @@
-﻿export type WorkflowAiPlanMode = 'create' | 'edit'
+import type { AiDraftGraph } from './draft/types.js'
+
+export type WorkflowAiPlanMode = 'create' | 'edit'
 
 export interface WorkflowAiNodeCatalogItem {
   name: string
@@ -76,6 +78,89 @@ export interface WorkflowAiPlan {
   operations: WorkflowAiOperation[]
 }
 
+export interface WorkflowAiContextRecipeHint {
+  id: string
+  name: string
+  reason: string
+  minimalPattern: string[]
+}
+
+export interface WorkflowAiContextSchemaSummary {
+  nodeId: string
+  nodeLabel: string
+  sourceKind?: 'canvas-cache' | 'canvas-ephemeral-run' | 'draft-ephemeral-run'
+  resultKind: 'table' | 'tableCollection' | 'json' | 'unknown'
+  rowCount?: number
+  numericColumns: string[]
+  categoricalColumns?: string[]
+  datetimeColumns?: string[]
+  candidateTargetColumns: string[]
+  candidateFeatureColumns: string[]
+  blockedReasons: string[]
+}
+
+export interface WorkflowAiContextUserAnswer {
+  key: string
+  value: string
+  label?: string
+  reason?: string
+}
+
+export interface WorkflowAiContextHints {
+  recipes?: WorkflowAiContextRecipeHint[]
+  schemaSummaries?: WorkflowAiContextSchemaSummary[]
+  userAnswers?: WorkflowAiContextUserAnswer[]
+}
+
+export interface WorkflowAiToolTraceItem {
+  id?: string
+  toolName: string
+  summary: string
+  status: 'success' | 'failed'
+  startedAt?: number
+  finishedAt?: number
+  inputSummary?: string
+  outputSummary?: string
+}
+
+export interface WorkflowAiSelectedRecipe {
+  id: string
+  name: string
+  reason: string
+}
+
+export interface WorkflowAiSessionIssue {
+  code: string
+  message: string
+  level: 'info' | 'warn' | 'error'
+}
+
+export interface WorkflowAiMissingInfoItem {
+  key: string
+  label: string
+  reason: string
+  blocking: boolean
+  suggestions?: string[]
+}
+
+export interface WorkflowAiSessionState {
+  sessionId: string
+  mode: WorkflowAiPlanMode
+  status: 'idle' | 'running' | 'waiting_user' | 'completed' | 'failed'
+  prompt: string
+  selectedRecipe?: WorkflowAiSelectedRecipe
+  draft: AiDraftGraph
+  trace: WorkflowAiToolTraceItem[]
+  diagnostics: {
+    issues: WorkflowAiSessionIssue[]
+    lastFailedTool?: string
+  }
+  missingInfo: WorkflowAiMissingInfoItem[]
+  finalizedPlan?: WorkflowAiPlan
+  contextHints?: WorkflowAiContextHints
+  updatedAt?: number
+}
+
 export type WorkflowAiGenerationStage = 'model_request' | 'parse' | 'normalize' | 'validate' | 'apply'
 
 export interface WorkflowAiGenerationIssue {
@@ -147,10 +232,59 @@ export interface WorkflowAiPlanResponse {
   diagnostics: WorkflowAiGenerationDiagnostics
 }
 
+export interface WorkflowAiSessionStartResponse {
+  session: WorkflowAiSessionState
+}
+
+export interface WorkflowAiSessionGetResponse {
+  session: WorkflowAiSessionState
+}
+
+export interface WorkflowAiSessionRunResponse {
+  plan: WorkflowAiPlan
+  draft: AiDraftGraph
+  diagnostics: WorkflowAiGenerationDiagnostics
+}
+
+export interface WorkflowAiSessionInputRequest {
+  answers: Record<string, string>
+}
+
+export interface WorkflowAiSessionInputResponse {
+  session: WorkflowAiSessionState
+}
+
 export type WorkflowAiStreamEvent =
   | {
       type: 'started'
+      sessionId?: string
       message?: string
+    }
+  | {
+      type: 'recipe_selected'
+      recipeId: string
+      recipeName: string
+      reason: string
+    }
+  | {
+      type: 'tool_started'
+      toolName: string
+      traceId: string
+      summary: string
+    }
+  | {
+      type: 'tool_completed'
+      toolName: string
+      traceId: string
+      summary: string
+    }
+  | {
+      type: 'draft_updated'
+      draft: AiDraftGraph
+    }
+  | {
+      type: 'missing_info'
+      items: WorkflowAiMissingInfoItem[]
     }
   | {
       type: 'attempt_started'
@@ -177,6 +311,7 @@ export type WorkflowAiStreamEvent =
   | {
       type: 'completed'
       plan: WorkflowAiPlan
+      draft?: AiDraftGraph
       diagnostics: WorkflowAiGenerationDiagnostics
     }
   | {
@@ -193,6 +328,7 @@ export interface WorkflowAiPlanRequest {
     nodes: unknown[]
     edges: unknown[]
   }
+  contextHints?: WorkflowAiContextHints
   profile: WorkflowAiModelProfile
   nodeCatalog: WorkflowAiNodeCatalogItem[]
 }

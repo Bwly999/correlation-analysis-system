@@ -4,6 +4,14 @@
 
 ### 功能 (Feature)
 
+- **完成工作流 AI Tool-first Session 化编排主链**:
+  - 新增 session 化 AI 编排接口 `POST /api/workflow-ai/session/start`、`POST /api/workflow-ai/session/:id/run`、`POST /api/workflow-ai/session/:id/input` 与 `GET /api/workflow-ai/session/:id`，前端主链切换为会话驱动编排。
+  - 新增 recipe catalog / search、draft graph、tool-first orchestrator 与细粒度 `mutate_draft` 能力，AI 改为先构建隔离草稿，再 `finalize` 为最终计划。
+  - 新增 AI 专用 schema inspector，支持画布缓存读取、服务端无副作用临时执行、draft 分支临时执行，并把字段摘要回灌到 AI 上下文中用于补齐配置。
+  - AI 编排面板升级为“编排会话面板”，支持展示当前策略、草稿结构、缺失信息、工具轨迹与继续编排入口。
+  - session store 从进程内内存升级为文件持久化实现，并增加 TTL 过期清理；同步补充服务端工具、会话状态、路由、前端 store 与面板的回归测试。
+  - 同步更新 `工作流系统.md` 与 `docs/superpowers/specs/2026-03-30-workflow-ai-tool-first-orchestration-design.md`，标记该 spec 首期范围已完成。
+
 - **增强 AI 编排的弱模型稳定性与实时观测**:
   - AI 编排后端改为“两阶段编排”，先生成最小工作流骨架，再补齐已选节点的最小运行配置，降低弱模型一次性输出复杂计划的失败率。
   - 模型可见节点目录收敛为精简提示词专用结构，并补充 JSON 场景优先选择 `manual-json-import`、必填字段不可留空等弱模型约束。

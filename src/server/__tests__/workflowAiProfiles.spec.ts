@@ -444,6 +444,77 @@ describe('workflowAi profiles', () => {
     expect(generateTextMock.mock.calls[1]?.[0]?.system).toContain('不要输出空数组')
   })
 
+  it('injects recipe guidance into the skeleton prompt for common intents', async () => {
+    const realisticRequest: WorkflowAiPlanRequest = {
+      ...baseRequest,
+      prompt: '导入一份 JSON 表格，快速演示 Pearson 相关分析，给我最小可运行流程。',
+    }
+
+    generateTextMock
+      .mockResolvedValueOnce({
+        text: '{"summary":"创建相关性分析流","assumptions":[],"warnings":[],"questions":[],"operations":[{"id":"node_import","type":"createNode","nodeType":"manual-json-import","nodeLabel":"手动输入数据"},{"id":"node_pearson","type":"createNode","nodeType":"pearson","nodeLabel":"Pearson 相关系数"},{"id":"edge_1","type":"connectNodes","sourceRef":"node_import","targetRef":"node_pearson"}]}',
+      })
+      .mockResolvedValueOnce({
+        text: '{"summary":"创建相关性分析流","assumptions":[],"warnings":[],"questions":[],"operations":[{"id":"node_import","type":"createNode","nodeType":"manual-json-import","nodeLabel":"手动输入数据","config":{"jsonData":"[]"}},{"id":"node_pearson","type":"createNode","nodeType":"pearson","nodeLabel":"Pearson 相关系数"},{"id":"edge_1","type":"connectNodes","sourceRef":"node_import","targetRef":"node_pearson"}]}',
+      })
+
+    await generateWorkflowAiPlan(realisticRequest)
+
+    expect(generateTextMock.mock.calls[0]?.[0]?.system).toContain('候选编排模板')
+    expect(generateTextMock.mock.calls[0]?.[0]?.system).toContain('quick-json-demo')
+    expect(generateTextMock.mock.calls[0]?.[0]?.system).toContain('manual-json-import')
+  })
+
+  it('injects local context hints from app-internal tools into the skeleton prompt', async () => {
+    const realisticRequest: WorkflowAiPlanRequest = {
+      ...baseRequest,
+      prompt: '修改现有流程，继续做 Pearson 相关分析。',
+      mode: 'edit',
+      workflowSnapshot: {
+        name: '测试工作流',
+        nodes: [],
+        edges: [],
+      },
+      contextHints: {
+        recipes: [
+          {
+            id: 'single-table-correlation',
+            name: '单表相关性分析',
+            reason: '命中关键词：相关、pearson',
+            minimalPattern: ['manual-json-import', 'pearson'],
+          },
+        ],
+        schemaSummaries: [
+          {
+            nodeId: 'node_import_1',
+            nodeLabel: '手动输入数据',
+            resultKind: 'table',
+            rowCount: 2,
+            numericColumns: ['feature', 'target'],
+            candidateTargetColumns: ['target'],
+            candidateFeatureColumns: ['feature'],
+            blockedReasons: [],
+          },
+        ],
+      },
+    }
+
+    generateTextMock
+      .mockResolvedValueOnce({
+        text: '{"summary":"创建相关性分析流","assumptions":[],"warnings":[],"questions":[],"operations":[{"id":"node_import","type":"createNode","nodeType":"manual-json-import","nodeLabel":"手动输入数据"},{"id":"node_pearson","type":"createNode","nodeType":"pearson","nodeLabel":"Pearson 相关系数"},{"id":"edge_1","type":"connectNodes","sourceRef":"node_import","targetRef":"node_pearson"}]}',
+      })
+      .mockResolvedValueOnce({
+        text: '{"summary":"创建相关性分析流","assumptions":[],"warnings":[],"questions":[],"operations":[{"id":"node_import","type":"createNode","nodeType":"manual-json-import","nodeLabel":"手动输入数据","config":{"jsonData":"[]"}},{"id":"node_pearson","type":"createNode","nodeType":"pearson","nodeLabel":"Pearson 相关系数"},{"id":"edge_1","type":"connectNodes","sourceRef":"node_import","targetRef":"node_pearson"}]}',
+      })
+
+    await generateWorkflowAiPlan(realisticRequest)
+
+    expect(generateTextMock.mock.calls[0]?.[0]?.system).toContain('应用内工具已提供以下上下文摘要')
+    expect(generateTextMock.mock.calls[0]?.[0]?.system).toContain('single-table-correlation')
+    expect(generateTextMock.mock.calls[0]?.[0]?.system).toContain('"candidateTargetColumns"')
+    expect(generateTextMock.mock.calls[0]?.[0]?.system).toContain('"target"')
+  })
+
   it('returns a recoverable draft plan when configuration repair still fails after a missing-required-config validation error', async () => {
     const realisticRequest: WorkflowAiPlanRequest = {
       ...baseRequest,

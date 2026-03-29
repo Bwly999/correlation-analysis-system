@@ -6,6 +6,11 @@ import type {
   WorkflowAiPlan,
   WorkflowAiPlanRequest,
   WorkflowAiPlanResponse,
+  WorkflowAiSessionInputRequest,
+  WorkflowAiSessionInputResponse,
+  WorkflowAiSessionGetResponse,
+  WorkflowAiSessionRunResponse,
+  WorkflowAiSessionStartResponse,
   WorkflowAiStreamEvent,
 } from '@/ai/types'
 
@@ -167,6 +172,158 @@ export const streamWorkflowAiPlan = async (
   }
 
   throw new Error('AI 流式响应提前结束，未返回最终结果')
+}
+
+export const startWorkflowAiSession = async (
+  request: WorkflowAiPlanRequest,
+): Promise<WorkflowAiSessionStartResponse> => {
+  const response = await fetch(`${WORKFLOW_AI_API_BASE_URL}/workflow-ai/session/start`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      ...request,
+      nodeCatalog: request.nodeCatalog?.length ? request.nodeCatalog : buildWorkflowAiNodeCatalog(),
+    }),
+  })
+
+  const payload = (await readResponsePayload(response)) as WorkflowAiSessionStartResponse & WorkflowAiErrorPayload
+  if (!response.ok) {
+    throw new WorkflowAiRequestError(
+      payload.message || '启动 AI 编排会话失败',
+      payload.diagnostics,
+      response.status,
+    )
+  }
+
+  return payload
+}
+
+export const runWorkflowAiSession = async (
+  sessionId: string,
+  options: StreamWorkflowAiPlanOptions = {},
+): Promise<WorkflowAiSessionRunResponse> => {
+  const response = await fetch(`${WORKFLOW_AI_API_BASE_URL}/workflow-ai/session/${sessionId}/run`, {
+    method: 'POST',
+  })
+
+  if (!response.ok) {
+    const payload = await readResponsePayload(response)
+    throw new WorkflowAiRequestError(
+      payload.message || '运行 AI 编排会话失败',
+      payload.diagnostics,
+      response.status,
+    )
+  }
+
+  if (!response.body) {
+    throw new Error('AI 会话流式响应不可用')
+  }
+
+  const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()
+  let buffer = ''
+  let completedPayload: WorkflowAiSessionRunResponse | null = null
+  let failedPayload: { message: string; diagnostics?: WorkflowAiGenerationDiagnostics } | null = null
+
+  while (true) {
+    const { value, done } = await reader.read()
+    if (done) break
+
+    buffer += value
+    const lines = buffer.split('\n')
+    buffer = lines.pop() ?? ''
+
+    for (const line of lines) {
+      const event = parseNdjsonLine(line)
+      if (!event) continue
+      options.onEvent?.(event)
+
+      if (event.type === 'completed' && event.draft) {
+        completedPayload = {
+          plan: event.plan as WorkflowAiPlan,
+          draft: event.draft,
+          diagnostics: event.diagnostics,
+        }
+      }
+
+      if (event.type === 'failed') {
+        failedPayload = {
+          message: event.message,
+          diagnostics: event.diagnostics,
+        }
+      }
+    }
+  }
+
+  const lastEvent = parseNdjsonLine(buffer)
+  if (lastEvent) {
+    options.onEvent?.(lastEvent)
+    if (lastEvent.type === 'completed' && lastEvent.draft) {
+      completedPayload = {
+        plan: lastEvent.plan as WorkflowAiPlan,
+        draft: lastEvent.draft,
+        diagnostics: lastEvent.diagnostics,
+      }
+    }
+    if (lastEvent.type === 'failed') {
+      failedPayload = {
+        message: lastEvent.message,
+        diagnostics: lastEvent.diagnostics,
+      }
+    }
+  }
+
+  if (completedPayload) {
+    return completedPayload
+  }
+
+  if (failedPayload) {
+    throw new WorkflowAiRequestError(failedPayload.message, failedPayload.diagnostics, response.status)
+  }
+
+  throw new Error('AI 会话流式响应提前结束，未返回最终结果')
+}
+
+export const getWorkflowAiSession = async (
+  sessionId: string,
+): Promise<WorkflowAiSessionGetResponse> => {
+  const response = await fetch(`${WORKFLOW_AI_API_BASE_URL}/workflow-ai/session/${sessionId}`)
+  const payload = (await readResponsePayload(response)) as WorkflowAiSessionGetResponse & WorkflowAiErrorPayload
+
+  if (!response.ok) {
+    throw new WorkflowAiRequestError(
+      payload.message || '读取 AI 编排会话失败',
+      payload.diagnostics,
+      response.status,
+    )
+  }
+
+  return payload
+}
+
+export const submitWorkflowAiSessionInput = async (
+  sessionId: string,
+  request: WorkflowAiSessionInputRequest,
+): Promise<WorkflowAiSessionInputResponse> => {
+  const response = await fetch(`${WORKFLOW_AI_API_BASE_URL}/workflow-ai/session/${sessionId}/input`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(request),
+  })
+  const payload = (await readResponsePayload(response)) as WorkflowAiSessionInputResponse & WorkflowAiErrorPayload
+
+  if (!response.ok) {
+    throw new WorkflowAiRequestError(
+      payload.message || '提交 AI 编排补充信息失败',
+      payload.diagnostics,
+      response.status,
+    )
+  }
+
+  return payload
 }
 
 export const fetchSystemModelProfiles = async (): Promise<WorkflowAiModelProfile[]> => {

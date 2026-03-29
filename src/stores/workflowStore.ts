@@ -1,5 +1,5 @@
 ﻿import { defineStore } from 'pinia'
-import { computed, ref, markRaw } from 'vue'
+import { computed, ref, markRaw, toRaw } from 'vue'
 import type { Ref } from 'vue'
 import { type Node, type Edge } from '@vue-flow/core'
 import { getNodeDefinition } from '@/nodes/registry'
@@ -146,6 +146,31 @@ export const useWorkflowStore = defineStore('workflow', () => {
   }
 
   const cloneJsonValue = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
+  const cloneInspectionValue = <T>(value: T): T => {
+    const rawValue = toRaw(value)
+
+    if (Array.isArray(rawValue)) {
+      return rawValue.map((item) => cloneInspectionValue(item)) as T
+    }
+
+    if (
+      (typeof File !== 'undefined' && rawValue instanceof File)
+      || (typeof Blob !== 'undefined' && rawValue instanceof Blob)
+      || rawValue instanceof Date
+    ) {
+      return rawValue
+    }
+
+    if (rawValue && typeof rawValue === 'object') {
+      const nextValue: Record<string, unknown> = {}
+      Object.entries(rawValue).forEach(([key, nestedValue]) => {
+        nextValue[key] = cloneInspectionValue(nestedValue)
+      })
+      return nextValue as T
+    }
+
+    return rawValue
+  }
 
   const cloneWorkflowNodes = (sourceNodes: WorkflowNode[]): WorkflowNode[] =>
     cloneJsonValue(sourceNodes)
@@ -1173,6 +1198,40 @@ export const useWorkflowStore = defineStore('workflow', () => {
     return result
   }
 
+  const executeForAiInspection = async (nodeId: string) => {
+    const stateSnapshot = {
+      nodes: cloneInspectionValue(getCurrentNodes()),
+      edges: cloneInspectionValue(getCurrentEdges()),
+      logs: cloneInspectionValue(logs.value),
+      pendingExecution: cloneInspectionValue(pendingExecution.value),
+      isRunning: isRunning.value,
+      isStopping: isStopping.value,
+      globalRuntimeQueueNodeIds: [...globalRuntimeQueueNodeIds],
+      lastExecutedTerminalNodeId: lastExecutedTerminalNodeId.value,
+    }
+
+    try {
+      const result = await executeNode(nodeId, true, 'single', {
+        rerunUpstream: true,
+      })
+
+      if (result === 'WAIT_INPUT' || result === 'STOPPED') {
+        return null
+      }
+
+      return cloneInspectionValue(result)
+    } finally {
+      nodes.value = stateSnapshot.nodes
+      edges.value = stateSnapshot.edges
+      logs.value = stateSnapshot.logs
+      pendingExecution.value = stateSnapshot.pendingExecution
+      isRunning.value = stateSnapshot.isRunning
+      isStopping.value = stateSnapshot.isStopping
+      globalRuntimeQueueNodeIds = stateSnapshot.globalRuntimeQueueNodeIds
+      lastExecutedTerminalNodeId.value = stateSnapshot.lastExecutedTerminalNodeId
+    }
+  }
+
   const runGlobal = async () => {
     if (isRunning.value) return
 
@@ -1343,6 +1402,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     addAndConnectNode,
     createNodeFromDefinition,
     executeNode,
+    executeForAiInspection,
     resumePendingExecution,
     runGlobal,
     getSavedWorkflows,
