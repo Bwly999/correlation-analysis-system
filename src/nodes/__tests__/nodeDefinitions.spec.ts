@@ -133,6 +133,9 @@ describe('Node Definitions Execution Logic', () => {
       expect(definition.help?.whenToUse?.length).toBeGreaterThan(0)
       expect(definition.help?.inputGuide?.length).toBeGreaterThan(0)
       expect(definition.help?.outputGuide?.length).toBeGreaterThan(0)
+      expect(definition.libraryGroup).toBeTruthy()
+      expect(definition.libraryAliases?.length).toBeGreaterThan(0)
+      expect(definition.libraryKeywords?.length).toBeGreaterThan(0)
     }
   })
 

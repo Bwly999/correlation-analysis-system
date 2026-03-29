@@ -1,4 +1,5 @@
 import type { NodeResult } from './result'
+import type { NodeLibraryGroupId } from './libraryGroups'
 import type { NodeAssistantHints, NodeHelpDoc } from '@/help/types'
 
 export type NodeCategory = 'trigger' | 'action' | 'terminal'
@@ -87,6 +88,9 @@ export interface NodeDefinition<
   description: string
   help?: NodeHelpDoc
   assistantHints?: NodeAssistantHints
+  libraryGroup?: NodeLibraryGroupId
+  libraryAliases?: string[]
+  libraryKeywords?: string[]
   properties: NodeProperty[]
   inputMode?: NodeInputMode
   minInputs?: number
