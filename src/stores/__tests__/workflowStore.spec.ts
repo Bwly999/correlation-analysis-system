@@ -1213,7 +1213,8 @@ describe('Workflow Store', () => {
           type: 'updateNodeConfig',
           nodeRef: 'create-terminal',
           config: {
-            targetField: 'y',
+            xFields: ['x'],
+            yFields: ['y'],
           },
         },
       ],
@@ -1226,7 +1227,8 @@ describe('Workflow Store', () => {
       expect.arrayContaining(['手动输入', '数据清洗', '线性相关分析']),
     )
     const terminalNode = store.nodes.find((node) => node.data.label === '线性相关分析')!
-    expect(terminalNode.data.config.targetField).toBe('y')
+    expect(terminalNode.data.config.xFields).toEqual(['x'])
+    expect(terminalNode.data.config.yFields).toEqual(['y'])
     expect(
       store.edges.some(
         (edge) =>

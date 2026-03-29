@@ -76,10 +76,15 @@ export interface WorkflowAiPlan {
   operations: WorkflowAiOperation[]
 }
 
-export interface WorkflowAiPlanValidationIssue {
+export type WorkflowAiGenerationStage = 'model_request' | 'parse' | 'normalize' | 'validate' | 'apply'
+
+export interface WorkflowAiGenerationIssue {
+  stage: WorkflowAiGenerationStage
   operationId: string
   message: string
 }
+
+export interface WorkflowAiPlanValidationIssue extends WorkflowAiGenerationIssue {}
 
 export interface WorkflowAiPlanValidationResult {
   valid: boolean
@@ -120,6 +125,65 @@ export interface WorkflowAiModelTestResult {
   message: string
   latencyMs?: number
 }
+
+export interface WorkflowAiGenerationAttempt {
+  attempt: number
+  trigger: 'initial' | 'repair'
+  status: 'success' | 'failed'
+  stage: WorkflowAiGenerationStage
+  message?: string
+}
+
+export interface WorkflowAiGenerationDiagnostics {
+  status: 'success' | 'failed'
+  stage: WorkflowAiGenerationStage
+  attempts: WorkflowAiGenerationAttempt[]
+  issues: WorkflowAiGenerationIssue[]
+  rawOutputExcerpt?: string
+}
+
+export interface WorkflowAiPlanResponse {
+  plan: WorkflowAiPlan
+  diagnostics: WorkflowAiGenerationDiagnostics
+}
+
+export type WorkflowAiStreamEvent =
+  | {
+      type: 'started'
+      message?: string
+    }
+  | {
+      type: 'attempt_started'
+      attempt: number
+      trigger: 'initial' | 'repair'
+      message?: string
+    }
+  | {
+      type: 'stage_changed'
+      stage: WorkflowAiGenerationStage
+      attempt: number
+      message?: string
+    }
+  | {
+      type: 'text_delta'
+      attempt: number
+      delta: string
+    }
+  | {
+      type: 'diagnostic'
+      diagnostics: WorkflowAiGenerationDiagnostics
+      message?: string
+    }
+  | {
+      type: 'completed'
+      plan: WorkflowAiPlan
+      diagnostics: WorkflowAiGenerationDiagnostics
+    }
+  | {
+      type: 'failed'
+      message: string
+      diagnostics?: WorkflowAiGenerationDiagnostics
+    }
 
 export interface WorkflowAiPlanRequest {
   mode: WorkflowAiPlanMode

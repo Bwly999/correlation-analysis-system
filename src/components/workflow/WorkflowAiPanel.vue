@@ -1,12 +1,21 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed, onMounted, reactive } from 'vue'
-import { Bot, ChevronDown, ChevronUp, RefreshCcw, Sparkles, Wrench, X } from 'lucide-vue-next'
+import {
+  AlertTriangle,
+  Bot,
+  ChevronDown,
+  ChevronUp,
+  RefreshCcw,
+  Sparkles,
+  Wrench,
+  X,
+} from 'lucide-vue-next'
 import Button from 'primevue/button'
 import { useWorkflowStore } from '@/stores/workflowStore'
 import { useWorkflowAiStore } from '@/stores/workflowAiStore'
-import type { WorkflowAiModelProfile } from '@/ai/types'
+import type { WorkflowAiModelProfile, WorkflowAiStreamEvent } from '@/ai/types'
 
-const props = defineProps<{
+defineProps<{
   visible: boolean
 }>()
 
@@ -30,6 +39,28 @@ const draftProfile = reactive<WorkflowAiModelProfile>({
 const canGenerate = computed(() => aiStore.prompt.trim().length > 0 && !!aiStore.selectedProfileId)
 const systemProfiles = computed(() => aiStore.systemProfiles)
 const customProfiles = computed(() => aiStore.customProfiles)
+const hasRepairAttempt = computed(() =>
+  aiStore.generationDiagnostics?.attempts.some((attempt) => attempt.trigger === 'repair'),
+)
+const timelineEvents = computed(() => aiStore.streamEvents.filter((event) => event.type !== 'text_delta'))
+const streamStatusLabel = computed(() => {
+  if (aiStore.streamStatus === 'streaming') return '生成中'
+  if (aiStore.streamStatus === 'completed') return '已完成'
+  if (aiStore.streamStatus === 'failed') return '失败'
+  return '空闲'
+})
+
+const describeTimelineEvent = (event: WorkflowAiStreamEvent) => {
+  if (event.type === 'started') return event.message ?? 'AI 编排已开始'
+  if (event.type === 'attempt_started') {
+    return event.message ?? `第 ${event.attempt} 次${event.trigger === 'repair' ? '自动修复重试' : '首次生成'}`
+  }
+  if (event.type === 'stage_changed') return event.message ?? `当前阶段：${event.stage}`
+  if (event.type === 'diagnostic') return event.message ?? '已收到诊断信息'
+  if (event.type === 'completed') return '计划生成完成'
+  if (event.type === 'failed') return event.message
+  return ''
+}
 
 const resetDraftProfile = () => {
   draftProfile.id = `custom_${Date.now()}`
@@ -49,8 +80,11 @@ const handleApply = async () => {
   try {
     aiStore.errorMessage = ''
     aiStore.applyCurrentPlan(workflowStore as any)
+    workflowStore.addLog('AI编排计划应用成功', 'info')
   } catch (error: any) {
-    aiStore.errorMessage = error.message ?? '应用 AI 计划失败'
+    const message = error.message ?? '应用 AI 计划失败'
+    aiStore.setApplyError(message)
+    workflowStore.addLog(`AI编排计划应用失败: ${message}`, 'error')
   }
 }
 
@@ -151,7 +185,7 @@ onMounted(async () => {
         <div class="workflow-ai-panel__actions">
           <Button :disabled="!canGenerate || aiStore.isGenerating" class="workflow-ai-panel__primary" @click="handleGenerate">
             <Sparkles :size="14" />
-            <span>{{ aiStore.isGenerating ? '生成中...' : '生成计划' }}</span>
+            <span>{{ aiStore.isGenerating ? '正在编排...' : '生成计划' }}</span>
           </Button>
           <Button severity="secondary" class="workflow-ai-panel__secondary" @click="aiStore.settingsVisible = !aiStore.settingsVisible">
             <Wrench :size="14" />
@@ -160,6 +194,89 @@ onMounted(async () => {
           </Button>
         </div>
         <p v-if="aiStore.errorMessage" class="workflow-ai-panel__error">{{ aiStore.errorMessage }}</p>
+      </section>
+
+      <section
+        v-if="aiStore.isGenerating || aiStore.streamEvents.length"
+        data-testid="workflow-ai-stream-progress"
+        class="workflow-ai-panel__section workflow-ai-panel__diagnostics"
+      >
+        <div class="workflow-ai-panel__section-title">
+          <RefreshCcw :size="14" />
+          <span>实时进度</span>
+        </div>
+        <div class="workflow-ai-panel__diag-meta">
+          <div><strong>当前状态</strong><span>{{ streamStatusLabel }}</span></div>
+          <div><strong>进度说明</strong><span>{{ aiStore.streamHeadline || '等待开始' }}</span></div>
+        </div>
+        <div v-if="timelineEvents.length" class="workflow-ai-panel__list-block">
+          <strong>进度时间线</strong>
+          <ul>
+            <li v-for="(event, index) in timelineEvents" :key="`${event.type}-${index}`">
+              {{ describeTimelineEvent(event) }}
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <section
+        v-if="aiStore.streamOutputs.length"
+        data-testid="workflow-ai-stream-output"
+        class="workflow-ai-panel__section"
+      >
+        <div class="workflow-ai-panel__section-title">
+          <Bot :size="14" />
+          <span>模型实时输出</span>
+        </div>
+        <div v-for="output in aiStore.streamOutputs" :key="`${output.trigger}-${output.attempt}`" class="workflow-ai-panel__list-block">
+          <strong>第 {{ output.attempt }} 次 · {{ output.trigger === 'repair' ? '自动修复重试' : '首次生成' }}</strong>
+          <pre class="workflow-ai-panel__raw-output">{{ output.text || '正在等待模型输出...' }}</pre>
+        </div>
+      </section>
+
+      <section
+        v-if="aiStore.generationDiagnostics"
+        data-testid="workflow-ai-diagnostics"
+        class="workflow-ai-panel__section workflow-ai-panel__diagnostics"
+      >
+        <div class="workflow-ai-panel__section-title">
+          <AlertTriangle :size="14" />
+          <span>诊断信息</span>
+        </div>
+        <div class="workflow-ai-panel__diag-meta">
+          <div><strong>失败阶段</strong><span>{{ aiStore.generationDiagnostics.stage }}</span></div>
+          <div><strong>当前状态</strong><span>{{ aiStore.generationDiagnostics.status }}</span></div>
+          <div v-if="hasRepairAttempt"><strong>自动修复重试</strong><span>已执行</span></div>
+        </div>
+
+        <div v-if="aiStore.generationDiagnostics.attempts.length" class="workflow-ai-panel__list-block">
+          <strong>尝试记录</strong>
+          <ul>
+            <li v-for="attempt in aiStore.generationDiagnostics.attempts" :key="`${attempt.attempt}-${attempt.trigger}`">
+              第 {{ attempt.attempt }} 次 · {{ attempt.trigger === 'repair' ? '自动修复重试' : '首次生成' }} · {{ attempt.stage }} ·
+              {{ attempt.status === 'success' ? '成功' : '失败' }}
+              <span v-if="attempt.message"> · {{ attempt.message }}</span>
+            </li>
+          </ul>
+        </div>
+
+        <div v-if="aiStore.generationDiagnostics.issues.length" class="workflow-ai-panel__list-block is-warning">
+          <strong>失败明细</strong>
+          <ul>
+            <li v-for="issue in aiStore.generationDiagnostics.issues" :key="`${issue.stage}-${issue.operationId}-${issue.message}`">
+              {{ issue.stage }} / {{ issue.operationId }}：{{ issue.message }}
+            </li>
+          </ul>
+        </div>
+
+        <div
+          v-if="aiStore.generationDiagnostics.rawOutputExcerpt"
+          data-testid="workflow-ai-raw-output"
+          class="workflow-ai-panel__list-block"
+        >
+          <strong>模型原始输出摘要</strong>
+          <pre class="workflow-ai-panel__raw-output">{{ aiStore.generationDiagnostics.rawOutputExcerpt }}</pre>
+        </div>
       </section>
 
       <section v-if="aiStore.plan" class="workflow-ai-panel__section workflow-ai-panel__plan">
@@ -440,6 +557,33 @@ onMounted(async () => {
 
 .workflow-ai-panel__ops-count {
   margin-bottom: 12px;
+}
+
+.workflow-ai-panel__diag-meta {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.workflow-ai-panel__diag-meta div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  color: #334155;
+}
+
+.workflow-ai-panel__diag-meta strong {
+  color: #0f172a;
+}
+
+.workflow-ai-panel__raw-output {
+  margin: 8px 0 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 12px;
+  color: #334155;
 }
 
 .workflow-ai-panel__error,

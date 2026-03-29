@@ -423,7 +423,10 @@ const buildManualInputTemplate = () => {
         </div>
 
         <!-- 下部分：运行时输入 -->
-        <div class="flex min-h-0 flex-1 flex-col overflow-hidden px-4 pb-4 pt-1">
+        <div
+          data-testid="runtime-inputs-panel-shell"
+          class="flex min-h-0 flex-1 flex-col overflow-hidden px-4 pb-4 pt-1"
+        >
           <RuntimeInputs
             v-model:config="config"
             :properties="runtimeProperties"

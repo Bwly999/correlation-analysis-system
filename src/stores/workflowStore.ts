@@ -5,6 +5,8 @@ import { type Node, type Edge } from '@vue-flow/core'
 import { getNodeDefinition } from '@/nodes/registry'
 import type { MultipleNodeExecutionInput, MultipleNodeExecutionItem } from '@/nodes/types'
 import { isNodeResult, normalizeNodeResult } from '@/nodes/result'
+import { buildWorkflowAiNodeCatalog } from '@/ai/catalog'
+import { validateWorkflowAiPlanAgainstContext } from '@/ai/planValidation'
 import {
   storageProvider,
   type WorkflowNode,
@@ -762,55 +764,19 @@ export const useWorkflowStore = defineStore('workflow', () => {
   }
 
   const validateWorkflowAiPlan = (plan: WorkflowAiPlan): WorkflowAiPlanValidationResult => {
-    const issues: WorkflowAiPlanValidationResult['issues'] = []
-    const plannedNodeRefs = new Set(
-      plan.operations
-        .filter((operation): operation is Extract<WorkflowAiOperation, { type: 'createNode' }> => operation.type === 'createNode')
-        .map((operation) => operation.id),
-    )
-    const hasNodeRef = (refId: string) => plannedNodeRefs.has(refId) || Boolean(findNodeById(refId))
-
-    plan.operations.forEach((operation) => {
-      try {
-        if (operation.type === 'createNode') {
-          const definition = getNodeDefinition(operation.nodeType)
-          if (!definition) {
-            issues.push({
-              operationId: operation.id,
-              message: `未找到节点定义: ${operation.nodeType}`,
-            })
-          }
-          return
-        }
-
-        if (operation.type === 'connectNodes') {
-          if (!hasNodeRef(operation.sourceRef) || !hasNodeRef(operation.targetRef)) {
-            issues.push({
-              operationId: operation.id,
-              message: '连接引用了不存在的节点',
-            })
-          }
-          return
-        }
-
-        if ('nodeRef' in operation && !hasNodeRef(operation.nodeRef)) {
-          issues.push({
-            operationId: operation.id,
-            message: '操作引用了不存在的节点',
-          })
-        }
-      } catch (error: any) {
-        issues.push({
-          operationId: operation.id,
-          message: error.message ?? 'AI 计划校验失败',
-        })
-      }
+    return validateWorkflowAiPlanAgainstContext(plan, {
+      nodeCatalog: buildWorkflowAiNodeCatalog(),
+      existingNodes: getCurrentNodes().map((node) => ({
+        id: node.id,
+        type: node.data.type,
+        config: node.data.config,
+      })),
+      existingEdges: getCurrentEdges().map((edge) => ({
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+      })),
     })
-
-    return {
-      valid: issues.length === 0,
-      issues,
-    }
   }
 
   const applyWorkflowAiPlan = (plan: WorkflowAiPlan): WorkflowAiPlanApplyResult => {
@@ -872,7 +838,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     }
 
     markWorkflowAsExplicitlyUnsaved()
-    addLog(`AI 计划已应用: ${plan.summary}`, 'info')
+    addLog(`AI编排计划已应用: ${plan.summary}`, 'info')
 
     return {
       applied: true,
