@@ -2,10 +2,17 @@
 import {
   generateWorkflowAiPlan,
   getSystemModelProfiles,
+  streamWorkflowAiPlan,
   testWorkflowAiModelProfile,
   toPublicModelProfile,
 } from './workflowAi/profiles.js'
-import type { WorkflowAiModelProfile, WorkflowAiPlanRequest } from '../ai/types.js'
+import type { WorkflowAiModelProfile, WorkflowAiPlanRequest, WorkflowAiStreamEvent } from '../ai/types.js'
+import {
+  getWorkflowAiSession,
+  runWorkflowAiSession,
+  startWorkflowAiSession,
+  submitWorkflowAiSessionInput,
+} from './workflowAi/orchestrator.js'
 import { proxyAnalysisRequest } from './analysisProxy.js'
 import {
   clearUserHistory,
@@ -31,6 +38,17 @@ const sendJson = (response: ServerResponse, statusCode: number, payload: unknown
   response.end(JSON.stringify(payload))
 }
 
+const startNdjsonStream = (response: ServerResponse) => {
+  setCorsHeaders(response)
+  response.statusCode = 200
+  response.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8')
+  response.setHeader('Cache-Control', 'no-cache, no-transform')
+}
+
+const writeNdjsonEvent = (response: ServerResponse, event: WorkflowAiStreamEvent) => {
+  response.write(`${JSON.stringify(event)}\n`)
+}
+
 const readJsonBody = async <T>(request: IncomingMessage): Promise<T> => {
   const chunks: Buffer[] = []
 
@@ -43,8 +61,14 @@ const readJsonBody = async <T>(request: IncomingMessage): Promise<T> => {
 }
 
 const sendError = (response: ServerResponse, error: unknown) => {
+  const statusCode =
+    typeof error === 'object' && error !== null && 'statusCode' in error && typeof error.statusCode === 'number'
+      ? error.statusCode
+      : 500
   const message = error instanceof Error ? error.message : '服务处理失败'
-  sendJson(response, 500, { message })
+  const diagnostics =
+    typeof error === 'object' && error !== null && 'diagnostics' in error ? error.diagnostics : undefined
+  sendJson(response, statusCode, diagnostics ? { message, diagnostics } : { message })
 }
 
 export const createServerHandler = () => async (request: IncomingMessage, response: ServerResponse) => {
@@ -159,8 +183,97 @@ export const createServerHandler = () => async (request: IncomingMessage, respon
 
     if (request.method === 'POST' && url.pathname === '/api/workflow-ai/plan') {
       const body = await readJsonBody<WorkflowAiPlanRequest>(request)
-      const plan = await generateWorkflowAiPlan(body)
-      sendJson(response, 200, plan)
+      const result = await generateWorkflowAiPlan(body)
+      sendJson(response, 200, result)
+      return
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/workflow-ai/plan/stream') {
+      const body = await readJsonBody<WorkflowAiPlanRequest>(request)
+      let hasWrittenEvent = false
+      startNdjsonStream(response)
+
+      try {
+        await streamWorkflowAiPlan(body, (event) => {
+          hasWrittenEvent = true
+          writeNdjsonEvent(response, event)
+        })
+      } catch (error) {
+        if (!hasWrittenEvent) {
+          const message = error instanceof Error ? error.message : '生成 AI 计划失败'
+          const diagnostics =
+            typeof error === 'object' && error !== null && 'diagnostics' in error ? error.diagnostics : undefined
+          writeNdjsonEvent(response, {
+            type: 'failed',
+            message,
+            diagnostics: diagnostics as any,
+          })
+        }
+      } finally {
+        response.end()
+      }
+      return
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/workflow-ai/session/start') {
+      const body = await readJsonBody<WorkflowAiPlanRequest>(request)
+      const session = startWorkflowAiSession(body)
+      sendJson(response, 200, { session })
+      return
+    }
+
+    if (
+      request.method === 'POST'
+      && /^\/api\/workflow-ai\/session\/[^/]+\/input$/.test(url.pathname)
+    ) {
+      const sessionId = decodeURIComponent(url.pathname.replace('/api/workflow-ai/session/', '').replace('/input', ''))
+      const body = await readJsonBody(request)
+      const session = await submitWorkflowAiSessionInput(sessionId, body as any)
+      sendJson(response, 200, { session })
+      return
+    }
+
+    if (
+      request.method === 'POST'
+      && /^\/api\/workflow-ai\/session\/[^/]+\/run$/.test(url.pathname)
+    ) {
+      const sessionId = decodeURIComponent(url.pathname.replace('/api/workflow-ai/session/', '').replace('/run', ''))
+      let hasWrittenEvent = false
+      startNdjsonStream(response)
+
+      try {
+        await runWorkflowAiSession(sessionId, (event) => {
+          hasWrittenEvent = true
+          writeNdjsonEvent(response, event)
+        })
+      } catch (error) {
+        if (!hasWrittenEvent) {
+          const message = error instanceof Error ? error.message : '运行 AI 编排会话失败'
+          const diagnostics =
+            typeof error === 'object' && error !== null && 'diagnostics' in error ? error.diagnostics : undefined
+          writeNdjsonEvent(response, {
+            type: 'failed',
+            message,
+            diagnostics: diagnostics as any,
+          })
+        }
+      } finally {
+        response.end()
+      }
+      return
+    }
+
+    if (
+      request.method === 'GET'
+      && /^\/api\/workflow-ai\/session\/[^/]+$/.test(url.pathname)
+    ) {
+      const sessionId = decodeURIComponent(url.pathname.replace('/api/workflow-ai/session/', ''))
+      const session = getWorkflowAiSession(sessionId)
+      if (!session) {
+        sendJson(response, 404, { message: '未找到 AI 编排会话' })
+        return
+      }
+      sendJson(response, 200, { session })
       return
     }
 

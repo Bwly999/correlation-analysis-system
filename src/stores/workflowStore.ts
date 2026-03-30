@@ -1,10 +1,12 @@
 ﻿import { defineStore } from 'pinia'
-import { computed, ref, markRaw } from 'vue'
+import { computed, ref, markRaw, toRaw } from 'vue'
 import type { Ref } from 'vue'
 import { type Node, type Edge } from '@vue-flow/core'
 import { getNodeDefinition } from '@/nodes/registry'
 import type { MultipleNodeExecutionInput, MultipleNodeExecutionItem } from '@/nodes/types'
 import { isNodeResult, normalizeNodeResult } from '@/nodes/result'
+import { buildWorkflowAiNodeCatalog } from '@/ai/catalog'
+import { validateWorkflowAiPlanAgainstContext } from '@/ai/planValidation'
 import {
   storageProvider,
   type WorkflowNode,
@@ -144,6 +146,31 @@ export const useWorkflowStore = defineStore('workflow', () => {
   }
 
   const cloneJsonValue = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
+  const cloneInspectionValue = <T>(value: T): T => {
+    const rawValue = toRaw(value)
+
+    if (Array.isArray(rawValue)) {
+      return rawValue.map((item) => cloneInspectionValue(item)) as T
+    }
+
+    if (
+      (typeof File !== 'undefined' && rawValue instanceof File)
+      || (typeof Blob !== 'undefined' && rawValue instanceof Blob)
+      || rawValue instanceof Date
+    ) {
+      return rawValue
+    }
+
+    if (rawValue && typeof rawValue === 'object') {
+      const nextValue: Record<string, unknown> = {}
+      Object.entries(rawValue).forEach(([key, nestedValue]) => {
+        nextValue[key] = cloneInspectionValue(nestedValue)
+      })
+      return nextValue as T
+    }
+
+    return rawValue
+  }
 
   const cloneWorkflowNodes = (sourceNodes: WorkflowNode[]): WorkflowNode[] =>
     cloneJsonValue(sourceNodes)
@@ -762,55 +789,19 @@ export const useWorkflowStore = defineStore('workflow', () => {
   }
 
   const validateWorkflowAiPlan = (plan: WorkflowAiPlan): WorkflowAiPlanValidationResult => {
-    const issues: WorkflowAiPlanValidationResult['issues'] = []
-    const plannedNodeRefs = new Set(
-      plan.operations
-        .filter((operation): operation is Extract<WorkflowAiOperation, { type: 'createNode' }> => operation.type === 'createNode')
-        .map((operation) => operation.id),
-    )
-    const hasNodeRef = (refId: string) => plannedNodeRefs.has(refId) || Boolean(findNodeById(refId))
-
-    plan.operations.forEach((operation) => {
-      try {
-        if (operation.type === 'createNode') {
-          const definition = getNodeDefinition(operation.nodeType)
-          if (!definition) {
-            issues.push({
-              operationId: operation.id,
-              message: `未找到节点定义: ${operation.nodeType}`,
-            })
-          }
-          return
-        }
-
-        if (operation.type === 'connectNodes') {
-          if (!hasNodeRef(operation.sourceRef) || !hasNodeRef(operation.targetRef)) {
-            issues.push({
-              operationId: operation.id,
-              message: '连接引用了不存在的节点',
-            })
-          }
-          return
-        }
-
-        if ('nodeRef' in operation && !hasNodeRef(operation.nodeRef)) {
-          issues.push({
-            operationId: operation.id,
-            message: '操作引用了不存在的节点',
-          })
-        }
-      } catch (error: any) {
-        issues.push({
-          operationId: operation.id,
-          message: error.message ?? 'AI 计划校验失败',
-        })
-      }
+    return validateWorkflowAiPlanAgainstContext(plan, {
+      nodeCatalog: buildWorkflowAiNodeCatalog(),
+      existingNodes: getCurrentNodes().map((node) => ({
+        id: node.id,
+        type: node.data.type,
+        config: node.data.config,
+      })),
+      existingEdges: getCurrentEdges().map((edge) => ({
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+      })),
     })
-
-    return {
-      valid: issues.length === 0,
-      issues,
-    }
   }
 
   const applyWorkflowAiPlan = (plan: WorkflowAiPlan): WorkflowAiPlanApplyResult => {
@@ -872,7 +863,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     }
 
     markWorkflowAsExplicitlyUnsaved()
-    addLog(`AI 计划已应用: ${plan.summary}`, 'info')
+    addLog(`AI编排计划已应用: ${plan.summary}`, 'info')
 
     return {
       applied: true,
@@ -1207,6 +1198,40 @@ export const useWorkflowStore = defineStore('workflow', () => {
     return result
   }
 
+  const executeForAiInspection = async (nodeId: string) => {
+    const stateSnapshot = {
+      nodes: cloneInspectionValue(getCurrentNodes()),
+      edges: cloneInspectionValue(getCurrentEdges()),
+      logs: cloneInspectionValue(logs.value),
+      pendingExecution: cloneInspectionValue(pendingExecution.value),
+      isRunning: isRunning.value,
+      isStopping: isStopping.value,
+      globalRuntimeQueueNodeIds: [...globalRuntimeQueueNodeIds],
+      lastExecutedTerminalNodeId: lastExecutedTerminalNodeId.value,
+    }
+
+    try {
+      const result = await executeNode(nodeId, true, 'single', {
+        rerunUpstream: true,
+      })
+
+      if (result === 'WAIT_INPUT' || result === 'STOPPED') {
+        return null
+      }
+
+      return cloneInspectionValue(result)
+    } finally {
+      nodes.value = stateSnapshot.nodes
+      edges.value = stateSnapshot.edges
+      logs.value = stateSnapshot.logs
+      pendingExecution.value = stateSnapshot.pendingExecution
+      isRunning.value = stateSnapshot.isRunning
+      isStopping.value = stateSnapshot.isStopping
+      globalRuntimeQueueNodeIds = stateSnapshot.globalRuntimeQueueNodeIds
+      lastExecutedTerminalNodeId.value = stateSnapshot.lastExecutedTerminalNodeId
+    }
+  }
+
   const runGlobal = async () => {
     if (isRunning.value) return
 
@@ -1377,6 +1402,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     addAndConnectNode,
     createNodeFromDefinition,
     executeNode,
+    executeForAiInspection,
     resumePendingExecution,
     runGlobal,
     getSavedWorkflows,

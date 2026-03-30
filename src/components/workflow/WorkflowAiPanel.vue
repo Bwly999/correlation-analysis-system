@@ -1,12 +1,21 @@
-﻿<script setup lang="ts">
-import { computed, onMounted, reactive } from 'vue'
-import { Bot, ChevronDown, ChevronUp, RefreshCcw, Sparkles, Wrench, X } from 'lucide-vue-next'
+<script setup lang="ts">
+import { computed, onMounted, reactive, watch } from 'vue'
+import {
+  AlertTriangle,
+  Bot,
+  ChevronDown,
+  ChevronUp,
+  RefreshCcw,
+  Sparkles,
+  Wrench,
+  X,
+} from 'lucide-vue-next'
 import Button from 'primevue/button'
 import { useWorkflowStore } from '@/stores/workflowStore'
 import { useWorkflowAiStore } from '@/stores/workflowAiStore'
-import type { WorkflowAiModelProfile } from '@/ai/types'
+import type { WorkflowAiModelProfile, WorkflowAiStreamEvent } from '@/ai/types'
 
-const props = defineProps<{
+defineProps<{
   visible: boolean
 }>()
 
@@ -30,6 +39,63 @@ const draftProfile = reactive<WorkflowAiModelProfile>({
 const canGenerate = computed(() => aiStore.prompt.trim().length > 0 && !!aiStore.selectedProfileId)
 const systemProfiles = computed(() => aiStore.systemProfiles)
 const customProfiles = computed(() => aiStore.customProfiles)
+const hasRepairAttempt = computed(() =>
+  aiStore.generationDiagnostics?.attempts.some((attempt) => attempt.trigger === 'repair'),
+)
+const sessionState = computed(() => aiStore.sessionState)
+const sessionStatusLabel = computed(() => {
+  if (sessionState.value?.status === 'running') return '编排中'
+  if (sessionState.value?.status === 'waiting_user') return '待补充信息'
+  if (sessionState.value?.status === 'completed') return '已完成'
+  if (sessionState.value?.status === 'failed') return '失败'
+  return '未开始'
+})
+const localRecipes = computed(() => aiStore.contextHints?.recipes ?? [])
+const localSchemaSummaries = computed(() => aiStore.contextHints?.schemaSummaries ?? [])
+const hasLocalContext = computed(
+  () => aiStore.toolTrace.length > 0 || localRecipes.value.length > 0 || localSchemaSummaries.value.length > 0,
+)
+const timelineEvents = computed(() => aiStore.streamEvents.filter((event) => event.type !== 'text_delta'))
+const missingInfoAnswers = reactive<Record<string, string>>({})
+const streamStatusLabel = computed(() => {
+  if (aiStore.streamStatus === 'streaming') return '生成中'
+  if (aiStore.streamStatus === 'completed') return '已完成'
+  if (aiStore.streamStatus === 'failed') return '失败'
+  return '空闲'
+})
+const canContinueSession = computed(() => {
+  if (aiStore.isGenerating || sessionState.value?.status !== 'waiting_user') return false
+  return sessionState.value.missingInfo.every((item) => !item.blocking || !!missingInfoAnswers[item.key]?.trim())
+})
+
+const formatFieldList = (fields: string[] | undefined) =>
+  fields && fields.length ? fields.join('、') : '无'
+
+const describeResultKind = (resultKind: string) => {
+  if (resultKind === 'table') return '单表'
+  if (resultKind === 'tableCollection') return '表集合'
+  if (resultKind === 'json') return 'JSON'
+  return '未知'
+}
+
+const describeDraftNodeStatus = (status: string) => {
+  if (status === 'added') return '新增'
+  if (status === 'updated') return '已修改'
+  if (status === 'removed') return '待删除'
+  return '保留'
+}
+
+const describeTimelineEvent = (event: WorkflowAiStreamEvent) => {
+  if (event.type === 'started') return event.message ?? 'AI 编排已开始'
+  if (event.type === 'attempt_started') {
+    return event.message ?? `第 ${event.attempt} 次${event.trigger === 'repair' ? '自动修复重试' : '首次生成'}`
+  }
+  if (event.type === 'stage_changed') return event.message ?? `当前阶段：${event.stage}`
+  if (event.type === 'diagnostic') return event.message ?? '已收到诊断信息'
+  if (event.type === 'completed') return '计划生成完成'
+  if (event.type === 'failed') return event.message
+  return ''
+}
 
 const resetDraftProfile = () => {
   draftProfile.id = `custom_${Date.now()}`
@@ -45,17 +111,45 @@ const handleGenerate = async () => {
   await aiStore.generatePlan(workflowStore as any)
 }
 
+const syncMissingInfoAnswers = () => {
+  const items = sessionState.value?.missingInfo ?? []
+  const userAnswerMap = new Map((sessionState.value?.contextHints?.userAnswers ?? []).map((item) => [item.key, item.value]))
+  const activeKeys = new Set(items.map((item) => item.key))
+
+  Object.keys(missingInfoAnswers).forEach((key) => {
+    if (!activeKeys.has(key)) {
+      delete missingInfoAnswers[key]
+    }
+  })
+
+  items.forEach((item) => {
+    if (!missingInfoAnswers[item.key]) {
+      missingInfoAnswers[item.key] = userAnswerMap.get(item.key) ?? ''
+    }
+  })
+}
+
 const handleApply = async () => {
   try {
     aiStore.errorMessage = ''
     aiStore.applyCurrentPlan(workflowStore as any)
+    workflowStore.addLog('AI编排计划应用成功', 'info')
   } catch (error: any) {
-    aiStore.errorMessage = error.message ?? '应用 AI 计划失败'
+    const message = error.message ?? '应用 AI 计划失败'
+    aiStore.setApplyError(message)
+    workflowStore.addLog(`AI编排计划应用失败: ${message}`, 'error')
   }
 }
 
 const handleRestore = () => {
   aiStore.restoreLastApplied(workflowStore as any)
+}
+
+const handleContinueSession = async () => {
+  const answers = Object.fromEntries(
+    (sessionState.value?.missingInfo ?? []).map((item) => [item.key, missingInfoAnswers[item.key] ?? '']),
+  )
+  await aiStore.continueSession(workflowStore as any, answers)
 }
 
 const handleSaveCustomProfile = () => {
@@ -87,6 +181,14 @@ onMounted(async () => {
     await aiStore.loadProfiles()
   }
 })
+
+watch(
+  () => sessionState.value?.missingInfo,
+  () => {
+    syncMissingInfoAnswers()
+  },
+  { deep: true, immediate: true },
+)
 </script>
 
 <template>
@@ -151,7 +253,7 @@ onMounted(async () => {
         <div class="workflow-ai-panel__actions">
           <Button :disabled="!canGenerate || aiStore.isGenerating" class="workflow-ai-panel__primary" @click="handleGenerate">
             <Sparkles :size="14" />
-            <span>{{ aiStore.isGenerating ? '生成中...' : '生成计划' }}</span>
+            <span>{{ aiStore.isGenerating ? '正在编排...' : '生成计划' }}</span>
           </Button>
           <Button severity="secondary" class="workflow-ai-panel__secondary" @click="aiStore.settingsVisible = !aiStore.settingsVisible">
             <Wrench :size="14" />
@@ -160,6 +262,227 @@ onMounted(async () => {
           </Button>
         </div>
         <p v-if="aiStore.errorMessage" class="workflow-ai-panel__error">{{ aiStore.errorMessage }}</p>
+      </section>
+
+      <section
+        v-if="aiStore.isGenerating || aiStore.streamEvents.length"
+        data-testid="workflow-ai-stream-progress"
+        class="workflow-ai-panel__section workflow-ai-panel__diagnostics"
+      >
+        <div class="workflow-ai-panel__section-title">
+          <RefreshCcw :size="14" />
+          <span>实时进度</span>
+        </div>
+        <div class="workflow-ai-panel__diag-meta">
+          <div><strong>当前状态</strong><span>{{ streamStatusLabel }}</span></div>
+          <div><strong>进度说明</strong><span>{{ aiStore.streamHeadline || '等待开始' }}</span></div>
+        </div>
+        <div v-if="timelineEvents.length" class="workflow-ai-panel__list-block">
+          <strong>进度时间线</strong>
+          <ul>
+            <li v-for="(event, index) in timelineEvents" :key="`${event.type}-${index}`">
+              {{ describeTimelineEvent(event) }}
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <section
+        v-if="sessionState"
+        data-testid="workflow-ai-session-strategy"
+        class="workflow-ai-panel__section workflow-ai-panel__diagnostics"
+      >
+        <div class="workflow-ai-panel__section-title">
+          <Sparkles :size="14" />
+          <span>当前策略</span>
+        </div>
+        <div class="workflow-ai-panel__diag-meta">
+          <div><strong>会话状态</strong><span>{{ sessionStatusLabel }}</span></div>
+          <div v-if="sessionState.selectedRecipe"><strong>当前模板</strong><span>{{ sessionState.selectedRecipe.name }}</span></div>
+          <div v-if="sessionState.selectedRecipe"><strong>命中原因</strong><span>{{ sessionState.selectedRecipe.reason }}</span></div>
+        </div>
+      </section>
+
+      <section
+        v-if="sessionState"
+        data-testid="workflow-ai-session-draft"
+        class="workflow-ai-panel__section"
+      >
+        <div class="workflow-ai-panel__section-title">
+          <RefreshCcw :size="14" />
+          <span>草稿结构</span>
+        </div>
+        <p class="workflow-ai-panel__summary">
+          {{ sessionState.draft.summary || '当前草稿尚未形成明确摘要。' }}
+        </p>
+        <div class="workflow-ai-panel__ops-count">
+          当前草稿共 {{ sessionState.draft.nodes.length }} 个节点、{{ sessionState.draft.edges.length }} 条连线
+        </div>
+        <div v-if="sessionState.draft.nodes.length" class="workflow-ai-panel__list-block">
+          <strong>草稿节点</strong>
+          <ul>
+            <li v-for="node in sessionState.draft.nodes" :key="node.ref">
+              {{ node.label }} · {{ describeDraftNodeStatus(node.status) }}
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <section
+        v-if="sessionState?.missingInfo.length"
+        data-testid="workflow-ai-missing-info"
+        class="workflow-ai-panel__section workflow-ai-panel__diagnostics"
+      >
+        <div class="workflow-ai-panel__section-title">
+          <AlertTriangle :size="14" />
+          <span>缺失信息</span>
+        </div>
+        <div class="workflow-ai-panel__list-block is-warning">
+          <strong>待补充项</strong>
+          <ul>
+            <li v-for="item in sessionState.missingInfo" :key="item.key">
+              {{ item.label }}：{{ item.reason }}
+            </li>
+          </ul>
+        </div>
+        <div class="workflow-ai-panel__form-grid">
+          <div v-for="item in sessionState.missingInfo" :key="`input-${item.key}`" class="workflow-ai-panel__field">
+            <label :for="`workflow-ai-missing-${item.key}`">{{ item.label }}</label>
+            <textarea
+              :id="`workflow-ai-missing-${item.key}`"
+              :data-testid="`workflow-ai-missing-info-input-${item.key}`"
+              v-model="missingInfoAnswers[item.key]"
+              class="workflow-ai-panel__textarea workflow-ai-panel__textarea--compact"
+              :placeholder="`请补充：${item.reason}`"
+            />
+          </div>
+        </div>
+        <div class="workflow-ai-panel__actions">
+          <Button
+            data-testid="workflow-ai-continue-session"
+            :disabled="!canContinueSession"
+            class="workflow-ai-panel__primary"
+            @click="handleContinueSession"
+          >
+            <RefreshCcw :size="14" />
+            <span>{{ aiStore.isGenerating ? '继续编排中...' : '继续编排' }}</span>
+          </Button>
+        </div>
+      </section>
+
+      <section
+        v-if="hasLocalContext"
+        data-testid="workflow-ai-context"
+        class="workflow-ai-panel__section workflow-ai-panel__diagnostics"
+      >
+        <div class="workflow-ai-panel__section-title">
+          <Wrench :size="14" />
+          <span>应用内上下文</span>
+        </div>
+
+        <div v-if="aiStore.toolTrace.length" class="workflow-ai-panel__list-block">
+          <strong>本地工具轨迹</strong>
+          <ul>
+            <li v-for="item in aiStore.toolTrace" :key="`${item.toolName}-${item.summary}`">
+              {{ item.toolName }} · {{ item.status === 'success' ? '成功' : '失败' }} · {{ item.summary }}
+            </li>
+          </ul>
+        </div>
+
+        <div v-if="localRecipes.length" class="workflow-ai-panel__list-block">
+          <strong>候选模板</strong>
+          <ul>
+            <li v-for="recipe in localRecipes" :key="recipe.id">
+              <span class="workflow-ai-panel__context-name">{{ recipe.name }}</span>
+              <span>（{{ recipe.id }}）</span>
+              <span> · {{ recipe.reason }}</span>
+              <span> · 最小骨架：{{ recipe.minimalPattern.join(' -> ') }}</span>
+            </li>
+          </ul>
+        </div>
+
+        <div v-if="localSchemaSummaries.length" class="workflow-ai-panel__list-block">
+          <strong>字段摘要</strong>
+          <div
+            v-for="summary in localSchemaSummaries"
+            :key="summary.nodeId"
+            class="workflow-ai-panel__schema-card"
+          >
+            <div class="workflow-ai-panel__schema-header">
+              <span class="workflow-ai-panel__context-name">{{ summary.nodeLabel }}</span>
+              <span>{{ describeResultKind(summary.resultKind) }}</span>
+              <span v-if="typeof summary.rowCount === 'number'">约 {{ summary.rowCount }} 行</span>
+            </div>
+            <div class="workflow-ai-panel__schema-grid">
+              <div><strong>数值字段</strong><span>{{ formatFieldList(summary.numericColumns) }}</span></div>
+              <div><strong>分类字段</strong><span>{{ formatFieldList(summary.categoricalColumns) }}</span></div>
+              <div><strong>时间字段</strong><span>{{ formatFieldList(summary.datetimeColumns) }}</span></div>
+              <div><strong>候选特征字段</strong><span>{{ formatFieldList(summary.candidateFeatureColumns) }}</span></div>
+              <div><strong>候选目标字段</strong><span>{{ formatFieldList(summary.candidateTargetColumns) }}</span></div>
+              <div><strong>阻塞原因</strong><span>{{ formatFieldList(summary.blockedReasons) }}</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section
+        v-if="aiStore.streamOutputs.length"
+        data-testid="workflow-ai-stream-output"
+        class="workflow-ai-panel__section"
+      >
+        <div class="workflow-ai-panel__section-title">
+          <Bot :size="14" />
+          <span>模型实时输出</span>
+        </div>
+        <div v-for="output in aiStore.streamOutputs" :key="`${output.trigger}-${output.attempt}`" class="workflow-ai-panel__list-block">
+          <strong>第 {{ output.attempt }} 次 · {{ output.trigger === 'repair' ? '自动修复重试' : '首次生成' }}</strong>
+          <pre class="workflow-ai-panel__raw-output">{{ output.text || '正在等待模型输出...' }}</pre>
+        </div>
+      </section>
+
+      <section
+        v-if="aiStore.generationDiagnostics"
+        data-testid="workflow-ai-diagnostics"
+        class="workflow-ai-panel__section workflow-ai-panel__diagnostics"
+      >
+        <div class="workflow-ai-panel__section-title">
+          <AlertTriangle :size="14" />
+          <span>诊断信息</span>
+        </div>
+        <div class="workflow-ai-panel__diag-meta">
+          <div><strong>失败阶段</strong><span>{{ aiStore.generationDiagnostics.stage }}</span></div>
+          <div><strong>当前状态</strong><span>{{ aiStore.generationDiagnostics.status }}</span></div>
+          <div v-if="hasRepairAttempt"><strong>自动修复重试</strong><span>已执行</span></div>
+        </div>
+
+        <div v-if="aiStore.generationDiagnostics.attempts.length" class="workflow-ai-panel__list-block">
+          <strong>尝试记录</strong>
+          <ul>
+            <li v-for="attempt in aiStore.generationDiagnostics.attempts" :key="`${attempt.attempt}-${attempt.trigger}`">
+              第 {{ attempt.attempt }} 次 · {{ attempt.trigger === 'repair' ? '自动修复重试' : '首次生成' }} · {{ attempt.stage }} ·
+              {{ attempt.status === 'success' ? '成功' : '失败' }}
+              <span v-if="attempt.message"> · {{ attempt.message }}</span>
+            </li>
+          </ul>
+        </div>
+
+        <div v-if="aiStore.generationDiagnostics.issues.length" class="workflow-ai-panel__list-block is-warning">
+          <strong>失败明细</strong>
+          <ul>
+            <li v-for="issue in aiStore.generationDiagnostics.issues" :key="`${issue.stage}-${issue.operationId}-${issue.message}`">
+              {{ issue.stage }} / {{ issue.operationId }}：{{ issue.message }}
+            </li>
+          </ul>
+        </div>
+
+        <div
+          v-if="aiStore.generationDiagnostics.rawOutputExcerpt"
+          data-testid="workflow-ai-raw-output"
+          class="workflow-ai-panel__list-block"
+        >
+          <strong>模型原始输出摘要</strong>
+          <pre class="workflow-ai-panel__raw-output">{{ aiStore.generationDiagnostics.rawOutputExcerpt }}</pre>
+        </div>
       </section>
 
       <section v-if="aiStore.plan" class="workflow-ai-panel__section workflow-ai-panel__plan">
@@ -370,6 +693,10 @@ onMounted(async () => {
   resize: vertical;
 }
 
+.workflow-ai-panel__textarea--compact {
+  min-height: 84px;
+}
+
 .workflow-ai-panel__segmented {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -438,8 +765,77 @@ onMounted(async () => {
   font-size: 12px;
 }
 
+.workflow-ai-panel__context-name {
+  font-weight: 700;
+  color: #0f172a;
+}
+
 .workflow-ai-panel__ops-count {
   margin-bottom: 12px;
+}
+
+.workflow-ai-panel__diag-meta {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.workflow-ai-panel__diag-meta div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  color: #334155;
+}
+
+.workflow-ai-panel__diag-meta strong {
+  color: #0f172a;
+}
+
+.workflow-ai-panel__schema-card {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.workflow-ai-panel__schema-card:first-of-type {
+  margin-top: 8px;
+}
+
+.workflow-ai-panel__schema-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12px;
+  color: #475569;
+  margin-bottom: 8px;
+}
+
+.workflow-ai-panel__schema-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.workflow-ai-panel__schema-grid div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  color: #334155;
+}
+
+.workflow-ai-panel__schema-grid strong {
+  color: #0f172a;
+}
+
+.workflow-ai-panel__raw-output {
+  margin: 8px 0 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 12px;
+  color: #334155;
 }
 
 .workflow-ai-panel__error,

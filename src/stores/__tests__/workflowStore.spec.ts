@@ -1111,6 +1111,79 @@ describe('Workflow Store', () => {
     expect(store.logs.some((l) => l.message.includes('已冻结，使用历史输出数据'))).toBe(true)
   })
 
+  it('should execute a node for ai inspection without mutating workflow runtime state', async () => {
+    const triggerDefinition = {
+      name: 'test-ai-inspection-trigger',
+      displayName: 'AI Inspection Trigger',
+      icon: 'test',
+      category: 'trigger' as const,
+      description: 'test',
+      properties: [
+        {
+          name: 'token',
+          displayName: '启动参数',
+          type: 'string' as const,
+          default: '',
+          required: true,
+          isRuntimeInput: true,
+        },
+      ],
+      execute: async (_input: null, config: { token: string }) =>
+        createTableResult([{ token: config.token, feature: 1, target: 2 }]),
+    }
+
+    const actionDefinition = {
+      name: 'test-ai-inspection-action',
+      displayName: 'AI Inspection Action',
+      icon: 'test',
+      category: 'action' as const,
+      description: 'test',
+      properties: [],
+      execute: async (input: { kind: string; payload: Array<{ token: string; feature: number; target: number }> } | null) =>
+        createTableResult(input?.payload ?? []),
+    }
+
+    nodeDefinitions.push(triggerDefinition, actionDefinition)
+
+    try {
+      const store = useWorkflowStore()
+      const trigger = store.addAndConnectNode('test-ai-inspection-trigger', '检查触发器', { x: 0, y: 0 })!
+      const action = store.addAndConnectNode('test-ai-inspection-action', '检查动作', { x: 300, y: 0 })!
+
+      store.edges.push({
+        id: 'e_ai_inspection',
+        source: trigger.id,
+        target: action.id,
+        type: 'n8n',
+        animated: true,
+      })
+
+      trigger.data.config.token = 'inspection-token'
+      const originalNodes = JSON.parse(JSON.stringify(store.nodes))
+      const originalLogs = JSON.parse(JSON.stringify(store.logs))
+
+      const result = await store.executeForAiInspection(action.id)
+
+      expect(result?.kind).toBe('table')
+      expect((result as any)?.payload?.[0]).toMatchObject({
+        token: 'inspection-token',
+        feature: 1,
+        target: 2,
+      })
+      expect(store.nodes).toEqual(originalNodes)
+      expect(store.logs).toEqual(originalLogs)
+      expect(store.executionHistory).toHaveLength(0)
+      expect(store.pendingExecution).toBeNull()
+      expect(store.isRunning).toBe(false)
+    } finally {
+      const triggerIndex = nodeDefinitions.findIndex((definition) => definition.name === 'test-ai-inspection-trigger')
+      if (triggerIndex >= 0) nodeDefinitions.splice(triggerIndex, 1)
+
+      const actionIndex = nodeDefinitions.findIndex((definition) => definition.name === 'test-ai-inspection-action')
+      if (actionIndex >= 0) nodeDefinitions.splice(actionIndex, 1)
+    }
+  })
+
   it('should duplicate a node correctly', () => {
     const store = useWorkflowStore()
     const original = store.addAndConnectNode('data-cleaning', 'Original Node', { x: 100, y: 100 })!
@@ -1213,7 +1286,8 @@ describe('Workflow Store', () => {
           type: 'updateNodeConfig',
           nodeRef: 'create-terminal',
           config: {
-            targetField: 'y',
+            xFields: ['x'],
+            yFields: ['y'],
           },
         },
       ],
@@ -1226,7 +1300,8 @@ describe('Workflow Store', () => {
       expect.arrayContaining(['手动输入', '数据清洗', '线性相关分析']),
     )
     const terminalNode = store.nodes.find((node) => node.data.label === '线性相关分析')!
-    expect(terminalNode.data.config.targetField).toBe('y')
+    expect(terminalNode.data.config.xFields).toEqual(['x'])
+    expect(terminalNode.data.config.yFields).toEqual(['y'])
     expect(
       store.edges.some(
         (edge) =>

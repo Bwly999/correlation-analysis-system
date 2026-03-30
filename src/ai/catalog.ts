@@ -35,6 +35,7 @@ export const buildWorkflowAiSnapshot = (nodes: WorkflowNode[], edges: Edge[]) =>
     category: node.data.category,
     position: node.position,
     config: node.data.config,
+    output: node.data.output ?? null,
   })),
   edges: edges.map((edge) => ({
     id: edge.id,

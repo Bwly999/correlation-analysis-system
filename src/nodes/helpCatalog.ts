@@ -1,9 +1,11 @@
+import type { NodeLibraryGroupId } from './libraryGroups'
 import type { NodeAssistantHints, NodeHelpDoc } from '@/help/types'
 import type { NodeDefinition } from './types'
 
 type NodeHelpCatalogEntry = {
   help: NodeHelpDoc
   assistantHints?: NodeAssistantHints
+  libraryGroup?: NodeLibraryGroupId
 }
 
 const createEntry = (
@@ -850,11 +852,65 @@ const fallbackHelpEntry = (definition: NodeDefinition): NodeHelpCatalogEntry => 
   },
 })
 
+const nodeLibraryGroups: Record<string, NodeLibraryGroupId> = {
+  'file-import': 'import-data',
+  'manual-json-import': 'import-data',
+  'neighbor-system': 'import-data',
+  'data-cleaning': 'clean-filter',
+  'data-filter': 'clean-filter',
+  'field-selection': 'field-shaping',
+  sort: 'field-shaping',
+  'data-limit': 'field-shaping',
+  'js-transform': 'field-shaping',
+  'data-aggregation': 'merge-aggregate',
+  'data-merge': 'merge-aggregate',
+  'data-profiling': 'merge-aggregate',
+  pearson: 'stat-analysis',
+  spearman: 'stat-analysis',
+  kendall: 'stat-analysis',
+  anova: 'stat-analysis',
+  vif: 'stat-analysis',
+  pca: 'stat-analysis',
+  lasso: 'model-analysis',
+  'multiple-linear-regression': 'model-analysis',
+  'random-forest-feature-importance': 'model-analysis',
+  'xgboost-shap': 'model-analysis',
+  'chart-display': 'result-output',
+  'data-export': 'result-output',
+}
+
+const uniqueStrings = (values: Array<string | undefined | null>) =>
+  Array.from(
+    new Set(
+      values
+        .flatMap((value) => (typeof value === 'string' ? [value] : []))
+        .map((value) => value.trim())
+        .filter(Boolean),
+    ),
+  )
+
 export const attachNodeHelp = <T extends NodeDefinition>(definition: T): T => {
   const entry = nodeHelpCatalog[definition.name] ?? fallbackHelpEntry(definition)
+  const libraryGroup = entry.libraryGroup ?? nodeLibraryGroups[definition.name]
+  const libraryAliases = uniqueStrings([
+    definition.displayName,
+    definition.name,
+  ])
+  const libraryKeywords = uniqueStrings([
+    entry.help.summary,
+    ...(entry.help.whenToUse ?? []),
+    ...(entry.help.nextSteps ?? []),
+    ...(entry.assistantHints?.keywords ?? []),
+    ...(entry.assistantHints?.useCases ?? []),
+    ...(entry.assistantHints?.workflowRoles ?? []),
+  ])
+
   return {
     ...definition,
     help: entry.help,
     assistantHints: entry.assistantHints ?? definition.assistantHints,
+    libraryGroup,
+    libraryAliases,
+    libraryKeywords,
   }
 }
