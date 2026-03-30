@@ -158,6 +158,14 @@ export const exportReportElementToPdf = async (
             )
             if (!clonedRoot) return
 
+            const sourceDocument = element.ownerDocument
+            if (sourceDocument?.documentElement && clonedDocument.documentElement) {
+              normalizeUnsupportedColorsForExport(
+                sourceDocument.documentElement,
+                clonedDocument.documentElement,
+              )
+            }
+
             normalizeUnsupportedColorsForExport(element, clonedRoot)
             clonedRoot.removeAttribute(TEMP_EXPORT_ID_ATTR)
           },

@@ -64,4 +64,21 @@ describe('reportPdfExport', () => {
     expect(cloneChild.style.boxShadow).toContain('rgba(')
     expect(cloneChild.style.borderTopColor).toMatch(/^rgb\(/)
   })
+
+  it('normalizes custom color properties defined on document-level ancestors', () => {
+    const sourceRoot = document.documentElement
+    const cloneRoot = document.documentElement.cloneNode(false) as HTMLElement
+
+    const getComputedStyleMock = vi.fn<typeof window.getComputedStyle>().mockImplementation(() =>
+      createStyleDeclaration({
+        '--color-blue-600': 'oklch(54.6% 0.245 262.881)',
+        '--color-slate-900': 'oklch(20.8% 0.042 265.755)',
+      }),
+    )
+
+    normalizeUnsupportedColorsForExport(sourceRoot, cloneRoot, getComputedStyleMock)
+
+    expect(cloneRoot.style.getPropertyValue('--color-blue-600')).toMatch(/^rgb\(/)
+    expect(cloneRoot.style.getPropertyValue('--color-slate-900')).toMatch(/^rgb\(/)
+  })
 })
