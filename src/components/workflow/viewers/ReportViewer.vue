@@ -11,10 +11,11 @@ import {
   LegendComponent,
   VisualMapComponent,
 } from 'echarts/components'
-import html2pdf from 'html2pdf.js'
 import { FileText, Image as ImageIcon, Loader2, Search } from 'lucide-vue-next'
 import { useToast } from 'primevue/usetoast'
 import { getResultReport } from '../resultView'
+import { exportReportElementToPdf } from '../reportPdfExport'
+import { resolveExportFilename } from '@/utils/exportNaming'
 
 type ReportSection = {
   key?: string
@@ -66,15 +67,17 @@ use([
 
 const props = defineProps<{
   data: any
+  exportMode?: boolean
 }>()
 
 const toast = useToast()
 const isExporting = ref(false)
-const reportRef = ref<HTMLElement | null>(null)
+const exportRootRef = ref<HTMLElement | null>(null)
 const featureSearch = ref('')
 const expandedDetailCount = ref(0)
 const chartSelectState = ref<Record<string, string>>({})
 const labelTruncateState = ref<Record<string, number>>({})
+const isExportMode = computed(() => props.exportMode === true)
 
 const report = computed<ReportPayload>(() => (getResultReport(props.data) ?? {}) as ReportPayload)
 const sections = computed<ReportSection[]>(() =>
@@ -233,7 +236,7 @@ const resolveChartOption = (section: ReportSection, index: number) => {
 }
 
 const exportCurrentReport = async () => {
-  if (!reportRef.value || isExporting.value) return
+  if (!exportRootRef.value || isExporting.value) return
   isExporting.value = true
 
   toast.add({
@@ -244,23 +247,11 @@ const exportCurrentReport = async () => {
   })
 
   try {
-    await html2pdf()
-      .set({
-        margin: 10,
-        filename: `分析报告_${Date.now()}.pdf`,
-        image: { type: 'jpeg', quality: 0.92 },
-        html2canvas: {
-          scale: 1.4,
-          useCORS: true,
-          logging: false,
-          backgroundColor: '#ffffff',
-          height: reportRef.value.scrollHeight,
-          windowHeight: reportRef.value.scrollHeight,
-        },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-      })
-      .from(reportRef.value)
-      .save()
+    const filename = resolveExportFilename(undefined, report.value.title || '分析报告', 'pdf', {
+      appendTimestamp: true,
+    })
+
+    await exportReportElementToPdf(exportRootRef.value, { filename })
 
     toast.add({
       severity: 'success',
@@ -293,8 +284,15 @@ const exportOriginalImage = () => {
 </script>
 
 <template>
-  <div class="report-viewer h-full overflow-y-auto p-6 bg-slate-50 custom-scrollbar relative">
-    <div class="max-w-5xl mx-auto bg-white p-8 rounded-2xl shadow-sm border border-slate-100 relative">
+  <div
+    class="report-viewer h-full overflow-y-auto p-6 bg-slate-50 custom-scrollbar relative"
+    :class="{ 'report-viewer--export px-0 py-0 bg-white overflow-visible': isExportMode }"
+  >
+    <div
+      ref="exportRootRef"
+      class="max-w-5xl mx-auto bg-white p-8 rounded-2xl shadow-sm border border-slate-100 relative"
+      :class="{ 'max-w-none rounded-none border-0 shadow-none': isExportMode }"
+    >
       <div class="flex flex-col gap-4 mb-6 pb-4 border-b border-slate-100 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 class="text-2xl font-black text-slate-800">
@@ -304,9 +302,10 @@ const exportOriginalImage = () => {
             前端主报告负责阅读与筛选，后端原始整图作为补充视图保留完整归档能力。
           </p>
         </div>
-        <div class="flex flex-wrap gap-2">
+        <div v-if="!isExportMode" data-export-hidden="true" class="flex flex-wrap gap-2">
           <button
             :disabled="isExporting"
+            data-test="report-export-current"
             class="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white text-sm font-bold rounded-xl hover:bg-slate-800 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
             title="导出当前报告"
             @click="exportCurrentReport"
@@ -327,7 +326,7 @@ const exportOriginalImage = () => {
         </div>
       </div>
 
-      <div ref="reportRef" class="pdf-container space-y-8">
+      <div class="pdf-container space-y-8">
         <template v-for="(section, idx) in sections" :key="section.key || idx">
           <section v-if="section.type === 'summary'" class="space-y-4">
             <div>

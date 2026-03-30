@@ -51,7 +51,7 @@ import { vifNode } from '../definitions/vif'
 import { pcaNode } from '../definitions/pca'
 import { dataExportNode } from '../definitions/dataExport'
 import { neighborSystemNode } from '../definitions/neighborSystem'
-import { createTableResult } from '../result'
+import { createReportResult, createTableResult } from '../result'
 
 global.URL.createObjectURL = vi.fn(() => 'blob:mock-url')
 
@@ -685,6 +685,31 @@ describe('remaining nodes standardized result protocol', () => {
     expect(result.kind).toBe('file')
     expect(result.payload.filename).toBe('test_export.csv')
     expect(result.payload.url).toBe('blob:mock-url')
+    expect(result.preview?.viewer).toBe('file-viewer')
+  })
+
+  it('data-export should support report pdf exports as standardized file results', async () => {
+    const result = await dataExportNode.execute(
+      createReportResult({
+        title: 'Pearson 相关系数矩阵分析',
+        sections: [
+          {
+            key: 'summary',
+            type: 'summary',
+            title: '分析摘要',
+            cards: [{ label: '样本行数', value: 128 }],
+          },
+        ],
+      }),
+      { format: 'pdf', filename: '相关性分析报告' },
+    )
+
+    expect(result.kind).toBe('file')
+    expect(result.payload.filename).toMatch(/^相关性分析报告_\d{8}_\d{6}\.pdf$/)
+    expect(result.payload.format).toBe('pdf')
+    expect(result.payload.contentKind).toBe('report-pdf')
+    expect(result.payload.url).toBeUndefined()
+    expect(result.meta?.sourceKind).toBe('report')
     expect(result.preview?.viewer).toBe('file-viewer')
   })
 })

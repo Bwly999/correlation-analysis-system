@@ -57,6 +57,7 @@ import { vifNode } from '../definitions/vif'
 import { nodeDefinitions } from '../registry'
 import {
   createTableCollectionResult,
+  createReportResult,
   createTableResult,
   isPlainObject,
   normalizeNodeResult,
@@ -1553,6 +1554,49 @@ describe('Node Definitions Execution Logic', () => {
 
       expect(legacy.viewType).toBe('export')
       expect(legacy.exportInfo.filename).toBe('test_export.json')
+    })
+
+    it('should generate on-demand pdf export info for report inputs', async () => {
+      const input = createReportResult({
+        title: '多元线性回归分析',
+        sections: [
+          {
+            key: 'summary',
+            type: 'summary',
+            title: '模型摘要',
+            cards: [{ label: '样本量', value: 48 }],
+          },
+        ],
+      })
+
+      const result = await dataExportNode.execute(input, {
+        format: 'pdf',
+        filename: '回归分析报告',
+      })
+
+      const legacy = asLegacy(result)
+
+      expect(legacy.viewType).toBe('export')
+      expect(legacy.exportInfo.filename).toMatch(/^回归分析报告_\d{8}_\d{6}\.pdf$/)
+      expect(legacy.exportInfo.format).toBe('pdf')
+      expect(legacy.exportInfo.url).toBeUndefined()
+      expect(legacy.exportInfo.contentKind).toBe('report-pdf')
+      expect(legacy.exportInfo.report.title).toBe('多元线性回归分析')
+      expect(legacy.meta?.sourceKind).toBe('report')
+    })
+
+    it('should reject non-pdf exports for report inputs with a clear message', async () => {
+      const input = createReportResult({
+        title: 'Pearson 相关系数矩阵分析',
+        sections: [],
+      })
+
+      await expect(
+        dataExportNode.execute(input, {
+          format: 'csv',
+          filename: 'report_export',
+        }),
+      ).rejects.toThrow('分析报告当前仅支持 PDF 导出')
     })
   })
 })

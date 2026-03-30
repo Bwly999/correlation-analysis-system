@@ -1,20 +1,82 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 import { Download, CheckCircle } from 'lucide-vue-next'
+import { useToast } from 'primevue/usetoast'
 import { getResultFileInfo } from '../resultView'
+import { exportReportElementToPdf } from '../reportPdfExport'
+import ReportViewer from './ReportViewer.vue'
 
 const props = defineProps<{
   data: any
 }>()
 
+const toast = useToast()
 const fileInfo = computed(() => getResultFileInfo(props.data))
+const reportExportRoot = ref<HTMLElement | null>(null)
+const isExporting = ref(false)
+const isOnDemandPdf = computed(
+  () => fileInfo.value?.format === 'pdf' && fileInfo.value?.contentKind === 'report-pdf' && fileInfo.value?.report,
+)
+const reportExportData = computed(() =>
+  isOnDemandPdf.value && fileInfo.value?.report
+    ? {
+        kind: 'report',
+        payload: fileInfo.value.report,
+      }
+    : null,
+)
 
-const handleDownload = () => {
+const handleDownload = async () => {
+  if (isExporting.value) return
+
   if (fileInfo.value?.url) {
     const a = document.createElement('a')
     a.href = String(fileInfo.value.url)
     a.download = String(fileInfo.value.filename || 'export.csv')
     a.click()
+    return
+  }
+
+  if (!isOnDemandPdf.value || !reportExportRoot.value) {
+    toast.add({
+      severity: 'error',
+      summary: '导出失败',
+      detail: '当前结果没有可下载的导出内容。',
+      life: 3000,
+    })
+    return
+  }
+
+  isExporting.value = true
+  const exportFilename = String(fileInfo.value?.filename || '分析报告.pdf')
+  toast.add({
+    severity: 'info',
+    summary: '正在生成 PDF',
+    detail: '正在准备导出内容，请稍候。',
+    life: 2000,
+  })
+
+  try {
+    await nextTick()
+    await exportReportElementToPdf(reportExportRoot.value, {
+      filename: exportFilename,
+    })
+    toast.add({
+      severity: 'success',
+      summary: '导出成功',
+      detail: 'PDF 已生成并开始下载。',
+      life: 2500,
+    })
+  } catch (error) {
+    console.error('生成报告 PDF 失败:', error)
+    toast.add({
+      severity: 'error',
+      summary: '导出失败',
+      detail: '生成 PDF 时发生错误。',
+      life: 4000,
+    })
+  } finally {
+    isExporting.value = false
   }
 }
 </script>
@@ -32,16 +94,24 @@ const handleDownload = () => {
       <p class="text-slate-500 mb-8 leading-relaxed">
         文件
         <strong>{{ fileInfo?.filename || 'export.csv' }}</strong>
-        已经成功生成，可以进行下载。
+        {{ isOnDemandPdf ? '已准备就绪，点击后将生成并下载 PDF。' : '已经成功生成，可以进行下载。' }}
       </p>
 
       <button
+        data-test="file-download-button"
+        :disabled="isExporting"
         class="flex items-center gap-3 px-8 py-4 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-xl font-bold shadow-lg shadow-indigo-200 transition-all"
         @click="handleDownload"
       >
         <Download :size="20" />
-        <span>立即下载文件</span>
+        <span>{{ isOnDemandPdf ? '生成并下载 PDF' : '立即下载文件' }}</span>
       </button>
+    </div>
+  </div>
+
+  <div v-if="reportExportData" class="pointer-events-none fixed left-[-200vw] top-0 w-[1120px] opacity-0">
+    <div ref="reportExportRoot" class="bg-white">
+      <ReportViewer :data="reportExportData" export-mode />
     </div>
   </div>
 </template>

@@ -1,13 +1,14 @@
 import type { NodeDefinition } from '../types'
-import { createFileResult, extractTableRows } from '../result'
+import { createFileResult, extractReportPayload, extractTableRows } from '../result'
 import * as XLSX from 'xlsx'
+import { resolveExportFilename } from '@/utils/exportNaming'
 
 export const dataExportNode: NodeDefinition = {
   name: 'data-export',
   displayName: '数据导出',
   icon: 'download',
   category: 'terminal',
-  description: '将当前节点的数据导出为 CSV、Excel 或 JSON 文件。',
+  description: '将当前节点的数据导出为 CSV、Excel、JSON，或把分析报告导出为 PDF。',
   properties: [
     {
       name: 'format',
@@ -18,6 +19,7 @@ export const dataExportNode: NodeDefinition = {
         { name: 'CSV', value: 'csv' },
         { name: 'Excel (.xlsx)', value: 'xlsx' },
         { name: 'JSON', value: 'json' },
+        { name: 'PDF（分析报告）', value: 'pdf' },
       ],
     },
     {
@@ -29,13 +31,51 @@ export const dataExportNode: NodeDefinition = {
     },
   ],
   execute: async (input, config) => {
+    const format = typeof config.format === 'string' ? config.format : 'csv'
+    const report = extractReportPayload(input)
+
+    if (format === 'pdf') {
+      if (!report) {
+        throw new Error('PDF 导出仅支持分析报告输入')
+      }
+
+      const reportTitle =
+        typeof report.title === 'string' && report.title.trim() !== '' ? report.title : '分析报告'
+      const filename = resolveExportFilename(config.filename, reportTitle, 'pdf', {
+        appendTimestamp: true,
+      })
+
+      return createFileResult(
+        {
+          filename,
+          format: 'pdf',
+          contentKind: 'report-pdf',
+          report,
+        },
+        {
+          meta: {
+            sourceKind: 'report',
+            sectionCount: Array.isArray(report.sections) ? report.sections.length : 0,
+          },
+          preview: {
+            viewer: 'file-viewer',
+            title: '导出文件',
+            summary: `已准备 ${filename}，点击后将生成 PDF。`,
+          },
+        },
+      )
+    }
+
+    if (report) {
+      throw new Error('分析报告当前仅支持 PDF 导出')
+    }
+
     const rows = extractTableRows(input)
     if (!rows || rows.length === 0) {
       throw new Error('无输入数据')
     }
 
-    const format = typeof config.format === 'string' ? config.format : 'csv'
-    const filename = `${config.filename || 'export_data'}.${format}`
+    const filename = resolveExportFilename(config.filename, 'export_data', format)
     let blob: Blob
 
     if (format === 'json') {

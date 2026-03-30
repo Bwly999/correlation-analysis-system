@@ -2,6 +2,9 @@
 import { mount } from '@vue/test-utils'
 import { defineComponent } from 'vue'
 import ReportViewer from '../viewers/ReportViewer.vue'
+const { mockExportReportElementToPdf } = vi.hoisted(() => ({
+  mockExportReportElementToPdf: vi.fn().mockResolvedValue(undefined),
+}))
 
 vi.mock('vue-echarts', () => ({
   default: defineComponent({
@@ -36,6 +39,10 @@ vi.mock('html2canvas', () => ({
   default: vi.fn().mockResolvedValue({
     toDataURL: () => 'data:image/jpeg;base64,mock',
   }),
+}))
+
+vi.mock('../reportPdfExport', () => ({
+  exportReportElementToPdf: mockExportReportElementToPdf,
 }))
 
 const createShapReport = () => ({
@@ -319,5 +326,21 @@ describe('ReportViewer', () => {
     expect(wrapper.text()).toContain('回归系数排序')
     expect(wrapper.text()).toContain('预测值对比')
     expect(wrapper.findAll('.chart-stub')).toHaveLength(2)
+  })
+
+  it('uses shared pdf export helper when exporting current report', async () => {
+    const wrapper = mount(ReportViewer, {
+      props: { data: createRegressionReport() },
+    })
+
+    await wrapper.get('[data-test="report-export-current"]').trigger('click')
+
+    expect(mockExportReportElementToPdf).toHaveBeenCalledTimes(1)
+    expect(mockExportReportElementToPdf).toHaveBeenCalledWith(
+      expect.any(HTMLElement),
+      expect.objectContaining({
+        filename: expect.stringMatching(/^多元线性回归分析.*\.pdf$/),
+      }),
+    )
   })
 })

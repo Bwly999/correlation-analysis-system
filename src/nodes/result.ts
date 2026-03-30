@@ -238,3 +238,15 @@ export const extractTableCollectionGroups = (
 
   return null
 }
+
+export const extractReportPayload = (input: unknown): Record<string, unknown> | null => {
+  if (isNodeResult(input) && input.kind === 'report' && isPlainObject(input.payload)) {
+    return input.payload
+  }
+
+  if (isPlainObject(input) && isPlainObject(input.report)) {
+    return input.report
+  }
+
+  return null
+}
