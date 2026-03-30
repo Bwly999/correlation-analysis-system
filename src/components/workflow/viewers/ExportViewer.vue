@@ -14,11 +14,12 @@ const toast = useToast()
 const fileInfo = computed(() => getResultFileInfo(props.data))
 const reportExportRoot = ref<HTMLElement | null>(null)
 const isExporting = ref(false)
+const shouldRenderPdfPreview = ref(false)
 const isOnDemandPdf = computed(
   () => fileInfo.value?.format === 'pdf' && fileInfo.value?.contentKind === 'report-pdf' && fileInfo.value?.report,
 )
 const reportExportData = computed(() =>
-  isOnDemandPdf.value && fileInfo.value?.report
+  shouldRenderPdfPreview.value && isOnDemandPdf.value && fileInfo.value?.report
     ? {
         kind: 'report',
         payload: fileInfo.value.report,
@@ -37,7 +38,7 @@ const handleDownload = async () => {
     return
   }
 
-  if (!isOnDemandPdf.value || !reportExportRoot.value) {
+  if (!isOnDemandPdf.value) {
     toast.add({
       severity: 'error',
       summary: '导出失败',
@@ -57,7 +58,11 @@ const handleDownload = async () => {
   })
 
   try {
+    shouldRenderPdfPreview.value = true
     await nextTick()
+    if (!reportExportRoot.value) {
+      throw new Error('报告导出容器未就绪')
+    }
     await exportReportElementToPdf(reportExportRoot.value, {
       filename: exportFilename,
     })
@@ -77,6 +82,7 @@ const handleDownload = async () => {
     })
   } finally {
     isExporting.value = false
+    shouldRenderPdfPreview.value = false
   }
 }
 </script>

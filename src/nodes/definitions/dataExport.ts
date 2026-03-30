@@ -3,6 +3,18 @@ import { createFileResult, extractReportPayload, extractTableRows } from '../res
 import * as XLSX from 'xlsx'
 import { resolveExportFilename } from '@/utils/exportNaming'
 
+const createPortableReportExportPayload = (report: Record<string, unknown>) => {
+  const portableReport = {
+    ...report,
+  }
+
+  if (portableReport.supplements && typeof portableReport.supplements === 'object') {
+    portableReport.supplements = {}
+  }
+
+  return portableReport
+}
+
 export const dataExportNode: NodeDefinition = {
   name: 'data-export',
   displayName: '数据导出',
@@ -39,6 +51,7 @@ export const dataExportNode: NodeDefinition = {
         throw new Error('PDF 导出仅支持分析报告输入')
       }
 
+      const portableReport = createPortableReportExportPayload(report)
       const reportTitle =
         typeof report.title === 'string' && report.title.trim() !== '' ? report.title : '分析报告'
       const filename = resolveExportFilename(config.filename, reportTitle, 'pdf', {
@@ -50,7 +63,7 @@ export const dataExportNode: NodeDefinition = {
           filename,
           format: 'pdf',
           contentKind: 'report-pdf',
-          report,
+          report: portableReport,
         },
         {
           meta: {

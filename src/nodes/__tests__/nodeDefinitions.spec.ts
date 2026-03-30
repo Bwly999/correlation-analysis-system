@@ -1567,6 +1567,11 @@ describe('Node Definitions Execution Logic', () => {
             cards: [{ label: '样本量', value: 48 }],
           },
         ],
+        supplements: {
+          fullReportImage: 'data:image/png;base64,base64_full',
+          beeswarmImage: 'data:image/png;base64,base64_beeswarm',
+          dependenceImages: [{ feature: 'f1', image: 'data:image/png;base64,base64_dep_1' }],
+        },
       })
 
       const result = await dataExportNode.execute(input, {
@@ -1582,6 +1587,7 @@ describe('Node Definitions Execution Logic', () => {
       expect(legacy.exportInfo.url).toBeUndefined()
       expect(legacy.exportInfo.contentKind).toBe('report-pdf')
       expect(legacy.exportInfo.report.title).toBe('多元线性回归分析')
+      expect(legacy.exportInfo.report.supplements).toEqual({})
       expect(legacy.meta?.sourceKind).toBe('report')
     })
 
