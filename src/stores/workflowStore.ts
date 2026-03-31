@@ -226,7 +226,10 @@ export const useWorkflowStore = defineStore('workflow', () => {
     return defaultConfig
   }
 
-  const serializeWorkflowNodes = (sourceNodes: WorkflowNode[]): WorkflowNodeSnapshot[] =>
+  const serializeWorkflowNodes = (
+    sourceNodes: WorkflowNode[],
+    options: { includePinnedOutput?: boolean } = {},
+  ): WorkflowNodeSnapshot[] =>
     sourceNodes.map((node) => {
       const normalizedNode = normalizeNodeConfigWithDefaults(node)
       return cloneJsonValue({
@@ -237,7 +240,8 @@ export const useWorkflowStore = defineStore('workflow', () => {
         data: {
           ...normalizedNode.data,
           status: 'idle' as const,
-          output: normalizedNode.data.isPinned ? normalizedNode.data.output : null,
+          output:
+            options.includePinnedOutput && normalizedNode.data.isPinned ? normalizedNode.data.output : null,
         },
       })
     })
@@ -246,7 +250,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     JSON.stringify({
       id: currentWorkflowId.value,
       name: workflowName.value,
-      nodes: serializeWorkflowNodes(getCurrentNodes()),
+      nodes: serializeWorkflowNodes(getCurrentNodes(), { includePinnedOutput: true }),
       edges: serializeWorkflowEdges(getCurrentEdges()),
     })
 
@@ -296,7 +300,9 @@ export const useWorkflowStore = defineStore('workflow', () => {
     currentWorkflowId.value = id
     const currentNodes = getCurrentNodes()
     const currentEdges = getCurrentEdges()
-    const serializedNodes: WorkflowNodeSnapshot[] = serializeWorkflowNodes(currentNodes)
+    const serializedNodes: WorkflowNodeSnapshot[] = serializeWorkflowNodes(currentNodes, {
+      includePinnedOutput: true,
+    })
     const workflow: SavedWorkflow = {
       id,
       name: workflowName.value,
@@ -334,7 +340,9 @@ export const useWorkflowStore = defineStore('workflow', () => {
         ...original,
         id: newId,
         name: duplicatedName,
-        nodes: serializeWorkflowNodes(resetWorkflowNodeRuntimeState(original.nodes)),
+        nodes: serializeWorkflowNodes(resetWorkflowNodeRuntimeState(original.nodes), {
+          includePinnedOutput: true,
+        }),
         updatedAt: Date.now(),
       }
       await storageProvider.saveWorkflow(duplicated)

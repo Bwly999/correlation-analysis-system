@@ -1213,6 +1213,55 @@ describe('Workflow Store', () => {
     expect(store.logs.some((log) => log.message.includes('新的工作流名称'))).toBe(true)
   })
 
+  it('should export workflow json without cached node outputs', async () => {
+    const store = useWorkflowStore()
+    const trigger = store.addAndConnectNode('manual-json-import', '数据输入', { x: 0, y: 0 })!
+    const action = store.addAndConnectNode('data-cleaning', '数据清洗', { x: 320, y: 0 })!
+
+    trigger.data.config.jsonData = JSON.stringify([{ feature: 1, target: 2 }])
+    trigger.data.isPinned = true
+    trigger.data.output = createTableResult([{ feature: 1, target: 2 }])
+    action.data.output = createJsonResult({ preview: 'cached' })
+
+    let exportedBlob: Blob | null = null
+    const click = vi.fn()
+    const originalCreateElement = document.createElement.bind(document)
+
+    const createObjectUrlSpy = vi.spyOn(URL, 'createObjectURL').mockImplementation((blob: Blob | MediaSource) => {
+      exportedBlob = blob as Blob
+      return 'blob:workflow-export'
+    })
+    const revokeObjectUrlSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
+    const createElementSpy = vi.spyOn(document, 'createElement').mockImplementation(((tagName: string) => {
+      if (tagName === 'a') {
+        return {
+          click,
+          href: '',
+          download: '',
+        } as unknown as HTMLAnchorElement
+      }
+      return originalCreateElement(tagName)
+    }) as typeof document.createElement)
+
+    try {
+      store.exportWorkflow()
+
+      expect(click).toHaveBeenCalledTimes(1)
+      expect(exportedBlob).not.toBeNull()
+
+      const exported = JSON.parse(await exportedBlob!.text())
+      expect(exported.name).toBe('未命名工作流')
+      expect(exported.nodes).toHaveLength(2)
+      expect(exported.nodes.every((node: any) => node.data.output === null)).toBe(true)
+      expect(exported.nodes[0]!.data.config.jsonData).toBe(JSON.stringify([{ feature: 1, target: 2 }]))
+      expect(exported.edges).toEqual(store.edges)
+    } finally {
+      createObjectUrlSpy.mockRestore()
+      revokeObjectUrlSpy.mockRestore()
+      createElementSpy.mockRestore()
+    }
+  })
+
   it('should create and restore an editable snapshot for ai-assisted changes', () => {
     const store = useWorkflowStore()
     const trigger = store.addAndConnectNode('manual-json-import', '数据输入', { x: 0, y: 0 })!
