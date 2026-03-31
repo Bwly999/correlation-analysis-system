@@ -1,5 +1,6 @@
 ﻿import { describe, it, expect, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
+import { afterEach } from 'vitest'
 import { vi } from 'vitest'
 import { useWorkflowStore } from '../workflowStore'
 import { nodeDefinitions } from '../../nodes/registry'
@@ -10,12 +11,29 @@ describe('Workflow Store', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     localStorage.clear()
+    vi.useRealTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it('should initialize with empty nodes and edges', () => {
     const store = useWorkflowStore()
     expect(store.nodes).toEqual([])
     expect(store.edges).toEqual([])
+  })
+
+  it('should cap in-memory logs to the latest 500 entries', () => {
+    const store = useWorkflowStore()
+
+    for (let index = 0; index < 520; index += 1) {
+      store.addLog(`日志 ${index + 1}`)
+    }
+
+    expect(store.logs).toHaveLength(500)
+    expect(store.logs[0]?.message).toBe('日志 21')
+    expect(store.logs[499]?.message).toBe('日志 520')
   })
 
   it('should load current storage user from the storage provider', async () => {
@@ -396,19 +414,40 @@ describe('Workflow Store', () => {
   })
 
   it('should stop execution when stopExecution is called', async () => {
-    const store = useWorkflowStore()
-    const node = store.addAndConnectNode('file-import', 'Trigger', { x: 0, y: 0 })!
-    node.data.config.fileData = new File(['a,b\n1,2'], 'test.csv')
+    let resolveExecution: () => void = () => undefined
+    const slowNodeDefinition = {
+      name: 'test-stoppable-node',
+      displayName: 'Stoppable Node',
+      icon: 'loader',
+      category: 'action' as const,
+      description: 'test',
+      properties: [],
+      execute: async () => {
+        await new Promise<void>((resolve) => {
+          resolveExecution = resolve
+        })
+        return createJsonResult({ ok: true })
+      },
+    }
 
-    // Start execution
-    const execPromise = store.executeNode(node.id, true)
+    nodeDefinitions.push(slowNodeDefinition)
 
-    // Immediately stop
-    store.stopExecution()
+    try {
+      const store = useWorkflowStore()
+      const node = store.addAndConnectNode('test-stoppable-node', '可中断节点', { x: 0, y: 0 })!
 
-    const result = await execPromise
-    expect(result).toBe('STOPPED')
-    expect(node.data.status).toBe('idle')
+      const execPromise = store.executeNode(node.id, true)
+
+      store.stopExecution()
+      resolveExecution()
+
+      const result = await execPromise
+      expect(result).toBe('STOPPED')
+      expect(node.data.status).toBe('idle')
+    } finally {
+      const nodeIndex = nodeDefinitions.findIndex((definition) => definition.name === 'test-stoppable-node')
+      if (nodeIndex >= 0) nodeDefinitions.splice(nodeIndex, 1)
+    }
   })
 
   it('should return WAIT_INPUT if trigger node lacks runtime input', async () => {
@@ -1072,6 +1111,137 @@ describe('Workflow Store', () => {
         (definition) => definition.name === 'test-history-terminal',
       )
       if (terminalIndex >= 0) nodeDefinitions.splice(terminalIndex, 1)
+    }
+  })
+
+  it('should truncate oversized report details in history snapshots', async () => {
+    const reportTriggerDefinition = {
+      name: 'test-large-report-history-trigger',
+      displayName: 'Large Report Trigger',
+      icon: 'database',
+      category: 'trigger' as const,
+      description: 'test',
+      properties: [],
+      execute: async () => createJsonResult({ source: 'report-input' }),
+    }
+
+    const reportTerminalDefinition = {
+      name: 'test-large-report-history-terminal',
+      displayName: 'Large Report Terminal',
+      icon: 'file-json',
+      category: 'terminal' as const,
+      description: 'test',
+      properties: [],
+      execute: async () => ({
+        kind: 'report' as const,
+        payload: {
+          title: '超大报告',
+          sections: [
+            {
+              key: 'details',
+              type: 'details',
+              items: Array.from({ length: 120 }, (_, index) => ({
+                feature: `字段_${index + 1}`,
+                score: index,
+              })),
+              allItems: Array.from({ length: 140 }, (_, index) => ({
+                feature: `明细_${index + 1}`,
+                score: index,
+              })),
+              option: {
+                series: [
+                  {
+                    type: 'line',
+                    data: Array.from({ length: 480 }, (_, index) => index),
+                  },
+                ],
+              },
+            },
+          ],
+        },
+        meta: {
+          sourceData: Array.from({ length: 180 }, (_, index) => ({ index })),
+        },
+      }),
+    }
+
+    nodeDefinitions.push(reportTriggerDefinition, reportTerminalDefinition)
+
+    try {
+      const store = useWorkflowStore()
+      const triggerNode = store.addAndConnectNode(
+        'test-large-report-history-trigger',
+        'Large Report Trigger',
+        { x: 0, y: 0 },
+      )!
+      const terminalNode = store.addAndConnectNode(
+        'test-large-report-history-terminal',
+        'Large Report Terminal',
+        { x: 300, y: 0 },
+      )!
+
+      store.edges.push({
+        id: 'e_large_report_history_terminal',
+        source: triggerNode.id,
+        target: terminalNode.id,
+        type: 'n8n',
+        animated: true,
+      })
+
+      await store.runGlobal()
+
+      const reportSnapshot = store.executionHistory[0]!.nodes.find(
+        (node) => node.id === terminalNode.id,
+      )!.data.output as any
+
+      expect(reportSnapshot.kind).toBe('report')
+      expect(reportSnapshot.meta?.historyTruncated).toBe(true)
+      expect(reportSnapshot.meta?.sourceData).toHaveLength(10)
+      expect(reportSnapshot.payload.sections[0].items).toHaveLength(20)
+      expect(reportSnapshot.payload.sections[0].allItems).toHaveLength(20)
+      expect(reportSnapshot.payload.sections[0].option.series[0].data).toHaveLength(200)
+    } finally {
+      const triggerIndex = nodeDefinitions.findIndex(
+        (definition) => definition.name === 'test-large-report-history-trigger',
+      )
+      if (triggerIndex >= 0) nodeDefinitions.splice(triggerIndex, 1)
+
+      const terminalIndex = nodeDefinitions.findIndex(
+        (definition) => definition.name === 'test-large-report-history-terminal',
+      )
+      if (terminalIndex >= 0) nodeDefinitions.splice(terminalIndex, 1)
+    }
+  })
+
+  it('should execute immediate nodes without waiting for a fixed timer', async () => {
+    vi.useFakeTimers()
+
+    const fastNodeDefinition = {
+      name: 'test-fast-node',
+      displayName: 'Fast Node',
+      icon: 'zap',
+      category: 'action' as const,
+      description: 'test',
+      properties: [],
+      execute: async () => createJsonResult({ ok: true }),
+    }
+
+    nodeDefinitions.push(fastNodeDefinition)
+
+    try {
+      const store = useWorkflowStore()
+      const node = store.addAndConnectNode('test-fast-node', 'Fast Node', { x: 0, y: 0 })!
+
+      const executionPromise = store.executeNode(node.id, true)
+
+      expect(vi.getTimerCount()).toBe(0)
+      await expect(executionPromise).resolves.toMatchObject({
+        kind: 'json',
+        payload: { ok: true },
+      })
+    } finally {
+      const nodeIndex = nodeDefinitions.findIndex((definition) => definition.name === 'test-fast-node')
+      if (nodeIndex >= 0) nodeDefinitions.splice(nodeIndex, 1)
     }
   })
 
