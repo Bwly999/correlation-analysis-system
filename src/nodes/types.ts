@@ -67,6 +67,7 @@ export interface NodeProperty {
   editable?: boolean
   forceInput?: boolean
   filterable?: boolean
+  singleSelect?: boolean
   allowRegexSearch?: boolean
   filterPlaceholder?: string
   dateOnly?: boolean

@@ -1,5 +1,13 @@
 # 更新日志 (Changelog)
 
+## [2026-03-31]
+
+### 修复 (Fix)
+
+- **支持树形配置项的单选模式**:
+  - `PropertyField` 中的 `tree` 类型新增 `singleSelect` 配置，保持 checkbox 视觉样式不变，但可限制为仅选中一个节点。
+  - 补充 `PropertyField` 定向测试，覆盖 tree 默认多选与单选模式的回归行为。
+
 ## [2026-03-30]
 
 ### 修复 (Fix)

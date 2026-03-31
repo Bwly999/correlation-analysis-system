@@ -276,6 +276,34 @@ const filteredTreeOptions = computed(() =>
   filterTreeNodes(optionSource.value, treeFilterQuery.value),
 )
 
+const treeSelectionValue = computed({
+  get: () => configValue.value,
+  set: (selectionKeys: Record<string, { checked?: boolean; partialChecked?: boolean }> | null) => {
+    if (!props.prop.singleSelect || !selectionKeys || typeof selectionKeys !== 'object') {
+      configValue.value = selectionKeys
+      return
+    }
+
+    const checkedEntries = Object.entries(selectionKeys).filter(([, state]) => state?.checked)
+    if (checkedEntries.length <= 1) {
+      configValue.value = selectionKeys
+      return
+    }
+
+    const [selectedKey, selectedState] = checkedEntries[checkedEntries.length - 1] as [
+      string,
+      { checked?: boolean; partialChecked?: boolean },
+    ]
+
+    configValue.value = {
+      [selectedKey]: {
+        checked: selectedState.checked ?? true,
+        partialChecked: false,
+      },
+    }
+  },
+})
+
 const confirmEditableMultiOption = (event?: KeyboardEvent) => {
   const target = event?.target as HTMLInputElement | null
   const value = (target?.value ?? multiOptionsFilterQuery.value).trim()
@@ -658,7 +686,7 @@ const getRegexToggleClass = (enabled: boolean) => [
         </div>
         <Tree
           v-else
-          v-model:selection-keys="configValue"
+          v-model:selection-keys="treeSelectionValue"
           :value="filteredTreeOptions"
           selection-mode="checkbox"
           class="ndv-tree max-h-[360px] overflow-auto"
