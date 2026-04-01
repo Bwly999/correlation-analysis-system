@@ -26,6 +26,7 @@ import { useToast } from 'primevue/usetoast'
 const emit = defineEmits<{
   openProjects: []
   newWorkflow: []
+  openTemplateLibrary: []
   importWorkflow: [file: File]
   openHelp: []
   toggleAi: []
@@ -242,6 +243,10 @@ const formatDuration = (ms: number) => {
         <span>新建</span>
       </Button>
 
+      <button v-if="!store.isHistoryMode" class="template-btn" @click="emit('openTemplateLibrary')">
+        <span>模板</span>
+      </button>
+
       <Button
         v-if="!store.isHistoryMode"
         data-testid="workflow-save-button"
@@ -382,6 +387,27 @@ const formatDuration = (ms: number) => {
   border-color: #b8c7da;
   background: #f8fafc;
   color: #0f172a;
+}
+
+.template-btn {
+  height: 2rem;
+  padding: 0 0.875rem;
+  border-radius: 0.625rem;
+  border: 1px solid #cbd5e1;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  color: #334155;
+  font-size: 12px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.template-btn:hover {
+  border-color: #93c5fd;
+  background: #eff6ff;
+  color: #1d4ed8;
 }
 
 .help-btn {

@@ -7,6 +7,7 @@ import type { MultipleNodeExecutionInput, MultipleNodeExecutionItem } from '@/no
 import { isNodeResult, normalizeNodeResult } from '@/nodes/result'
 import { buildWorkflowAiNodeCatalog } from '@/ai/catalog'
 import { validateWorkflowAiPlanAgainstContext } from '@/ai/planValidation'
+import { getWorkflowTemplateDefinition } from '@/workflow/templates'
 import {
   storageProvider,
   type WorkflowNode,
@@ -309,6 +310,77 @@ export const useWorkflowStore = defineStore('workflow', () => {
     lastRunDashboard.value = null
     addLog('已创建新工作流', 'info')
     syncSavedWorkflowSignature()
+  }
+
+  const createWorkflowFromTemplate = (templateId: string) => {
+    const template = getWorkflowTemplateDefinition(templateId)
+    if (!template) {
+      throw new Error(`未找到工作流模板: ${templateId}`)
+    }
+
+    const draft = template.build()
+    const createdNodes: WorkflowNode[] = draft.nodes.map((nodeDraft) => {
+      const definition = getNodeDefinition(nodeDraft.type)
+      if (!definition) {
+        throw new Error(`模板引用了未注册节点: ${nodeDraft.type}`)
+      }
+
+      const label = nodeDraft.label || definition.displayName
+      return {
+        id: generateNodeId(),
+        type: 'custom',
+        position: cloneJsonValue(nodeDraft.position),
+        label,
+        data: {
+          label,
+          type: nodeDraft.type,
+          category: definition.category,
+          status: 'idle',
+          config: {
+            ...getDefaultConfigForType(nodeDraft.type),
+            ...cloneJsonValue(nodeDraft.config ?? {}),
+          },
+          reuseLastRuntimeInputs: false,
+          logs: [],
+          useManualInput: false,
+          manualInput: '',
+          isPinned: false,
+        },
+      }
+    })
+
+    const createdEdges: Edge[] = draft.edges.map((edgeDraft) => {
+      const sourceNode = createdNodes[edgeDraft.sourceIndex]
+      const targetNode = createdNodes[edgeDraft.targetIndex]
+
+      if (!sourceNode || !targetNode) {
+        throw new Error(`模板连线索引无效: ${templateId}`)
+      }
+
+      return {
+        id: generateEdgeId(),
+        source: sourceNode.id,
+        target: targetNode.id,
+        type: 'n8n',
+        animated: true,
+      }
+    })
+
+    nodes.value = createdNodes
+    edges.value = createdEdges
+    logs.value = []
+    workflowName.value = draft.workflowName
+    currentWorkflowId.value = null
+    isHistoryMode.value = false
+    originalWorkflowState.value = null
+    lastRunDashboard.value = null
+    pendingConnection.value = null
+    pendingExecution.value = null
+    activeConfigNodeId.value = null
+    addLog(`已从模板创建工作流: ${template.name}`, 'info')
+    needsViewReset.value = true
+    syncSavedWorkflowSignature()
+    markWorkflowAsExplicitlyUnsaved()
   }
 
   const saveWorkflow = async (name?: string) => {
@@ -1620,6 +1692,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     enterHistoryMode,
     exitHistoryMode,
     createNewWorkflow,
+    createWorkflowFromTemplate,
     setPendingConnection,
     setActiveConfigNodeId,
     markWorkflowAsExplicitlyUnsaved,

@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useWorkflowStore } from '@/stores/workflowStore'
 import { type SavedWorkflow, type ExecutionRecord } from '@/utils/storage'
+import { workflowTemplateDefinitions } from '@/workflow/templates'
 import Dialog from 'primevue/dialog'
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
@@ -24,18 +25,30 @@ import {
   AlertCircle,
   StopCircle,
   Activity,
+  Radar,
+  Trophy,
+  Microscope,
+  LayoutDashboard,
+  ArrowRight,
+  Sparkles,
 } from 'lucide-vue-next'
 
-const _props = defineProps<{
+const props = defineProps<{
   visible: boolean
+  initialTab?: string
 }>()
 
-const emit = defineEmits(['close', 'load-workflow', 'create-workflow'])
+const emit = defineEmits([
+  'close',
+  'load-workflow',
+  'create-workflow',
+  'create-workflow-from-template',
+])
 
 const store = useWorkflowStore()
 const confirm = useConfirm()
 
-const activeTab = ref('0')
+const activeTab = ref(props.initialTab ?? '0')
 const duplicateDialogVisible = ref(false)
 const duplicateSourceWorkflowId = ref<string | null>(null)
 const duplicateWorkflowName = ref('')
@@ -46,6 +59,16 @@ const loadData = async () => {
 }
 
 onMounted(loadData)
+
+watch(
+  () => [props.visible, props.initialTab] as const,
+  ([visible, initialTab]) => {
+    if (visible) {
+      activeTab.value = initialTab ?? '0'
+    }
+  },
+  { immediate: true },
+)
 
 // 排序后的工作流列表 (按更新时间倒序)
 const sortedWorkflows = computed(() => {
@@ -110,16 +133,69 @@ const handleCreateNew = () => {
   emit('create-workflow')
 }
 
+const openTemplateTab = () => {
+  activeTab.value = '2'
+}
+
+const handleCreateFromTemplate = (templateId: string) => {
+  emit('create-workflow-from-template', templateId)
+}
+
 const handleClearHistory = async () => {
   await store.clearHistory()
 }
+
+const templateVisualMap = {
+  insight: {
+    icon: Radar,
+    shell: 'border-blue-200 bg-[radial-gradient(circle_at_top_left,_rgba(191,219,254,0.9),_rgba(255,255,255,0.98)_48%,_rgba(239,246,255,0.9)_100%)]',
+    glow: 'from-blue-500/18 via-sky-500/10 to-transparent',
+    iconWrap: 'bg-blue-600 text-white shadow-[0_14px_28px_-18px_rgba(37,99,235,0.9)]',
+    accentText: 'text-blue-700',
+    accentSoft: 'bg-blue-100/80 text-blue-700 border-blue-200',
+    panel: 'bg-white/80 border-blue-100',
+    buttonClass: 'template-action-btn template-action-btn--blue',
+  },
+  ranking: {
+    icon: Trophy,
+    shell: 'border-emerald-200 bg-[radial-gradient(circle_at_top_left,_rgba(209,250,229,0.95),_rgba(255,255,255,0.98)_50%,_rgba(236,253,245,0.88)_100%)]',
+    glow: 'from-emerald-500/18 via-teal-500/10 to-transparent',
+    iconWrap: 'bg-emerald-600 text-white shadow-[0_14px_28px_-18px_rgba(5,150,105,0.9)]',
+    accentText: 'text-emerald-700',
+    accentSoft: 'bg-emerald-100/80 text-emerald-700 border-emerald-200',
+    panel: 'bg-white/82 border-emerald-100',
+    buttonClass: 'template-action-btn template-action-btn--emerald',
+  },
+  explanation: {
+    icon: Microscope,
+    shell: 'border-amber-200 bg-[radial-gradient(circle_at_top_left,_rgba(254,243,199,0.96),_rgba(255,255,255,0.98)_50%,_rgba(255,251,235,0.88)_100%)]',
+    glow: 'from-amber-500/18 via-orange-500/10 to-transparent',
+    iconWrap: 'bg-amber-500 text-white shadow-[0_14px_28px_-18px_rgba(217,119,6,0.9)]',
+    accentText: 'text-amber-700',
+    accentSoft: 'bg-amber-100/80 text-amber-700 border-amber-200',
+    panel: 'bg-white/82 border-amber-100',
+    buttonClass: 'template-action-btn template-action-btn--amber',
+  },
+  comparison: {
+    icon: LayoutDashboard,
+    shell: 'border-cyan-200 bg-[radial-gradient(circle_at_top_left,_rgba(207,250,254,0.96),_rgba(255,255,255,0.98)_50%,_rgba(236,254,255,0.88)_100%)]',
+    glow: 'from-cyan-500/18 via-sky-500/10 to-transparent',
+    iconWrap: 'bg-cyan-600 text-white shadow-[0_14px_28px_-18px_rgba(8,145,178,0.9)]',
+    accentText: 'text-cyan-700',
+    accentSoft: 'bg-cyan-100/80 text-cyan-700 border-cyan-200',
+    panel: 'bg-white/82 border-cyan-100',
+    buttonClass: 'template-action-btn template-action-btn--cyan',
+  },
+} as const
+
+const getTemplateVisual = (theme: keyof typeof templateVisualMap) => templateVisualMap[theme]
 </script>
 
 <template>
   <Dialog
     :visible="visible"
     modal
-    :style="{ width: '640px' }"
+    :style="{ width: 'min(980px, calc(100vw - 32px))' }"
     :pt="{
       mask: {
         class: 'workflow-manager-dialog-mask',
@@ -151,6 +227,7 @@ const handleClearHistory = async () => {
       <Tabs v-model:value="activeTab">
         <TabList>
           <Tab value="0" class="flex items-center gap-2"><FolderOpen :size="14" /> 我的工作流</Tab>
+          <Tab value="2" class="flex items-center gap-2"><Layers2 :size="14" /> 分析模板</Tab>
           <Tab value="1" class="flex items-center gap-2"><History :size="14" /> 运行历史</Tab>
         </TabList>
         <TabPanels>
@@ -169,6 +246,21 @@ const handleClearHistory = async () => {
                 <div>
                   <div class="font-bold text-[16px] tracking-tight">创建新工作流</div>
                   <div class="text-[11px] text-slate-400">从零开始构建您的分析流程</div>
+                </div>
+              </div>
+
+              <div
+                class="flex items-center gap-4 p-5 bg-white border border-blue-100 rounded-2xl cursor-pointer hover:border-blue-200 hover:bg-blue-50/60 transition-all shadow-sm group/template shrink-0"
+                @click="openTemplateTab"
+              >
+                <div
+                  class="p-3 bg-blue-50 text-blue-600 rounded-xl group-hover/template:bg-blue-100 transition-colors"
+                >
+                  <Layers2 :size="24" :stroke-width="2.5" />
+                </div>
+                <div>
+                  <div class="font-bold text-[16px] tracking-tight text-slate-900">从模板创建</div>
+                  <div class="text-[11px] text-slate-500">选择常见分析链路，直接生成可编辑工作流</div>
                 </div>
               </div>
 
@@ -220,6 +312,156 @@ const handleClearHistory = async () => {
                       @click="handleDeleteWorkflow(wf.id)"
                       ><Trash2 :size="16"
                     /></Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </TabPanel>
+          <TabPanel value="2">
+            <div class="flex flex-col gap-4 py-4 px-1">
+              <div
+                class="relative overflow-hidden rounded-[28px] border border-slate-200 bg-[linear-gradient(135deg,_#0f172a_0%,_#172554_46%,_#0f172a_100%)] px-5 py-5 text-white shadow-[0_22px_60px_-32px_rgba(15,23,42,0.65)]"
+              >
+                <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(96,165,250,0.28),_transparent_34%)]"></div>
+                <div class="absolute inset-0 bg-[radial-gradient(circle_at_bottom_left,_rgba(59,130,246,0.18),_transparent_42%)]"></div>
+                <div class="relative">
+                  <div
+                    class="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[11px] font-bold tracking-[0.24em] text-blue-100"
+                  >
+                    <Sparkles :size="12" />
+                    分析模板
+                  </div>
+                  <div class="mt-4 max-w-[520px]">
+                    <div class="text-[24px] font-black tracking-tight text-white">
+                      先看结果，再决定要不要用这条工作流
+                    </div>
+                    <div class="mt-2 text-sm leading-6 text-slate-200">
+                      每张模板卡都先告诉你最终会得到什么分析成果，再补充适合场景、关键产出和核心节点，帮助你快速选对起手式。
+                    </div>
+                  </div>
+                  <div class="mt-4 flex flex-wrap gap-2 text-[11px] font-semibold text-slate-200">
+                    <span class="rounded-full border border-white/10 bg-white/8 px-3 py-1.5">一键创建</span>
+                    <span class="rounded-full border border-white/10 bg-white/8 px-3 py-1.5">未保存骨架</span>
+                    <span class="rounded-full border border-white/10 bg-white/8 px-3 py-1.5">结果导向挑选</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 gap-4 pr-1">
+                <div
+                  v-for="template in workflowTemplateDefinitions"
+                  :key="template.id"
+                  :class="[
+                    'group relative overflow-hidden rounded-[28px] border p-5 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_24px_60px_-36px_rgba(15,23,42,0.35)]',
+                    getTemplateVisual(template.theme).shell,
+                  ]"
+                >
+                  <div
+                    :class="[
+                      'pointer-events-none absolute inset-0 bg-gradient-to-br opacity-90 transition-opacity duration-300 group-hover:opacity-100',
+                      getTemplateVisual(template.theme).glow,
+                    ]"
+                  ></div>
+                  <div class="relative flex min-h-[360px] flex-col">
+                    <div class="flex items-start justify-between gap-5">
+                      <div class="min-w-0">
+                        <div
+                          :class="[
+                            'inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[10px] font-black tracking-[0.18em]',
+                            getTemplateVisual(template.theme).accentSoft,
+                          ]"
+                        >
+                          {{ template.categoryLabel }}
+                        </div>
+                        <div class="mt-3 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                          你会先看到
+                        </div>
+                      </div>
+                      <div
+                        :class="[
+                          'flex h-12 w-12 shrink-0 items-center justify-center rounded-[18px]',
+                          getTemplateVisual(template.theme).iconWrap,
+                        ]"
+                      >
+                        <component :is="getTemplateVisual(template.theme).icon" :size="20" :stroke-width="2.3" />
+                      </div>
+                    </div>
+
+                    <div class="mt-3">
+                      <div class="max-w-[620px] text-[26px] font-black leading-[1.08] tracking-tight text-slate-950">
+                        {{ template.outcomeTitle }}
+                      </div>
+                      <p class="mt-3 max-w-[680px] text-[14px] leading-6 text-slate-600">
+                        {{ template.outcomeSummary }}
+                      </p>
+                    </div>
+
+                    <div class="mt-5 flex flex-wrap gap-2.5">
+                      <span
+                        v-for="result in template.keyResults"
+                        :key="result"
+                        :class="[
+                          'inline-flex rounded-full border px-3.5 py-1.5 text-[11px] font-bold',
+                          getTemplateVisual(template.theme).accentSoft,
+                        ]"
+                      >
+                        {{ result }}
+                      </span>
+                    </div>
+
+                    <div
+                      :class="[
+                        'mt-6 rounded-[22px] border p-5 backdrop-blur-sm',
+                        getTemplateVisual(template.theme).panel,
+                      ]"
+                    >
+                      <div class="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] gap-6 max-md:grid-cols-1">
+                        <div>
+                          <div class="text-[11px] font-black tracking-[0.2em] text-slate-500">核心节点</div>
+                          <div class="mt-2 flex flex-wrap gap-2">
+                            <span
+                              v-for="node in template.keyNodes"
+                              :key="node"
+                              class="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-700"
+                            >
+                              {{ node }}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div>
+                          <div class="text-[11px] font-black tracking-[0.2em] text-slate-500">适合场景</div>
+                          <p class="mt-2 text-[12px] leading-5 text-slate-700">{{ template.bestFor }}</p>
+                        </div>
+                      </div>
+
+                      <div class="mt-5">
+                        <div class="text-[11px] font-black tracking-[0.2em] text-slate-500">下一步建议</div>
+                        <p class="mt-2 text-[12px] leading-5 text-slate-600">
+                          {{ template.recommendedNextStep }}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div class="mt-auto flex items-end justify-between gap-4 pt-5 max-md:flex-col max-md:items-start">
+                      <div class="max-w-[560px]">
+                        <div class="text-[13px] font-bold text-slate-900">{{ template.name }}</div>
+                        <div :class="['mt-1 text-[12px] font-medium leading-5', getTemplateVisual(template.theme).accentText]">
+                          {{ template.description }}
+                        </div>
+                      </div>
+                      <Button
+                        :data-testid="`workflow-template-create-${template.id}`"
+                        label="立即生成"
+                        size="small"
+                        :class="getTemplateVisual(template.theme).buttonClass"
+                        @click="handleCreateFromTemplate(template.id)"
+                      >
+                        <template #icon>
+                          <ArrowRight :size="14" />
+                        </template>
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -362,6 +604,8 @@ const handleClearHistory = async () => {
 }
 .n8n-modern-dialog :deep(.p-dialog-content) {
   padding: 0 1rem;
+  max-height: min(78vh, 840px);
+  overflow-y: auto;
 }
 .custom-scrollbar::-webkit-scrollbar {
   width: 4px;
@@ -369,5 +613,32 @@ const handleClearHistory = async () => {
 .custom-scrollbar::-webkit-scrollbar-thumb {
   background: #e2e8f0;
   border-radius: 10px;
+}
+
+.template-action-btn {
+  height: 2.5rem;
+  border-radius: 999px;
+  border: none;
+  padding-inline: 0.9rem;
+  font-size: 12px;
+  font-weight: 800;
+  color: #ffffff;
+  box-shadow: 0 14px 28px -18px rgba(15, 23, 42, 0.4);
+}
+
+.template-action-btn--blue {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+}
+
+.template-action-btn--emerald {
+  background: linear-gradient(135deg, #059669 0%, #0f766e 100%);
+}
+
+.template-action-btn--amber {
+  background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+}
+
+.template-action-btn--cyan {
+  background: linear-gradient(135deg, #0891b2 0%, #0f766e 100%);
 }
 </style>

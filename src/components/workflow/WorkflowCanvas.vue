@@ -39,6 +39,7 @@ const toast = useToast()
 const isConfigVisible = ref(false)
 const isLogExpanded = ref(true)
 const isWorkflowListVisible = ref(false)
+const workflowManagerInitialTab = ref('0')
 const isSidebarVisible = ref(true)
 const isAiPanelVisible = ref(false)
 const isHelpCenterVisible = ref(false)
@@ -152,6 +153,13 @@ const handleCreateWorkflow = async () => {
   })
 }
 
+const handleCreateWorkflowFromTemplate = async (templateId: string) => {
+  await runWorkflowActionWithGuard(async () => {
+    isWorkflowListVisible.value = false
+    store.createWorkflowFromTemplate(templateId)
+  })
+}
+
 const handleLoadWorkflow = async (id: string) => {
   await runWorkflowActionWithGuard(async () => {
     isWorkflowListVisible.value = false
@@ -208,8 +216,13 @@ const resultDashboardModal = ref<{
   summary: null,
 })
 
-const openWorkflowList = async () => {
+const openWorkflowList = async (initialTab = '0') => {
+  workflowManagerInitialTab.value = initialTab
   isWorkflowListVisible.value = true
+}
+
+const openTemplateLibrary = async () => {
+  await openWorkflowList('2')
 }
 
 const waitForViewportStabilized = async () => {
@@ -365,6 +378,7 @@ onBeforeUnmount(() => {
     <WorkflowHeader
       :is-ai-panel-visible="isAiPanelVisible"
       @open-projects="openWorkflowList"
+      @open-template-library="openTemplateLibrary"
       @new-workflow="handleCreateWorkflow"
       @import-workflow="handleImportWorkflow"
       @open-help="isHelpCenterVisible = true"
@@ -538,9 +552,11 @@ onBeforeUnmount(() => {
     </footer>
 
     <WorkflowManagerModal
+      :initial-tab="workflowManagerInitialTab"
       :visible="isWorkflowListVisible"
       @close="isWorkflowListVisible = false"
       @create-workflow="handleCreateWorkflow"
+      @create-workflow-from-template="handleCreateWorkflowFromTemplate"
       @load-workflow="handleLoadWorkflow"
     />
     <NodeConfigModal

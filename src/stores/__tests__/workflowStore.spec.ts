@@ -59,6 +59,30 @@ describe('Workflow Store', () => {
     expect(node?.data.category).toBe('trigger')
   })
 
+  it('should create a new unsaved workflow from a template', () => {
+    const store = useWorkflowStore()
+
+    store.createWorkflowFromTemplate('correlation-analysis')
+
+    expect(store.workflowName).toBe('相关性排查模板')
+    expect(store.currentWorkflowId).toBeNull()
+    expect(store.hasUnsavedChanges).toBe(true)
+    expect(store.nodes.map((node) => node.data.type)).toEqual([
+      'file-import',
+      'field-selection',
+      'pearson',
+    ])
+    expect(store.edges).toHaveLength(2)
+    expect(store.edges[0]).toMatchObject({
+      source: store.nodes[0]?.id,
+      target: store.nodes[1]?.id,
+    })
+    expect(store.edges[1]).toMatchObject({
+      source: store.nodes[1]?.id,
+      target: store.nodes[2]?.id,
+    })
+  })
+
   it('should allow adding multiple trigger nodes', () => {
     const store = useWorkflowStore()
     const node1 = store.addAndConnectNode('file-import', 'Import 1', { x: 0, y: 0 })

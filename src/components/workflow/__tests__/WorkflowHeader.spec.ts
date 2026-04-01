@@ -119,6 +119,26 @@ describe('WorkflowHeader', () => {
     expect(wrapper.emitted('openHelp')).toBeTruthy()
   })
 
+  it('renders the template button and emits open-template-library when clicked', async () => {
+    const wrapper = mount(WorkflowHeader, {
+      global: {
+        stubs: {
+          Button: { template: '<button @click="$emit(\'click\')"><slot /></button>' },
+          Menu: { template: '<div />' },
+          Popover: { template: '<div><slot /></div>' },
+        },
+      },
+    })
+
+    const templateButton = wrapper.findAll('button').find((node) => node.text().includes('模板'))
+
+    expect(templateButton).toBeTruthy()
+
+    await templateButton!.trigger('click')
+
+    expect(wrapper.emitted('openTemplateLibrary')).toBeTruthy()
+  })
+
   it('shows unsaved status beside the workflow name and highlights the save action', () => {
     const store = useWorkflowStore()
     store.workflowName = '测试工作流'
