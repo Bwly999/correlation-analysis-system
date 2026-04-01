@@ -3,6 +3,7 @@ import { BarChart3, Play, Square } from 'lucide-vue-next'
 
 const props = defineProps<{
   visible: boolean
+  showRunActions?: boolean
   isRunning: boolean
   hasPendingExecution: boolean
   hasResultDashboard: boolean
@@ -26,30 +27,32 @@ const emit = defineEmits<{
       :style="{ bottom: `${props.runBarBottom}px` }"
     >
       <div class="workflow-run-shell" :class="`workflow-run-shell--${props.runBarState}`">
-        <button
-          type="button"
-          :disabled="props.isRunning || props.hasPendingExecution"
-          class="workflow-run-bar"
-          :class="`workflow-run-bar--${props.runBarState}`"
-          @click="emit('run')"
-        >
-          <span class="workflow-run-bar__icon">
-            <Play :size="18" fill="currentColor" />
-          </span>
-          <span class="workflow-run-bar__copy">
-            <strong>{{ props.runButtonTitle }}</strong>
-            <span>{{ props.runButtonSubtitle }}</span>
-          </span>
-        </button>
-        <button
-          v-if="props.isRunning || props.hasPendingExecution"
-          type="button"
-          v-tooltip.top="'停止执行'"
-          class="workflow-run-stop animate-in fade-in zoom-in-75 duration-300"
-          @click="emit('stop')"
-        >
-          <Square :size="18" fill="currentColor" />
-        </button>
+        <template v-if="props.showRunActions !== false">
+          <button
+            type="button"
+            :disabled="props.isRunning || props.hasPendingExecution"
+            class="workflow-run-bar"
+            :class="`workflow-run-bar--${props.runBarState}`"
+            @click="emit('run')"
+          >
+            <span class="workflow-run-bar__icon">
+              <Play :size="18" fill="currentColor" />
+            </span>
+            <span class="workflow-run-bar__copy">
+              <strong>{{ props.runButtonTitle }}</strong>
+              <span>{{ props.runButtonSubtitle }}</span>
+            </span>
+          </button>
+          <button
+            v-if="props.isRunning || props.hasPendingExecution"
+            type="button"
+            v-tooltip.top="'停止执行'"
+            class="workflow-run-stop animate-in fade-in zoom-in-75 duration-300"
+            @click="emit('stop')"
+          >
+            <Square :size="18" fill="currentColor" />
+          </button>
+        </template>
         <button
           v-if="props.hasResultDashboard"
           type="button"

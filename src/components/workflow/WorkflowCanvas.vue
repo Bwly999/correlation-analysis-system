@@ -296,6 +296,7 @@ watch(
       }),
     }
   },
+  { immediate: true },
 )
 
 watch(
@@ -479,7 +480,8 @@ onBeforeUnmount(() => {
     </aside>
 
     <WorkflowFloatingControls
-      :visible="!store.isHistoryMode"
+      :visible="!store.isHistoryMode || !!resultDashboardModal.summary"
+      :show-run-actions="!store.isHistoryMode"
       :is-running="store.isRunning"
       :has-pending-execution="!!store.pendingExecution"
       :has-result-dashboard="!!resultDashboardModal.summary"

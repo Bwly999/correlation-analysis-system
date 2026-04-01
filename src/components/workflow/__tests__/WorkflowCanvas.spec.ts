@@ -433,6 +433,109 @@ describe('WorkflowCanvas', () => {
     expect(dashboardModal.text()).not.toContain('测试工作流')
   })
 
+  it('shows result dashboard entry and summary in history mode', async () => {
+    const store = useWorkflowStore()
+    store.nodes = [
+      {
+        id: 'terminal_1',
+        type: 'custom',
+        position: { x: 0, y: 0 },
+        label: '相关性分析',
+        data: {
+          label: '相关性分析',
+          type: 'pearson',
+          category: 'terminal',
+          status: 'success',
+          config: {},
+          logs: [],
+          output: {
+            kind: 'report',
+            payload: { title: '历史相关性结果', sections: [] },
+            preview: { viewer: 'report-viewer' },
+          },
+        },
+      } as any,
+    ]
+
+    store.executionHistory = [
+      {
+        id: 'exec_history_1',
+        workflowId: 'wf_1',
+        workflowName: '历史工作流',
+        startTime: Date.now(),
+        duration: 800,
+        status: 'success',
+        nodes: [
+          {
+            id: 'terminal_1',
+            type: 'custom',
+            position: { x: 0, y: 0 },
+            label: '相关性分析',
+            data: {
+              label: '相关性分析',
+              type: 'pearson',
+              category: 'terminal',
+              status: 'success',
+              config: {},
+              logs: [],
+              output: {
+                kind: 'report',
+                payload: { title: '历史相关性结果', sections: [] },
+                preview: { viewer: 'report-viewer' },
+              },
+              useManualInput: false,
+              manualInput: '',
+              isPinned: false,
+            },
+          },
+        ],
+        edges: [],
+      },
+    ] as any
+
+    store.enterHistoryMode('exec_history_1')
+
+    const wrapper = mount(WorkflowCanvas, {
+      global: {
+        stubs: {
+          Background: { template: '<div />' },
+          Controls: { template: '<div />' },
+          NodeSidebar: { template: '<div />' },
+          WorkflowHeader: { template: '<div />' },
+          BaseNode: { template: '<div />' },
+          LogPanel: { template: '<div />' },
+          NodeConfigModal: { template: '<div />' },
+          RuntimeInputModal: runtimeInputModalStub,
+          WorkflowResultDashboardModal: workflowResultDashboardModalStub,
+          WorkflowManagerModal: workflowManagerModalStub,
+          WorkflowFloatingControls: {
+            props: ['visible', 'hasResultDashboard'],
+            template:
+              '<div class="floating-controls-stub" :data-visible="visible" :data-has-result-dashboard="hasResultDashboard"></div>',
+          },
+          UnsavedWorkflowDialog: { template: '<div />' },
+          HelpCenterModal: { template: '<div />' },
+          ConfirmDialog: { template: '<div />' },
+          Toast: { template: '<div />' },
+          Button: { template: '<button><slot /></button>' },
+          N8nEdge: { template: '<div />' },
+        },
+        directives: {
+          tooltip: () => undefined,
+        },
+      },
+    })
+
+    await flushAsyncWork()
+
+    expect(wrapper.find('.floating-controls-stub').attributes('data-visible')).toBe('true')
+    expect(wrapper.find('.floating-controls-stub').attributes('data-has-result-dashboard')).toBe('true')
+
+    const dashboardModal = wrapper.findComponent(workflowResultDashboardModalStub)
+    expect(dashboardModal.attributes('data-visible')).toBe('true')
+    expect(dashboardModal.text()).toContain('历史工作流')
+  })
+
   it('prompts before browser unload when the workflow has unsaved changes', async () => {
     const store = useWorkflowStore()
     store.addAndConnectNode('file-import', '导入数据', { x: 0, y: 0 })

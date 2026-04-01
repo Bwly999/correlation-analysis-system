@@ -1042,6 +1042,42 @@ describe('Workflow Store', () => {
     })
   })
 
+  it('should preserve historical node outputs when entering history mode', async () => {
+    const store = useWorkflowStore()
+    const triggerNode = store.addAndConnectNode('file-import', 'Trigger', { x: 0, y: 0 })!
+    const terminalNode = store.addAndConnectNode('chart-display', '图表展示', { x: 300, y: 0 })!
+
+    store.edges.push({
+      id: 'e_history_trigger_terminal',
+      source: triggerNode.id,
+      target: terminalNode.id,
+      type: 'n8n',
+      animated: true,
+    })
+
+    triggerNode.data.config.fileData = new File(['x,y\n1,2'], 'history.csv')
+    terminalNode.data.config = { chartType: 'scatter', xAxis: 'x', yAxis: 'y' }
+
+    await store.runGlobal()
+
+    const record = store.executionHistory[0]!
+    const triggerSnapshot = record.nodes.find((node) => node.id === triggerNode.id)
+    const terminalSnapshot = record.nodes.find((node) => node.id === terminalNode.id)
+
+    expect(triggerSnapshot?.data.output).toMatchObject({ kind: 'table' })
+    expect(terminalSnapshot?.data.output).toMatchObject({ kind: 'chart' })
+
+    store.enterHistoryMode(record.id)
+
+    expect(store.isHistoryMode).toBe(true)
+    expect(store.nodes.find((node) => node.id === triggerNode.id)?.data.output).toMatchObject({
+      kind: 'table',
+    })
+    expect(store.nodes.find((node) => node.id === terminalNode.id)?.data.output).toMatchObject({
+      kind: 'chart',
+    })
+  })
+
   it('should truncate oversized table outputs in history snapshots while preserving result metadata', async () => {
     const largeTriggerDefinition = {
       name: 'test-large-history-trigger',

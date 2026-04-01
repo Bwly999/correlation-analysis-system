@@ -41,6 +41,7 @@ type OriginalWorkflowState = {
   edges: Edge[]
   name: string
   id: string | null
+  lastRunDashboard: WorkflowRunDashboardState | null
 }
 
 export type WorkflowRunDashboardState = {
@@ -292,6 +293,11 @@ export const useWorkflowStore = defineStore('workflow', () => {
       }),
     )
 
+  const restoreHistoricalWorkflowNodes = (
+    sourceNodes: Array<WorkflowNode | WorkflowNodeSnapshot>,
+  ): WorkflowNode[] =>
+    sourceNodes.map((node) => normalizeNodeConfigWithDefaults(cloneJsonValue(node as WorkflowNode)))
+
   const createNewWorkflow = () => {
     nodes.value = []
     edges.value = []
@@ -413,12 +419,27 @@ export const useWorkflowStore = defineStore('workflow', () => {
         edges: cloneWorkflowEdges(currentEdges),
         name: workflowName.value,
         id: currentWorkflowId.value,
+        lastRunDashboard: cloneOptionalJsonValue(lastRunDashboard.value),
       }
     }
 
     isHistoryMode.value = true
-    nodes.value = resetWorkflowNodeRuntimeState(record.nodes)
+    nodes.value = restoreHistoricalWorkflowNodes(record.nodes)
     edges.value = cloneWorkflowEdges(record.edges)
+    lastRunDashboard.value = {
+      id: record.id,
+      workflowName: record.workflowName,
+      status: record.status,
+      startTime: record.startTime,
+      duration: record.duration,
+      executionTargetIds: record.nodes
+        .filter((node) => node.data.category === 'terminal')
+        .map((node) => node.id),
+      executionScopeNodeIds: record.nodes.map((node) => node.id),
+      terminalNodeIds: record.nodes
+        .filter((node) => node.data.category === 'terminal')
+        .map((node) => node.id),
+    }
     workflowName.value = `${record.workflowName} (历史记录: ${new Date(record.startTime).toLocaleString()})`
     addLog(`正在查看历史运行记录: ${new Date(record.startTime).toLocaleString()}`, 'info')
     needsViewReset.value = true
@@ -431,6 +452,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     edges.value = originalWorkflowState.value.edges
     workflowName.value = originalWorkflowState.value.name
     currentWorkflowId.value = originalWorkflowState.value.id
+    lastRunDashboard.value = originalWorkflowState.value.lastRunDashboard
 
     isHistoryMode.value = false
     originalWorkflowState.value = null
