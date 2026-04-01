@@ -1,0 +1,97 @@
+{
+  "name": "看板数据对比分析模板",
+  "nodes": [
+    {
+      "id": "template_manual_json",
+      "type": "custom",
+      "position": { "x": 120, "y": 180 },
+      "label": "手动输入数据",
+      "data": {
+        "label": "手动输入数据",
+        "type": "manual-json-import",
+        "category": "trigger",
+        "config": {
+          "jsonData": "[\n  { \"group\": \"产线 A\", \"score\": 92, \"cost\": 18 },\n  { \"group\": \"产线 A\", \"score\": 95, \"cost\": 17 },\n  { \"group\": \"产线 B\", \"score\": 88, \"cost\": 21 },\n  { \"group\": \"产线 B\", \"score\": 90, \"cost\": 20 },\n  { \"group\": \"产线 C\", \"score\": 85, \"cost\": 24 },\n  { \"group\": \"产线 C\", \"score\": 87, \"cost\": 23 }\n]",
+          "autoClean": true,
+          "excludeFields": []
+        },
+        "reuseLastRuntimeInputs": false,
+        "status": "idle",
+        "output": null,
+        "manualInput": "",
+        "useManualInput": false,
+        "isPinned": false,
+        "logs": []
+      }
+    },
+    {
+      "id": "template_data_aggregation",
+      "type": "custom",
+      "position": { "x": 400, "y": 180 },
+      "label": "数据聚合",
+      "data": {
+        "label": "数据聚合",
+        "type": "data-aggregation",
+        "category": "action",
+        "config": {
+          "mode": "group_by",
+          "groupByField": "group",
+          "groupByMethods": ["mean"],
+          "windowSize": 5,
+          "timeWindowSize": 1,
+          "timeWindowUnit": "hour",
+          "timeWindowMethods": ["mean"],
+          "rollingMethod": "mean",
+          "targetColumns": ["score", "cost"],
+          "aggregationGroups": []
+        },
+        "reuseLastRuntimeInputs": false,
+        "status": "idle",
+        "output": null,
+        "manualInput": "",
+        "useManualInput": false,
+        "isPinned": false,
+        "logs": []
+      }
+    },
+    {
+      "id": "template_chart_display",
+      "type": "custom",
+      "position": { "x": 680, "y": 180 },
+      "label": "图表展示",
+      "data": {
+        "label": "图表展示",
+        "type": "chart-display",
+        "category": "terminal",
+        "config": {
+          "chartType": "bar",
+          "xAxis": "group",
+          "yAxis": "score_mean"
+        },
+        "reuseLastRuntimeInputs": false,
+        "status": "idle",
+        "output": null,
+        "manualInput": "",
+        "useManualInput": false,
+        "isPinned": false,
+        "logs": []
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "template_edge_1",
+      "source": "template_manual_json",
+      "target": "template_data_aggregation",
+      "type": "n8n",
+      "animated": true
+    },
+    {
+      "id": "template_edge_2",
+      "source": "template_data_aggregation",
+      "target": "template_chart_display",
+      "type": "n8n",
+      "animated": true
+    }
+  ]
+}

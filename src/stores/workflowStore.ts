@@ -7,7 +7,10 @@ import type { MultipleNodeExecutionInput, MultipleNodeExecutionItem } from '@/no
 import { isNodeResult, normalizeNodeResult } from '@/nodes/result'
 import { buildWorkflowAiNodeCatalog } from '@/ai/catalog'
 import { validateWorkflowAiPlanAgainstContext } from '@/ai/planValidation'
-import { getWorkflowTemplateDefinition } from '@/workflow/templates'
+import {
+  getWorkflowTemplateDefinition,
+  type WorkflowTemplateJsonDefinition,
+} from '@/workflow/templates'
 import {
   storageProvider,
   type WorkflowNode,
@@ -312,64 +315,86 @@ export const useWorkflowStore = defineStore('workflow', () => {
     syncSavedWorkflowSignature()
   }
 
+  const instantiateWorkflowFromTemplate = (workflow: WorkflowTemplateJsonDefinition) => {
+    const sourceNodes = workflow.nodes ?? []
+    const sourceEdges = workflow.edges ?? []
+    const nodeIdMap = new Map<string, string>()
+
+    const createdNodes: WorkflowNode[] = sourceNodes.map((templateNode) => {
+      const nodeType = templateNode.data?.type
+      const definition = nodeType ? getNodeDefinition(nodeType) : null
+      if (!nodeType || !definition) {
+        throw new Error(`模板引用了未注册节点: ${nodeType ?? 'unknown'}`)
+      }
+
+      const nextId = generateNodeId()
+      nodeIdMap.set(templateNode.id, nextId)
+
+      const label = templateNode.data?.label || templateNode.label || definition.displayName
+      return normalizeNodeConfigWithDefaults({
+        id: nextId,
+        type: templateNode.type ?? 'custom',
+        position: cloneJsonValue(templateNode.position ?? { x: 0, y: 0 }),
+        label,
+        data: {
+          label,
+          type: nodeType,
+          category: definition.category,
+          config: cloneJsonValue(templateNode.data?.config ?? {}),
+          reuseLastRuntimeInputs: templateNode.data?.reuseLastRuntimeInputs ?? false,
+          status: 'idle',
+          output: null,
+          manualInput: templateNode.data?.manualInput ?? '',
+          useManualInput: templateNode.data?.useManualInput ?? false,
+          isPinned: templateNode.data?.isPinned ?? false,
+          logs: cloneJsonValue(templateNode.data?.logs ?? []),
+          error: undefined,
+        },
+      })
+    })
+
+    const createdEdges: Edge[] = sourceEdges.map((templateEdge) => {
+      const sourceId = nodeIdMap.get(templateEdge.source)
+      const targetId = nodeIdMap.get(templateEdge.target)
+
+      if (!sourceId || !targetId) {
+        throw new Error('模板连线引用了不存在的节点')
+      }
+
+      return {
+        id: generateEdgeId(),
+        source: sourceId,
+        target: targetId,
+        type: templateEdge.type ?? 'n8n',
+        animated: templateEdge.animated ?? true,
+        sourceHandle: templateEdge.sourceHandle,
+        targetHandle: templateEdge.targetHandle,
+        label: templateEdge.label,
+        data: cloneOptionalJsonValue(templateEdge.data),
+        style: cloneOptionalJsonValue(templateEdge.style),
+        markerStart: cloneOptionalJsonValue(templateEdge.markerStart),
+        markerEnd: cloneOptionalJsonValue(templateEdge.markerEnd),
+      }
+    })
+
+    return {
+      workflowName: workflow.name || '未命名模板工作流',
+      nodes: createdNodes,
+      edges: createdEdges,
+    }
+  }
+
   const createWorkflowFromTemplate = (templateId: string) => {
     const template = getWorkflowTemplateDefinition(templateId)
     if (!template) {
       throw new Error(`未找到工作流模板: ${templateId}`)
     }
+    const instantiated = instantiateWorkflowFromTemplate(template.workflow)
 
-    const draft = template.build()
-    const createdNodes: WorkflowNode[] = draft.nodes.map((nodeDraft) => {
-      const definition = getNodeDefinition(nodeDraft.type)
-      if (!definition) {
-        throw new Error(`模板引用了未注册节点: ${nodeDraft.type}`)
-      }
-
-      const label = nodeDraft.label || definition.displayName
-      return {
-        id: generateNodeId(),
-        type: 'custom',
-        position: cloneJsonValue(nodeDraft.position),
-        label,
-        data: {
-          label,
-          type: nodeDraft.type,
-          category: definition.category,
-          status: 'idle',
-          config: {
-            ...getDefaultConfigForType(nodeDraft.type),
-            ...cloneJsonValue(nodeDraft.config ?? {}),
-          },
-          reuseLastRuntimeInputs: false,
-          logs: [],
-          useManualInput: false,
-          manualInput: '',
-          isPinned: false,
-        },
-      }
-    })
-
-    const createdEdges: Edge[] = draft.edges.map((edgeDraft) => {
-      const sourceNode = createdNodes[edgeDraft.sourceIndex]
-      const targetNode = createdNodes[edgeDraft.targetIndex]
-
-      if (!sourceNode || !targetNode) {
-        throw new Error(`模板连线索引无效: ${templateId}`)
-      }
-
-      return {
-        id: generateEdgeId(),
-        source: sourceNode.id,
-        target: targetNode.id,
-        type: 'n8n',
-        animated: true,
-      }
-    })
-
-    nodes.value = createdNodes
-    edges.value = createdEdges
+    nodes.value = instantiated.nodes
+    edges.value = instantiated.edges
     logs.value = []
-    workflowName.value = draft.workflowName
+    workflowName.value = instantiated.workflowName
     currentWorkflowId.value = null
     isHistoryMode.value = false
     originalWorkflowState.value = null

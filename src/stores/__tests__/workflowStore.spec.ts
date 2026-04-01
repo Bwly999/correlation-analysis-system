@@ -6,6 +6,7 @@ import { useWorkflowStore } from '../workflowStore'
 import { nodeDefinitions } from '../../nodes/registry'
 import { createJsonResult, createTableResult } from '../../nodes/result'
 import { storageProvider } from '../../utils/storage'
+import { workflowTemplateDefinitions } from '../../workflow/templates'
 
 describe('Workflow Store', () => {
   beforeEach(() => {
@@ -68,7 +69,7 @@ describe('Workflow Store', () => {
     expect(store.currentWorkflowId).toBeNull()
     expect(store.hasUnsavedChanges).toBe(true)
     expect(store.nodes.map((node) => node.data.type)).toEqual([
-      'file-import',
+      'manual-json-import',
       'field-selection',
       'pearson',
     ])
@@ -81,6 +82,38 @@ describe('Workflow Store', () => {
       source: store.nodes[1]?.id,
       target: store.nodes[2]?.id,
     })
+  })
+
+  it('should load template workflow structures from export-compatible json definitions', () => {
+    const correlationTemplate = workflowTemplateDefinitions.find(
+      (template) => template.id === 'correlation-analysis',
+    )
+
+    expect(correlationTemplate).toBeTruthy()
+    expect(correlationTemplate?.workflow.name).toBe('相关性排查模板')
+    expect(correlationTemplate?.workflow.nodes.map((node) => node.data.type)).toEqual([
+      'manual-json-import',
+      'field-selection',
+      'pearson',
+    ])
+    expect(correlationTemplate?.workflow.edges).toHaveLength(2)
+    expect(correlationTemplate?.workflow.nodes.every((node) => node.data.output === null)).toBe(true)
+  })
+
+  it('should create a correlation template that can run immediately with manual json input', async () => {
+    const store = useWorkflowStore()
+
+    store.createWorkflowFromTemplate('correlation-analysis')
+
+    await store.runGlobal()
+
+    const sourceNode = store.nodes[0]
+    const terminalNode = store.nodes[2]
+
+    expect(sourceNode?.data.type).toBe('manual-json-import')
+    expect(sourceNode?.data.config.jsonData).toContain('"target"')
+    expect(terminalNode?.data.status).toBe('success')
+    expect((terminalNode?.data.output as any)?.kind).toBe('report')
   })
 
   it('should allow adding multiple trigger nodes', () => {

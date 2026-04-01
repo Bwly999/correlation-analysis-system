@@ -441,6 +441,13 @@ const getTemplateVisual = (theme: keyof typeof templateVisualMap) => templateVis
                           {{ template.recommendedNextStep }}
                         </p>
                       </div>
+
+                      <div class="mt-4 rounded-2xl border border-blue-100 bg-blue-50/80 px-4 py-3">
+                        <div class="text-[11px] font-black tracking-[0.18em] text-blue-700">数据入口建议</div>
+                        <p class="mt-1 text-[12px] leading-5 text-blue-700">
+                          {{ template.dataSourceHint }}
+                        </p>
+                      </div>
                     </div>
 
                     <div class="mt-auto flex items-end justify-between gap-4 pt-5 max-md:flex-col max-md:items-start">

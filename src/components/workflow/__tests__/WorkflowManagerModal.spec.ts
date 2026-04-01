@@ -169,6 +169,7 @@ describe('WorkflowManagerModal', () => {
 
     expect(wrapper.text()).toContain('分析模板')
     expect(wrapper.text()).toContain('相关性排查模板')
+    expect(wrapper.text()).toContain('手动 JSON 输入可随时替换为文件导入或看板数据获取')
 
     await wrapper.find('[data-testid="workflow-template-create-correlation-analysis"]').trigger('click')
 

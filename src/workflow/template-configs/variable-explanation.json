@@ -1,0 +1,89 @@
+{
+  "name": "变量解释分析模板",
+  "nodes": [
+    {
+      "id": "template_manual_json",
+      "type": "custom",
+      "position": { "x": 120, "y": 180 },
+      "label": "手动输入数据",
+      "data": {
+        "label": "手动输入数据",
+        "type": "manual-json-import",
+        "category": "trigger",
+        "config": {
+          "jsonData": "[\n  { \"batch\": \"A\", \"feature_a\": 10, \"feature_b\": 22, \"feature_c\": 5, \"target\": 101 },\n  { \"batch\": \"A\", \"feature_a\": 12, \"feature_b\": 21, \"feature_c\": 6, \"target\": 104 },\n  { \"batch\": \"B\", \"feature_a\": 15, \"feature_b\": 18, \"feature_c\": 8, \"target\": 111 },\n  { \"batch\": \"B\", \"feature_a\": 18, \"feature_b\": 16, \"feature_c\": 9, \"target\": 118 },\n  { \"batch\": \"C\", \"feature_a\": 20, \"feature_b\": 14, \"feature_c\": 11, \"target\": 126 }\n]",
+          "autoClean": true,
+          "excludeFields": []
+        },
+        "reuseLastRuntimeInputs": false,
+        "status": "idle",
+        "output": null,
+        "manualInput": "",
+        "useManualInput": false,
+        "isPinned": false,
+        "logs": []
+      }
+    },
+    {
+      "id": "template_field_selection",
+      "type": "custom",
+      "position": { "x": 400, "y": 180 },
+      "label": "字段筛选",
+      "data": {
+        "label": "字段筛选",
+        "type": "field-selection",
+        "category": "action",
+        "config": {
+          "mode": "include",
+          "fields": ["feature_a", "feature_b", "feature_c", "target"]
+        },
+        "reuseLastRuntimeInputs": false,
+        "status": "idle",
+        "output": null,
+        "manualInput": "",
+        "useManualInput": false,
+        "isPinned": false,
+        "logs": []
+      }
+    },
+    {
+      "id": "template_xgboost_shap",
+      "type": "custom",
+      "position": { "x": 680, "y": 180 },
+      "label": "XGBoost SHAP",
+      "data": {
+        "label": "XGBoost SHAP",
+        "type": "xgboost-shap",
+        "category": "terminal",
+        "config": {
+          "targetField": "target",
+          "factorNames": ["feature_a", "feature_b", "feature_c"],
+          "maxDependencePlots": 6
+        },
+        "reuseLastRuntimeInputs": false,
+        "status": "idle",
+        "output": null,
+        "manualInput": "",
+        "useManualInput": false,
+        "isPinned": false,
+        "logs": []
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "template_edge_1",
+      "source": "template_manual_json",
+      "target": "template_field_selection",
+      "type": "n8n",
+      "animated": true
+    },
+    {
+      "id": "template_edge_2",
+      "source": "template_field_selection",
+      "target": "template_xgboost_shap",
+      "type": "n8n",
+      "animated": true
+    }
+  ]
+}
