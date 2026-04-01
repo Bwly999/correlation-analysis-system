@@ -508,12 +508,16 @@ class VisualStudio:
                 current_kwargs.pop(unsupported_name, None)
 
     @staticmethod
-    def _draw_report(shap_values, X_sample, y_sample, feature_names, 
-                     show_actual_y: bool, full_report_mode: bool, 
+    def _draw_report(shap_values, X_sample, y_sample, feature_names,
+                     show_actual_y: bool, full_report_mode: bool,
                      model_r2: float, model_mae: float,
-                     target_name: str = "Target"):
+                     target_name: str = "Target",
+                     detail_feature_names: Optional[List[str]] = None):
         """内部绘图核心逻辑 (共享于文件保存与 Base64 生成)"""
-        n_features = len(feature_names)
+        summary_feature_names = list(feature_names)
+        detail_feature_names = list(detail_feature_names) if detail_feature_names else list(feature_names)
+        n_features = len(summary_feature_names)
+        detail_feature_count = len(detail_feature_names)
         
         # 1. 动态计算画布尺寸，避免完整报告在高特征数下出现极端放大
         if full_report_mode:
@@ -521,7 +525,7 @@ class VisualStudio:
             summary_section_height = summary_unit_height * 2
             
             plots_per_row = 3
-            n_rows = math.ceil(n_features / plots_per_row)
+            n_rows = max(1, math.ceil(detail_feature_count / plots_per_row))
             detail_height = n_rows * 4.5
             
             total_height = summary_section_height + detail_height + 3
@@ -541,10 +545,10 @@ class VisualStudio:
             fig = plt.figure(figsize=fig_size, dpi=AppConfig.DPI)
             
             # 3. 构造增强标题
-            if len(feature_names) > 5 and not full_report_mode:
-                x_desc = ", ".join(feature_names[:5]) + f", ... (共{len(feature_names)}个)"
+            if len(summary_feature_names) > 5 and not full_report_mode:
+                x_desc = ", ".join(summary_feature_names[:5]) + f", ... (共{len(summary_feature_names)}个)"
             else:
-                x_desc = ", ".join(feature_names) 
+                x_desc = ", ".join(summary_feature_names)
             
             title_text = (
                 f"智能归因分析深度报告 {'(完整版)' if full_report_mode else ''}\n"
@@ -594,11 +598,18 @@ class VisualStudio:
 
             # --- 绘制 Details ---
             mean_shap = np.abs(shap_values.values).mean(axis=0)
-            top_indices = np.argsort(-mean_shap)
-            features_to_plot_indices = top_indices if full_report_mode else top_indices[:4]
+            feature_importance_map = {
+                column_name: float(mean_shap[column_index])
+                for column_index, column_name in enumerate(X_sample.columns.tolist())
+            }
+            ordered_feature_names = sorted(
+                [feature_name for feature_name in detail_feature_names if feature_name in feature_importance_map],
+                key=lambda feature_name: feature_importance_map.get(feature_name, float('-inf')),
+                reverse=True,
+            )
+            features_to_plot_names = ordered_feature_names if full_report_mode else ordered_feature_names[:4]
 
-            def plot_dependence(ax, rank, feat_idx):
-                feat_name = feature_names[feat_idx]
+            def plot_dependence(ax, rank, feat_name):
                 if show_actual_y and y_sample is not None:
                     ax.set_title(f"【No.{rank}】{feat_name} vs 实际值", fontsize=18, fontweight='bold', pad=15)
                     x_data = X_sample[feat_name]
@@ -633,7 +644,7 @@ class VisualStudio:
                     except Exception as e:
                         ax.text(0.5, 0.5, "N/A", ha='center')
 
-            for i, feat_idx in enumerate(features_to_plot_indices):
+            for i, feat_name in enumerate(features_to_plot_names):
                 rank = i + 1
                 if full_report_mode:
                     ax = fig.add_subplot(gs_bottom[i // 3, i % 3])
@@ -641,7 +652,7 @@ class VisualStudio:
                     plot_locs = [(1, 0), (1, 1), (2, 0), (2, 1)]
                     if i < 4: ax = fig.add_subplot(gs[plot_locs[i][0], plot_locs[i][1]])
                     else: continue
-                plot_dependence(ax, rank, feat_idx)
+                plot_dependence(ax, rank, feat_name)
 
             # 某些 SHAP 版本会在绘图过程中重置 figure 尺寸，导致完整报告被压成小图。
             fig.set_size_inches(fig_size[0], fig_size[1], forward=True)
@@ -709,14 +720,26 @@ class VisualStudio:
             return img_base64
 
     @staticmethod
-    def get_full_report_base64(shap_values, X, y, model_r2: float, model_mae: float, target_col: str = "Target"):
+    def get_full_report_base64(
+        shap_values,
+        X,
+        y,
+        model_r2: float,
+        model_mae: float,
+        target_col: str = "Target",
+        max_dependence_plots: Optional[int] = None,
+        detail_feature_names: Optional[List[str]] = None,
+    ):
         """生成整合好的完整报表并返回 base64 字符串"""
         feature_names = X.columns.tolist()
+        if detail_feature_names is not None:
+            detail_feature_names = detail_feature_names[: max(1, int(max_dependence_plots or len(detail_feature_names)))]
         with plt.style.context(VisualStudio._resolve_plot_style()):
             fig = VisualStudio._draw_report(
                 shap_values, X, y, feature_names,
-                show_actual_y=False, full_report_mode=True, 
-                model_r2=model_r2, model_mae=model_mae, target_name=target_col
+                show_actual_y=False, full_report_mode=True,
+                model_r2=model_r2, model_mae=model_mae, target_name=target_col,
+                detail_feature_names=detail_feature_names,
             )
             buf = io.BytesIO()
             fig.savefig(buf, format='png', dpi=AppConfig.DPI)

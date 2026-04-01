@@ -134,6 +134,38 @@ class FullReportLayoutTests(unittest.TestCase):
         finally:
             plt.close(fig)
 
+    def test_full_report_keeps_summary_full_but_limits_detail_features(self):
+        feature_names = [f'f{i}' for i in range(1, 11)]
+        shap_values = FakeShapValues(feature_names, np.random.rand(12, len(feature_names)))
+        x_sample = pd.DataFrame(np.random.rand(12, len(feature_names)), columns=feature_names)
+        y_sample = pd.Series(np.random.rand(12), name='target')
+        selected_feature_names = ['f10', 'f9', 'f8', 'f7', 'f6', 'f5', 'f4', 'f3']
+
+        fig = insight_tool.VisualStudio._draw_report(
+            shap_values=shap_values,
+            X_sample=x_sample,
+            y_sample=y_sample,
+            feature_names=feature_names,
+            detail_feature_names=selected_feature_names,
+            show_actual_y=False,
+            full_report_mode=True,
+            model_r2=0.93,
+            model_mae=0.08,
+            target_name='target',
+        )
+
+        try:
+            beeswarm_call = next(kwargs for name, kwargs in SUMMARY_CALLS if name == 'beeswarm')
+            bar_call = next(kwargs for name, kwargs in SUMMARY_CALLS if name == 'bar')
+            detail_titles = [axis.get_title() for axis in fig.axes if axis.get_title().startswith('【No.')]
+            self.assertEqual(beeswarm_call.get('max_display'), len(feature_names))
+            self.assertEqual(bar_call.get('max_display'), len(feature_names))
+            self.assertEqual(len(detail_titles), len(selected_feature_names))
+            self.assertTrue(any('f10' in title for title in detail_titles))
+            self.assertTrue(any('f3' in title for title in detail_titles))
+        finally:
+            plt.close(fig)
+
 
 if __name__ == '__main__':
     unittest.main()

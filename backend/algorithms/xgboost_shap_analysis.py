@@ -4,6 +4,18 @@ import numpy as np
 import pandas as pd
 
 
+DEFAULT_MAX_DEPENDENCE_PLOTS = 8
+
+
+def _normalize_max_dependence_plots(config: Dict[str, Any]) -> int:
+    raw_value = config.get('maxDependencePlots', DEFAULT_MAX_DEPENDENCE_PLOTS)
+    try:
+        limit = int(raw_value)
+    except (TypeError, ValueError):
+        limit = DEFAULT_MAX_DEPENDENCE_PLOTS
+    return max(1, limit)
+
+
 def analyze_xgboost_shap(data: Iterable[Dict[str, Any]], target: str, config: Dict[str, Any]) -> Dict[str, Any]:
     try:
         from backend.algorithm.robust_insight_tool import (
@@ -51,6 +63,9 @@ def analyze_xgboost_shap(data: Iterable[Dict[str, Any]], target: str, config: Di
 
     feature_names = X_sample.columns.tolist()
     mean_abs_shap = np.abs(shap_values.values).mean(axis=0)
+    max_dependence_plots = min(len(feature_names), _normalize_max_dependence_plots(config))
+    top_indices = np.argsort(-mean_abs_shap)[:max_dependence_plots]
+    top_feature_names = [feature_names[index] for index in top_indices]
     importance = [
         {
             'name': feature_name,
@@ -64,8 +79,7 @@ def analyze_xgboost_shap(data: Iterable[Dict[str, Any]], target: str, config: Di
 
     dependence = []
     dependence_images = []
-    for feature_name in feature_names:
-        feature_index = feature_names.index(feature_name)
+    for feature_index, feature_name in zip(top_indices, top_feature_names):
         dependence.append(
             {
                 'feature': feature_name,
@@ -102,6 +116,8 @@ def analyze_xgboost_shap(data: Iterable[Dict[str, Any]], target: str, config: Di
         model_r2=model_core.r2_score,
         model_mae=model_core.mae,
         target_col=target,
+        max_dependence_plots=max_dependence_plots,
+        detail_feature_names=top_feature_names,
     )
 
     return {

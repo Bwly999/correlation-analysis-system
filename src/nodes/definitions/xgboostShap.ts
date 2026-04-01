@@ -33,6 +33,7 @@ const SHAP_PRIMARY_COLOR = '#ff0052'
 const SHAP_SECONDARY_COLOR = '#2563eb'
 const DEFAULT_VISIBLE_FEATURES = 6
 const DEFAULT_IMPORTANCE_LIMIT = 15
+const DEFAULT_MAX_DEPENDENCE_PLOTS = 8
 
 const asImageDataUrl = (value?: string) => {
   if (!value) return undefined
@@ -145,6 +146,13 @@ export const xgboostShapNode: NodeDefinition = {
       editable: true,
       forceInput: true,
       description: '选择参与分析的因子列表；留空时默认使用除目标变量外的全部数值字段。',
+    },
+    {
+      name: 'maxDependencePlots',
+      displayName: '依赖图数量上限',
+      type: 'number',
+      default: DEFAULT_MAX_DEPENDENCE_PLOTS,
+      description: '限制生成的因子趋势图数量，默认取 SHAP 重要性最高的前 8 个，避免图片过多影响速度和存储。',
     },
   ],
   execute: async (input, config) => {

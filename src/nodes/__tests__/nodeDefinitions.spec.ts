@@ -183,6 +183,18 @@ describe('Node Definitions Execution Logic', () => {
     })
   })
 
+  it('should expose a configurable dependence plot limit for xgboost-shap', () => {
+    const dependenceLimitProperty = xgboostShapNode.properties.find(
+      (property) => property.name === 'maxDependencePlots',
+    )
+
+    expect(dependenceLimitProperty).toMatchObject({
+      type: 'number',
+      displayName: '依赖图数量上限',
+      default: 8,
+    })
+  })
+
   describe('file-import', () => {
     it('should parse a CSV file correctly', async () => {
       const csvPath = path.resolve(__dirname, '../../../test/resource/test_data.csv')

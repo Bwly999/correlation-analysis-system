@@ -757,6 +757,11 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
           title: '目标变量',
           content: '这是建模的核心配置，必须准确指向你要预测或解释的字段。',
         },
+        {
+          property: 'maxDependencePlots',
+          title: '依赖图数量上限',
+          content: '默认只生成 SHAP 重要性最高的前 8 个因子趋势图，用于控制报告图片数量、运行耗时和存储体积。',
+        },
       ],
       outputGuide: ['输出结果是带图表和补充图片的分析报告。'],
       nextSteps: ['若结果需要归档或分享，可直接接数据导出。'],
