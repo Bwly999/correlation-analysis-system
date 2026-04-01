@@ -27,6 +27,15 @@ vi.mock('primevue/usetoast', () => ({
   useToast: () => ({ add: vi.fn() }),
 }))
 
+vi.mock('primevue/dialog', () => ({
+  default: defineComponent({
+    props: ['visible'],
+    emits: ['update:visible'],
+    template:
+      '<div v-if="visible" data-test="dialog-stub"><slot /><slot name="header" /></div>',
+  }),
+}))
+
 vi.mock('html2pdf.js', () => ({
   default: () => ({
     set: vi.fn().mockReturnThis(),
@@ -71,8 +80,9 @@ const createShapReport = () => ({
         title: '特征贡献排行',
         option: { xAxis: {}, yAxis: {}, series: [{ type: 'bar', data: [1, 2] }] },
         items: [
-          { name: 'f1', value: 0.5 },
-          { name: 'f2', value: 0.4 },
+          { name: 'f2', value: 0.5 },
+          { name: 'f1', value: 0.4 },
+          { name: 'f3', value: 0.3 },
         ],
       },
       {
@@ -263,6 +273,77 @@ describe('ReportViewer', () => {
     await wrapper.get('[data-test="shap-show-all"]').trigger('click')
 
     expect(wrapper.text()).toContain('因子趋势: f3')
+  })
+
+  it('sorts shap dependence cards by importance ranking', () => {
+    const wrapper = mount(ReportViewer, {
+      props: { data: createShapReport() },
+    })
+
+    const titles = wrapper
+      .findAll('[data-test="shap-dependence-card-title"]')
+      .map((node) => node.text())
+
+    expect(titles).toEqual(['因子趋势: f2', '因子趋势: f1'])
+  })
+
+  it('opens a zoomable preview modal for the backend full report image', async () => {
+    const wrapper = mount(ReportViewer, {
+      props: { data: createShapReport() },
+    })
+
+    expect(wrapper.find('[data-test="full-report-preview-modal"]').exists()).toBe(false)
+
+    await wrapper.get('[data-test="full-report-image"]').trigger('click')
+
+    expect(wrapper.get('[data-test="full-report-preview-modal"]').text()).toContain('原始整图预览')
+    expect(wrapper.get('[data-test="full-report-preview-image"]').attributes('src')).toContain('full-report')
+  })
+
+  it('supports dragging the full report preview image after zooming in', async () => {
+    const wrapper = mount(ReportViewer, {
+      props: { data: createShapReport() },
+      attachTo: document.body,
+    })
+
+    await wrapper.get('[data-test="full-report-image"]').trigger('click')
+    await wrapper.get('[data-test="full-report-zoom-in"]').trigger('click')
+
+    const previewSurface = wrapper.get('[data-test="full-report-preview-surface"]')
+    const previewImage = wrapper.get('[data-test="full-report-preview-image"]')
+    const beforeTransform = previewImage.attributes('style')
+
+    await previewSurface.trigger('mousedown', { clientX: 100, clientY: 120, button: 0 })
+    window.dispatchEvent(new MouseEvent('mousemove', { clientX: 160, clientY: 190 }))
+    await wrapper.vm.$nextTick()
+
+    const afterTransform = wrapper.get('[data-test="full-report-preview-image"]').attributes('style')
+
+    expect(beforeTransform).not.toBe(afterTransform)
+    expect(afterTransform).toContain('translate(60px, 70px)')
+  })
+
+  it('still allows dragging the preview image when scale is below 1', async () => {
+    const wrapper = mount(ReportViewer, {
+      props: { data: createShapReport() },
+      attachTo: document.body,
+    })
+
+    await wrapper.get('[data-test="full-report-image"]').trigger('click')
+    await wrapper.get('[data-test="full-report-zoom-out"]').trigger('click')
+
+    const previewSurface = wrapper.get('[data-test="full-report-preview-surface"]')
+    const beforeTransform = wrapper.get('[data-test="full-report-preview-image"]').attributes('style')
+
+    await previewSurface.trigger('mousedown', { clientX: 120, clientY: 140, button: 0 })
+    window.dispatchEvent(new MouseEvent('mousemove', { clientX: 170, clientY: 200 }))
+    await wrapper.vm.$nextTick()
+
+    const afterTransform = wrapper.get('[data-test="full-report-preview-image"]').attributes('style')
+
+    expect(previewSurface.classes()).toContain('cursor-grab')
+    expect(beforeTransform).not.toBe(afterTransform)
+    expect(afterTransform).toContain('translate(50px, 60px)')
   })
 
   it('supports correlation chart Y switching and axis label truncation', async () => {

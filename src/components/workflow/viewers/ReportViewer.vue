@@ -1,5 +1,5 @@
 ﻿<script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
@@ -11,7 +11,8 @@ import {
   LegendComponent,
   VisualMapComponent,
 } from 'echarts/components'
-import { FileText, Image as ImageIcon, Loader2, Search } from 'lucide-vue-next'
+import { FileText, Image as ImageIcon, Loader2, Search, X, ZoomIn, ZoomOut } from 'lucide-vue-next'
+import Dialog from 'primevue/dialog'
 import { useToast } from 'primevue/usetoast'
 import { getResultReport } from '../resultView'
 import { exportReportElementToPdf } from '../reportPdfExport'
@@ -74,6 +75,11 @@ const isExporting = ref(false)
 const exportRootRef = ref<HTMLElement | null>(null)
 const featureSearch = ref('')
 const expandedDependence = ref(false)
+const isFullReportPreviewOpen = ref(false)
+const previewScale = ref(1)
+const previewTranslate = ref({ x: 0, y: 0 })
+const isPreviewDragging = ref(false)
+const previewDragStart = ref({ x: 0, y: 0 })
 const chartSelectState = ref<Record<string, string>>({})
 const labelTruncateState = ref<Record<string, number>>({})
 const isExportMode = computed(() => props.exportMode === true)
@@ -94,10 +100,26 @@ const dependenceSection = computed(() => {
   return sections.value.find((section: any) => section?.key === 'dependence' || section?.type === 'dependence')
 })
 
+const importanceRankMap = computed(() => {
+  const section = sections.value.find((item: any) => item?.key === 'importance' || item?.title === '特征贡献排行')
+  const items = Array.isArray(section?.items) ? section.items : []
+  return new Map(
+    items.map((item: any, index: number) => [String(item.name ?? item.feature ?? ''), index]),
+  )
+})
+
 const normalizedDependence = computed(() => {
   const section = dependenceSection.value
   if (!section) return []
-  const items = Array.isArray(section.items) ? section.items : []
+  const items = Array.isArray(section.items) ? [...section.items] : []
+  items.sort((left: any, right: any) => {
+    const leftKey = String(left.feature ?? left.title ?? '')
+    const rightKey = String(right.feature ?? right.title ?? '')
+    const leftRank = importanceRankMap.value.get(leftKey) ?? Number.MAX_SAFE_INTEGER
+    const rightRank = importanceRankMap.value.get(rightKey) ?? Number.MAX_SAFE_INTEGER
+    if (leftRank !== rightRank) return leftRank - rightRank
+    return leftKey.localeCompare(rightKey, 'zh-CN')
+  })
   const keyword = featureSearch.value.trim().toLowerCase()
   if (!keyword) return items
   return items.filter((item: any) => {
@@ -254,6 +276,76 @@ const exportOriginalImage = () => {
   anchor.download = `后端原始整图_${Date.now()}.png`
   anchor.click()
 }
+
+const previewImageTransform = computed(
+  () => `translate(${previewTranslate.value.x}px, ${previewTranslate.value.y}px) scale(${previewScale.value})`,
+)
+
+const resetFullReportPreview = () => {
+  previewScale.value = 1
+  previewTranslate.value = { x: 0, y: 0 }
+  isPreviewDragging.value = false
+}
+
+const openFullReportPreview = () => {
+  if (!supplements.value.fullReportImage) return
+  resetFullReportPreview()
+  isFullReportPreviewOpen.value = true
+}
+
+const closeFullReportPreview = () => {
+  isFullReportPreviewOpen.value = false
+  resetFullReportPreview()
+}
+
+const nudgePreviewScale = (delta: number) => {
+  previewScale.value = Math.min(10, Math.max(0.1, Number((previewScale.value + delta).toFixed(2))))
+}
+
+const handlePreviewWheel = (event: WheelEvent) => {
+  event.preventDefault()
+  nudgePreviewScale(event.deltaY < 0 ? 0.2 : -0.2)
+}
+
+const handlePreviewMouseDown = (event: MouseEvent) => {
+  if (event.button !== 0) return
+  event.preventDefault()
+  isPreviewDragging.value = true
+  previewDragStart.value = {
+    x: event.clientX - previewTranslate.value.x,
+    y: event.clientY - previewTranslate.value.y,
+  }
+}
+
+const handleWindowMouseMove = (event: MouseEvent) => {
+  if (!isPreviewDragging.value) return
+  previewTranslate.value = {
+    x: event.clientX - previewDragStart.value.x,
+    y: event.clientY - previewDragStart.value.y,
+  }
+}
+
+const stopPreviewDragging = () => {
+  isPreviewDragging.value = false
+}
+
+const handleWindowKeydown = (event: KeyboardEvent) => {
+  if (event.key === 'Escape' && isFullReportPreviewOpen.value) {
+    closeFullReportPreview()
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('mousemove', handleWindowMouseMove)
+  window.addEventListener('mouseup', stopPreviewDragging)
+  window.addEventListener('keydown', handleWindowKeydown)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('mousemove', handleWindowMouseMove)
+  window.removeEventListener('mouseup', stopPreviewDragging)
+  window.removeEventListener('keydown', handleWindowKeydown)
+})
 </script>
 
 <template>
@@ -414,7 +506,7 @@ const exportOriginalImage = () => {
                 :key="`dependence-${item.feature}`"
                 class="rounded-2xl border border-slate-200 bg-slate-50 p-4"
               >
-                <h3 class="text-sm font-bold text-slate-700">{{ item.title }}</h3>
+                <h3 data-test="shap-dependence-card-title" class="text-sm font-bold text-slate-700">{{ item.title }}</h3>
                 <div class="mt-3 h-[280px] rounded-xl border border-slate-100 bg-white p-3">
                   <VChart :option="item.option" autoresize />
                 </div>
@@ -484,17 +576,96 @@ const exportOriginalImage = () => {
             >
               导出原始整图
             </button>
+            <button
+              v-if="supplements.fullReportImage"
+              data-test="open-full-report-preview"
+              class="rounded-xl border border-slate-200 bg-slate-900 px-3 py-2 text-sm font-bold text-white transition hover:bg-slate-800"
+              @click="openFullReportPreview"
+            >
+              放大查看
+            </button>
           </div>
           <div v-if="supplements.fullReportImage" class="mt-4 rounded-2xl border border-slate-100 bg-white p-4">
             <img
+              data-test="full-report-image"
               :src="supplements.fullReportImage"
               alt="后端原始整图"
-              class="mx-auto max-w-full rounded-xl shadow-sm"
+              class="mx-auto max-w-full cursor-zoom-in rounded-xl shadow-sm"
+              @click="openFullReportPreview"
             />
           </div>
         </section>
       </div>
     </div>
+    <Dialog
+      v-if="supplements.fullReportImage"
+      :visible="isFullReportPreviewOpen"
+      modal
+      dismissable-mask
+      maximizable
+      :draggable="false"
+      :closable="false"
+      :style="{ width: '96vw' }"
+      content-class="!p-0 !overflow-hidden"
+      mask-class="backdrop-blur-sm"
+      @update:visible="(value) => !value && closeFullReportPreview()"
+    >
+      <template #header>
+        <div class="flex w-full items-center justify-between gap-4 pr-2">
+          <div>
+            <h2 data-test="full-report-preview-modal" class="text-lg font-bold text-slate-900">原始整图预览</h2>
+            <p class="mt-1 text-sm text-slate-500">支持滚轮缩放和鼠标按住拖动平移。</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button
+              data-test="full-report-zoom-out"
+              class="rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-100"
+              @click="nudgePreviewScale(-0.2)"
+            >
+              <ZoomOut :size="16" />
+            </button>
+            <span class="min-w-16 text-center text-sm font-bold text-slate-700">{{ Math.round(previewScale * 100) }}%</span>
+            <button
+              data-test="full-report-zoom-in"
+              class="rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-100"
+              @click="nudgePreviewScale(0.2)"
+            >
+              <ZoomIn :size="16" />
+            </button>
+            <button
+              class="rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-100"
+              @click="resetFullReportPreview"
+            >
+              重置
+            </button>
+            <button
+              class="rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-100"
+              @click="closeFullReportPreview"
+            >
+              <X :size="16" />
+            </button>
+          </div>
+        </div>
+      </template>
+
+      <div
+        data-test="full-report-preview-surface"
+        class="relative h-[82vh] cursor-grab overflow-hidden bg-slate-950"
+        :class="{ 'cursor-grabbing': isPreviewDragging }"
+        @wheel="handlePreviewWheel"
+        @mousedown="handlePreviewMouseDown"
+      >
+        <img
+          data-test="full-report-preview-image"
+          :src="supplements.fullReportImage"
+          alt="原始整图预览"
+          class="absolute left-1/2 top-1/2 max-h-none max-w-none select-none"
+          :class="{ 'cursor-grabbing': isPreviewDragging }"
+          :style="{ transform: `translate(-50%, -50%) ${previewImageTransform}`, transformOrigin: 'center center' }"
+          draggable="false"
+        />
+      </div>
+    </Dialog>
   </div>
 </template>
 
