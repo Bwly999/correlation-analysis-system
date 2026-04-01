@@ -52,14 +52,10 @@ const sortedWorkflows = computed(() => {
   return [...store.savedWorkflows].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
 })
 
-// 当前工作流的运行历史
-const currentWorkflowHistory = computed<ExecutionRecord[]>(() => {
-  const executionHistory = store.executionHistory as ExecutionRecord[]
-  if (store.currentWorkflowId) {
-    return executionHistory.filter((record) => record.workflowId === store.currentWorkflowId)
-  }
-  return executionHistory
-})
+// 管理中心统一展示全部工作流的运行历史
+const allWorkflowHistory = computed<ExecutionRecord[]>(
+  () => store.executionHistory as ExecutionRecord[],
+)
 
 const handleLoadWorkflow = async (id: string) => {
   emit('load-workflow', id)
@@ -232,10 +228,10 @@ const handleClearHistory = async () => {
           <TabPanel value="1">
             <div class="flex items-center justify-between px-2 pb-2 border-b border-slate-100">
               <span class="text-[11px] font-bold text-slate-500">
-                当前工作流的历史记录 (最近 20 条)
+                所有工作流的历史记录 (最近 20 条)
               </span>
               <Button
-                v-if="currentWorkflowHistory.length > 0"
+                v-if="allWorkflowHistory.length > 0"
                 label="清空历史"
                 size="small"
                 severity="danger"
@@ -248,13 +244,13 @@ const handleClearHistory = async () => {
               class="flex flex-col gap-3 py-4 max-h-[420px] overflow-y-auto custom-scrollbar px-1"
             >
               <div
-                v-if="currentWorkflowHistory.length === 0"
+                v-if="allWorkflowHistory.length === 0"
                 class="text-center py-20 text-[#a3acb9] italic"
               >
-                <History :size="48" class="mx-auto mb-4 opacity-10" /> 暂无当前工作流的运行记录。
+                <History :size="48" class="mx-auto mb-4 opacity-10" /> 暂无运行记录。
               </div>
               <div
-                v-for="record in currentWorkflowHistory"
+                v-for="record in allWorkflowHistory"
                 :key="record.id"
                 class="flex items-center justify-between p-4 bg-[#fcfcfd] border border-[#f1f4f8] rounded-xl hover:bg-white transition-all group border-l-4"
                 :class="

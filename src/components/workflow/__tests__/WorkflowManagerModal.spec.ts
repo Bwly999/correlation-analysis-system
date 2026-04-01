@@ -29,6 +29,52 @@ describe('WorkflowManagerModal', () => {
     vi.clearAllMocks()
   })
 
+  it('shows history records from all workflows in workflow manager', async () => {
+    const store = useWorkflowStore()
+    store.currentWorkflowId = 'wf_current'
+    store.executionHistory = [
+      {
+        id: 'history_1',
+        workflowId: 'wf_other',
+        workflowName: '其他工作流',
+        startTime: Date.now(),
+        duration: 1200,
+        status: 'success',
+        nodes: [],
+        edges: [],
+      },
+    ] as any
+
+    const wrapper = mount(WorkflowManagerModal, {
+      props: {
+        visible: true,
+      },
+      global: {
+        stubs: {
+          Dialog: dialogStub,
+          Button: {
+            props: ['label', 'disabled'],
+            emits: ['click'],
+            template:
+              '<button :disabled="disabled" @click="$emit(\'click\')">{{ label }}<slot /></button>',
+          },
+          Tabs: { template: '<div><slot /></div>' },
+          TabList: { template: '<div><slot /></div>' },
+          Tab: { template: '<button><slot /></button>' },
+          TabPanels: { template: '<div><slot /></div>' },
+          TabPanel: { template: '<div><slot /></div>' },
+          InputText: inputTextStub,
+        },
+        directives: {
+          tooltip: {},
+        },
+      },
+    })
+
+    expect(wrapper.text()).toContain('所有工作流的历史记录')
+    expect(wrapper.text()).toContain('其他工作流')
+  })
+
   it('opens duplicate-name dialog with a default workflow name and confirms duplication', async () => {
     const store = useWorkflowStore()
     store.savedWorkflows = [
