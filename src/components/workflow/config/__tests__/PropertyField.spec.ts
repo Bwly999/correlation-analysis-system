@@ -55,6 +55,42 @@ describe('PropertyField', () => {
     expect(wrapper.get('[data-testid="options-regex-toggle"]').classes()).toContain('!bg-blue-50')
   })
 
+  it('为 resolveOptions 失败的 options 保留加载错误提示', async () => {
+    setActivePinia(createPinia())
+
+    const wrapper = mount(PropertyField, {
+      props: {
+        prop: {
+          name: 'field',
+          displayName: '字段',
+          type: 'options',
+          default: '',
+          resolveOptions: async () => {
+            throw new Error('远程选项加载失败')
+          },
+        },
+        modelValue: '',
+        upstreamFactors: [],
+      },
+      global: {
+        directives: {
+          tooltip: () => undefined,
+        },
+        stubs: {
+          Select: {
+            props: ['emptyFilterMessage'],
+            template: '<div class="options-empty-message">{{ emptyFilterMessage }}</div>',
+          },
+        },
+      },
+    })
+
+    await wrapper.vm.$nextTick()
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('.options-empty-message').text()).toContain('远程选项加载失败')
+  })
+
   it('为 multi-options 切换正则过滤模式', async () => {
     setActivePinia(createPinia())
 
@@ -251,6 +287,42 @@ describe('PropertyField', () => {
     })
 
     expect(wrapper.find('.multi-options-options').text()).toContain('manual_field:manual_field')
+  })
+
+  it('为已有手工值的 forceInput multi-options 继续保留回车输入提示', () => {
+    setActivePinia(createPinia())
+
+    const wrapper = mount(PropertyField, {
+      props: {
+        prop: {
+          name: 'fields',
+          displayName: '字段列表',
+          type: 'multi-options',
+          default: [],
+          editable: true,
+          forceInput: true,
+          options: [],
+        },
+        modelValue: ['manual_field'],
+        upstreamFactors: [],
+      },
+      global: {
+        directives: {
+          tooltip: () => undefined,
+        },
+        stubs: {
+          MultiSelect: {
+            props: ['emptyFilterMessage', 'emptyMessage'],
+            template:
+              '<div class="multi-options-empty-message">{{ emptyFilterMessage || emptyMessage }}</div>',
+          },
+        },
+      },
+    })
+
+    expect(wrapper.find('.multi-options-empty-message').text()).toContain(
+      '暂无可选项，可直接输入后按回车添加',
+    )
   })
 
   it('为分析字段禁用非数值上游字段并展示紧凑提示', () => {
