@@ -462,6 +462,38 @@ class VisualStudio:
     2. 在标题中显示 R2 和 MAE。
     """
     @staticmethod
+    def _resolve_plot_style() -> str:
+        available_styles = set(plt.style.available)
+        for style_name in ('seaborn-v0_8-whitegrid', 'seaborn-whitegrid', 'seaborn'):
+            if style_name in available_styles:
+                return style_name
+        return 'default'
+
+    @staticmethod
+    def _call_shap_plot(plot_func, *args, fallback_current_axis=None, **kwargs):
+        current_kwargs = dict(kwargs)
+        unsupported_kwargs = ('ax', 'plot_size')
+
+        while True:
+            try:
+                if fallback_current_axis is not None:
+                    plt.sca(fallback_current_axis)
+                return plot_func(*args, **current_kwargs)
+            except TypeError as error:
+                message = str(error)
+                unsupported_name = next(
+                    (
+                        name
+                        for name in unsupported_kwargs
+                        if f"unexpected keyword argument '{name}'" in message and name in current_kwargs
+                    ),
+                    None,
+                )
+                if unsupported_name is None:
+                    raise
+                current_kwargs.pop(unsupported_name, None)
+
+    @staticmethod
     def _draw_report(shap_values, X_sample, y_sample, feature_names, 
                      show_actual_y: bool, full_report_mode: bool, 
                      model_r2: float, model_mae: float,
@@ -523,12 +555,27 @@ class VisualStudio:
             # --- 绘制 Summary ---
             plt.sca(ax_beeswarm)
             ax_beeswarm.set_title("【全局概览】关键因子影响力度与方向 (Beeswarm)", fontsize=22, fontweight='bold', pad=20)
-            shap.plots.beeswarm(shap_values, max_display=beeswarm_max_display, ax=ax_beeswarm, show=False, plot_size=None)
+            VisualStudio._call_shap_plot(
+                shap.plots.beeswarm,
+                shap_values,
+                max_display=beeswarm_max_display,
+                ax=ax_beeswarm,
+                show=False,
+                plot_size=None,
+                fallback_current_axis=ax_beeswarm,
+            )
             ax_beeswarm.set_xlabel("SHAP Value (对结果的影响值)", fontsize=18)
 
             plt.sca(ax_bar)
             ax_bar.set_title("【量化排名】特征平均绝对贡献度 (Importance Bar)", fontsize=22, fontweight='bold', pad=20)
-            shap.plots.bar(shap_values, max_display=beeswarm_max_display, ax=ax_bar, show=False)
+            VisualStudio._call_shap_plot(
+                shap.plots.bar,
+                shap_values,
+                max_display=beeswarm_max_display,
+                ax=ax_bar,
+                show=False,
+                fallback_current_axis=ax_bar,
+            )
             ax_bar.set_xlabel("Mean |SHAP Value| (平均影响幅度)", fontsize=18)
 
             # --- 绘制 Details ---
@@ -559,7 +606,14 @@ class VisualStudio:
                 else:
                     ax.set_title(f"【No.{rank}】{feat_name} vs SHAP", fontsize=18, fontweight='bold', pad=15)
                     try:
-                        shap.plots.scatter(shap_values[:, feat_name], ax=ax, show=False, color=shap_values)
+                        VisualStudio._call_shap_plot(
+                            shap.plots.scatter,
+                            shap_values[:, feat_name],
+                            ax=ax,
+                            show=False,
+                            color=shap_values,
+                            fallback_current_axis=ax,
+                        )
                         ax.set_ylabel("SHAP", fontsize=14)
                         ax.set_xlabel(feat_name, fontsize=14)
                     except Exception as e:
@@ -586,7 +640,7 @@ class VisualStudio:
         logger.info(f"正在渲染分析报表 (全量模式: {full_report_mode})...")
         target_name = y_sample.name if hasattr(y_sample, 'name') else "Target"
         
-        with plt.style.context('seaborn-v0_8-whitegrid'):
+        with plt.style.context(VisualStudio._resolve_plot_style()):
             fig = VisualStudio._draw_report(
                 shap_values, X_sample, y_sample, feature_names,
                 show_actual_y, full_report_mode, model_r2, model_mae, target_name
@@ -599,7 +653,7 @@ class VisualStudio:
     @staticmethod
     def get_beeswarm_base64(shap_values, X, max_display=15):
         """生成蜂群图并返回 base64 字符串"""
-        with plt.style.context('seaborn-v0_8-whitegrid'):
+        with plt.style.context(VisualStudio._resolve_plot_style()):
             SystemContext._fix_matplotlib_chinese()
             fig = plt.figure(figsize=(10, 6), dpi=100)
             ax = fig.add_subplot(111)
@@ -616,11 +670,19 @@ class VisualStudio:
     @staticmethod
     def get_dependence_plot_base64(shap_values, X, feature_name):
         """生成指定特征的依赖图并返回 base64 字符串"""
-        with plt.style.context('seaborn-v0_8-whitegrid'):
+        with plt.style.context(VisualStudio._resolve_plot_style()):
             SystemContext._fix_matplotlib_chinese()
             fig = plt.figure(figsize=(8, 5), dpi=100)
             ax = fig.add_subplot(111)
-            shap.dependence_plot(feature_name, shap_values.values, X, ax=ax, show=False)
+            VisualStudio._call_shap_plot(
+                shap.dependence_plot,
+                feature_name,
+                shap_values.values,
+                X,
+                ax=ax,
+                show=False,
+                fallback_current_axis=ax,
+            )
             plt.tight_layout()
             
             buf = io.BytesIO()
@@ -634,7 +696,7 @@ class VisualStudio:
     def get_full_report_base64(shap_values, X, y, model_r2: float, model_mae: float, target_col: str = "Target"):
         """生成整合好的完整报表并返回 base64 字符串"""
         feature_names = X.columns.tolist()
-        with plt.style.context('seaborn-v0_8-whitegrid'):
+        with plt.style.context(VisualStudio._resolve_plot_style()):
             fig = VisualStudio._draw_report(
                 shap_values, X, y, feature_names,
                 show_actual_y=False, full_report_mode=True, 

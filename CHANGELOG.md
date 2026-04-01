@@ -4,6 +4,12 @@
 
 ### 修复 (Fix)
 
+- **修复 Xgboost + SHAP 节点在本地 Python 环境下的运行兼容性问题**:
+  - 修复 `backend/algorithms/xgboost_shap_analysis.py` 在 `python backend/main.py` 启动方式下写死 `backend.algorithm` 导致的导入失败。
+  - 为 SHAP 报表生成链路补充 Matplotlib 样式回退，兼容旧版环境中仅提供 `seaborn-whitegrid` 的情况。
+  - 为 SHAP 绘图调用补充新旧版本 API 兼容处理，避免 `beeswarm`、`bar`、`scatter`、`dependence_plot` 在旧版 SHAP 下因不支持 `ax` 等参数报错。
+  - 新增后端回归测试，覆盖 Xgboost + SHAP 导入回退与绘图兼容分支，并在浏览器端重新验证节点执行成功。
+
 - **修复工作流管理中心只显示当前工作流运行历史的问题**:
   - 工作流管理中心的“运行历史”页签改为统一展示所有工作流的运行记录，不再受当前打开工作流限制。
   - 顶部工具栏中的运行历史弹层继续保持当前工作流视角，避免影响现有快速回溯体验。

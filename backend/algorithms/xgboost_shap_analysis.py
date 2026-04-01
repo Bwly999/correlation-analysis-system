@@ -5,13 +5,22 @@ import pandas as pd
 
 
 def analyze_xgboost_shap(data: Iterable[Dict[str, Any]], target: str, config: Dict[str, Any]) -> Dict[str, Any]:
-    from backend.algorithm.robust_insight_tool import (
-        DataEngine,
-        InsightEngine,
-        ModelCore,
-        SystemContext,
-        VisualStudio,
-    )
+    try:
+        from backend.algorithm.robust_insight_tool import (
+            DataEngine,
+            InsightEngine,
+            ModelCore,
+            SystemContext,
+            VisualStudio,
+        )
+    except ImportError:
+        from algorithm.robust_insight_tool import (
+            DataEngine,
+            InsightEngine,
+            ModelCore,
+            SystemContext,
+            VisualStudio,
+        )
 
     df = pd.DataFrame(list(data))
     if df.empty:
