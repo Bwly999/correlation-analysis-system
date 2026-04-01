@@ -73,6 +73,7 @@ SUMMARY_CALLS = []
 def draw_stub_beeswarm(*_args, **kwargs):
     SUMMARY_CALLS.append(('beeswarm', kwargs))
     ax = kwargs.get('ax') or plt.gca()
+    ax.figure.set_size_inches(8, 3)
     ax.plot([0, 1], [0, 1], color='#2563eb')
     ax.set_ylabel('importance')
 
@@ -80,6 +81,7 @@ def draw_stub_beeswarm(*_args, **kwargs):
 def draw_stub_bar(*_args, **kwargs):
     SUMMARY_CALLS.append(('bar', kwargs))
     ax = kwargs.get('ax') or plt.gca()
+    ax.figure.set_size_inches(8, 3)
     ax.barh([0, 1], [0.5, 0.8], color='#ff0052')
 
 
@@ -118,8 +120,11 @@ class FullReportLayoutTests(unittest.TestCase):
         )
 
         try:
-            self.assertIsNone(fig.get_layout_engine())
+            if hasattr(fig, 'get_layout_engine'):
+                self.assertIsNone(fig.get_layout_engine())
             self.assertLessEqual(fig._suptitle.get_fontsize(), 24)
+            self.assertGreater(fig.get_size_inches()[0], 20)
+            self.assertGreater(fig.get_size_inches()[1], 15)
             self.assertLess(fig.get_size_inches()[1], 30)
             beeswarm_call = next(kwargs for name, kwargs in SUMMARY_CALLS if name == 'beeswarm')
             bar_call = next(kwargs for name, kwargs in SUMMARY_CALLS if name == 'bar')

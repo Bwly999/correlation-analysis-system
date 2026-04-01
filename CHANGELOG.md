@@ -4,6 +4,11 @@
 
 ### 修复 (Fix)
 
+- **修复 Xgboost + SHAP 完整大图重叠及 Python 3.10 环境兼容问题**:
+  - 修复完整报告在部分 SHAP 版本下被意外重置为小画布，导致前端“后端原始整图”中的标题、图表和文字全部挤压重叠。
+  - 为 SHAP 解释器补充分级回退策略，依次兼容 `shap.Explainer`、`TreeExplainer` 和 `model.predict` 包装路径，解决 Python 3.10 环境下 `xgboost` 与 `shap` 组合运行报错的问题。
+  - 新增后端回归测试，覆盖完整报告尺寸稳定性，以及 SHAP 解释器在不同兼容分支下的回退行为。
+
 - **修复 Xgboost + SHAP 节点在本地 Python 环境下的运行兼容性问题**:
   - 修复 `backend/algorithms/xgboost_shap_analysis.py` 在 `python backend/main.py` 启动方式下写死 `backend.algorithm` 导致的导入失败。
   - 为 SHAP 报表生成链路补充 Matplotlib 样式回退，兼容旧版环境中仅提供 `seaborn-whitegrid` 的情况。

@@ -444,7 +444,21 @@ class InsightEngine:
                 if y is not None:
                     y_sample = y.loc[sample_indices]
 
-            explainer = shap.Explainer(self.model, X_sample)
+            try:
+                explainer = shap.Explainer(self.model, X_sample)
+            except TypeError as error:
+                error_message = str(error)
+                if 'cannot be analyzed directly' not in error_message:
+                    raise
+                logger.warning("通用 SHAP Explainer 不兼容当前模型，回退到 TreeExplainer")
+                try:
+                    explainer = shap.TreeExplainer(self.model)
+                except ValueError as tree_error:
+                    tree_error_message = str(tree_error)
+                    if 'could not convert string to float' not in tree_error_message:
+                        raise
+                    logger.warning("TreeExplainer 与当前 XGBoost 版本不兼容，回退到 predict 函数 Explainer")
+                    explainer = shap.Explainer(self.model.predict, X_sample)
             shap_values = explainer(X_sample)
             return X_sample, y_sample, shap_values
         except Exception as e:
@@ -629,6 +643,8 @@ class VisualStudio:
                     else: continue
                 plot_dependence(ax, rank, feat_idx)
 
+            # 某些 SHAP 版本会在绘图过程中重置 figure 尺寸，导致完整报告被压成小图。
+            fig.set_size_inches(fig_size[0], fig_size[1], forward=True)
             fig.subplots_adjust(top=0.9, hspace=0.35)
             
             return fig
