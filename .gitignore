@@ -48,6 +48,7 @@ ref/
 # Python cache
 __pycache__/
 *.py[cod]
+.venv310/
 
 # Local archive exports
 correlation-analysis-system*.zip

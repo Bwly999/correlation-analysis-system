@@ -4,6 +4,9 @@
 
 ### 修复 (Fix)
 
+- **忽略本地 Python 3.10 虚拟环境目录**:
+  - 将 `.venv310/` 加入 `.gitignore`，避免本地算法后端测试环境进入版本控制。
+
 - **修复 Xgboost + SHAP 完整大图重叠及 Python 3.10 环境兼容问题**:
   - 修复完整报告在部分 SHAP 版本下被意外重置为小画布，导致前端“后端原始整图”中的标题、图表和文字全部挤压重叠。
   - 为 SHAP 解释器补充分级回退策略，依次兼容 `shap.Explainer`、`TreeExplainer` 和 `model.predict` 包装路径，解决 Python 3.10 环境下 `xgboost` 与 `shap` 组合运行报错的问题。
