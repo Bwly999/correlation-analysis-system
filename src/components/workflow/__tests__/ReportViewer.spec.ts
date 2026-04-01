@@ -78,18 +78,7 @@ const createShapReport = () => ({
       {
         key: 'dependence',
         type: 'dependence',
-        title: '关键因子趋势',
-        defaultVisibleCount: 2,
-        allItems: [
-          { feature: 'f1', title: '因子趋势: f1', option: { xAxis: {}, yAxis: {}, series: [{ type: 'scatter', data: [[1, 1]] }] } },
-          { feature: 'f2', title: '因子趋势: f2', option: { xAxis: {}, yAxis: {}, series: [{ type: 'scatter', data: [[1, 2]] }] } },
-          { feature: 'f3', title: '因子趋势: f3', option: { xAxis: {}, yAxis: {}, series: [{ type: 'scatter', data: [[1, 3]] }] } },
-        ],
-      },
-      {
-        key: 'details',
-        type: 'details',
-        title: '完整因子明细',
+        title: '因子趋势明细',
         defaultVisibleCount: 2,
         items: [
           { feature: 'f1', title: '因子趋势: f1', option: { xAxis: {}, yAxis: {}, series: [{ type: 'scatter', data: [[1, 1]] }] } },
@@ -259,6 +248,19 @@ describe('ReportViewer', () => {
 
     const searchInput = wrapper.get('[data-test="shap-feature-search"]')
     await searchInput.setValue('f3')
+
+    expect(wrapper.text()).toContain('因子趋势: f3')
+  })
+
+  it('expands shap dependence section to show all features', async () => {
+    const wrapper = mount(ReportViewer, {
+      props: { data: createShapReport() },
+    })
+
+    expect(wrapper.text()).toContain('因子趋势明细')
+    expect(wrapper.text()).not.toContain('因子趋势: f3')
+
+    await wrapper.get('[data-test="shap-show-all"]').trigger('click')
 
     expect(wrapper.text()).toContain('因子趋势: f3')
   })

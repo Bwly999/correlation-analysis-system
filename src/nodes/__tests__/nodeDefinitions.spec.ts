@@ -853,9 +853,8 @@ describe('Node Definitions Execution Logic', () => {
       expect(legacy.report.sections.some((section: any) => section.type === 'summary')).toBe(true)
       expect(legacy.report.sections.some((section: any) => section.key === 'importance')).toBe(true)
       expect(legacy.report.sections.some((section: any) => section.key === 'dependence')).toBe(true)
-      expect(legacy.report.sections.some((section: any) => section.key === 'details')).toBe(true)
       expect(
-        legacy.report.sections.find((section: any) => section.key === 'details').items,
+        legacy.report.sections.find((section: any) => section.key === 'dependence').items,
       ).toHaveLength(3)
       expect(legacy.report.supplements.fullReportImage).toBe('data:image/png;base64,base64_full')
       expect(legacy.report.supplements.beeswarmImage).toBe('data:image/png;base64,base64_beeswarm')

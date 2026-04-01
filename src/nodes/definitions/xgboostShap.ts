@@ -168,8 +168,6 @@ export const xgboostShapNode: NodeDefinition = {
       : buildLegacyPayload(result.results ?? {})
 
     const { summary, importance, dependence, assets } = normalized
-    const visibleDependence = dependence.slice(0, DEFAULT_VISIBLE_FEATURES)
-
     return createReportResult(
       {
         title: 'Xgboost + SHAP 因子贡献度分析报告',
@@ -203,23 +201,7 @@ export const xgboostShapNode: NodeDefinition = {
           {
             key: 'dependence',
             type: 'dependence',
-            title: '关键因子趋势',
-            defaultVisibleCount: DEFAULT_VISIBLE_FEATURES,
-            items: visibleDependence.map((item) => ({
-              feature: item.feature,
-              title: `因子趋势: ${item.feature}`,
-              option: buildScatterOption(item),
-            })),
-            allItems: dependence.map((item) => ({
-              feature: item.feature,
-              title: `因子趋势: ${item.feature}`,
-              option: buildScatterOption(item),
-            })),
-          },
-          {
-            key: 'details',
-            type: 'details',
-            title: '完整因子明细',
+            title: '因子趋势明细',
             defaultVisibleCount: DEFAULT_VISIBLE_FEATURES,
             items: dependence.map((item) => ({
               feature: item.feature,

@@ -36,7 +36,6 @@ type ReportSection = {
     }
   }
   items?: any[]
-  allItems?: any[]
   cards?: Array<{ label: string; value: unknown }>
   content?: string
   url?: string
@@ -74,7 +73,7 @@ const toast = useToast()
 const isExporting = ref(false)
 const exportRootRef = ref<HTMLElement | null>(null)
 const featureSearch = ref('')
-const expandedDetailCount = ref(0)
+const expandedDependence = ref(false)
 const chartSelectState = ref<Record<string, string>>({})
 const labelTruncateState = ref<Record<string, number>>({})
 const isExportMode = computed(() => props.exportMode === true)
@@ -87,21 +86,16 @@ const supplements = computed<Record<string, any>>(() => report.value.supplements
 const metadata = computed<Record<string, any>>(() => report.value.metadata ?? {})
 const isShapReport = computed(() =>
   sections.value.some((section: any) =>
-    ['dependence', 'details'].includes(section?.type) ||
-    ['importance', 'dependence', 'details'].includes(section?.key),
+    section?.type === 'dependence' || ['importance', 'dependence'].includes(section?.key),
   ),
 )
-
-const detailSection = computed(() => {
-  return sections.value.find((section: any) => section?.key === 'details' || section?.type === 'details')
-})
 
 const dependenceSection = computed(() => {
   return sections.value.find((section: any) => section?.key === 'dependence' || section?.type === 'dependence')
 })
 
-const normalizedDetails = computed(() => {
-  const section = detailSection.value
+const normalizedDependence = computed(() => {
+  const section = dependenceSection.value
   if (!section) return []
   const items = Array.isArray(section.items) ? section.items : []
   const keyword = featureSearch.value.trim().toLowerCase()
@@ -112,42 +106,21 @@ const normalizedDetails = computed(() => {
   })
 })
 
-const normalizedDependence = computed(() => {
-  const section = dependenceSection.value
-  if (!section) return []
-  const items = Array.isArray(section.allItems) ? section.allItems : Array.isArray(section.items) ? section.items : []
-  const keyword = featureSearch.value.trim().toLowerCase()
-  if (!keyword) return items
-  return items.filter((item: any) => {
-    const feature = String(item.feature ?? item.title ?? '').toLowerCase()
-    return feature.includes(keyword)
-  })
-})
-
-const visibleDetails = computed(() => {
-  const section = detailSection.value
-  const items = normalizedDetails.value
-  if (!section) return []
-  if (featureSearch.value.trim()) return items
-  const limit = expandedDetailCount.value || section.defaultVisibleCount || items.length
-  return items.slice(0, limit)
-})
-
 const visibleDependence = computed(() => {
   const section = dependenceSection.value
   const items = normalizedDependence.value
   if (!section) return []
-  if (featureSearch.value.trim()) return items
+  if (featureSearch.value.trim() || expandedDependence.value) return items
   const limit = section.defaultVisibleCount || items.length
   return items.slice(0, limit)
 })
 
-const hasMoreDetails = computed(() => {
-  const section = detailSection.value
+const hasMoreDependence = computed(() => {
+  const section = dependenceSection.value
   if (!section || featureSearch.value.trim()) return false
-  const items = normalizedDetails.value
-  const limit = expandedDetailCount.value || section.defaultVisibleCount || items.length
-  return items.length > limit
+  const items = normalizedDependence.value
+  const limit = section.defaultVisibleCount || items.length
+  return !expandedDependence.value && items.length > limit
 })
 
 const getRiskItemClasses = (level: string | undefined) => {
@@ -411,19 +384,29 @@ const exportOriginalImage = () => {
               <div>
                 <h2 class="text-lg font-bold text-slate-800">{{ section.title }}</h2>
                 <p class="mt-1 text-sm text-slate-500">
-                  默认展示高重要性因子，可通过搜索快速切换到任意因子。
+                  默认展示高重要性因子，支持搜索和展开全部，保证所有因子都可访问。
                 </p>
               </div>
-              <label class="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-500">
-                <Search :size="14" />
-                <input
-                  v-model="featureSearch"
-                  data-test="shap-feature-search"
-                  type="text"
-                  class="min-w-[200px] border-0 bg-transparent p-0 text-sm text-slate-700 outline-none"
-                  placeholder="搜索因子，如 f3"
-                />
-              </label>
+              <div class="flex flex-wrap items-center gap-2">
+                <button
+                  v-if="hasMoreDependence"
+                  data-test="shap-show-all"
+                  class="rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold text-slate-600 transition hover:bg-slate-100"
+                  @click="expandedDependence = true"
+                >
+                  显示全部因子
+                </button>
+                <label class="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-500">
+                  <Search :size="14" />
+                  <input
+                    v-model="featureSearch"
+                    data-test="shap-feature-search"
+                    type="text"
+                    class="min-w-[200px] border-0 bg-transparent p-0 text-sm text-slate-700 outline-none"
+                    placeholder="搜索因子，如 f3"
+                  />
+                </label>
+              </div>
             </div>
             <div class="grid gap-4 lg:grid-cols-2">
               <article
@@ -433,41 +416,6 @@ const exportOriginalImage = () => {
               >
                 <h3 class="text-sm font-bold text-slate-700">{{ item.title }}</h3>
                 <div class="mt-3 h-[280px] rounded-xl border border-slate-100 bg-white p-3">
-                  <VChart :option="item.option" autoresize />
-                </div>
-              </article>
-            </div>
-          </section>
-
-          <section v-else-if="section.type === 'details'" class="space-y-4">
-            <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div>
-                <h2 class="text-lg font-bold text-slate-800">{{ section.title }}</h2>
-                <p class="mt-1 text-sm text-slate-500">
-                  默认只展开部分因子，支持搜索和逐步展开，保证全部因子都可访问。
-                </p>
-              </div>
-              <button
-                v-if="hasMoreDetails"
-                class="rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold text-slate-600 transition hover:bg-slate-100"
-                @click="expandedDetailCount = normalizedDetails.length"
-              >
-                显示全部因子
-              </button>
-            </div>
-            <div class="grid gap-4 lg:grid-cols-2">
-              <article
-                v-for="item in visibleDetails"
-                :key="`details-${item.feature}`"
-                class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
-              >
-                <div class="flex items-center justify-between gap-3">
-                  <h3 class="text-sm font-bold text-slate-800">{{ item.title }}</h3>
-                  <span class="rounded-full bg-rose-50 px-2 py-1 text-[11px] font-bold text-rose-600">
-                    {{ item.feature }}
-                  </span>
-                </div>
-                <div class="mt-3 h-[260px] rounded-xl border border-slate-100 bg-slate-50 p-3">
                   <VChart :option="item.option" autoresize />
                 </div>
               </article>
