@@ -71,6 +71,7 @@ const HOST_TOKEN_EVENT_TYPES = new Set([
 
 let authToken = ''
 let hasInitializedHostBridge = false
+const MOCK_AUTH_TOKEN = '__mock_kanban_token__'
 
 const defaultProducts: KanbanProductOption[] = [
   { name: '试制产品 A1', value: '试制产品 A1' },
@@ -120,9 +121,9 @@ const sortByLocale = <T>(items: T[], getLabel: (item: T) => string) =>
   [...items].sort((left, right) => getLabel(left).localeCompare(getLabel(right), 'zh-CN'))
 
 const buildFactorTree = (catalog: KanbanFactorCatalogItem[]): KanbanTreeNode[] => {
-  const sceneMap = new Map<
+  const processMap = new Map<
     string,
-    Map<string, Array<{ factorName: string; factorKey: string }>>
+    Array<{ sceneName: string; factorName: string; factorKey: string }>
   >()
 
   catalog.forEach((item) => {
@@ -130,46 +131,38 @@ const buildFactorTree = (catalog: KanbanFactorCatalogItem[]): KanbanTreeNode[] =
     const processName = item.processName || '未命名工序'
     const factorName = item.factorName || item.factorKey
 
-    const processMap = sceneMap.get(sceneName) ?? new Map<string, Array<{ factorName: string; factorKey: string }>>()
     const factors = processMap.get(processName) ?? []
 
     factors.push({
+      sceneName,
       factorName,
       factorKey: item.factorKey,
     })
 
     processMap.set(processName, factors)
-    sceneMap.set(sceneName, processMap)
   })
 
-  return sortByLocale(Array.from(sceneMap.entries()), ([sceneName]) => sceneName).map(
-    ([sceneName, processMap]) => ({
-      key: `scene:${sceneName}`,
-      label: sceneName,
-      data: { nodeType: 'scene', searchText: sceneName },
-      children: sortByLocale(Array.from(processMap.entries()), ([processName]) => processName).map(
-        ([processName, factors]) => ({
-          key: `process:scene:${sceneName}::${processName}`,
-          label: processName,
-          data: {
-            nodeType: 'process',
-            sceneName,
-            process: processName,
-            searchText: `${sceneName} / ${processName}`,
-          },
-          children: sortByLocale(factors, (item) => item.factorName).map((factor) => ({
-            key: `factor:${processName}::${factor.factorKey}`,
-            label: factor.factorName,
-            data: {
-              nodeType: 'factor',
-              sceneName,
-              process: processName,
-              factorKey: factor.factorKey,
-              searchText: `${sceneName} / ${processName} / ${factor.factorName}`,
-            },
-          })),
-        }),
-      ),
+  return sortByLocale(Array.from(processMap.entries()), ([processName]) => processName).map(
+    ([processName, factors]) => ({
+      key: `process:${processName}`,
+      label: processName,
+      data: {
+        nodeType: 'process',
+        sceneName: factors[0]?.sceneName || '未命名场景',
+        process: processName,
+        searchText: `${factors[0]?.sceneName || '未命名场景'} / ${processName}`,
+      },
+      children: sortByLocale(factors, (item) => item.factorName).map((factor) => ({
+        key: `factor:${processName}::${factor.factorKey}`,
+        label: factor.factorName,
+        data: {
+          nodeType: 'factor',
+          sceneName: factor.sceneName,
+          process: processName,
+          factorKey: factor.factorKey,
+          searchText: `${factor.sceneName} / ${processName} / ${factor.factorName}`,
+        },
+      })),
     }),
   )
 }
@@ -257,18 +250,18 @@ const defaultBridge: KanbanDataBridge = {
 
 let registeredBridge: KanbanDataBridge | null = null
 
-const ensureToken = (token: string) => {
-  if (!token) {
-    throw new Error('未接收到宿主系统传入的访问凭证')
-  }
-}
-
 const resolveBridge = (): KanbanDataBridge => {
   if (registeredBridge) return registeredBridge
   if (typeof window !== 'undefined' && window.__KANBAN_DATA_BRIDGE__) {
     return window.__KANBAN_DATA_BRIDGE__
   }
   return defaultBridge
+}
+
+const resolveAccessToken = (token?: string) => {
+  if (token) return token
+  if (resolveBridge() === defaultBridge) return MOCK_AUTH_TOKEN
+  throw new Error('未接收到宿主系统传入的访问凭证')
 }
 
 const readTokenFromPayload = (payload: any): string => {
@@ -307,6 +300,8 @@ export const setKanbanAuthToken = (token: string) => {
 
 export const getKanbanAuthToken = () => authToken
 
+export const getResolvedKanbanAuthToken = () => resolveAccessToken(authToken)
+
 export const registerKanbanDataBridge = (bridge: KanbanDataBridge | null) => {
   registeredBridge = bridge
 }
@@ -325,23 +320,23 @@ export const initializeKanbanHostBridge = (target: Window = window) => {
 }
 
 export const listAuthorizedProducts = async (token: string) => {
-  ensureToken(token)
-  return (await resolveBridge().listAuthorizedProducts?.({ token })) || []
+  const resolvedToken = resolveAccessToken(token)
+  return (await resolveBridge().listAuthorizedProducts?.({ token: resolvedToken })) || []
 }
 
 export const listMaterialTypes = async (token: string, productName?: string) => {
-  ensureToken(token)
-  return (await resolveBridge().listMaterialTypes?.({ token, productName })) || []
+  const resolvedToken = resolveAccessToken(token)
+  return (await resolveBridge().listMaterialTypes?.({ token: resolvedToken, productName })) || []
 }
 
 export const listTaskOrderTypes = async (token: string, productName?: string) => {
-  ensureToken(token)
-  return (await resolveBridge().listTaskOrderTypes?.({ token, productName })) || []
+  const resolvedToken = resolveAccessToken(token)
+  return (await resolveBridge().listTaskOrderTypes?.({ token: resolvedToken, productName })) || []
 }
 
 export const listFactorCatalog = async (token: string, productName: string) => {
-  ensureToken(token)
-  return (await resolveBridge().listFactorCatalog?.({ token, productName })) || []
+  const resolvedToken = resolveAccessToken(token)
+  return (await resolveBridge().listFactorCatalog?.({ token: resolvedToken, productName })) || []
 }
 
 export const getFactorTree = async (token: string, productName: string) => {
@@ -361,8 +356,8 @@ export const listProcessOptions = async (token: string, productName: string) => 
 }
 
 export const listSchemeCatalog = async (token: string, productName: string) => {
-  ensureToken(token)
-  return (await resolveBridge().listSchemeCatalog?.({ token, productName })) || []
+  const resolvedToken = resolveAccessToken(token)
+  return (await resolveBridge().listSchemeCatalog?.({ token: resolvedToken, productName })) || []
 }
 
 export const getSchemeTree = async (token: string, productName: string) => {
@@ -371,6 +366,9 @@ export const getSchemeTree = async (token: string, productName: string) => {
 }
 
 export const fetchKanbanData = async (params: KanbanFetchParams) => {
-  ensureToken(params.token)
-  return resolveBridge().fetchKanbanData(params)
+  const resolvedToken = resolveAccessToken(params.token)
+  return resolveBridge().fetchKanbanData({
+    ...params,
+    token: resolvedToken,
+  })
 }

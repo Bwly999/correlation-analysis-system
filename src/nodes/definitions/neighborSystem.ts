@@ -2,7 +2,7 @@ import type { NodeDefinition } from '../types'
 import {
   fetchKanbanData,
   getFactorTree,
-  getKanbanAuthToken,
+  getResolvedKanbanAuthToken,
   getSchemeTree,
   listAuthorizedProducts,
   listMaterialTypes,
@@ -58,11 +58,7 @@ const parseProcessSelections = (value: string[] | undefined) =>
   Array.from(new Set((value || []).map((item) => item.trim()).filter(Boolean)))
 
 const ensureToken = () => {
-  const token = getKanbanAuthToken()
-  if (!token) {
-    throw new Error('未接收到宿主系统传入的访问凭证')
-  }
-  return token
+  return getResolvedKanbanAuthToken()
 }
 
 export const neighborSystemNode: NodeDefinition = {

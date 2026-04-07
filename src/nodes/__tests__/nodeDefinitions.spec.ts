@@ -5,6 +5,7 @@ import * as path from 'path'
 const {
   mockFetchKanbanData,
   mockGetKanbanAuthToken,
+  mockGetResolvedKanbanAuthToken,
   mockGetFactorTree,
   mockGetSchemeTree,
   mockListAuthorizedProducts,
@@ -14,6 +15,7 @@ const {
 } = vi.hoisted(() => ({
   mockFetchKanbanData: vi.fn(),
   mockGetKanbanAuthToken: vi.fn(),
+  mockGetResolvedKanbanAuthToken: vi.fn(),
   mockGetFactorTree: vi.fn(),
   mockGetSchemeTree: vi.fn(),
   mockListAuthorizedProducts: vi.fn(),
@@ -25,6 +27,7 @@ const {
 vi.mock('@/services/kanbanIntegration', () => ({
   fetchKanbanData: mockFetchKanbanData,
   getKanbanAuthToken: mockGetKanbanAuthToken,
+  getResolvedKanbanAuthToken: mockGetResolvedKanbanAuthToken,
   getFactorTree: mockGetFactorTree,
   getSchemeTree: mockGetSchemeTree,
   listAuthorizedProducts: mockListAuthorizedProducts,
@@ -1360,7 +1363,7 @@ describe('Node Definitions Execution Logic', () => {
 
   describe('neighbor-system', () => {
     it('should fetch board data through the integration bridge', async () => {
-      mockGetKanbanAuthToken.mockReturnValue('token-from-host')
+      mockGetResolvedKanbanAuthToken.mockReturnValue('token-from-host')
       mockFetchKanbanData.mockResolvedValue({
         rows: [
           { sn: 'SN001', F_TEMP: 12.3, F_PRESS: 45.6 },
@@ -1407,7 +1410,7 @@ describe('Node Definitions Execution Logic', () => {
     })
 
     it('should throw error if no factors are selected', async () => {
-      mockGetKanbanAuthToken.mockReturnValue('token-from-host')
+      mockGetResolvedKanbanAuthToken.mockReturnValue('token-from-host')
       const config = {
         fetchMode: 'sn',
         snList: 'SN001',
@@ -1422,7 +1425,9 @@ describe('Node Definitions Execution Logic', () => {
     })
 
     it('should require a token from the host system', async () => {
-      mockGetKanbanAuthToken.mockReturnValue('')
+      mockGetResolvedKanbanAuthToken.mockImplementation(() => {
+        throw new Error('未接收到宿主系统传入的访问凭证')
+      })
 
       await expect(
         neighborSystemNode.execute(null, {
@@ -1436,7 +1441,7 @@ describe('Node Definitions Execution Logic', () => {
     })
 
     it('should require explicit processes from runtime input instead of inferring them from factors', async () => {
-      mockGetKanbanAuthToken.mockReturnValue('token-from-host')
+      mockGetResolvedKanbanAuthToken.mockReturnValue('token-from-host')
 
       await expect(
         neighborSystemNode.execute(null, {

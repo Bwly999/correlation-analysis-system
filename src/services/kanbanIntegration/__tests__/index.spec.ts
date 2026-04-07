@@ -69,55 +69,48 @@ describe('kanban integration bridge', () => {
 
     expect(tree).toEqual([
       {
-        key: 'scene:全场景/全场景',
-        label: '全场景/全场景',
-        data: { nodeType: 'scene', searchText: '全场景/全场景' },
+        key: 'process:涂布',
+        label: '涂布',
+        data: {
+          nodeType: 'process',
+          sceneName: '全场景/全场景',
+          process: '涂布',
+          searchText: '全场景/全场景 / 涂布',
+        },
         children: [
           {
-            key: 'process:scene:全场景/全场景::涂布',
-            label: '涂布',
+            key: 'factor:涂布::F_TEMP',
+            label: '温度',
             data: {
-              nodeType: 'process',
+              nodeType: 'factor',
               sceneName: '全场景/全场景',
               process: '涂布',
-              searchText: '全场景/全场景 / 涂布',
+              factorKey: 'F_TEMP',
+              searchText: '全场景/全场景 / 涂布 / 温度',
             },
-            children: [
-              {
-                key: 'factor:涂布::F_TEMP',
-                label: '温度',
-                data: {
-                  nodeType: 'factor',
-                  sceneName: '全场景/全场景',
-                  process: '涂布',
-                  factorKey: 'F_TEMP',
-                  searchText: '全场景/全场景 / 涂布 / 温度',
-                },
-              },
-            ],
           },
+        ],
+      },
+      {
+        key: 'process:装配',
+        label: '装配',
+        data: {
+          nodeType: 'process',
+          sceneName: '全场景/全场景',
+          process: '装配',
+          searchText: '全场景/全场景 / 装配',
+        },
+        children: [
           {
-            key: 'process:scene:全场景/全场景::装配',
-            label: '装配',
+            key: 'factor:装配::F_TORQUE',
+            label: '扭矩',
             data: {
-              nodeType: 'process',
+              nodeType: 'factor',
               sceneName: '全场景/全场景',
               process: '装配',
-              searchText: '全场景/全场景 / 装配',
+              factorKey: 'F_TORQUE',
+              searchText: '全场景/全场景 / 装配 / 扭矩',
             },
-            children: [
-              {
-                key: 'factor:装配::F_TORQUE',
-                label: '扭矩',
-                data: {
-                  nodeType: 'factor',
-                  sceneName: '全场景/全场景',
-                  process: '装配',
-                  factorKey: 'F_TORQUE',
-                  searchText: '全场景/全场景 / 装配 / 扭矩',
-                },
-              },
-            ],
           },
         ],
       },
