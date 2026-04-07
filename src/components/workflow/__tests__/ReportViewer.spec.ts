@@ -187,6 +187,12 @@ const createCorrelationReport = () => ({
           },
         ],
       },
+      {
+        key: 'details',
+        type: 'text',
+        title: 'X / Y 字段相关明细',
+        content: '[\n  {\n    "xField": "超长字段名称ABCDEF",\n    "yField": "产线温度标签超长字段",\n    "correlation": 0.91\n  }\n]',
+      },
     ],
   },
 })
@@ -396,6 +402,29 @@ describe('ReportViewer', () => {
     expect(wrapper.text()).toContain('样本量偏少')
     expect(wrapper.text()).toContain('字段高度共线')
     expect(wrapper.findAll('[data-test="report-risk-item"]')).toHaveLength(2)
+  })
+
+  it('expands summary and risks by default but collapses correlation details by default', async () => {
+    const wrapper = mount(ReportViewer, {
+      props: { data: createCorrelationReport() },
+    })
+
+    expect(wrapper.get('[data-test="report-section-summary"]').attributes('data-collapsed')).toBe('false')
+    expect(wrapper.get('[data-test="report-section-risks"]').attributes('data-collapsed')).toBe('false')
+    expect(wrapper.get('[data-test="report-section-details"]').attributes('data-collapsed')).toBe('true')
+    expect(wrapper.text()).toContain('本次共分析 2 个 X 字段与 2 个 Y 字段。')
+    expect(wrapper.text()).toContain('样本量偏少')
+    expect(wrapper.text()).not.toContain('"correlation": 0.91')
+
+    await wrapper.get('[data-test="report-section-toggle-details"]').trigger('click')
+
+    expect(wrapper.get('[data-test="report-section-details"]').attributes('data-collapsed')).toBe('false')
+    expect(wrapper.text()).toContain('"correlation": 0.91')
+
+    await wrapper.get('[data-test="report-section-toggle-details"]').trigger('click')
+
+    expect(wrapper.get('[data-test="report-section-details"]').attributes('data-collapsed')).toBe('true')
+    expect(wrapper.text()).not.toContain('"correlation": 0.91')
   })
 
   it('renders regression summary and chart sections with the generic report viewer', () => {

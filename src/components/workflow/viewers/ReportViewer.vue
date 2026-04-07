@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, useTemplateRef, type Component } from 'vue'
-import { FileText, Image as ImageIcon, Loader2 } from 'lucide-vue-next'
+import { computed, ref, watch, useTemplateRef, type Component } from 'vue'
+import { ChevronDown, FileText, Image as ImageIcon, Loader2 } from 'lucide-vue-next'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 import { BarChart, HeatmapChart, LineChart, PieChart, ScatterChart } from 'echarts/charts'
@@ -35,6 +35,9 @@ import type {
 
 interface RenderedSection {
   key: string | number
+  sectionKey: string
+  title?: string
+  isCollapsible: boolean
   component: Component
   props: Record<string, unknown>
 }
@@ -97,6 +100,9 @@ const { isExporting, exportCurrentReport, exportOriginalImage } = useReportExpor
 })
 
 const isExportMode = computed(() => props.exportMode === true)
+const collapsibleSectionTitles = new Set(['分析摘要', '结果可信提示', 'X / Y 字段相关明细'])
+const collapsedByDefaultSectionTitles = new Set(['X / Y 字段相关明细'])
+const collapsedSections = ref<Record<string, boolean>>({})
 
 const sectionComponentMap: Partial<Record<ReportSectionType, Component>> = {
   summary: ReportSummarySection,
@@ -110,17 +116,34 @@ const sectionComponentMap: Partial<Record<ReportSectionType, Component>> = {
 const resolveSectionComponent = (section: ReportSection) =>
   section.type ? sectionComponentMap[section.type as ReportSectionType] ?? null : null
 
+const getSectionStateKey = (section: ReportSection, index: number) =>
+  String(section.key || `section-${index}`)
+
+const isCollapsibleSection = (section: ReportSection) =>
+  collapsibleSectionTitles.has(String(section.title ?? ''))
+
+const isCollapsedByDefault = (section: ReportSection) =>
+  collapsedByDefaultSectionTitles.has(String(section.title ?? ''))
+
+const getSectionCollapsed = (sectionKey: string) => collapsedSections.value[sectionKey] ?? false
+
+const toggleSectionCollapsed = (sectionKey: string) => {
+  collapsedSections.value[sectionKey] = !getSectionCollapsed(sectionKey)
+}
+
 const resolveSectionProps = (section: ReportSection, index: number): Record<string, unknown> => {
+  const resolvedSection = isCollapsibleSection(section) ? { ...section, title: undefined } : section
+
   if (section.type === 'summary') {
     return {
-      section: section as ReportSummarySectionType,
+      section: resolvedSection as ReportSummarySectionType,
       isShapReport: isShapReport.value,
     }
   }
 
   if (section.type === 'chart') {
     return {
-      section: section as ReportChartSectionType,
+      section: resolvedSection as ReportChartSectionType,
       selectedValue: getChartSelectedValue(section as ReportChartSectionType, index),
       labelTruncateLength: getLabelTruncateLength(section as ReportChartSectionType, index),
       option: resolveChartOption(section as ReportChartSectionType, index),
@@ -133,7 +156,7 @@ const resolveSectionProps = (section: ReportSection, index: number): Record<stri
 
   if (section.type === 'dependence') {
     return {
-      section: section as ReportDependenceSectionType,
+      section: resolvedSection as ReportDependenceSectionType,
       items: visibleDependence.value,
       featureSearch: featureSearch.value,
       hasMore: hasMoreDependence.value,
@@ -148,33 +171,54 @@ const resolveSectionProps = (section: ReportSection, index: number): Record<stri
 
   if (section.type === 'text') {
     return {
-      section: section as ReportTextSectionType,
+      section: resolvedSection as ReportTextSectionType,
     }
   }
 
   if (section.type === 'risk-list') {
     return {
-      section: section as ReportRiskListSectionType,
+      section: resolvedSection as ReportRiskListSectionType,
     }
   }
 
   if (section.type === 'image') {
     return {
-      section: section as ReportImageSectionType,
+      section: resolvedSection as ReportImageSectionType,
     }
   }
 
   return {}
 }
 
+watch(
+  sections,
+  (nextSections) => {
+    const nextCollapsedState: Record<string, boolean> = {}
+
+    nextSections.forEach((section, index) => {
+      const sectionKey = getSectionStateKey(section, index)
+      nextCollapsedState[sectionKey] =
+        collapsedSections.value[sectionKey] ?? isCollapsedByDefault(section)
+    })
+
+    collapsedSections.value = nextCollapsedState
+  },
+  { immediate: true },
+)
+
 const renderedSections = computed<RenderedSection[]>(() =>
   sections.value.flatMap((section, index) => {
     const component = resolveSectionComponent(section)
     if (!component) return []
 
+    const sectionKey = getSectionStateKey(section, index)
+
     return [
       {
-        key: section.key || index,
+        key: sectionKey,
+        sectionKey,
+        title: section.title,
+        isCollapsible: isCollapsibleSection(section),
         component,
         props: resolveSectionProps(section, index),
       },
@@ -227,12 +271,43 @@ const renderedSections = computed<RenderedSection[]>(() =>
       </div>
 
       <div class="pdf-container space-y-8">
-        <component
-          :is="renderedSection.component"
-          v-for="renderedSection in renderedSections"
-          :key="renderedSection.key"
-          v-bind="renderedSection.props"
-        />
+        <template v-for="renderedSection in renderedSections" :key="renderedSection.key">
+          <section
+            v-if="renderedSection.isCollapsible"
+            :data-test="`report-section-${renderedSection.sectionKey}`"
+            :data-collapsed="String(getSectionCollapsed(renderedSection.sectionKey))"
+            class="rounded-2xl border border-slate-200 bg-slate-50/60"
+          >
+            <button
+              :data-test="`report-section-toggle-${renderedSection.sectionKey}`"
+              class="flex w-full items-center justify-between gap-3 px-5 py-4 text-left"
+              type="button"
+              @click="toggleSectionCollapsed(renderedSection.sectionKey)"
+            >
+              <div>
+                <h2 class="text-lg font-bold text-slate-800">{{ renderedSection.title }}</h2>
+              </div>
+              <span
+                class="inline-flex shrink-0 items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-bold text-slate-600"
+              >
+                {{ getSectionCollapsed(renderedSection.sectionKey) ? '展开' : '收起' }}
+                <ChevronDown
+                  :size="14"
+                  class="transition-transform"
+                  :class="{ '-rotate-90': getSectionCollapsed(renderedSection.sectionKey) }"
+                />
+              </span>
+            </button>
+            <div v-if="!getSectionCollapsed(renderedSection.sectionKey)" class="px-5 pb-5">
+              <component :is="renderedSection.component" v-bind="renderedSection.props" />
+            </div>
+          </section>
+          <component
+            :is="renderedSection.component"
+            v-else
+            v-bind="renderedSection.props"
+          />
+        </template>
 
         <ReportSupplementSection
           :full-report-image="supplements.fullReportImage as string | undefined"
