@@ -567,7 +567,7 @@ onBeforeUnmount(() => {
     <RuntimeInputModal
       :visible="!!store.pendingExecution"
       :node="store.nodes.find((n) => n.id === store.pendingExecution?.nodeId) || null"
-      @close="store.pendingExecution = null"
+      @close="store.cancelPendingExecution()"
       @confirm="resumeExecution"
     />
     <WorkflowResultDashboardModal

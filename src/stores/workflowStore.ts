@@ -97,6 +97,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     } | null
   >(null)
   let pendingExecutionResolver: ((result: 'RESUMED' | 'STOPPED') => void) | null = null
+  let skipGlobalRunSummaryOnCancel = false
   let globalRuntimeQueueNodeIds: string[] = []
   const lastExecutedTerminalNodeId = ref<string | null>(null)
   const lastRunDashboard = ref<WorkflowRunDashboardState | null>(null)
@@ -597,6 +598,27 @@ export const useWorkflowStore = defineStore('workflow', () => {
       }
       addLog('正在停止工作流...', 'warn')
     }
+  }
+
+  const cancelPendingExecution = () => {
+    if (!pendingExecution.value) return
+
+    if (pendingExecution.value.executionScope === 'global') {
+      skipGlobalRunSummaryOnCancel = true
+      isStopping.value = true
+      pendingExecution.value = null
+      isRunning.value = false
+      if (pendingExecutionResolver) {
+        pendingExecutionResolver('STOPPED')
+        pendingExecutionResolver = null
+      }
+      addLog('正在停止工作流...', 'warn')
+      return
+    }
+
+    pendingExecution.value = null
+    isRunning.value = false
+    isStopping.value = false
   }
 
   const getCategoryByType = (type: string): 'trigger' | 'action' | 'terminal' => {
@@ -1526,6 +1548,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
   const runGlobal = async () => {
     if (isRunning.value) return
 
+    skipGlobalRunSummaryOnCancel = false
     isRunning.value = true
     isStopping.value = false
     lastRunDashboard.value = null
@@ -1576,6 +1599,10 @@ export const useWorkflowStore = defineStore('workflow', () => {
         }
         let result = await executeNode(node.id, false, 'global')
         while (result === 'WAIT_INPUT') {
+          if (isStopping.value || !pendingExecution.value) {
+            result = 'STOPPED'
+            break
+          }
           const resumed = await new Promise<'RESUMED' | 'STOPPED'>((resolve) => {
             pendingExecutionResolver = resolve
           })
@@ -1600,6 +1627,13 @@ export const useWorkflowStore = defineStore('workflow', () => {
       isRunning.value = false
       isStopping.value = false
       const duration = Date.now() - startTime
+
+      if (finalStatus === 'stopped' && skipGlobalRunSummaryOnCancel) {
+        skipGlobalRunSummaryOnCancel = false
+        addLog('已取消本次运行', 'info')
+        return
+      }
+
       addLog(
         '工作流运行结束',
         finalStatus === 'stopped' ? 'warn' : finalStatus === 'error' ? 'error' : 'info',
@@ -1688,6 +1722,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     hasUnsavedChanges,
     addLog,
     stopExecution,
+    cancelPendingExecution,
     getCategoryByType,
     validateConnection,
     addAndConnectNode,

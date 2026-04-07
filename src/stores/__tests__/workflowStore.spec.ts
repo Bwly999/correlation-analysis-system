@@ -950,6 +950,45 @@ describe('Workflow Store', () => {
     expect(store.executionHistory[0]!.status).toBe('success')
   })
 
+  it('should stop global execution when pending runtime input is cancelled', async () => {
+    const store = useWorkflowStore()
+    const triggerNode = store.addAndConnectNode('file-import', '文件导入', { x: 0, y: 0 })!
+    const terminalNode = store.addAndConnectNode('data-export', '数据导出', { x: 240, y: 0 })!
+
+    store.edges.push({
+      id: 'e_trigger_terminal_runtime_cancel',
+      source: triggerNode.id,
+      target: terminalNode.id,
+      type: 'n8n',
+      animated: true,
+    })
+
+    const waitForPending = async () => {
+      for (let attempt = 0; attempt < 50; attempt += 1) {
+        if (store.pendingExecution) return
+        await new Promise((resolve) => setTimeout(resolve, 20))
+      }
+      throw new Error('等待运行时参数输入超时')
+    }
+
+    const runPromise = store.runGlobal()
+
+    await waitForPending()
+    expect(store.isRunning).toBe(true)
+    expect(store.pendingExecution?.executionScope).toBe('global')
+
+    store.cancelPendingExecution()
+
+    await runPromise
+
+    expect(store.pendingExecution).toBeNull()
+    expect(store.isRunning).toBe(false)
+    expect(store.isStopping).toBe(false)
+    expect(terminalNode.data.status).toBe('idle')
+    expect(store.lastRunDashboard).toBeNull()
+    expect(store.executionHistory).toHaveLength(0)
+  })
+
   it('should only require visible runtime inputs for trigger nodes', async () => {
     const conditionalTriggerDefinition = {
       name: 'test-conditional-trigger',

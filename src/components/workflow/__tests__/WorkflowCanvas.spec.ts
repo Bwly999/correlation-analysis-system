@@ -16,7 +16,7 @@ const onConnect = vi.fn()
 const project = vi.fn((position) => position)
 const runtimeInputModalStub = defineComponent({
   name: 'RuntimeInputModal',
-  emits: ['confirm'],
+  emits: ['confirm', 'close'],
   template: '<div class="runtime-input-modal-stub"></div>',
 })
 const workflowManagerModalStub = defineComponent({
@@ -289,6 +289,62 @@ describe('WorkflowCanvas', () => {
     expect(resumeSpy).toHaveBeenCalledTimes(1)
   })
 
+  it('cancels pending execution after runtime input modal close', async () => {
+    const store = useWorkflowStore()
+    const cancelSpy = vi.spyOn(store, 'cancelPendingExecution').mockImplementation(() => undefined)
+    store.pendingExecution = { nodeId: 'node_1', forceUpdate: true, executionScope: 'global' }
+    store.nodes = [
+      {
+        id: 'node_1',
+        type: 'custom',
+        position: { x: 0, y: 0 },
+        label: 'Trigger',
+        data: {
+          label: 'Trigger',
+          type: 'file-import',
+          category: 'trigger',
+          status: 'idle',
+          config: {},
+          logs: [],
+          useManualInput: false,
+          manualInput: '',
+          isPinned: false,
+        },
+      } as any,
+    ]
+
+    const wrapper = mount(WorkflowCanvas, {
+      global: {
+        stubs: {
+          Background: { template: '<div />' },
+          Controls: { template: '<div />' },
+          NodeSidebar: { template: '<div />' },
+          WorkflowHeader: { template: '<div />' },
+          BaseNode: { template: '<div />' },
+          LogPanel: { template: '<div />' },
+          NodeConfigModal: { template: '<div />' },
+          RuntimeInputModal: runtimeInputModalStub,
+          WorkflowResultDashboardModal: { template: '<div />' },
+          WorkflowManagerModal: workflowManagerModalStub,
+          UnsavedWorkflowDialog: { template: '<div />' },
+          HelpCenterModal: { template: '<div />' },
+          ConfirmDialog: { template: '<div />' },
+          Toast: { template: '<div />' },
+          Button: { template: '<button><slot /></button>' },
+          N8nEdge: { template: '<div />' },
+        },
+        directives: {
+          tooltip: () => undefined,
+        },
+      },
+    })
+
+    wrapper.findComponent({ name: 'RuntimeInputModal' }).vm.$emit('close')
+    await wrapper.vm.$nextTick()
+
+    expect(cancelSpy).toHaveBeenCalledTimes(1)
+  })
+
   it('opens the result dashboard when a run dashboard summary is published', async () => {
     const store = useWorkflowStore()
     store.nodes = [
@@ -354,6 +410,62 @@ describe('WorkflowCanvas', () => {
     expect(dashboardModal.exists()).toBe(true)
     expect(dashboardModal.attributes('data-visible')).toBe('true')
     expect(dashboardModal.text()).toContain('测试工作流')
+  })
+
+  it('does not open the result dashboard when no run dashboard summary is published after cancelling input', async () => {
+    const store = useWorkflowStore()
+    store.pendingExecution = { nodeId: 'node_1', forceUpdate: true, executionScope: 'global' }
+    store.nodes = [
+      {
+        id: 'node_1',
+        type: 'custom',
+        position: { x: 0, y: 0 },
+        label: 'Trigger',
+        data: {
+          label: 'Trigger',
+          type: 'file-import',
+          category: 'trigger',
+          status: 'idle',
+          config: {},
+          logs: [],
+          useManualInput: false,
+          manualInput: '',
+          isPinned: false,
+        },
+      } as any,
+    ]
+
+    const wrapper = mount(WorkflowCanvas, {
+      global: {
+        stubs: {
+          Background: { template: '<div />' },
+          Controls: { template: '<div />' },
+          NodeSidebar: { template: '<div />' },
+          WorkflowHeader: { template: '<div />' },
+          BaseNode: { template: '<div />' },
+          LogPanel: { template: '<div />' },
+          NodeConfigModal: { template: '<div />' },
+          RuntimeInputModal: runtimeInputModalStub,
+          WorkflowResultDashboardModal: workflowResultDashboardModalStub,
+          WorkflowManagerModal: workflowManagerModalStub,
+          UnsavedWorkflowDialog: { template: '<div />' },
+          HelpCenterModal: { template: '<div />' },
+          ConfirmDialog: { template: '<div />' },
+          Toast: { template: '<div />' },
+          Button: { template: '<button><slot /></button>' },
+          N8nEdge: { template: '<div />' },
+        },
+        directives: {
+          tooltip: () => undefined,
+        },
+      },
+    })
+
+    wrapper.findComponent({ name: 'RuntimeInputModal' }).vm.$emit('close')
+    await flushAsyncWork()
+
+    const dashboardModal = wrapper.findComponent(workflowResultDashboardModalStub)
+    expect(dashboardModal.attributes('data-visible')).toBe('false')
   })
 
   it('clears the result dashboard summary after switching to a new workflow without running it', async () => {
