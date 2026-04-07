@@ -43,6 +43,7 @@ const EXCLUDE_DIRS = new Set([
   '.idea',
   '.worktrees',
   '.superpowers',
+  '.venv310'
 ])
 
 const EXCLUDE_FILES = new Set([
@@ -107,6 +108,7 @@ archive.glob('**/*', {
   cwd: PROJECT_DIR,
   ignore: [
     'node_modules/**',
+    '.venv310/**',
     'dist/**',
     'dist-ssr/**',
     'dist-server/**',
