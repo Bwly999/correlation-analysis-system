@@ -26,7 +26,7 @@ import type { WorkflowNode } from '@/utils/storage'
 const RECENT_NODE_STORAGE_KEY = 'workflow-node-sidebar-recent'
 const MAX_RECENT_NODE_COUNT = 5
 const MAX_SHORTCUT_NODE_COUNT = 4
-const FALLBACK_RECOMMENDED_TYPES = ['file-import', 'data-cleaning', 'pearson', 'chart-display']
+const FALLBACK_RECOMMENDED_TYPES = ['file-import', 'manual-json-import', 'neighbor-system']
 
 type SidebarCategoryFilter = 'all' | NodeCategory
 

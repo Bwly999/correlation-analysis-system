@@ -203,9 +203,13 @@ describe('NodeSidebar', () => {
     const wrapper = mountSidebar()
     const shortcutSection = wrapper.find('[data-shortcut-section="recommended"]')
     const toggle = shortcutSection.find('[data-testid="shortcut-toggle"]')
+    const nodeTypes = wrapper
+      .findAll('[data-shortcut-section="recommended"] [data-node-type]')
+      .map((node) => node.attributes('data-node-type'))
 
     expect(shortcutSection.exists()).toBe(true)
     expect(shortcutSection.text()).toContain('常用起点')
+    expect(nodeTypes).toEqual(['file-import', 'manual-json-import', 'neighbor-system'])
     expect(shortcutSection.find('[data-testid="shortcut-body"]').exists()).toBe(true)
 
     await toggle.trigger('click')
