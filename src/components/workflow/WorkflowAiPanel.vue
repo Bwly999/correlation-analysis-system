@@ -37,6 +37,7 @@ const draftProfile = reactive<WorkflowAiModelProfile>({
 })
 
 const canGenerate = computed(() => aiStore.prompt.trim().length > 0 && !!aiStore.selectedProfileId)
+const analysisAgentSession = computed(() => aiStore.analysisAgentSession)
 const systemProfiles = computed(() => aiStore.systemProfiles)
 const customProfiles = computed(() => aiStore.customProfiles)
 const hasRepairAttempt = computed(() =>
@@ -109,6 +110,10 @@ const resetDraftProfile = () => {
 
 const handleGenerate = async () => {
   await aiStore.generatePlan(workflowStore as any)
+}
+
+const handleSyncCanvas = () => {
+  aiStore.syncAnalysisCanvas(workflowStore as any)
 }
 
 const syncMissingInfoAnswers = () => {
@@ -199,8 +204,8 @@ watch(
           <Bot :size="16" />
         </div>
         <div>
-          <strong>AI 编排</strong>
-          <p>用自然语言创建或修改工作流</p>
+          <strong>分析代理</strong>
+          <p>聊天提问，直接得到分析结论与可追溯流程</p>
         </div>
       </div>
       <button class="workflow-ai-panel__close" @click="emit('close')">
@@ -212,7 +217,7 @@ watch(
       <section class="workflow-ai-panel__section">
         <div class="workflow-ai-panel__section-title">
           <Sparkles :size="14" />
-          <span>编排请求</span>
+          <span>分析请求</span>
         </div>
         <div class="workflow-ai-panel__field">
           <label>编排模式</label>
@@ -262,6 +267,75 @@ watch(
           </Button>
         </div>
         <p v-if="aiStore.errorMessage" class="workflow-ai-panel__error">{{ aiStore.errorMessage }}</p>
+      </section>
+
+      <section
+        v-if="analysisAgentSession"
+        data-testid="analysis-agent-chat"
+        class="workflow-ai-panel__section workflow-ai-panel__diagnostics"
+      >
+        <div class="workflow-ai-panel__section-title">
+          <Bot :size="14" />
+          <span>对话分析</span>
+        </div>
+        <div class="workflow-ai-panel__diag-meta">
+          <div><strong>当前阶段</strong><span>{{ analysisAgentSession.phase }}</span></div>
+          <div><strong>分析目标</strong><span>{{ analysisAgentSession.userGoal }}</span></div>
+        </div>
+        <div class="workflow-ai-panel__list-block">
+          <strong>会话消息</strong>
+          <ul>
+            <li v-for="message in analysisAgentSession.conversation" :key="message.id">
+              {{ message.role === 'user' ? '用户' : '代理' }}：{{ message.content }}
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <section
+        v-if="analysisAgentSession?.artifacts.length"
+        data-testid="analysis-agent-artifacts"
+        class="workflow-ai-panel__section"
+      >
+        <div class="workflow-ai-panel__section-title">
+          <Sparkles :size="14" />
+          <span>结论与报告</span>
+        </div>
+        <div
+          v-for="artifact in analysisAgentSession.artifacts"
+          :key="artifact.id"
+          class="workflow-ai-panel__list-block"
+        >
+          <strong>{{ artifact.title }}</strong>
+          <p class="workflow-ai-panel__summary">{{ artifact.summary }}</p>
+          <ul v-if="artifact.bullets?.length">
+            <li v-for="bullet in artifact.bullets" :key="bullet">{{ bullet }}</li>
+          </ul>
+        </div>
+      </section>
+
+      <section
+        v-if="analysisAgentSession"
+        class="workflow-ai-panel__section workflow-ai-panel__diagnostics"
+      >
+        <div class="workflow-ai-panel__section-title">
+          <RefreshCcw :size="14" />
+          <span>画布协同</span>
+        </div>
+        <p class="workflow-ai-panel__summary">
+          {{ analysisAgentSession.workflowSummary || '当前还没有同步右侧工作流，可在修改画布后手动同步。' }}
+        </p>
+        <div class="workflow-ai-panel__actions">
+          <Button
+            data-testid="analysis-agent-sync-canvas"
+            severity="secondary"
+            class="workflow-ai-panel__secondary"
+            @click="handleSyncCanvas"
+          >
+            <RefreshCcw :size="14" />
+            <span>同步当前画布</span>
+          </Button>
+        </div>
       </section>
 
       <section

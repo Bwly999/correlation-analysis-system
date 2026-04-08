@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  getAnalysisAgentSession,
   getWorkflowAiSession,
   requestWorkflowAiPlan,
   runWorkflowAiSession,
+  startAnalysisAgentSession,
   startWorkflowAiSession,
   streamWorkflowAiPlan,
 } from '../index'
@@ -427,5 +429,81 @@ describe('workflowAi service', () => {
         },
       }),
     })
+  })
+
+  it('starts and loads analysis agent sessions through the dedicated endpoints', async () => {
+    vi.mocked(globalThis.fetch)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          session: {
+            sessionId: 'session_1',
+            userGoal: '帮我分析影响销量的关键因素',
+            phase: 'intent',
+            conversation: [{ id: 'user_goal', role: 'user', content: '帮我分析影响销量的关键因素' }],
+            artifacts: [],
+            approvalRequests: [],
+            workflowSession: {
+              sessionId: 'session_1',
+              mode: 'create',
+              status: 'idle',
+              prompt: '帮我分析影响销量的关键因素',
+              draft: { summary: '', assumptions: [], warnings: [], questions: [], nodes: [], edges: [] },
+              trace: [],
+              diagnostics: { issues: [] },
+              missingInfo: [],
+            },
+          },
+        }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          session: {
+            sessionId: 'session_1',
+            userGoal: '帮我分析影响销量的关键因素',
+            phase: 'completed',
+            conversation: [{ id: 'user_goal', role: 'user', content: '帮我分析影响销量的关键因素' }],
+            artifacts: [],
+            approvalRequests: [],
+            workflowSession: {
+              sessionId: 'session_1',
+              mode: 'create',
+              status: 'completed',
+              prompt: '帮我分析影响销量的关键因素',
+              draft: { summary: '', assumptions: [], warnings: [], questions: [], nodes: [], edges: [] },
+              trace: [],
+              diagnostics: { issues: [] },
+              missingInfo: [],
+            },
+          },
+        }),
+      } as Response)
+
+    const request: WorkflowAiPlanRequest = {
+      mode: 'create',
+      prompt: '帮我分析影响销量的关键因素',
+      profile: {
+        id: 'system-default-zhipu-glm-4-7',
+        name: '默认智谱 GLM-4.7',
+        baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+        model: 'glm-4.7',
+        enabled: true,
+        source: 'system',
+      },
+      nodeCatalog: [],
+    }
+
+    const startResponse = await startAnalysisAgentSession(request)
+    const getResponse = await getAnalysisAgentSession('session_1')
+
+    expect(startResponse.session.phase).toBe('intent')
+    expect(getResponse.session.phase).toBe('completed')
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(
+      1,
+      '/api/analysis-agent/session/start',
+      expect.objectContaining({ method: 'POST' }),
+    )
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(2, '/api/analysis-agent/session/session_1')
   })
 })

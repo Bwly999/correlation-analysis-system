@@ -1,5 +1,6 @@
 import { buildWorkflowAiNodeCatalog } from '@/ai/catalog'
 import type {
+  AnalysisAgentSessionState,
   WorkflowAiGenerationDiagnostics,
   WorkflowAiModelProfile,
   WorkflowAiModelTestResult,
@@ -19,6 +20,10 @@ const WORKFLOW_AI_API_BASE_URL = import.meta.env.VITE_WORKFLOW_AI_API_BASE_URL |
 type WorkflowAiErrorPayload = {
   message?: string
   diagnostics?: WorkflowAiGenerationDiagnostics
+}
+
+type AnalysisAgentSessionResponse = {
+  session: AnalysisAgentSessionState
 }
 
 type StreamWorkflowAiPlanOptions = {
@@ -200,6 +205,32 @@ export const startWorkflowAiSession = async (
   return payload
 }
 
+export const startAnalysisAgentSession = async (
+  request: WorkflowAiPlanRequest,
+): Promise<AnalysisAgentSessionResponse> => {
+  const response = await fetch(`${WORKFLOW_AI_API_BASE_URL}/analysis-agent/session/start`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      ...request,
+      nodeCatalog: request.nodeCatalog?.length ? request.nodeCatalog : buildWorkflowAiNodeCatalog(),
+    }),
+  })
+
+  const payload = (await readResponsePayload(response)) as AnalysisAgentSessionResponse & WorkflowAiErrorPayload
+  if (!response.ok) {
+    throw new WorkflowAiRequestError(
+      payload.message || '启动分析代理会话失败',
+      payload.diagnostics,
+      response.status,
+    )
+  }
+
+  return payload
+}
+
 export const runWorkflowAiSession = async (
   sessionId: string,
   options: StreamWorkflowAiPlanOptions = {},
@@ -302,6 +333,23 @@ export const getWorkflowAiSession = async (
   return payload
 }
 
+export const getAnalysisAgentSession = async (
+  sessionId: string,
+): Promise<AnalysisAgentSessionResponse> => {
+  const response = await fetch(`${WORKFLOW_AI_API_BASE_URL}/analysis-agent/session/${sessionId}`)
+  const payload = (await readResponsePayload(response)) as AnalysisAgentSessionResponse & WorkflowAiErrorPayload
+
+  if (!response.ok) {
+    throw new WorkflowAiRequestError(
+      payload.message || '读取分析代理会话失败',
+      payload.diagnostics,
+      response.status,
+    )
+  }
+
+  return payload
+}
+
 export const submitWorkflowAiSessionInput = async (
   sessionId: string,
   request: WorkflowAiSessionInputRequest,
@@ -324,6 +372,37 @@ export const submitWorkflowAiSessionInput = async (
   }
 
   return payload
+}
+
+export const syncAnalysisAgentCanvas = async (
+  sessionId: string,
+  workflowSnapshot: {
+    name: string
+    nodes: unknown[]
+    edges: unknown[]
+  },
+): Promise<AnalysisAgentSessionResponse & { syncSummary: string }> => {
+  const response = await fetch(`${WORKFLOW_AI_API_BASE_URL}/analysis-agent/session/${sessionId}/canvas-sync`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ workflowSnapshot }),
+  })
+  const payload = (await readResponsePayload(response)) as
+    | (AnalysisAgentSessionResponse & { syncSummary: string })
+    | WorkflowAiErrorPayload
+
+  if (!response.ok) {
+    const errorPayload = payload as WorkflowAiErrorPayload
+    throw new WorkflowAiRequestError(
+      errorPayload.message || '同步分析代理画布失败',
+      errorPayload.diagnostics,
+      response.status,
+    )
+  }
+
+  return payload as AnalysisAgentSessionResponse & { syncSummary: string }
 }
 
 export const fetchSystemModelProfiles = async (): Promise<WorkflowAiModelProfile[]> => {

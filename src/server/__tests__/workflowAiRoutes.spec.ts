@@ -83,6 +83,110 @@ afterEach(() => {
 })
 
 describe('workflow ai routes', () => {
+  it('starts an analysis agent session from the new session route', async () => {
+    startWorkflowAiSessionMock.mockReturnValueOnce({
+      sessionId: 'session_1',
+      mode: 'create',
+      status: 'idle',
+      prompt: '帮我分析影响销量的关键因素',
+      draft: {
+        summary: '',
+        assumptions: [],
+        warnings: [],
+        questions: [],
+        nodes: [],
+        edges: [],
+      },
+      trace: [],
+      diagnostics: {
+        issues: [],
+      },
+      missingInfo: [],
+    })
+
+    const handler = createServerHandler()
+    const response = createResponse()
+
+    await handler(
+      createRequest('POST', '/api/analysis-agent/session/start', {
+        mode: 'create',
+        prompt: '帮我分析影响销量的关键因素',
+        profile: { id: 'custom', name: '测试模型', baseUrl: 'http://example.com', model: 'test', enabled: true, source: 'custom' },
+        nodeCatalog: [],
+      }),
+      response,
+    )
+
+    expect(response.statusCode).toBe(200)
+    expect(JSON.parse(response.body)).toEqual({
+      session: expect.objectContaining({
+        sessionId: 'session_1',
+        userGoal: '帮我分析影响销量的关键因素',
+        phase: 'intent',
+        conversation: [
+          expect.objectContaining({
+            role: 'user',
+            content: '帮我分析影响销量的关键因素',
+          }),
+        ],
+        artifacts: [],
+        approvalRequests: [],
+      }),
+    })
+  })
+
+  it('syncs canvas state through the analysis agent canvas route', async () => {
+    getWorkflowAiSessionMock.mockReturnValueOnce({
+      sessionId: 'session_1',
+      mode: 'edit',
+      status: 'waiting_user',
+      prompt: '继续分析',
+      draft: {
+        summary: '待补全草稿',
+        assumptions: [],
+        warnings: [],
+        questions: ['请确认目标字段'],
+        nodes: [],
+        edges: [],
+      },
+      trace: [],
+      diagnostics: {
+        issues: [],
+      },
+      missingInfo: [
+        {
+          key: 'question_1',
+          label: '待确认项 1',
+          reason: '请确认目标字段',
+          blocking: true,
+        },
+      ],
+    })
+
+    const handler = createServerHandler()
+    const response = createResponse()
+
+    await handler(
+      createRequest('POST', '/api/analysis-agent/session/session_1/canvas-sync', {
+        workflowSnapshot: {
+          name: '测试工作流',
+          nodes: [{ id: 'node_1' }],
+          edges: [],
+        },
+      }),
+      response,
+    )
+
+    expect(response.statusCode).toBe(200)
+    expect(JSON.parse(response.body)).toEqual({
+      session: expect.objectContaining({
+        sessionId: 'session_1',
+        phase: 'waiting_for_input',
+      }),
+      syncSummary: '已同步当前画布，共 1 个节点、0 条连线',
+    })
+  })
+
   it('returns diagnostics together with the generated plan', async () => {
     generateWorkflowAiPlanMock.mockResolvedValueOnce({
       plan: {

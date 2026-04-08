@@ -4,6 +4,15 @@
 
 ### 新增 (Feat)
 
+- **新增聊天式分析代理工作台第一版，并兼容回退到原画布体验**:
+  - 新增 `analysis-agent` 前后端兼容接口与前端服务封装，复用既有 `workflow-ai` session 主链承接分析代理会话。
+  - `workflowAiStore` 新增面向工作台的派生状态，支持消息流、阶段时间线、工具调用、结论卡片与执行区 Tab 状态。
+  - 新增 `components/agent/` 组件组，落地聊天消息、工具卡、思考块、审批卡和输入区等 agent 界面基础能力。
+  - `WorkflowCanvas` 升级为“左侧 Agent Workspace + 右侧 Execution Workspace”的工作台容器，并确保未打开代理时保持原有单画布 UI/UX。
+  - 同步更新相关回归测试、系统文档与设计规格文档，覆盖默认旧布局、代理展开后新布局以及执行区 Tab 行为。
+
+### 新增 (Feat)
+
 - **看板数据对接节点新增场景树选择与对象值协议**:
   - `neighbor-system` 节点新增“场景选择”树形单选，配置链路调整为“产品 -> 场景 -> 因子全集”。
   - `KanbanDataBridge` 新增 `listScene`，并让因子目录与工序候选支持按已选场景加载。

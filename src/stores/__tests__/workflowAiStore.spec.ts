@@ -645,4 +645,103 @@ describe('workflowAiStore', () => {
     expect(aiStore.plan?.summary).toBe('已补齐目标字段并完成工作流')
     expect(aiStore.sessionState?.status).toBe('completed')
   })
+
+  it('derives an analysis agent session with conversation, artifacts and approval requests', () => {
+    const aiStore = useWorkflowAiStore()
+
+    aiStore.prompt = '帮我找出影响销量的关键因素'
+    aiStore.plan = {
+      summary: '价格和折扣对销量影响最明显',
+      assumptions: ['默认以销量作为目标字段'],
+      warnings: ['样本量偏小，建议结合更多周期数据复核'],
+      questions: [],
+      operations: [],
+    }
+    aiStore.sessionState = {
+      sessionId: 'session_1',
+      mode: 'edit',
+      status: 'waiting_user',
+      prompt: '帮我找出影响销量的关键因素',
+      draft: {
+        summary: '先清洗数据，再执行相关性与特征重要性分析',
+        assumptions: [],
+        warnings: [],
+        questions: [],
+        nodes: [],
+        edges: [],
+      },
+      trace: [],
+      diagnostics: {
+        issues: [],
+      },
+      missingInfo: [
+        {
+          key: 'question_1',
+          label: '目标字段',
+          reason: '请确认销量字段',
+          blocking: true,
+        },
+      ],
+    }
+
+    expect(aiStore.analysisAgentSession).toMatchObject({
+      sessionId: 'session_1',
+      userGoal: '帮我找出影响销量的关键因素',
+      phase: 'waiting_for_input',
+      artifacts: [
+        expect.objectContaining({
+          type: 'conclusion_card',
+          title: '分析结论',
+        }),
+      ],
+      approvalRequests: [
+        expect.objectContaining({
+          key: 'question_1',
+          label: '目标字段',
+        }),
+      ],
+      conversation: [
+        expect.objectContaining({
+          role: 'user',
+          content: '帮我找出影响销量的关键因素',
+        }),
+      ],
+    })
+  })
+
+  it('syncs the current canvas into the analysis session summary', () => {
+    const aiStore = useWorkflowAiStore()
+
+    aiStore.sessionState = {
+      sessionId: 'session_1',
+      mode: 'edit',
+      status: 'running',
+      prompt: '继续分析',
+      draft: {
+        summary: '旧草稿',
+        assumptions: [],
+        warnings: [],
+        questions: [],
+        nodes: [],
+        edges: [],
+      },
+      trace: [],
+      diagnostics: {
+        issues: [],
+      },
+      missingInfo: [],
+    }
+
+    aiStore.syncAnalysisCanvas({
+      workflowName: '测试工作流',
+      nodes: [{ id: 'node_1' }, { id: 'node_2' }],
+      edges: [{ id: 'edge_1' }],
+    } as any)
+
+    expect(aiStore.analysisAgentSession?.conversation[aiStore.analysisAgentSession.conversation.length - 1]).toMatchObject({
+      role: 'assistant',
+      content: '已同步当前画布，共 2 个节点、1 条连线。',
+    })
+    expect(aiStore.analysisAgentSession?.workflowSummary).toBe('当前画布共 2 个节点、1 条连线')
+  })
 })

@@ -44,11 +44,27 @@ const workflowAiPanelStub = defineComponent({
   template: '<div class="workflow-ai-panel-stub" :data-visible="visible"></div>',
 })
 
+const agentWorkspaceStub = defineComponent({
+  name: 'AgentWorkspace',
+  props: {
+    visible: Boolean,
+  },
+  template: '<div class="agent-workspace-stub" :data-visible="visible"></div>',
+})
+
 vi.mock('../WorkflowAiPanel.vue', () => ({
   default: {
     name: 'WorkflowAiPanel',
     props: ['visible'],
     template: '<div class="workflow-ai-panel-stub" :data-visible="visible"></div>',
+  },
+}))
+
+vi.mock('../agent/AgentWorkspace.vue', () => ({
+  default: {
+    name: 'AgentWorkspace',
+    props: ['visible'],
+    template: '<div class="agent-workspace-stub" :data-visible="visible"></div>',
   },
 }))
 
@@ -868,7 +884,7 @@ describe('WorkflowCanvas', () => {
     )
   })
 
-  it('keeps the ai panel collapsed by default', async () => {
+  it('keeps the legacy single-canvas layout before the agent workspace is opened', async () => {
     const wrapper = mount(WorkflowCanvas, {
       global: {
         stubs: {
@@ -895,17 +911,19 @@ describe('WorkflowCanvas', () => {
       },
     })
 
-    const aiPanel = wrapper.findComponent({ name: 'WorkflowAiPanel' })
-    expect(aiPanel.exists()).toBe(true)
-    expect(aiPanel.attributes('data-visible')).toBe('false')
+    const agentWorkspace = wrapper.findComponent({ name: 'AgentWorkspace' })
+    expect(agentWorkspace.exists()).toBe(true)
+    expect(agentWorkspace.attributes('data-visible')).toBe('false')
+    expect(wrapper.find('.execution-workspace__header').exists()).toBe(false)
+    expect(wrapper.find('.workflow-workspace').classes()).not.toContain('workflow-workspace--agent')
   })
 
-  it('opens the ai panel from the header action entry', async () => {
+  it('collapses the agent workspace from the header action entry', async () => {
     const workflowHeaderStub = defineComponent({
       name: 'WorkflowHeader',
       emits: ['toggle-ai'],
       template:
-        '<button data-testid="workflow-header-ai-toggle" @click="$emit(\'toggle-ai\')">AI 编排</button>',
+        '<button data-testid="workflow-header-ai-toggle" @click="$emit(\'toggle-ai\')">分析代理</button>',
     })
 
     const wrapper = mount(WorkflowCanvas, {
@@ -934,11 +952,69 @@ describe('WorkflowCanvas', () => {
       },
     })
 
-    expect(wrapper.findComponent({ name: 'WorkflowAiPanel' }).attributes('data-visible')).toBe('false')
+    expect(wrapper.findComponent({ name: 'AgentWorkspace' }).attributes('data-visible')).toBe('false')
 
     await wrapper.find('[data-testid="workflow-header-ai-toggle"]').trigger('click')
 
-    expect(wrapper.findComponent({ name: 'WorkflowAiPanel' }).attributes('data-visible')).toBe('true')
+    expect(wrapper.findComponent({ name: 'AgentWorkspace' }).attributes('data-visible')).toBe('true')
+    expect(wrapper.find('.execution-workspace__header').exists()).toBe(true)
+    expect(wrapper.find('.workflow-workspace').classes()).toContain('workflow-workspace--agent')
+  })
+
+  it('switches the execution workspace tabs between canvas and report', async () => {
+    const store = useWorkflowStore()
+    store.lastRunDashboard = {
+      id: 'run_1',
+      workflowName: '测试工作流',
+      status: 'success',
+      startTime: Date.now(),
+      duration: 1000,
+      executionTargetIds: [],
+      executionScopeNodeIds: [],
+      terminalNodeIds: [],
+    }
+    const workflowHeaderStub = defineComponent({
+      name: 'WorkflowHeader',
+      emits: ['toggle-ai'],
+      template:
+        '<button data-testid="workflow-header-ai-toggle" @click="$emit(\'toggle-ai\')">分析代理</button>',
+    })
+
+    const wrapper = mount(WorkflowCanvas, {
+      global: {
+        stubs: {
+          Background: { template: '<div />' },
+          Controls: { template: '<div />' },
+          NodeSidebar: { template: '<div />' },
+          WorkflowHeader: workflowHeaderStub,
+          AgentWorkspace: agentWorkspaceStub,
+          BaseNode: { template: '<div />' },
+          LogPanel: { template: '<div />' },
+          NodeConfigModal: { template: '<div />' },
+          RuntimeInputModal: runtimeInputModalStub,
+          WorkflowResultDashboardModal: workflowResultDashboardModalStub,
+          WorkflowManagerModal: workflowManagerModalStub,
+          UnsavedWorkflowDialog: { template: '<div />' },
+          HelpCenterModal: { template: '<div />' },
+          ConfirmDialog: { template: '<div />' },
+          Toast: { template: '<div />' },
+          Button: { template: '<button><slot /></button>' },
+          N8nEdge: { template: '<div />' },
+        },
+        directives: {
+          tooltip: () => undefined,
+        },
+      },
+    })
+
+    await wrapper.get('[data-testid="workflow-header-ai-toggle"]').trigger('click')
+
+    expect(wrapper.get('[data-testid="execution-workspace-tab-canvas"]').attributes('data-active')).toBe('true')
+
+    await wrapper.get('[data-testid="execution-workspace-tab-report"]').trigger('click')
+
+    expect(wrapper.get('[data-testid="execution-workspace-tab-report"]').attributes('data-active')).toBe('true')
+    expect(wrapper.text()).toContain('分析报告')
   })
 })
 

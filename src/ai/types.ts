@@ -161,6 +161,90 @@ export interface WorkflowAiSessionState {
   updatedAt?: number
 }
 
+export type AnalysisAgentPhase =
+  | 'intent'
+  | 'planning'
+  | 'executing'
+  | 'interpreting'
+  | 'waiting_for_input'
+  | 'completed'
+  | 'failed'
+
+export type AnalysisAgentExecutionTab = 'execution' | 'result' | 'report'
+
+export interface AnalysisAgentConversationItem {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+}
+
+export interface AnalysisAgentArtifact {
+  id: string
+  type: 'conclusion_card' | 'report' | 'workflow_summary'
+  title: string
+  summary: string
+  bullets?: string[]
+}
+
+export interface AnalysisAgentApprovalRequest {
+  key: string
+  label: string
+  reason: string
+  blocking: boolean
+}
+
+export interface AnalysisAgentToolCall {
+  id: string
+  toolName: string
+  displayName: string
+  status: 'success' | 'failed' | 'running'
+  inputSummary?: string
+  outputSummary?: string
+  summary?: string
+  startedAt?: number
+  finishedAt?: number
+  linkedExecutionRef?: string
+}
+
+export interface AnalysisAgentTimelineStep {
+  id: string
+  title: string
+  description?: string
+  status: 'idle' | 'running' | 'completed' | 'waiting' | 'failed'
+  linkedToolCallIds?: string[]
+  linkedExecutionRef?: string
+}
+
+export type AnalysisAgentMessageBlock =
+  | { type: 'text'; content: string }
+  | { type: 'stream'; content: string; status: 'streaming' | 'completed' }
+  | { type: 'tool_call'; toolCallId: string }
+  | { type: 'thinking'; title: string; summary: string; details: string[]; collapsed: boolean }
+  | { type: 'artifact'; artifactId: string }
+  | { type: 'approval_request'; requestKey: string }
+  | { type: 'step_group'; stepIds: string[] }
+
+export interface AnalysisAgentMessage {
+  id: string
+  role: 'user' | 'assistant'
+  blocks: AnalysisAgentMessageBlock[]
+  createdAt: number
+}
+
+export interface AnalysisAgentSessionState {
+  sessionId: string
+  userGoal: string
+  phase: AnalysisAgentPhase
+  workflowSummary?: string
+  conversation: AnalysisAgentConversationItem[]
+  messages: AnalysisAgentMessage[]
+  timeline: AnalysisAgentTimelineStep[]
+  toolCalls: AnalysisAgentToolCall[]
+  artifacts: AnalysisAgentArtifact[]
+  approvalRequests: AnalysisAgentApprovalRequest[]
+  workflowSession: WorkflowAiSessionState
+}
+
 export type WorkflowAiGenerationStage = 'model_request' | 'parse' | 'normalize' | 'validate' | 'apply'
 
 export interface WorkflowAiGenerationIssue {

@@ -270,4 +270,78 @@ describe('WorkflowAiPanel', () => {
       question_1: '目标字段就是 target',
     })
   })
+
+  it('renders chat-first analysis workspace sections with conclusion cards and workflow sync action', async () => {
+    const aiStore = useWorkflowAiStore()
+    const workflowStore = useWorkflowStore()
+
+    const syncAnalysisCanvasMock = vi.fn()
+    ;(aiStore as any).syncAnalysisCanvas = syncAnalysisCanvasMock
+
+    aiStore.prompt = '帮我分析影响销量的关键因素'
+    aiStore.plan = {
+      summary: '价格和折扣对销量影响最明显',
+      assumptions: ['默认以销量作为目标字段'],
+      warnings: ['样本量偏小，建议补充更多周期数据'],
+      questions: [],
+      operations: [],
+    }
+    aiStore.sessionState = {
+      sessionId: 'session_1',
+      mode: 'edit',
+      status: 'completed',
+      prompt: '帮我分析影响销量的关键因素',
+      draft: {
+        summary: '先清洗数据，再执行相关性和特征重要性分析',
+        assumptions: [],
+        warnings: [],
+        questions: [],
+        nodes: [],
+        edges: [],
+      },
+      trace: [],
+      diagnostics: {
+        issues: [],
+      },
+      missingInfo: [],
+    }
+
+    workflowStore.workflowName = '销量分析'
+    workflowStore.nodes = [
+      {
+        id: 'node_1',
+        position: { x: 0, y: 0 },
+        data: {
+          label: '手动输入数据',
+          type: 'manual-json-import',
+          category: 'trigger',
+          config: {},
+          status: 'idle',
+          output: null,
+          logs: [],
+        },
+      },
+    ] as any
+    workflowStore.edges = [] as any
+
+    const wrapper = mount(WorkflowAiPanel, {
+      props: {
+        visible: true,
+      },
+      global: {
+        stubs: {
+          Button: { template: '<button @click="$emit(\'click\')"><slot /></button>' },
+        },
+      },
+    })
+
+    expect(wrapper.get('[data-testid="analysis-agent-chat"]').text()).toContain('帮我分析影响销量的关键因素')
+    expect(wrapper.get('[data-testid="analysis-agent-artifacts"]').text()).toContain('分析结论')
+    expect(wrapper.get('[data-testid="analysis-agent-artifacts"]').text()).toContain('价格和折扣对销量影响最明显')
+    expect(wrapper.get('[data-testid="analysis-agent-artifacts"]').text()).toContain('样本量偏小')
+
+    await wrapper.get('[data-testid="analysis-agent-sync-canvas"]').trigger('click')
+
+    expect(syncAnalysisCanvasMock).toHaveBeenCalledWith(workflowStore)
+  })
 })
