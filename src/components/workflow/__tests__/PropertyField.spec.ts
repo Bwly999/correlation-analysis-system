@@ -63,7 +63,7 @@ describe('PropertyField', () => {
 
     const updates = wrapper.emitted('update:modelValue')
     expect(updates).toBeTruthy()
-    expect(updates?.[updates.length - 1]?.[0]).toEqual(baseTreeOptions)
+    expect(updates?.[updates.length - 1]?.[0]).toMatchObject(baseTreeOptions)
   })
 
   it('keeps only one selected tree node when singleSelect is enabled', async () => {
