@@ -44,6 +44,7 @@ ref/
 # Local git worktrees
 .worktrees/
 .superpowers/
+.codex/
 
 # Python cache
 __pycache__/
