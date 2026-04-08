@@ -117,11 +117,11 @@ const formatDuration = (ms: number) => {
 
 <template>
   <header
-    class="absolute top-0 left-0 right-0 h-[56px] bg-white/95 backdrop-blur border-b border-slate-200 z-[100] flex items-center justify-between px-5 xl:px-6"
+    class="absolute top-0 left-0 right-0 h-[56px] bg-white/95 backdrop-blur border-b border-slate-200 z-[100] flex items-center justify-between gap-3 overflow-hidden px-5 xl:px-6"
   >
     <input ref="fileInput" type="file" class="hidden" accept=".json" @change="handleImport" />
 
-    <div class="flex items-center gap-3.5">
+    <div class="flex min-w-0 flex-1 items-center gap-3.5">
       <!-- 导航/面包屑 -->
       <div
         class="flex items-center gap-2 text-slate-500 hover:text-slate-900 transition-colors cursor-pointer group px-2 py-1.5 rounded-md hover:bg-slate-100"
@@ -133,11 +133,11 @@ const formatDuration = (ms: number) => {
       </div>
 
       <!-- 项目名称编辑 -->
-      <div class="flex items-center gap-2 group relative">
+      <div class="flex min-w-0 items-center gap-2 group relative">
         <input
           v-model="store.workflowName"
           :disabled="store.isHistoryMode"
-          class="font-semibold text-[14px] text-slate-900 border border-transparent hover:border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 bg-transparent focus:bg-white rounded-md px-2.5 py-1 transition-all w-[300px] outline-none disabled:opacity-70 disabled:cursor-not-allowed"
+          class="font-semibold text-[14px] text-slate-900 border border-transparent hover:border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 bg-transparent focus:bg-white rounded-md px-2.5 py-1 transition-all w-[300px] max-w-full outline-none disabled:opacity-70 disabled:cursor-not-allowed"
           placeholder="未命名工作流"
         />
         <span
@@ -315,14 +315,23 @@ const formatDuration = (ms: number) => {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
+  min-width: 0;
+  max-width: 100%;
   height: 2.5rem;
   padding: 0.25rem 0.375rem;
   border-radius: 0.875rem;
   border: 1px solid #dbe4ef;
   background: linear-gradient(180deg, #f8fbff 0%, #f2f6fb 100%);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
   box-shadow:
     0 6px 14px -10px rgba(15, 23, 42, 0.45),
     inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+
+.action-deck::-webkit-scrollbar {
+  display: none;
 }
 
 .status-pill {
@@ -483,5 +492,12 @@ const formatDuration = (ms: number) => {
   border-color: #b8c7da;
   background: #f8fafc;
   color: #0f172a;
+}
+
+@media (max-width: 1280px) {
+  .status-pill,
+  .deck-divider {
+    display: none;
+  }
 }
 </style>

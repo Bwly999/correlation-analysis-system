@@ -914,8 +914,8 @@ describe('WorkflowCanvas', () => {
     const agentWorkspace = wrapper.findComponent({ name: 'AgentWorkspace' })
     expect(agentWorkspace.exists()).toBe(true)
     expect(agentWorkspace.attributes('data-visible')).toBe('false')
-    expect(wrapper.find('.execution-workspace__header').exists()).toBe(false)
     expect(wrapper.find('.workflow-workspace').classes()).not.toContain('workflow-workspace--agent')
+    expect(wrapper.find('.execution-canvas-shell__sidebar').exists()).toBe(true)
   })
 
   it('collapses the agent workspace from the header action entry', async () => {
@@ -957,22 +957,12 @@ describe('WorkflowCanvas', () => {
     await wrapper.find('[data-testid="workflow-header-ai-toggle"]').trigger('click')
 
     expect(wrapper.findComponent({ name: 'AgentWorkspace' }).attributes('data-visible')).toBe('true')
-    expect(wrapper.find('.execution-workspace__header').exists()).toBe(true)
+    expect(wrapper.text()).not.toContain('执行工作区')
     expect(wrapper.find('.workflow-workspace').classes()).toContain('workflow-workspace--agent')
+    expect(wrapper.find('.execution-canvas-shell__sidebar').exists()).toBe(true)
   })
 
-  it('switches the execution workspace tabs between canvas and report', async () => {
-    const store = useWorkflowStore()
-    store.lastRunDashboard = {
-      id: 'run_1',
-      workflowName: '测试工作流',
-      status: 'success',
-      startTime: Date.now(),
-      duration: 1000,
-      executionTargetIds: [],
-      executionScopeNodeIds: [],
-      terminalNodeIds: [],
-    }
+  it('keeps the canvas-only right workspace after opening the agent panel', async () => {
     const workflowHeaderStub = defineComponent({
       name: 'WorkflowHeader',
       emits: ['toggle-ai'],
@@ -1009,12 +999,10 @@ describe('WorkflowCanvas', () => {
 
     await wrapper.get('[data-testid="workflow-header-ai-toggle"]').trigger('click')
 
-    expect(wrapper.get('[data-testid="execution-workspace-tab-canvas"]').attributes('data-active')).toBe('true')
-
-    await wrapper.get('[data-testid="execution-workspace-tab-report"]').trigger('click')
-
-    expect(wrapper.get('[data-testid="execution-workspace-tab-report"]').attributes('data-active')).toBe('true')
-    expect(wrapper.text()).toContain('分析报告')
+    expect(wrapper.text()).not.toContain('执行工作区')
+    expect(wrapper.find('.execution-workspace__header').exists()).toBe(false)
+    expect(wrapper.findComponent({ name: 'VueFlow' }).exists()).toBe(true)
+    expect(wrapper.find('.execution-canvas-shell__sidebar').exists()).toBe(true)
   })
 })
 
