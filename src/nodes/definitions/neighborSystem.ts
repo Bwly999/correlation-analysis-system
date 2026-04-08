@@ -2,8 +2,11 @@ import type { NodeDefinition } from '../types'
 import {
   fetchKanbanData,
   getFactorTree,
+  getSceneTree,
   getResolvedKanbanAuthToken,
   getSchemeTree,
+  type KanbanFactorValue,
+  type KanbanSceneValue,
   listAuthorizedProducts,
   listMaterialTypes,
   listProcessOptions,
@@ -29,6 +32,16 @@ const extractCheckedLeafKeys = (
     .map(([key]) => key)
 
 const parseFactorSelections = (selection: Record<string, { checked?: boolean }> | undefined) => {
+  const wrappedValues = (selection as { values?: KanbanFactorValue[] } | undefined)?.values
+  if (Array.isArray(wrappedValues) && wrappedValues.length > 0) {
+    const factorValues = wrappedValues.filter((item) => Boolean(item?.factorKey))
+
+    return {
+      factorKeys: factorValues.map((item) => item.factorKey),
+      factorValues,
+    }
+  }
+
   const factorSelections = extractCheckedLeafKeys(selection, FACTOR_KEY_PREFIX)
 
   return {
@@ -38,7 +51,30 @@ const parseFactorSelections = (selection: Record<string, { checked?: boolean }> 
         return segments[segments.length - 1]
       })
       .filter((value): value is string => Boolean(value)),
+    factorValues: factorSelections
+      .map((key) => {
+        const segments = key.slice(FACTOR_KEY_PREFIX.length).split('::')
+        const processName = segments[0] || ''
+        const factorKey = segments[segments.length - 1] || ''
+
+        if (!factorKey) return null
+
+        return {
+          factorKey,
+          factorName: factorKey,
+          materialType: '',
+          processName,
+          r2Name: '',
+        } satisfies KanbanFactorValue
+      })
+      .filter((value): value is KanbanFactorValue => Boolean(value)),
   }
+}
+
+const parseSceneSelection = (selection: unknown): KanbanSceneValue | undefined => {
+  const value = (selection as { value?: KanbanSceneValue } | undefined)?.value
+  if (!value?.sceneId || !value?.subSceneId) return undefined
+  return value
 }
 
 const parseSchemeSelections = (selection: Record<string, { checked?: boolean }> | undefined) =>
@@ -79,6 +115,22 @@ export const neighborSystemNode: NodeDefinition = {
       resolveOptions: async () => listAuthorizedProducts(ensureToken()),
     },
     {
+      name: 'sceneSelection',
+      displayName: '场景选择',
+      type: 'tree',
+      required: true,
+      default: {},
+      singleSelect: true,
+      filterable: true,
+      placeholder: '搜索场景 / 子场景',
+      emptyMessage: '请先选择产品名称',
+      dependencies: ['productName'],
+      resolveOptions: async ({ config }) => {
+        if (!config.productName) return []
+        return getSceneTree(ensureToken(), config.productName)
+      },
+    },
+    {
       name: 'selectedFactors',
       displayName: '因子全集',
       type: 'tree',
@@ -86,11 +138,12 @@ export const neighborSystemNode: NodeDefinition = {
       default: {},
       filterable: true,
       placeholder: '搜索场景 / 工序 / 因子名称',
-      emptyMessage: '请先选择产品名称',
-      dependencies: ['productName'],
+      emptyMessage: '请先选择产品名称和场景',
+      dependencies: ['productName', 'sceneSelection'],
       resolveOptions: async ({ config }) => {
-        if (!config.productName) return []
-        return getFactorTree(ensureToken(), config.productName)
+        const scene = parseSceneSelection(config.sceneSelection)
+        if (!config.productName || !scene) return []
+        return getFactorTree(ensureToken(), config.productName, scene)
       },
     },
     {
@@ -203,7 +256,12 @@ export const neighborSystemNode: NodeDefinition = {
       throw new Error('请选择产品名称')
     }
 
-    const { factorKeys } = parseFactorSelections(config.selectedFactors)
+    const scene = parseSceneSelection(config.sceneSelection)
+    if (!scene) {
+      throw new Error('请选择场景')
+    }
+
+    const { factorKeys, factorValues } = parseFactorSelections(config.selectedFactors)
     if (factorKeys.length === 0) {
       throw new Error('请至少选择一个因子进行获取')
     }
@@ -252,7 +310,8 @@ export const neighborSystemNode: NodeDefinition = {
       token,
       productName: config.productName,
       fetchMode: config.fetchMode,
-      factorKeys,
+      scene,
+      val: factorValues,
       processList,
       materialType: config.materialType,
       timeRange,
@@ -270,6 +329,7 @@ export const neighborSystemNode: NodeDefinition = {
           total_sn: result.metadata?.totalSn ?? result.rows.length,
           factors_count: factorKeys.length,
           product: config.productName,
+          scene,
           fetch_mode: config.fetchMode,
           process_list: processList,
           ...result.metadata,

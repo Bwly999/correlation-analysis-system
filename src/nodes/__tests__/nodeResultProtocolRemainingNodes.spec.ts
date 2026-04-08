@@ -3,7 +3,9 @@
 const {
   mockFetchKanbanData,
   mockGetKanbanAuthToken,
+  mockGetResolvedKanbanAuthToken,
   mockGetFactorTree,
+  mockGetSceneTree,
   mockGetSchemeTree,
   mockListAuthorizedProducts,
   mockListMaterialTypes,
@@ -12,7 +14,9 @@ const {
 } = vi.hoisted(() => ({
   mockFetchKanbanData: vi.fn(),
   mockGetKanbanAuthToken: vi.fn(),
+  mockGetResolvedKanbanAuthToken: vi.fn(),
   mockGetFactorTree: vi.fn(),
+  mockGetSceneTree: vi.fn(),
   mockGetSchemeTree: vi.fn(),
   mockListAuthorizedProducts: vi.fn(),
   mockListMaterialTypes: vi.fn(),
@@ -23,7 +27,9 @@ const {
 vi.mock('@/services/kanbanIntegration', () => ({
   fetchKanbanData: mockFetchKanbanData,
   getKanbanAuthToken: mockGetKanbanAuthToken,
+  getResolvedKanbanAuthToken: mockGetResolvedKanbanAuthToken,
   getFactorTree: mockGetFactorTree,
+  getSceneTree: mockGetSceneTree,
   getSchemeTree: mockGetSchemeTree,
   listAuthorizedProducts: mockListAuthorizedProducts,
   listMaterialTypes: mockListMaterialTypes,
@@ -644,7 +650,7 @@ describe('remaining nodes standardized result protocol', () => {
   })
 
   it('neighbor-system should return a table result with upstream metadata in meta', async () => {
-    mockGetKanbanAuthToken.mockReturnValue('token-from-host')
+    mockGetResolvedKanbanAuthToken.mockReturnValue('token-from-host')
     mockFetchKanbanData.mockResolvedValue({
       rows: [
         { sn: 'SN001', F_TEMP: 12.3, F_PRESS: 45.6 },
@@ -657,13 +663,37 @@ describe('remaining nodes standardized result protocol', () => {
 
     const result = await neighborSystemNode.execute(null, {
       productName: '试制产品 A1',
+      sceneSelection: {
+        selectedKey: 'sub-scene:scene-pack::sub-pack-a',
+        value: {
+          sceneId: 'scene-pack',
+          sceneLable: 'PACK',
+          subSceneId: 'sub-pack-a',
+          subSceneLable: 'PACK-A',
+        },
+      },
       fetchMode: 'time',
       timeRange: [new Date('2026-03-01'), new Date('2026-03-10')],
       materialType: '正极',
       selectedProcesses: ['涂布'],
       selectedFactors: {
-        'factor:涂布::F_TEMP': { checked: true },
-        'factor:涂布::F_PRESS': { checked: true },
+        selectedKeys: ['factor:涂布::F_TEMP', 'factor:涂布::F_PRESS'],
+        values: [
+          {
+            factorKey: 'F_TEMP',
+            factorName: '温度',
+            materialType: '正极',
+            processName: '涂布',
+            r2Name: 'R2-TEMP',
+          },
+          {
+            factorKey: 'F_PRESS',
+            factorName: '压力',
+            materialType: '正极',
+            processName: '涂布',
+            r2Name: 'R2-PRESS',
+          },
+        ],
       },
     })
 

@@ -5,6 +5,21 @@ export interface KanbanTreeNode {
   children?: KanbanTreeNode[]
 }
 
+export interface KanbanSceneValue {
+  sceneId: string
+  sceneLable: string
+  subSceneId: string
+  subSceneLable: string
+}
+
+export interface KanbanFactorValue {
+  factorKey: string
+  factorName: string
+  materialType: string
+  processName: string
+  r2Name: string
+}
+
 export interface KanbanProductOption {
   name: string
   value: string
@@ -15,6 +30,11 @@ export interface KanbanFactorCatalogItem {
   processName: string
   factorName: string
   factorKey: string
+  materialType?: string
+  r2Name?: string
+}
+
+export interface KanbanSceneCatalogItem extends KanbanSceneValue {
 }
 
 export interface KanbanSchemeCatalogItem {
@@ -27,7 +47,8 @@ export interface KanbanFetchParams {
   token: string
   productName: string
   fetchMode: 'time' | 'scheme' | 'sn' | 'taskOrder'
-  factorKeys: string[]
+  scene?: KanbanSceneValue
+  val: KanbanFactorValue[]
   processList: string[]
   materialType?: string
   timeRange?: [string, string]
@@ -46,9 +67,14 @@ export interface KanbanDataBridge {
   listAuthorizedProducts?: (params: { token: string }) => Promise<KanbanProductOption[]>
   listMaterialTypes?: (params: { token: string; productName?: string }) => Promise<KanbanProductOption[]>
   listTaskOrderTypes?: (params: { token: string; productName?: string }) => Promise<KanbanProductOption[]>
+  listScene?: (params: {
+    token: string
+    productName: string
+  }) => Promise<KanbanSceneCatalogItem[]>
   listFactorCatalog?: (params: {
     token: string
     productName: string
+    scene?: KanbanSceneValue
   }) => Promise<KanbanFactorCatalogItem[]>
   listSchemeCatalog?: (params: {
     token: string
@@ -95,18 +121,33 @@ const defaultFactorCatalog: KanbanFactorCatalogItem[] = [
     processName: '涂布',
     factorName: '温度',
     factorKey: 'F_TEMP',
+    materialType: '正极',
+    r2Name: 'R2-TEMP',
   },
   {
     sceneName: '全场景/全场景',
     processName: '涂布',
     factorName: '压力',
     factorKey: 'F_PRESS',
+    materialType: '正极',
+    r2Name: 'R2-PRESS',
   },
   {
     sceneName: '全场景/全场景',
     processName: '装配',
     factorName: '扭矩',
     factorKey: 'F_TORQUE',
+    materialType: '壳体',
+    r2Name: 'R2-TORQUE',
+  },
+]
+
+const defaultSceneCatalog: KanbanSceneCatalogItem[] = [
+  {
+    sceneId: 'scene-all',
+    sceneLable: '全场景',
+    subSceneId: 'sub-scene-all',
+    subSceneLable: '全场景',
   },
 ]
 
@@ -123,7 +164,13 @@ const sortByLocale = <T>(items: T[], getLabel: (item: T) => string) =>
 const buildFactorTree = (catalog: KanbanFactorCatalogItem[]): KanbanTreeNode[] => {
   const processMap = new Map<
     string,
-    Array<{ sceneName: string; factorName: string; factorKey: string }>
+    Array<{
+      sceneName: string
+      factorName: string
+      factorKey: string
+      materialType: string
+      r2Name: string
+    }>
   >()
 
   catalog.forEach((item) => {
@@ -137,6 +184,8 @@ const buildFactorTree = (catalog: KanbanFactorCatalogItem[]): KanbanTreeNode[] =
       sceneName,
       factorName,
       factorKey: item.factorKey,
+      materialType: item.materialType || '',
+      r2Name: item.r2Name || '',
     })
 
     processMap.set(processName, factors)
@@ -160,7 +209,56 @@ const buildFactorTree = (catalog: KanbanFactorCatalogItem[]): KanbanTreeNode[] =
           sceneName: factor.sceneName,
           process: processName,
           factorKey: factor.factorKey,
+          value: {
+            factorKey: factor.factorKey,
+            factorName: factor.factorName,
+            materialType: factor.materialType || '',
+            processName,
+            r2Name: factor.r2Name || '',
+          } satisfies KanbanFactorValue,
           searchText: `${factor.sceneName} / ${processName} / ${factor.factorName}`,
+        },
+      })),
+    }),
+  )
+}
+
+const buildSceneTree = (catalog: KanbanSceneCatalogItem[]): KanbanTreeNode[] => {
+  const sceneMap = new Map<string, KanbanSceneCatalogItem[]>()
+
+  catalog.forEach((item) => {
+    const sceneId = item.sceneId || 'scene-unknown'
+    const sceneItems = sceneMap.get(sceneId) ?? []
+    sceneItems.push(item)
+    sceneMap.set(sceneId, sceneItems)
+  })
+
+  return sortByLocale(Array.from(sceneMap.entries()), ([, items]) => items[0]?.sceneLable || '').map(
+    ([sceneId, items]) => ({
+      key: `scene:${sceneId}`,
+      label: items[0]?.sceneLable || '未命名场景',
+      data: {
+        nodeType: 'scene',
+        sceneId,
+        sceneLable: items[0]?.sceneLable || '未命名场景',
+        searchText: items[0]?.sceneLable || '未命名场景',
+      },
+      children: sortByLocale(items, (item) => item.subSceneLable || '').map((item) => ({
+        key: `sub-scene:${sceneId}::${item.subSceneId}`,
+        label: item.subSceneLable || '未命名子场景',
+        data: {
+          nodeType: 'sub-scene',
+          sceneId,
+          sceneLable: item.sceneLable,
+          subSceneId: item.subSceneId,
+          subSceneLable: item.subSceneLable,
+          value: {
+            sceneId,
+            sceneLable: item.sceneLable,
+            subSceneId: item.subSceneId,
+            subSceneLable: item.subSceneLable,
+          } satisfies KanbanSceneValue,
+          searchText: `${item.sceneLable} / ${item.subSceneLable}`,
         },
       })),
     }),
@@ -214,8 +312,8 @@ const buildRows = (params: KanbanFetchParams): KanbanFetchResult => {
         productName: params.productName,
         collectedAt: `2026-03-${String(index + 1).padStart(2, '0')}T08:00:00.000Z`,
       }
-      params.factorKeys.forEach((factorKey, factorIndex) => {
-        row[factorKey] = Number(((index + 1) * 10 + factorIndex + 0.5).toFixed(2))
+      params.val.forEach((factor, factorIndex) => {
+        row[factor.factorKey] = Number(((index + 1) * 10 + factorIndex + 0.5).toFixed(2))
       })
       return row
     }),
@@ -236,6 +334,9 @@ const defaultBridge: KanbanDataBridge = {
   },
   async listTaskOrderTypes() {
     return defaultTaskOrderTypes
+  },
+  async listScene() {
+    return defaultSceneCatalog
   },
   async listFactorCatalog() {
     return defaultFactorCatalog
@@ -334,18 +435,38 @@ export const listTaskOrderTypes = async (token: string, productName?: string) =>
   return (await resolveBridge().listTaskOrderTypes?.({ token: resolvedToken, productName })) || []
 }
 
-export const listFactorCatalog = async (token: string, productName: string) => {
+export const listScene = async (token: string, productName: string) => {
   const resolvedToken = resolveAccessToken(token)
-  return (await resolveBridge().listFactorCatalog?.({ token: resolvedToken, productName })) || []
+  return (await resolveBridge().listScene?.({ token: resolvedToken, productName })) || []
 }
 
-export const getFactorTree = async (token: string, productName: string) => {
-  const catalog = await listFactorCatalog(token, productName)
+export const getSceneTree = async (token: string, productName: string) => {
+  const catalog = await listScene(token, productName)
+  return buildSceneTree(catalog)
+}
+
+export const listFactorCatalog = async (
+  token: string,
+  productName: string,
+  scene?: KanbanSceneValue,
+) => {
+  const resolvedToken = resolveAccessToken(token)
+  return (
+    (await resolveBridge().listFactorCatalog?.({ token: resolvedToken, productName, scene })) || []
+  )
+}
+
+export const getFactorTree = async (token: string, productName: string, scene?: KanbanSceneValue) => {
+  const catalog = await listFactorCatalog(token, productName, scene)
   return buildFactorTree(catalog)
 }
 
-export const listProcessOptions = async (token: string, productName: string) => {
-  const catalog = await listFactorCatalog(token, productName)
+export const listProcessOptions = async (
+  token: string,
+  productName: string,
+  scene?: KanbanSceneValue,
+) => {
+  const catalog = await listFactorCatalog(token, productName, scene)
   return sortByLocale(
     Array.from(new Set(catalog.map((item) => item.processName).filter(Boolean))),
     (item) => item,

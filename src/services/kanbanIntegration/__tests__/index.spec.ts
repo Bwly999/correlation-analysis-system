@@ -4,6 +4,7 @@ import {
   fetchKanbanData,
   getKanbanAuthToken,
   getFactorTree,
+  getSceneTree,
   getSchemeTree,
   initializeKanbanHostBridge,
   listProcessOptions,
@@ -31,6 +32,22 @@ describe('kanban integration bridge', () => {
           },
         ]
       },
+      async listScene() {
+        return [
+          {
+            sceneId: 'scene-pack',
+            sceneLable: 'PACK',
+            subSceneId: 'sub-pack-a',
+            subSceneLable: 'PACK-A',
+          },
+          {
+            sceneId: 'scene-pack',
+            sceneLable: 'PACK',
+            subSceneId: 'sub-pack-b',
+            subSceneLable: 'PACK-B',
+          },
+        ]
+      },
       async listSchemeCatalog() {
         return [
           { stageName: 'V4', schemeName: 'C', schemeKey: 'V4::C' },
@@ -39,7 +56,7 @@ describe('kanban integration bridge', () => {
       },
       async fetchKanbanData(params) {
         return {
-          rows: [{ sn: 'SN001', factorCount: params.factorKeys.length }],
+          rows: [{ sn: 'SN001', factorCount: params.val.length }],
           metadata: { from: 'test' },
         }
       },
@@ -86,6 +103,13 @@ describe('kanban integration bridge', () => {
               sceneName: '全场景/全场景',
               process: '涂布',
               factorKey: 'F_TEMP',
+              value: {
+                factorKey: 'F_TEMP',
+                factorName: '温度',
+                materialType: '',
+                processName: '涂布',
+                r2Name: '',
+              },
               searchText: '全场景/全场景 / 涂布 / 温度',
             },
           },
@@ -109,6 +133,13 @@ describe('kanban integration bridge', () => {
               sceneName: '全场景/全场景',
               process: '装配',
               factorKey: 'F_TORQUE',
+              value: {
+                factorKey: 'F_TORQUE',
+                factorName: '扭矩',
+                materialType: '',
+                processName: '装配',
+                r2Name: '',
+              },
               searchText: '全场景/全场景 / 装配 / 扭矩',
             },
           },
@@ -119,6 +150,63 @@ describe('kanban integration bridge', () => {
     expect(processOptions).toEqual([
       { name: '涂布', value: '涂布' },
       { name: '装配', value: '装配' },
+    ])
+  })
+
+  it('builds scene tree with frontend compact value objects', async () => {
+    setKanbanAuthToken('host-token-005')
+
+    const tree = await getSceneTree(getKanbanAuthToken(), '试制产品 A1')
+
+    expect(tree).toEqual([
+      {
+        key: 'scene:scene-pack',
+        label: 'PACK',
+        data: {
+          nodeType: 'scene',
+          sceneId: 'scene-pack',
+          sceneLable: 'PACK',
+          searchText: 'PACK',
+        },
+        children: [
+          {
+            key: 'sub-scene:scene-pack::sub-pack-a',
+            label: 'PACK-A',
+            data: {
+              nodeType: 'sub-scene',
+              sceneId: 'scene-pack',
+              sceneLable: 'PACK',
+              subSceneId: 'sub-pack-a',
+              subSceneLable: 'PACK-A',
+              value: {
+                sceneId: 'scene-pack',
+                sceneLable: 'PACK',
+                subSceneId: 'sub-pack-a',
+                subSceneLable: 'PACK-A',
+              },
+              searchText: 'PACK / PACK-A',
+            },
+          },
+          {
+            key: 'sub-scene:scene-pack::sub-pack-b',
+            label: 'PACK-B',
+            data: {
+              nodeType: 'sub-scene',
+              sceneId: 'scene-pack',
+              sceneLable: 'PACK',
+              subSceneId: 'sub-pack-b',
+              subSceneLable: 'PACK-B',
+              value: {
+                sceneId: 'scene-pack',
+                sceneLable: 'PACK',
+                subSceneId: 'sub-pack-b',
+                subSceneLable: 'PACK-B',
+              },
+              searchText: 'PACK / PACK-B',
+            },
+          },
+        ],
+      },
     ])
   })
 
@@ -174,7 +262,22 @@ describe('kanban integration bridge', () => {
       token: getKanbanAuthToken(),
       productName: '试制产品 A1',
       fetchMode: 'sn',
-      factorKeys: ['F_TEMP', 'F_PRESS'],
+      val: [
+        {
+          factorKey: 'F_TEMP',
+          factorName: '温度',
+          materialType: '正极',
+          processName: '涂布',
+          r2Name: 'R2-TEMP',
+        },
+        {
+          factorKey: 'F_PRESS',
+          factorName: '压力',
+          materialType: '正极',
+          processName: '涂布',
+          r2Name: 'R2-PRESS',
+        },
+      ],
       processList: ['涂布'],
       snList: ['SN001'],
     })
@@ -189,7 +292,15 @@ describe('kanban integration bridge', () => {
         token: '',
         productName: '试制产品 A1',
         fetchMode: 'sn',
-        factorKeys: ['F_TEMP'],
+        val: [
+          {
+            factorKey: 'F_TEMP',
+            factorName: '温度',
+            materialType: '正极',
+            processName: '涂布',
+            r2Name: 'R2-TEMP',
+          },
+        ],
         processList: ['涂布'],
         snList: ['SN001'],
       }),

@@ -26,6 +26,96 @@ const configValue = computed({
   set: (value) => emit('update:modelValue', value),
 })
 
+const collectNodeMap = (nodes: any[]) => {
+  const map = new Map<string, any>()
+
+  const visit = (items: any[]) => {
+    items.forEach((item) => {
+      if (!item?.key) return
+      map.set(String(item.key), item)
+      if (Array.isArray(item.children) && item.children.length > 0) {
+        visit(item.children)
+      }
+    })
+  }
+
+  visit(nodes)
+
+  return map
+}
+
+const treeNodeMap = computed(() => collectNodeMap(props.options))
+const usesObjectValueMode = computed(() =>
+  Array.from(treeNodeMap.value.values()).some((node) => node?.data?.value !== undefined),
+)
+
+const toSelectionStateMap = (keys: string[]) =>
+  keys.reduce<Record<string, { checked: boolean; partialChecked: boolean }>>((acc, key) => {
+    acc[key] = { checked: true, partialChecked: false }
+    return acc
+  }, {})
+
+const getCheckedKeys = (selectionKeys: TreeSelectionKeys | undefined) =>
+  Object.entries(selectionKeys || {})
+    .filter(([, state]) => state?.checked)
+    .map(([key]) => key)
+
+const normalizeSingleSelection = (selectionKeys: TreeSelectionKeys | undefined) => {
+  if (!selectionKeys || typeof selectionKeys !== 'object') return selectionKeys
+
+  const checkedEntries = Object.entries(selectionKeys).filter(([, state]) => state?.checked)
+  if (checkedEntries.length <= 1) return selectionKeys
+
+  const [selectedKey, selectedState] = checkedEntries[checkedEntries.length - 1] as [
+    string,
+    { checked?: boolean; partialChecked?: boolean },
+  ]
+
+  return {
+    [selectedKey]: {
+      checked: selectedState.checked ?? true,
+      partialChecked: false,
+    },
+  }
+}
+
+const selectionKeysToObjectValue = (selectionKeys: TreeSelectionKeys | undefined) => {
+  const checkedKeys = getCheckedKeys(selectionKeys)
+
+  if (checkedKeys.length === 0) return {}
+
+  if (props.prop.singleSelect) {
+    const selectedKey = checkedKeys[checkedKeys.length - 1]
+    if (!selectedKey) return {}
+
+    return {
+      selectedKey,
+      value: treeNodeMap.value.get(selectedKey)?.data?.value,
+    }
+  }
+
+  return {
+    selectedKeys: checkedKeys,
+    values: checkedKeys
+      .map((key) => treeNodeMap.value.get(key)?.data?.value)
+      .filter((value) => value !== undefined),
+  }
+}
+
+const objectValueToSelectionKeys = (value: unknown): TreeSelectionKeys | undefined => {
+  if (!value || typeof value !== 'object') return undefined
+
+  if (props.prop.singleSelect) {
+    const selectedKey = (value as { selectedKey?: string }).selectedKey
+    return selectedKey ? toSelectionStateMap([selectedKey]) : undefined
+  }
+
+  const selectedKeys = (value as { selectedKeys?: string[] }).selectedKeys
+  return Array.isArray(selectedKeys) && selectedKeys.length > 0
+    ? toSelectionStateMap(selectedKeys)
+    : undefined
+}
+
 const filterTreeNodes = (nodes: any[], query: string): any[] => {
   if (!query.trim()) return nodes
 
@@ -76,30 +166,21 @@ const collapseAllNodes = () => {
 }
 
 const treeSelectionValue = computed<TreeSelectionKeys | undefined>({
-  get: () => configValue.value as TreeSelectionKeys | undefined,
+  get: () =>
+    usesObjectValueMode.value
+      ? objectValueToSelectionKeys(configValue.value)
+      : (configValue.value as TreeSelectionKeys | undefined),
   set: (selectionKeys) => {
-    if (!props.prop.singleSelect || !selectionKeys || typeof selectionKeys !== 'object') {
-      configValue.value = selectionKeys
+    const normalizedSelectionKeys = props.prop.singleSelect
+      ? normalizeSingleSelection(selectionKeys)
+      : selectionKeys
+
+    if (!usesObjectValueMode.value) {
+      configValue.value = normalizedSelectionKeys
       return
     }
 
-    const checkedEntries = Object.entries(selectionKeys).filter(([, state]) => state?.checked)
-    if (checkedEntries.length <= 1) {
-      configValue.value = selectionKeys
-      return
-    }
-
-    const [selectedKey, selectedState] = checkedEntries[checkedEntries.length - 1] as [
-      string,
-      { checked?: boolean; partialChecked?: boolean },
-    ]
-
-    configValue.value = {
-      [selectedKey]: {
-        checked: selectedState.checked ?? true,
-        partialChecked: false,
-      },
-    }
+    configValue.value = selectionKeysToObjectValue(normalizedSelectionKeys)
   },
 })
 

@@ -7,6 +7,7 @@ const {
   mockGetKanbanAuthToken,
   mockGetResolvedKanbanAuthToken,
   mockGetFactorTree,
+  mockGetSceneTree,
   mockGetSchemeTree,
   mockListAuthorizedProducts,
   mockListMaterialTypes,
@@ -17,6 +18,7 @@ const {
   mockGetKanbanAuthToken: vi.fn(),
   mockGetResolvedKanbanAuthToken: vi.fn(),
   mockGetFactorTree: vi.fn(),
+  mockGetSceneTree: vi.fn(),
   mockGetSchemeTree: vi.fn(),
   mockListAuthorizedProducts: vi.fn(),
   mockListMaterialTypes: vi.fn(),
@@ -29,6 +31,7 @@ vi.mock('@/services/kanbanIntegration', () => ({
   getKanbanAuthToken: mockGetKanbanAuthToken,
   getResolvedKanbanAuthToken: mockGetResolvedKanbanAuthToken,
   getFactorTree: mockGetFactorTree,
+  getSceneTree: mockGetSceneTree,
   getSchemeTree: mockGetSchemeTree,
   listAuthorizedProducts: mockListAuthorizedProducts,
   listMaterialTypes: mockListMaterialTypes,
@@ -149,6 +152,10 @@ describe('Node Definitions Execution Logic', () => {
       neighborSystemNode.properties.find((property) => property.name === 'productName')
         ?.displayName,
     ).toBe('产品名称')
+    expect(
+      neighborSystemNode.properties.find((property) => property.name === 'sceneSelection')
+        ?.displayName,
+    ).toBe('场景选择')
     expect(
       neighborSystemNode.properties.find((property) => property.name === 'selectedFactors')
         ?.displayName,
@@ -1376,12 +1383,36 @@ describe('Node Definitions Execution Logic', () => {
 
       const config = {
         productName: '试制产品 A1',
+        sceneSelection: {
+          selectedKey: 'sub-scene:scene-pack::sub-pack-a',
+          value: {
+            sceneId: 'scene-pack',
+            sceneLable: 'PACK',
+            subSceneId: 'sub-pack-a',
+            subSceneLable: 'PACK-A',
+          },
+        },
         fetchMode: 'time',
         timeRange: [new Date('2026-03-01'), new Date('2026-03-10')],
         materialType: '正极',
         selectedFactors: {
-          'factor:涂布::F_TEMP': { checked: true },
-          'factor:涂布::F_PRESS': { checked: true },
+          selectedKeys: ['factor:涂布::F_TEMP', 'factor:涂布::F_PRESS'],
+          values: [
+            {
+              factorKey: 'F_TEMP',
+              factorName: '温度',
+              materialType: '正极',
+              processName: '涂布',
+              r2Name: 'R2-TEMP',
+            },
+            {
+              factorKey: 'F_PRESS',
+              factorName: '压力',
+              materialType: '正极',
+              processName: '涂布',
+              r2Name: 'R2-PRESS',
+            },
+          ],
         },
         selectedProcesses: ['装配'],
       }
@@ -1396,7 +1427,28 @@ describe('Node Definitions Execution Logic', () => {
           productName: '试制产品 A1',
           fetchMode: 'time',
           materialType: '正极',
-          factorKeys: ['F_TEMP', 'F_PRESS'],
+          scene: {
+            sceneId: 'scene-pack',
+            sceneLable: 'PACK',
+            subSceneId: 'sub-pack-a',
+            subSceneLable: 'PACK-A',
+          },
+          val: [
+            {
+              factorKey: 'F_TEMP',
+              factorName: '温度',
+              materialType: '正极',
+              processName: '涂布',
+              r2Name: 'R2-TEMP',
+            },
+            {
+              factorKey: 'F_PRESS',
+              factorName: '压力',
+              materialType: '正极',
+              processName: '涂布',
+              r2Name: 'R2-PRESS',
+            },
+          ],
           processList: ['装配'],
         }),
       )
@@ -1415,6 +1467,15 @@ describe('Node Definitions Execution Logic', () => {
         fetchMode: 'sn',
         snList: 'SN001',
         productName: '试制产品 A1',
+        sceneSelection: {
+          selectedKey: 'sub-scene:scene-pack::sub-pack-a',
+          value: {
+            sceneId: 'scene-pack',
+            sceneLable: 'PACK',
+            subSceneId: 'sub-pack-a',
+            subSceneLable: 'PACK-A',
+          },
+        },
         selectedProcesses: ['涂布'],
         selectedFactors: {},
       }
@@ -1435,7 +1496,18 @@ describe('Node Definitions Execution Logic', () => {
           fetchMode: 'sn',
           snList: 'SN001',
           selectedProcesses: ['涂布'],
-          selectedFactors: { 'factor:涂布::F_TEMP': { checked: true } },
+          selectedFactors: {
+            selectedKeys: ['factor:涂布::F_TEMP'],
+            values: [
+              {
+                factorKey: 'F_TEMP',
+                factorName: '温度',
+                materialType: '正极',
+                processName: '涂布',
+                r2Name: 'R2-TEMP',
+              },
+            ],
+          },
         }),
       ).rejects.toThrow('未接收到宿主系统传入的访问凭证')
     })
@@ -1446,9 +1518,29 @@ describe('Node Definitions Execution Logic', () => {
       await expect(
         neighborSystemNode.execute(null, {
           productName: '试制产品 A1',
+          sceneSelection: {
+            selectedKey: 'sub-scene:scene-pack::sub-pack-a',
+            value: {
+              sceneId: 'scene-pack',
+              sceneLable: 'PACK',
+              subSceneId: 'sub-pack-a',
+              subSceneLable: 'PACK-A',
+            },
+          },
           fetchMode: 'sn',
           snList: 'SN001',
-          selectedFactors: { 'factor:涂布::F_TEMP': { checked: true } },
+          selectedFactors: {
+            selectedKeys: ['factor:涂布::F_TEMP'],
+            values: [
+              {
+                factorKey: 'F_TEMP',
+                factorName: '温度',
+                materialType: '正极',
+                processName: '涂布',
+                r2Name: 'R2-TEMP',
+              },
+            ],
+          },
           selectedProcesses: [],
         }),
       ).rejects.toThrow('请至少选择一个工序')

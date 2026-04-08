@@ -17,8 +17,23 @@ describe('neighbor-system mock options', () => {
       config: {},
       property: propertyMap.get('productName')!,
     })
-    const factorTree = await propertyMap.get('selectedFactors')!.resolveOptions?.({
+    const sceneTree = await propertyMap.get('sceneSelection')!.resolveOptions?.({
       config: { productName: '试制产品 A1' },
+      property: propertyMap.get('sceneSelection')!,
+    })
+    const factorTree = await propertyMap.get('selectedFactors')!.resolveOptions?.({
+      config: {
+        productName: '试制产品 A1',
+        sceneSelection: {
+          selectedKey: 'sub-scene:scene-pack::sub-pack-a',
+          value: {
+            sceneId: 'scene-pack',
+            sceneLable: 'PACK',
+            subSceneId: 'sub-pack-a',
+            subSceneLable: 'PACK-A',
+          },
+        },
+      },
       property: propertyMap.get('selectedFactors')!,
     })
     const materialTypeOptions = await propertyMap.get('materialType')!.resolveOptions?.({
@@ -39,6 +54,7 @@ describe('neighbor-system mock options', () => {
     })
 
     expect(productOptions).toHaveLength(2)
+    expect(sceneTree).toHaveLength(1)
     expect(factorTree).toHaveLength(2)
     expect(factorTree?.[0]).toMatchObject({
       key: 'process:涂布',

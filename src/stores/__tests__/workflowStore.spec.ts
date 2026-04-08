@@ -892,62 +892,105 @@ describe('Workflow Store', () => {
   })
 
   it('should keep global run alive and collect runtime inputs for multiple trigger nodes', async () => {
-    const store = useWorkflowStore()
-    const trigger1 = store.addAndConnectNode('file-import', '触发器一', { x: 0, y: 0 })!
-    const trigger2 = store.addAndConnectNode('file-import', '触发器二', { x: 0, y: 120 })!
-    const mergeNode = store.addAndConnectNode('data-merge', '数据合并', { x: 320, y: 60 })!
-    const terminalNode = store.addAndConnectNode('chart-display', '图表展示', { x: 640, y: 60 })!
+    const runtimeTriggerDefinition = {
+      name: 'test-runtime-queue-trigger',
+      displayName: 'Runtime Queue Trigger',
+      icon: 'database',
+      category: 'trigger' as const,
+      description: 'test',
+      properties: [
+        {
+          name: 'token',
+          displayName: '启动参数',
+          type: 'string' as const,
+          default: '',
+          required: true,
+          isRuntimeInput: true,
+        },
+      ],
+      execute: async (_input: null, config: { token: string }) =>
+        createTableResult([{ a: 1, b: config.token.length }]),
+    }
 
-    store.edges.push(
-      {
-        id: 'e_trigger1_merge_runtime',
-        source: trigger1.id,
-        target: mergeNode.id,
-        type: 'n8n',
-        animated: true,
-      },
-      {
-        id: 'e_trigger2_merge_runtime',
-        source: trigger2.id,
-        target: mergeNode.id,
-        type: 'n8n',
-        animated: true,
-      },
-      {
-        id: 'e_merge_terminal_runtime',
-        source: mergeNode.id,
-        target: terminalNode.id,
-        type: 'n8n',
-        animated: true,
-      },
-    )
+    nodeDefinitions.push(runtimeTriggerDefinition)
 
-    const waitForPending = async () => {
-      for (let attempt = 0; attempt < 50; attempt += 1) {
-        if (store.pendingExecution) return
-        await new Promise((resolve) => setTimeout(resolve, 20))
+    try {
+      const store = useWorkflowStore()
+      const trigger1 = store.addAndConnectNode('test-runtime-queue-trigger', '触发器一', {
+        x: 0,
+        y: 0,
+      })!
+      const trigger2 = store.addAndConnectNode('test-runtime-queue-trigger', '触发器二', {
+        x: 0,
+        y: 120,
+      })!
+      const mergeNode = store.addAndConnectNode('data-merge', '数据合并', { x: 320, y: 60 })!
+      const terminalNode = store.addAndConnectNode('chart-display', '图表展示', { x: 640, y: 60 })!
+      terminalNode.data.config = {
+        chartType: 'scatter',
+        xAxis: 'a',
+        yAxis: 'b',
       }
-      throw new Error('等待运行时参数输入超时')
+
+      store.edges.push(
+        {
+          id: 'e_trigger1_merge_runtime',
+          source: trigger1.id,
+          target: mergeNode.id,
+          type: 'n8n',
+          animated: true,
+        },
+        {
+          id: 'e_trigger2_merge_runtime',
+          source: trigger2.id,
+          target: mergeNode.id,
+          type: 'n8n',
+          animated: true,
+        },
+        {
+          id: 'e_merge_terminal_runtime',
+          source: mergeNode.id,
+          target: terminalNode.id,
+          type: 'n8n',
+          animated: true,
+        },
+      )
+
+      const waitForPending = async () => {
+        for (let attempt = 0; attempt < 50; attempt += 1) {
+          if (store.pendingExecution) {
+            await new Promise((resolve) => setTimeout(resolve, 0))
+            return
+          }
+          await new Promise((resolve) => setTimeout(resolve, 20))
+        }
+        throw new Error('等待运行时参数输入超时')
+      }
+
+      const runPromise = store.runGlobal()
+
+      for (let i = 0; i < 2; i += 1) {
+        await waitForPending()
+        expect(store.pendingExecution?.executionScope).toBe('global')
+        expect(store.pendingExecution?.promptTotal).toBe(2)
+        expect(store.pendingExecution?.promptIndex).toBe(i + 1)
+        const pendingNode = store.nodes.find((node) => node.id === store.pendingExecution?.nodeId)!
+        pendingNode.data.config.token = `runtime-${i + 1}`
+        await store.resumePendingExecution()
+      }
+
+      await runPromise
+
+      expect(store.pendingExecution).toBeNull()
+      expect(store.isRunning).toBe(false)
+      expect(terminalNode.data.status).toBe('success')
+      expect(store.executionHistory[0]!.status).toBe('success')
+    } finally {
+      const definitionIndex = nodeDefinitions.findIndex(
+        (definition) => definition.name === 'test-runtime-queue-trigger',
+      )
+      if (definitionIndex >= 0) nodeDefinitions.splice(definitionIndex, 1)
     }
-
-    const runPromise = store.runGlobal()
-
-    for (let i = 0; i < 2; i += 1) {
-      await waitForPending()
-      expect(store.pendingExecution?.executionScope).toBe('global')
-      expect(store.pendingExecution?.promptTotal).toBe(2)
-      expect(store.pendingExecution?.promptIndex).toBe(i + 1)
-      const pendingNode = store.nodes.find((node) => node.id === store.pendingExecution?.nodeId)!
-      pendingNode.data.config.fileData = new File(['a,b\n1,2'], `runtime-${i}.csv`)
-      await store.resumePendingExecution()
-    }
-
-    await runPromise
-
-    expect(store.pendingExecution).toBeNull()
-    expect(store.isRunning).toBe(false)
-    expect(terminalNode.data.status).toBe('success')
-    expect(store.executionHistory[0]!.status).toBe('success')
   })
 
   it('should stop global execution when pending runtime input is cancelled', async () => {

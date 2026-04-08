@@ -91,4 +91,167 @@ describe('PropertyFieldTreeInput', () => {
       }),
     )
   })
+
+  it('singleSelect 且节点提供对象值时，对外输出精简对象包装结构', async () => {
+    const wrapper = mount(PropertyFieldTreeInput, {
+      props: {
+        modelValue: {},
+        prop: createTreeProp({ singleSelect: true }),
+        options: [
+          {
+            key: 'scene:pack',
+            label: 'PACK',
+            children: [
+              {
+                key: 'sub-scene:pack-a',
+                label: 'PACK-A',
+                data: {
+                  value: {
+                    sceneId: 'scene-pack',
+                    sceneLable: 'PACK',
+                    subSceneId: 'sub-pack-a',
+                    subSceneLable: 'PACK-A',
+                  },
+                },
+              },
+            ],
+          },
+        ],
+        isOptionsLoading: false,
+        optionsError: '',
+      },
+      global: {
+        stubs: {
+          InputText: {
+            props: ['modelValue', 'placeholder', 'class'],
+            emits: ['update:modelValue'],
+            template:
+              '<input :value="modelValue" :placeholder="placeholder" :class="$attrs.class || $props.class" @input="$emit(\'update:modelValue\', $event.target.value)" />',
+          },
+          Tree: {
+            props: ['value', 'selectionKeys', 'expandedKeys'],
+            emits: ['update:selectionKeys'],
+            template: `
+              <div data-testid="tree-stub">
+                <button
+                  type="button"
+                  data-testid="tree-object-single"
+                  @click="$emit('update:selectionKeys', { 'sub-scene:pack-a': { checked: true, partialChecked: false } })"
+                >
+                  触发对象单选
+                </button>
+              </div>
+            `,
+          },
+        },
+      },
+    })
+
+    await wrapper.get('[data-testid="tree-object-single"]').trigger('click')
+
+    expect(wrapper.emitted('update:modelValue')?.[0]?.[0]).toEqual({
+      selectedKey: 'sub-scene:pack-a',
+      value: {
+        sceneId: 'scene-pack',
+        sceneLable: 'PACK',
+        subSceneId: 'sub-pack-a',
+        subSceneLable: 'PACK-A',
+      },
+    })
+  })
+
+  it('多选树节点提供对象值时，对外输出 values 数组', async () => {
+    const wrapper = mount(PropertyFieldTreeInput, {
+      props: {
+        modelValue: {},
+        prop: createTreeProp(),
+        options: [
+          {
+            key: 'process:涂布',
+            label: '涂布',
+            children: [
+              {
+                key: 'factor:F_TEMP',
+                label: '温度',
+                data: {
+                  value: {
+                    factorKey: 'F_TEMP',
+                    factorName: '温度',
+                    materialType: '正极',
+                    processName: '涂布',
+                    r2Name: 'R2-TEMP',
+                  },
+                },
+              },
+              {
+                key: 'factor:F_PRESS',
+                label: '压力',
+                data: {
+                  value: {
+                    factorKey: 'F_PRESS',
+                    factorName: '压力',
+                    materialType: '正极',
+                    processName: '涂布',
+                    r2Name: 'R2-PRESS',
+                  },
+                },
+              },
+            ],
+          },
+        ],
+        isOptionsLoading: false,
+        optionsError: '',
+      },
+      global: {
+        stubs: {
+          InputText: {
+            props: ['modelValue', 'placeholder', 'class'],
+            emits: ['update:modelValue'],
+            template:
+              '<input :value="modelValue" :placeholder="placeholder" :class="$attrs.class || $props.class" @input="$emit(\'update:modelValue\', $event.target.value)" />',
+          },
+          Tree: {
+            props: ['value', 'selectionKeys', 'expandedKeys'],
+            emits: ['update:selectionKeys'],
+            template: `
+              <div data-testid="tree-stub">
+                <button
+                  type="button"
+                  data-testid="tree-object-multi"
+                  @click="$emit('update:selectionKeys', {
+                    'factor:F_TEMP': { checked: true, partialChecked: false },
+                    'factor:F_PRESS': { checked: true, partialChecked: false },
+                  })"
+                >
+                  触发对象多选
+                </button>
+              </div>
+            `,
+          },
+        },
+      },
+    })
+
+    await wrapper.get('[data-testid="tree-object-multi"]').trigger('click')
+
+    expect(wrapper.emitted('update:modelValue')?.[0]?.[0]).toEqual({
+      selectedKeys: ['factor:F_TEMP', 'factor:F_PRESS'],
+      values: [
+        {
+          factorKey: 'F_TEMP',
+          factorName: '温度',
+          materialType: '正极',
+          processName: '涂布',
+          r2Name: 'R2-TEMP',
+        },
+        {
+          factorKey: 'F_PRESS',
+          factorName: '压力',
+          materialType: '正极',
+          processName: '涂布',
+          r2Name: 'R2-PRESS',
+        },
+      ],
+    })
+  })
 })
