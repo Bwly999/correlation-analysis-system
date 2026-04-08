@@ -1433,7 +1433,7 @@ describe('Node Definitions Execution Logic', () => {
             subSceneId: 'sub-pack-a',
             subSceneLable: 'PACK-A',
           },
-          val: [
+          facotrs: [
             {
               factorKey: 'F_TEMP',
               factorName: '温度',

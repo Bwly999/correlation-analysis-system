@@ -48,7 +48,7 @@ export interface KanbanFetchParams {
   productName: string
   fetchMode: 'time' | 'scheme' | 'sn' | 'taskOrder'
   scene?: KanbanSceneValue
-  val: KanbanFactorValue[]
+  facotrs: KanbanFactorValue[]
   processList: string[]
   materialType?: string
   timeRange?: [string, string]
@@ -312,7 +312,7 @@ const buildRows = (params: KanbanFetchParams): KanbanFetchResult => {
         productName: params.productName,
         collectedAt: `2026-03-${String(index + 1).padStart(2, '0')}T08:00:00.000Z`,
       }
-      params.val.forEach((factor, factorIndex) => {
+      params.facotrs.forEach((factor, factorIndex) => {
         row[factor.factorKey] = Number(((index + 1) * 10 + factorIndex + 0.5).toFixed(2))
       })
       return row

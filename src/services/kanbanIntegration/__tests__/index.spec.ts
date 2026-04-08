@@ -56,7 +56,7 @@ describe('kanban integration bridge', () => {
       },
       async fetchKanbanData(params) {
         return {
-          rows: [{ sn: 'SN001', factorCount: params.val.length }],
+          rows: [{ sn: 'SN001', factorCount: params.facotrs.length }],
           metadata: { from: 'test' },
         }
       },
@@ -262,7 +262,7 @@ describe('kanban integration bridge', () => {
       token: getKanbanAuthToken(),
       productName: '试制产品 A1',
       fetchMode: 'sn',
-      val: [
+      facotrs: [
         {
           factorKey: 'F_TEMP',
           factorName: '温度',
@@ -292,7 +292,7 @@ describe('kanban integration bridge', () => {
         token: '',
         productName: '试制产品 A1',
         fetchMode: 'sn',
-        val: [
+        facotrs: [
           {
             factorKey: 'F_TEMP',
             factorName: '温度',

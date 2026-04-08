@@ -311,7 +311,7 @@ export const neighborSystemNode: NodeDefinition = {
       productName: config.productName,
       fetchMode: config.fetchMode,
       scene,
-      val: factorValues,
+      facotrs: factorValues,
       processList,
       materialType: config.materialType,
       timeRange,
