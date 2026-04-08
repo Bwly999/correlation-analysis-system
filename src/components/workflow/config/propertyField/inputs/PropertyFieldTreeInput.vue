@@ -1,11 +1,15 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed } from 'vue'
 import { ChevronDown, ChevronUp, LoaderCircle, Search } from 'lucide-vue-next'
 import InputText from 'primevue/inputtext'
 import Tree from 'primevue/tree'
 import type { TreeSelectionKeys } from 'primevue/tree'
 import type { TreeNode } from 'primevue/treenode'
 import type { NodeProperty } from '@/nodes/types'
+import {
+  normalizePropertyFieldTreeOptions,
+  usePropertyFieldTreeSearch,
+} from '../usePropertyFieldTreeSearch'
 
 const props = defineProps<{
   modelValue: unknown
@@ -19,9 +23,6 @@ const emit = defineEmits<{
   'update:modelValue': [value: unknown]
 }>()
 
-const treeFilterQuery = ref('')
-const treeExpandedKeys = ref<Record<string, boolean>>({})
-
 const configValue = computed({
   get: () => props.modelValue,
   set: (value) => emit('update:modelValue', value),
@@ -29,22 +30,8 @@ const configValue = computed({
 
 const isLeafNode = (node: TreeNode) => !Array.isArray(node.children) || node.children.length === 0
 
-const normalizeTreeOptions = (nodes: TreeNode[], leafOnlySelectable: boolean): TreeNode[] =>
-  nodes.map((node) => {
-    const normalizedChildren = Array.isArray(node.children)
-      ? normalizeTreeOptions(node.children, leafOnlySelectable)
-      : undefined
-    const leaf = !normalizedChildren || normalizedChildren.length === 0
-
-    return {
-      ...node,
-      children: normalizedChildren,
-      selectable: leafOnlySelectable && !leaf ? false : node.selectable,
-    }
-  })
-
-const normalizedTreeOptions = computed<TreeNode[]>(() =>
-  normalizeTreeOptions(props.options as TreeNode[], Boolean(props.prop.singleSelect)),
+const normalizedTreeOptions = computed(() =>
+  normalizePropertyFieldTreeOptions(props.options as TreeNode[], Boolean(props.prop.singleSelect)),
 )
 
 const collectNodeMap = (nodes: any[]) => {
@@ -156,54 +143,10 @@ const objectValueToSelectionKeys = (value: unknown): TreeSelectionKeys | undefin
     : undefined
 }
 
-const filterTreeNodes = (nodes: any[], query: string): any[] => {
-  if (!query.trim()) return nodes
-
-  const normalizedQuery = query.trim().toLowerCase()
-
-  return nodes
-    .map((node) => {
-      const searchText = String(node.data?.searchText || node.label || '').toLowerCase()
-      const matchedChildren = filterTreeNodes(node.children || [], query)
-      if (searchText.includes(normalizedQuery) || matchedChildren.length > 0) {
-        return {
-          ...node,
-          children: matchedChildren,
-        }
-      }
-
-      return null
-    })
-    .filter(Boolean)
-}
-
-const filteredTreeOptions = computed(() =>
-  filterTreeNodes(normalizedTreeOptions.value, treeFilterQuery.value),
-)
-
-const collectExpandedKeys = (nodes: any[]): Record<string, boolean> => {
-  const expandedKeys: Record<string, boolean> = {}
-
-  const traverse = (items: any[]) => {
-    items.forEach((item) => {
-      if (!item?.children?.length) return
-      expandedKeys[String(item.key)] = true
-      traverse(item.children)
-    })
-  }
-
-  traverse(nodes)
-
-  return expandedKeys
-}
-
-const expandAllNodes = () => {
-  treeExpandedKeys.value = collectExpandedKeys(filteredTreeOptions.value)
-}
-
-const collapseAllNodes = () => {
-  treeExpandedKeys.value = {}
-}
+const { query: treeFilterQuery, expandedKeys: treeExpandedKeys, filteredOptions: filteredTreeOptions, expandAllNodes, collapseAllNodes } =
+  usePropertyFieldTreeSearch({
+    options: normalizedTreeOptions,
+  })
 
 const treeSelectionValue = computed<TreeSelectionKeys | undefined>({
   get: () =>
@@ -224,14 +167,6 @@ const treeSelectionValue = computed<TreeSelectionKeys | undefined>({
   },
 })
 
-watch(
-  [treeFilterQuery, filteredTreeOptions],
-  ([query, options]) => {
-    if (!query.trim()) return
-    treeExpandedKeys.value = collectExpandedKeys(options)
-  },
-  { deep: true },
-)
 </script>
 
 <template>

@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { nextTick } from 'vue'
 import PropertyFieldTreeInput from '../PropertyFieldTreeInput.vue'
 import type { NodeProperty } from '@/nodes/types'
 
@@ -114,9 +115,16 @@ describe('PropertyFieldTreeInput', () => {
   })
 
   it('搜索后自动展开过滤结果中的所有层级', async () => {
+    vi.useFakeTimers()
     const wrapper = mountTreeInput()
 
     await wrapper.get('input').setValue('目标')
+
+    expect(wrapper.get('[data-testid="tree-value"]').text()).toContain('普通节点')
+    expect(wrapper.get('[data-testid="tree-expanded-keys"]').text()).toBe('{}')
+
+    vi.advanceTimersByTime(150)
+    await nextTick()
 
     expect(wrapper.get('[data-testid="tree-value"]').text()).toContain('目标节点')
     expect(wrapper.get('[data-testid="tree-expanded-keys"]').text()).toBe(
@@ -125,6 +133,27 @@ describe('PropertyFieldTreeInput', () => {
         'group-1-1': true,
       }),
     )
+
+    vi.useRealTimers()
+  })
+
+  it('连续快速输入时只按最后一次查询更新结果', async () => {
+    vi.useFakeTimers()
+    const wrapper = mountTreeInput()
+
+    await wrapper.get('input').setValue('普')
+    await wrapper.get('input').setValue('普通')
+
+    vi.advanceTimersByTime(149)
+    await nextTick()
+    expect(wrapper.get('[data-testid="tree-value"]').text()).toContain('目标节点')
+
+    vi.advanceTimersByTime(1)
+    await nextTick()
+    expect(wrapper.get('[data-testid="tree-value"]').text()).toContain('普通节点')
+    expect(wrapper.get('[data-testid="tree-value"]').text()).not.toContain('目标节点')
+
+    vi.useRealTimers()
   })
 
   it('singleSelect 且节点提供对象值时，对外输出精简对象包装结构', async () => {
