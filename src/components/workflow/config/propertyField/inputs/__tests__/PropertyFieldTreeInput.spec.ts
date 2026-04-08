@@ -62,6 +62,41 @@ const mountTreeInput = () =>
   })
 
 describe('PropertyFieldTreeInput', () => {
+  it('singleSelect 时将非叶子节点标记为不可选', () => {
+    const wrapper = mount(PropertyFieldTreeInput, {
+      props: {
+        modelValue: {},
+        prop: createTreeProp({ singleSelect: true }),
+        options: treeOptions,
+        isOptionsLoading: false,
+        optionsError: '',
+      },
+      global: {
+        stubs: {
+          InputText: {
+            props: ['modelValue', 'placeholder', 'class'],
+            emits: ['update:modelValue'],
+            template:
+              '<input :value="modelValue" :placeholder="placeholder" :class="$attrs.class || $props.class" @input="$emit(\'update:modelValue\', $event.target.value)" />',
+          },
+          Tree: {
+            props: ['value', 'selectionKeys', 'expandedKeys'],
+            template: `
+              <div data-testid="tree-stub">
+                <div data-testid="tree-value">{{ JSON.stringify(value) }}</div>
+              </div>
+            `,
+          },
+        },
+      },
+    })
+
+    expect(wrapper.get('[data-testid="tree-value"]').text()).toContain('"key":"group-1","label":"一级分组","children"')
+    expect(wrapper.get('[data-testid="tree-value"]').text()).toContain('"key":"group-1","label":"一级分组","children":[{"key":"group-1-1"')
+    expect(wrapper.get('[data-testid="tree-value"]').text()).toContain('"selectable":false')
+    expect(wrapper.get('[data-testid="tree-value"]').text()).toContain('"key":"leaf-1","label":"目标节点"')
+  })
+
   it('点击完全展开和完全收起按钮时更新展开状态', async () => {
     const wrapper = mountTreeInput()
 
@@ -157,6 +192,53 @@ describe('PropertyFieldTreeInput', () => {
         subSceneId: 'sub-pack-a',
         subSceneLable: 'PACK-A',
       },
+    })
+  })
+
+  it('singleSelect 时忽略父节点勾选，只保留叶子节点', async () => {
+    const wrapper = mount(PropertyFieldTreeInput, {
+      props: {
+        modelValue: {},
+        prop: createTreeProp({ singleSelect: true }),
+        options: treeOptions,
+        isOptionsLoading: false,
+        optionsError: '',
+      },
+      global: {
+        stubs: {
+          InputText: {
+            props: ['modelValue', 'placeholder', 'class'],
+            emits: ['update:modelValue'],
+            template:
+              '<input :value="modelValue" :placeholder="placeholder" :class="$attrs.class || $props.class" @input="$emit(\'update:modelValue\', $event.target.value)" />',
+          },
+          Tree: {
+            props: ['value', 'selectionKeys', 'expandedKeys'],
+            emits: ['update:selectionKeys'],
+            template: `
+              <div data-testid="tree-stub">
+                <button
+                  type="button"
+                  data-testid="tree-parent-single"
+                  @click="$emit('update:selectionKeys', {
+                    'group-1': { checked: true, partialChecked: false },
+                    'group-1-1': { checked: true, partialChecked: false },
+                    'leaf-1': { checked: true, partialChecked: false },
+                  })"
+                >
+                  触发父节点单选
+                </button>
+              </div>
+            `,
+          },
+        },
+      },
+    })
+
+    await wrapper.get('[data-testid="tree-parent-single"]').trigger('click')
+
+    expect(wrapper.emitted('update:modelValue')?.[0]?.[0]).toEqual({
+      'leaf-1': { checked: true, partialChecked: false },
     })
   })
 

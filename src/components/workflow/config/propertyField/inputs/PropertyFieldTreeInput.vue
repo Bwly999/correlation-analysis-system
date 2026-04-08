@@ -4,6 +4,7 @@ import { ChevronDown, ChevronUp, LoaderCircle, Search } from 'lucide-vue-next'
 import InputText from 'primevue/inputtext'
 import Tree from 'primevue/tree'
 import type { TreeSelectionKeys } from 'primevue/tree'
+import type { TreeNode } from 'primevue/treenode'
 import type { NodeProperty } from '@/nodes/types'
 
 const props = defineProps<{
@@ -26,6 +27,26 @@ const configValue = computed({
   set: (value) => emit('update:modelValue', value),
 })
 
+const isLeafNode = (node: TreeNode) => !Array.isArray(node.children) || node.children.length === 0
+
+const normalizeTreeOptions = (nodes: TreeNode[], leafOnlySelectable: boolean): TreeNode[] =>
+  nodes.map((node) => {
+    const normalizedChildren = Array.isArray(node.children)
+      ? normalizeTreeOptions(node.children, leafOnlySelectable)
+      : undefined
+    const leaf = !normalizedChildren || normalizedChildren.length === 0
+
+    return {
+      ...node,
+      children: normalizedChildren,
+      selectable: leafOnlySelectable && !leaf ? false : node.selectable,
+    }
+  })
+
+const normalizedTreeOptions = computed<TreeNode[]>(() =>
+  normalizeTreeOptions(props.options as TreeNode[], Boolean(props.prop.singleSelect)),
+)
+
 const collectNodeMap = (nodes: any[]) => {
   const map = new Map<string, any>()
 
@@ -44,7 +65,7 @@ const collectNodeMap = (nodes: any[]) => {
   return map
 }
 
-const treeNodeMap = computed(() => collectNodeMap(props.options))
+const treeNodeMap = computed(() => collectNodeMap(normalizedTreeOptions.value))
 const usesObjectValueMode = computed(() =>
   Array.from(treeNodeMap.value.values()).some((node) => node?.data?.value !== undefined),
 )
@@ -60,13 +81,32 @@ const getCheckedKeys = (selectionKeys: TreeSelectionKeys | undefined) =>
     .filter(([, state]) => state?.checked)
     .map(([key]) => key)
 
+const getCheckedLeafEntries = (selectionKeys: TreeSelectionKeys | undefined) =>
+  Object.entries(selectionKeys || {}).filter(([key, state]) => {
+    const node = treeNodeMap.value.get(key)
+    return state?.checked && node && isLeafNode(node)
+  })
+
 const normalizeSingleSelection = (selectionKeys: TreeSelectionKeys | undefined) => {
   if (!selectionKeys || typeof selectionKeys !== 'object') return selectionKeys
 
-  const checkedEntries = Object.entries(selectionKeys).filter(([, state]) => state?.checked)
-  if (checkedEntries.length <= 1) return selectionKeys
+  const checkedLeafEntries = getCheckedLeafEntries(selectionKeys)
+  if (checkedLeafEntries.length === 0) return {}
+  if (checkedLeafEntries.length === 1) {
+    const [selectedKey, selectedState] = checkedLeafEntries[0] as [
+      string,
+      { checked?: boolean; partialChecked?: boolean },
+    ]
 
-  const [selectedKey, selectedState] = checkedEntries[checkedEntries.length - 1] as [
+    return {
+      [selectedKey]: {
+        checked: selectedState.checked ?? true,
+        partialChecked: false,
+      },
+    }
+  }
+
+  const [selectedKey, selectedState] = checkedLeafEntries[checkedLeafEntries.length - 1] as [
     string,
     { checked?: boolean; partialChecked?: boolean },
   ]
@@ -138,7 +178,7 @@ const filterTreeNodes = (nodes: any[], query: string): any[] => {
 }
 
 const filteredTreeOptions = computed(() =>
-  filterTreeNodes(props.options, treeFilterQuery.value),
+  filterTreeNodes(normalizedTreeOptions.value, treeFilterQuery.value),
 )
 
 const collectExpandedKeys = (nodes: any[]): Record<string, boolean> => {
