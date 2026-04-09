@@ -34,13 +34,17 @@ const normalizedTreeOptions = computed(() =>
   normalizePropertyFieldTreeOptions(props.options as TreeNode[], Boolean(props.prop.singleSelect)),
 )
 
-const collectNodeMap = (nodes: any[]) => {
+const collectTreeMeta = (nodes: any[]) => {
   const map = new Map<string, any>()
+  let hasObjectValue = false
 
   const visit = (items: any[]) => {
     items.forEach((item) => {
       if (!item?.key) return
       map.set(String(item.key), item)
+      if (item?.data?.value !== undefined) {
+        hasObjectValue = true
+      }
       if (Array.isArray(item.children) && item.children.length > 0) {
         visit(item.children)
       }
@@ -49,13 +53,15 @@ const collectNodeMap = (nodes: any[]) => {
 
   visit(nodes)
 
-  return map
+  return {
+    map,
+    hasObjectValue,
+  }
 }
 
-const treeNodeMap = computed(() => collectNodeMap(normalizedTreeOptions.value))
-const usesObjectValueMode = computed(() =>
-  Array.from(treeNodeMap.value.values()).some((node) => node?.data?.value !== undefined),
-)
+const treeMeta = computed(() => collectTreeMeta(normalizedTreeOptions.value))
+const treeNodeMap = computed(() => treeMeta.value.map)
+const usesObjectValueMode = computed(() => treeMeta.value.hasObjectValue)
 
 const toSelectionStateMap = (keys: string[]) =>
   keys.reduce<Record<string, { checked: boolean; partialChecked: boolean }>>((acc, key) => {
@@ -143,10 +149,18 @@ const objectValueToSelectionKeys = (value: unknown): TreeSelectionKeys | undefin
     : undefined
 }
 
-const { query: treeFilterQuery, expandedKeys: treeExpandedKeys, filteredOptions: filteredTreeOptions, expandAllNodes, collapseAllNodes } =
-  usePropertyFieldTreeSearch({
-    options: normalizedTreeOptions,
-  })
+const {
+  query: treeFilterQuery,
+  expandedKeys: treeExpandedKeys,
+  filteredOptions: filteredTreeOptions,
+  isSearchResultTruncated,
+  searchResultMessage,
+  expandAllLabel,
+  expandAllNodes,
+  collapseAllNodes,
+} = usePropertyFieldTreeSearch({
+  options: normalizedTreeOptions,
+})
 
 const treeSelectionValue = computed<TreeSelectionKeys | undefined>({
   get: () =>
@@ -188,8 +202,8 @@ const treeSelectionValue = computed<TreeSelectionKeys | undefined>({
           type="button"
           data-testid="tree-expand-all"
           class="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600"
-          title="完全展开"
-          aria-label="完全展开"
+          :title="expandAllLabel"
+          :aria-label="expandAllLabel"
           @click="expandAllNodes"
         >
           <ChevronDown :size="16" />
@@ -208,6 +222,12 @@ const treeSelectionValue = computed<TreeSelectionKeys | undefined>({
     </div>
 
     <div class="p-2">
+      <div
+        v-if="isSearchResultTruncated"
+        class="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-5 text-amber-700"
+      >
+        {{ searchResultMessage }}
+      </div>
       <div
         v-if="isOptionsLoading"
         class="flex items-center justify-center gap-2 py-8 text-xs text-slate-400"

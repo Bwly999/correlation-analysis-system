@@ -101,6 +101,9 @@ describe('PropertyFieldTreeInput', () => {
   it('点击完全展开和完全收起按钮时更新展开状态', async () => {
     const wrapper = mountTreeInput()
 
+    expect(wrapper.get('[data-testid="tree-expand-all"]').attributes('title')).toBe('安全展开')
+    expect(wrapper.get('[data-testid="tree-expand-all"]').attributes('aria-label')).toBe('安全展开')
+
     await wrapper.get('[data-testid="tree-expand-all"]').trigger('click')
     expect(wrapper.get('[data-testid="tree-expanded-keys"]').text()).toBe(
       JSON.stringify({
@@ -112,6 +115,61 @@ describe('PropertyFieldTreeInput', () => {
 
     await wrapper.get('[data-testid="tree-collapse-all"]').trigger('click')
     expect(wrapper.get('[data-testid="tree-expanded-keys"]').text()).toBe('{}')
+  })
+
+  it('搜索结果超限时显示分组摘要提示', async () => {
+    vi.useFakeTimers()
+    const largeTreeOptions = [
+      {
+        key: 'group-1',
+        label: '一级分组',
+        children: Array.from({ length: 40 }, (_, index) => ({
+          key: `sub-group-${index + 1}`,
+          label: `二级分组${index + 1}`,
+          children: Array.from({ length: 20 }, (_, leafIndex) => ({
+            key: `leaf-${index + 1}-${leafIndex + 1}`,
+            label: `温度指标-${index + 1}-${leafIndex + 1}`,
+          })),
+        })),
+      },
+    ]
+
+    const wrapper = mount(PropertyFieldTreeInput, {
+      props: {
+        modelValue: {},
+        prop: createTreeProp(),
+        options: largeTreeOptions,
+        isOptionsLoading: false,
+        optionsError: '',
+      },
+      global: {
+        stubs: {
+          InputText: {
+            props: ['modelValue', 'placeholder', 'class'],
+            emits: ['update:modelValue'],
+            template:
+              '<input :value="modelValue" :placeholder="placeholder" :class="$attrs.class || $props.class" @input="$emit(\'update:modelValue\', $event.target.value)" />',
+          },
+          Tree: {
+            props: ['value', 'selectionKeys', 'expandedKeys'],
+            template: `
+              <div data-testid="tree-stub">
+                <div data-testid="tree-value">{{ JSON.stringify(value) }}</div>
+              </div>
+            `,
+          },
+        },
+      },
+    })
+
+    await wrapper.get('input').setValue('温度指标')
+    vi.advanceTimersByTime(150)
+    await nextTick()
+
+    expect(wrapper.text()).toContain('结果过多，已按分组摘要显示')
+    expect(wrapper.get('[data-testid="tree-value"]').text()).toContain('__search-summary__')
+
+    vi.useRealTimers()
   })
 
   it('搜索后自动展开过滤结果中的所有层级', async () => {
