@@ -44,6 +44,7 @@ const createSearchHarness = (
   overrides?: {
     maxSearchLeafMatches?: number
     maxExpandKeys?: number
+    enableSearchResultGuard?: boolean
   },
 ) =>
   defineComponent({
@@ -153,7 +154,7 @@ describe('usePropertyFieldTreeSearch', () => {
       filteredOptions: Array<{
         key?: string
         label?: string
-        children?: Array<{ key?: string; label?: string; children?: Array<{ label?: string }> }>
+        children?: Array<{ key?: string; label?: string; children?: Array<{ key?: string; label?: string }> }>
       }>
       expandedKeys: Record<string, boolean>
       isSearchResultTruncated: boolean
@@ -177,6 +178,38 @@ describe('usePropertyFieldTreeSearch', () => {
       ),
     ).toBe(true)
     expect(Object.keys(exposed.expandedKeys).length).toBeGreaterThan(0)
+
+    vi.useRealTimers()
+  })
+
+  it('关闭搜索保护时返回完整命中子树且不显示摘要节点', async () => {
+    vi.useFakeTimers()
+    const wrapper = mount(
+      createSearchHarness(createLargeTreeOptions(), {
+        maxSearchLeafMatches: 6,
+        maxExpandKeys: 20,
+        enableSearchResultGuard: false,
+      }),
+    )
+    const exposed = wrapper.vm as unknown as {
+      query: string
+      filteredOptions: Array<{
+        children?: Array<{ children?: Array<{ key?: string; label?: string }> }>
+      }>
+      isSearchResultTruncated: boolean
+      searchResultMessage: string
+    }
+
+    exposed.query = '温度指标'
+    await wrapper.vm.$nextTick()
+    vi.advanceTimersByTime(150)
+    await wrapper.vm.$nextTick()
+
+    expect(exposed.isSearchResultTruncated).toBe(false)
+    expect(exposed.searchResultMessage).toBe('')
+    const leaves = exposed.filteredOptions[0]?.children?.flatMap((child) => child.children || []) || []
+    expect(leaves.length).toBeGreaterThan(6)
+    expect(leaves.some((node) => node.key?.includes('__search-summary__'))).toBe(false)
 
     vi.useRealTimers()
   })

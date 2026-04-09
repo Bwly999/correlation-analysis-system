@@ -23,6 +23,7 @@ interface UsePropertyFieldTreeSearchOptions {
   debounceMs?: number
   maxSearchLeafMatches?: number
   maxExpandKeys?: number
+  enableSearchResultGuard?: boolean
 }
 
 const DEFAULT_MAX_SEARCH_LEAF_MATCHES = 120
@@ -182,15 +183,96 @@ const visitFilteredNode = (
   }
 }
 
+const visitFilteredNodeWithoutGuard = (
+  node: PropertyFieldTreeNode,
+  normalizedQuery: string,
+): SearchVisitResult => {
+  const children = Array.isArray(node.children) ? node.children : []
+  const isLeaf = children.length === 0
+  const searchText = node.data?.normalizedSearchText || ''
+  const selfMatched = searchText.includes(normalizedQuery)
+
+  if (isLeaf) {
+    return selfMatched
+      ? {
+          node: {
+            ...node,
+            children: [],
+          },
+          matched: true,
+          expandedKeys: [],
+        }
+      : {
+          node: null,
+          matched: false,
+          expandedKeys: [],
+        }
+  }
+
+  const visibleChildren: PropertyFieldTreeNode[] = []
+  const expandedKeys: string[] = []
+
+  children.forEach((child) => {
+    const result = visitFilteredNodeWithoutGuard(child, normalizedQuery)
+    if (!result.matched) return
+    if (result.node) {
+      visibleChildren.push(result.node)
+    }
+    expandedKeys.push(...result.expandedKeys)
+  })
+
+  if (!selfMatched && visibleChildren.length === 0) {
+    return {
+      node: null,
+      matched: false,
+      expandedKeys: [],
+    }
+  }
+
+  return {
+    node: {
+      ...node,
+      children: visibleChildren,
+    },
+    matched: true,
+    expandedKeys:
+      visibleChildren.length > 0 && node.key !== undefined
+        ? [String(node.key), ...expandedKeys]
+        : expandedKeys,
+  }
+}
+
 const filterTreeNodes = (
   nodes: PropertyFieldTreeNode[],
   normalizedQuery: string,
   maxSearchLeafMatches: number,
+  enableSearchResultGuard: boolean,
 ): FilteredTreeState => {
   if (!normalizedQuery) {
     return {
       nodes,
       expandedKeys: {},
+      isTruncated: false,
+      hiddenLeafMatchCount: 0,
+      message: '',
+    }
+  }
+
+  if (!enableSearchResultGuard) {
+    const expandedKeys: Record<string, boolean> = {}
+    const filteredNodes = nodes.reduce<PropertyFieldTreeNode[]>((acc, node) => {
+      const result = visitFilteredNodeWithoutGuard(node, normalizedQuery)
+      if (!result.node) return acc
+      result.expandedKeys.forEach((key) => {
+        expandedKeys[key] = true
+      })
+      acc.push(result.node)
+      return acc
+    }, [])
+
+    return {
+      nodes: filteredNodes,
+      expandedKeys,
       isTruncated: false,
       hiddenLeafMatchCount: 0,
       message: '',
@@ -254,6 +336,7 @@ export const usePropertyFieldTreeSearch = ({
   debounceMs = 150,
   maxSearchLeafMatches = DEFAULT_MAX_SEARCH_LEAF_MATCHES,
   maxExpandKeys = DEFAULT_MAX_EXPAND_KEYS,
+  enableSearchResultGuard = true,
 }: UsePropertyFieldTreeSearchOptions) => {
   const query = ref('')
   const debouncedQuery = ref('')
@@ -263,7 +346,12 @@ export const usePropertyFieldTreeSearch = ({
   const normalizedTreeFilterQuery = computed(() => debouncedQuery.value.trim().toLowerCase())
 
   const filteredTreeState = computed(() =>
-    filterTreeNodes(options.value, normalizedTreeFilterQuery.value, maxSearchLeafMatches),
+    filterTreeNodes(
+      options.value,
+      normalizedTreeFilterQuery.value,
+      maxSearchLeafMatches,
+      enableSearchResultGuard,
+    ),
   )
 
   const filteredOptions = computed(() => filteredTreeState.value.nodes)

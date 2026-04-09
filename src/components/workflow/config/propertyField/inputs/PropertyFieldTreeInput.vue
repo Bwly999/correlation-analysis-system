@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { ChevronDown, ChevronUp, LoaderCircle, Search } from 'lucide-vue-next'
+import { ElTreeV2 } from 'element-plus'
 import InputText from 'primevue/inputtext'
-import Tree from 'primevue/tree'
 import type { TreeSelectionKeys } from 'primevue/tree'
 import type { TreeNode } from 'primevue/treenode'
 import type { NodeProperty } from '@/nodes/types'
@@ -22,6 +22,18 @@ const props = defineProps<{
 const emit = defineEmits<{
   'update:modelValue': [value: unknown]
 }>()
+
+const ENABLE_SEARCH_RESULT_GUARD = false
+const ENABLE_SAFE_EXPAND_LIMIT = true
+
+type TreeV2Expose = {
+  setCheckedKeys?: (keys: Array<string | number>) => void
+  setExpandedKeys?: (keys: Array<string | number>) => void
+}
+
+if (!import.meta.env.TEST) {
+  void import('element-plus/es/components/tree-v2/style/css')
+}
 
 const configValue = computed({
   get: () => props.modelValue,
@@ -160,7 +172,82 @@ const {
   collapseAllNodes,
 } = usePropertyFieldTreeSearch({
   options: normalizedTreeOptions,
+  enableSearchResultGuard: ENABLE_SEARCH_RESULT_GUARD,
+  maxExpandKeys: ENABLE_SAFE_EXPAND_LIMIT ? undefined : Number.MAX_SAFE_INTEGER,
 })
+
+const treeRef = ref<TreeV2Expose | null>(null)
+
+const checkedKeysList = computed(() =>
+  getCheckedKeys(
+    usesObjectValueMode.value
+      ? objectValueToSelectionKeys(configValue.value)
+      : (configValue.value as TreeSelectionKeys | undefined),
+  ),
+)
+
+const expandedKeysList = computed(() => Object.keys(treeExpandedKeys.value || {}))
+
+const toTreeV2Data = (nodes: TreeNode[]): TreeNode[] =>
+  nodes.map((node) => ({
+    ...node,
+    children: Array.isArray(node.children) ? toTreeV2Data(node.children) : node.children,
+  }))
+
+const treeViewData = computed(() => toTreeV2Data(filteredTreeOptions.value as TreeNode[]))
+
+const syncTreeState = async () => {
+  await nextTick()
+  treeRef.value?.setCheckedKeys?.(checkedKeysList.value)
+  treeRef.value?.setExpandedKeys?.(expandedKeysList.value)
+}
+
+watch([filteredTreeOptions, checkedKeysList, expandedKeysList], () => {
+  void syncTreeState()
+}, { immediate: true })
+
+const selectionKeysFromCheckedState = (
+  checkedKeys: Array<string | number> = [],
+  halfCheckedKeys: Array<string | number> = [],
+): TreeSelectionKeys =>
+  [...checkedKeys, ...halfCheckedKeys].reduce<TreeSelectionKeys>((acc, rawKey) => {
+    const key = String(rawKey)
+    acc[key] = {
+      checked: checkedKeys.some((item) => String(item) === key),
+      partialChecked: halfCheckedKeys.some((item) => String(item) === key),
+    }
+    return acc
+  }, {})
+
+const handleTreeCheck = (
+  _data: unknown,
+  payload: {
+    checkedKeys?: Array<string | number>
+    halfCheckedKeys?: Array<string | number>
+  },
+) => {
+  treeSelectionValue.value = selectionKeysFromCheckedState(
+    payload.checkedKeys || [],
+    payload.halfCheckedKeys || [],
+  )
+}
+
+const handleTreeExpand = (data: unknown) => {
+  const node = data as TreeNode
+  if (node.key === undefined) return
+  treeExpandedKeys.value = {
+    ...treeExpandedKeys.value,
+    [String(node.key)]: true,
+  }
+}
+
+const handleTreeCollapse = (data: unknown) => {
+  const node = data as TreeNode
+  if (node.key === undefined) return
+  const nextKeys = { ...treeExpandedKeys.value }
+  delete nextKeys[String(node.key)]
+  treeExpandedKeys.value = nextKeys
+}
 
 const treeSelectionValue = computed<TreeSelectionKeys | undefined>({
   get: () =>
@@ -246,21 +333,30 @@ const treeSelectionValue = computed<TreeSelectionKeys | undefined>({
       >
         {{ prop.emptyMessage || '暂无数据' }}
       </div>
-      <Tree
+      <ElTreeV2
         v-else
-        v-model:selection-keys="treeSelectionValue"
-        v-model:expanded-keys="treeExpandedKeys"
-        :value="filteredTreeOptions"
-        selection-mode="checkbox"
+        ref="treeRef"
+        :data="treeViewData"
+        node-key="key"
+        show-checkbox
+        check-on-click-node
+        :check-strictly="false"
+        highlight-current
         class="ndv-tree max-h-[360px] overflow-auto"
-        :pt="{
-          root: { class: 'p-0' },
-          node: { class: 'p-0' },
-          content: { class: 'p-1 hover:bg-blue-50/50 rounded-lg transition-colors' },
-          label: { class: 'text-[12px] text-slate-600 font-medium' },
-          checkbox: { class: 'mr-2' },
-        }"
-      />
+        :props="{ value: 'key', label: 'label', children: 'children' }"
+        @check="handleTreeCheck"
+        @node-expand="handleTreeExpand"
+        @node-collapse="handleTreeCollapse"
+      >
+        <template #default="{ node, data }">
+          <span
+            class="block rounded-lg px-1 py-1 text-[12px] font-medium text-slate-600"
+            :class="data?.data?.searchSummary ? 'text-amber-700 italic' : ''"
+          >
+            {{ node.label }}
+          </span>
+        </template>
+      </ElTreeV2>
     </div>
   </div>
 </template>

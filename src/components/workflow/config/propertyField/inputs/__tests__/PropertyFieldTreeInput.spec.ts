@@ -32,6 +32,21 @@ const createTreeProp = (overrides: Partial<NodeProperty> = {}): NodeProperty => 
   ...overrides,
 })
 
+const createInputTextStub = {
+  props: ['modelValue', 'placeholder', 'class'],
+  emits: ['update:modelValue'],
+  template:
+    '<input :value="modelValue" :placeholder="placeholder" :class="$attrs.class || $props.class" @input="$emit(\'update:modelValue\', $event.target.value)" />',
+}
+
+const createTreeV2Stub = (
+  template = '<div data-testid="tree-value">{{ JSON.stringify({ data, treeProps: props }) }}</div>',
+) => ({
+  props: ['data', 'props'],
+  emits: ['check', 'node-expand', 'node-collapse'],
+  template: `<div data-testid="tree-v2-stub">${template}</div>`,
+})
+
 const mountTreeInput = () =>
   mount(PropertyFieldTreeInput, {
     props: {
@@ -43,21 +58,8 @@ const mountTreeInput = () =>
     },
     global: {
       stubs: {
-        InputText: {
-          props: ['modelValue', 'placeholder', 'class'],
-          emits: ['update:modelValue'],
-          template:
-            '<input :value="modelValue" :placeholder="placeholder" :class="$attrs.class || $props.class" @input="$emit(\'update:modelValue\', $event.target.value)" />',
-        },
-        Tree: {
-          props: ['value', 'selectionKeys', 'expandedKeys'],
-          template: `
-            <div data-testid="tree-stub">
-              <div data-testid="tree-value">{{ JSON.stringify(value) }}</div>
-              <div data-testid="tree-expanded-keys">{{ JSON.stringify(expandedKeys || {}) }}</div>
-            </div>
-          `,
-        },
+        InputText: createInputTextStub,
+        ElTreeV2: createTreeV2Stub(),
       },
     },
   })
@@ -74,50 +76,31 @@ describe('PropertyFieldTreeInput', () => {
       },
       global: {
         stubs: {
-          InputText: {
-            props: ['modelValue', 'placeholder', 'class'],
-            emits: ['update:modelValue'],
-            template:
-              '<input :value="modelValue" :placeholder="placeholder" :class="$attrs.class || $props.class" @input="$emit(\'update:modelValue\', $event.target.value)" />',
-          },
-          Tree: {
-            props: ['value', 'selectionKeys', 'expandedKeys'],
-            template: `
-              <div data-testid="tree-stub">
-                <div data-testid="tree-value">{{ JSON.stringify(value) }}</div>
-              </div>
-            `,
-          },
+          InputText: createInputTextStub,
+          ElTreeV2: createTreeV2Stub(),
         },
       },
     })
 
-    expect(wrapper.get('[data-testid="tree-value"]').text()).toContain('"key":"group-1","label":"一级分组","children"')
-    expect(wrapper.get('[data-testid="tree-value"]').text()).toContain('"key":"group-1","label":"一级分组","children":[{"key":"group-1-1"')
     expect(wrapper.get('[data-testid="tree-value"]').text()).toContain('"selectable":false')
     expect(wrapper.get('[data-testid="tree-value"]').text()).toContain('"key":"leaf-1","label":"目标节点"')
   })
 
-  it('点击完全展开和完全收起按钮时更新展开状态', async () => {
+  it('渲染 TreeV2 并保留展开按钮文案', async () => {
     const wrapper = mountTreeInput()
 
+    expect(wrapper.find('[data-testid="tree-v2-stub"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="tree-value"]').text()).toContain('"value":"key"')
     expect(wrapper.get('[data-testid="tree-expand-all"]').attributes('title')).toBe('安全展开')
     expect(wrapper.get('[data-testid="tree-expand-all"]').attributes('aria-label')).toBe('安全展开')
 
     await wrapper.get('[data-testid="tree-expand-all"]').trigger('click')
-    expect(wrapper.get('[data-testid="tree-expanded-keys"]').text()).toBe(
-      JSON.stringify({
-        'group-1': true,
-        'group-1-1': true,
-        'group-2': true,
-      }),
-    )
-
     await wrapper.get('[data-testid="tree-collapse-all"]').trigger('click')
-    expect(wrapper.get('[data-testid="tree-expanded-keys"]').text()).toBe('{}')
+
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
   })
 
-  it('搜索结果超限时显示分组摘要提示', async () => {
+  it('组件默认关闭搜索保护，不显示分组摘要提示', async () => {
     vi.useFakeTimers()
     const largeTreeOptions = [
       {
@@ -144,20 +127,8 @@ describe('PropertyFieldTreeInput', () => {
       },
       global: {
         stubs: {
-          InputText: {
-            props: ['modelValue', 'placeholder', 'class'],
-            emits: ['update:modelValue'],
-            template:
-              '<input :value="modelValue" :placeholder="placeholder" :class="$attrs.class || $props.class" @input="$emit(\'update:modelValue\', $event.target.value)" />',
-          },
-          Tree: {
-            props: ['value', 'selectionKeys', 'expandedKeys'],
-            template: `
-              <div data-testid="tree-stub">
-                <div data-testid="tree-value">{{ JSON.stringify(value) }}</div>
-              </div>
-            `,
-          },
+          InputText: createInputTextStub,
+          ElTreeV2: createTreeV2Stub(),
         },
       },
     })
@@ -166,50 +137,50 @@ describe('PropertyFieldTreeInput', () => {
     vi.advanceTimersByTime(150)
     await nextTick()
 
-    expect(wrapper.text()).toContain('结果过多，已按分组摘要显示')
-    expect(wrapper.get('[data-testid="tree-value"]').text()).toContain('__search-summary__')
+    expect(wrapper.text()).not.toContain('结果过多，已按分组摘要显示')
+    expect(wrapper.get('[data-testid="tree-value"]').text()).not.toContain('__search-summary__')
 
     vi.useRealTimers()
   })
 
-  it('搜索后自动展开过滤结果中的所有层级', async () => {
+  it('关闭搜索保护时不过滤为摘要节点', async () => {
     vi.useFakeTimers()
-    const wrapper = mountTreeInput()
+    const largeTreeOptions = [
+      {
+        key: 'group-1',
+        label: '一级分组',
+        children: Array.from({ length: 12 }, (_, index) => ({
+          key: `sub-group-${index + 1}`,
+          label: `二级分组${index + 1}`,
+          children: Array.from({ length: 10 }, (_, leafIndex) => ({
+            key: `leaf-${index + 1}-${leafIndex + 1}`,
+            label: `温度指标-${index + 1}-${leafIndex + 1}`,
+          })),
+        })),
+      },
+    ]
 
-    await wrapper.get('input').setValue('目标')
+    const wrapper = mount(PropertyFieldTreeInput, {
+      props: {
+        modelValue: {},
+        prop: createTreeProp(),
+        options: largeTreeOptions,
+        isOptionsLoading: false,
+        optionsError: '',
+      },
+      global: {
+        stubs: {
+          InputText: createInputTextStub,
+          ElTreeV2: createTreeV2Stub(),
+        },
+      },
+    })
 
-    expect(wrapper.get('[data-testid="tree-value"]').text()).toContain('普通节点')
-    expect(wrapper.get('[data-testid="tree-expanded-keys"]').text()).toBe('{}')
-
+    await wrapper.get('input').setValue('温度指标')
     vi.advanceTimersByTime(150)
     await nextTick()
 
-    expect(wrapper.get('[data-testid="tree-value"]').text()).toContain('目标节点')
-    expect(wrapper.get('[data-testid="tree-expanded-keys"]').text()).toBe(
-      JSON.stringify({
-        'group-1': true,
-        'group-1-1': true,
-      }),
-    )
-
-    vi.useRealTimers()
-  })
-
-  it('连续快速输入时只按最后一次查询更新结果', async () => {
-    vi.useFakeTimers()
-    const wrapper = mountTreeInput()
-
-    await wrapper.get('input').setValue('普')
-    await wrapper.get('input').setValue('普通')
-
-    vi.advanceTimersByTime(149)
-    await nextTick()
-    expect(wrapper.get('[data-testid="tree-value"]').text()).toContain('目标节点')
-
-    vi.advanceTimersByTime(1)
-    await nextTick()
-    expect(wrapper.get('[data-testid="tree-value"]').text()).toContain('普通节点')
-    expect(wrapper.get('[data-testid="tree-value"]').text()).not.toContain('目标节点')
+    expect(wrapper.get('[data-testid="tree-value"]').text()).not.toContain('__search-summary__')
 
     vi.useRealTimers()
   })
@@ -244,27 +215,16 @@ describe('PropertyFieldTreeInput', () => {
       },
       global: {
         stubs: {
-          InputText: {
-            props: ['modelValue', 'placeholder', 'class'],
-            emits: ['update:modelValue'],
-            template:
-              '<input :value="modelValue" :placeholder="placeholder" :class="$attrs.class || $props.class" @input="$emit(\'update:modelValue\', $event.target.value)" />',
-          },
-          Tree: {
-            props: ['value', 'selectionKeys', 'expandedKeys'],
-            emits: ['update:selectionKeys'],
-            template: `
-              <div data-testid="tree-stub">
-                <button
-                  type="button"
-                  data-testid="tree-object-single"
-                  @click="$emit('update:selectionKeys', { 'sub-scene:pack-a': { checked: true, partialChecked: false } })"
-                >
-                  触发对象单选
-                </button>
-              </div>
-            `,
-          },
+          InputText: createInputTextStub,
+          ElTreeV2: createTreeV2Stub(`
+            <button
+              type="button"
+              data-testid="tree-object-single"
+              @click="$emit('check', null, { checkedKeys: ['sub-scene:pack-a'], halfCheckedKeys: [] })"
+            >
+              触发对象单选
+            </button>
+          `),
         },
       },
     })
@@ -293,31 +253,19 @@ describe('PropertyFieldTreeInput', () => {
       },
       global: {
         stubs: {
-          InputText: {
-            props: ['modelValue', 'placeholder', 'class'],
-            emits: ['update:modelValue'],
-            template:
-              '<input :value="modelValue" :placeholder="placeholder" :class="$attrs.class || $props.class" @input="$emit(\'update:modelValue\', $event.target.value)" />',
-          },
-          Tree: {
-            props: ['value', 'selectionKeys', 'expandedKeys'],
-            emits: ['update:selectionKeys'],
-            template: `
-              <div data-testid="tree-stub">
-                <button
-                  type="button"
-                  data-testid="tree-parent-single"
-                  @click="$emit('update:selectionKeys', {
-                    'group-1': { checked: true, partialChecked: false },
-                    'group-1-1': { checked: true, partialChecked: false },
-                    'leaf-1': { checked: true, partialChecked: false },
-                  })"
-                >
-                  触发父节点单选
-                </button>
-              </div>
-            `,
-          },
+          InputText: createInputTextStub,
+          ElTreeV2: createTreeV2Stub(`
+            <button
+              type="button"
+              data-testid="tree-parent-single"
+              @click="$emit('check', null, {
+                checkedKeys: ['group-1', 'group-1-1', 'leaf-1'],
+                halfCheckedKeys: [],
+              })"
+            >
+              触发父节点单选
+            </button>
+          `),
         },
       },
     })
@@ -373,30 +321,19 @@ describe('PropertyFieldTreeInput', () => {
       },
       global: {
         stubs: {
-          InputText: {
-            props: ['modelValue', 'placeholder', 'class'],
-            emits: ['update:modelValue'],
-            template:
-              '<input :value="modelValue" :placeholder="placeholder" :class="$attrs.class || $props.class" @input="$emit(\'update:modelValue\', $event.target.value)" />',
-          },
-          Tree: {
-            props: ['value', 'selectionKeys', 'expandedKeys'],
-            emits: ['update:selectionKeys'],
-            template: `
-              <div data-testid="tree-stub">
-                <button
-                  type="button"
-                  data-testid="tree-object-multi"
-                  @click="$emit('update:selectionKeys', {
-                    'factor:F_TEMP': { checked: true, partialChecked: false },
-                    'factor:F_PRESS': { checked: true, partialChecked: false },
-                  })"
-                >
-                  触发对象多选
-                </button>
-              </div>
-            `,
-          },
+          InputText: createInputTextStub,
+          ElTreeV2: createTreeV2Stub(`
+            <button
+              type="button"
+              data-testid="tree-object-multi"
+              @click="$emit('check', null, {
+                checkedKeys: ['factor:F_TEMP', 'factor:F_PRESS'],
+                halfCheckedKeys: [],
+              })"
+            >
+              触发对象多选
+            </button>
+          `),
         },
       },
     })

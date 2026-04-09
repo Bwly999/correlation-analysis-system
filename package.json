@@ -30,6 +30,7 @@
     "ai": "^6.0.134",
     "clsx": "^2.1.1",
     "echarts": "^6.0.0",
+    "element-plus": "^2.13.6",
     "html2canvas": "^1.4.1",
     "html2pdf.js": "^0.14.0",
     "lucide-vue-next": "^0.577.0",
