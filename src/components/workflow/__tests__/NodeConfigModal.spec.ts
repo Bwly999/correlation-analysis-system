@@ -752,4 +752,108 @@ describe('NodeConfigModal', () => {
     expect(store.nodes[0]?.data.config.fileData).toBeNull()
     expect(store.nodes[0]?.data.config.format).toBe('csv')
   })
+
+  it('renders a refined error card above the output panel when node debugging fails', () => {
+    const store = useWorkflowStore()
+    store.nodes = [
+      {
+        id: 'pearson-node',
+        type: 'custom',
+        position: { x: 300, y: 0 },
+        label: 'Pearson 分析',
+        data: {
+          label: 'Pearson 分析',
+          type: 'pearson',
+          category: 'terminal',
+          status: 'error',
+          error: '字段 target 不存在，请先检查输入字段映射',
+          config: { xFields: [], yFields: [] },
+          logs: [],
+          useManualInput: false,
+          manualInput: '',
+          isPinned: false,
+          output: null,
+        },
+      } as any,
+    ]
+
+    const wrapper = mount(NodeConfigModal, {
+      props: { visible: true, nodeId: 'pearson-node' },
+      global: {
+        stubs: {
+          Dialog: dialogStub,
+          DataDisplayPanel: {
+            props: ['title'],
+            template: '<div class="data-display-panel">{{ title }}</div>',
+          },
+          DataAnalysisModal: true,
+          ConfigHeader: { template: '<div />', props: ['nodeLabel', 'isPinned', 'nodeType'] },
+          ConfigFooter: { template: '<div />' },
+          ConfigForm: { template: '<div />', props: ['config', 'properties', 'upstreamFactors'] },
+          RuntimeInputs: { template: '<div />', props: ['config', 'properties', 'upstreamFactors'] },
+        },
+      },
+    })
+
+    expect(wrapper.find('[data-testid="node-debug-error-card"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('本次调试失败')
+    expect(wrapper.text()).toContain('字段 target 不存在，请先检查输入字段映射')
+    expect(wrapper.text()).toContain('重新调试')
+    expect(wrapper.text()).toContain('重跑上游后调试')
+    expect(wrapper.text()).toContain('查看执行日志')
+  })
+
+  it('opens the log panel and closes the modal from the error card action', async () => {
+    const store = useWorkflowStore()
+    store.nodes = [
+      {
+        id: 'pearson-node',
+        type: 'custom',
+        position: { x: 300, y: 0 },
+        label: 'Pearson 分析',
+        data: {
+          label: 'Pearson 分析',
+          type: 'pearson',
+          category: 'terminal',
+          status: 'error',
+          error: '字段 target 不存在，请先检查输入字段映射',
+          config: { xFields: [], yFields: [] },
+          logs: [],
+          useManualInput: false,
+          manualInput: '',
+          isPinned: false,
+          output: null,
+        },
+      } as any,
+    ]
+
+    const dispatchEventSpy = vi.spyOn(window, 'dispatchEvent')
+
+    const wrapper = mount(NodeConfigModal, {
+      props: { visible: true, nodeId: 'pearson-node' },
+      global: {
+        stubs: {
+          Dialog: dialogStub,
+          DataDisplayPanel: {
+            props: ['title'],
+            template: '<div class="data-display-panel">{{ title }}</div>',
+          },
+          DataAnalysisModal: true,
+          ConfigHeader: { template: '<div />', props: ['nodeLabel', 'isPinned', 'nodeType'] },
+          ConfigFooter: { template: '<div />' },
+          ConfigForm: { template: '<div />', props: ['config', 'properties', 'upstreamFactors'] },
+          RuntimeInputs: { template: '<div />', props: ['config', 'properties', 'upstreamFactors'] },
+        },
+      },
+    })
+
+    await wrapper.get('[data-testid="node-debug-open-log-button"]').trigger('click')
+
+    expect(dispatchEventSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'workflow:open-log-panel',
+      }),
+    )
+    expect(wrapper.emitted('close')).toBeTruthy()
+  })
 })

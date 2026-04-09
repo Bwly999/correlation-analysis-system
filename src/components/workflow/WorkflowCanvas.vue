@@ -96,6 +96,10 @@ const onWindowResize = () => {
   viewportWidth.value = window.innerWidth
 }
 
+const handleOpenLogPanel = () => {
+  isLogExpanded.value = true
+}
+
 const saveWorkflowWithToast = async () => {
   try {
     await store.saveWorkflow()
@@ -192,6 +196,7 @@ const handleBeforeUnload = (event: BeforeUnloadEvent) => {
 onMounted(async () => {
   window.addEventListener('resize', onWindowResize)
   window.addEventListener('beforeunload', handleBeforeUnload)
+  window.addEventListener('workflow:open-log-panel', handleOpenLogPanel)
   await store.getSavedWorkflows()
 
   if (store.nodes.length > 0) {
@@ -369,6 +374,7 @@ const onDropLocal = (event: DragEvent) => {
 onBeforeUnmount(() => {
   window.removeEventListener('resize', onWindowResize)
   window.removeEventListener('beforeunload', handleBeforeUnload)
+  window.removeEventListener('workflow:open-log-panel', handleOpenLogPanel)
 })
 </script>
 

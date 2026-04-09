@@ -21,6 +21,7 @@ import ConfigForm from './config/ConfigForm.vue'
 import RuntimeInputs from './config/RuntimeInputs.vue'
 import RuntimeSettingsPanel from './config/RuntimeSettingsPanel.vue'
 import NodeHelpPanel from './help/NodeHelpPanel.vue'
+import NodeDebugErrorCard from './NodeDebugErrorCard.vue'
 import {
   getResultGroups,
   getResultRows,
@@ -232,6 +233,9 @@ const debugActionGuideText = computed(
   () =>
     '调试节点只重新执行当前节点，默认复用上游缓存；重跑上游后调试会沿当前链路重新执行上游节点，更适合校验最新输入。',
 )
+const currentNodeError = computed(() =>
+  node.value?.data.status === 'error' && node.value.data.error ? node.value.data.error : '',
+)
 
 const correlationSetupGuide = computed(() => {
   if (!isCorrelationNode.value) return null
@@ -281,6 +285,17 @@ const saveAndClose = () => {
 
 const openAnalysis = (title: string, data: any) => {
   analysisModal.value = { visible: true, title, data }
+}
+
+const openExecutionLogs = () => {
+  window.dispatchEvent(
+    new CustomEvent('workflow:open-log-panel', {
+      detail: {
+        nodeId: node.value?.id ?? null,
+      },
+    }),
+  )
+  emit('close')
 }
 
 const defaultMockRows = () => [{ f1: 10, f2: 20, target: 1 }]
@@ -604,6 +619,15 @@ const buildManualInputTemplate = () => {
         :style="{ width: `${rightPaneWidth}px` }"
       >
         <div class="flex-1 p-4 flex flex-col min-h-0">
+          <NodeDebugErrorCard
+            v-if="currentNodeError"
+            class="mb-3 shrink-0"
+            :message="currentNodeError"
+            :disabled="node.data.status === 'running'"
+            @retry="runCurrentNode(false)"
+            @rerun-upstream="runCurrentNode(true)"
+            @open-logs="openExecutionLogs"
+          />
           <DataDisplayPanel
             title="节点输出 (OUTPUT)"
             :data="node.data.output"
