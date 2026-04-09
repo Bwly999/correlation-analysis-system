@@ -19,6 +19,8 @@ import {
   submitWorkflowAiSessionInput,
 } from './workflowAi/orchestrator.js'
 import { proxyAnalysisRequest } from './analysisProxy.js'
+import { runAgentLoop } from './agentLoop/engine.js'
+import type { AgentLoopConfig } from './agentLoop/types.js'
 import {
   clearUserHistory,
   deleteUserWorkflow,
@@ -347,6 +349,57 @@ export const createServerHandler = () => async (request: IncomingMessage, respon
         session: toAnalysisAgentSession(session),
         syncSummary: `已同步当前画布，共 ${nodeCount} 个节点、${edgeCount} 条连线`,
       })
+      return
+    }
+
+    if (
+      request.method === 'POST'
+      && /^\/api\/analysis-agent\/session\/[^/]+\/run-agent-loop$/.test(url.pathname)
+    ) {
+      const sessionId = decodeURIComponent(
+        url.pathname.replace('/api/analysis-agent/session/', '').replace('/run-agent-loop', ''),
+      )
+      const session = getWorkflowAiSession(sessionId)
+      if (!session) {
+        sendJson(response, 404, { message: '未找到分析代理会话' })
+        return
+      }
+
+      const body = await readJsonBody<{ config?: Partial<AgentLoopConfig> }>(request)
+      const planRequest: WorkflowAiPlanRequest = {
+        mode: session.mode,
+        prompt: session.prompt,
+        contextHints: session.contextHints,
+        profile: (body as any).profile ?? { id: 'system-default-zhipu-glm-4-7', source: 'system' },
+        nodeCatalog: (body as any).nodeCatalog ?? [],
+      }
+
+      let hasWrittenEvent = false
+      startNdjsonStream(response)
+
+      try {
+        const output = await runAgentLoop(planRequest, body.config, (event) => {
+          hasWrittenEvent = true
+          writeNdjsonEvent(response, event)
+        })
+
+        if (!hasWrittenEvent) {
+          writeNdjsonEvent(response, {
+            type: 'loop_completed',
+            totalIterations: output.totalIterations,
+            totalDurationMs: output.totalDurationMs,
+          })
+        }
+      } catch (error) {
+        if (!hasWrittenEvent) {
+          writeNdjsonEvent(response, {
+            type: 'failed',
+            message: error instanceof Error ? error.message : 'Agent Loop 运行失败',
+          })
+        }
+      } finally {
+        response.end()
+      }
       return
     }
 

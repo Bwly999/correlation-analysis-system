@@ -433,3 +433,127 @@ export const testWorkflowAiModelProfile = async (
 
   return data
 }
+
+export type AgentLoopConfig = {
+  maxIterations?: number
+  autoExecute?: boolean
+  generateConclusion?: boolean
+}
+
+export type AgentLoopOutput = {
+  iterations: Array<{
+    iteration: number
+    plan: WorkflowAiPlan
+    executionResults: Array<{
+      nodeId: string
+      nodeLabel: string
+      nodeType: string
+      success: boolean
+      resultKind: string | null
+      resultSummary: string
+      rowCount?: number
+      error?: string
+    }>
+    interpretation: {
+      text: string
+      shouldContinue: boolean
+      continueReason?: string
+    } | null
+  }>
+  conclusion: {
+    summary: string
+    findings: string[]
+    recommendations: string[]
+    caveats: string[]
+  } | null
+  totalDurationMs: number
+  totalIterations: number
+}
+
+export const runAnalysisAgentLoop = async (
+  sessionId: string,
+  config?: AgentLoopConfig,
+  options: StreamWorkflowAiPlanOptions = {},
+): Promise<AgentLoopOutput> => {
+  const response = await fetch(
+    `${WORKFLOW_AI_API_BASE_URL}/analysis-agent/session/${sessionId}/run-agent-loop`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ config: config ?? {} }),
+    },
+  )
+
+  if (!response.ok) {
+    const payload = await readResponsePayload(response)
+    throw new WorkflowAiRequestError(
+      payload.message || '运行 Agent Loop 失败',
+      payload.diagnostics,
+      response.status,
+    )
+  }
+
+  if (!response.body) {
+    throw new Error('Agent Loop 流式响应不可用')
+  }
+
+  const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()
+  let buffer = ''
+  let loopOutput: AgentLoopOutput | null = null
+
+  while (true) {
+    const { value, done } = await reader.read()
+    if (done) break
+
+    buffer += value
+    const lines = buffer.split('\n')
+    buffer = lines.pop() ?? ''
+
+    for (const line of lines) {
+      const event = parseNdjsonLine(line)
+      if (!event) continue
+      options.onEvent?.(event)
+
+      if (event.type === 'loop_completed') {
+        loopOutput = {
+          iterations: [],
+          conclusion: null,
+          totalDurationMs: event.totalDurationMs,
+          totalIterations: event.totalIterations,
+        }
+      }
+      if (event.type === 'conclusion_completed') {
+        if (loopOutput) {
+          loopOutput.conclusion = event.conclusion
+        }
+      }
+    }
+  }
+
+  const lastEvent = parseNdjsonLine(buffer)
+  if (lastEvent) {
+    options.onEvent?.(lastEvent)
+    if (lastEvent.type === 'loop_completed') {
+      loopOutput = {
+        iterations: [],
+        conclusion: null,
+        totalDurationMs: lastEvent.totalDurationMs,
+        totalIterations: lastEvent.totalIterations,
+      }
+    }
+    if (lastEvent.type === 'conclusion_completed' && loopOutput) {
+      loopOutput.conclusion = lastEvent.conclusion
+    }
+  }
+
+  return (
+    loopOutput ?? {
+      iterations: [],
+      conclusion: null,
+      totalDurationMs: 0,
+      totalIterations: 0,
+    }
+  )
+}

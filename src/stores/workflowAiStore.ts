@@ -23,10 +23,12 @@ import type {
 import {
   WorkflowAiRequestError,
   fetchSystemModelProfiles,
+  runAnalysisAgentLoop,
   runWorkflowAiSession,
   startWorkflowAiSession,
   submitWorkflowAiSessionInput,
   testWorkflowAiModelProfile,
+  type AgentLoopOutput,
 } from '@/services/workflowAi'
 
 const CUSTOM_PROFILE_STORAGE_KEY = 'workflow_ai_custom_profiles'
@@ -334,6 +336,8 @@ export const useWorkflowAiStore = defineStore('workflow-ai', () => {
   const analysisConversation = ref<Array<{ id: string; role: 'user' | 'assistant'; content: string }>>([])
   const workflowSummary = ref('')
   const activeExecutionTab = ref<AnalysisAgentExecutionTab>('execution')
+  const agentLoopRunning = ref(false)
+  const agentLoopOutput = ref<AgentLoopOutput | null>(null)
 
   const profiles = computed(() => [...systemProfiles.value, ...customProfiles.value])
   const selectedProfile = computed(
@@ -585,6 +589,66 @@ export const useWorkflowAiStore = defineStore('workflow-ai', () => {
           status: 'failed',
         }
       }
+      return
+    }
+
+    // ── Agent Loop 事件处理 ──
+
+    if (event.type === 'loop_started') {
+      streamHeadline.value = `Agent Loop 启动，最多 ${event.maxIterations} 轮`
+      return
+    }
+
+    if (event.type === 'loop_iteration_started') {
+      streamHeadline.value = `第 ${event.iteration} 轮分析开始`
+      return
+    }
+
+    if (event.type === 'node_execution_started') {
+      streamHeadline.value = `正在执行节点：${event.nodeLabel}`
+      return
+    }
+
+    if (event.type === 'node_execution_completed') {
+      streamHeadline.value = `${event.nodeLabel} 执行完成`
+      return
+    }
+
+    if (event.type === 'node_execution_failed') {
+      streamHeadline.value = `${event.nodeLabel} 执行失败：${event.summary}`
+      return
+    }
+
+    if (event.type === 'interpretation_delta') {
+      return
+    }
+
+    if (event.type === 'interpretation_completed') {
+      streamHeadline.value = event.shouldContinue
+        ? `第 ${event.iteration} 轮分析完成，准备追加分析`
+        : `第 ${event.iteration} 轮分析完成，准备生成结论`
+      return
+    }
+
+    if (event.type === 'conclusion_started') {
+      streamHeadline.value = '正在生成分析结论...'
+      return
+    }
+
+    if (event.type === 'conclusion_delta') {
+      return
+    }
+
+    if (event.type === 'conclusion_completed') {
+      streamHeadline.value = event.conclusion
+        ? `结论：${event.conclusion.summary.slice(0, 60)}`
+        : '结论已生成'
+      return
+    }
+
+    if (event.type === 'loop_completed') {
+      streamHeadline.value = `Agent Loop 完成，共 ${event.totalIterations} 轮 (${(event.totalDurationMs / 1000).toFixed(1)}s)`
+      return
     }
   }
 
@@ -776,6 +840,63 @@ export const useWorkflowAiStore = defineStore('workflow-ai', () => {
     }
   }
 
+  const startAgentLoop = async (
+    workflowStore: WorkflowStoreLike,
+    config?: { maxIterations?: number; autoExecute?: boolean; generateConclusion?: boolean },
+  ) => {
+    const profile = selectedProfile.value
+    if (!profile) {
+      throw new Error('请先选择可用的模型配置')
+    }
+    if (!sessionState.value?.sessionId) {
+      throw new Error('请先生成工作流计划后再启动 Agent Loop')
+    }
+
+    agentLoopRunning.value = true
+    agentLoopOutput.value = null
+    resetStreamingState('Agent Loop 正在启动')
+    workflowStore.addLog?.('Agent Loop 开始运行', 'info')
+
+    try {
+      const output = await runAnalysisAgentLoop(
+        sessionState.value.sessionId,
+        config,
+        {
+          onEvent(event) {
+            appendStreamEvent(event)
+          },
+        },
+      )
+      agentLoopOutput.value = output
+
+      // 自动应用最后一轮的计划
+      const lastIteration = output.iterations[output.iterations.length - 1]
+      if (lastIteration?.plan) {
+        plan.value = lastIteration.plan
+        try {
+          workflowStore.applyWorkflowAiPlan(lastIteration.plan)
+          workflowStore.addLog?.('Agent Loop 已自动应用最终计划', 'info')
+        } catch {
+          workflowStore.addLog?.('Agent Loop 计划应用失败，请手动应用', 'warn')
+        }
+      }
+
+      streamStatus.value = 'completed'
+      streamHeadline.value = output.conclusion
+        ? `Agent Loop 完成：${output.conclusion.summary}`
+        : `Agent Loop 完成，共 ${output.totalIterations} 轮`
+      workflowStore.addLog?.(`Agent Loop 运行成功，共 ${output.totalIterations} 轮`, 'info')
+    } catch (error: any) {
+      errorMessage.value = error.message ?? 'Agent Loop 运行失败'
+      streamStatus.value = 'failed'
+      streamHeadline.value = errorMessage.value
+      workflowStore.addLog?.(`Agent Loop 运行失败: ${errorMessage.value}`, 'error')
+      throw error
+    } finally {
+      agentLoopRunning.value = false
+    }
+  }
+
   const applyCurrentPlan = (workflowStore: WorkflowStoreLike) => {
     if (!plan.value) {
       throw new Error('当前没有可应用的 AI 计划')
@@ -804,6 +925,8 @@ export const useWorkflowAiStore = defineStore('workflow-ai', () => {
     analysisConversation.value = []
     workflowSummary.value = ''
     activeExecutionTab.value = 'execution'
+    agentLoopRunning.value = false
+    agentLoopOutput.value = null
   }
 
   const syncAnalysisCanvas = (workflowStore: WorkflowStoreLike) => {
@@ -859,6 +982,8 @@ export const useWorkflowAiStore = defineStore('workflow-ai', () => {
     agentToolCalls,
     settingsVisible,
     activeExecutionTab,
+    agentLoopRunning,
+    agentLoopOutput,
     lastAppliedSnapshotId,
     lastTestResult,
     loadProfiles,
@@ -873,5 +998,6 @@ export const useWorkflowAiStore = defineStore('workflow-ai', () => {
     setActiveExecutionTab,
     setApplyError,
     resetPlan,
+    startAgentLoop,
   }
 })

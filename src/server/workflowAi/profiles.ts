@@ -577,7 +577,7 @@ export const normalizePlanWithCatalog = (
   }),
 })
 
-const createProvider = (profile: WorkflowAiModelProfile) =>
+export const createProvider = (profile: WorkflowAiModelProfile) =>
   createOpenAICompatible({
     name: 'workflow-ai',
     baseURL: profile.baseUrl,

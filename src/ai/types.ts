@@ -403,6 +403,62 @@ export type WorkflowAiStreamEvent =
       message: string
       diagnostics?: WorkflowAiGenerationDiagnostics
     }
+  | {
+      type: 'loop_started'
+      maxIterations: number
+    }
+  | {
+      type: 'loop_iteration_started'
+      iteration: number
+    }
+  | {
+      type: 'node_execution_started'
+      nodeId: string
+      nodeLabel: string
+    }
+  | {
+      type: 'node_execution_completed'
+      nodeId: string
+      nodeLabel: string
+      summary: string
+    }
+  | {
+      type: 'node_execution_failed'
+      nodeId: string
+      nodeLabel: string
+      summary: string
+    }
+  | {
+      type: 'interpretation_delta'
+      iteration: number
+      delta: string
+    }
+  | {
+      type: 'interpretation_completed'
+      iteration: number
+      shouldContinue: boolean
+    }
+  | {
+      type: 'conclusion_started'
+    }
+  | {
+      type: 'conclusion_delta'
+      delta: string
+    }
+  | {
+      type: 'conclusion_completed'
+      conclusion: {
+        summary: string
+        findings: string[]
+        recommendations: string[]
+        caveats: string[]
+      }
+    }
+  | {
+      type: 'loop_completed'
+      totalIterations: number
+      totalDurationMs: number
+    }
 
 export interface WorkflowAiPlanRequest {
   mode: WorkflowAiPlanMode
