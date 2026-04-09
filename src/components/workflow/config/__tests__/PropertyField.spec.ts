@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import PropertyField from '../PropertyField.vue'
 
@@ -135,6 +135,111 @@ describe('PropertyField', () => {
 
     expect(wrapper.find('.multi-select-props').text()).toBe('true|custom_regex')
     expect(wrapper.get('[data-testid="multi-options-regex-toggle"]').classes()).toContain('!bg-blue-50')
+  })
+
+  it('为开启自动全选的 multi-options 在依赖刷新后自动选中全部远程选项', async () => {
+    setActivePinia(createPinia())
+
+    const wrapper = mount(PropertyField, {
+      props: {
+        prop: {
+          name: 'selectedProcesses',
+          displayName: '工序',
+          type: 'multi-options',
+          default: [],
+          autoSelectAllOnOptionsChange: true,
+          dependencies: ['productName'],
+          resolveOptions: async ({ config }) => {
+            if (!config.productName) return []
+            return [
+              { name: '涂布', value: '涂布' },
+              { name: '装配', value: '装配' },
+            ]
+          },
+        },
+        modelValue: [],
+        upstreamFactors: [],
+        configContext: {
+          productName: '',
+        },
+      },
+      global: {
+        directives: {
+          tooltip: () => undefined,
+        },
+        stubs: {
+          MultiSelect: {
+            props: ['options'],
+            template: '<div class="multi-options-options">{{ options.length }}</div>',
+          },
+        },
+      },
+    })
+
+    await flushPromises()
+
+    await wrapper.setProps({
+      configContext: {
+        productName: '电池A',
+      },
+    })
+
+    await flushPromises()
+
+    const emitted = wrapper.emitted('update:modelValue') || []
+    expect(emitted[emitted.length - 1]).toEqual([['涂布', '装配']])
+  })
+
+  it('为开启自动全选的 multi-options 在已有选择时不覆盖当前值', async () => {
+    setActivePinia(createPinia())
+
+    const wrapper = mount(PropertyField, {
+      props: {
+        prop: {
+          name: 'selectedProcesses',
+          displayName: '工序',
+          type: 'multi-options',
+          default: [],
+          autoSelectAllOnOptionsChange: true,
+          dependencies: ['productName'],
+          resolveOptions: async ({ config }) => {
+            if (!config.productName) return []
+            return [
+              { name: '涂布', value: '涂布' },
+              { name: '装配', value: '装配' },
+            ]
+          },
+        },
+        modelValue: ['自定义工序'],
+        upstreamFactors: [],
+        configContext: {
+          productName: '',
+        },
+      },
+      global: {
+        directives: {
+          tooltip: () => undefined,
+        },
+        stubs: {
+          MultiSelect: {
+            props: ['options'],
+            template: '<div class="multi-options-options">{{ options.length }}</div>',
+          },
+        },
+      },
+    })
+
+    await flushPromises()
+
+    await wrapper.setProps({
+      configContext: {
+        productName: '电池A',
+      },
+    })
+
+    await flushPromises()
+
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
   })
 
   it('为启动方式提供独立的强调样式容器', () => {

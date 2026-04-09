@@ -164,6 +164,10 @@ describe('Node Definitions Execution Logic', () => {
       neighborSystemNode.properties.find((property) => property.name === 'selectedProcesses')
         ?.displayName,
     ).toBe('工序')
+    expect(
+      neighborSystemNode.properties.find((property) => property.name === 'selectedProcesses')
+        ?.autoSelectAllOnOptionsChange,
+    ).toBe(true)
 
     const runtimePropertyNames = neighborSystemNode.properties
       .filter((property) => property.isRuntimeInput)

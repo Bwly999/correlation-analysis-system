@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 import { HelpCircle, Settings, Trash2 } from 'lucide-vue-next'
 import Button from 'primevue/button'
 import { type NodeProperty } from '@/nodes/types'
@@ -35,6 +35,30 @@ const {
   isOptionsLoading,
   optionsError,
 } = usePropertyFieldOptions(props)
+
+const autoSelectableMultiOptionValues = computed(() => {
+  if (props.prop.type !== 'multi-options') return []
+
+  return normalizedOptionSource.value
+    .map((option) => {
+      if (!option || typeof option !== 'object') return option
+      if ('disabled' in option && option.disabled) return null
+      return 'value' in option ? option.value : option
+    })
+    .filter((value): value is string => typeof value === 'string' && Boolean(value))
+})
+
+watch(
+  autoSelectableMultiOptionValues,
+  (values) => {
+    if (props.prop.type !== 'multi-options' || !props.prop.autoSelectAllOnOptionsChange) return
+    if (!Array.isArray(props.modelValue) || props.modelValue.length > 0) return
+    if (values.length === 0) return
+
+    emit('update:modelValue', values)
+  },
+  { immediate: true },
+)
 
 const addCollectionItem = () => {
   const nextValue = [...((props.modelValue as unknown[]) || [])]

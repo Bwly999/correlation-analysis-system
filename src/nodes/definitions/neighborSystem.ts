@@ -269,6 +269,7 @@ export const neighborSystemNode: NodeDefinition = {
       required: true,
       isRuntimeInput: true,
       placeholder: '请选择工序',
+      autoSelectAllOnOptionsChange: true,
       dependencies: ['productName'],
       description: '四种启动方式都会按这里选择的工序范围查询 SN 与因子数据。',
       resolveOptions: async ({ config }) => {

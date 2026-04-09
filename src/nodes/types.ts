@@ -69,6 +69,7 @@ export interface NodeProperty {
   filterable?: boolean
   singleSelect?: boolean
   allowRegexSearch?: boolean
+  autoSelectAllOnOptionsChange?: boolean
   filterPlaceholder?: string
   dateOnly?: boolean
   emptyMessage?: string

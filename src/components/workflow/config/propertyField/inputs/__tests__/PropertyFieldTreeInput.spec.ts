@@ -399,4 +399,40 @@ describe('PropertyFieldTreeInput', () => {
       values: [undefined, undefined],
     })
   })
+
+  it('多选树节点勾选状态包含父节点时，对外仍只保留叶子节点', async () => {
+    const wrapper = mount(PropertyFieldTreeInput, {
+      props: {
+        modelValue: {},
+        prop: createTreeProp(),
+        options: treeOptions,
+        isOptionsLoading: false,
+        optionsError: '',
+      },
+      global: {
+        stubs: {
+          InputText: createInputTextStub,
+          ElTreeV2: createTreeV2Stub(`
+            <button
+              type="button"
+              data-testid="tree-parent-multi"
+              @click="$emit('check', null, {
+                checkedKeys: ['group-1', 'group-1-1', 'leaf-1', 'group-2', 'leaf-2'],
+                halfCheckedKeys: [],
+              })"
+            >
+              触发父节点多选
+            </button>
+          `),
+        },
+      },
+    })
+
+    await wrapper.get('[data-testid="tree-parent-multi"]').trigger('click')
+
+    expect(wrapper.emitted('update:modelValue')?.[0]?.[0]).toEqual({
+      selectedKeys: ['leaf-1', 'leaf-2'],
+      values: [undefined, undefined],
+    })
+  })
 })

@@ -139,11 +139,11 @@ const normalizeSingleSelection = (selectionKeys: TreeSelectionKeys | undefined) 
 const selectionKeysToModelValue = (
   selectionKeys: TreeSelectionKeys | undefined,
 ): PropertyFieldTreeModelValue => {
-  const checkedKeys = getCheckedKeys(selectionKeys)
+  const checkedLeafKeys = getCheckedLeafEntries(selectionKeys).map(([key]) => key)
 
   return {
-    selectedKeys: checkedKeys,
-    values: checkedKeys.map((key) => treeNodeMap.value.get(key)?.data?.value),
+    selectedKeys: checkedLeafKeys,
+    values: checkedLeafKeys.map((key) => treeNodeMap.value.get(key)?.data?.value),
   }
 }
 
