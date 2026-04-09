@@ -185,7 +185,7 @@ describe('PropertyFieldTreeInput', () => {
     vi.useRealTimers()
   })
 
-  it('singleSelect 且节点提供对象值时，对外输出精简对象包装结构', async () => {
+  it('singleSelect 且节点提供对象值时，仍输出统一的 selectedKeys 和 values 结构', async () => {
     const wrapper = mount(PropertyFieldTreeInput, {
       props: {
         modelValue: {},
@@ -232,17 +232,19 @@ describe('PropertyFieldTreeInput', () => {
     await wrapper.get('[data-testid="tree-object-single"]').trigger('click')
 
     expect(wrapper.emitted('update:modelValue')?.[0]?.[0]).toEqual({
-      selectedKey: 'sub-scene:pack-a',
-      value: {
-        sceneId: 'scene-pack',
-        sceneLable: 'PACK',
-        subSceneId: 'sub-pack-a',
-        subSceneLable: 'PACK-A',
-      },
+      selectedKeys: ['sub-scene:pack-a'],
+      values: [
+        {
+          sceneId: 'scene-pack',
+          sceneLable: 'PACK',
+          subSceneId: 'sub-pack-a',
+          subSceneLable: 'PACK-A',
+        },
+      ],
     })
   })
 
-  it('singleSelect 时忽略父节点勾选，只保留叶子节点', async () => {
+  it('singleSelect 时忽略父节点勾选，只保留一个叶子节点并输出统一结构', async () => {
     const wrapper = mount(PropertyFieldTreeInput, {
       props: {
         modelValue: {},
@@ -273,11 +275,12 @@ describe('PropertyFieldTreeInput', () => {
     await wrapper.get('[data-testid="tree-parent-single"]').trigger('click')
 
     expect(wrapper.emitted('update:modelValue')?.[0]?.[0]).toEqual({
-      'leaf-1': { checked: true, partialChecked: false },
+      selectedKeys: ['leaf-1'],
+      values: [undefined],
     })
   })
 
-  it('多选树节点提供对象值时，对外输出 values 数组', async () => {
+  it('多选树节点提供对象值时，对外输出统一的 selectedKeys 和 values 结构', async () => {
     const wrapper = mount(PropertyFieldTreeInput, {
       props: {
         modelValue: {},
@@ -358,6 +361,42 @@ describe('PropertyFieldTreeInput', () => {
           r2Name: 'R2-PRESS',
         },
       ],
+    })
+  })
+
+  it('多选树节点未提供对象值时，也输出统一的 selectedKeys 和 values 结构', async () => {
+    const wrapper = mount(PropertyFieldTreeInput, {
+      props: {
+        modelValue: {},
+        prop: createTreeProp(),
+        options: treeOptions,
+        isOptionsLoading: false,
+        optionsError: '',
+      },
+      global: {
+        stubs: {
+          InputText: createInputTextStub,
+          ElTreeV2: createTreeV2Stub(`
+            <button
+              type="button"
+              data-testid="tree-plain-multi"
+              @click="$emit('check', null, {
+                checkedKeys: ['leaf-1', 'leaf-2'],
+                halfCheckedKeys: [],
+              })"
+            >
+              触发普通多选
+            </button>
+          `),
+        },
+      },
+    })
+
+    await wrapper.get('[data-testid="tree-plain-multi"]').trigger('click')
+
+    expect(wrapper.emitted('update:modelValue')?.[0]?.[0]).toEqual({
+      selectedKeys: ['leaf-1', 'leaf-2'],
+      values: [undefined, undefined],
     })
   })
 })

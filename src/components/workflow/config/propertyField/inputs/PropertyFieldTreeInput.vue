@@ -23,6 +23,28 @@ const emit = defineEmits<{
   'update:modelValue': [value: unknown]
 }>()
 
+/**
+ * PropertyFieldTreeInput 用法说明
+ *
+ * 1. 该组件的 v-model 始终输出统一结构：
+ *    {
+ *      selectedKeys: string[]
+ *      values: unknown[]
+ *    }
+ * 2. 输出结构与 options 节点是否提供 data.value 无关。
+ *    - selectedKeys 保存当前选中的叶子节点 key
+ *    - values 按相同顺序保存节点 data.value；若节点未提供 data.value，则对应项为 undefined
+ * 3. singleSelect=true 时仍使用同一结构，只是最多保留一个叶子节点
+ * 4. 为兼容历史配置，组件读取时仍支持旧格式：
+ *    - TreeSelectionKeys
+ *    - { selectedKey, value }
+ *    - { selectedKeys, values }
+ */
+interface PropertyFieldTreeModelValue {
+  selectedKeys: string[]
+  values: unknown[]
+}
+
 const ENABLE_SEARCH_RESULT_GUARD = false
 const ENABLE_SAFE_EXPAND_LIMIT = true
 
@@ -46,17 +68,13 @@ const normalizedTreeOptions = computed(() =>
   normalizePropertyFieldTreeOptions(props.options as TreeNode[], Boolean(props.prop.singleSelect)),
 )
 
-const collectTreeMeta = (nodes: any[]) => {
+const collectTreeNodeMap = (nodes: any[]) => {
   const map = new Map<string, any>()
-  let hasObjectValue = false
 
   const visit = (items: any[]) => {
     items.forEach((item) => {
       if (!item?.key) return
       map.set(String(item.key), item)
-      if (item?.data?.value !== undefined) {
-        hasObjectValue = true
-      }
       if (Array.isArray(item.children) && item.children.length > 0) {
         visit(item.children)
       }
@@ -64,16 +82,10 @@ const collectTreeMeta = (nodes: any[]) => {
   }
 
   visit(nodes)
-
-  return {
-    map,
-    hasObjectValue,
-  }
+  return map
 }
 
-const treeMeta = computed(() => collectTreeMeta(normalizedTreeOptions.value))
-const treeNodeMap = computed(() => treeMeta.value.map)
-const usesObjectValueMode = computed(() => treeMeta.value.hasObjectValue)
+const treeNodeMap = computed(() => collectTreeNodeMap(normalizedTreeOptions.value))
 
 const toSelectionStateMap = (keys: string[]) =>
   keys.reduce<Record<string, { checked: boolean; partialChecked: boolean }>>((acc, key) => {
@@ -124,38 +136,41 @@ const normalizeSingleSelection = (selectionKeys: TreeSelectionKeys | undefined) 
   }
 }
 
-const selectionKeysToObjectValue = (selectionKeys: TreeSelectionKeys | undefined) => {
+const selectionKeysToModelValue = (
+  selectionKeys: TreeSelectionKeys | undefined,
+): PropertyFieldTreeModelValue => {
   const checkedKeys = getCheckedKeys(selectionKeys)
-
-  if (checkedKeys.length === 0) return {}
-
-  if (props.prop.singleSelect) {
-    const selectedKey = checkedKeys[checkedKeys.length - 1]
-    if (!selectedKey) return {}
-
-    return {
-      selectedKey,
-      value: treeNodeMap.value.get(selectedKey)?.data?.value,
-    }
-  }
 
   return {
     selectedKeys: checkedKeys,
-    values: checkedKeys
-      .map((key) => treeNodeMap.value.get(key)?.data?.value)
-      .filter((value) => value !== undefined),
+    values: checkedKeys.map((key) => treeNodeMap.value.get(key)?.data?.value),
   }
 }
 
-const objectValueToSelectionKeys = (value: unknown): TreeSelectionKeys | undefined => {
+const isSelectionStateRecord = (
+  value: unknown,
+): value is Record<string, { checked?: boolean; partialChecked?: boolean }> => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  return Object.values(value).some((item) => item && typeof item === 'object' && 'checked' in item)
+}
+
+const modelValueToSelectionKeys = (value: unknown): TreeSelectionKeys | undefined => {
   if (!value || typeof value !== 'object') return undefined
 
-  if (props.prop.singleSelect) {
-    const selectedKey = (value as { selectedKey?: string }).selectedKey
-    return selectedKey ? toSelectionStateMap([selectedKey]) : undefined
+  if (isSelectionStateRecord(value)) {
+    return value
   }
 
-  const selectedKeys = (value as { selectedKeys?: string[] }).selectedKeys
+  const wrappedValue = value as {
+    selectedKey?: string
+    selectedKeys?: string[]
+  }
+
+  if (typeof wrappedValue.selectedKey === 'string' && wrappedValue.selectedKey) {
+    return toSelectionStateMap([wrappedValue.selectedKey])
+  }
+
+  const selectedKeys = wrappedValue.selectedKeys
   return Array.isArray(selectedKeys) && selectedKeys.length > 0
     ? toSelectionStateMap(selectedKeys)
     : undefined
@@ -179,11 +194,7 @@ const {
 const treeRef = ref<TreeV2Expose | null>(null)
 
 const checkedKeysList = computed(() =>
-  getCheckedKeys(
-    usesObjectValueMode.value
-      ? objectValueToSelectionKeys(configValue.value)
-      : (configValue.value as TreeSelectionKeys | undefined),
-  ),
+  getCheckedKeys(modelValueToSelectionKeys(configValue.value)),
 )
 
 const expandedKeysList = computed(() => Object.keys(treeExpandedKeys.value || {}))
@@ -250,21 +261,13 @@ const handleTreeCollapse = (data: unknown) => {
 }
 
 const treeSelectionValue = computed<TreeSelectionKeys | undefined>({
-  get: () =>
-    usesObjectValueMode.value
-      ? objectValueToSelectionKeys(configValue.value)
-      : (configValue.value as TreeSelectionKeys | undefined),
+  get: () => modelValueToSelectionKeys(configValue.value),
   set: (selectionKeys) => {
     const normalizedSelectionKeys = props.prop.singleSelect
       ? normalizeSingleSelection(selectionKeys)
       : selectionKeys
 
-    if (!usesObjectValueMode.value) {
-      configValue.value = normalizedSelectionKeys
-      return
-    }
-
-    configValue.value = selectionKeysToObjectValue(normalizedSelectionKeys)
+    configValue.value = selectionKeysToModelValue(normalizedSelectionKeys)
   },
 })
 

@@ -17,6 +17,13 @@ import { createTableResult } from '../result'
 const FACTOR_KEY_PREFIX = 'factor:'
 const SCHEME_KEY_PREFIX = 'scheme:'
 
+type LegacyTreeSelectionState = Record<string, { checked?: boolean }>
+
+interface TreeModelValue {
+  selectedKeys?: string[]
+  values?: unknown[]
+}
+
 const parseDelimitedList = (value: string) =>
   (value || '')
     .split(/[\n,\uff0c]/)
@@ -31,7 +38,21 @@ const extractCheckedLeafKeys = (
     .filter(([key, state]) => Boolean(state?.checked) && key.startsWith(prefix))
     .map(([key]) => key)
 
-const parseFactorSelections = (selection: Record<string, { checked?: boolean }> | undefined) => {
+const isLegacyTreeSelectionState = (value: unknown): value is LegacyTreeSelectionState => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  return Object.values(value).some((item) => item && typeof item === 'object' && 'checked' in item)
+}
+
+const getSelectedKeys = (selection: unknown) => {
+  if (isLegacyTreeSelectionState(selection)) {
+    return extractCheckedLeafKeys(selection, '')
+  }
+
+  const selectedKeys = (selection as TreeModelValue | undefined)?.selectedKeys
+  return Array.isArray(selectedKeys) ? selectedKeys.filter((item): item is string => Boolean(item)) : []
+}
+
+const parseFactorSelections = (selection: unknown) => {
   const wrappedValues = (selection as { values?: KanbanFactorValue[] } | undefined)?.values
   if (Array.isArray(wrappedValues) && wrappedValues.length > 0) {
     const factorValues = wrappedValues.filter((item) => Boolean(item?.factorKey))
@@ -42,7 +63,7 @@ const parseFactorSelections = (selection: Record<string, { checked?: boolean }> 
     }
   }
 
-  const factorSelections = extractCheckedLeafKeys(selection, FACTOR_KEY_PREFIX)
+  const factorSelections = getSelectedKeys(selection).filter((key) => key.startsWith(FACTOR_KEY_PREFIX))
 
   return {
     factorKeys: factorSelections
@@ -72,13 +93,20 @@ const parseFactorSelections = (selection: Record<string, { checked?: boolean }> 
 }
 
 const parseSceneSelection = (selection: unknown): KanbanSceneValue | undefined => {
-  const value = (selection as { value?: KanbanSceneValue } | undefined)?.value
-  if (!value?.sceneId || !value?.subSceneId) return undefined
-  return value
+  const wrappedValues = (selection as TreeModelValue | undefined)?.values
+  const value =
+    (Array.isArray(wrappedValues) ? wrappedValues[0] : undefined) ??
+    (selection as { value?: KanbanSceneValue } | undefined)?.value
+  if (!value || typeof value !== 'object') return undefined
+  const sceneValue = value as KanbanSceneValue
+  if (!sceneValue.sceneId || !sceneValue.subSceneId) return undefined
+  return sceneValue
 }
 
-const parseSchemeSelections = (selection: Record<string, { checked?: boolean }> | undefined) =>
-  extractCheckedLeafKeys(selection, SCHEME_KEY_PREFIX).map((key) =>
+const parseSchemeSelections = (selection: unknown) =>
+  getSelectedKeys(selection)
+    .filter((key) => key.startsWith(SCHEME_KEY_PREFIX))
+    .map((key) =>
     key.slice(SCHEME_KEY_PREFIX.length),
   )
 

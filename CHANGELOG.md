@@ -4,6 +4,11 @@
 
 ### 修复 (Fix)
 
+- **统一树形字段组件的 modelValue 协议并补充组件说明**:
+  - `PropertyFieldTreeInput` 不再根据节点是否提供 `data.value` 切换 `modelValue` 结构，统一输出 `{ selectedKeys, values }`。
+  - 组件内部保留对旧版 `TreeSelectionKeys` 与 `{ selectedKey, value }` 结构的读取兼容，避免已有配置直接失效。
+  - 为组件补充中文使用说明，并同步更新 `neighbor-system` 对树形配置值的解析逻辑与相关测试。
+
 - **修复树形字段切换到 Element Plus Tree V2 后无法展开与勾选的问题**:
   - 为 `TreeV2` 显式补充 `props.value = 'key'`，让组件内部节点主键与现有树数据结构对齐。
   - 修复内部节点 key 丢失后导致的展开、勾选和选中状态同步失效问题。

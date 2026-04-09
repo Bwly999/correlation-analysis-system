@@ -6,23 +6,6 @@ import type { NodeProperty } from '@/nodes/types'
 
 vi.mock('../MonacoEditor.vue', () => ({ default: { template: '<div />' } }))
 
-const treeStub = {
-  name: 'Tree',
-  props: ['selectionKeys', 'value'],
-  emits: ['update:selectionKeys'],
-  template: `
-    <div data-testid="tree-stub">
-      <button
-        type="button"
-        data-testid="tree-select"
-        @click="$emit('update:selectionKeys', value)"
-      >
-        触发选择
-      </button>
-    </div>
-  `,
-}
-
 const baseTreeOptions = [
   { key: 'group-1', label: '分组', children: [{ key: 'node-a', label: '节点 A' }] },
   { key: 'node-b', label: '节点 B' },
@@ -45,7 +28,7 @@ describe('PropertyField', () => {
     }
   })
 
-  it('keeps multiple tree selections in default checkbox mode', async () => {
+  it('在默认多选模式下透传统一的树值结构', async () => {
     const wrapper = mount(PropertyField, {
       props: {
         prop: createTreeProp(),
@@ -54,19 +37,37 @@ describe('PropertyField', () => {
       },
       global: {
         stubs: {
-          Tree: treeStub,
+          PropertyFieldTreeInput: {
+            props: ['modelValue'],
+            emits: ['update:modelValue'],
+            template: `
+              <button
+                type="button"
+                data-testid="tree-select"
+                @click="$emit('update:modelValue', {
+                  selectedKeys: ['node-a', 'node-b'],
+                  values: [undefined, undefined],
+                })"
+              >
+                触发选择
+              </button>
+            `,
+          },
         },
       },
     })
 
-    await wrapper.find('[data-testid="tree-select"]').trigger('click')
+    await wrapper.get('[data-testid="tree-select"]').trigger('click')
 
     const updates = wrapper.emitted('update:modelValue')
     expect(updates).toBeTruthy()
-    expect(updates?.[updates.length - 1]?.[0]).toMatchObject(baseTreeOptions)
+    expect(updates?.[updates.length - 1]?.[0]).toEqual({
+      selectedKeys: ['node-a', 'node-b'],
+      values: [undefined, undefined],
+    })
   })
 
-  it('keeps only one selected tree node when singleSelect is enabled', async () => {
+  it('singleSelect 开启时仍透传统一的树值结构', async () => {
     const wrapper = mount(PropertyField, {
       props: {
         prop: createTreeProp({ singleSelect: true }),
@@ -75,33 +76,33 @@ describe('PropertyField', () => {
       },
       global: {
         stubs: {
-          Tree: {
-            ...treeStub,
+          PropertyFieldTreeInput: {
+            props: ['modelValue'],
+            emits: ['update:modelValue'],
             template: `
-              <div data-testid="tree-stub">
-                <button
-                  type="button"
-                  data-testid="tree-select-single"
-                  @click="$emit('update:selectionKeys', {
-                    'node-a': { checked: true, partialChecked: false },
-                    'node-b': { checked: true, partialChecked: false },
-                  })"
-                >
-                  触发单选
-                </button>
-              </div>
+              <button
+                type="button"
+                data-testid="tree-select-single"
+                @click="$emit('update:modelValue', {
+                  selectedKeys: ['node-b'],
+                  values: [undefined],
+                })"
+              >
+                触发单选
+              </button>
             `,
           },
         },
       },
     })
 
-    await wrapper.find('[data-testid="tree-select-single"]').trigger('click')
+    await wrapper.get('[data-testid="tree-select-single"]').trigger('click')
 
     const updates = wrapper.emitted('update:modelValue')
     expect(updates).toBeTruthy()
     expect(updates?.[updates.length - 1]?.[0]).toEqual({
-      'node-b': { checked: true, partialChecked: false },
+      selectedKeys: ['node-b'],
+      values: [undefined],
     })
   })
 })
