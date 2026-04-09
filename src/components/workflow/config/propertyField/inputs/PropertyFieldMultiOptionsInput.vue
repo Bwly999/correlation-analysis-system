@@ -74,7 +74,7 @@ const multiOptionsForceInputHint = computed(() => {
     :pt="passThrough"
     display="chip"
     :placeholder="prop.placeholder"
-    class="w-full text-xs ndv-input ndv-multi-options"
+    class="w-full ndv-input ndv-multi-options"
   >
     <template v-if="prop.allowRegexSearch" #filtericon>
       <button
@@ -106,7 +106,6 @@ const multiOptionsForceInputHint = computed(() => {
   padding: 0 12px;
   display: flex;
   align-items: center;
-  font-size: 12px;
 }
 
 :deep(.ndv-multi-options .p-multiselect-dropdown) {

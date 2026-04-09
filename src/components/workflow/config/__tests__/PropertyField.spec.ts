@@ -137,6 +137,40 @@ describe('PropertyField', () => {
     expect(wrapper.get('[data-testid="multi-options-regex-toggle"]').classes()).toContain('!bg-blue-50')
   })
 
+  it('为 multi-options 保持与 options 一致的基础字号', () => {
+    setActivePinia(createPinia())
+
+    const wrapper = mount(PropertyField, {
+      props: {
+        prop: {
+          name: 'fields',
+          displayName: '字段列表',
+          type: 'multi-options',
+          default: [],
+          options: [
+            { name: '温度', value: 'temperature' },
+            { name: '压力', value: 'pressure' },
+          ],
+        },
+        modelValue: [],
+        upstreamFactors: [],
+      },
+      global: {
+        directives: {
+          tooltip: () => undefined,
+        },
+        stubs: {
+          MultiSelect: {
+            template: '<div class="multi-select-root" v-bind="$attrs"></div>',
+          },
+        },
+      },
+    })
+
+    expect(wrapper.get('.multi-select-root').classes()).toContain('ndv-multi-options')
+    expect(wrapper.get('.multi-select-root').classes()).not.toContain('text-xs')
+  })
+
   it('为开启自动全选的 multi-options 在依赖刷新后自动选中全部远程选项', async () => {
     setActivePinia(createPinia())
 
