@@ -49,7 +49,7 @@ const {
 } = useRegexFilter({
   inputTestId: 'multi-options-filter-input',
   onEnter: confirmEditableMultiOption,
-  defaultEnabled: props.prop.allowRegexSearch !== false,
+  defaultEnabled: false,
 })
 
 const multiOptionsForceInputHint = computed(() => {

@@ -91,7 +91,7 @@ describe('PropertyField', () => {
     expect(wrapper.find('.options-empty-message').text()).toContain('远程选项加载失败')
   })
 
-  it('为 multi-options 默认启用正则过滤，并允许切回普通过滤', async () => {
+  it('为 multi-options 默认关闭正则过滤，并允许切换到正则过滤', async () => {
     setActivePinia(createPinia())
 
     const wrapper = mount(PropertyField, {
@@ -126,14 +126,14 @@ describe('PropertyField', () => {
       },
     })
 
-    expect(wrapper.find('.multi-select-props').text()).toBe('true|custom_regex')
+    expect(wrapper.find('.multi-select-props').text()).toBe('true|contains')
     expect(wrapper.find('.ndv-multi-options').exists()).toBe(true)
-    expect(wrapper.get('[data-testid="multi-options-regex-toggle"]').classes()).toContain('!bg-blue-50')
+    expect(wrapper.get('[data-testid="multi-options-regex-toggle"]').classes()).toContain('bg-white')
 
     await wrapper.get('[data-testid="multi-options-regex-toggle"]').trigger('click')
 
-    expect(wrapper.find('.multi-select-props').text()).toBe('true|contains')
-    expect(wrapper.get('[data-testid="multi-options-regex-toggle"]').classes()).toContain('bg-white')
+    expect(wrapper.find('.multi-select-props').text()).toBe('true|custom_regex')
+    expect(wrapper.get('[data-testid="multi-options-regex-toggle"]').classes()).toContain('!bg-blue-50')
   })
 
   it('为 allowRegexSearch=false 的 multi-options 保持普通过滤且不渲染切换按钮', () => {
