@@ -2,6 +2,12 @@
 
 ## [2026-04-11]
 
+### 文档 (Docs)
+
+- **同步 AgentLoop benchmark 的默认模型配置与系统文档**:
+  - 将示例环境变量与部署说明中的默认兼容端点更新为 `https://open.bigmodel.cn/api/coding/paas/v4`。
+  - 在工作流系统文档中补充分析代理自动闭环运行接口、Agent Loop 流式事件与结果约束说明。
+
 ### 修复 (Fix)
 
 - **稳定 AgentLoop benchmark 的结论与清洗收敛行为**:

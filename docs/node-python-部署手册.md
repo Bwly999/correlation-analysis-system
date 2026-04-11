@@ -90,7 +90,7 @@ PYTHON_ANALYSIS_API_BASE_URL=http://127.0.0.1:8000
 
 ```env
 OPENAI_API_KEY=你的系统模型密钥
-OPENAI_COMPAT_BASE_URL=https://open.bigmodel.cn/api/paas/v4
+OPENAI_COMPAT_BASE_URL=https://open.bigmodel.cn/api/coding/paas/v4
 WORKFLOW_AI_DEFAULT_MODEL=glm-4.7
 ```
 
