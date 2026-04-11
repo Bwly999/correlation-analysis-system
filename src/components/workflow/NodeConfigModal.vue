@@ -33,6 +33,7 @@ import { useVerticalResize } from './composables/useVerticalResize'
 
 // PrimeVue Components
 import Dialog from 'primevue/dialog'
+import { useToast } from 'primevue/usetoast'
 
 const props = defineProps<{
   nodeId: string | null
@@ -43,6 +44,7 @@ const emit = defineEmits<{
   close: []
 }>()
 const store = useWorkflowStore()
+const toast = useToast()
 const workflowNodes = computed<WorkflowNode[]>(() => store.nodes as WorkflowNode[])
 const workflowEdges = computed<Edge[]>(() => store.edges as Edge[])
 
@@ -275,6 +277,12 @@ const saveConfig = () => {
     node.value.data.useManualInput = localUseManualInput.value
     node.value.data.manualInput = localManualInput.value
     node.value.data.reuseLastRuntimeInputs = localReuseLastRuntimeInputs.value
+    toast.add({
+      severity: 'success',
+      summary: '保存成功',
+      detail: '节点配置已应用',
+      life: 2200,
+    })
   }
 }
 

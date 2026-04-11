@@ -7,9 +7,18 @@ import { nextTick } from 'vue'
 import NodeConfigModal from '../NodeConfigModal.vue'
 import { useWorkflowStore } from '@/stores/workflowStore'
 
+const mockToastAdd = vi.fn()
+
+vi.mock('primevue/usetoast', () => ({
+  useToast: () => ({
+    add: mockToastAdd,
+  }),
+}))
+
 describe('NodeConfigModal', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
+    mockToastAdd.mockReset()
     document.queryCommandSupported = vi.fn(() => true) as any
     config.global.directives = {
       ...(config.global.directives || {}),
@@ -914,5 +923,55 @@ describe('NodeConfigModal', () => {
     await stopButton.trigger('click')
 
     expect(stopSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows a success toast after applying node config changes', async () => {
+    const store = useWorkflowStore()
+    store.nodes = [
+      {
+        id: 'data-cleaning-node',
+        type: 'custom',
+        position: { x: 300, y: 0 },
+        label: '数据清洗',
+        data: {
+          label: '数据清洗',
+          type: 'data-cleaning',
+          category: 'action',
+          status: 'idle',
+          config: { scaling: 'none' },
+          logs: [],
+          useManualInput: false,
+          manualInput: '',
+          isPinned: false,
+        },
+      } as any,
+    ]
+
+    const wrapper = mount(NodeConfigModal, {
+      props: { visible: true, nodeId: 'data-cleaning-node' },
+      global: {
+        stubs: {
+          Dialog: dialogStub,
+          DataDisplayPanel: true,
+          DataAnalysisModal: true,
+          ConfigHeader: { template: '<div />', props: ['nodeLabel', 'isPinned', 'nodeType'] },
+          ConfigFooter: {
+            template: '<button class="apply-btn" @click="$emit(\'save\')">应用</button>',
+          },
+          ConfigForm: { template: '<div />', props: ['config', 'properties', 'upstreamFactors'] },
+          RuntimeInputs: { template: '<div />', props: ['config', 'properties', 'upstreamFactors'] },
+        },
+      },
+    })
+
+    await wrapper.get('.apply-btn').trigger('click')
+
+    expect(mockToastAdd).toHaveBeenCalledWith(
+      expect.objectContaining({
+        severity: 'success',
+        summary: '保存成功',
+        detail: '节点配置已应用',
+      }),
+    )
   })
 })
