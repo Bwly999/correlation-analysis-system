@@ -137,4 +137,66 @@ describe('RuntimeInputModal', () => {
     expect(wrapper.text()).toContain('文件导入')
     expect(wrapper.text()).not.toContain('关闭后，每次启动都会要求重新输入本次运行参数')
   })
+
+  it('does not reset current runtime values to defaults when toggling reuse-last-inputs', async () => {
+    const wrapper = mount(RuntimeInputModal, {
+      props: {
+        visible: true,
+        node: {
+          id: 'neighbor-system-node',
+          type: 'custom',
+          position: { x: 0, y: 0 },
+          label: '看板数据对接',
+          data: {
+            label: '看板数据对接',
+            type: 'neighbor-system',
+            category: 'trigger',
+            status: 'idle',
+            config: {
+              fetchMode: 'scheme',
+              productName: '电池A',
+              schemeSelection: { checkedKeys: { '阶段A': true } },
+              taskOrderType: '首件',
+              selectedProcesses: ['涂布'],
+            },
+            logs: [],
+            useManualInput: false,
+            manualInput: '',
+            isPinned: false,
+            reuseLastRuntimeInputs: true,
+          },
+        } as any,
+      },
+      global: {
+        directives: tooltipDirectives,
+        stubs: {
+          Dialog: dialogStub,
+          Button: true,
+          ToggleSwitch: {
+            props: ['modelValue'],
+            emits: ['update:modelValue'],
+            template:
+              '<button data-testid="reuse-toggle" @click="$emit(\'update:modelValue\', !modelValue)">{{ modelValue }}</button>',
+          },
+          PropertyField: {
+            props: ['prop', 'modelValue'],
+            template:
+              '<div class="property-field-stub">{{ prop.name }}:{{ typeof modelValue === "string" ? modelValue : JSON.stringify(modelValue) }}</div>',
+          },
+        },
+      },
+    })
+
+    expect(wrapper.text()).toContain('fetchMode:scheme')
+    expect(wrapper.text()).toContain('schemeSelection:{"checkedKeys":{"阶段A":true}}')
+    expect(wrapper.text()).toContain('taskOrderType:首件')
+    expect(wrapper.text()).toContain('selectedProcesses:["涂布"]')
+
+    await wrapper.get('[data-testid="reuse-toggle"]').trigger('click')
+
+    expect(wrapper.text()).toContain('fetchMode:scheme')
+    expect(wrapper.text()).toContain('schemeSelection:{"checkedKeys":{"阶段A":true}}')
+    expect(wrapper.text()).toContain('taskOrderType:首件')
+    expect(wrapper.text()).toContain('selectedProcesses:["涂布"]')
+  })
 })

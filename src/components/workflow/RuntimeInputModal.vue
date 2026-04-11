@@ -160,11 +160,6 @@ watch(
   { immediate: true },
 )
 
-watch(reuseLastRuntimeInputs, (value) => {
-  if (!props.node) return
-  config.value = buildRuntimeConfig(props.node, value)
-})
-
 const updateConfig = (propName: string, value: any) => {
   config.value = applyDependencyReset({
     properties: runtimeProperties.value,
