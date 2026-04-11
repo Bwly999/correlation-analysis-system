@@ -57,12 +57,10 @@ const statusLabel = computed(() => {
 <style scoped>
 .agent-header {
   display: grid;
-  gap: 14px;
-  padding: 18px;
+  gap: 12px;
+  padding: 18px 18px 14px;
   border-bottom: 1px solid #dbe4ef;
-  background:
-    radial-gradient(120% 140% at 100% 0%, rgba(37, 99, 235, 0.12) 0%, rgba(255, 255, 255, 0) 50%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(248, 250, 252, 0.96) 100%);
+  background: #ffffff;
 }
 
 .agent-header__identity {
@@ -72,26 +70,27 @@ const statusLabel = computed(() => {
 }
 
 .agent-header__badge {
-  width: 38px;
-  height: 38px;
+  width: 40px;
+  height: 40px;
   border-radius: 14px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   background: #0f172a;
   color: #ffffff;
-  box-shadow: 0 16px 30px -20px rgba(15, 23, 42, 0.75);
+  box-shadow: 0 14px 24px -20px rgba(15, 23, 42, 0.42);
 }
 
 .agent-header__identity strong {
   display: block;
   color: #0f172a;
-  font-size: 15px;
+  font-size: 16px;
+  letter-spacing: -0.03em;
 }
 
 .agent-header__identity p {
   margin: 4px 0 0;
-  color: #475569;
+  color: #64748b;
   font-size: 12px;
   line-height: 1.6;
 }
@@ -109,10 +108,10 @@ const statusLabel = computed(() => {
   align-items: center;
   gap: 6px;
   border-radius: 999px;
-  border: 1px solid #bfdbfe;
-  background: #eff6ff;
-  color: #1d4ed8;
-  padding: 6px 10px;
+  border: 1px solid #dbe4ef;
+  background: #f8fbff;
+  color: #2563eb;
+  padding: 5px 10px;
   font-size: 11px;
   font-weight: 800;
 }
@@ -136,5 +135,12 @@ const statusLabel = computed(() => {
   cursor: pointer;
   font-size: 12px;
   font-weight: 700;
+  transition: border-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+
+.agent-header__actions button:hover {
+  border-color: #c4d3e4;
+  color: #0f172a;
+  transform: translateY(-1px);
 }
 </style>

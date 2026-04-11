@@ -56,6 +56,27 @@ const logHeight = computed(() =>
 )
 const runBarBottom = computed(() => logHeight.value + 20)
 const isAgentMode = computed(() => isAiPanelVisible.value)
+const executionWorkspaceBanner = computed(() => {
+  const hasAppliedPlan = Boolean(aiStore.lastAppliedSnapshotId) || aiStore.autoApplyResult.status === 'applied'
+  const hasFailedApply = aiStore.autoApplyResult.status === 'failed'
+
+  if (!aiStore.agentLoopRunning && !hasAppliedPlan && !hasFailedApply) {
+    return null
+  }
+
+  return {
+    tone: aiStore.agentLoopRunning ? 'running' : hasFailedApply ? 'failed' : 'applied',
+    headline:
+      aiStore.streamHeadline
+      || aiStore.agentLoopOutput?.conclusion?.summary
+      || '自动分析已完成',
+    detail: hasFailedApply
+      ? (aiStore.autoApplyResult.message || '最终计划已生成，但同步到画布失败。')
+      : hasAppliedPlan
+        ? '已自动同步到画布'
+        : '系统正在自动执行并分析当前流程',
+  }
+})
 const runBarState = computed<'idle' | 'running' | 'pending'>(() => {
   if (store.pendingExecution) return 'pending'
   if (store.isRunning) return 'running'
@@ -406,6 +427,16 @@ onBeforeUnmount(() => {
 
         <section class="execution-workspace">
           <div class="execution-workspace__panel">
+            <div
+              v-if="executionWorkspaceBanner"
+              data-testid="execution-workspace-banner"
+              class="execution-workspace__banner"
+              :class="`is-${executionWorkspaceBanner.tone}`"
+            >
+              <strong>{{ executionWorkspaceBanner.headline }}</strong>
+              <span>{{ executionWorkspaceBanner.detail }}</span>
+            </div>
+
             <div class="execution-canvas-shell">
               <VueFlow
                 v-model:nodes="store.nodes"
@@ -637,6 +668,48 @@ onBeforeUnmount(() => {
   height: 100%;
   min-height: 0;
   position: relative;
+}
+
+.execution-workspace__banner {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  right: 18px;
+  z-index: 120;
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid #dbe4ef;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 24px 40px -34px rgba(15, 23, 42, 0.45);
+}
+
+.execution-workspace__banner strong {
+  color: #0f172a;
+  font-size: 13px;
+}
+
+.execution-workspace__banner span {
+  color: #475569;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.execution-workspace__banner.is-running {
+  border-color: #bfdbfe;
+  background: rgba(239, 246, 255, 0.96);
+}
+
+.execution-workspace__banner.is-applied {
+  border-color: #bbf7d0;
+  background: rgba(240, 253, 244, 0.96);
+}
+
+.execution-workspace__banner.is-failed {
+  border-color: #fecaca;
+  background: rgba(254, 242, 242, 0.96);
 }
 
 .execution-canvas-shell {

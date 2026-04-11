@@ -65,23 +65,25 @@ const findApproval = (requestKey: string) => props.approvalRequests.find((item) 
 <style scoped>
 .agent-message-list {
   display: grid;
-  gap: 14px;
+  gap: 16px;
 }
 
 .agent-message-list__item {
   display: grid;
-  gap: 8px;
+  gap: 10px;
 }
 
 .agent-message-list__role {
   font-size: 11px;
   font-weight: 800;
   color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .agent-message-list__blocks {
   display: grid;
-  gap: 10px;
+  gap: 12px;
 }
 
 .agent-message-list__text,
@@ -90,23 +92,43 @@ const findApproval = (requestKey: string) => props.approvalRequests.find((item) 
   border-radius: 18px;
   padding: 14px 16px;
   font-size: 13px;
-  line-height: 1.7;
+  line-height: 1.8;
 }
 
 .is-user .agent-message-list__text {
   background: #0f172a;
   color: #f8fafc;
+  width: fit-content;
+  max-width: min(82%, 720px);
+  box-shadow: 0 20px 30px -28px rgba(15, 23, 42, 0.78);
 }
 
 .is-assistant .agent-message-list__text {
   border: 1px solid #dbe4ef;
   background: #ffffff;
   color: #0f172a;
+  box-shadow: 0 18px 30px -28px rgba(15, 23, 42, 0.18);
 }
 
 .agent-message-list__stream {
-  border: 1px solid #bfdbfe;
-  background: linear-gradient(180deg, #eff6ff 0%, #f8fbff 100%);
-  color: #1d4ed8;
+  border: 1px solid #dbe4ef;
+  background: #fbfdff;
+  color: #1e293b;
+  position: relative;
+  padding-left: 18px;
+  font-family: "Consolas", "SFMono-Regular", "Liberation Mono", monospace;
+  font-size: 12px;
+}
+
+.agent-message-list__stream::before {
+  content: '';
+  position: absolute;
+  top: 16px;
+  left: 8px;
+  width: 4px;
+  height: calc(100% - 32px);
+  min-height: 18px;
+  border-radius: 999px;
+  background: #2563eb;
 }
 </style>

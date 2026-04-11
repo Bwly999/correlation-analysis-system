@@ -4,6 +4,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { defineComponent } from 'vue'
 import WorkflowCanvas from '../WorkflowCanvas.vue'
 import { useWorkflowStore } from '@/stores/workflowStore'
+import { useWorkflowAiStore } from '@/stores/workflowAiStore'
 
 vi.mock('../MonacoEditor.vue', () => ({ default: { template: '<div />' } }))
 
@@ -1003,6 +1004,67 @@ describe('WorkflowCanvas', () => {
     expect(wrapper.find('.execution-workspace__header').exists()).toBe(false)
     expect(wrapper.findComponent({ name: 'VueFlow' }).exists()).toBe(true)
     expect(wrapper.find('.execution-canvas-shell__sidebar').exists()).toBe(true)
+  })
+
+  it('shows an execution workspace banner while agent loop is running and after auto-apply completes', async () => {
+    const aiStore = useWorkflowAiStore()
+    aiStore.agentLoopRunning = true
+    aiStore.streamHeadline = '正在执行节点：Pearson 相关系数'
+    aiStore.agentLoopOutput = {
+      iterations: [
+        {
+          iteration: 1,
+          plan: {
+            summary: '先做相关性分析',
+            assumptions: [],
+            warnings: [],
+            questions: [],
+            operations: [],
+          },
+          executionResults: [],
+          interpretation: null,
+        },
+      ],
+      conclusion: {
+        summary: '价格和折扣对销量影响最明显',
+        findings: [],
+        recommendations: [],
+        caveats: [],
+      },
+      totalDurationMs: 1800,
+      totalIterations: 1,
+    }
+    aiStore.lastAppliedSnapshotId = 'snapshot_1'
+
+    const wrapper = mount(WorkflowCanvas, {
+      global: {
+        stubs: {
+          Background: { template: '<div />' },
+          Controls: { template: '<div />' },
+          NodeSidebar: { template: '<div />' },
+          WorkflowHeader: { template: '<div />' },
+          AgentWorkspace: agentWorkspaceStub,
+          BaseNode: { template: '<div />' },
+          LogPanel: { template: '<div />' },
+          NodeConfigModal: { template: '<div />' },
+          RuntimeInputModal: runtimeInputModalStub,
+          WorkflowResultDashboardModal: workflowResultDashboardModalStub,
+          WorkflowManagerModal: workflowManagerModalStub,
+          UnsavedWorkflowDialog: { template: '<div />' },
+          HelpCenterModal: { template: '<div />' },
+          ConfirmDialog: { template: '<div />' },
+          Toast: { template: '<div />' },
+          Button: { template: '<button><slot /></button>' },
+          N8nEdge: { template: '<div />' },
+        },
+        directives: {
+          tooltip: () => undefined,
+        },
+      },
+    })
+
+    expect(wrapper.get('[data-testid="execution-workspace-banner"]').text()).toContain('正在执行节点：Pearson 相关系数')
+    expect(wrapper.get('[data-testid="execution-workspace-banner"]').text()).toContain('已自动同步到画布')
   })
 })
 

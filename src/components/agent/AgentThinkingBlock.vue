@@ -51,7 +51,7 @@ const toggleLabel = computed(() => (isCollapsed.value ? '展开思考' : '收起
 .agent-thinking-block {
   border: 1px solid #dbe4ef;
   border-radius: 16px;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  background: #fbfdff;
 }
 
 .agent-thinking-block__toggle {
@@ -79,8 +79,8 @@ const toggleLabel = computed(() => (isCollapsed.value ? '展开思考' : '收起
 }
 
 .agent-thinking-block__summary {
-  color: #475569;
-  font-size: 13px;
+  color: #64748b;
+  font-size: 12px;
   line-height: 1.6;
 }
 

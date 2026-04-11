@@ -12,6 +12,13 @@ const iconMap = computed(() => ({
   running: CircleDashed,
   failed: CircleAlert,
 }))
+
+const formatDuration = (item: AnalysisAgentToolCall) => {
+  if (!item.startedAt || !item.finishedAt) return ''
+  const durationMs = Math.max(item.finishedAt - item.startedAt, 0)
+  if (durationMs < 1000) return `${durationMs}ms`
+  return `${(durationMs / 1000).toFixed(1)}s`
+}
 </script>
 
 <template>
@@ -27,10 +34,17 @@ const iconMap = computed(() => ({
         </div>
         <span class="agent-tool-call-list__status" :class="`is-${item.status}`">
           <component :is="iconMap[item.status]" :size="14" />
-          <span>{{ item.status === 'success' ? '成功' : item.status === 'failed' ? '失败' : '执行中' }}</span>
+          <span>
+            {{ item.status === 'success' ? '成功' : item.status === 'failed' ? '失败' : '执行中' }}
+            {{ formatDuration(item) ? `· ${formatDuration(item)}` : '' }}
+          </span>
         </span>
       </div>
-      <p>{{ item.summary || item.outputSummary || item.inputSummary || '已记录工具执行。' }}</p>
+      <div class="agent-tool-call-list__body">
+        <p v-if="item.inputSummary"><strong>输入</strong>{{ item.inputSummary }}</p>
+        <p v-if="item.outputSummary || item.summary"><strong>输出</strong>{{ item.outputSummary || item.summary }}</p>
+        <p v-if="!item.inputSummary && !item.outputSummary && !item.summary">已记录工具执行。</p>
+      </div>
     </article>
   </div>
 </template>
@@ -44,8 +58,9 @@ const iconMap = computed(() => ({
 .agent-tool-call-list__card {
   border-radius: 16px;
   border: 1px solid #dbe4ef;
-  background: #ffffff;
+  background: #f8fbff;
   padding: 14px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.72);
 }
 
 .agent-tool-call-list__header {
@@ -63,8 +78,8 @@ const iconMap = computed(() => ({
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: #eff6ff;
-  color: #2563eb;
+  background: #edf4ff;
+  color: #1d4ed8;
 }
 
 .agent-tool-call-list__meta {
@@ -75,17 +90,32 @@ const iconMap = computed(() => ({
 .agent-tool-call-list__meta strong {
   color: #0f172a;
   font-size: 12px;
+  font-family: "Consolas", "SFMono-Regular", "Liberation Mono", monospace;
 }
 
-.agent-tool-call-list__meta span,
-.agent-tool-call-list__card p {
-  color: #475569;
-  font-size: 12px;
+.agent-tool-call-list__meta span {
+  color: #64748b;
+  font-size: 11px;
 }
 
-.agent-tool-call-list__card p {
+.agent-tool-call-list__body {
+  display: grid;
+  gap: 6px;
+}
+
+.agent-tool-call-list__body p {
   margin: 0;
-  line-height: 1.6;
+  color: #334155;
+  font-size: 12px;
+  line-height: 1.7;
+  font-family: "Consolas", "SFMono-Regular", "Liberation Mono", monospace;
+}
+
+.agent-tool-call-list__body strong {
+  margin-right: 8px;
+  color: #64748b;
+  font-size: 11px;
+  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
 .agent-tool-call-list__status {

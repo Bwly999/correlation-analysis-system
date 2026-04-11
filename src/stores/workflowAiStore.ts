@@ -1,14 +1,19 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { buildWorkflowAiNodeCatalog, buildWorkflowAiSnapshot } from '@/ai/catalog'
+import {
+  buildAgentArtifacts,
+  buildAgentMessages,
+  buildAgentTimeline,
+  buildAgentToolCalls,
+  type AgentWorkspaceAutoApplyResult,
+  type AgentWorkspaceStreamOutput,
+} from '@/ai/agentWorkspaceAdapter'
 import { buildLocalWorkflowAiContext } from '@/ai/tools/localContext'
 import type {
   AnalysisAgentExecutionTab,
-  AnalysisAgentMessage,
-  AnalysisAgentMessageBlock,
   AnalysisAgentSessionState,
   AnalysisAgentTimelineStep,
-  AnalysisAgentToolCall,
   WorkflowAiContextHints,
   WorkflowAiGenerationDiagnostics,
   WorkflowAiMissingInfoItem,
@@ -44,31 +49,46 @@ type WorkflowStoreLike = {
   executeForAiInspection?: (nodeId: string) => Promise<unknown>
 }
 
-type WorkflowAiStreamOutput = {
-  attempt: number
-  trigger: 'initial' | 'repair'
-  text: string
+type AgentLoopPresetId = 'standard' | 'deep'
+
+type AgentLoopPresetOption = {
+  id: AgentLoopPresetId
+  label: string
+  description: string
 }
 
-const TOOL_LABEL_MAP: Record<string, string> = {
-  get_workflow_context: '检查当前工作流上下文',
-  search_recipes: '选择分析路径',
-  inspect_cached_schema: '读取字段摘要',
-  inspect_ephemeral_schema: '临时检查字段摘要',
-  inspect_upstream_schema: '检查上游数据结构',
+type AgentWorkspaceFlowState = {
+  status: 'idle' | 'planning' | 'waiting' | 'ready' | 'running' | 'completed' | 'failed'
+  title: string
+  description: string
+  badge: string
 }
 
-const TIMELINE_TEMPLATE: Array<{ id: string; title: string }> = [
-  { id: 'intent', title: '理解问题' },
-  { id: 'inspect', title: '检查数据' },
-  { id: 'method', title: '选择方法' },
-  { id: 'draft', title: '构建流程' },
-  { id: 'execute', title: '执行分析' },
-  { id: 'interpret', title: '解释结果' },
-  { id: 'report', title: '输出结论' },
+const AGENT_LOOP_PRESET_OPTIONS: AgentLoopPresetOption[] = [
+  {
+    id: 'standard',
+    label: '标准分析',
+    description: '单轮优先，适合先快速跑通主流程。',
+  },
+  {
+    id: 'deep',
+    label: '深入分析',
+    description: '允许更多轮次，适合需要继续追问和补充分析的场景。',
+  },
 ]
 
-const getToolDisplayName = (toolName: string) => TOOL_LABEL_MAP[toolName] ?? toolName
+const AGENT_LOOP_PRESET_CONFIG: Record<AgentLoopPresetId, NonNullable<Parameters<typeof runAnalysisAgentLoop>[1]>> = {
+  standard: {
+    maxIterations: 1,
+    autoExecute: true,
+    generateConclusion: true,
+  },
+  deep: {
+    maxIterations: 2,
+    autoExecute: true,
+    generateConclusion: true,
+  },
+}
 
 const mapSessionPhase = (status?: WorkflowAiSessionState['status']): AnalysisAgentSessionState['phase'] => {
   if (status === 'waiting_user') return 'waiting_for_input'
@@ -77,227 +97,6 @@ const mapSessionPhase = (status?: WorkflowAiSessionState['status']): AnalysisAge
   if (status === 'running') return 'executing'
   return 'planning'
 }
-
-const getTimelineFocusId = (
-  phase: AnalysisAgentSessionState['phase'],
-  events: WorkflowAiStreamEvent[],
-): string => {
-  const latestStage = [...events].reverse().find((event) => event.type === 'stage_changed')
-  if (latestStage?.type === 'stage_changed') {
-    if (latestStage.stage === 'model_request') return 'method'
-    if (latestStage.stage === 'parse') return 'draft'
-    if (latestStage.stage === 'validate') return 'execute'
-    if (latestStage.stage === 'apply') return 'report'
-  }
-
-  if (phase === 'waiting_for_input') return 'method'
-  if (phase === 'completed') return 'report'
-  if (phase === 'failed') return 'execute'
-  return 'intent'
-}
-
-const buildTimeline = (
-  phase: AnalysisAgentSessionState['phase'],
-  events: WorkflowAiStreamEvent[],
-  toolCalls: AnalysisAgentToolCall[],
-): AnalysisAgentTimelineStep[] => {
-  const focusId = getTimelineFocusId(phase, events)
-  const isCompleted = phase === 'completed'
-  const isFailed = phase === 'failed'
-  const isWaiting = phase === 'waiting_for_input'
-  const focusIndex = TIMELINE_TEMPLATE.findIndex((step) => step.id === focusId)
-  const lastStageEvent = [...events].reverse().find((event) => event.type === 'stage_changed')
-
-  return TIMELINE_TEMPLATE.map((step, index) => {
-    let status: AnalysisAgentTimelineStep['status'] = 'idle'
-    if (isCompleted) {
-      status = 'completed'
-    } else if (index < focusIndex) {
-      status = 'completed'
-    } else if (index === focusIndex) {
-      status = isFailed ? 'failed' : isWaiting ? 'waiting' : 'running'
-    }
-
-    return {
-      id: step.id,
-      title: step.title,
-      description:
-        index === focusIndex && lastStageEvent?.type === 'stage_changed'
-          ? (lastStageEvent.message ?? `当前阶段：${lastStageEvent.stage}`)
-          : undefined,
-      status,
-      linkedToolCallIds: toolCalls.map((item) => item.id),
-      linkedExecutionRef: step.id,
-    }
-  })
-}
-
-const buildToolCalls = (
-  trace: WorkflowAiToolTraceItem[],
-  events: WorkflowAiStreamEvent[],
-): AnalysisAgentToolCall[] => {
-  const items = new Map<string, AnalysisAgentToolCall>()
-
-  trace.forEach((item, index) => {
-    const id = item.id ?? `${item.toolName}_${index}`
-    items.set(id, {
-      id,
-      toolName: item.toolName,
-      displayName: getToolDisplayName(item.toolName),
-      status: item.status,
-      inputSummary: item.inputSummary,
-      outputSummary: item.outputSummary,
-      summary: item.summary,
-      startedAt: item.startedAt,
-      finishedAt: item.finishedAt,
-    })
-  })
-
-  events.forEach((event, index) => {
-    if (event.type === 'tool_started') {
-      const existing = items.get(event.traceId)
-      items.set(event.traceId, {
-        id: event.traceId,
-        toolName: event.toolName,
-        displayName: getToolDisplayName(event.toolName),
-        status: 'running',
-        summary: event.summary,
-        startedAt: existing?.startedAt ?? Date.now() + index,
-        inputSummary: existing?.inputSummary,
-        outputSummary: existing?.outputSummary,
-      })
-      return
-    }
-
-    if (event.type === 'tool_completed') {
-      const existing = items.get(event.traceId)
-      items.set(event.traceId, {
-        id: event.traceId,
-        toolName: event.toolName,
-        displayName: getToolDisplayName(event.toolName),
-        status: 'success',
-        summary: event.summary,
-        startedAt: existing?.startedAt,
-        finishedAt: Date.now() + index,
-        inputSummary: existing?.inputSummary,
-        outputSummary: event.summary,
-      })
-    }
-  })
-
-  return [...items.values()]
-}
-
-const buildMessages = ({
-  prompt,
-  conversation,
-  toolCalls,
-  timeline,
-  streamOutputs,
-  plan,
-  session,
-}: {
-  prompt: string
-  conversation: Array<{ id: string; role: 'user' | 'assistant'; content: string }>
-  toolCalls: AnalysisAgentToolCall[]
-  timeline: AnalysisAgentTimelineStep[]
-  streamOutputs: WorkflowAiStreamOutput[]
-  plan: WorkflowAiPlan | null
-  session: WorkflowAiSessionState
-}): AnalysisAgentMessage[] => {
-  const messages: AnalysisAgentMessage[] = []
-
-  const normalizedConversation =
-    conversation.length > 0
-      ? conversation
-      : prompt
-        ? [{ id: 'user_goal', role: 'user' as const, content: prompt }]
-        : []
-
-  normalizedConversation.forEach((item, index) => {
-    messages.push({
-      id: item.id,
-      role: item.role,
-      createdAt: Date.now() + index,
-      blocks: [{ type: 'text', content: item.content }],
-    })
-  })
-
-  const assistantBlocks: AnalysisAgentMessageBlock[] = []
-
-  if (session.draft.summary || plan?.summary) {
-    assistantBlocks.push({
-      type: 'text',
-      content: plan?.summary ?? session.draft.summary,
-    })
-  }
-
-  if (timeline.length > 0) {
-    assistantBlocks.push({
-      type: 'step_group',
-      stepIds: timeline.map((item) => item.id),
-    })
-  }
-
-  streamOutputs.forEach((output) => {
-    assistantBlocks.push({
-      type: 'stream',
-      content: output.text,
-      status: output.text && session.status !== 'completed' ? 'streaming' : 'completed',
-    })
-  })
-
-  toolCalls.forEach((toolCall) => {
-    assistantBlocks.push({
-      type: 'tool_call',
-      toolCallId: toolCall.id,
-    })
-  })
-
-  if (session.draft.summary || plan?.assumptions?.length || plan?.warnings?.length) {
-    const details = [
-      ...(session.draft.summary ? [session.draft.summary] : []),
-      ...(plan?.assumptions ?? []),
-      ...(plan?.warnings ?? []),
-    ]
-    assistantBlocks.push({
-      type: 'thinking',
-      title: '分析思考',
-      summary: session.draft.summary || plan?.summary || '已形成当前分析路径',
-      details,
-      collapsed: true,
-    })
-  }
-
-  ;(plan
-    ? [
-        {
-          type: 'artifact' as const,
-          artifactId: 'conclusion_card',
-        },
-      ]
-    : []
-  ).forEach((block) => assistantBlocks.push(block))
-
-  session.missingInfo.forEach((item) => {
-    assistantBlocks.push({
-      type: 'approval_request',
-      requestKey: item.key,
-    })
-  })
-
-  if (assistantBlocks.length > 0) {
-    messages.push({
-      id: `assistant_state_${session.sessionId}`,
-      role: 'assistant',
-      createdAt: Date.now() + normalizedConversation.length + 1,
-      blocks: assistantBlocks,
-    })
-  }
-
-  return messages
-}
-
 const readCustomProfiles = (): WorkflowAiModelProfile[] => {
   try {
     const raw = localStorage.getItem(CUSTOM_PROFILE_STORAGE_KEY)
@@ -326,7 +125,7 @@ export const useWorkflowAiStore = defineStore('workflow-ai', () => {
   const streamStatus = ref<'idle' | 'streaming' | 'completed' | 'failed'>('idle')
   const streamHeadline = ref('')
   const streamEvents = ref<WorkflowAiStreamEvent[]>([])
-  const streamOutputs = ref<WorkflowAiStreamOutput[]>([])
+  const streamOutputs = ref<AgentWorkspaceStreamOutput[]>([])
   const contextHints = ref<WorkflowAiContextHints | null>(null)
   const toolTrace = ref<WorkflowAiToolTraceItem[]>([])
   const sessionState = ref<WorkflowAiSessionState | null>(null)
@@ -338,26 +137,229 @@ export const useWorkflowAiStore = defineStore('workflow-ai', () => {
   const activeExecutionTab = ref<AnalysisAgentExecutionTab>('execution')
   const agentLoopRunning = ref(false)
   const agentLoopOutput = ref<AgentLoopOutput | null>(null)
+  const agentLoopPreset = ref<AgentLoopPresetId>('standard')
+  const autoApplyResult = ref<AgentWorkspaceAutoApplyResult>({
+    status: 'idle',
+    message: '',
+  })
+  const resetAgentLoopState = (resetPreset = false) => {
+    agentLoopRunning.value = false
+    agentLoopOutput.value = null
+    autoApplyResult.value = {
+      status: 'idle',
+      message: '',
+    }
+    lastAppliedSnapshotId.value = ''
+    if (resetPreset) {
+      agentLoopPreset.value = 'standard'
+    }
+  }
 
   const profiles = computed(() => [...systemProfiles.value, ...customProfiles.value])
   const selectedProfile = computed(
     () => profiles.value.find((profile) => profile.id === selectedProfileId.value) ?? null,
   )
-  const agentToolCalls = computed(() => buildToolCalls(toolTrace.value, streamEvents.value))
+  const hasBlockingMissingInfo = computed(() =>
+    sessionState.value?.missingInfo.some((item) => item.blocking) ?? false,
+  )
+  const canStartAgentLoop = computed(() =>
+    plan.value !== null
+    && !isGenerating.value
+    && !agentLoopRunning.value
+    && selectedProfile.value !== null
+    && !hasBlockingMissingInfo.value,
+  )
+  const latestLoopIteration = computed(() => {
+    const lastIterationEvent = [...streamEvents.value]
+      .reverse()
+      .find((event): event is Extract<WorkflowAiStreamEvent, { type: 'loop_iteration_started' }> => event.type === 'loop_iteration_started')
+    if (lastIterationEvent) return lastIterationEvent.iteration
+    return agentLoopOutput.value?.totalIterations ?? 0
+  })
+  const agentLoopPresetOptions = computed(() => AGENT_LOOP_PRESET_OPTIONS)
+  const agentToolCalls = computed(() => buildAgentToolCalls(toolTrace.value, streamEvents.value))
+  const agentPhase = computed<AnalysisAgentSessionState['phase']>(() => {
+    if (agentLoopRunning.value) return 'executing'
+    if (autoApplyResult.value.status === 'failed') return 'failed'
+    if (agentLoopOutput.value?.conclusion || autoApplyResult.value.status === 'applied') return 'completed'
+    return mapSessionPhase(sessionState.value?.status)
+  })
   const agentTimeline = computed(() =>
     sessionState.value
-      ? buildTimeline(mapSessionPhase(sessionState.value.status), streamEvents.value, agentToolCalls.value)
+      ? buildAgentTimeline(agentPhase.value, streamEvents.value, agentToolCalls.value)
       : [],
   )
+  const agentWorkspaceFlow = computed<AgentWorkspaceFlowState>(() => {
+    if (!selectedProfile.value) {
+      return {
+        status: 'idle',
+        title: '先选择可用模型配置',
+        description: '需要先选择模型配置，才能生成计划并启动自动分析。',
+        badge: '待准备',
+      }
+    }
+
+    if (isGenerating.value) {
+      return {
+        status: 'planning',
+        title: '正在生成工作流计划',
+        description: streamHeadline.value || '系统正在理解目标、生成计划并检查缺失信息。',
+        badge: '规划中',
+      }
+    }
+
+    if (hasBlockingMissingInfo.value) {
+      return {
+        status: 'waiting',
+        title: '需要补充信息后才能继续',
+        description: '先回答当前阻塞问题，系统再继续生成或执行完整分析流程。',
+        badge: '待补充',
+      }
+    }
+
+    if (agentLoopRunning.value) {
+      return {
+        status: 'running',
+        title: '自动分析运行中',
+        description: streamHeadline.value || '系统正在自动执行计划、判断是否继续，并准备输出结论。',
+        badge: `第 ${Math.max(1, latestLoopIteration.value)} 轮`,
+      }
+    }
+
+    if (autoApplyResult.value.status === 'failed') {
+      return {
+        status: 'failed',
+        title: '自动分析已完成，但同步画布失败',
+        description: autoApplyResult.value.message || '最终计划已生成，请检查画布同步结果并手动处理。',
+        badge: '需处理',
+      }
+    }
+
+    if (agentLoopOutput.value?.conclusion) {
+      return {
+        status: 'completed',
+        title: '自动分析已完成',
+        description: agentLoopOutput.value.conclusion.summary,
+        badge: autoApplyResult.value.status === 'applied' ? '已同步画布' : '已完成',
+      }
+    }
+
+    if (plan.value) {
+      return {
+        status: 'ready',
+        title: '已生成计划，可开始自动分析',
+        description: plan.value.summary,
+        badge: '可运行',
+      }
+    }
+
+    if (errorMessage.value) {
+      return {
+        status: 'failed',
+        title: '当前流程未能完成',
+        description: errorMessage.value,
+        badge: '失败',
+      }
+    }
+
+    return {
+      status: 'idle',
+      title: '先描述你的分析目标',
+      description: '系统会先生成计划，再自动执行自动分析，最后把最终计划同步到右侧画布。',
+      badge: '待开始',
+    }
+  })
+  const agentWorkspaceSteps = computed<AnalysisAgentTimelineStep[]>(() => {
+    const planningStatus: AnalysisAgentTimelineStep['status'] =
+      isGenerating.value
+        ? 'running'
+        : hasBlockingMissingInfo.value
+          ? 'waiting'
+          : plan.value
+            ? 'completed'
+            : errorMessage.value && !agentLoopOutput.value
+              ? 'failed'
+              : 'idle'
+    const executionStatus: AnalysisAgentTimelineStep['status'] =
+      agentLoopRunning.value
+        ? 'running'
+        : agentLoopOutput.value
+          ? 'completed'
+          : plan.value
+            ? 'idle'
+            : 'idle'
+    const conclusionStatus: AnalysisAgentTimelineStep['status'] =
+      streamEvents.value.some((event) => event.type === 'conclusion_started') && agentLoopRunning.value
+        ? 'running'
+        : agentLoopOutput.value?.conclusion
+          ? 'completed'
+          : executionStatus === 'completed'
+            ? 'idle'
+            : 'idle'
+    const syncStatus: AnalysisAgentTimelineStep['status'] =
+      autoApplyResult.value.status === 'applied'
+        ? 'completed'
+        : autoApplyResult.value.status === 'failed'
+          ? 'failed'
+          : 'idle'
+
+    return [
+      {
+        id: 'goal',
+        title: '输入目标',
+        description: prompt.value ? '已记录本次分析目标' : '先描述你想解决的分析问题',
+        status: prompt.value ? 'completed' : 'running',
+      },
+      {
+        id: 'plan',
+        title: '生成计划',
+        description: agentWorkspaceFlow.value.status === 'planning'
+          ? agentWorkspaceFlow.value.description
+          : plan.value
+            ? '已生成最小可运行计划'
+            : hasBlockingMissingInfo.value
+              ? '需要先补充阻塞信息'
+              : '尚未生成计划',
+        status: planningStatus,
+      },
+      {
+        id: 'loop',
+        title: '自动分析',
+        description: agentLoopRunning.value
+          ? (streamHeadline.value || '系统正在自动执行当前计划')
+          : agentLoopOutput.value
+            ? `共完成 ${agentLoopOutput.value.totalIterations} 轮分析`
+            : '生成计划后即可启动自动分析',
+        status: executionStatus,
+      },
+      {
+        id: 'conclusion',
+        title: '输出结论',
+        description: agentLoopOutput.value?.conclusion?.summary ?? '自动分析结束后输出最终结论',
+        status: conclusionStatus,
+      },
+      {
+        id: 'apply',
+        title: '同步画布',
+        description:
+          autoApplyResult.value.message
+          || '完成后默认自动应用最终计划到右侧画布',
+        status: syncStatus,
+      },
+    ]
+  })
   const agentMessages = computed(() =>
     sessionState.value
-      ? buildMessages({
+      ? buildAgentMessages({
           prompt: prompt.value || sessionState.value.prompt,
           conversation: analysisConversation.value,
           toolCalls: agentToolCalls.value,
           timeline: agentTimeline.value,
           streamOutputs: streamOutputs.value,
+          streamEvents: streamEvents.value,
           plan: plan.value,
+          loopOutput: agentLoopOutput.value,
+          autoApplyResult: autoApplyResult.value,
           session: sessionState.value,
         })
       : [],
@@ -365,7 +367,7 @@ export const useWorkflowAiStore = defineStore('workflow-ai', () => {
   const analysisAgentSession = computed<AnalysisAgentSessionState | null>(() => {
     if (!sessionState.value) return null
 
-    const phase = mapSessionPhase(sessionState.value.status)
+    const phase = agentPhase.value
 
     const baseConversation =
       analysisConversation.value.length > 0
@@ -378,17 +380,12 @@ export const useWorkflowAiStore = defineStore('workflow-ai', () => {
             },
           ]
 
-    const artifacts = plan.value
-      ? [
-          {
-            id: 'conclusion_card',
-            type: 'conclusion_card' as const,
-            title: '分析结论',
-            summary: plan.value.summary,
-            bullets: [...plan.value.assumptions, ...plan.value.warnings],
-          },
-        ]
-      : []
+    const artifacts = buildAgentArtifacts({
+      plan: plan.value,
+      loopOutput: agentLoopOutput.value,
+      autoApplyResult: autoApplyResult.value,
+      session: sessionState.value,
+    })
 
     const approvalRequests = sessionState.value.missingInfo.map((item) => ({
       key: item.key,
@@ -595,7 +592,7 @@ export const useWorkflowAiStore = defineStore('workflow-ai', () => {
     // ── Agent Loop 事件处理 ──
 
     if (event.type === 'loop_started') {
-      streamHeadline.value = `Agent Loop 启动，最多 ${event.maxIterations} 轮`
+      streamHeadline.value = `自动分析已启动，最多 ${event.maxIterations} 轮`
       return
     }
 
@@ -647,7 +644,7 @@ export const useWorkflowAiStore = defineStore('workflow-ai', () => {
     }
 
     if (event.type === 'loop_completed') {
-      streamHeadline.value = `Agent Loop 完成，共 ${event.totalIterations} 轮 (${(event.totalDurationMs / 1000).toFixed(1)}s)`
+      streamHeadline.value = `自动分析完成，共 ${event.totalIterations} 轮 (${(event.totalDurationMs / 1000).toFixed(1)}s)`
       return
     }
   }
@@ -730,6 +727,12 @@ export const useWorkflowAiStore = defineStore('workflow-ai', () => {
     return lastTestResult.value
   }
 
+  const setAgentLoopPreset = (preset: AgentLoopPresetId) => {
+    if (preset in AGENT_LOOP_PRESET_CONFIG) {
+      agentLoopPreset.value = preset
+    }
+  }
+
   const generatePlan = async (workflowStore: WorkflowStoreLike) => {
     const profile = selectedProfile.value
     if (!profile) {
@@ -738,6 +741,7 @@ export const useWorkflowAiStore = defineStore('workflow-ai', () => {
 
     isGenerating.value = true
     resetStreamingState('正在准备 AI 编排请求')
+    resetAgentLoopState()
     contextHints.value = null
     toolTrace.value = []
     sessionState.value = null
@@ -816,6 +820,7 @@ export const useWorkflowAiStore = defineStore('workflow-ai', () => {
 
     isGenerating.value = true
     resetStreamingState('正在提交补充信息并继续编排')
+    resetAgentLoopState()
     workflowStore.addLog?.('AI编排已接收补充信息，继续生成计划', 'info')
 
     try {
@@ -849,18 +854,25 @@ export const useWorkflowAiStore = defineStore('workflow-ai', () => {
       throw new Error('请先选择可用的模型配置')
     }
     if (!sessionState.value?.sessionId) {
-      throw new Error('请先生成工作流计划后再启动 Agent Loop')
+      throw new Error('请先生成工作流计划后再启动自动分析')
     }
+
+    const resolvedConfig = config ?? AGENT_LOOP_PRESET_CONFIG[agentLoopPreset.value]
 
     agentLoopRunning.value = true
     agentLoopOutput.value = null
-    resetStreamingState('Agent Loop 正在启动')
-    workflowStore.addLog?.('Agent Loop 开始运行', 'info')
+    autoApplyResult.value = {
+      status: 'idle',
+      message: '',
+    }
+    lastAppliedSnapshotId.value = ''
+    resetStreamingState('自动分析正在启动')
+    workflowStore.addLog?.('自动分析开始运行', 'info')
 
     try {
       const output = await runAnalysisAgentLoop(
         sessionState.value.sessionId,
-        config,
+        resolvedConfig,
         {
           onEvent(event) {
             appendStreamEvent(event)
@@ -874,23 +886,33 @@ export const useWorkflowAiStore = defineStore('workflow-ai', () => {
       if (lastIteration?.plan) {
         plan.value = lastIteration.plan
         try {
-          workflowStore.applyWorkflowAiPlan(lastIteration.plan)
-          workflowStore.addLog?.('Agent Loop 已自动应用最终计划', 'info')
+          const applyResult = workflowStore.applyWorkflowAiPlan(lastIteration.plan)
+          lastAppliedSnapshotId.value = applyResult.snapshotId
+          autoApplyResult.value = {
+            status: 'applied',
+            message: '已自动同步到右侧画布，可直接继续检查最终计划。',
+          }
+          workflowStore.addLog?.('自动分析已自动应用最终计划', 'info')
         } catch {
-          workflowStore.addLog?.('Agent Loop 计划应用失败，请手动应用', 'warn')
+          lastAppliedSnapshotId.value = ''
+          autoApplyResult.value = {
+            status: 'failed',
+            message: '最终计划已生成，但自动同步到右侧画布失败，请手动应用。',
+          }
+          workflowStore.addLog?.('自动分析计划应用失败，请手动应用', 'warn')
         }
       }
 
       streamStatus.value = 'completed'
       streamHeadline.value = output.conclusion
-        ? `Agent Loop 完成：${output.conclusion.summary}`
-        : `Agent Loop 完成，共 ${output.totalIterations} 轮`
-      workflowStore.addLog?.(`Agent Loop 运行成功，共 ${output.totalIterations} 轮`, 'info')
+        ? `自动分析完成：${output.conclusion.summary}`
+        : `自动分析完成，共 ${output.totalIterations} 轮`
+      workflowStore.addLog?.(`自动分析运行成功，共 ${output.totalIterations} 轮`, 'info')
     } catch (error: any) {
-      errorMessage.value = error.message ?? 'Agent Loop 运行失败'
+      errorMessage.value = error.message ?? '自动分析运行失败'
       streamStatus.value = 'failed'
       streamHeadline.value = errorMessage.value
-      workflowStore.addLog?.(`Agent Loop 运行失败: ${errorMessage.value}`, 'error')
+      workflowStore.addLog?.(`自动分析运行失败: ${errorMessage.value}`, 'error')
       throw error
     } finally {
       agentLoopRunning.value = false
@@ -925,8 +947,7 @@ export const useWorkflowAiStore = defineStore('workflow-ai', () => {
     analysisConversation.value = []
     workflowSummary.value = ''
     activeExecutionTab.value = 'execution'
-    agentLoopRunning.value = false
-    agentLoopOutput.value = null
+    resetAgentLoopState(true)
   }
 
   const syncAnalysisCanvas = (workflowStore: WorkflowStoreLike) => {
@@ -980,6 +1001,14 @@ export const useWorkflowAiStore = defineStore('workflow-ai', () => {
     agentMessages,
     agentTimeline,
     agentToolCalls,
+    canStartAgentLoop,
+    hasBlockingMissingInfo,
+    latestLoopIteration,
+    agentLoopPreset,
+    agentLoopPresetOptions,
+    agentWorkspaceFlow,
+    agentWorkspaceSteps,
+    autoApplyResult,
     settingsVisible,
     activeExecutionTab,
     agentLoopRunning,
@@ -990,6 +1019,7 @@ export const useWorkflowAiStore = defineStore('workflow-ai', () => {
     upsertCustomProfile,
     removeCustomProfile,
     testProfile,
+    setAgentLoopPreset,
     generatePlan,
     continueSession,
     applyCurrentPlan,

@@ -5,10 +5,9 @@ import { useWorkflowStore } from '@/stores/workflowStore'
 import AgentComposer from './AgentComposer.vue'
 import AgentHeader from './AgentHeader.vue'
 import AgentMessageList from './AgentMessageList.vue'
-import AgentTimeline from './AgentTimeline.vue'
+import AgentModelSettingsDialog from './AgentModelSettingsDialog.vue'
+import AgentProgressBar from './AgentProgressBar.vue'
 import AgentToolCallList from './AgentToolCallList.vue'
-import AgentArtifactCard from './AgentArtifactCard.vue'
-import { Play, Loader2 } from 'lucide-vue-next'
 
 const props = defineProps<{
   visible: boolean
@@ -22,39 +21,52 @@ const aiStore = useWorkflowAiStore()
 const workflowStore = useWorkflowStore()
 
 const session = computed(() => aiStore.analysisAgentSession)
-const timeline = computed(() => aiStore.agentTimeline)
 const toolCalls = computed(() => aiStore.agentToolCalls)
 const messages = computed(() => aiStore.agentMessages)
+const hasToolRail = computed(() => toolCalls.value.length > 0)
 const artifacts = computed(() => session.value?.artifacts ?? [])
 const approvalRequests = computed(() => session.value?.approvalRequests ?? [])
-
-const canStartAgentLoop = computed(() =>
-  aiStore.plan !== null
-  && !aiStore.isGenerating
-  && !aiStore.agentLoopRunning
-  && aiStore.selectedProfile !== null,
-)
-
 const conclusion = computed(() => aiStore.agentLoopOutput?.conclusion ?? null)
+const progressHeadline = computed(() =>
+  aiStore.streamHeadline
+  || aiStore.agentTimeline.find((item) => item.status === 'running' || item.status === 'waiting' || item.status === 'failed')?.description
+  || aiStore.agentWorkspaceSteps.find((item) => item.status === 'running' || item.status === 'waiting' || item.status === 'failed')?.description
+  || '',
+)
 
 const handleSubmit = async (value: string) => {
   aiStore.prompt = value
+  if (!aiStore.selectedProfile) {
+    aiStore.settingsVisible = true
+    return
+  }
+
+  try {
+    await aiStore.generatePlan(workflowStore)
+    if (!aiStore.hasBlockingMissingInfo && aiStore.canStartAgentLoop) {
+      await aiStore.startAgentLoop(workflowStore)
+    }
+  } catch {
+    // error handled in store
+  }
 }
 
 const handleClear = () => {
   aiStore.resetPlan()
+  aiStore.settingsVisible = false
 }
 
 const handleNewSession = () => {
   aiStore.resetPlan()
+  aiStore.settingsVisible = false
 }
 
-const handleStartAgentLoop = async () => {
-  try {
-    await aiStore.startAgentLoop(workflowStore)
-  } catch {
-    // error handled in store
-  }
+const handleSelectAgentLoopPreset = (preset: 'standard' | 'deep') => {
+  aiStore.setAgentLoopPreset(preset)
+}
+
+const openModelSettings = () => {
+  aiStore.settingsVisible = true
 }
 
 onMounted(async () => {
@@ -77,7 +89,15 @@ onMounted(async () => {
       @focus-report="emit('focusReport')"
     />
 
-    <div class="agent-workspace__body">
+    <AgentProgressBar
+      :steps="aiStore.agentWorkspaceSteps"
+      :headline="progressHeadline"
+      :auto-apply-status="aiStore.autoApplyResult.status"
+      :auto-apply-message="aiStore.autoApplyResult.message"
+      :has-applied-snapshot="Boolean(aiStore.lastAppliedSnapshotId)"
+    />
+
+    <div class="agent-workspace__body" :class="{ 'has-tool-rail': hasToolRail }">
       <div class="agent-workspace__main">
         <AgentMessageList
           :messages="messages"
@@ -86,25 +106,7 @@ onMounted(async () => {
           :approval-requests="approvalRequests"
         />
 
-        <!-- Agent Loop 控制按钮 -->
-        <div v-if="canStartAgentLoop || aiStore.agentLoopRunning" class="agent-loop-control">
-          <button
-            v-if="canStartAgentLoop"
-            type="button"
-            class="agent-loop-control__btn"
-            @click="handleStartAgentLoop"
-          >
-            <Play :size="14" />
-            <span>自动执行并分析</span>
-          </button>
-          <span v-if="aiStore.agentLoopRunning" class="agent-loop-control__status">
-            <Loader2 :size="14" class="agent-loop-control__spin" />
-            <span>{{ aiStore.streamHeadline || 'Agent Loop 运行中...' }}</span>
-          </span>
-        </div>
-
-        <!-- Agent Loop 结论卡片 -->
-        <article v-if="conclusion" class="agent-conclusion">
+        <article v-if="conclusion" data-testid="agent-conclusion-card" class="agent-conclusion">
           <div class="agent-conclusion__header">
             <strong>分析结论</strong>
             <span class="agent-conclusion__badge">{{ aiStore.agentLoopOutput?.totalIterations ?? 0 }} 轮分析</span>
@@ -131,8 +133,7 @@ onMounted(async () => {
         </article>
       </div>
 
-      <div class="agent-workspace__rail">
-        <AgentTimeline :items="timeline" @select="() => undefined" />
+      <div v-if="hasToolRail" class="agent-workspace__rail">
         <AgentToolCallList :items="toolCalls" />
       </div>
     </div>
@@ -140,9 +141,18 @@ onMounted(async () => {
     <AgentComposer
       :prompt="aiStore.prompt"
       :approval-requests="approvalRequests"
+      :preset="aiStore.agentLoopPreset"
+      :preset-options="aiStore.agentLoopPresetOptions"
       :disabled="aiStore.isGenerating || aiStore.agentLoopRunning"
       @submit="handleSubmit"
       @update-prompt="aiStore.prompt = $event"
+      @update-preset="handleSelectAgentLoopPreset"
+      @open-model-settings="openModelSettings"
+    />
+
+    <AgentModelSettingsDialog
+      :visible="aiStore.settingsVisible"
+      @close="aiStore.settingsVisible = false"
     />
   </aside>
 </template>
@@ -152,9 +162,7 @@ onMounted(async () => {
   height: 100%;
   display: grid;
   grid-template-rows: auto 1fr auto;
-  background:
-    radial-gradient(120% 120% at 100% 0%, rgba(37, 99, 235, 0.08) 0%, rgba(255, 255, 255, 0) 48%),
-    linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  background: #f4f7fb;
   border-right: 1px solid #dbe4ef;
   min-width: 0;
 }
@@ -166,8 +174,11 @@ onMounted(async () => {
 .agent-workspace__body {
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 280px;
-  gap: 0;
+  grid-template-columns: 1fr;
+}
+
+.agent-workspace__body.has-tool-rail {
+  grid-template-columns: minmax(0, 1fr) 260px;
 }
 
 .agent-workspace__main {
@@ -196,58 +207,15 @@ onMounted(async () => {
   }
 }
 
-/* Agent Loop 控制按钮 */
-.agent-loop-control {
-  padding: 12px 0;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.agent-loop-control__btn {
-  height: 36px;
-  padding: 0 16px;
-  border-radius: 12px;
-  border: 1px solid #059669;
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  color: #ffffff;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  font-weight: 800;
-  cursor: pointer;
-  transition: opacity 0.15s;
-}
-
-.agent-loop-control__btn:hover {
-  opacity: 0.9;
-}
-
-.agent-loop-control__status {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: #475569;
-}
-
-.agent-loop-control__spin {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
 /* 分析结论卡片 */
 .agent-conclusion {
   border-radius: 18px;
   border: 1px solid #dbe4ef;
-  background: linear-gradient(160deg, #0f172a 0%, #1e293b 100%);
+  background: #ffffff;
   padding: 20px;
-  color: #e2e8f0;
+  color: #1e293b;
   margin-top: 12px;
+  box-shadow: 0 20px 34px -32px rgba(15, 23, 42, 0.24);
 }
 
 .agent-conclusion__header {
@@ -259,13 +227,13 @@ onMounted(async () => {
 
 .agent-conclusion__header strong {
   font-size: 14px;
-  color: #ffffff;
+  color: #0f172a;
 }
 
 .agent-conclusion__badge {
   border-radius: 999px;
-  background: rgba(16, 185, 129, 0.18);
-  color: #6ee7b7;
+  background: #eef4ff;
+  color: #2563eb;
   padding: 4px 10px;
   font-size: 11px;
   font-weight: 700;
@@ -275,13 +243,13 @@ onMounted(async () => {
   font-size: 13px;
   line-height: 1.7;
   margin: 0 0 14px;
-  color: #cbd5e1;
+  color: #334155;
 }
 
 .agent-conclusion__section {
   margin-top: 12px;
   padding-top: 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid #e2e8f0;
 }
 
 .agent-conclusion__section strong {
@@ -296,6 +264,7 @@ onMounted(async () => {
   padding-left: 18px;
   font-size: 12px;
   line-height: 1.7;
+  color: #475569;
 }
 
 .agent-conclusion__section--warn strong {
