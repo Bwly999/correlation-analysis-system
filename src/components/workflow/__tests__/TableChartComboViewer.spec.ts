@@ -166,13 +166,13 @@ describe('TableChartComboViewer', () => {
       },
     })
 
-    expect(wrapper.find('[data-test="table-viewer-stub"]').exists()).toBe(true)
-    expect(wrapper.find('[data-test="chart-viewer-stub"]').exists()).toBe(false)
+    expect(wrapper.html()).toContain('data-test="table-viewer-stub"')
+    expect(wrapper.html()).not.toContain('data-test="chart-viewer-stub"')
     expect(wrapper.get('[data-test="combo-mode-chart"]').attributes('disabled')).toBeUndefined()
 
     await wrapper.get('[data-test="combo-mode-chart"]').trigger('click')
 
-    expect(wrapper.get('[data-test="chart-key-select"]').exists()).toBe(true)
+    expect(wrapper.html()).toContain('data-test="chart-key-select"')
   })
 
   it('keeps derived chart settings when switching between chart and split modes', async () => {
@@ -210,5 +210,35 @@ describe('TableChartComboViewer', () => {
       (wrapper.get('[data-test="chart-key-select"]').element as HTMLSelectElement).selectedOptions,
     ).map((option) => option.value)
     expect(selectedOptions).toEqual(['other'])
+  })
+
+  it('keeps normalization settings when switching between chart and split modes', async () => {
+    localStorage.clear()
+
+    const wrapper = mount(TableChartComboViewer, {
+      props: {
+        data: {
+          kind: 'table',
+          payload: [
+            { score: 1, revenue: 1000 },
+            { score: 2, revenue: 2000 },
+            { score: 3, revenue: 3000 },
+          ],
+        },
+      },
+    })
+
+    await wrapper.get('[data-test="combo-mode-chart"]').trigger('click')
+    await wrapper.get('[data-test="chart-view-mode-normalized"]').trigger('click')
+    await wrapper.get('[data-test="chart-normalization-method-z-score"]').trigger('click')
+    await wrapper.get('[data-test="combo-mode-split"]').trigger('click')
+    await wrapper.get('[data-test="combo-mode-chart"]').trigger('click')
+
+    expect(wrapper.get('[data-test="chart-view-mode-normalized"]').attributes('data-state')).toBe(
+      'active',
+    )
+    expect(wrapper.get('[data-test="chart-normalization-method-z-score"]').attributes('data-state')).toBe(
+      'active',
+    )
   })
 })

@@ -25,10 +25,18 @@ import {
   ListChecks,
   PanelRightClose,
   PanelRightOpen,
+  Scale,
   Settings2,
   Trash2,
 } from 'lucide-vue-next'
 import { calculateBoxValues } from '@/utils/stats'
+import {
+  buildNormalizationStats,
+  isFiniteNumber,
+  normalizeSeriesValue,
+  type ChartRow,
+  type NormalizationMethod,
+} from './dataChartNormalization'
 
 use([
   CanvasRenderer,
@@ -43,7 +51,6 @@ use([
   TransformComponent,
 ])
 
-type ChartRow = Record<string, unknown>
 type ChartGroup = {
   name: string
   data: ChartRow[]
@@ -59,6 +66,8 @@ type ChartFilterPreset = {
 
 const FILTER_PRESETS_STORAGE_KEY = 'workflow-data-chart-filter-presets'
 const FILTER_PRESETS_DEFAULT_KEY = 'workflow-data-chart-default-preset'
+const VIEW_MODE_STORAGE_KEY = 'workflow-data-chart-view-mode'
+const NORMALIZATION_METHOD_STORAGE_KEY = 'workflow-data-chart-normalization-method'
 const LINE_CHART_RENDER_LIMIT = 1200
 
 const props = defineProps<{
@@ -70,6 +79,8 @@ const maxPoints = ref(5000)
 const selectedKeys = ref<string[]>([])
 const lowerBound = ref<number | null>(null)
 const upperBound = ref<number | null>(null)
+const viewMode = ref<'raw' | 'normalized'>('raw')
+const normalizationMethod = ref<NormalizationMethod>('min-max')
 const isPresetPanelOpen = ref(false)
 const presetNameInput = ref('')
 const selectedPresetId = ref<string | null>(null)
@@ -78,9 +89,6 @@ const defaultPresetId = ref<string | 'none' | null>(null)
 const chartRef = shallowRef<any>(null)
 
 const isBrowser = typeof window !== 'undefined'
-
-const isFiniteNumber = (value: unknown): value is number =>
-  typeof value === 'number' && Number.isFinite(value)
 
 const createDefaultPresetName = () => {
   const now = new Date()
@@ -117,6 +125,12 @@ const loadPresetState = () => {
 
   const rawDefault = localStorage.getItem(FILTER_PRESETS_DEFAULT_KEY)
   defaultPresetId.value = rawDefault === 'none' ? 'none' : rawDefault
+
+  const rawViewMode = localStorage.getItem(VIEW_MODE_STORAGE_KEY)
+  viewMode.value = rawViewMode === 'normalized' ? 'normalized' : 'raw'
+
+  const rawNormalizationMethod = localStorage.getItem(NORMALIZATION_METHOD_STORAGE_KEY)
+  normalizationMethod.value = rawNormalizationMethod === 'z-score' ? 'z-score' : 'min-max'
 }
 
 const applyPreset = (preset: ChartFilterPreset | null) => {
@@ -276,6 +290,27 @@ watch(
 const normalizedKeys = computed(() =>
   selectedKeys.value.length > 0 ? selectedKeys.value : availableKeys.value.slice(0, 1),
 )
+
+const supportsNormalization = computed(() => !isGroupedData.value && chartType.value === 'line')
+
+const normalizationStats = computed(() => {
+  if (!supportsNormalization.value) return buildNormalizationStats([], [])
+  return buildNormalizationStats(filteredData.value as ChartRow[], normalizedKeys.value)
+})
+
+const isNormalizedView = computed(
+  () => supportsNormalization.value && viewMode.value === 'normalized',
+)
+
+const chartViewModes = [
+  { label: '原始值', value: 'raw' as const },
+  { label: '归一化', value: 'normalized' as const },
+]
+
+const normalizationMethodOptions = [
+  { label: 'Min-Max 0~1', value: 'min-max' as const },
+  { label: 'Z-Score', value: 'z-score' as const },
+]
 
 const filteredData = computed(() => {
   const sourceData = props.data || []
@@ -442,6 +477,8 @@ const chartOption = computed(() => {
     const rows = (sourceData as ChartRow[]).slice(0, maxPoints.value)
     const renderLimit = Math.min(maxPoints.value, LINE_CHART_RENDER_LIMIT)
     const sampledRows = downsampleLineRows(rows, keys, renderLimit)
+    const sampledIndex = Array.from({ length: sampledRows.length }, (_, index) => index + 1)
+    const activeNormalizationMethod = normalizationMethod.value
 
     option.tooltip.trigger = 'axis'
     option.tooltip.axisPointer = {
@@ -450,11 +487,56 @@ const chartOption = computed(() => {
       snap: false,
     }
     option.tooltip.triggerOn = 'mousemove'
-    option.xAxis.data = Array.from({ length: sampledRows.length }, (_, index) => index + 1)
+    option.xAxis.data = sampledIndex
+    option.tooltip.formatter = (params: Array<Record<string, unknown>> | Record<string, unknown>) => {
+      const paramList = Array.isArray(params) ? params : [params]
+      const axisValue = paramList[0]?.axisValueLabel ?? paramList[0]?.axisValue ?? ''
+      const lines = [`样本 ${axisValue}`]
+
+      paramList.forEach((item) => {
+        const seriesName = String(item.seriesName ?? '')
+        const seriesStats = normalizationStats.value.get(seriesName)
+        const rawRow = sampledRows[Number(item.dataIndex ?? -1)] ?? null
+        const rawValue = rawRow?.[seriesName]
+        const displayValue = item.data
+
+        if (isNormalizedView.value) {
+          const normalizationLabel =
+            activeNormalizationMethod === 'min-max' ? '归一化值' : '标准分值'
+          lines.push(
+            `${seriesName}<br/>原始值：${rawValue ?? '--'}<br/>${normalizationLabel}：${displayValue ?? '--'}`,
+          )
+          return
+        }
+
+        const statsLabel =
+          seriesStats && activeNormalizationMethod === 'min-max'
+            ? `最小值 ${seriesStats.min} / 最大值 ${seriesStats.max}`
+            : undefined
+        lines.push(statsLabel ? `${seriesName}：${displayValue}<br/>${statsLabel}` : `${seriesName}：${displayValue}`)
+      })
+
+      return lines.join('<br/>')
+    }
+    if (isNormalizedView.value) {
+      option.yAxis.name = activeNormalizationMethod === 'min-max' ? '归一化值' : '标准分值'
+      option.yAxis.min = activeNormalizationMethod === 'min-max' ? 0 : undefined
+      option.yAxis.max = activeNormalizationMethod === 'min-max' ? 1 : undefined
+    } else {
+      option.yAxis.name = undefined
+      option.yAxis.min = undefined
+      option.yAxis.max = undefined
+    }
     option.series = keys.map((key) => ({
       name: key,
       type: 'line',
-      data: sampledRows.map((row) => (typeof row[key] === 'number' ? row[key] : 0)),
+      data: sampledRows.map((row) =>
+        isNormalizedView.value
+          ? normalizeSeriesValue(row[key], normalizationStats.value.get(key), activeNormalizationMethod)
+          : typeof row[key] === 'number'
+            ? row[key]
+            : 0,
+      ),
       showSymbol: false,
       lineStyle: { width: 2.5 },
       sampling: 'lttb',
@@ -473,6 +555,16 @@ const chartOption = computed(() => {
 
 loadPresetState()
 applyDefaultPreset()
+
+watch(viewMode, (nextViewMode) => {
+  if (!isBrowser) return
+  localStorage.setItem(VIEW_MODE_STORAGE_KEY, nextViewMode)
+}, { immediate: true })
+
+watch(normalizationMethod, (nextMethod) => {
+  if (!isBrowser) return
+  localStorage.setItem(NORMALIZATION_METHOD_STORAGE_KEY, nextMethod)
+}, { immediate: true })
 </script>
 
 <template>
@@ -636,6 +728,54 @@ applyDefaultPreset()
               </div>
             </aside>
           </div>
+        </div>
+
+        <div
+          v-if="supportsNormalization"
+          class="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-100 rounded-lg shadow-sm"
+        >
+          <Scale :size="14" class="text-blue-600" />
+          <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">对比</span>
+          <div class="segmented-toggle-group">
+            <button
+              v-for="modeOption in chartViewModes"
+              :key="modeOption.value"
+              :data-test="`chart-view-mode-${modeOption.value}`"
+              class="segmented-toggle-button"
+              :class="{ 'segmented-toggle-button--active': viewMode === modeOption.value }"
+              :data-state="viewMode === modeOption.value ? 'active' : 'inactive'"
+              type="button"
+              @click="viewMode = modeOption.value"
+            >
+              {{ modeOption.label }}
+            </button>
+          </div>
+        </div>
+
+        <div
+          v-if="supportsNormalization && isNormalizedView"
+          class="flex items-center gap-2 px-3 py-1.5 bg-blue-50 border border-blue-100 rounded-lg shadow-sm"
+        >
+          <span class="text-[10px] font-black text-blue-600 uppercase tracking-widest">方式</span>
+          <div class="segmented-toggle-group">
+            <button
+              v-for="methodOption in normalizationMethodOptions"
+              :key="methodOption.value"
+              :data-test="`chart-normalization-method-${methodOption.value}`"
+              class="segmented-toggle-button segmented-toggle-button--compact"
+              :class="{
+                'segmented-toggle-button--active': normalizationMethod === methodOption.value,
+              }"
+              :data-state="normalizationMethod === methodOption.value ? 'active' : 'inactive'"
+              type="button"
+              @click="normalizationMethod = methodOption.value"
+            >
+              {{ methodOption.label }}
+            </button>
+          </div>
+          <span class="text-[10px] font-bold text-blue-600/80 whitespace-nowrap">
+            仅图表显示归一化，过滤仍按原始值生效
+          </span>
         </div>
       </div>
 
@@ -852,5 +992,39 @@ applyDefaultPreset()
   color: #2563eb;
   border-color: #bfdbfe;
   background: #eff6ff;
+}
+
+.segmented-toggle-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.segmented-toggle-button {
+  border: none;
+  border-radius: 8px;
+  padding: 6px 10px;
+  background: transparent;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.segmented-toggle-button--compact {
+  padding: 5px 8px;
+}
+
+.segmented-toggle-button--active {
+  background: #2563eb;
+  color: #ffffff;
+  box-shadow: 0 6px 12px -10px rgba(37, 99, 235, 0.8);
 }
 </style>

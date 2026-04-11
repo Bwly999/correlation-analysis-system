@@ -104,6 +104,89 @@ const getChartOption = (wrapper: ReturnType<typeof mount>) =>
   JSON.parse(wrapper.get('[data-test="chart-option"]').attributes('data-option') || '{}')
 
 describe('DataChart', () => {
+  it('normalizes selected line series with min-max scaling and restores the saved mode on remount', async () => {
+    localStorage.clear()
+
+    const wrapper = mount(DataChart, {
+      props: {
+        data: [
+          { small: 1, large: 1000 },
+          { small: 3, large: 3000 },
+          { small: 5, large: 5000 },
+        ],
+      },
+    })
+
+    await wrapper.get('[data-test="chart-key-select"]').setValue(['small', 'large'])
+    await wrapper.get('[data-test="chart-view-mode-normalized"]').trigger('click')
+
+    const option = getChartOption(wrapper)
+    expect(option.yAxis.min).toBe(0)
+    expect(option.yAxis.max).toBe(1)
+    expect(option.series[0].data).toEqual([0, 0.5, 1])
+    expect(option.series[1].data).toEqual([0, 0.5, 1])
+    expect(localStorage.getItem('workflow-data-chart-view-mode')).toBe('normalized')
+    expect(localStorage.getItem('workflow-data-chart-normalization-method')).toBe('min-max')
+
+    await wrapper.unmount()
+
+    const remounted = mount(DataChart, {
+      props: {
+        data: [
+          { small: 2, large: 2000 },
+          { small: 4, large: 4000 },
+        ],
+      },
+    })
+
+    expect(remounted.get('[data-test="chart-view-mode-normalized"]').attributes('data-state')).toBe(
+      'active',
+    )
+    expect(remounted.get('[data-test="chart-normalization-method-min-max"]').attributes('data-state')).toBe(
+      'active',
+    )
+  })
+
+  it('supports z-score normalization while keeping filtering based on raw values', async () => {
+    localStorage.clear()
+
+    const wrapper = mount(DataChart, {
+      props: {
+        data: [
+          { score: 10, revenue: 1000 },
+          { score: 20, revenue: 2000 },
+          { score: 30, revenue: 3000 },
+        ],
+      },
+    })
+
+    await wrapper.get('[data-test="chart-key-select"]').setValue(['score', 'revenue'])
+    await wrapper.get('[data-test="chart-view-mode-normalized"]').trigger('click')
+    await wrapper.get('[data-test="chart-normalization-method-z-score"]').trigger('click')
+    await wrapper.get('[data-test="chart-lower-bound"]').setValue('15')
+    await wrapper.get('[data-test="chart-upper-bound"]').setValue('25')
+
+    const option = getChartOption(wrapper)
+    expect(option.xAxis.data).toEqual([1])
+    expect(option.series[0].data).toEqual([0])
+    expect(option.series[1].data).toEqual([0])
+    expect(option.yAxis.name).toBe('标准分值')
+  })
+
+  it('does not show normalization controls for grouped boxplot charts', () => {
+    const wrapper = mount(DataChart, {
+      props: {
+        data: [
+          { name: 'A', data: [{ score: 1 }, { score: 2 }] },
+          { name: 'B', data: [{ score: 3 }, { score: 4 }] },
+        ],
+      },
+    })
+
+    expect(wrapper.find('[data-test="chart-view-mode-raw"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="chart-normalization-method-min-max"]').exists()).toBe(false)
+  })
+
   it('saves presets locally, applies them, and restores default preset on remount', async () => {
     localStorage.clear()
 
