@@ -34,7 +34,7 @@ import {
   submitWorkflowAiSessionInput,
   testWorkflowAiModelProfile,
   type AgentLoopOutput,
-} from '@/services/workflowAi'
+} from '@/services/agentWorkspace'
 
 const CUSTOM_PROFILE_STORAGE_KEY = 'workflow_ai_custom_profiles'
 

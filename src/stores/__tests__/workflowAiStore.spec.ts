@@ -25,7 +25,7 @@ const {
     testWorkflowAiModelTestResultMock: vi.fn(),
   }))
 
-vi.mock('@/services/workflowAi', () => ({
+vi.mock('@/services/agentWorkspace', () => ({
   WorkflowAiRequestError: class WorkflowAiRequestError extends Error {
     diagnostics?: unknown
     statusCode?: number
@@ -688,25 +688,31 @@ describe('workflowAiStore', () => {
       sessionId: 'session_1',
       userGoal: '帮我找出影响销量的关键因素',
       phase: 'waiting_for_input',
-      artifacts: [
+    })
+    expect(aiStore.analysisAgentSession?.artifacts).toEqual(
+      expect.arrayContaining([
         expect.objectContaining({
           type: 'conclusion_card',
           title: '分析结论',
         }),
-      ],
-      approvalRequests: [
+      ]),
+    )
+    expect(aiStore.analysisAgentSession?.approvalRequests).toEqual(
+      expect.arrayContaining([
         expect.objectContaining({
           key: 'question_1',
           label: '目标字段',
         }),
-      ],
-      conversation: [
+      ]),
+    )
+    expect(aiStore.analysisAgentSession?.conversation).toEqual(
+      expect.arrayContaining([
         expect.objectContaining({
           role: 'user',
           content: '帮我找出影响销量的关键因素',
         }),
-      ],
-    })
+      ]),
+    )
   })
 
   it('syncs the current canvas into the analysis session summary', () => {

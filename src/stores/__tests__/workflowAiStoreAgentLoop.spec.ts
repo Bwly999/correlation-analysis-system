@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { useWorkflowAiStore } from '@/stores/workflowAiStore'
 import { createPinia, setActivePinia } from 'pinia'
-import { runAnalysisAgentLoop } from '@/services/workflowAi'
+import { runAnalysisAgentLoop } from '@/services/agentWorkspace'
 
-vi.mock('@/services/workflowAi', () => ({
+vi.mock('@/services/agentWorkspace', () => ({
   fetchSystemModelProfiles: vi.fn(async () => []),
   requestWorkflowAiPlan: vi.fn(),
   streamWorkflowAiPlan: vi.fn(),
