@@ -28,7 +28,14 @@ describe('executeNodesForAgent', () => {
   const mockRequest = {
     mode: 'create' as const,
     prompt: '测试',
-    profile: { id: 'test', source: 'system' as const },
+    profile: {
+      id: 'test',
+      name: 'Test Profile',
+      baseUrl: 'https://open.bigmodel.cn/api/coding/paas/v4',
+      model: 'glm-4.7',
+      enabled: true,
+      source: 'system' as const,
+    },
     nodeCatalog: [],
   }
 
@@ -53,9 +60,9 @@ describe('executeNodesForAgent', () => {
     const results = await executeNodesForAgent(plan, mockRequest, (e) => events.push(e))
 
     expect(results).toHaveLength(1)
-    expect(results[0].success).toBe(true)
-    expect(results[0].nodeType).toBe('manual-json-import')
-    expect(results[0].rowCount).toBe(2)
+    expect(results[0]!.success).toBe(true)
+    expect(results[0]!.nodeType).toBe('manual-json-import')
+    expect(results[0]!.rowCount).toBe(2)
   })
 
   it('报告不支持的节点类型', async () => {
@@ -76,9 +83,9 @@ describe('executeNodesForAgent', () => {
 
     const results = await executeNodesForAgent(plan, mockRequest, () => {})
     expect(results).toHaveLength(1)
-    expect(results[0].success).toBe(false)
-    expect(results[0].error).toBe('unsupported_node_type')
-    expect(results[0].resultSummary).toContain('不支持')
+    expect(results[0]!.success).toBe(false)
+    expect(results[0]!.error).toBe('unsupported_node_type')
+    expect(results[0]!.resultSummary).toContain('不支持')
   })
 
   it('按拓扑序执行多个节点', async () => {
@@ -97,8 +104,8 @@ describe('executeNodesForAgent', () => {
     const results = await executeNodesForAgent(plan, mockRequest, () => {})
     expect(results).toHaveLength(2)
     // n1 应该先执行（无上游依赖）
-    expect(results[0].nodeId).toBe('n1')
-    expect(results[1].nodeId).toBe('n2')
+    expect(results[0]!.nodeId).toBe('n1')
+    expect(results[1]!.nodeId).toBe('n2')
   })
 
   it('发送节点执行事件', async () => {

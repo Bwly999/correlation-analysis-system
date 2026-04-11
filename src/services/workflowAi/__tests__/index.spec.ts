@@ -3,6 +3,7 @@ import {
   getAnalysisAgentSession,
   getWorkflowAiSession,
   requestWorkflowAiPlan,
+  runAnalysisAgentLoop,
   runWorkflowAiSession,
   startAnalysisAgentSession,
   startWorkflowAiSession,
@@ -49,7 +50,7 @@ describe('workflowAi service', () => {
       profile: {
         id: 'system-default-zhipu-glm-4-7',
         name: '默认智谱 GLM-4.7',
-        baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+        baseUrl: 'https://open.bigmodel.cn/api/coding/paas/v4',
         model: 'glm-4.7',
         enabled: true,
         source: 'system',
@@ -105,7 +106,7 @@ describe('workflowAi service', () => {
       profile: {
         id: 'system-default-zhipu-glm-4-7',
         name: '默认智谱 GLM-4.7',
-        baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+        baseUrl: 'https://open.bigmodel.cn/api/coding/paas/v4',
         model: 'glm-4.7',
         enabled: true,
         source: 'system',
@@ -166,7 +167,7 @@ describe('workflowAi service', () => {
       profile: {
         id: 'system-default-zhipu-glm-4-7',
         name: '默认智谱 GLM-4.7',
-        baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+        baseUrl: 'https://open.bigmodel.cn/api/coding/paas/v4',
         model: 'glm-4.7',
         enabled: true,
         source: 'system',
@@ -226,7 +227,7 @@ describe('workflowAi service', () => {
       profile: {
         id: 'system-default-zhipu-glm-4-7',
         name: '默认智谱 GLM-4.7',
-        baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+        baseUrl: 'https://open.bigmodel.cn/api/coding/paas/v4',
         model: 'glm-4.7',
         enabled: true,
         source: 'system',
@@ -486,7 +487,7 @@ describe('workflowAi service', () => {
       profile: {
         id: 'system-default-zhipu-glm-4-7',
         name: '默认智谱 GLM-4.7',
-        baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+        baseUrl: 'https://open.bigmodel.cn/api/coding/paas/v4',
         model: 'glm-4.7',
         enabled: true,
         source: 'system',
@@ -505,5 +506,124 @@ describe('workflowAi service', () => {
       expect.objectContaining({ method: 'POST' }),
     )
     expect(globalThis.fetch).toHaveBeenNthCalledWith(2, '/api/analysis-agent/session/session_1')
+  })
+
+  it('reconstructs the full agent loop output from ndjson events', async () => {
+    const encoder = new TextEncoder()
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(
+          encoder.encode(
+            [
+              JSON.stringify({ type: 'loop_started', maxIterations: 2 }),
+              JSON.stringify({
+                type: 'loop_iteration_completed',
+                iteration: 1,
+                plan: {
+                  summary: '第一轮计划',
+                  assumptions: [],
+                  warnings: [],
+                  questions: [],
+                  operations: [
+                    {
+                      id: 'node_import_1',
+                      type: 'createNode',
+                      nodeType: 'manual-json-import',
+                      nodeLabel: '手动输入数据',
+                    },
+                  ],
+                },
+                executionResults: [
+                  {
+                    nodeId: 'node_import_1',
+                    nodeLabel: '手动输入数据',
+                    nodeType: 'manual-json-import',
+                    success: true,
+                    resultKind: 'table',
+                    resultSummary: '表格数据，5 行',
+                    rowCount: 5,
+                  },
+                ],
+                interpretation: {
+                  text: '当前结果已足够',
+                  shouldContinue: false,
+                },
+              }),
+              JSON.stringify({
+                type: 'conclusion_completed',
+                conclusion: {
+                  summary: '分析已完成',
+                  findings: ['发现一'],
+                  recommendations: ['建议一'],
+                  caveats: [],
+                },
+              }),
+              JSON.stringify({
+                type: 'loop_completed',
+                totalIterations: 1,
+                totalDurationMs: 1234,
+              }),
+            ].join('\n'),
+          ),
+        )
+        controller.close()
+      },
+    })
+
+    vi.mocked(globalThis.fetch).mockResolvedValue({
+      ok: true,
+      body: stream,
+    } as Response)
+
+    const events: string[] = []
+    const response = await runAnalysisAgentLoop('session_1', { maxIterations: 2 }, {
+      onEvent(event) {
+        events.push(event.type)
+      },
+    })
+
+    expect(events).toEqual([
+      'loop_started',
+      'loop_iteration_completed',
+      'conclusion_completed',
+      'loop_completed',
+    ])
+    expect(response.totalIterations).toBe(1)
+    expect(response.totalDurationMs).toBe(1234)
+    expect(response.conclusion?.summary).toBe('分析已完成')
+    expect(response.iterations).toEqual([
+      {
+        iteration: 1,
+        plan: {
+          summary: '第一轮计划',
+          assumptions: [],
+          warnings: [],
+          questions: [],
+          operations: [
+            {
+              id: 'node_import_1',
+              type: 'createNode',
+              nodeType: 'manual-json-import',
+              nodeLabel: '手动输入数据',
+            },
+          ],
+        },
+        executionResults: [
+          {
+            nodeId: 'node_import_1',
+            nodeLabel: '手动输入数据',
+            nodeType: 'manual-json-import',
+            success: true,
+            resultKind: 'table',
+            resultSummary: '表格数据，5 行',
+            rowCount: 5,
+          },
+        ],
+        interpretation: {
+          text: '当前结果已足够',
+          shouldContinue: false,
+        },
+      },
+    ])
   })
 })

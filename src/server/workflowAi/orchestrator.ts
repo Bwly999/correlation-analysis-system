@@ -387,3 +387,4 @@ export const runWorkflowAiSession = async (
 }
 
 export { getWorkflowAiSession }
+export { getWorkflowAiSessionRecord }

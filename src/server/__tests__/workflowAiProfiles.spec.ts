@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { WorkflowAiPlanRequest } from '../../ai/types.js'
+import type { WorkflowAiPlanRequest, WorkflowAiStreamEvent } from '../../ai/types.js'
 
-const { generateTextMock, createOpenAICompatibleMock } = vi.hoisted(() => ({
+const { generateTextMock, streamTextMock, createOpenAICompatibleMock } = vi.hoisted(() => ({
   generateTextMock: vi.fn(),
+  streamTextMock: vi.fn(),
   createOpenAICompatibleMock: vi.fn(() => ({
     chatModel: (model: string) => ({ model }),
   })),
@@ -10,6 +11,7 @@ const { generateTextMock, createOpenAICompatibleMock } = vi.hoisted(() => ({
 
 vi.mock('ai', () => ({
   generateText: generateTextMock,
+  streamText: streamTextMock,
 }))
 
 vi.mock('@ai-sdk/openai-compatible', () => ({
@@ -21,12 +23,15 @@ import {
   normalizePlanWithCatalog,
   parsePlan,
   resolveModelProfile,
+  streamWorkflowAiPlan,
 } from '../workflowAi/profiles.js'
+import { buildServerWorkflowAiNodeCatalog } from '../workflowAi/nodeCatalog.js'
 
 describe('workflowAi profiles', () => {
   beforeEach(() => {
     vi.stubEnv('OPENAI_API_KEY', 'test-system-key')
     generateTextMock.mockReset()
+    streamTextMock.mockReset()
     createOpenAICompatibleMock.mockClear()
   })
 
@@ -36,7 +41,7 @@ describe('workflowAi profiles', () => {
     profile: {
       id: 'system-default-zhipu-glm-4-7',
       name: '默认智谱 GLM-4.7',
-      baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+      baseUrl: 'https://open.bigmodel.cn/api/coding/paas/v4',
       model: 'glm-4.7',
       enabled: true,
       source: 'system',
@@ -88,7 +93,7 @@ describe('workflowAi profiles', () => {
     expect(profiles[0]).toMatchObject({
       id: 'system-default-zhipu-glm-4-7',
       name: '默认智谱 GLM-4.7',
-      baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+      baseUrl: 'https://open.bigmodel.cn/api/coding/paas/v4',
       model: 'glm-4.7',
       enabled: true,
       isDefault: true,
@@ -100,7 +105,7 @@ describe('workflowAi profiles', () => {
     const profile = resolveModelProfile({
       id: 'system-default-zhipu-glm-4-7',
       name: '默认智谱 GLM-4.7',
-      baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+      baseUrl: 'https://open.bigmodel.cn/api/coding/paas/v4',
       model: 'glm-4.7',
       enabled: true,
       source: 'system',
@@ -336,6 +341,7 @@ describe('workflowAi profiles', () => {
 
     expect(generateTextMock).toHaveBeenCalledTimes(2)
     expect(generateTextMock.mock.calls[0]?.[0]?.system).toContain('当前阶段是骨架规划')
+    expect(generateTextMock.mock.calls[0]?.[0]?.system).not.toContain('data-export')
     expect(generateTextMock.mock.calls[1]?.[0]?.system).toContain('当前阶段是配置补全')
     expect(generateTextMock.mock.calls[1]?.[0]?.system).toContain('manual-json-import')
     expect(generateTextMock.mock.calls[1]?.[0]?.system).toContain('pearson')
@@ -638,5 +644,111 @@ describe('workflowAi profiles', () => {
       },
     })
     expect(generateTextMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('bypasses streaming for the bigmodel coding endpoint and uses non-streaming generation directly', async () => {
+    generateTextMock
+      .mockResolvedValueOnce({
+        text: '{"summary":"创建相关性分析流","assumptions":[],"warnings":[],"questions":[],"operations":[{"id":"node_import","type":"createNode","nodeType":"manual-json-import","nodeLabel":"手动输入数据"},{"id":"node_pearson","type":"createNode","nodeType":"pearson","nodeLabel":"Pearson 相关系数"},{"id":"edge_1","type":"connectNodes","sourceRef":"node_import","targetRef":"node_pearson"}]}',
+      })
+      .mockResolvedValueOnce({
+        text: '{"summary":"创建相关性分析流","assumptions":[],"warnings":[],"questions":[],"operations":[{"id":"node_import","type":"createNode","nodeType":"manual-json-import","nodeLabel":"手动输入数据","config":{"jsonData":"[{\\"feature\\":1,\\"target\\":2}]"}},{"id":"node_pearson","type":"createNode","nodeType":"pearson","nodeLabel":"Pearson 相关系数"},{"id":"edge_1","type":"connectNodes","sourceRef":"node_import","targetRef":"node_pearson"}]}',
+      })
+
+    const events: Array<{ type: string }> = []
+    const result = await streamWorkflowAiPlan(baseRequest, (event) => {
+      events.push({ type: event.type })
+    })
+
+    expect(result.plan.summary).toBe('创建相关性分析流')
+    expect(streamTextMock).not.toHaveBeenCalled()
+    expect(generateTextMock).toHaveBeenCalledTimes(2)
+    expect(events.some((event) => event.type === 'text_delta')).toBe(true)
+  })
+
+  it('uses local heuristic planning for inline-json correlation prompts without calling the model', async () => {
+    const request: WorkflowAiPlanRequest = {
+      ...baseRequest,
+      prompt: '帮我分析以下数据的相关性：[{"x1":1,"x2":2,"y":3},{"x1":2,"x2":4,"y":6},{"x1":3,"x2":6,"y":9}]',
+      nodeCatalog: buildServerWorkflowAiNodeCatalog(),
+    }
+
+    const result = await generateWorkflowAiPlan(request)
+
+    expect(generateTextMock).not.toHaveBeenCalled()
+    expect(streamTextMock).not.toHaveBeenCalled()
+    expect(result.plan.operations).toEqual([
+      expect.objectContaining({
+        id: 'node_import_1',
+        type: 'createNode',
+        nodeType: 'manual-json-import',
+        config: expect.objectContaining({
+          jsonData: expect.any(String),
+        }),
+      }),
+      expect.objectContaining({
+        id: 'node_terminal_1',
+        type: 'createNode',
+        nodeType: 'pearson',
+        config: {
+          xFields: ['x1', 'x2'],
+          yFields: ['y'],
+          topN: 3,
+        },
+      }),
+      expect.objectContaining({
+        type: 'connectNodes',
+        sourceRef: 'node_import_1',
+        targetRef: 'node_terminal_1',
+      }),
+    ])
+    expect(JSON.parse((result.plan.operations[0] as Extract<typeof result.plan.operations[number], { type: 'createNode' }>).config!.jsonData as string)).toHaveLength(3)
+    expect(result.diagnostics.status).toBe('success')
+    expect(result.diagnostics.attempts).toHaveLength(1)
+  })
+
+  it('uses local heuristic planning for inline-json filter prompts in streaming mode', async () => {
+    const request: WorkflowAiPlanRequest = {
+      ...baseRequest,
+      prompt: '先筛选出 score 大于 999 的记录，再说明还能做什么分析：[{"score":70,"x":1,"y":2},{"score":85,"x":2,"y":4},{"score":90,"x":3,"y":7}]',
+      nodeCatalog: buildServerWorkflowAiNodeCatalog(),
+    }
+
+    const events: WorkflowAiStreamEvent[] = []
+    const result = await streamWorkflowAiPlan(request, (event) => {
+      events.push(event)
+    })
+
+    expect(generateTextMock).not.toHaveBeenCalled()
+    expect(streamTextMock).not.toHaveBeenCalled()
+    expect(result.plan.operations).toEqual([
+      expect.objectContaining({
+        id: 'node_import_1',
+        type: 'createNode',
+        nodeType: 'manual-json-import',
+      }),
+      expect.objectContaining({
+        id: 'node_filter_1',
+        type: 'createNode',
+        nodeType: 'data-filter',
+        config: {
+          matchMode: 'all',
+          conditions: [
+            {
+              field: 'score',
+              operator: 'gt',
+              value: 999,
+            },
+          ],
+        },
+      }),
+      expect.objectContaining({
+        type: 'connectNodes',
+        sourceRef: 'node_import_1',
+        targetRef: 'node_filter_1',
+      }),
+    ])
+    expect(events.some((event) => event.type === 'completed')).toBe(true)
+    expect(events.some((event) => event.type === 'text_delta')).toBe(true)
   })
 })

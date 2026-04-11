@@ -1,5 +1,6 @@
 import { buildWorkflowAiNodeCatalog } from '@/ai/catalog'
 import type {
+  AgentLoopOutput,
   AnalysisAgentSessionState,
   WorkflowAiGenerationDiagnostics,
   WorkflowAiModelProfile,
@@ -14,6 +15,8 @@ import type {
   WorkflowAiSessionStartResponse,
   WorkflowAiStreamEvent,
 } from '@/ai/types'
+
+export type { AgentLoopOutput } from '@/ai/types'
 
 const WORKFLOW_AI_API_BASE_URL = import.meta.env.VITE_WORKFLOW_AI_API_BASE_URL || '/api'
 
@@ -440,36 +443,6 @@ export type AgentLoopConfig = {
   generateConclusion?: boolean
 }
 
-export type AgentLoopOutput = {
-  iterations: Array<{
-    iteration: number
-    plan: WorkflowAiPlan
-    executionResults: Array<{
-      nodeId: string
-      nodeLabel: string
-      nodeType: string
-      success: boolean
-      resultKind: string | null
-      resultSummary: string
-      rowCount?: number
-      error?: string
-    }>
-    interpretation: {
-      text: string
-      shouldContinue: boolean
-      continueReason?: string
-    } | null
-  }>
-  conclusion: {
-    summary: string
-    findings: string[]
-    recommendations: string[]
-    caveats: string[]
-  } | null
-  totalDurationMs: number
-  totalIterations: number
-}
-
 export const runAnalysisAgentLoop = async (
   sessionId: string,
   config?: AgentLoopConfig,
@@ -501,7 +474,28 @@ export const runAnalysisAgentLoop = async (
 
   const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()
   let buffer = ''
-  let loopOutput: AgentLoopOutput | null = null
+  let loopOutput: AgentLoopOutput = {
+    iterations: [],
+    conclusion: null,
+    totalDurationMs: 0,
+    totalIterations: 0,
+  }
+
+  const upsertIteration = (event: Extract<WorkflowAiStreamEvent, { type: 'loop_iteration_completed' }>) => {
+    const nextIteration = {
+      iteration: event.iteration,
+      plan: event.plan,
+      executionResults: event.executionResults,
+      interpretation: event.interpretation,
+    }
+    const existingIndex = loopOutput.iterations.findIndex((item) => item.iteration === event.iteration)
+    if (existingIndex >= 0) {
+      loopOutput.iterations.splice(existingIndex, 1, nextIteration)
+      return
+    }
+    loopOutput.iterations.push(nextIteration)
+    loopOutput.iterations.sort((left, right) => left.iteration - right.iteration)
+  }
 
   while (true) {
     const { value, done } = await reader.read()
@@ -516,17 +510,23 @@ export const runAnalysisAgentLoop = async (
       if (!event) continue
       options.onEvent?.(event)
 
+      if (event.type === 'loop_iteration_completed') {
+        upsertIteration(event)
+      }
+
       if (event.type === 'loop_completed') {
-        loopOutput = {
-          iterations: [],
-          conclusion: null,
-          totalDurationMs: event.totalDurationMs,
-          totalIterations: event.totalIterations,
-        }
+        loopOutput = event.output
+          ? event.output
+          : {
+              ...loopOutput,
+              totalDurationMs: event.totalDurationMs,
+              totalIterations: event.totalIterations,
+            }
       }
       if (event.type === 'conclusion_completed') {
-        if (loopOutput) {
-          loopOutput.conclusion = event.conclusion
+        loopOutput = {
+          ...loopOutput,
+          conclusion: event.conclusion,
         }
       }
     }
@@ -535,25 +535,25 @@ export const runAnalysisAgentLoop = async (
   const lastEvent = parseNdjsonLine(buffer)
   if (lastEvent) {
     options.onEvent?.(lastEvent)
-    if (lastEvent.type === 'loop_completed') {
-      loopOutput = {
-        iterations: [],
-        conclusion: null,
-        totalDurationMs: lastEvent.totalDurationMs,
-        totalIterations: lastEvent.totalIterations,
-      }
+    if (lastEvent.type === 'loop_iteration_completed') {
+      upsertIteration(lastEvent)
     }
-    if (lastEvent.type === 'conclusion_completed' && loopOutput) {
-      loopOutput.conclusion = lastEvent.conclusion
+    if (lastEvent.type === 'loop_completed') {
+      loopOutput = lastEvent.output
+        ? lastEvent.output
+        : {
+            ...loopOutput,
+            totalDurationMs: lastEvent.totalDurationMs,
+            totalIterations: lastEvent.totalIterations,
+          }
+    }
+    if (lastEvent.type === 'conclusion_completed') {
+      loopOutput = {
+        ...loopOutput,
+        conclusion: lastEvent.conclusion,
+      }
     }
   }
 
-  return (
-    loopOutput ?? {
-      iterations: [],
-      conclusion: null,
-      totalDurationMs: 0,
-      totalIterations: 0,
-    }
-  )
+  return loopOutput
 }

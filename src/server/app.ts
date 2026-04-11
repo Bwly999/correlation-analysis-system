@@ -14,6 +14,7 @@ import type {
 } from '../ai/types.js'
 import {
   getWorkflowAiSession,
+  getWorkflowAiSessionRecord,
   runWorkflowAiSession,
   startWorkflowAiSession,
   submitWorkflowAiSessionInput,
@@ -359,19 +360,21 @@ export const createServerHandler = () => async (request: IncomingMessage, respon
       const sessionId = decodeURIComponent(
         url.pathname.replace('/api/analysis-agent/session/', '').replace('/run-agent-loop', ''),
       )
-      const session = getWorkflowAiSession(sessionId)
-      if (!session) {
+      const sessionRecord = getWorkflowAiSessionRecord(sessionId)
+      if (!sessionRecord) {
         sendJson(response, 404, { message: '未找到分析代理会话' })
         return
       }
+      const session = sessionRecord.state
 
       const body = await readJsonBody<{ config?: Partial<AgentLoopConfig> }>(request)
       const planRequest: WorkflowAiPlanRequest = {
+        ...sessionRecord.request,
         mode: session.mode,
         prompt: session.prompt,
-        contextHints: session.contextHints,
-        profile: (body as any).profile ?? { id: 'system-default-zhipu-glm-4-7', source: 'system' },
-        nodeCatalog: (body as any).nodeCatalog ?? [],
+        contextHints: sessionRecord.request.contextHints ?? session.contextHints,
+        profile: (body as any).profile ?? sessionRecord.request.profile ?? { id: 'system-default-zhipu-glm-4-7', source: 'system' },
+        nodeCatalog: (body as any).nodeCatalog ?? sessionRecord.request.nodeCatalog,
       }
 
       let hasWrittenEvent = false
@@ -388,6 +391,7 @@ export const createServerHandler = () => async (request: IncomingMessage, respon
             type: 'loop_completed',
             totalIterations: output.totalIterations,
             totalDurationMs: output.totalDurationMs,
+            output,
           })
         }
       } catch (error) {

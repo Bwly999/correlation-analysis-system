@@ -12,7 +12,7 @@ describe('agentLoopTools', () => {
 
   it('conclude_analysis 的 execute 返回输入', async () => {
     const input = { summary: '分析完成', should_continue: false as const }
-    const result = await concludeAnalysisTool.execute!(input, { toolCallId: 'test' })
+    const result = await concludeAnalysisTool.execute!(input, { toolCallId: 'test', messages: [] })
     expect(result).toEqual(input)
   })
 
@@ -22,7 +22,7 @@ describe('agentLoopTools', () => {
       analysis_type: '相关性分析',
       should_continue: true as const,
     }
-    const result = await requestAdditionalAnalysisTool.execute!(input, { toolCallId: 'test' })
+    const result = await requestAdditionalAnalysisTool.execute!(input, { toolCallId: 'test', messages: [] })
     expect(result).toEqual(input)
   })
 
@@ -33,7 +33,7 @@ describe('agentLoopTools', () => {
       target_fields: ['field_a', 'field_b'],
       should_continue: true as const,
     }
-    const result = await requestAdditionalAnalysisTool.execute!(input, { toolCallId: 'test' })
+    const result = await requestAdditionalAnalysisTool.execute!(input, { toolCallId: 'test', messages: [] })
     expect(result).toEqual(input)
   })
 })

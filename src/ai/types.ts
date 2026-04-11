@@ -338,6 +338,45 @@ export interface WorkflowAiSessionInputResponse {
   session: WorkflowAiSessionState
 }
 
+export interface AgentExecutionResult {
+  nodeId: string
+  nodeLabel: string
+  nodeType: string
+  success: boolean
+  resultKind: string | null
+  resultSummary: string
+  rowCount?: number
+  sampleRows?: Record<string, unknown>[]
+  error?: string
+}
+
+export interface AgentInterpretationResult {
+  text: string
+  shouldContinue: boolean
+  continueReason?: string
+}
+
+export interface AgentConclusion {
+  summary: string
+  findings: string[]
+  recommendations: string[]
+  caveats: string[]
+}
+
+export interface AgentLoopIteration {
+  iteration: number
+  plan: WorkflowAiPlan
+  executionResults: AgentExecutionResult[]
+  interpretation: AgentInterpretationResult | null
+}
+
+export interface AgentLoopOutput {
+  iterations: AgentLoopIteration[]
+  conclusion: AgentConclusion | null
+  totalDurationMs: number
+  totalIterations: number
+}
+
 export type WorkflowAiStreamEvent =
   | {
       type: 'started'
@@ -439,6 +478,13 @@ export type WorkflowAiStreamEvent =
       shouldContinue: boolean
     }
   | {
+      type: 'loop_iteration_completed'
+      iteration: number
+      plan: WorkflowAiPlan
+      executionResults: AgentExecutionResult[]
+      interpretation: AgentInterpretationResult | null
+    }
+  | {
       type: 'conclusion_started'
     }
   | {
@@ -458,6 +504,7 @@ export type WorkflowAiStreamEvent =
       type: 'loop_completed'
       totalIterations: number
       totalDurationMs: number
+      output?: AgentLoopOutput
     }
 
 export interface WorkflowAiPlanRequest {

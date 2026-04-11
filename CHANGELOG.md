@@ -1,5 +1,14 @@
 # 更新日志 (Changelog)
 
+## [2026-04-11]
+
+### 新增 (Feat)
+
+- **补齐 AgentLoop benchmark 的服务端规划与执行链路**:
+  - 新增服务端安全节点目录与基准脚本，支持基于真实模型配置执行 `base` / `adversarial` benchmark。
+  - 扩展工作流 AI 的计划、诊断与 AgentLoop 协议，补齐流式事件、服务端接口与前端消费链路。
+  - 优化工作流规划提示策略与 BigModel coding endpoint 的请求兼容行为，降低规划阶段空返回带来的不稳定性。
+
 ## [2026-04-09]
 
 ### 修复 (Fix)

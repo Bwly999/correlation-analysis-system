@@ -77,6 +77,14 @@ export const runAgentLoop = async (
         shouldContinue: interpretation.shouldContinue,
       } as WorkflowAiStreamEvent)
 
+      emitEvent({
+        type: 'loop_iteration_completed',
+        iteration: i + 1,
+        plan: planResult.plan,
+        executionResults,
+        interpretation,
+      } as WorkflowAiStreamEvent)
+
       if (!interpretation.shouldContinue) break
 
       // 准备下一轮请求
@@ -115,6 +123,12 @@ export const runAgentLoop = async (
     type: 'loop_completed',
     totalIterations: iterations.length,
     totalDurationMs,
+    output: {
+      iterations,
+      conclusion,
+      totalDurationMs,
+      totalIterations: iterations.length,
+    },
   } as WorkflowAiStreamEvent)
 
   return {

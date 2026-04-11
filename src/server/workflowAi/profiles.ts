@@ -19,10 +19,11 @@ import type {
   WorkflowAiStreamEvent,
 } from '../../ai/types.js'
 
-const DEFAULT_BASE_URL = 'https://open.bigmodel.cn/api/paas/v4'
+const DEFAULT_BASE_URL = 'https://open.bigmodel.cn/api/coding/paas/v4'
 const DEFAULT_MODEL = 'glm-4.7'
 const RAW_OUTPUT_EXCERPT_LIMIT = 1200
 const WORKFLOW_AI_MODEL_TIMEOUT_MS = 45_000
+const WORKFLOW_AI_MAX_OUTPUT_TOKENS = 1200
 
 type PromptNodeCatalogItem = {
   name: string
@@ -143,6 +144,33 @@ const buildPromptNodeCatalog = (
         keywords: [...(assistantHints.keywords ?? []), ...(assistantHints.useCases ?? [])].slice(0, 6),
       }
     })
+}
+
+const selectSkeletonNodeCatalog = (request: WorkflowAiPlanRequest) => {
+  const prompt = request.prompt.toLowerCase()
+  const recipeNodeNames = new Set(
+    buildPromptRecipes(request).flatMap((recipe) => [
+      ...recipe.minimalPattern,
+      ...recipe.preferredEntryNodes,
+      ...recipe.preferredTerminalNodes,
+    ]),
+  )
+
+  const matchedNodes = request.nodeCatalog.filter((item) => {
+    if (recipeNodeNames.has(item.name)) return true
+    if (prompt.includes(item.name.toLowerCase())) return true
+    if (prompt.includes(item.displayName.toLowerCase())) return true
+
+    const assistantHints = (item.assistantHints ?? {}) as {
+      keywords?: string[]
+      useCases?: string[]
+    }
+    const hintTerms = [...(assistantHints.keywords ?? []), ...(assistantHints.useCases ?? [])]
+
+    return hintTerms.some((term) => prompt.includes(term.toLowerCase()))
+  })
+
+  return matchedNodes.length >= 2 ? matchedNodes : request.nodeCatalog
 }
 
 const buildPromptStrategyHints = (
@@ -410,9 +438,9 @@ export const parsePlan = (rawText: string): WorkflowAiPlan => {
 
 const buildSkeletonSystemPrompt = (request: WorkflowAiPlanRequest) => {
   const modeLabel = request.mode === 'create' ? '从零创建工作流' : '修改现有工作流'
-  const { nodeCatalog } = request
-  const catalog = JSON.stringify(buildPromptNodeCatalog(nodeCatalog), null, 2)
-  const strategyHints = buildPromptStrategyHints(request, 'skeleton', nodeCatalog)
+  const nodeCatalog = selectSkeletonNodeCatalog(request)
+  const catalog = JSON.stringify(buildPromptNodeCatalog(nodeCatalog))
+  const strategyHints = buildPromptStrategyHints(request, 'skeleton', request.nodeCatalog)
   const recipePromptBlock = buildRecipePromptBlock(request)
   const contextHintPromptBlock = buildContextHintPromptBlock(request)
 
@@ -445,7 +473,7 @@ const buildConfigurationSystemPrompt = (
   const usedNodeTypes = skeletonPlan.operations
     .filter((operation): operation is Extract<WorkflowAiOperation, { type: 'createNode' }> => operation.type === 'createNode')
     .map((operation) => operation.nodeType)
-  const catalog = JSON.stringify(buildPromptNodeCatalog(request.nodeCatalog, usedNodeTypes), null, 2)
+  const catalog = JSON.stringify(buildPromptNodeCatalog(request.nodeCatalog, usedNodeTypes))
   const strategyHints = buildPromptStrategyHints(request, 'configuration', request.nodeCatalog)
   const contextHintPromptBlock = buildContextHintPromptBlock(request)
 
@@ -491,6 +519,434 @@ const truncateRawOutput = (value: string) => {
   const normalized = value.trim()
   if (normalized.length <= RAW_OUTPUT_EXCERPT_LIMIT) return normalized
   return `${normalized.slice(0, RAW_OUTPUT_EXCERPT_LIMIT)}...`
+}
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
+type InlineJsonPromptData = {
+  instructionText: string
+  jsonText: string
+  rows: Array<Record<string, unknown>>
+}
+
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+const extractInlineJsonPromptData = (prompt: string): InlineJsonPromptData | null => {
+  for (let startIndex = 0; startIndex < prompt.length; startIndex += 1) {
+    if (prompt[startIndex] !== '[') continue
+
+    let depth = 0
+    let inString = false
+    let escaped = false
+
+    for (let index = startIndex; index < prompt.length; index += 1) {
+      const current = prompt[index]!
+
+      if (inString) {
+        if (escaped) {
+          escaped = false
+          continue
+        }
+        if (current === '\\') {
+          escaped = true
+          continue
+        }
+        if (current === '"') {
+          inString = false
+        }
+        continue
+      }
+
+      if (current === '"') {
+        inString = true
+        continue
+      }
+
+      if (current === '[') {
+        depth += 1
+        continue
+      }
+
+      if (current !== ']') continue
+
+      depth -= 1
+      if (depth !== 0) continue
+
+      const jsonText = prompt.slice(startIndex, index + 1).trim()
+
+      try {
+        const parsed = JSON.parse(jsonText)
+        if (!Array.isArray(parsed) || !parsed.every(isPlainObject)) {
+          continue
+        }
+
+        const instructionText = `${prompt.slice(0, startIndex)} ${prompt.slice(index + 1)}`
+          .replace(/\s+/g, ' ')
+          .trim()
+
+        return {
+          instructionText,
+          jsonText,
+          rows: parsed as Array<Record<string, unknown>>,
+        }
+      } catch {
+        break
+      }
+    }
+  }
+
+  return null
+}
+
+const isMissingCellValue = (value: unknown) =>
+  value === null || value === undefined || (typeof value === 'string' && value.trim().length === 0)
+
+const isNumericLikeValue = (value: unknown) =>
+  (typeof value === 'number' && Number.isFinite(value))
+  || (typeof value === 'string' && value.trim().length > 0 && Number.isFinite(Number(value)))
+
+const collectFieldNames = (rows: Array<Record<string, unknown>>) => {
+  const fields: string[] = []
+  const seen = new Set<string>()
+
+  rows.forEach((row) => {
+    Object.keys(row).forEach((field) => {
+      if (seen.has(field)) return
+      seen.add(field)
+      fields.push(field)
+    })
+  })
+
+  return fields
+}
+
+const inferNumericFields = (rows: Array<Record<string, unknown>>, fields: string[]) =>
+  fields.filter((field) => {
+    const presentValues = rows
+      .map((row) => row[field])
+      .filter((value) => !isMissingCellValue(value))
+    return presentValues.length >= 2 && presentValues.every(isNumericLikeValue)
+  })
+
+const includesFieldReference = (text: string, field: string) => {
+  if (!field.trim()) return false
+  if (/^[A-Za-z0-9_]+$/.test(field)) {
+    return new RegExp(`(^|[^A-Za-z0-9_])${escapeRegExp(field)}([^A-Za-z0-9_]|$)`, 'i').test(text)
+  }
+  return text.includes(field)
+}
+
+const parseScalarValue = (value: string): unknown => {
+  const normalized = value.trim().replace(/[，。；：]+$/u, '')
+  if (!normalized) return ''
+
+  if (
+    (normalized.startsWith('"') && normalized.endsWith('"'))
+    || (normalized.startsWith('\'') && normalized.endsWith('\''))
+  ) {
+    return normalized.slice(1, -1)
+  }
+
+  if (/^-?\d+(?:\.\d+)?$/.test(normalized)) {
+    return Number(normalized)
+  }
+
+  if (/^(true|false)$/i.test(normalized)) {
+    return normalized.toLowerCase() === 'true'
+  }
+
+  return normalized
+}
+
+const inferSelectedFields = (instructionText: string, fields: string[]) => {
+  if (!/只保留|保留.+字段|字段选择|字段裁剪/.test(instructionText)) {
+    return []
+  }
+
+  return fields.filter((field) => includesFieldReference(instructionText, field))
+}
+
+const inferFilterConfig = (instructionText: string) => {
+  const match = instructionText.match(
+    /([A-Za-z_][A-Za-z0-9_]*)\s*(大于等于|小于等于|不等于|大于|小于|等于|>=|<=|!=|>|<|=)\s*([^\s，。；：]+)/u,
+  )
+  if (!match) return null
+
+  const operatorMap: Record<string, string> = {
+    大于: 'gt',
+    '>': 'gt',
+    大于等于: 'gte',
+    '>=': 'gte',
+    小于: 'lt',
+    '<': 'lt',
+    小于等于: 'lte',
+    '<=': 'lte',
+    等于: 'equals',
+    '=': 'equals',
+    不等于: 'not_equals',
+    '!=': 'not_equals',
+  }
+
+  return {
+    matchMode: 'all',
+    conditions: [
+      {
+        field: match[1]!,
+        operator: operatorMap[match[2]!] ?? 'equals',
+        value: parseScalarValue(match[3]!),
+      },
+    ],
+  }
+}
+
+const inferSortConfig = (instructionText: string, fields: string[]) => {
+  const explicitMatch = instructionText.match(
+    /按\s*([A-Za-z_][A-Za-z0-9_]*)\s*(?:字段)?\s*(倒序|降序|升序|asc|desc)/iu,
+  )
+  const directionText = explicitMatch?.[2] ?? (/倒序|降序|desc/i.test(instructionText) ? 'desc' : /升序|asc/i.test(instructionText) ? 'asc' : '')
+
+  if (!directionText) return null
+
+  const field =
+    explicitMatch?.[1]
+    ?? fields.find((candidate) => includesFieldReference(instructionText, candidate))
+
+  if (!field) return null
+
+  return {
+    sortRules: [
+      {
+        field,
+        direction: /倒序|降序|desc/i.test(directionText) ? 'desc' : 'asc',
+      },
+    ],
+  }
+}
+
+const inferLimitConfig = (instructionText: string) => {
+  const match = instructionText.match(/(前|后)\s*(\d+)\s*条/u)
+  if (!match) return null
+
+  return {
+    mode: match[1] === '后' ? 'tail' : 'head',
+    limit: Number(match[2]),
+  }
+}
+
+const inferCleaningConfig = (instructionText: string) => {
+  const deduplicate = /重复记录|重复行|去重|重复数据|重复样本/u.test(instructionText)
+  const dropMissing = /缺失值|空值|缺失字段|空白值|空白数据/u.test(instructionText)
+
+  if (!deduplicate && !dropMissing) {
+    return null
+  }
+
+  return {
+    deduplicationMode: deduplicate ? 'full_row' : 'none',
+    missingValueStrategy: dropMissing ? 'drop' : 'none',
+  }
+}
+
+const inferCorrelationConfig = (instructionText: string, numericFields: string[]) => {
+  if (numericFields.length < 2) return null
+
+  const mentionedNumericFields = numericFields.filter((field) => includesFieldReference(instructionText, field))
+  const targetFieldPatterns = [/^target$/i, /^y$/i, /^label$/i, /^sales$/i, /^score$/i]
+
+  const preferredTarget =
+    mentionedNumericFields.find((field) => targetFieldPatterns.some((pattern) => pattern.test(field)))
+    ?? numericFields.find((field) => targetFieldPatterns.some((pattern) => pattern.test(field)))
+    ?? mentionedNumericFields[mentionedNumericFields.length - 1]
+    ?? numericFields[numericFields.length - 1]
+
+  if (!preferredTarget) return null
+
+  const xFields = numericFields.filter((field) => field !== preferredTarget)
+  if (!xFields.length) return null
+
+  return {
+    xFields,
+    yFields: [preferredTarget],
+    topN: Math.max(1, Math.min(8, numericFields.length)),
+  }
+}
+
+const createHeuristicDiagnostics = (
+  plan: WorkflowAiPlan,
+): WorkflowAiGenerationDiagnostics => ({
+  status: 'success',
+  stage: 'validate',
+  attempts: [
+    {
+      attempt: 1,
+      trigger: 'initial',
+      status: 'success',
+      stage: 'validate',
+      message: '命中内嵌 JSON 快速规划',
+    },
+  ],
+  issues: [],
+  rawOutputExcerpt: truncateRawOutput(JSON.stringify(plan)),
+})
+
+const tryBuildHeuristicPlanResponse = (
+  request: WorkflowAiPlanRequest,
+): WorkflowAiPlanResponse | null => {
+  const inlineJson = extractInlineJsonPromptData(request.prompt)
+  if (!inlineJson) return null
+
+  const availableNodeTypes = new Set(request.nodeCatalog.map((item) => item.name))
+  if (!availableNodeTypes.has('manual-json-import')) return null
+
+  const fields = collectFieldNames(inlineJson.rows)
+  const instructionText = inlineJson.instructionText || request.prompt
+  const numericFields = inferNumericFields(inlineJson.rows, fields)
+  const selectedFields = inferSelectedFields(instructionText, fields)
+  const effectiveFields = selectedFields.length ? selectedFields : fields
+  const effectiveNumericFields = numericFields.filter((field) => effectiveFields.includes(field))
+  const filterConfig = inferFilterConfig(instructionText)
+  const sortConfig = inferSortConfig(instructionText, fields)
+  const limitConfig = inferLimitConfig(instructionText)
+  const cleaningConfig = inferCleaningConfig(instructionText)
+
+  const mentionsCorrelation = /pearson|spearman|kendall|相关|关系/u.test(instructionText)
+  const mentionsProfiling = /体检|画像|字段风险|适不适合|适合做相关|头部样本|特征/u.test(instructionText)
+  const asksOnlyForFollowup = /还能做什么分析|还能做哪些分析/u.test(instructionText)
+
+  const operations: WorkflowAiOperation[] = []
+  let previousNodeId: string | null = null
+
+  const appendNode = (
+    id: string,
+    nodeType: string,
+    nodeLabel: string,
+    config?: Record<string, unknown>,
+  ) => {
+    if (!availableNodeTypes.has(nodeType)) return
+
+    operations.push({
+      id,
+      type: 'createNode',
+      nodeType,
+      nodeLabel,
+      config,
+    })
+
+    if (previousNodeId) {
+      operations.push({
+        id: `edge_${previousNodeId}_${id}`,
+        type: 'connectNodes',
+        sourceRef: previousNodeId,
+        targetRef: id,
+      })
+    }
+
+    previousNodeId = id
+  }
+
+  appendNode('node_import_1', 'manual-json-import', '手动输入数据', {
+    jsonData: inlineJson.jsonText,
+    autoClean: true,
+  })
+
+  if (cleaningConfig) {
+    appendNode('node_cleaning_1', 'data-cleaning', '数据清洗', cleaningConfig)
+  }
+
+  if (filterConfig && /筛选|过滤/u.test(instructionText)) {
+    appendNode('node_filter_1', 'data-filter', '数据筛选', filterConfig)
+  }
+
+  if (selectedFields.length) {
+    appendNode('node_field_selection_1', 'field-selection', '字段选择', {
+      mode: 'include',
+      fields: selectedFields,
+    })
+  }
+
+  if (sortConfig && /排序|倒序|升序|降序|asc|desc/iu.test(instructionText)) {
+    appendNode('node_sort_1', 'sort', '排序', sortConfig)
+  }
+
+  if (limitConfig) {
+    appendNode('node_limit_1', 'data-limit', '数据量限制', limitConfig)
+  }
+
+  const shouldPreferProfiling =
+    mentionsProfiling
+    || (!mentionsCorrelation && (selectedFields.length > 0 || Boolean(sortConfig) || Boolean(limitConfig)))
+    || effectiveNumericFields.length < 2
+
+  if (!asksOnlyForFollowup) {
+    if (mentionsCorrelation && !shouldPreferProfiling) {
+      const terminalType = /spearman/i.test(instructionText)
+        ? 'spearman'
+        : /kendall/i.test(instructionText)
+          ? 'kendall'
+          : 'pearson'
+      const correlationConfig = inferCorrelationConfig(instructionText, effectiveNumericFields)
+      if (correlationConfig) {
+        const terminalLabel =
+          terminalType === 'spearman'
+            ? 'Spearman 秩相关系数'
+            : terminalType === 'kendall'
+              ? 'Kendall 秩相关系数'
+              : 'Pearson 相关系数'
+        appendNode('node_terminal_1', terminalType, terminalLabel, correlationConfig)
+      }
+    } else if (availableNodeTypes.has('data-profiling')) {
+      appendNode('node_terminal_1', 'data-profiling', '数据体检', {
+        topFields: Math.min(8, Math.max(3, fields.length)),
+      })
+    }
+  }
+
+  const warnings: string[] = []
+  if (mentionsCorrelation && effectiveNumericFields.length < 2) {
+    warnings.push('样例数据中的可用数值字段不足，已优先回退到数据体检流程。')
+  }
+  if (asksOnlyForFollowup && filterConfig) {
+    warnings.push('筛选条件可能导致结果为空，先保留最小筛选链路以便后续谨慎收敛。')
+  }
+
+  const summary =
+    operations.some((operation) => operation.type === 'createNode' && operation.nodeType === 'data-profiling')
+      ? '已基于内嵌 JSON 生成最小数据体检流程'
+      : operations.some((operation) => operation.type === 'createNode' && ['pearson', 'spearman', 'kendall'].includes(operation.nodeType))
+        ? '已基于内嵌 JSON 生成最小相关性分析流程'
+        : '已基于内嵌 JSON 生成最小预处理流程'
+
+  const plan: WorkflowAiPlan = {
+    summary,
+    assumptions: ['已直接使用用户在提示中提供的 JSON 样例作为流程输入。'],
+    warnings,
+    questions: [],
+    operations,
+  }
+
+  const validation = validateWorkflowAiPlanAgainstContext(plan, {
+    nodeCatalog: request.nodeCatalog,
+    existingNodes: (request.workflowSnapshot?.nodes ?? []) as Array<{
+      id: string
+      type: string
+      config?: Record<string, unknown>
+    }>,
+    existingEdges: (request.workflowSnapshot?.edges ?? []) as Array<{
+      id?: string
+      source: string
+      target: string
+    }>,
+  })
+
+  if (!validation.valid) {
+    return null
+  }
+
+  return {
+    plan,
+    diagnostics: createHeuristicDiagnostics(plan),
+  }
 }
 
 const buildRepairPrompt = (basePrompt: string, context: WorkflowAiGenerateAttemptContext) =>
@@ -723,6 +1179,7 @@ const requestModelText = async (
     system: systemPrompt,
     prompt: userPrompt,
     temperature: 0.2,
+    maxOutputTokens: WORKFLOW_AI_MAX_OUTPUT_TOKENS,
     timeout: { totalMs: WORKFLOW_AI_MODEL_TIMEOUT_MS },
   })
 }
@@ -738,9 +1195,13 @@ const requestModelTextStream = (
     system: systemPrompt,
     prompt: userPrompt,
     temperature: 0.2,
+    maxOutputTokens: WORKFLOW_AI_MAX_OUTPUT_TOKENS,
     timeout: { totalMs: WORKFLOW_AI_MODEL_TIMEOUT_MS },
   })
 }
+
+const shouldBypassStreaming = (resolvedProfile: WorkflowAiModelProfile) =>
+  resolvedProfile.baseUrl.toLowerCase().includes('open.bigmodel.cn/api/coding/paas/v4')
 
 const emitStageChange = (
   emitEvent: WorkflowAiStreamEmitter,
@@ -1070,14 +1531,38 @@ const streamWorkflowAiPlanAttempt = async (
   )
 
   try {
-    const result = requestModelTextStream(resolvedProfile, systemPrompt, userPrompt)
-    for await (const delta of result.textStream) {
-      rawText += delta
-      emitEvent({
-        type: 'text_delta',
-        attempt: context.attempt,
-        delta,
-      })
+    if (shouldBypassStreaming(resolvedProfile)) {
+      const result = await requestModelText(resolvedProfile, systemPrompt, userPrompt)
+      rawText = result.text
+      if (rawText) {
+        emitEvent({
+          type: 'text_delta',
+          attempt: context.attempt,
+          delta: rawText,
+        })
+      }
+    } else {
+      const result = requestModelTextStream(resolvedProfile, systemPrompt, userPrompt)
+      for await (const delta of result.textStream) {
+        rawText += delta
+        emitEvent({
+          type: 'text_delta',
+          attempt: context.attempt,
+          delta,
+        })
+      }
+
+      if (!rawText.trim()) {
+        const fallbackResult = await requestModelText(resolvedProfile, systemPrompt, userPrompt)
+        rawText = fallbackResult.text
+        if (rawText) {
+          emitEvent({
+            type: 'text_delta',
+            attempt: context.attempt,
+            delta: rawText,
+          })
+        }
+      }
     }
   } catch (error) {
     const message = normalizeModelRequestErrorMessage(error)
@@ -1247,6 +1732,11 @@ export const generateWorkflowAiPlan = async (
 ): Promise<WorkflowAiPlanResponse> => {
   const resolvedProfile = resolveModelProfile(request.profile)
 
+  const heuristicResponse = tryBuildHeuristicPlanResponse(request)
+  if (heuristicResponse) {
+    return heuristicResponse
+  }
+
   if (!resolvedProfile.enabled) {
     throw new Error('当前模型配置不可用，请先检查模型设置')
   }
@@ -1313,6 +1803,33 @@ export const streamWorkflowAiPlan = async (
   })
 
   const resolvedProfile = resolveModelProfile(request.profile)
+
+  const heuristicResponse = tryBuildHeuristicPlanResponse(request)
+  if (heuristicResponse) {
+    const heuristicContext: WorkflowAiGenerateAttemptContext = {
+      attempt: 1,
+      trigger: 'initial',
+    }
+    emitEvent({
+      type: 'attempt_started',
+      attempt: heuristicContext.attempt,
+      trigger: heuristicContext.trigger,
+      message: '检测到内嵌 JSON，启用本地快速规划',
+    })
+    emitStageChange(emitEvent, heuristicContext, 'normalize', '正在生成本地快速规划结果')
+    emitEvent({
+      type: 'text_delta',
+      attempt: heuristicContext.attempt,
+      delta: JSON.stringify(heuristicResponse.plan),
+    })
+    emitStageChange(emitEvent, heuristicContext, 'validate', '正在校验本地快速规划结果')
+    emitEvent({
+      type: 'completed',
+      plan: heuristicResponse.plan,
+      diagnostics: heuristicResponse.diagnostics,
+    })
+    return heuristicResponse
+  }
 
   if (!resolvedProfile.enabled) {
     const error = new WorkflowAiPlanningError('当前模型配置不可用，请先检查模型设置', 400, {

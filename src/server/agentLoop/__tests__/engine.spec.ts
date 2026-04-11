@@ -121,7 +121,7 @@ describe('runAgentLoop', () => {
     )
 
     expect(output.totalIterations).toBe(1)
-    expect(output.iterations[0].executionResults).toHaveLength(0)
+    expect(output.iterations[0]!.executionResults).toHaveLength(0)
   })
 
   it('generateConclusion=false 时不生成结论', async () => {
@@ -141,6 +141,7 @@ describe('runAgentLoop', () => {
     const types = events.map((e) => e.type)
     expect(types).toContain('loop_started')
     expect(types).toContain('loop_iteration_started')
+    expect(types).toContain('loop_iteration_completed')
     expect(types).toContain('loop_completed')
   })
 })
