@@ -2,6 +2,12 @@
 
 ## [2026-04-11]
 
+### 修复 (Fix)
+
+- **稳定 AgentLoop benchmark 的结论与清洗收敛行为**:
+  - 服务端自动执行补齐 `data-cleaning` 新版配置名兼容，支持 `deduplicationMode` 与 `missingValueStrategy`。
+  - 结论生成阶段在模型返回空摘要或弱结构化结果时回退到带执行上下文的摘要，避免 benchmark 因关键词丢失误判失败。
+
 ### 新增 (Feat)
 
 - **补齐 AgentLoop benchmark 的服务端规划与执行链路**:

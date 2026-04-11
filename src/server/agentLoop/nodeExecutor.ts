@@ -167,8 +167,19 @@ const executeDataCleaningNode = (
   const rows = extractRowsFromResult(input)
   if (!rows || rows.length === 0) throw new Error('数据清洗需要输入数据')
 
-  const removeDuplicates = config.removeDuplicates === true
-  const removeNulls = config.removeNullRows === true
+  const deduplicationMode =
+    typeof config.deduplicationMode === 'string' ? config.deduplicationMode : 'none'
+  const deduplicationFields = Array.isArray(config.deduplicationFields)
+    ? config.deduplicationFields.filter((field): field is string => typeof field === 'string')
+    : []
+  const missingValueStrategy =
+    typeof config.missingValueStrategy === 'string' ? config.missingValueStrategy : 'none'
+
+  const removeDuplicates =
+    config.removeDuplicates === true
+    || deduplicationMode === 'full_row'
+    || (deduplicationMode === 'by_fields' && deduplicationFields.length > 0)
+  const removeNulls = config.removeNullRows === true || missingValueStrategy === 'drop'
 
   let result = [...rows]
 
@@ -181,7 +192,10 @@ const executeDataCleaningNode = (
   if (removeDuplicates) {
     const seen = new Set<string>()
     result = result.filter((row) => {
-      const key = JSON.stringify(row)
+      const key =
+        deduplicationMode === 'by_fields' && deduplicationFields.length > 0
+          ? JSON.stringify(deduplicationFields.map((field) => row[field]))
+          : JSON.stringify(row)
       if (seen.has(key)) return false
       seen.add(key)
       return true

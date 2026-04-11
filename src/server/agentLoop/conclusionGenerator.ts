@@ -1,10 +1,16 @@
 import { generateText } from 'ai'
 import type { WorkflowAiStreamEvent } from '../../ai/types.js'
 import { resolveModelProfile, createProvider } from '../workflowAi/profiles.js'
-import type { AgentConclusion, AgentLoopIteration, AgentLoopStreamEmitter } from './types.js'
+import type {
+  AgentConclusion,
+  AgentExecutionResult,
+  AgentLoopIteration,
+  AgentLoopStreamEmitter,
+} from './types.js'
 
 const WORKFLOW_AI_MODEL_TIMEOUT_MS = 45_000
 const CONCLUSION_MAX_RESULT_CHARS = 4000
+const DEFAULT_CONCLUSION_SUMMARY = '分析已完成'
 
 export const runConclusionPhase = async (
   userPrompt: string,
@@ -29,7 +35,7 @@ export const runConclusionPhase = async (
   const analysisSummary = iterations
     .map((it) => {
       const resultsText = it.executionResults
-        .map((r) =>
+        .map((r: AgentExecutionResult) =>
           r.success
             ? `  ✓ ${r.nodeLabel}: ${truncateText(r.resultSummary, 300)}`
             : `  ✗ ${r.nodeLabel}: 失败 - ${truncateText(r.error ?? '未知错误', 200)}`,
@@ -72,7 +78,7 @@ export const runConclusionPhase = async (
       timeout: { totalMs: WORKFLOW_AI_MODEL_TIMEOUT_MS },
     })
 
-    const conclusion = parseConclusion(result.text)
+    const conclusion = mergeConclusionWithFallback(parseConclusion(result.text), iterations)
 
     emitEvent({
       type: 'conclusion_completed',
@@ -106,9 +112,10 @@ export const parseConclusion = (rawText: string): AgentConclusion => {
 
     const jsonStr = stripped.slice(startIndex, endIndex + 1)
     const parsed = JSON.parse(jsonStr)
+    const summary = normalizeSummaryText(parsed.summary) || DEFAULT_CONCLUSION_SUMMARY
 
     return {
-      summary: typeof parsed.summary === 'string' ? parsed.summary : '分析已完成',
+      summary,
       findings: Array.isArray(parsed.findings)
         ? parsed.findings.filter((f: unknown) => typeof f === 'string')
         : [],
@@ -125,19 +132,42 @@ export const parseConclusion = (rawText: string): AgentConclusion => {
 }
 
 const buildTextConclusion = (text: string): AgentConclusion => ({
-  summary: text.slice(0, 500),
+  summary: normalizeSummaryText(text.slice(0, 500)) || DEFAULT_CONCLUSION_SUMMARY,
   findings: [],
   recommendations: [],
   caveats: ['此结论由模型文本输出自动生成，未经结构化解析'],
 })
 
+const normalizeSummaryText = (value: unknown) =>
+  typeof value === 'string' ? value.trim() : ''
+
+const mergeConclusionWithFallback = (
+  conclusion: AgentConclusion,
+  iterations: AgentLoopIteration[],
+): AgentConclusion => {
+  const fallback = buildFallbackConclusion(iterations)
+  const summary = normalizeSummaryText(conclusion.summary)
+
+  return {
+    summary:
+      !summary || summary === DEFAULT_CONCLUSION_SUMMARY
+        ? fallback.summary
+        : summary,
+    findings: conclusion.findings.length ? conclusion.findings : fallback.findings.slice(0, 5),
+    recommendations: conclusion.recommendations,
+    caveats: conclusion.caveats.length ? conclusion.caveats : fallback.caveats,
+  }
+}
+
 const buildFallbackConclusion = (iterations: AgentLoopIteration[]): AgentConclusion => {
   const allResults = iterations.flatMap((it) => it.executionResults)
   const successCount = allResults.filter((r) => r.success).length
   const failCount = allResults.length - successCount
+  const lastPlanSummary = normalizeSummaryText(iterations[iterations.length - 1]?.plan.summary)
+  const summaryPrefix = lastPlanSummary || DEFAULT_CONCLUSION_SUMMARY
 
   return {
-    summary: `共完成 ${iterations.length} 轮分析，执行了 ${allResults.length} 个节点（成功 ${successCount} 个，失败 ${failCount} 个）`,
+    summary: `${summaryPrefix}。共完成 ${iterations.length} 轮，执行了 ${allResults.length} 个节点（成功 ${successCount} 个，失败 ${failCount} 个）。`,
     findings: allResults
       .filter((r) => r.success)
       .map((r) => `${r.nodeLabel}: ${r.resultSummary}`),

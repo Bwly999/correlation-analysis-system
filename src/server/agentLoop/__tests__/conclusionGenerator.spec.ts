@@ -41,4 +41,16 @@ describe('parseConclusion', () => {
     const result = parseConclusion(input)
     expect(result.findings).toEqual(['正确'])
   })
+
+  it('在 JSON summary 为空时回退到默认摘要', () => {
+    const input = JSON.stringify({
+      summary: '',
+      findings: [],
+      recommendations: [],
+      caveats: [],
+    })
+
+    const result = parseConclusion(input)
+    expect(result.summary).toBe('分析已完成')
+  })
 })
