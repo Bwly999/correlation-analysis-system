@@ -49,6 +49,7 @@ const {
 } = useRegexFilter({
   inputTestId: 'multi-options-filter-input',
   onEnter: confirmEditableMultiOption,
+  defaultEnabled: props.prop.allowRegexSearch !== false,
 })
 
 const multiOptionsForceInputHint = computed(() => {
@@ -76,7 +77,7 @@ const multiOptionsForceInputHint = computed(() => {
     :placeholder="prop.placeholder"
     class="w-full ndv-input ndv-multi-options"
   >
-    <template v-if="prop.allowRegexSearch" #filtericon>
+    <template v-if="prop.allowRegexSearch !== false" #filtericon>
       <button
         type="button"
         data-testid="multi-options-regex-toggle"

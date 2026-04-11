@@ -4,11 +4,16 @@ import { REGEX_FILTER_MODE } from './filterModes'
 interface UseRegexFilterOptions {
   inputTestId: string
   onEnter?: (event?: KeyboardEvent) => void
+  defaultEnabled?: boolean
 }
 
-export const useRegexFilter = ({ inputTestId, onEnter }: UseRegexFilterOptions) => {
+export const useRegexFilter = ({
+  inputTestId,
+  onEnter,
+  defaultEnabled = false,
+}: UseRegexFilterOptions) => {
   const query = ref('')
-  const enabled = ref(false)
+  const enabled = ref(defaultEnabled)
   const errorMessage = ref('')
 
   const updateRegexError = (nextQuery: string, nextEnabled = enabled.value) => {

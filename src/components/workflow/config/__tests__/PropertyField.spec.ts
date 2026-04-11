@@ -91,7 +91,7 @@ describe('PropertyField', () => {
     expect(wrapper.find('.options-empty-message').text()).toContain('远程选项加载失败')
   })
 
-  it('为 multi-options 切换正则过滤模式', async () => {
+  it('为 multi-options 默认启用正则过滤，并允许切回普通过滤', async () => {
     setActivePinia(createPinia())
 
     const wrapper = mount(PropertyField, {
@@ -103,7 +103,6 @@ describe('PropertyField', () => {
           default: [],
           editable: true,
           filterable: true,
-          allowRegexSearch: true,
           options: [
             { name: 'temp_avg', value: 'temp_avg' },
             { name: 'temp_max', value: 'temp_max' },
@@ -127,14 +126,51 @@ describe('PropertyField', () => {
       },
     })
 
-    expect(wrapper.find('.multi-select-props').text()).toBe('true|contains')
+    expect(wrapper.find('.multi-select-props').text()).toBe('true|custom_regex')
     expect(wrapper.find('.ndv-multi-options').exists()).toBe(true)
-    expect(wrapper.get('[data-testid="multi-options-regex-toggle"]').classes()).toContain('bg-white')
+    expect(wrapper.get('[data-testid="multi-options-regex-toggle"]').classes()).toContain('!bg-blue-50')
 
     await wrapper.get('[data-testid="multi-options-regex-toggle"]').trigger('click')
 
-    expect(wrapper.find('.multi-select-props').text()).toBe('true|custom_regex')
-    expect(wrapper.get('[data-testid="multi-options-regex-toggle"]').classes()).toContain('!bg-blue-50')
+    expect(wrapper.find('.multi-select-props').text()).toBe('true|contains')
+    expect(wrapper.get('[data-testid="multi-options-regex-toggle"]').classes()).toContain('bg-white')
+  })
+
+  it('为 allowRegexSearch=false 的 multi-options 保持普通过滤且不渲染切换按钮', () => {
+    setActivePinia(createPinia())
+
+    const wrapper = mount(PropertyField, {
+      props: {
+        prop: {
+          name: 'fields',
+          displayName: '字段列表',
+          type: 'multi-options',
+          default: [],
+          allowRegexSearch: false,
+          options: [
+            { name: 'temp_avg', value: 'temp_avg' },
+            { name: 'temp_max', value: 'temp_max' },
+          ],
+        },
+        modelValue: [],
+        upstreamFactors: [],
+      },
+      global: {
+        directives: {
+          tooltip: () => undefined,
+        },
+        stubs: {
+          MultiSelect: {
+            props: ['filter', 'filterMatchMode'],
+            template:
+              '<div v-bind="$attrs"><div class="multi-select-props">{{ filter }}|{{ filterMatchMode }}</div><slot name="filtericon" /></div>',
+          },
+        },
+      },
+    })
+
+    expect(wrapper.find('.multi-select-props').text()).toBe('true|contains')
+    expect(wrapper.find('[data-testid="multi-options-regex-toggle"]').exists()).toBe(false)
   })
 
   it('为 multi-options 保持与 options 一致的基础字号', () => {
