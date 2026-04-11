@@ -90,6 +90,111 @@ const isLoopEvent = (event: WorkflowAiStreamEvent) =>
 const formatExecutionSummary = (result: AgentLoopOutput['iterations'][number]['executionResults'][number]) =>
   `${result.nodeLabel}: ${result.success ? result.resultSummary : `失败 - ${result.error ?? '未知错误'}`}`
 
+const buildPlanningMessages = (
+  events: WorkflowAiStreamEvent[],
+  streamOutputs: AgentWorkspaceStreamOutput[],
+  session: WorkflowAiSessionState,
+): AnalysisAgentMessage[] => {
+  const messages: AnalysisAgentMessage[] = []
+  const createdAtBase = Date.now() + 20
+  const seenToolTraceIds = new Set<string>()
+
+  events.forEach((event, index) => {
+    const createdAt = createdAtBase + index
+
+    if (event.type === 'attempt_started') {
+      messages.push({
+        id: `planning_attempt_${event.attempt}_${index}`,
+        role: 'assistant',
+        createdAt,
+        blocks: [
+          {
+            type: 'thinking',
+            title: '规划过程',
+            summary: event.message ?? (event.trigger === 'repair' ? '开始自动修复重试' : '开始规划分析路径'),
+            details: [
+              event.trigger === 'repair' ? '上一轮规划未通过校验，系统正在自动修复并重试。' : '系统开始结合当前上下文生成工作流计划。',
+            ],
+            collapsed: true,
+          },
+        ],
+      })
+      return
+    }
+
+    if (event.type === 'stage_changed' && event.message) {
+      messages.push({
+        id: `planning_stage_${event.stage}_${index}`,
+        role: 'assistant',
+        createdAt,
+        blocks: [
+          {
+            type: 'thinking',
+            title: '规划阶段',
+            summary: event.message,
+            details: [`当前阶段：${event.stage}`],
+            collapsed: true,
+          },
+        ],
+      })
+      return
+    }
+
+    if (event.type === 'tool_started' || event.type === 'tool_completed') {
+      if (seenToolTraceIds.has(event.traceId)) return
+      seenToolTraceIds.add(event.traceId)
+      messages.push({
+        id: `planning_tool_${event.traceId}`,
+        role: 'assistant',
+        createdAt,
+        blocks: [
+          {
+            type: 'tool_call',
+            toolCallId: event.traceId,
+          },
+        ],
+      })
+      return
+    }
+
+    if (event.type === 'diagnostic') {
+      messages.push({
+        id: `planning_diagnostic_${index}`,
+        role: 'assistant',
+        createdAt,
+        blocks: [
+          {
+            type: 'thinking',
+            title: '规划诊断',
+            summary: event.message ?? '系统返回了规划诊断信息',
+            details: event.diagnostics.issues.length
+              ? event.diagnostics.issues.map((issue) => `${issue.stage}: ${issue.message}`)
+              : ['当前诊断未返回额外问题。'],
+            collapsed: true,
+          },
+        ],
+      })
+    }
+  })
+
+  streamOutputs.forEach((output, index) => {
+    messages.push({
+      id: `planning_stream_${output.attempt}_${index}`,
+      role: 'assistant',
+      createdAt: createdAtBase + 100 + index,
+      blocks: [
+        {
+          type: 'stream',
+          content: output.text,
+          status: output.text && session.status !== 'completed' ? 'streaming' : 'completed',
+        },
+      ],
+    })
+  })
+
+  return messages
+}
+
 const buildLoopMessages = (
   events: WorkflowAiStreamEvent[],
   autoApplyResult: AgentWorkspaceAutoApplyResult,
@@ -505,21 +610,6 @@ export const buildAgentMessages = ({
     })
   }
 
-  streamOutputs.forEach((output) => {
-    assistantBlocks.push({
-      type: 'stream',
-      content: output.text,
-      status: output.text && session.status !== 'completed' ? 'streaming' : 'completed',
-    })
-  })
-
-  toolCalls.forEach((toolCall) => {
-    assistantBlocks.push({
-      type: 'tool_call',
-      toolCallId: toolCall.id,
-    })
-  })
-
   if (session.draft.summary || plan?.assumptions?.length || plan?.warnings?.length) {
     const details = [
       ...(session.draft.summary ? [session.draft.summary] : []),
@@ -565,6 +655,7 @@ export const buildAgentMessages = ({
     })
   }
 
+  const planningMessages = buildPlanningMessages(streamEvents, streamOutputs, session)
   const loopMessages = buildLoopMessages(streamEvents, autoApplyResult)
 
   if (loopOutput?.conclusion && loopMessages.every((message) =>
@@ -597,5 +688,5 @@ export const buildAgentMessages = ({
     })
   }
 
-  return messages.concat(loopMessages)
+  return messages.concat(planningMessages, loopMessages)
 }
