@@ -4,6 +4,10 @@
 
 ### 新增 (Feat)
 
+- **将系统关键节点卡片正式接入 Agent Workspace 消息流**:
+  - 为数据理解完成、待确认信息与画布同步结果补充稳定的 artifact 映射，不再仅依赖普通文本提示。
+  - `agentWorkspaceAdapter` 现在会把 schema 摘要、缺失信息与同步结果插入到消息流中，强化类似 agent coding 工具的系统事件展示节奏。
+
 - **补齐 Agent Workspace 服务中间层入口，收敛前端依赖边界**:
   - 新增 `src/services/agentWorkspace` facade，统一承接 Agent Workspace / Agent Loop 相关的模型配置、会话运行、补充输入与自动循环执行调用。
   - `workflowAiStore` 与相关测试改为依赖该中间层，而不再直接绑定底层 `workflowAi` 服务实现，为后续对接真实 agent-loop 服务与事件流演进预留稳定入口。

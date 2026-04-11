@@ -674,6 +674,19 @@ describe('workflowAiStore', () => {
       diagnostics: {
         issues: [],
       },
+      contextHints: {
+        schemaSummaries: [
+          {
+            nodeId: 'node_1',
+            nodeLabel: '销量明细表',
+            resultKind: 'table',
+            numericColumns: ['销量', '价格', '折扣'],
+            candidateTargetColumns: ['销量'],
+            candidateFeatureColumns: ['价格', '折扣'],
+            blockedReasons: [],
+          },
+        ],
+      },
       missingInfo: [
         {
           key: 'question_1',
@@ -691,6 +704,14 @@ describe('workflowAiStore', () => {
     })
     expect(aiStore.analysisAgentSession?.artifacts).toEqual(
       expect.arrayContaining([
+        expect.objectContaining({
+          id: 'data_understanding',
+          title: '数据理解完成',
+        }),
+        expect.objectContaining({
+          id: 'missing_info_summary',
+          title: '待确认信息',
+        }),
         expect.objectContaining({
           type: 'conclusion_card',
           title: '分析结论',

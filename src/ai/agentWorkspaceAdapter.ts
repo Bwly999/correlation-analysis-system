@@ -6,6 +6,7 @@ import type {
   AnalysisAgentSessionState,
   AnalysisAgentTimelineStep,
   AnalysisAgentToolCall,
+  WorkflowAiContextSchemaSummary,
   WorkflowAiPlan,
   WorkflowAiSessionState,
   WorkflowAiStreamEvent,
@@ -55,6 +56,22 @@ const TIMELINE_TEMPLATE: Array<{ id: string; title: string }> = [
 ]
 
 const getToolDisplayName = (toolName: string) => TOOL_LABEL_MAP[toolName] ?? toolName
+
+const formatSchemaSummary = (summary: WorkflowAiContextSchemaSummary) => {
+  const details: string[] = []
+
+  if (summary.candidateTargetColumns.length > 0) {
+    details.push(`目标候选：${summary.candidateTargetColumns.join('、')}`)
+  }
+  if (summary.candidateFeatureColumns.length > 0) {
+    details.push(`特征候选：${summary.candidateFeatureColumns.slice(0, 3).join('、')}`)
+  }
+  if (summary.blockedReasons.length > 0) {
+    details.push(`限制：${summary.blockedReasons.join('；')}`)
+  }
+
+  return `${summary.nodeLabel}: ${details.join('，') || `结果类型 ${summary.resultKind}`}`
+}
 
 const isLoopEvent = (event: WorkflowAiStreamEvent) =>
   [
@@ -369,6 +386,26 @@ export const buildAgentArtifacts = ({
     })
   }
 
+  if (session.contextHints?.schemaSummaries?.length) {
+    artifacts.push({
+      id: 'data_understanding',
+      type: 'workflow_summary',
+      title: '数据理解完成',
+      summary: `已检查 ${session.contextHints.schemaSummaries.length} 个节点的数据结构，并提炼出候选字段。`,
+      bullets: session.contextHints.schemaSummaries.slice(0, 3).map((item) => formatSchemaSummary(item)),
+    })
+  }
+
+  if (session.missingInfo.length) {
+    artifacts.push({
+      id: 'missing_info_summary',
+      type: 'workflow_summary',
+      title: '待确认信息',
+      summary: `还需要补充 ${session.missingInfo.length} 项关键信息后，系统才能继续后续分析。`,
+      bullets: session.missingInfo.slice(0, 4).map((item) => `${item.label}: ${item.reason}`),
+    })
+  }
+
   if (loopOutput?.iterations.length) {
     const latestIteration = loopOutput.iterations[loopOutput.iterations.length - 1]
     if (latestIteration) {
@@ -406,9 +443,9 @@ export const buildAgentArtifacts = ({
       type: 'workflow_summary',
       title: autoApplyResult.status === 'applied' ? '画布同步完成' : '画布同步异常',
       summary: autoApplyResult.message || (autoApplyResult.status === 'applied' ? '最终计划已写入右侧画布。' : '自动同步到右侧画布失败。'),
-      bullets: session.missingInfo.length
-        ? session.missingInfo.map((item) => `${item.label}: ${item.reason}`).slice(0, 3)
-        : undefined,
+      bullets: autoApplyResult.status === 'applied'
+        ? ['右侧工作流画布已切换到当前自动分析生成的最终计划。']
+        : ['最终计划已经生成，但需要手动检查并应用到右侧工作流画布。'],
     })
   }
 
@@ -461,6 +498,13 @@ export const buildAgentMessages = ({
     })
   }
 
+  if (session.contextHints?.schemaSummaries?.length) {
+    assistantBlocks.push({
+      type: 'artifact',
+      artifactId: 'data_understanding',
+    })
+  }
+
   streamOutputs.forEach((output) => {
     assistantBlocks.push({
       type: 'stream',
@@ -498,12 +542,19 @@ export const buildAgentMessages = ({
     })
   }
 
-  session.missingInfo.forEach((item) => {
+  if (session.missingInfo.length) {
     assistantBlocks.push({
-      type: 'approval_request',
-      requestKey: item.key,
+      type: 'artifact',
+      artifactId: 'missing_info_summary',
     })
-  })
+
+    session.missingInfo.forEach((item) => {
+      assistantBlocks.push({
+        type: 'approval_request',
+        requestKey: item.key,
+      })
+    })
+  }
 
   if (assistantBlocks.length > 0) {
     messages.push({
