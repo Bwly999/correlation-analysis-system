@@ -17,7 +17,7 @@ const props = defineProps<{
 
 type ComboMode = 'chart' | 'table' | 'split'
 
-const mode = ref<ComboMode>('split')
+const mode = ref<ComboMode>('chart')
 const normalizedResult = computed(() => normalizeWorkflowResult(props.data))
 const explicitChartOption = computed(() => getResultChartOption(props.data))
 const groups = computed(() => getResultGroups(props.data))
@@ -33,12 +33,21 @@ const hasTable = computed(() => {
   if (normalized?.kind === 'tableCollection') return true
   return rows.value.length > 0
 })
+const showChartPane = computed(() => hasChart.value && mode.value !== 'table')
+const showTablePane = computed(() => hasTable.value && mode.value !== 'chart')
+const isSplitMode = computed(() => mode.value === 'split' && hasChart.value && hasTable.value)
+const contentClass = computed(() =>
+  isSplitMode.value
+    ? 'flex-1 min-h-0 grid grid-cols-2 gap-px bg-slate-200'
+    : 'flex-1 min-h-0 bg-slate-50',
+)
+const paneClass = computed(() => (isSplitMode.value ? 'min-h-0 bg-slate-50' : 'h-full min-h-0 bg-slate-50'))
 
 watch(
   [hasChart, hasTable],
   ([nextHasChart, nextHasTable]) => {
     if (nextHasChart && nextHasTable) {
-      if (!['chart', 'table', 'split'].includes(mode.value)) mode.value = 'split'
+      if (!['chart', 'table', 'split'].includes(mode.value)) mode.value = 'chart'
       return
     }
 
@@ -97,23 +106,15 @@ watch(
         </div>
       </div>
 
-      <div v-if="mode === 'split' && hasChart && hasTable" class="flex-1 min-h-0 grid grid-cols-2 gap-px bg-slate-200">
-        <div class="min-h-0 bg-slate-50">
+      <div v-if="showChartPane || showTablePane" :class="contentClass">
+        <div v-if="hasChart" v-show="showChartPane" data-test="combo-chart-pane" :class="paneClass">
           <ChartViewer v-if="explicitChartOption" :data="props.data" />
           <DataChart v-else :data="fallbackChartData" />
         </div>
-        <div class="min-h-0 bg-slate-50">
+
+        <div v-if="hasTable" v-show="showTablePane" data-test="combo-table-pane" :class="paneClass">
           <TableViewer :data="props.data" />
         </div>
-      </div>
-
-      <div v-else-if="mode === 'chart' && hasChart" class="flex-1 min-h-0 bg-slate-50">
-        <ChartViewer v-if="explicitChartOption" :data="props.data" />
-        <DataChart v-else :data="fallbackChartData" />
-      </div>
-
-      <div v-else-if="mode === 'table' && hasTable" class="flex-1 min-h-0 bg-slate-50">
-        <TableViewer :data="props.data" />
       </div>
 
       <div v-else class="flex-1 min-h-0 flex items-center justify-center text-sm font-medium text-slate-400 bg-slate-50">
