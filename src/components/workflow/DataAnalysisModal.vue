@@ -18,6 +18,7 @@ const props = defineProps<{
   visible: boolean
   title: string
   data: any
+  appendTo?: HTMLElement | 'body' | 'self'
 }>()
 
 const emit = defineEmits(['close'])
@@ -100,6 +101,7 @@ const exportData = () => {
   <Dialog
     :visible="visible"
     modal
+    :append-to="appendTo"
     class="analysis-dialog"
     :style="{ width: '90vw', height: '90vh' }"
     :closable="false"

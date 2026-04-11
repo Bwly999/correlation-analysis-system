@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { defineComponent } from 'vue'
 import WorkflowResultDashboardModal from '../WorkflowResultDashboardModal.vue'
 import type { WorkflowResultDashboardSummary } from '../resultDashboard'
 
@@ -85,9 +86,23 @@ const createWrapper = () =>
         },
         WorkflowResultPanel: {
           props: ['node'],
-          template: '<div class="panel-stub">{{ node.label }}</div>',
+          emits: ['open-detail'],
+          template:
+            '<button class="panel-stub" @click="$emit(\'open-detail\', node)">{{ node.label }}</button>',
         },
-        DataAnalysisModal: true,
+        DataAnalysisModal: defineComponent({
+          name: 'DataAnalysisModal',
+          props: ['visible', 'title', 'data', 'appendTo'],
+          computed: {
+            appendToType(): string {
+              return this.appendTo && typeof this.appendTo === 'object'
+                ? 'element'
+                : String(this.appendTo ?? '')
+            },
+          },
+          template:
+            '<div class="data-analysis-modal-stub" :data-visible="String(visible)" :data-title="title" :data-append-to-type="appendToType"></div>',
+        }),
       },
     },
   })
@@ -237,5 +252,33 @@ describe('WorkflowResultDashboardModal', () => {
     await wrapper.find('button[aria-label="退出全屏专注模式"]').trigger('click')
 
     expect(exitFullscreen).toHaveBeenCalledTimes(1)
+  })
+
+  it('passes the fullscreen dashboard shell as detail dialog host when opening a card in fullscreen', async () => {
+    const requestFullscreen = vi.fn(async function (this: HTMLElement) {
+      Object.defineProperty(document, 'fullscreenElement', {
+        configurable: true,
+        value: this,
+      })
+      document.dispatchEvent(new Event('fullscreenchange'))
+    })
+
+    Object.defineProperty(HTMLElement.prototype, 'requestFullscreen', {
+      configurable: true,
+      value: requestFullscreen,
+    })
+
+    const wrapper = createWrapper()
+
+    await wrapper.find('button[aria-label="进入全屏专注模式"]').trigger('click')
+    await wrapper.vm.$nextTick()
+
+    await wrapper.find('.panel-stub').trigger('click')
+    await wrapper.vm.$nextTick()
+
+    const modalStub = wrapper.get('.data-analysis-modal-stub')
+    expect(modalStub.attributes('data-visible')).toBe('true')
+    expect(modalStub.attributes('data-title')).toContain('报告 A 结果详情')
+    expect(modalStub.attributes('data-append-to-type')).toBe('element')
   })
 })

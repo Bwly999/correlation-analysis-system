@@ -4,6 +4,10 @@
 
 ### 修复 (Fix)
 
+- **修复结果看板全屏模式下单卡详情弹窗不可见的问题**:
+  - `WorkflowResultDashboardModal` 在进入全屏后，会将单卡详情弹窗挂载到看板容器内部，避免弹窗落到全屏树外导致不可见。
+  - `DataAnalysisModal` 新增 `appendTo` 透传，并补充结果看板与详情弹窗测试，覆盖全屏打开详情与宿主透传场景。
+
 - **将 `multi-options` 的正则搜索改为默认开启**:
   - `PropertyFieldMultiOptionsInput` 现在默认使用正则过滤模式，只有显式传入 `allowRegexSearch: false` 时才回退为普通搜索。
   - 保留现有正则切换按钮交互，并补充表单字段组件测试，覆盖默认启用与显式关闭两类回归场景。

@@ -78,6 +78,9 @@ const workspaceHint = computed(() => {
 })
 const canShowOverviewToggle = computed(() => isFocusMode.value)
 const nodeSidebarWidthClass = computed(() => (isNodeSidebarCollapsed.value ? 'w-[72px]' : 'w-[280px]'))
+const detailDialogAppendTarget = computed(() =>
+  isFullscreen.value ? dashboardShellRef.value ?? undefined : undefined,
+)
 
 const selectedNodes = computed(() => {
   const allNodes = props.summary?.nodes ?? []
@@ -612,6 +615,7 @@ const formatDuration = (duration: number) => {
       :visible="!!detailNode"
       :title="detailNode ? `${detailNode.label} 结果详情` : ''"
       :data="detailNode?.output"
+      :append-to="detailDialogAppendTarget"
       @close="detailNode = null"
     />
   </Dialog>

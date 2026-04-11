@@ -190,4 +190,34 @@ describe('DataAnalysisModal', () => {
     expect(previewText).toContain('budgetExceeded')
     expect(previewText).not.toContain('f399-target')
   })
+
+  it('passes appendTo through to the underlying dialog', () => {
+    const host = document.createElement('div')
+
+    const wrapper = mount(DataAnalysisModal, {
+      props: {
+        visible: true,
+        title: '挂载宿主测试',
+        data: { ok: true },
+        appendTo: host,
+      },
+      global: {
+        stubs: {
+          Dialog: {
+            props: ['visible', 'appendTo'],
+            template:
+              '<div class="dialog-stub" :data-append-to-type="appendTo && typeof appendTo === \'object\' ? \'element\' : String(appendTo ?? \'\')"><slot name="header" /><slot /></div>',
+          },
+          InputNumber: {
+            props: ['modelValue'],
+            emits: ['update:modelValue'],
+            template: '<input class="input-number-stub" :value="modelValue" />',
+          },
+          DataChart: true,
+        },
+      },
+    })
+
+    expect(wrapper.get('.dialog-stub').attributes('data-append-to-type')).toBe('element')
+  })
 })
