@@ -80,6 +80,8 @@ export const useWorkflowStore = defineStore('workflow', () => {
 
   const isRunning = ref(false)
   const isStopping = ref(false)
+  const activeExecutionScope = ref<'single' | 'global' | null>(null)
+  const activeExecutionNodeId = ref<string | null>(null)
   const needsViewReset = ref(false) // 视图复位信号
 
   const pendingConnection = ref<PendingConnectionState>(null)
@@ -592,6 +594,8 @@ export const useWorkflowStore = defineStore('workflow', () => {
       isStopping.value = true
       pendingExecution.value = null
       isRunning.value = false
+      activeExecutionScope.value = null
+      activeExecutionNodeId.value = null
       if (pendingExecutionResolver) {
         pendingExecutionResolver('STOPPED')
         pendingExecutionResolver = null
@@ -608,6 +612,8 @@ export const useWorkflowStore = defineStore('workflow', () => {
       isStopping.value = true
       pendingExecution.value = null
       isRunning.value = false
+      activeExecutionScope.value = null
+      activeExecutionNodeId.value = null
       if (pendingExecutionResolver) {
         pendingExecutionResolver('STOPPED')
         pendingExecutionResolver = null
@@ -619,6 +625,8 @@ export const useWorkflowStore = defineStore('workflow', () => {
     pendingExecution.value = null
     isRunning.value = false
     isStopping.value = false
+    activeExecutionScope.value = null
+    activeExecutionNodeId.value = null
   }
 
   const getCategoryByType = (type: string): 'trigger' | 'action' | 'terminal' => {
@@ -1326,9 +1334,14 @@ export const useWorkflowStore = defineStore('workflow', () => {
     const isNestedDebugExecution = debugOptions.isNested ?? false
 
     const wasRunning = isRunning.value
+    const isTopLevelExecution = !isNestedDebugExecution
     if (!wasRunning) {
       isRunning.value = true
       isStopping.value = false
+    }
+    if (isTopLevelExecution) {
+      activeExecutionScope.value = executionScope
+      activeExecutionNodeId.value = nodeId
     }
 
     try {
@@ -1486,6 +1499,10 @@ export const useWorkflowStore = defineStore('workflow', () => {
       return 'STOPPED'
     } finally {
       if (!wasRunning) isRunning.value = false
+      if (isTopLevelExecution) {
+        activeExecutionScope.value = null
+        activeExecutionNodeId.value = null
+      }
     }
   }
 
@@ -1551,6 +1568,8 @@ export const useWorkflowStore = defineStore('workflow', () => {
     skipGlobalRunSummaryOnCancel = false
     isRunning.value = true
     isStopping.value = false
+    activeExecutionScope.value = 'global'
+    activeExecutionNodeId.value = null
     lastRunDashboard.value = null
     const startTime = Date.now()
     addLog('开始全局运行...', 'info')
@@ -1626,6 +1645,8 @@ export const useWorkflowStore = defineStore('workflow', () => {
       globalRuntimeQueueNodeIds = []
       isRunning.value = false
       isStopping.value = false
+      activeExecutionScope.value = null
+      activeExecutionNodeId.value = null
       const duration = Date.now() - startTime
 
       if (finalStatus === 'stopped' && skipGlobalRunSummaryOnCancel) {
@@ -1708,6 +1729,8 @@ export const useWorkflowStore = defineStore('workflow', () => {
     currentWorkflowId,
     isRunning,
     isStopping,
+    activeExecutionScope,
+    activeExecutionNodeId,
     needsViewReset,
     pendingConnection,
     activeConfigNodeId,

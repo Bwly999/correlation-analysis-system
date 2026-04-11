@@ -138,4 +138,75 @@ describe('BaseNode', () => {
       rerunUpstream: true,
     })
   })
+
+  it('shows a stop action and disables debug buttons while the current node debug run is active', async () => {
+    const store = useWorkflowStore()
+    store.nodes = [
+      {
+        id: 'data-cleaning-node',
+        type: 'custom',
+        position: { x: 0, y: 0 },
+        label: '数据清洗',
+        data: {
+          label: '数据清洗',
+          type: 'data-cleaning',
+          category: 'action',
+          status: 'idle',
+          config: {},
+          logs: [],
+          useManualInput: false,
+          manualInput: '',
+          isPinned: false,
+        },
+      } as any,
+    ]
+    store.isRunning = true
+    ;(store as any).activeExecutionScope = 'single'
+    ;(store as any).activeExecutionNodeId = 'data-cleaning-node'
+
+    const stopSpy = vi.spyOn(store, 'stopExecution').mockImplementation(() => undefined)
+
+    const wrapper = mount(BaseNode, {
+      props: {
+        id: 'data-cleaning-node',
+        type: 'custom',
+        selected: false,
+        dragging: false,
+        connectable: true,
+        resizing: false,
+        position: { x: 0, y: 0 },
+        dimensions: { width: 110, height: 110 },
+        isValidTargetPos: () => true,
+        isValidSourcePos: () => true,
+        zIndex: 1,
+        targetPosition: Position.Left,
+        sourcePosition: Position.Right,
+        data: store.nodes[0]!.data,
+        events: {} as any,
+      } as any,
+      global: {
+        plugins: [PrimeVue],
+        directives: { tooltip: () => undefined },
+        stubs: {
+          Handle: { template: '<div />' },
+          NodeToolbar: { template: '<div><slot /></div>' },
+          NodeIcon: { template: '<div>ICON</div>' },
+        },
+      },
+    })
+
+    wrapper.vm.$el.dispatchEvent(new MouseEvent('mouseenter'))
+
+    const debugButton = wrapper.get('[data-testid="debug-node-button"]')
+    const rerunButton = wrapper.get('[data-testid="debug-node-rerun-button"]')
+    const stopButton = wrapper.get('[data-testid="debug-node-stop-button"]')
+
+    expect(debugButton.attributes('disabled')).toBeDefined()
+    expect(rerunButton.attributes('disabled')).toBeDefined()
+    expect(stopButton.exists()).toBe(true)
+
+    await stopButton.trigger('click')
+
+    expect(stopSpy).toHaveBeenCalledTimes(1)
+  })
 })

@@ -14,6 +14,7 @@ import {
   Pencil,
   Pin,
   PinOff,
+  Square,
 } from 'lucide-vue-next'
 import { useWorkflowStore, type PendingConnectionState } from '@/stores/workflowStore'
 import { getNodeDefinition } from '@/nodes/registry'
@@ -144,6 +145,13 @@ const isMultipleInput = computed(() => {
   const definition = getNodeDefinition(props.data.type)
   return definition?.inputMode === 'multiple'
 })
+
+const isCurrentNodeDebugRunning = computed(
+  () =>
+    store.isRunning
+    && store.activeExecutionScope === 'single'
+    && store.activeExecutionNodeId === props.id,
+)
 </script>
 
 <template>
@@ -275,20 +283,36 @@ const isMultipleInput = computed(() => {
       @mouseenter="onMouseEnter"
     >
       <button
-        v-tooltip.top="'调试运行'"
+        v-tooltip.top="isCurrentNodeDebugRunning ? '正在调试' : '调试运行'"
         data-testid="debug-node-button"
-        class="p-1.5 hover:bg-slate-50 rounded-lg text-indigo-600 transition-colors cursor-pointer"
+        :disabled="isCurrentNodeDebugRunning"
+        class="p-1.5 hover:bg-slate-50 rounded-lg text-indigo-600 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
         @click.stop="runNode(true)"
       >
-        <Play :size="14" fill="currentColor" />
+        <Loader2
+          v-if="isCurrentNodeDebugRunning"
+          :size="14"
+          class="animate-spin"
+        />
+        <Play v-else :size="14" fill="currentColor" />
       </button>
       <button
-        v-tooltip.top="'重跑上游后调试'"
+        v-tooltip.top="isCurrentNodeDebugRunning ? '正在调试' : '重跑上游后调试'"
         data-testid="debug-node-rerun-button"
-        class="p-1.5 hover:bg-amber-50 rounded-lg text-amber-600 transition-colors cursor-pointer"
+        :disabled="isCurrentNodeDebugRunning"
+        class="p-1.5 hover:bg-amber-50 rounded-lg text-amber-600 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
         @click.stop="rerunNodeWithUpstream"
       >
         <Loader2 :size="14" />
+      </button>
+      <button
+        v-if="isCurrentNodeDebugRunning"
+        v-tooltip.top="'停止调试'"
+        data-testid="debug-node-stop-button"
+        class="p-1.5 hover:bg-rose-50 rounded-lg text-rose-600 transition-colors cursor-pointer"
+        @click.stop="store.stopExecution()"
+      >
+        <Square :size="14" fill="currentColor" />
       </button>
       <button
         v-tooltip.top="isPinned ? '取消冻结数据' : '冻结当前数据 (Pin)'"

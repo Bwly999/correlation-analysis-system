@@ -856,4 +856,63 @@ describe('NodeConfigModal', () => {
     )
     expect(wrapper.emitted('close')).toBeTruthy()
   })
+
+  it('shows loading debug actions and a stop button while the current node debug run is active', async () => {
+    const store = useWorkflowStore()
+    store.nodes = [
+      {
+        id: 'pearson-node',
+        type: 'custom',
+        position: { x: 300, y: 0 },
+        label: 'Pearson 分析',
+        data: {
+          label: 'Pearson 分析',
+          type: 'pearson',
+          category: 'terminal',
+          status: 'idle',
+          config: { xFields: [], yFields: [] },
+          logs: [],
+          useManualInput: false,
+          manualInput: '',
+          isPinned: false,
+          output: null,
+        },
+      } as any,
+    ]
+    store.isRunning = true
+    ;(store as any).activeExecutionScope = 'single'
+    ;(store as any).activeExecutionNodeId = 'pearson-node'
+
+    const stopSpy = vi.spyOn(store, 'stopExecution').mockImplementation(() => undefined)
+
+    const wrapper = mount(NodeConfigModal, {
+      props: { visible: true, nodeId: 'pearson-node' },
+      global: {
+        stubs: {
+          Dialog: dialogStub,
+          DataDisplayPanel: {
+            props: ['title'],
+            template: '<div class="data-display-panel">{{ title }}</div>',
+          },
+          DataAnalysisModal: true,
+          ConfigHeader: { template: '<div />', props: ['nodeLabel', 'isPinned', 'nodeType'] },
+          ConfigFooter: { template: '<div />' },
+          ConfigForm: { template: '<div />', props: ['config', 'properties', 'upstreamFactors'] },
+          RuntimeInputs: { template: '<div />', props: ['config', 'properties', 'upstreamFactors'] },
+        },
+      },
+    })
+
+    const debugButton = wrapper.get('[data-testid="node-config-debug-button"]')
+    const rerunButton = wrapper.get('[data-testid="node-config-rerun-button"]')
+    const stopButton = wrapper.get('[data-testid="node-config-stop-button"]')
+
+    expect(debugButton.attributes('disabled')).toBeDefined()
+    expect(rerunButton.attributes('disabled')).toBeDefined()
+    expect(wrapper.text()).toContain('正在调试...')
+
+    await stopButton.trigger('click')
+
+    expect(stopSpy).toHaveBeenCalledTimes(1)
+  })
 })

@@ -1,7 +1,7 @@
 ﻿<script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import type { Edge } from '@vue-flow/core'
-import { Loader2, Bug, HelpCircle } from 'lucide-vue-next'
+import { Loader2, Bug, HelpCircle, Square } from 'lucide-vue-next'
 import { useWorkflowStore } from '@/stores/workflowStore'
 import { getNodeDefinition } from '@/nodes/registry'
 import {
@@ -235,6 +235,13 @@ const debugActionGuideText = computed(
 )
 const currentNodeError = computed(() =>
   node.value?.data.status === 'error' && node.value.data.error ? node.value.data.error : '',
+)
+const isCurrentNodeDebugRunning = computed(
+  () =>
+    !!node.value
+    && store.isRunning
+    && store.activeExecutionScope === 'single'
+    && store.activeExecutionNodeId === node.value.id,
 )
 
 const correlationSetupGuide = computed(() => {
@@ -494,26 +501,36 @@ const buildManualInputTemplate = () => {
               <HelpCircle :size="14" class="text-slate-400" />
             </div>
             <button
-              :disabled="node.data.status === 'running'"
+              data-testid="node-config-rerun-button"
+              :disabled="isCurrentNodeDebugRunning"
               class="rounded-lg border border-slate-200 bg-white px-4 py-2 text-[12px] font-bold text-slate-600 shadow-sm transition-all hover:border-amber-200 hover:bg-amber-50 hover:text-amber-700 active:scale-95 disabled:opacity-70"
               @click="runCurrentNode(true)"
             >
               重跑上游后调试
             </button>
             <button
-              :disabled="node.data.status === 'running'"
+              data-testid="node-config-debug-button"
+              :disabled="isCurrentNodeDebugRunning"
               class="n8n-debug-btn h-9 px-5 rounded-lg border-none shadow-sm hover:shadow-md active:scale-95 transition-all flex items-center gap-2 cursor-pointer outline-none disabled:opacity-70"
               @click="runCurrentNode(false)"
             >
               <Loader2
-                v-if="node.data.status === 'running'"
+                v-if="isCurrentNodeDebugRunning"
                 :size="16"
                 class="text-white animate-spin"
               />
               <Bug v-else :size="16" class="text-white" />
               <span class="text-[12px] font-bold text-white uppercase tracking-wider">
-                {{ node.data.status === 'running' ? '正在调试...' : '调试节点' }}
+                {{ isCurrentNodeDebugRunning ? '正在调试...' : '调试节点' }}
               </span>
+            </button>
+            <button
+              v-if="isCurrentNodeDebugRunning"
+              data-testid="node-config-stop-button"
+              class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-600 shadow-sm transition-all hover:bg-rose-100 active:scale-95"
+              @click="store.stopExecution()"
+            >
+              <Square :size="15" fill="currentColor" />
             </button>
           </div>
         </div>
@@ -623,7 +640,7 @@ const buildManualInputTemplate = () => {
             v-if="currentNodeError"
             class="mb-3 shrink-0"
             :message="currentNodeError"
-            :disabled="node.data.status === 'running'"
+            :disabled="isCurrentNodeDebugRunning"
             @retry="runCurrentNode(false)"
             @rerun-upstream="runCurrentNode(true)"
             @open-logs="openExecutionLogs"
