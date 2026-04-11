@@ -9,12 +9,14 @@ import AgentThinkingBlock from './AgentThinkingBlock.vue'
 import AgentToolCallList from './AgentToolCallList.vue'
 import AgentArtifactCard from './AgentArtifactCard.vue'
 import AgentApprovalCard from './AgentApprovalCard.vue'
+import AgentStepGroup from './AgentStepGroup.vue'
 
 const props = defineProps<{
   messages: AnalysisAgentMessage[]
   toolCalls: AnalysisAgentToolCall[]
   artifacts: AnalysisAgentArtifact[]
   approvalRequests: AnalysisAgentApprovalRequest[]
+  timeline: import('@/ai/types').AnalysisAgentTimelineStep[]
 }>()
 
 const findToolCall = (toolCallId: string) => props.toolCalls.find((item) => item.id === toolCallId)
@@ -55,6 +57,11 @@ const findApproval = (requestKey: string) => props.approvalRequests.find((item) 
           <AgentApprovalCard
             v-else-if="block.type === 'approval_request' && findApproval(block.requestKey)"
             :request="findApproval(block.requestKey)!"
+          />
+          <AgentStepGroup
+            v-else-if="block.type === 'step_group'"
+            :step-ids="block.stepIds"
+            :timeline="props.timeline"
           />
         </template>
       </div>

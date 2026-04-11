@@ -114,6 +114,8 @@ describe('AgentWorkspace', () => {
     expect(wrapper.get('[data-testid="agent-workspace-tools"]').text()).toContain('inspect_cached_schema')
     expect(wrapper.get('[data-testid="agent-workspace-stream"]').text()).toContain('正在检查字段与样本质量')
     expect(wrapper.get('[data-testid="agent-thinking-block"]').text()).toContain('分析思考')
+    expect(wrapper.get('[data-testid="agent-step-group"]').text()).toContain('理解问题')
+    expect(wrapper.find('.agent-workspace__rail').exists()).toBe(false)
     expect(wrapper.find('[data-testid="agent-workspace-flow"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="agent-composer-preset-toggle"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="agent-composer-model-toggle"]').exists()).toBe(true)
@@ -130,7 +132,7 @@ describe('AgentWorkspace', () => {
     expect(wrapper.get('[data-testid="agent-model-settings-dialog"]').text()).toContain('OpenAI 兼容')
   })
 
-  it('renders the compact progress bar, conclusion and auto-apply feedback after agent loop finishes', async () => {
+  it('renders the compact progress bar and keeps conclusion inside the message stream after agent loop finishes', async () => {
     const aiStore = useWorkflowAiStore()
     aiStore.systemProfiles = [buildProfile()]
     aiStore.selectedProfileId = 'profile_1'
@@ -215,7 +217,9 @@ describe('AgentWorkspace', () => {
     expect(wrapper.get('[data-testid="agent-progress-track"]').text()).toContain('同步画布')
     expect(wrapper.get('[data-testid="agent-progress-current"]').text()).toContain('第 1 轮分析开始')
     expect(wrapper.get('[data-testid="agent-progress-bar"]').text()).not.toContain('实时进度')
-    expect(wrapper.get('[data-testid="agent-conclusion-card"]').text()).toContain('价格和折扣对销量影响最明显')
+    expect(wrapper.get('[data-testid="agent-workspace-messages"]').text()).toContain('自动分析结论')
+    expect(wrapper.get('[data-testid="agent-workspace-messages"]').text()).toContain('价格和折扣对销量影响最明显')
+    expect(wrapper.find('[data-testid="agent-conclusion-card"]').exists()).toBe(false)
     expect(wrapper.get('[data-testid="agent-auto-apply-feedback"]').text()).toContain('已自动同步到右侧画布')
   })
 

@@ -99,15 +99,15 @@ const buildLoopMessages = (
   return loopEvents.map((event, index) => {
     const createdAt = Date.now() + 100 + index
 
-    if (event.type === 'conclusion_completed') {
+  if (event.type === 'conclusion_completed') {
       return {
         id: `agent_loop_conclusion_${index}`,
         role: 'assistant',
         createdAt,
         blocks: [
           {
-            type: 'text',
-            content: event.conclusion.summary,
+            type: 'artifact',
+            artifactId: 'conclusion_card',
           },
         ],
       }
@@ -484,10 +484,10 @@ export const buildAgentMessages = ({
 
   const assistantBlocks: AnalysisAgentMessageBlock[] = []
 
-  if (session.draft.summary || plan?.summary) {
+  if (!plan && session.draft.summary) {
     assistantBlocks.push({
       type: 'text',
-      content: plan?.summary ?? session.draft.summary,
+      content: session.draft.summary,
     })
   }
 
@@ -568,7 +568,7 @@ export const buildAgentMessages = ({
   const loopMessages = buildLoopMessages(streamEvents, autoApplyResult)
 
   if (loopOutput?.conclusion && loopMessages.every((message) =>
-    !message.blocks.some((block) => block.type === 'text' && block.content === loopOutput.conclusion?.summary),
+    !message.blocks.some((block) => block.type === 'artifact' && block.artifactId === 'conclusion_card'),
   )) {
     loopMessages.push({
       id: `agent_loop_conclusion_output_${session.sessionId}`,
