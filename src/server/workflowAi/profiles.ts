@@ -768,7 +768,8 @@ const inferCorrelationConfig = (instructionText: string, numericFields: string[]
   return {
     xFields,
     yFields: [preferredTarget],
-    topN: Math.max(1, Math.min(8, numericFields.length)),
+    heatmapTopN: Math.max(1, Math.min(8, numericFields.length)),
+    rankingTopN: Math.max(1, Math.min(8, numericFields.length)),
   }
 }
 

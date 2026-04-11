@@ -16,6 +16,7 @@ export const useReportSections = (getData: () => unknown) => {
   const expandedDependence = ref(false)
   const chartSelectState = ref<Record<string, string>>({})
   const labelTruncateState = ref<Record<string, number>>({})
+  const chartToggleState = ref<Record<string, boolean>>({})
 
   const report = computed<ReportPayload>(() => (getResultReport(getData()) ?? {}) as ReportPayload)
   const sections = computed<ReportSection[]>(() =>
@@ -130,6 +131,18 @@ export const useReportSections = (getData: () => unknown) => {
     labelTruncateState.value[getSectionKey(section, index)] = value
   }
 
+  const getChartToggleValue = (section: ReportChartSection, index: number) => {
+    const stateKey = getSectionKey(section, index)
+    const stateValue = chartToggleState.value[stateKey]
+    if (typeof stateValue === 'boolean') return stateValue
+
+    return section.controls?.toggle?.defaultValue ?? true
+  }
+
+  const setChartToggleValue = (section: ReportChartSection, index: number, value: boolean) => {
+    chartToggleState.value[getSectionKey(section, index)] = value
+  }
+
   const truncateLabel = (label: string, length: number) => {
     if (length <= 0 || label.length <= length) return label
     return `${label.slice(0, length)}...`
@@ -163,11 +176,34 @@ export const useReportSections = (getData: () => unknown) => {
     if (!baseOption) return {}
 
     const truncateLength = getLabelTruncateLength(section, index)
+    const toggleValue = getChartToggleValue(section, index)
+    const baseSeries = Array.isArray(baseOption.series) ? baseOption.series : null
+    const nextSeries =
+      section.controls?.toggle && baseSeries
+        ? baseSeries.map((seriesItem, seriesIndex) => {
+            if (!seriesItem || typeof seriesItem !== 'object' || seriesIndex !== 0) return seriesItem
+
+            const baseSeriesItem = seriesItem as Record<string, unknown>
+            const baseLabel =
+              baseSeriesItem.label && typeof baseSeriesItem.label === 'object'
+                ? (baseSeriesItem.label as Record<string, unknown>)
+                : {}
+
+            return {
+              ...baseSeriesItem,
+              label: {
+                ...baseLabel,
+                show: toggleValue,
+              },
+            }
+          })
+        : baseSeries
 
     return {
       ...baseOption,
       xAxis: withAxisLabelTruncation(baseOption.xAxis, truncateLength),
       yAxis: withAxisLabelTruncation(baseOption.yAxis, truncateLength),
+      ...(nextSeries ? { series: nextSeries } : {}),
     }
   }
 
@@ -184,6 +220,8 @@ export const useReportSections = (getData: () => unknown) => {
     setChartSelectedValue,
     getLabelTruncateLength,
     setLabelTruncateLength,
+    getChartToggleValue,
+    setChartToggleValue,
     resolveChartOption,
   }
 }

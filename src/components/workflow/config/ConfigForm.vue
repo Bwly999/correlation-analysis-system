@@ -31,6 +31,8 @@ const PRIMARY_PROPERTY_NAMES = new Set([
   'targetField',
   'factorNames',
   'topN',
+  'heatmapTopN',
+  'rankingTopN',
   'deduplicationMode',
   'deduplicationKeep',
 ])

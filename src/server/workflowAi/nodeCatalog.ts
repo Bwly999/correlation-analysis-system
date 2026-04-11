@@ -337,9 +337,13 @@ const SERVER_SAFE_NODE_CATALOG: WorkflowAiNodeCatalogItem[] = [
         defaultValue: [],
         description: '选择参与相关性计算的 Y 字段集合。',
       }),
-      createProperty('topN', '重点展示因子数', 'number', {
+      createProperty('heatmapTopN', '热力图显示因子数', 'number', {
         defaultValue: 8,
-        description: '每个 Y 字段按相关绝对值排序后展示前 N 个 X 字段。',
+        description: '热力图按因子在任一 Y 字段上的最大绝对相关值排序后展示前 N 个 X 字段。',
+      }),
+      createProperty('rankingTopN', '排行图显示因子数', 'number', {
+        defaultValue: 8,
+        description: '每个 Y 字段按相关绝对值筛选重点因子后展示前 N 个 X 字段。',
       }),
     ],
     assistantHints: {
@@ -363,9 +367,13 @@ const SERVER_SAFE_NODE_CATALOG: WorkflowAiNodeCatalogItem[] = [
         defaultValue: [],
         description: '选择参与相关性计算的 Y 字段集合。',
       }),
-      createProperty('topN', '重点展示因子数', 'number', {
+      createProperty('heatmapTopN', '热力图显示因子数', 'number', {
         defaultValue: 8,
-        description: '每个 Y 字段按相关绝对值排序后展示前 N 个 X 字段。',
+        description: '热力图按因子在任一 Y 字段上的最大绝对相关值排序后展示前 N 个 X 字段。',
+      }),
+      createProperty('rankingTopN', '排行图显示因子数', 'number', {
+        defaultValue: 8,
+        description: '每个 Y 字段按相关绝对值筛选重点因子后展示前 N 个 X 字段。',
       }),
     ],
     assistantHints: {
@@ -389,9 +397,13 @@ const SERVER_SAFE_NODE_CATALOG: WorkflowAiNodeCatalogItem[] = [
         defaultValue: [],
         description: '选择参与相关性计算的 Y 字段集合。',
       }),
-      createProperty('topN', '重点展示因子数', 'number', {
+      createProperty('heatmapTopN', '热力图显示因子数', 'number', {
         defaultValue: 8,
-        description: '每个 Y 字段按相关绝对值排序后展示前 N 个 X 字段。',
+        description: '热力图按因子在任一 Y 字段上的最大绝对相关值排序后展示前 N 个 X 字段。',
+      }),
+      createProperty('rankingTopN', '排行图显示因子数', 'number', {
+        defaultValue: 8,
+        description: '每个 Y 字段按相关绝对值筛选重点因子后展示前 N 个 X 字段。',
       }),
     ],
     assistantHints: {

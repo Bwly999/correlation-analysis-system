@@ -6,12 +6,14 @@ defineProps<{
   section: ReportChartSection
   selectedValue: string
   labelTruncateLength: number
+  toggleValue: boolean
   option: ReportChartOption
 }>()
 
 const emit = defineEmits<{
   updateSelectedValue: [value: string]
   updateLabelTruncateLength: [value: number]
+  updateToggleValue: [value: boolean]
 }>()
 
 const handleSelectChange = (event: Event) => {
@@ -20,6 +22,10 @@ const handleSelectChange = (event: Event) => {
 
 const handleLabelTruncateInput = (event: Event) => {
   emit('updateLabelTruncateLength', Number((event.target as HTMLInputElement).value || 0))
+}
+
+const handleToggleChange = (event: Event) => {
+  emit('updateToggleValue', (event.target as HTMLInputElement).checked)
 }
 </script>
 
@@ -33,7 +39,7 @@ const handleLabelTruncateInput = (event: Event) => {
         </p>
       </div>
       <div
-        v-if="section.controls?.select || section.controls?.labelTruncate"
+        v-if="section.controls?.select || section.controls?.labelTruncate || section.controls?.toggle"
         class="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2"
       >
         <label
@@ -68,6 +74,19 @@ const handleLabelTruncateInput = (event: Event) => {
             class="w-20 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none"
             :value="labelTruncateLength"
             @input="handleLabelTruncateInput"
+          />
+        </label>
+        <label
+          v-if="section.controls?.toggle"
+          class="flex items-center gap-2 text-sm font-medium text-slate-600"
+        >
+          <span>{{ section.controls.toggle.label || '显示数值' }}</span>
+          <input
+            :data-test="`report-toggle-${section.controls.toggle.modelKey || 'toggle'}`"
+            type="checkbox"
+            class="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+            :checked="toggleValue"
+            @change="handleToggleChange"
           />
         </label>
       </div>

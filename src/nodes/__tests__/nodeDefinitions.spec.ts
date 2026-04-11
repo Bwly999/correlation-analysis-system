@@ -1092,7 +1092,8 @@ describe('Node Definitions Execution Logic', () => {
       const result = await pearsonNode.execute(input, {
         xFields: ['f1', 'f2'],
         yFields: ['target'],
-        topN: 5,
+        heatmapTopN: 1,
+        rankingTopN: 1,
       })
 
       const legacy = asLegacy(result)
@@ -1107,7 +1108,10 @@ describe('Node Definitions Execution Logic', () => {
       expect(legacy.report.sections).toHaveLength(5)
       expect(legacy.report.sections[1].option.series[0].type).toBe('heatmap')
       expect(legacy.report.sections[1].option.visualMap.top).toBe(8)
+      expect(legacy.report.sections[1].option.xAxis.data).toEqual(['f1'])
+      expect(legacy.report.sections[1].controls.toggle.modelKey).toBe('showHeatmapLabels')
       expect(legacy.report.sections[2].controls.select.options).toEqual(['target'])
+      expect(legacy.report.sections[2].option.yAxis.data).toEqual(['f1'])
       expect(legacy.report.sections[2].option.series[0].data[0].value).toBe(1)
       expect(legacy.report.sections[0].type).toBe('summary')
       expect(legacy.report.sections[0].cards[0].label).toBe('样本行数')
@@ -1157,7 +1161,8 @@ describe('Node Definitions Execution Logic', () => {
       const result = await spearmanNode.execute(input, {
         xFields: ['f1', 'f2'],
         yFields: ['target'],
-        topN: 5,
+        heatmapTopN: 1,
+        rankingTopN: 2,
       })
 
       const legacy = asLegacy(result)
@@ -1169,6 +1174,7 @@ describe('Node Definitions Execution Logic', () => {
       expect(legacy.report.sections[2].option.xAxis.name).toBe('Spearman ρ')
       expect(legacy.report.sections[2].option.series[0].data[0].value).toBe(1)
       expect(legacy.report.sections[2].option.series[0].data[1].value).toBe(-1)
+      expect(legacy.report.sections[2].option.yAxis.data).toEqual(['f1', 'f2'])
       expect(legacy.report.sections[4].content).toContain('target')
     })
 
@@ -1184,7 +1190,8 @@ describe('Node Definitions Execution Logic', () => {
       const result = await kendallNode.execute(input, {
         xFields: ['f1', 'f2'],
         yFields: ['target'],
-        topN: 5,
+        heatmapTopN: 1,
+        rankingTopN: 2,
       })
 
       const legacy = asLegacy(result)
@@ -1194,9 +1201,41 @@ describe('Node Definitions Execution Logic', () => {
       expect(legacy.metrics.xFields).toEqual(['f1', 'f2'])
       expect(legacy.report.sections[1].option.series[0].name).toBe('Kendall τ')
       expect(legacy.report.sections[2].option.xAxis.name).toBe('Kendall τ')
-      expect(legacy.report.sections[2].option.series[0].data[0].value).toBe(-1)
-      expect(legacy.report.sections[2].option.series[0].data[1].value).toBe(1)
+      expect(legacy.report.sections[2].option.series[0].data[0].value).toBe(1)
+      expect(legacy.report.sections[2].option.series[0].data[1].value).toBe(-1)
+      expect(legacy.report.sections[2].option.yAxis.data).toEqual(['f2', 'f1'])
       expect(legacy.report.sections[4].content).toContain('f1')
+    })
+
+    it('should respect separate heatmap and ranking factor limits and keep topN backward compatibility', async () => {
+      const input = createTableResult([
+        { targetA: 1, targetB: 5, f1: 1, f2: 10, f3: 3 },
+        { targetA: 2, targetB: 4, f1: 2, f2: 8, f3: 3 },
+        { targetA: 3, targetB: 3, f1: 3, f2: 6, f3: 3 },
+        { targetA: 4, targetB: 2, f1: 4, f2: 4, f3: 3 },
+        { targetA: 5, targetB: 1, f1: 5, f2: 2, f3: 3 },
+      ])
+
+      const separated = asLegacy(
+        await pearsonNode.execute(input, {
+          xFields: ['f1', 'f2', 'f3'],
+          yFields: ['targetA', 'targetB'],
+          heatmapTopN: 1,
+          rankingTopN: 2,
+        }),
+      )
+      const legacyFallback = asLegacy(
+        await pearsonNode.execute(input, {
+          xFields: ['f1', 'f2', 'f3'],
+          yFields: ['targetA', 'targetB'],
+          topN: 1,
+        }),
+      )
+
+      expect(separated.report.sections[1].option.xAxis.data).toEqual(['f1'])
+      expect(separated.report.sections[2].option.yAxis.data).toEqual(['f1', 'f2'])
+      expect(legacyFallback.report.sections[1].option.xAxis.data).toEqual(['f1'])
+      expect(legacyFallback.report.sections[2].option.yAxis.data).toEqual(['f1'])
     })
 
     it('should reject non-numeric selected fields for correlation analysis', async () => {

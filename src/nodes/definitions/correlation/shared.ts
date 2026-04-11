@@ -103,11 +103,18 @@ const commonProperties: NodeProperty[] = [
     description: '选择参与相关性计算的 Y 字段集合，结果区的排行图可在这些字段间切换。',
   },
   {
-    name: 'topN',
-    displayName: '重点展示因子数',
+    name: 'heatmapTopN',
+    displayName: '热力图显示因子数',
     type: 'number',
     default: 8,
-    description: '每个 Y 字段按相关绝对值排序后，展示前 N 个 X 字段。',
+    description: '热力图按因子在任一 Y 字段上的最大绝对相关值排序后，展示前 N 个 X 字段。',
+  },
+  {
+    name: 'rankingTopN',
+    displayName: '排行图显示因子数',
+    type: 'number',
+    default: 8,
+    description: '每个 Y 字段按相关绝对值筛选重点因子后，在排行图中展示前 N 个 X 字段。',
   },
 ]
 
@@ -427,6 +434,36 @@ const createSelectedFieldError = (
   }
 }
 
+const normalizeDisplayLimit = (
+  configValue: unknown,
+  fallbackValue: unknown,
+  defaultValue: number,
+  maxValue: number,
+) => {
+  const rawValue =
+    typeof configValue === 'number' || typeof configValue === 'string'
+      ? Number(configValue)
+      : typeof fallbackValue === 'number' || typeof fallbackValue === 'string'
+        ? Number(fallbackValue)
+        : defaultValue
+
+  const normalizedValue = Number.isFinite(rawValue) ? Math.trunc(rawValue) : defaultValue
+  return Math.max(1, Math.min(Math.max(1, maxValue), normalizedValue))
+}
+
+const sortRankingRowsForDisplay = <
+  T extends {
+    correlation: number
+    field: string
+  },
+>(
+  rows: T[],
+) =>
+  [...rows].sort((left, right) => {
+    if (right.correlation !== left.correlation) return right.correlation - left.correlation
+    return left.field.localeCompare(right.field, 'zh-CN')
+  })
+
 const buildRankingOption = (
   method: CorrelationMethodMeta,
   yField: string,
@@ -647,11 +684,12 @@ export const executeCorrelationAnalysis = async (
     throw new Error('所选字段缺少足够的有效样本，无法完成相关性分析')
   }
 
-  const topNValue = typeof config.topN === 'number' ? config.topN : Number(config.topN ?? 8)
-  const topN = Math.max(3, Number.isFinite(topNValue) ? topNValue : 8)
+  const heatmapTopN = normalizeDisplayLimit(config.heatmapTopN, config.topN, 8, xFields.length)
+  const rankingTopN = normalizeDisplayLimit(config.rankingTopN, config.topN, 8, xFields.length)
   const rankingMap = Object.fromEntries(
     yFields.map((yField) => {
-      const rankingRows = pairDetails
+      const rankingRows = sortRankingRowsForDisplay(
+        pairDetails
         .filter((item) => item.yField === yField && item.xField !== yField)
         .map((item) => ({
           field: item.xField,
@@ -660,11 +698,37 @@ export const executeCorrelationAnalysis = async (
           pValue: item.pValue,
         }))
         .sort((left, right) => Math.abs(right.correlation) - Math.abs(left.correlation))
-        .slice(0, topN)
+        .slice(0, rankingTopN),
+      )
 
       return [yField, rankingRows]
     }),
   ) as Record<string, Array<{ field: string; correlation: number; sampleSize: number; pValue: number | null }>>
+
+  const heatmapXFields = [...xFields]
+    .map((field) => {
+      const strongestCorrelation = pairDetails
+        .filter((item) => item.xField === field && item.xField !== item.yField)
+        .reduce((maxValue, item) => Math.max(maxValue, Math.abs(item.correlation)), 0)
+
+      return { field, strongestCorrelation }
+    })
+    .sort((left, right) => {
+      if (right.strongestCorrelation !== left.strongestCorrelation) {
+        return right.strongestCorrelation - left.strongestCorrelation
+      }
+      return left.field.localeCompare(right.field, 'zh-CN')
+    })
+    .slice(0, heatmapTopN)
+    .map((item) => item.field)
+
+  const heatmapMatrixData = pairDetails
+    .filter((item) => heatmapXFields.includes(item.xField))
+    .map((item) => [
+      heatmapXFields.indexOf(item.xField),
+      yFields.indexOf(item.yField),
+      item.correlation,
+    ] as [number, number, number])
 
   const validPairs = pairDetails.filter((item) => item.sampleSize >= 4)
   const strongRelationCount = validPairs.filter((item) => Math.abs(item.correlation) >= 0.6).length
@@ -718,7 +782,7 @@ export const executeCorrelationAnalysis = async (
       position: 'top',
       formatter: (params: { data: [number, number, number] }) => {
         const [xIndex, yIndex, value] = params.data
-        const xLabel = xFields[xIndex] ?? ''
+        const xLabel = heatmapXFields[xIndex] ?? ''
         const yLabel = yFields[yIndex] ?? ''
         return `${yLabel} vs ${xLabel}<br/>r = ${value}`
       },
@@ -726,8 +790,8 @@ export const executeCorrelationAnalysis = async (
     grid: { top: 72, left: 90, right: 20, bottom: 70 },
     xAxis: {
       type: 'category',
-      data: xFields,
-      axisLabel: { interval: 0, rotate: xFields.length > 8 ? 40 : 0 },
+      data: heatmapXFields,
+      axisLabel: { interval: 0, rotate: heatmapXFields.length > 8 ? 40 : 0 },
     },
     yAxis: {
       type: 'category',
@@ -749,7 +813,7 @@ export const executeCorrelationAnalysis = async (
       {
         name: meta.chartSeriesName,
         type: 'heatmap',
-        data: matrixData,
+        data: heatmapMatrixData,
         label: {
           show: true,
           formatter: (params: { data: [number, number, number] }) => params.data[2].toFixed(2),
@@ -819,6 +883,11 @@ export const executeCorrelationAnalysis = async (
           type: 'chart',
           option: heatmapOption,
           controls: {
+            toggle: {
+              label: '显示数值',
+              modelKey: 'showHeatmapLabels',
+              defaultValue: true,
+            },
             labelTruncate: {
               label: '标签截断',
               modelKey: 'labelTruncateLength',

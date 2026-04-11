@@ -31,9 +31,16 @@ export interface ReportChartLabelTruncateControl {
   defaultValue?: number
 }
 
+export interface ReportChartToggleControl {
+  label?: string
+  modelKey?: string
+  defaultValue?: boolean
+}
+
 export interface ReportChartControls {
   select?: ReportChartSelectControl
   labelTruncate?: ReportChartLabelTruncateControl
+  toggle?: ReportChartToggleControl
 }
 
 export interface ReportDependenceItem {

@@ -76,6 +76,8 @@ const {
   setChartSelectedValue,
   getLabelTruncateLength,
   setLabelTruncateLength,
+  getChartToggleValue,
+  setChartToggleValue,
   resolveChartOption,
 } = useReportSections(() => props.data)
 
@@ -146,11 +148,14 @@ const resolveSectionProps = (section: ReportSection, index: number): Record<stri
       section: resolvedSection as ReportChartSectionType,
       selectedValue: getChartSelectedValue(section as ReportChartSectionType, index),
       labelTruncateLength: getLabelTruncateLength(section as ReportChartSectionType, index),
+      toggleValue: getChartToggleValue(section as ReportChartSectionType, index),
       option: resolveChartOption(section as ReportChartSectionType, index),
       onUpdateSelectedValue: (value: string) =>
         setChartSelectedValue(section as ReportChartSectionType, index, value),
       onUpdateLabelTruncateLength: (value: number) =>
         setLabelTruncateLength(section as ReportChartSectionType, index, value),
+      onUpdateToggleValue: (value: boolean) =>
+        setChartToggleValue(section as ReportChartSectionType, index, value),
     }
   }
 

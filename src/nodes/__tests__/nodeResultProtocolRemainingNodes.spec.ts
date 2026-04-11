@@ -576,7 +576,7 @@ describe('remaining nodes standardized result protocol', () => {
       { target: 5, f1: 5, f2: 2 },
     ])
 
-    const config = { xFields: ['f1', 'f2'], yFields: ['target'], topN: 5 }
+    const config = { xFields: ['f1', 'f2'], yFields: ['target'], heatmapTopN: 1, rankingTopN: 1 }
     const pearson = await pearsonNode.execute(input, config)
     const spearman = await spearmanNode.execute(input, config)
     const kendall = await kendallNode.execute(input, config)
@@ -586,7 +586,11 @@ describe('remaining nodes standardized result protocol', () => {
     expect(pearson.meta?.metrics?.yFields).toEqual(['target'])
     expect(pearson.meta?.metrics?.minPairSampleSize).toBe(5)
     expect(pearson.payload.sections?.[0]?.type).toBe('summary')
+    expect(pearson.payload.sections?.[1]?.option?.xAxis?.data).toEqual(['f1'])
+    expect(pearson.payload.sections?.[1]?.controls?.toggle?.modelKey).toBe('showHeatmapLabels')
     expect(pearson.payload.sections?.[2]?.controls?.select?.options).toEqual(['target'])
+    expect(pearson.payload.sections?.[2]?.option?.yAxis?.data).toEqual(['f1'])
+    expect(pearson.payload.sections?.[2]?.option?.series?.[0]?.data).toEqual([{ value: 1, itemStyle: { color: '#2563eb' } }])
     expect(pearson.payload.sections?.[3]?.title).toBe('结果可信提示')
     expect(pearson.payload.sections?.[3]?.type).toBe('risk-list')
     expect(Array.isArray(pearson.meta?.risks)).toBe(true)

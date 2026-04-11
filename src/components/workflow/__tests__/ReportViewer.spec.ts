@@ -128,6 +128,11 @@ const createCorrelationReport = () => ({
         type: 'chart',
         title: 'X / Y 相关矩阵',
         controls: {
+          toggle: {
+            label: '显示数值',
+            modelKey: 'showHeatmapLabels',
+            defaultValue: true,
+          },
           labelTruncate: {
             label: '标签截断',
             modelKey: 'labelTruncateLength',
@@ -138,7 +143,7 @@ const createCorrelationReport = () => ({
           visualMap: { top: 8, bottom: 'auto' },
           xAxis: { data: ['超长字段名称ABCDEF', '另一个超长字段123456'] },
           yAxis: { data: ['产线温度标签超长字段', '压力标签超长字段'] },
-          series: [{ type: 'heatmap', data: [[0, 0, 0.91]] }],
+          series: [{ type: 'heatmap', data: [[0, 0, 0.91]], label: { show: true } }],
         },
       },
       {
@@ -165,8 +170,11 @@ const createCorrelationReport = () => ({
           },
           压力标签超长字段: {
             xAxis: { type: 'value', name: 'Pearson r' },
-            yAxis: { type: 'category', data: ['超长字段名称ABCDEF', '另一个超长字段123456'] },
-            series: [{ type: 'bar', data: [{ value: 0.25 }, { value: 0.61 }] }],
+            yAxis: {
+              type: 'category',
+              data: ['另一个超长字段123456', '超长字段名称ABCDEF'],
+            },
+            series: [{ type: 'bar', data: [{ value: 0.61 }, { value: 0.25 }] }],
           },
         },
       },
@@ -387,7 +395,12 @@ describe('ReportViewer', () => {
     expect(wrapper.findAll('.chart-stub')[0]?.attributes('data-preview-label')).toContain('产线温度...')
 
     await truncateInputs[1]!.setValue('4')
-    expect(wrapper.findAll('.chart-stub')[1]?.attributes('data-preview-label')).toContain('超长字段...')
+    expect(wrapper.findAll('.chart-stub')[1]?.attributes('data-preview-label')).toContain('另一个超...')
+
+    const matrixToggle = wrapper.get('[data-test="report-toggle-showHeatmapLabels"]')
+    expect((matrixToggle.element as HTMLInputElement).checked).toBe(true)
+    await matrixToggle.setValue(false)
+    expect(wrapper.findAll('.chart-stub')[0]?.attributes('data-option')).toContain('"show":false')
   })
 
   it('renders correlation summary cards and risk list', () => {

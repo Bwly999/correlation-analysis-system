@@ -693,7 +693,8 @@ describe('workflowAi profiles', () => {
         config: {
           xFields: ['x1', 'x2'],
           yFields: ['y'],
-          topN: 3,
+          heatmapTopN: 3,
+          rankingTopN: 3,
         },
       }),
       expect.objectContaining({

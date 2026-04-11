@@ -226,7 +226,7 @@ describe('NodeConfigModal', () => {
           type: 'pearson',
           category: 'terminal',
           status: 'idle',
-          config: { xFields: [], yFields: [], topN: 8 },
+          config: { xFields: [], yFields: [], heatmapTopN: 8, rankingTopN: 8 },
           logs: [],
           useManualInput: false,
           manualInput: '',
