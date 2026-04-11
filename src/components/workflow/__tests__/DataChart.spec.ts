@@ -223,4 +223,61 @@ describe('DataChart', () => {
     expect(firstSeries.progressiveThreshold).toBeGreaterThan(0)
     expect(firstSeries.emphasis.disabled).toBe(true)
   })
+
+  it('anchors the preset panel beside the trigger and changes trigger style after opening', async () => {
+    const wrapper = mount(DataChart, {
+      props: {
+        data: [
+          { score: 5, other: 10 },
+          { score: 15, other: 11 },
+        ],
+      },
+    })
+
+    const trigger = wrapper.get('[data-test="chart-filter-presets-trigger"]')
+
+    expect(trigger.attributes('data-state')).toBe('closed')
+    expect(trigger.classes()).not.toContain('preset-trigger-button--active')
+
+    await trigger.trigger('click')
+
+    expect(trigger.attributes('data-state')).toBe('open')
+    expect(trigger.classes()).toContain('preset-trigger-button--active')
+
+    const panel = wrapper.get('[data-test="chart-preset-panel"]')
+    expect(panel.classes()).toContain('chart-preset-popover')
+    expect(panel.classes()).toContain('left-full')
+    expect(panel.classes()).toContain('top-0')
+    expect(panel.classes()).not.toContain('right-0')
+  })
+
+  it('keeps the preset panel tall enough to show the upper controls before scrolling', async () => {
+    localStorage.clear()
+    localStorage.setItem(
+      'workflow-data-chart-filter-presets',
+      JSON.stringify(
+        Array.from({ length: 20 }, (_, index) => ({
+          id: `preset-${index}`,
+          name: `过滤条件 ${index + 1}`,
+          lowerBound: index,
+          upperBound: index + 10,
+          updatedAt: index + 1,
+        })),
+      ),
+    )
+
+    const wrapper = mount(DataChart, {
+      props: {
+        data: [
+          { score: 5, other: 10 },
+          { score: 15, other: 11 },
+        ],
+      },
+    })
+
+    await wrapper.get('[data-test="chart-filter-presets-trigger"]').trigger('click')
+
+    expect(wrapper.get('[data-test="chart-preset-panel"]').classes()).toContain('max-h-[min(75vh,640px)]')
+    expect(wrapper.get('[data-test="chart-preset-scroll"]').classes()).toContain('overflow-y-auto')
+  })
 })

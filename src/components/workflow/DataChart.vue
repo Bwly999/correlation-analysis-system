@@ -23,6 +23,7 @@ import {
   Layers,
   LineChart as LineChartIcon,
   ListChecks,
+  PanelRightClose,
   PanelRightOpen,
   Settings2,
   Trash2,
@@ -310,6 +311,8 @@ const selectedPreset = computed(
   () => savedPresets.value.find((item) => item.id === selectedPresetId.value) ?? null,
 )
 
+const presetTriggerIcon = computed(() => (isPresetPanelOpen.value ? PanelRightClose : PanelRightOpen))
+
 const saveCurrentPreset = () => {
   const preset: ChartFilterPreset = {
     id: `chart_filter_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
@@ -522,14 +525,117 @@ applyDefaultPreset()
             placeholder="上限"
           />
           <span class="text-[10px] font-bold text-slate-400 whitespace-nowrap">{{ filteredSummary }} 条</span>
-          <button
-            data-test="chart-filter-presets-trigger"
-            class="preset-trigger-button"
-            type="button"
-            @click="isPresetPanelOpen = !isPresetPanelOpen"
-          >
-            <PanelRightOpen :size="14" />
-          </button>
+          <div class="relative flex items-center">
+            <button
+              data-test="chart-filter-presets-trigger"
+              class="preset-trigger-button"
+              :class="{ 'preset-trigger-button--active': isPresetPanelOpen }"
+              :data-state="isPresetPanelOpen ? 'open' : 'closed'"
+              type="button"
+              @click="isPresetPanelOpen = !isPresetPanelOpen"
+            >
+              <component :is="presetTriggerIcon" :size="14" />
+            </button>
+
+            <aside
+              v-if="isPresetPanelOpen"
+              data-test="chart-preset-panel"
+              class="chart-preset-popover absolute left-full top-0 z-20 ml-3 w-[320px] max-h-[min(75vh,640px)] bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden flex flex-col"
+            >
+              <div class="px-4 py-4 border-b border-slate-100">
+                <div class="flex items-center gap-2 text-slate-700">
+                  <Bookmark :size="15" />
+                  <h3 class="text-sm font-black">过滤条件</h3>
+                </div>
+                <p class="mt-2 text-xs text-slate-500">保存、应用和设置默认过滤条件。默认也可以设为不过滤。</p>
+              </div>
+
+              <div class="px-4 py-4 border-b border-slate-100 space-y-3">
+                <input
+                  v-model="presetNameInput"
+                  data-test="chart-preset-name"
+                  type="text"
+                  class="preset-name-input"
+                  placeholder="输入名称，可留空自动生成"
+                />
+
+                <button
+                  data-test="chart-preset-save"
+                  class="preset-primary-button w-full"
+                  type="button"
+                  @click="saveCurrentPreset"
+                >
+                  保存当前条件
+                </button>
+
+                <div class="flex gap-2">
+                  <button
+                    data-test="chart-preset-mark-default"
+                    class="preset-secondary-button flex-1"
+                    :class="{ 'preset-secondary-button--active': defaultPresetId === selectedPresetId && selectedPresetId !== null }"
+                    type="button"
+                    :disabled="!selectedPresetId"
+                    @click="markCurrentSelectionAsDefault"
+                  >
+                    默认应用当前条件
+                  </button>
+                  <button
+                    data-test="chart-preset-set-no-default"
+                    class="preset-secondary-button flex-1"
+                    :class="{ 'preset-secondary-button--active': defaultPresetId === 'none' }"
+                    type="button"
+                    @click="setNoFilterAsDefault"
+                  >
+                    默认不过滤
+                  </button>
+                </div>
+              </div>
+
+              <div
+                data-test="chart-preset-scroll"
+                class="flex-1 min-h-0 overflow-y-auto preset-scroll px-4 py-4 space-y-3"
+              >
+                <div
+                  v-for="preset in sortedPresets"
+                  :key="preset.id"
+                  class="preset-card"
+                  :class="{ 'preset-card--active': defaultPresetId === preset.id }"
+                >
+                  <div class="flex items-start justify-between gap-3">
+                    <div class="min-w-0">
+                      <span class="text-sm font-bold text-slate-800 truncate block">{{ preset.name }}</span>
+                      <p class="mt-1 text-xs text-slate-500">{{ presetSummaryText(preset) }}</p>
+                    </div>
+
+                    <div class="flex items-center gap-2 shrink-0">
+                      <button
+                        data-test="chart-preset-apply"
+                        class="preset-action-button"
+                        type="button"
+                        @click="selectAndApplyPreset(preset)"
+                      >
+                        <Check :size="14" />
+                      </button>
+                      <button class="preset-action-button" type="button" @click.stop="deletePreset(preset.id)">
+                        <Trash2 :size="14" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div
+                    v-if="selectedPresetId === preset.id"
+                    class="mt-3 text-[10px] font-bold text-blue-600 bg-blue-50 rounded-full px-2 py-1 inline-flex"
+                  >
+                    当前已应用
+                  </div>
+                </div>
+
+                <div v-if="sortedPresets.length === 0" class="text-xs text-slate-400 leading-6">
+                  还没有保存的过滤条件。设置好上下限后即可在这里保存。
+                </div>
+              </div>
+            </aside>
+          </div>
         </div>
       </div>
 
@@ -567,102 +673,6 @@ applyDefaultPreset()
             <VChart ref="chartRef" :option="chartOption" autoresize />
           </div>
         </div>
-
-        <aside
-          v-if="isPresetPanelOpen"
-          data-test="chart-preset-panel"
-          class="chart-preset-popover absolute right-0 top-0 z-20 w-[280px] bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden flex flex-col"
-        >
-          <div class="px-4 py-4 border-b border-slate-100">
-            <div class="flex items-center gap-2 text-slate-700">
-              <Bookmark :size="15" />
-              <h3 class="text-sm font-black">过滤条件</h3>
-            </div>
-            <p class="mt-2 text-xs text-slate-500">保存、应用和设置默认过滤条件。默认也可以设为不过滤。</p>
-          </div>
-
-          <div class="px-4 py-4 border-b border-slate-100 space-y-3">
-            <input
-              v-model="presetNameInput"
-              data-test="chart-preset-name"
-              type="text"
-              class="preset-name-input"
-              placeholder="输入名称，可留空自动生成"
-            />
-
-            <button
-              data-test="chart-preset-save"
-              class="preset-primary-button w-full"
-              type="button"
-              @click="saveCurrentPreset"
-            >
-              保存当前条件
-            </button>
-
-            <div class="flex gap-2">
-              <button
-                data-test="chart-preset-mark-default"
-                class="preset-secondary-button flex-1"
-                :class="{ 'preset-secondary-button--active': defaultPresetId === selectedPresetId && selectedPresetId !== null }"
-                type="button"
-                :disabled="!selectedPresetId"
-                @click="markCurrentSelectionAsDefault"
-              >
-                默认应用当前条件
-              </button>
-              <button
-                data-test="chart-preset-set-no-default"
-                class="preset-secondary-button flex-1"
-                :class="{ 'preset-secondary-button--active': defaultPresetId === 'none' }"
-                type="button"
-                @click="setNoFilterAsDefault"
-              >
-                默认不过滤
-              </button>
-            </div>
-          </div>
-
-          <div class="flex-1 min-h-0 overflow-y-auto preset-scroll px-4 py-4 space-y-3">
-            <div
-              v-for="preset in sortedPresets"
-              :key="preset.id"
-              class="preset-card"
-              :class="{ 'preset-card--active': defaultPresetId === preset.id }"
-            >
-              <div class="flex items-start justify-between gap-3">
-                <div class="min-w-0">
-                  <span class="text-sm font-bold text-slate-800 truncate block">{{ preset.name }}</span>
-                  <p class="mt-1 text-xs text-slate-500">{{ presetSummaryText(preset) }}</p>
-                </div>
-
-                <div class="flex items-center gap-2 shrink-0">
-                  <button
-                    data-test="chart-preset-apply"
-                    class="preset-action-button"
-                    type="button"
-                    @click="selectAndApplyPreset(preset)"
-                  >
-                    <Check :size="14" />
-                  </button>
-                  <button class="preset-action-button" type="button" @click.stop="deletePreset(preset.id)">
-                    <Trash2 :size="14" />
-                  </button>
-                </div>
-              </div>
-
-              <div
-                v-if="selectedPresetId === preset.id"
-                class="mt-3 text-[10px] font-bold text-blue-600 bg-blue-50 rounded-full px-2 py-1 inline-flex"
-              >
-                当前已应用
-              </div>
-            </div>
-
-            <div v-if="sortedPresets.length === 0" class="text-xs text-slate-400 leading-6">
-              还没有保存的过滤条件。设置好上下限后即可在这里保存。
-            </div>
-          </div>
-        </aside>
       </div>
     </div>
   </div>
@@ -743,6 +753,18 @@ applyDefaultPreset()
   background: #eff6ff;
   color: #2563eb;
   cursor: pointer;
+  transition:
+    color 0.2s ease,
+    border-color 0.2s ease,
+    background-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.preset-trigger-button--active {
+  border-color: #1d4ed8;
+  background: #2563eb;
+  color: #ffffff;
+  box-shadow: 0 8px 18px -12px rgba(37, 99, 235, 0.7);
 }
 
 .preset-name-input {
