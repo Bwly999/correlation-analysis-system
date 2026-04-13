@@ -4,6 +4,10 @@
 
 ### 修复 (Fix)
 
+- **补充宿主 iframe token 对接文档说明**:
+  - 在 `工作流系统.md` 中新增“宿主 iframe 看板 token 对接”小节，明确 `neighbor-system` 嵌入宿主网站后的 token 传递方式、可识别消息格式与排查建议。
+  - 在 `工作流节点说明.md` 的看板数据对接节点条目下补充宿主 token 前置要求，并指向系统文档中的详细接入说明。
+
 - **修复构建阶段的测试类型报错**:
   - 更新 `BaseNode` 测试断言，兼容当前 `@vue/test-utils` 对 `get()` 返回值的类型约束，避免因调用不存在的 `exists()` 方法导致 `vue-tsc` 失败。
   - `PropertyFieldSelectButton` 改为接受只读 `options` props，并在传给 PrimeVue `SelectButton` 前显式转换为可变数组，兼容测试中的只读配置对象与组件库内部类型要求。
