@@ -38,8 +38,35 @@ const emit = defineEmits<{
   'update:modelValue': [value: unknown]
 }>()
 
+const normalizeDateValue = (value: unknown): Date | null => {
+  if (value === null || value === undefined || value === '') return null
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value
+  }
+
+  if (typeof value === 'string' || typeof value === 'number') {
+    const parsed = new Date(value)
+    return Number.isNaN(parsed.getTime()) ? null : parsed
+  }
+
+  return null
+}
+
+const normalizeDatePickerModelValue = (value: unknown) => {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => normalizeDateValue(item))
+      .filter((item): item is Date => item !== null)
+  }
+
+  return normalizeDateValue(value)
+}
+
 const modelValueProxy = computed({
-  get: () => props.modelValue,
+  get: () =>
+    props.prop.type === 'datetime-range'
+      ? normalizeDatePickerModelValue(props.modelValue)
+      : props.modelValue,
   set: (value) => emit('update:modelValue', value),
 })
 

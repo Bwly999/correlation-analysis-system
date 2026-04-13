@@ -347,6 +347,40 @@ describe('PropertyField', () => {
     expect(wrapper.find('.select-button-hero__eyebrow').text()).toContain('查询策略')
   })
 
+  it('为 datetime-range 将持久化后的字符串数组规范化为 DatePicker 可识别的 Date 数组', () => {
+    setActivePinia(createPinia())
+
+    const wrapper = mount(PropertyField, {
+      props: {
+        prop: {
+          name: 'timeRange',
+          displayName: '查询日期',
+          type: 'datetime-range',
+          default: null,
+          dateOnly: true,
+        },
+        modelValue: ['2026-04-01T00:00:00.000Z', '2026-04-07T00:00:00.000Z'],
+        upstreamFactors: [],
+      },
+      global: {
+        directives: {
+          tooltip: () => undefined,
+        },
+        stubs: {
+          DatePicker: {
+            props: ['modelValue'],
+            template:
+              '<div class="date-picker-model">{{ Array.isArray(modelValue) ? modelValue.map((item) => item instanceof Date ? item.toISOString() : typeof item).join("|") : typeof modelValue }}</div>',
+          },
+        },
+      },
+    })
+
+    expect(wrapper.find('.date-picker-model').text()).toBe(
+      '2026-04-01T00:00:00.000Z|2026-04-07T00:00:00.000Z',
+    )
+  })
+
   it('为 multi-options 允许在过滤框回车确认自定义字段', async () => {
     setActivePinia(createPinia())
 

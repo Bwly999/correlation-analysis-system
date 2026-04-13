@@ -38,6 +38,7 @@ const configValue = computed({
         <SelectButton
           v-model="configValue"
           :options="options"
+          :allow-empty="false"
           option-label="name"
           option-value="value"
           class="w-full select-button-custom select-button-custom--hero"
@@ -49,6 +50,7 @@ const configValue = computed({
       v-else
       v-model="configValue"
       :options="options"
+      :allow-empty="false"
       option-label="name"
       option-value="value"
       class="w-full select-button-custom"
@@ -96,42 +98,59 @@ const configValue = computed({
 
 :deep(.select-button-custom .p-togglebutton) {
   flex: 1;
-  border: none !important;
+  border: 1px solid transparent !important;
   background: transparent !important;
   color: #64748b !important;
-  font-size: 11px !important;
-  font-weight: 800 !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
   border-radius: 10px !important;
-  padding: 9px 6px !important;
+  padding: 7px 5px !important;
+  line-height: 1.35 !important;
   transition: all 0.2s ease !important;
 }
 
-:deep(.select-button-custom .p-togglebutton.p-togglebutton-selected) {
-  background: white !important;
+:deep(.select-button-custom .p-togglebutton.p-togglebutton-checked) {
+  border-color: transparent !important;
+  background: #e2e8f0 !important;
   color: #0f172a !important;
-  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08) !important;
+  box-shadow: none !important;
 }
 
 :deep(.select-button-custom .p-togglebutton::before) {
   display: none !important;
 }
 
+:deep(.select-button-custom .p-togglebutton .p-togglebutton-content) {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+:deep(.select-button-custom .p-togglebutton .p-togglebutton-label) {
+  display: block;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}
+
 :deep(.select-button-custom--hero) {
-  gap: 8px;
+  gap: 6px;
   background: transparent;
   padding: 0;
 }
 
 :deep(.select-button-custom--hero .p-togglebutton) {
-  min-height: 58px;
+  min-height: 48px;
   border: 1px solid rgba(148, 163, 184, 0.28) !important;
   background: rgba(255, 255, 255, 0.92) !important;
   color: #475569 !important;
-  font-size: 12px !important;
+  font-size: 11px !important;
   font-weight: 700 !important;
   letter-spacing: 0.01em;
   border-radius: 16px !important;
   box-shadow: 0 12px 24px -24px rgba(15, 23, 42, 0.55);
+  padding: 8px 8px !important;
 }
 
 :deep(.select-button-custom--hero .p-togglebutton:hover) {
@@ -140,12 +159,10 @@ const configValue = computed({
   color: #0f172a !important;
 }
 
-:deep(.select-button-custom--hero .p-togglebutton.p-togglebutton-selected) {
-  border-color: rgba(37, 99, 235, 0.4) !important;
-  background: linear-gradient(135deg, #ffffff 0%, #eff6ff 100%) !important;
-  color: #0f172a !important;
-  box-shadow:
-    0 18px 32px -24px rgba(37, 99, 235, 0.65),
-    inset 0 0 0 1px rgba(37, 99, 235, 0.1) !important;
+:deep(.select-button-custom--hero .p-togglebutton.p-togglebutton-checked) {
+  border-color: rgba(37, 99, 235, 0.18) !important;
+  background: #dbeafe !important;
+  color: #1d4ed8 !important;
+  box-shadow: none !important;
 }
 </style>
