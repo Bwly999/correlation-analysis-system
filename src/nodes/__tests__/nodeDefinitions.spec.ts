@@ -1591,6 +1591,24 @@ describe('Node Definitions Execution Logic', () => {
   })
 
   describe('chart-display', () => {
+    it('should expose upstream field suggestions for xAxis and yAxis', () => {
+      const xAxisProperty = chartDisplayNode.properties.find((property) => property.name === 'xAxis')
+      const yAxisProperty = chartDisplayNode.properties.find((property) => property.name === 'yAxis')
+
+      expect(xAxisProperty).toMatchObject({
+        type: 'options',
+        useUpstreamFactors: true,
+        editable: true,
+        forceInput: true,
+      })
+      expect(yAxisProperty).toMatchObject({
+        type: 'options',
+        useUpstreamFactors: true,
+        editable: true,
+        forceInput: true,
+      })
+    })
+
     it('should generate scatter chart option', async () => {
       const input = createTableResult([
         { x: 1, y: 2 },
