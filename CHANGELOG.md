@@ -4,6 +4,10 @@
 
 ### 修复 (Fix)
 
+- **优化结果预览弹窗右侧视图的首开空白体验**:
+  - `DataAnalysisModal` 的右侧结果 viewer 改为通过统一 `Suspense fallback` 显示加载态，避免表格、图表等异步视图在首开时短暂空白。
+  - 新增加载态回归测试，覆盖异步 report viewer 尚未 resolve 时的占位提示展示。
+
 - **补充宿主 iframe token 对接文档说明**:
   - 在 `工作流系统.md` 中新增“宿主 iframe 看板 token 对接”小节，明确 `neighbor-system` 嵌入宿主网站后的 token 传递方式、可识别消息格式与排查建议。
   - 在 `工作流节点说明.md` 的看板数据对接节点条目下补充宿主 token 前置要求，并指向系统文档中的详细接入说明。

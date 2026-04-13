@@ -1,7 +1,10 @@
+import { defineAsyncComponent } from 'vue'
 import { describe, expect, it, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { createJsonResult, createReportResult } from '@/nodes/result'
 import DataAnalysisModal from '../DataAnalysisModal.vue'
+
+let resolveReportViewer: (() => void) | null = null
 
 vi.mock('../viewers/registry', () => ({
   workflowViewerRegistry: {
@@ -9,14 +12,63 @@ vi.mock('../viewers/registry', () => ({
       props: ['data'],
       template: '<div class="json-viewer-stub">{{ JSON.stringify(data) }}</div>',
     },
-    'report-viewer': {
-      props: ['data'],
-      template: '<div class="report-viewer-stub">{{ JSON.stringify(data) }}</div>',
-    },
+    'report-viewer': defineAsyncComponent(
+      () =>
+        new Promise<any>((resolve) => {
+          resolveReportViewer = () =>
+            resolve({
+              props: ['data'],
+              template: '<div class="report-viewer-stub">{{ JSON.stringify(data) }}</div>',
+            })
+        }),
+    ),
   },
 }))
 
 describe('DataAnalysisModal', () => {
+  it('shows a loading state while the async viewer is still resolving', async () => {
+    const data = createReportResult({
+      title: '延迟报告',
+      sections: [
+        {
+          type: 'text',
+          content: '报告内容',
+        },
+      ],
+    })
+
+    const wrapper = mount(DataAnalysisModal, {
+      props: {
+        visible: true,
+        title: '报告结果',
+        data,
+      },
+      global: {
+        stubs: {
+          Dialog: {
+            props: ['visible'],
+            template: '<div class="dialog-stub"><slot name="header" /><slot /></div>',
+          },
+          InputNumber: {
+            props: ['modelValue'],
+            emits: ['update:modelValue'],
+            template: '<input class="input-number-stub" :value="modelValue" />',
+          },
+          DataChart: true,
+        },
+      },
+    })
+
+    expect(wrapper.get('[data-test="result-viewer-loading"]').text()).toContain('正在加载结果视图')
+    expect(wrapper.find('.report-viewer-stub').exists()).toBe(false)
+
+    resolveReportViewer?.()
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="result-viewer-loading"]').exists()).toBe(false)
+    expect(wrapper.get('.report-viewer-stub').text()).toContain('延迟报告')
+  })
+
   it('shows truncated json preview instead of full oversized payload', () => {
     const data = createJsonResult({
       rows: Array.from({ length: 25 }, (_, index) => ({
