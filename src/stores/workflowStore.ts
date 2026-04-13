@@ -20,6 +20,7 @@ import {
   type WorkflowNodeSnapshot,
   type StorageUser,
 } from '@/utils/storage'
+import { stripRuntimeInputValuesFromConfig } from '@/utils/workflowConfig'
 import type {
   WorkflowAiEditableSnapshot,
   WorkflowAiOperation,
@@ -258,6 +259,10 @@ export const useWorkflowStore = defineStore('workflow', () => {
         label: normalizedNode.label,
         data: {
           ...normalizedNode.data,
+          config: stripRuntimeInputValuesFromConfig(
+            normalizedNode.data.type,
+            normalizedNode.data.config,
+          ),
           status: 'idle' as const,
           output:
             options.includePinnedOutput && normalizedNode.data.isPinned ? normalizedNode.data.output : null,
@@ -1055,6 +1060,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
       y: original.position.y + 40,
     }
     newNode.data.label = `${original.data.label} (副本)`
+    newNode.data.config = stripRuntimeInputValuesFromConfig(newNode.data.type, newNode.data.config)
     newNode.data.status = 'idle'
     newNode.data.output = null
     newNode.data.logs = []

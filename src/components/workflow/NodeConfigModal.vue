@@ -11,6 +11,7 @@ import {
   isPlainObject,
 } from '@/nodes/result'
 import type { WorkflowNode } from '@/utils/storage'
+import { stripRuntimeInputValuesFromConfig } from '@/utils/workflowConfig'
 
 // Sub Components
 import DataDisplayPanel from './DataDisplayPanel.vue'
@@ -150,9 +151,6 @@ watch(localUseManualInput, (val) => {
 watch(localManualInput, (val) => {
   if (node.value) node.value.data.manualInput = val
 })
-watch(localReuseLastRuntimeInputs, (val) => {
-  if (node.value) node.value.data.reuseLastRuntimeInputs = val
-})
 
 const inputData = computed(() => {
   const currentNode = node.value
@@ -273,10 +271,9 @@ const runCurrentNode = async (rerunUpstream = false) => {
 const saveConfig = () => {
   if (node.value) {
     node.value.data.label = editedName.value
-    node.value.data.config = { ...config.value }
+    node.value.data.config = stripRuntimeInputValuesFromConfig(node.value.data.type, config.value)
     node.value.data.useManualInput = localUseManualInput.value
     node.value.data.manualInput = localManualInput.value
-    node.value.data.reuseLastRuntimeInputs = localReuseLastRuntimeInputs.value
     toast.add({
       severity: 'success',
       summary: '保存成功',

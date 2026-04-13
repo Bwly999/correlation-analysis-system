@@ -974,4 +974,70 @@ describe('NodeConfigModal', () => {
       }),
     )
   })
+
+  it('does not persist runtime input values when applying trigger node settings', async () => {
+    const store = useWorkflowStore()
+    store.nodes = [
+      {
+        id: 'neighbor-system-node',
+        type: 'custom',
+        position: { x: 0, y: 0 },
+        label: '看板数据对接',
+        data: {
+          label: '看板数据对接',
+          type: 'neighbor-system',
+          category: 'trigger',
+          status: 'idle',
+          config: {
+            productName: '产品A',
+            fetchMode: 'time',
+            timeRange: null,
+            materialType: '',
+          },
+          logs: [],
+          useManualInput: false,
+          manualInput: '',
+          isPinned: false,
+          reuseLastRuntimeInputs: false,
+        },
+      } as any,
+    ]
+
+    const selectedRange = [new Date('2026-04-01T00:00:00.000Z'), new Date('2026-04-07T00:00:00.000Z')]
+
+    const wrapper = mount(NodeConfigModal, {
+      props: { visible: true, nodeId: 'neighbor-system-node' },
+      global: {
+        stubs: {
+          Dialog: dialogStub,
+          DataDisplayPanel: true,
+          DataAnalysisModal: true,
+          ConfigHeader: { template: '<div />', props: ['nodeLabel', 'isPinned', 'nodeType'] },
+          ConfigFooter: {
+            template: '<button class="apply-btn" @click="$emit(\'save\')">应用</button>',
+          },
+          ConfigForm: { template: '<div />', props: ['config', 'properties', 'upstreamFactors'] },
+          RuntimeInputs: {
+            props: ['config'],
+            emits: ['update:config'],
+            template:
+              '<button class="runtime-change-btn" @click="$emit(\'update:config\', { ...config, timeRange: selectedRange, materialType: \'成品\' })">改运行时输入</button>',
+            data() {
+              return {
+                selectedRange,
+              }
+            },
+          },
+        },
+      },
+    })
+
+    await wrapper.get('.runtime-change-btn').trigger('click')
+    await wrapper.get('.apply-btn').trigger('click')
+
+    expect(store.nodes[0]?.data.config.productName).toBe('产品A')
+    expect(store.nodes[0]?.data.config.fetchMode).toBe('time')
+    expect(store.nodes[0]?.data.config.timeRange).toBeNull()
+    expect(store.nodes[0]?.data.config.materialType).toBe('')
+  })
 })

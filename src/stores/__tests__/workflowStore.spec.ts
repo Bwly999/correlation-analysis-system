@@ -470,6 +470,28 @@ describe('Workflow Store', () => {
     expect(store.workflowName).toBe('Test Workflow')
   })
 
+  it('should strip runtime input values from workflow persistence snapshots', async () => {
+    const store = useWorkflowStore()
+    const trigger = store.addAndConnectNode('neighbor-system', '看板数据对接', { x: 0, y: 0 })!
+
+    trigger.data.config.productName = '产品A'
+    trigger.data.config.fetchMode = 'time'
+    trigger.data.config.timeRange = [
+      new Date('2026-04-01T00:00:00.000Z'),
+      new Date('2026-04-07T00:00:00.000Z'),
+    ]
+    trigger.data.config.materialType = '成品'
+    trigger.data.config.selectedProcesses = ['工序A']
+
+    const saved = await store.saveWorkflow('运行时输入剥离')
+    const savedNode = saved.nodes[0]
+
+    expect(savedNode?.data.config.productName).toBe('产品A')
+    expect(savedNode?.data.config.timeRange).toBeNull()
+    expect(savedNode?.data.config.materialType).toBe('')
+    expect(savedNode?.data.config.selectedProcesses).toEqual([])
+  })
+
   it('should stop execution when stopExecution is called', async () => {
     let resolveExecution: () => void = () => undefined
     const slowNodeDefinition = {
