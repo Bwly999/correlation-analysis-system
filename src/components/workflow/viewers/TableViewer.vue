@@ -266,7 +266,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="h-full w-full p-4">
+  <div class="h-full w-full">
     <div class="h-full w-full bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col">
       <div
         v-if="rows.length === 0"
