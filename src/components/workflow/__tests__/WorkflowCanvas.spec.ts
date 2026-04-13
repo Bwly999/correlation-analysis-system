@@ -767,6 +767,41 @@ describe('WorkflowCanvas', () => {
     expect(runButton.classes()).toContain('workflow-run-bar--idle')
   })
 
+  it('keeps the execution record full-width while reserving space internally for the visible node sidebar', () => {
+    const wrapper = mount(WorkflowCanvas, {
+      global: {
+        stubs: {
+          Background: { template: '<div />' },
+          Controls: { template: '<div />' },
+          NodeSidebar: { template: '<div />' },
+          WorkflowHeader: { template: '<div />' },
+          BaseNode: { template: '<div />' },
+          LogPanel: { template: '<div />' },
+          NodeConfigModal: { template: '<div />' },
+          RuntimeInputModal: runtimeInputModalStub,
+          WorkflowResultDashboardModal: { template: '<div />' },
+          WorkflowManagerModal: { template: '<div />' },
+          UnsavedWorkflowDialog: { template: '<div />' },
+          ConfirmDialog: { template: '<div />' },
+          Toast: { template: '<div />' },
+          Button: { template: '<button><slot /></button>' },
+          N8nEdge: { template: '<div />' },
+        },
+        directives: {
+          tooltip: () => undefined,
+        },
+      },
+    })
+
+    const footer = wrapper.find('footer')
+    const header = wrapper.get('[data-testid="execution-record-header"]')
+
+    expect(footer.exists()).toBe(true)
+    expect(footer.attributes('style')).toContain('right: 0px;')
+    expect(footer.classes()).toContain('z-[80]')
+    expect(header.attributes('style')).toContain('padding-right: 364px;')
+  })
+
   it('shifts the fitted viewport left by half the sidebar width after workflow load', async () => {
     const store = useWorkflowStore()
     store.addAndConnectNode('manual-json-import', '手动输入数据', { x: 0, y: 0 })

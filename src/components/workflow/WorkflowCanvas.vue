@@ -55,6 +55,23 @@ const logHeight = computed(() =>
   isLogExpanded.value ? layoutMetrics.value.logExpandedHeight : layoutMetrics.value.logCollapsedHeight,
 )
 const runBarBottom = computed(() => logHeight.value + 20)
+const executionRecordRightInset = computed(() => {
+  if (store.isHistoryMode || !isSidebarVisible.value) {
+    return 0
+  }
+
+  return layoutMetrics.value.sidebarWidth
+})
+const executionRecordStyle = computed(() => ({
+  height: `${logHeight.value}px`,
+  right: '0px',
+}))
+const executionRecordHeaderStyle = computed(() => ({
+  paddingRight: `${24 + executionRecordRightInset.value}px`,
+}))
+const executionRecordBodyStyle = computed(() => ({
+  marginRight: `${executionRecordRightInset.value}px`,
+}))
 const isAgentMode = computed(() => isAiPanelVisible.value)
 const executionWorkspaceBanner = computed(() => {
   const hasAppliedPlan = Boolean(aiStore.lastAppliedSnapshotId) || aiStore.autoApplyResult.status === 'applied'
@@ -520,20 +537,20 @@ onBeforeUnmount(() => {
                   </button>
                 </div>
               </VueFlow>
-
-              <aside
-                v-if="!store.isHistoryMode"
-                class="execution-canvas-shell__sidebar"
-                :class="{ 'execution-canvas-shell__sidebar--collapsed': !isSidebarVisible }"
-                :style="{ width: `${layoutMetrics.sidebarWidth}px` }"
-              >
-                <NodeSidebar @close="isSidebarVisible = false" />
-              </aside>
             </div>
           </div>
         </section>
       </div>
     </main>
+
+    <aside
+      v-if="!store.isHistoryMode"
+      class="workflow-page-sidebar"
+      :class="{ 'workflow-page-sidebar--collapsed': !isSidebarVisible }"
+      :style="{ width: `${layoutMetrics.sidebarWidth}px` }"
+    >
+      <NodeSidebar @close="isSidebarVisible = false" />
+    </aside>
 
     <WorkflowFloatingControls
       :visible="!store.isHistoryMode || !!resultDashboardModal.summary"
@@ -551,11 +568,13 @@ onBeforeUnmount(() => {
     />
 
     <footer
-      class="absolute bottom-0 left-0 right-0 z-[120] transition-all duration-300 ease-in-out flex flex-col"
-      :style="{ height: `${logHeight}px` }"
+      class="absolute bottom-0 left-0 z-[80] transition-all duration-300 ease-in-out flex flex-col"
+      :style="executionRecordStyle"
     >
       <div
-        class="h-11 min-h-[44px] bg-white border-t border-[#efefef] flex items-center justify-between px-6 shadow-[0_-1px_3px_rgba(0,0,0,0.02)] relative z-10"
+        data-testid="execution-record-header"
+        class="execution-record-header h-11 min-h-[44px] bg-white border-t border-[#efefef] flex items-center justify-between gap-3 px-6 shadow-[0_-1px_3px_rgba(0,0,0,0.02)] relative z-10"
+        :style="executionRecordHeaderStyle"
       >
         <div class="flex items-center gap-4 h-full">
           <button
@@ -578,7 +597,7 @@ onBeforeUnmount(() => {
           </button>
         </div>
         <div
-          class="flex items-center gap-4 text-[10px] font-bold text-[#a3acb9] uppercase tracking-widest"
+          class="flex max-w-full flex-wrap items-center justify-end gap-x-4 gap-y-1 text-[10px] font-bold text-[#a3acb9] uppercase tracking-widest text-right"
         >
           <span class="flex items-center gap-1.5"
             ><div class="w-1.5 h-1.5 bg-emerald-500 rounded-full"></div>
@@ -589,7 +608,9 @@ onBeforeUnmount(() => {
         </div>
       </div>
       <div v-if="isLogExpanded" class="flex-1 w-full overflow-hidden bg-white shadow-inner">
-        <LogPanel />
+        <div class="execution-record-body h-full" :style="executionRecordBodyStyle">
+          <LogPanel />
+        </div>
       </div>
     </footer>
 
@@ -724,9 +745,9 @@ onBeforeUnmount(() => {
   transition: color 0.5s ease;
 }
 
-.execution-canvas-shell__sidebar {
+.workflow-page-sidebar {
   position: absolute;
-  top: 0;
+  top: 56px;
   right: 0;
   bottom: 0;
   z-index: 130;
@@ -737,10 +758,18 @@ onBeforeUnmount(() => {
   box-shadow: -20px 0 50px rgba(0, 0, 0, 0.03);
 }
 
-.execution-canvas-shell__sidebar--collapsed {
+.workflow-page-sidebar--collapsed {
   transform: translateX(calc(100% + 20px));
   opacity: 0;
   pointer-events: none;
+}
+
+.execution-record-header,
+.execution-record-body {
+  transition:
+    padding-right 0.5s ease,
+    margin-right 0.5s ease;
+  will-change: padding-right, margin-right;
 }
 
 @media (max-width: 1280px) {
