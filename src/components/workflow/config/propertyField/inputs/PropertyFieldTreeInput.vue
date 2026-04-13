@@ -87,6 +87,12 @@ const collectTreeNodeMap = (nodes: any[]) => {
 
 const treeNodeMap = computed(() => collectTreeNodeMap(normalizedTreeOptions.value))
 
+const countLeafNodes = (nodes: TreeNode[]): number =>
+  nodes.reduce((count, node) => {
+    if (isLeafNode(node)) return count + 1
+    return count + countLeafNodes((node.children || []) as TreeNode[])
+  }, 0)
+
 const toSelectionStateMap = (keys: string[]) =>
   keys.reduce<Record<string, { checked: boolean; partialChecked: boolean }>>((acc, key) => {
     acc[key] = { checked: true, partialChecked: false }
@@ -196,6 +202,15 @@ const treeRef = ref<TreeV2Expose | null>(null)
 const checkedKeysList = computed(() =>
   getCheckedKeys(modelValueToSelectionKeys(configValue.value)),
 )
+
+const selectedLeafCount = computed(() => getCheckedLeafEntries(treeSelectionValue.value).length)
+
+const totalLeafCount = computed(() => countLeafNodes(normalizedTreeOptions.value as TreeNode[]))
+
+const selectionSummary = computed(() => {
+  if (selectedLeafCount.value === 0) return ''
+  return `${selectedLeafCount.value} / ${totalLeafCount.value}`
+})
 
 const expandedKeysList = computed(() => Object.keys(treeExpandedKeys.value || {}))
 
@@ -388,6 +403,13 @@ const treeSelectionValue = computed<TreeSelectionKeys | undefined>({
           </span>
         </template>
       </ElTreeV2>
+      <div
+        v-if="selectionSummary"
+        class="mt-2 text-right text-[11px] leading-5 text-slate-400"
+        data-testid="tree-selection-summary"
+      >
+        {{ selectionSummary }}
+      </div>
     </div>
   </div>
 </template>

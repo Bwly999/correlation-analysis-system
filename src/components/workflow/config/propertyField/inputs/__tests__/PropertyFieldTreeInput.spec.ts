@@ -436,6 +436,36 @@ describe('PropertyFieldTreeInput', () => {
     })
   })
 
+  it('存在已选叶子节点时，在组件下方显示 已选数/总叶子数', () => {
+    const wrapper = mount(PropertyFieldTreeInput, {
+      props: {
+        modelValue: {
+          selectedKeys: ['leaf-1', 'leaf-2'],
+          values: [undefined, undefined],
+        },
+        prop: createTreeProp(),
+        options: treeOptions,
+        isOptionsLoading: false,
+        optionsError: '',
+      },
+      global: {
+        stubs: {
+          InputText: createInputTextStub,
+          ElTreeV2: createTreeV2Stub(),
+        },
+      },
+    })
+
+    expect(wrapper.text()).toContain('2 / 2')
+  })
+
+  it('未选择叶子节点时，不显示数量 tips', () => {
+    const wrapper = mountTreeInput()
+
+    expect(wrapper.text()).not.toContain('0 / 2')
+    expect(wrapper.text()).not.toContain('/ 2')
+  })
+
   it('收起节点时不重复回写 checkedKeys，避免已选子节点阻止父级折叠', async () => {
     const setCheckedKeys = vi.fn()
     const setExpandedKeys = vi.fn()
