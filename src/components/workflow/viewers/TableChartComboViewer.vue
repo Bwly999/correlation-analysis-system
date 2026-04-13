@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { BarChart3, LayoutPanelTop, Rows3 } from 'lucide-vue-next'
 import ChartViewer from './ChartViewer.vue'
 import TableViewer from './TableViewer.vue'
+import TableCollectionViewer from './TableCollectionViewer.vue'
 import DataChart from '../DataChart.vue'
 import {
   getResultChartOption,
@@ -22,6 +23,7 @@ const normalizedResult = computed(() => normalizeWorkflowResult(props.data))
 const explicitChartOption = computed(() => getResultChartOption(props.data))
 const groups = computed(() => getResultGroups(props.data))
 const rows = computed(() => getResultRows(props.data))
+const isTableCollection = computed(() => normalizedResult.value?.kind === 'tableCollection')
 const fallbackChartData = computed(() => {
   if (groups.value.length > 0) return groups.value
   if (rows.value.length > 0) return rows.value
@@ -108,12 +110,14 @@ watch(
 
       <div v-if="showChartPane || showTablePane" :class="contentClass">
         <div v-if="hasChart" v-show="showChartPane" data-test="combo-chart-pane" :class="paneClass">
-          <ChartViewer v-if="explicitChartOption" :data="props.data" />
+          <DataChart v-if="isTableCollection" :data="fallbackChartData" />
+          <ChartViewer v-else-if="explicitChartOption" :data="props.data" />
           <DataChart v-else :data="fallbackChartData" />
         </div>
 
         <div v-if="hasTable" v-show="showTablePane" data-test="combo-table-pane" :class="paneClass">
-          <TableViewer :data="props.data" />
+          <TableCollectionViewer v-if="isTableCollection" :data="props.data" />
+          <TableViewer v-else :data="props.data" />
         </div>
       </div>
 

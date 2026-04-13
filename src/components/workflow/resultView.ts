@@ -8,6 +8,7 @@ import {
   type FieldSchema,
   type NodeResult,
 } from '@/nodes/result'
+import { inferCommonSchemaFromGroups } from './groupedResultSchema'
 
 const legacyViewerMap: Record<string, string> = {
   report: 'report-viewer',
@@ -38,6 +39,11 @@ export const getResultGroups = (value: unknown) => extractTableCollectionGroups(
 export const getResultSchemaFields = (value: unknown): FieldSchema[] => {
   const normalized = normalizeWorkflowResult(value)
   if (normalized?.schema?.fields?.length) return normalized.schema.fields
+
+  const groups = getResultGroups(value)
+  if (groups.length > 0) {
+    return inferCommonSchemaFromGroups(groups)
+  }
 
   const rows = getResultRows(value)
   if (rows.length === 0) return []

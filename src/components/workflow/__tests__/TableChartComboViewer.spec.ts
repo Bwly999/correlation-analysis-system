@@ -10,6 +10,13 @@ vi.mock('../viewers/TableViewer.vue', () => ({
   },
 }))
 
+vi.mock('../viewers/TableCollectionViewer.vue', () => ({
+  default: {
+    props: ['data'],
+    template: '<div data-test="table-collection-viewer-stub">table-collection-viewer</div>',
+  },
+}))
+
 vi.mock('../viewers/ChartViewer.vue', () => ({
   default: {
     props: ['data'],
@@ -154,6 +161,52 @@ describe('TableChartComboViewer', () => {
     await wrapper.get('[data-test="combo-mode-table"]').trigger('click')
     expectPaneVisible(wrapper, '[data-test="combo-table-pane"]')
     expectPaneHidden(wrapper, '[data-test="combo-chart-pane"]')
+  })
+
+  it('uses interactive grouped charts and grouped tables for tableCollection results', async () => {
+    const wrapper = mount(TableChartComboViewer, {
+      props: {
+        data: {
+          kind: 'tableCollection',
+          payload: [
+            {
+              name: 'Group A',
+              data: [
+                { score: null, temperature: 10 },
+                { score: 1, temperature: 12 },
+              ],
+            },
+            {
+              name: 'Group B',
+              data: [
+                { score: null, temperature: 20, onlyB: 99 },
+                { score: 2, temperature: 22 },
+              ],
+            },
+          ],
+          meta: {
+            chartOption: {
+              xAxis: { type: 'category', data: ['Group A', 'Group B'] },
+              yAxis: { type: 'value' },
+              series: [{ type: 'bar', data: [1, 2] }],
+            },
+          },
+        },
+      },
+    })
+
+    expect(wrapper.html()).toContain('data-test="chart-key-select"')
+    expect(wrapper.html()).not.toContain('data-test="chart-viewer-stub"')
+
+    await wrapper.get('[data-test="combo-mode-table"]').trigger('click')
+
+    expect(wrapper.html()).toContain('data-test="table-collection-viewer-stub"')
+    expect(wrapper.html()).not.toContain('data-test="table-viewer-stub"')
+
+    await wrapper.get('[data-test="combo-mode-split"]').trigger('click')
+
+    expectPaneVisible(wrapper, '[data-test="combo-chart-pane"]')
+    expectPaneVisible(wrapper, '[data-test="combo-table-pane"]')
   })
 
   it('enables chart mode for plain table results by using derived data charts', async () => {

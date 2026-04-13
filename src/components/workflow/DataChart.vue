@@ -37,6 +37,7 @@ import {
   type ChartRow,
   type NormalizationMethod,
 } from './dataChartNormalization'
+import { getCommonNumericFieldsFromGroups } from './groupedResultSchema'
 
 use([
   CanvasRenderer,
@@ -242,15 +243,7 @@ const availableKeys = computed(() => {
   if (!Array.isArray(props.data) || props.data.length === 0) return []
 
   if (isGroupedData.value) {
-    const groupFields = (props.data as ChartGroup[])
-      .map((group) => {
-        const firstRow = Array.isArray(group.data) ? group.data[0] : null
-        return firstRow ? Object.keys(firstRow).filter((key) => typeof firstRow[key] === 'number') : []
-      })
-      .filter((fields) => fields.length > 0)
-
-    if (groupFields.length === 0) return []
-    return groupFields.reduce((left, right) => left.filter((field) => right.includes(field)))
+    return getCommonNumericFieldsFromGroups(props.data as ChartGroup[])
   }
 
   return Object.keys((props.data as ChartRow[])[0] ?? {}).filter(
@@ -261,9 +254,14 @@ const availableKeys = computed(() => {
 watch(
   availableKeys,
   (newKeys) => {
-    if (newKeys.length > 0 && selectedKeys.value.length === 0) {
-      selectedKeys.value = [newKeys[0]!]
+    const nextSelectedKeys = selectedKeys.value.filter((key) => newKeys.includes(key))
+
+    if (nextSelectedKeys.length > 0) {
+      selectedKeys.value = nextSelectedKeys
+      return
     }
+
+    if (newKeys.length > 0) selectedKeys.value = [newKeys[0]!]
   },
   { immediate: true },
 )

@@ -187,6 +187,36 @@ describe('DataChart', () => {
     expect(wrapper.find('[data-test="chart-normalization-method-min-max"]').exists()).toBe(false)
   })
 
+  it('discovers grouped numeric factors from all rows and keeps only common fields across groups', () => {
+    const wrapper = mount(DataChart, {
+      props: {
+        data: [
+          {
+            name: 'A',
+            data: [
+              { score: null, temperature: 10, onlyA: 1 },
+              { score: 2, temperature: 12 },
+            ],
+          },
+          {
+            name: 'B',
+            data: [
+              { score: null, temperature: 20, onlyB: 9 },
+              { score: 5, temperature: 24 },
+            ],
+          },
+        ],
+      },
+    })
+
+    const options = wrapper
+      .get('[data-test="chart-key-select"]')
+      .findAll('option')
+      .map((option) => option.text())
+
+    expect(options).toEqual(['score', 'temperature'])
+  })
+
   it('saves presets locally, applies them, and restores default preset on remount', async () => {
     localStorage.clear()
 

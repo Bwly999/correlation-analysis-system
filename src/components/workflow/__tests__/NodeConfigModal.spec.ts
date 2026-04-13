@@ -194,6 +194,91 @@ describe('NodeConfigModal', () => {
     expect(wrapper.find('.upstream-factors').text()).toContain('"dataType":"string"')
   })
 
+  it('derives upstream factors from grouped collection outputs using common fields', () => {
+    const store = useWorkflowStore()
+    store.nodes = [
+      {
+        id: 'merge-node',
+        type: 'custom',
+        position: { x: 0, y: 0 },
+        label: '数据合并',
+        data: {
+          label: '数据合并',
+          type: 'data-merge',
+          category: 'action',
+          status: 'success',
+          config: { mergeMode: 'collection' },
+          logs: [],
+          useManualInput: false,
+          manualInput: '',
+          isPinned: false,
+          output: {
+            kind: 'tableCollection',
+            payload: [
+              {
+                name: '来源一',
+                data: [
+                  { score: null, temperature: 10, onlyA: 1 },
+                  { score: 2, temperature: 12 },
+                ],
+              },
+              {
+                name: '来源二',
+                data: [
+                  { score: null, temperature: 20, onlyB: 9 },
+                  { score: 5, temperature: 24 },
+                ],
+              },
+            ],
+          },
+        },
+      } as any,
+      {
+        id: 'chart-node',
+        type: 'custom',
+        position: { x: 300, y: 0 },
+        label: '图表展示',
+        data: {
+          label: '图表展示',
+          type: 'chart-display',
+          category: 'terminal',
+          status: 'idle',
+          config: { chartType: 'boxplot', xAxis: '', yAxis: '' },
+          logs: [],
+          useManualInput: false,
+          manualInput: '',
+          isPinned: false,
+        },
+      } as any,
+    ]
+    store.edges = [{ id: 'e1', source: 'merge-node', target: 'chart-node', type: 'n8n', animated: true }] as any
+
+    const wrapper = mount(NodeConfigModal, {
+      props: { visible: true, nodeId: 'chart-node' },
+      global: {
+        stubs: {
+          Dialog: dialogStub,
+          DataDisplayPanel: true,
+          DataAnalysisModal: true,
+          ConfigHeader: { template: '<div />', props: ['nodeLabel', 'isPinned', 'nodeType'] },
+          ConfigFooter: { template: '<div />' },
+          ConfigForm: {
+            props: ['upstreamFactors'],
+            template: '<div class="upstream-factors">{{ JSON.stringify(upstreamFactors) }}</div>',
+          },
+          RuntimeInputs: { template: '<div />', props: ['config', 'properties', 'upstreamFactors'] },
+        },
+      },
+    })
+
+    const text = wrapper.find('.upstream-factors').text()
+    expect(text).toContain('"name":"score"')
+    expect(text).toContain('"name":"temperature"')
+    expect(text).toContain('"dataType":"number"')
+    expect(text).not.toContain('"name":"onlyA"')
+    expect(text).not.toContain('"name":"onlyB"')
+  })
+
   it('shows a compact correlation setup guide entry for first-time analysis configuration', () => {
     const store = useWorkflowStore()
     store.nodes = [
