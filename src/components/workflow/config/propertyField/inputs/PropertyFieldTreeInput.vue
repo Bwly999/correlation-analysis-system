@@ -207,15 +207,41 @@ const toTreeV2Data = (nodes: TreeNode[]): TreeNode[] =>
 
 const treeViewData = computed(() => toTreeV2Data(filteredTreeOptions.value as TreeNode[]))
 
-const syncTreeState = async () => {
+const collectNodeAndDescendantKeys = (node: TreeNode | undefined): string[] => {
+  if (!node || node.key === undefined) return []
+
+  const keys = [String(node.key)]
+  const children = Array.isArray(node.children) ? node.children : []
+
+  children.forEach((child) => {
+    keys.push(...collectNodeAndDescendantKeys(child))
+  })
+
+  return keys
+}
+
+const syncCheckedState = async () => {
   await nextTick()
   treeRef.value?.setCheckedKeys?.(checkedKeysList.value)
+}
+
+const syncExpandedState = async () => {
+  await nextTick()
   treeRef.value?.setExpandedKeys?.(expandedKeysList.value)
 }
 
-watch([filteredTreeOptions, checkedKeysList, expandedKeysList], () => {
-  void syncTreeState()
+watch(filteredTreeOptions, () => {
+  void syncCheckedState()
+  void syncExpandedState()
 }, { immediate: true })
+
+watch(checkedKeysList, () => {
+  void syncCheckedState()
+})
+
+watch(expandedKeysList, () => {
+  void syncExpandedState()
+})
 
 const selectionKeysFromCheckedState = (
   checkedKeys: Array<string | number> = [],
@@ -256,7 +282,9 @@ const handleTreeCollapse = (data: unknown) => {
   const node = data as TreeNode
   if (node.key === undefined) return
   const nextKeys = { ...treeExpandedKeys.value }
-  delete nextKeys[String(node.key)]
+  collectNodeAndDescendantKeys(node).forEach((key) => {
+    delete nextKeys[key]
+  })
   treeExpandedKeys.value = nextKeys
 }
 

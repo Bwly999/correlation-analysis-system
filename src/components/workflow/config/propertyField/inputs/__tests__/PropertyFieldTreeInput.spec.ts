@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
-import { nextTick } from 'vue'
+import { defineComponent, h, nextTick } from 'vue'
 import PropertyFieldTreeInput from '../PropertyFieldTreeInput.vue'
 import type { NodeProperty } from '@/nodes/types'
 
@@ -434,5 +434,141 @@ describe('PropertyFieldTreeInput', () => {
       selectedKeys: ['leaf-1', 'leaf-2'],
       values: [undefined, undefined],
     })
+  })
+
+  it('收起节点时不重复回写 checkedKeys，避免已选子节点阻止父级折叠', async () => {
+    const setCheckedKeys = vi.fn()
+    const setExpandedKeys = vi.fn()
+
+    const TreeV2ExposeStub = defineComponent({
+      name: 'TreeV2ExposeStub',
+      props: ['data', 'props'],
+      emits: ['check', 'node-expand', 'node-collapse'],
+      setup(_, { emit, expose }) {
+        expose({
+          setCheckedKeys,
+          setExpandedKeys,
+        })
+
+        return () =>
+          h('button', {
+            'data-testid': 'tree-collapse-node',
+            type: 'button',
+            onClick: () => emit('node-collapse', { key: 'group-1' }),
+          })
+      },
+    })
+
+    const wrapper = mount(PropertyFieldTreeInput, {
+      props: {
+        modelValue: {
+          selectedKeys: ['leaf-1'],
+          values: [undefined],
+        },
+        prop: createTreeProp(),
+        options: treeOptions,
+        isOptionsLoading: false,
+        optionsError: '',
+      },
+      global: {
+        stubs: {
+          InputText: createInputTextStub,
+          ElTreeV2: TreeV2ExposeStub,
+        },
+      },
+    })
+
+    await nextTick()
+    setCheckedKeys.mockClear()
+    setExpandedKeys.mockClear()
+
+    await wrapper.get('[data-testid="tree-collapse-node"]').trigger('click')
+    await nextTick()
+    await nextTick()
+
+    expect(setCheckedKeys).not.toHaveBeenCalled()
+    expect(setExpandedKeys).toHaveBeenCalled()
+  })
+
+  it('收起父节点时会同步清理后代 expanded keys，避免被 TreeV2 自动重新展开', async () => {
+    const setExpandedKeys = vi.fn()
+
+    const TreeV2ExposeStub = defineComponent({
+      name: 'TreeV2ExposeStub',
+      props: ['data', 'props'],
+      emits: ['check', 'node-expand', 'node-collapse'],
+      setup(_, { emit, expose }) {
+        expose({
+          setCheckedKeys: vi.fn(),
+          setExpandedKeys,
+        })
+
+        return () =>
+          h('div', [
+            h('button', {
+              'data-testid': 'tree-expand-parent',
+              type: 'button',
+              onClick: () =>
+                emit('node-expand', {
+                  key: 'group-1',
+                  children: [{ key: 'group-1-1', children: [{ key: 'leaf-1' }] }],
+                }),
+            }),
+            h('button', {
+              'data-testid': 'tree-expand-child',
+              type: 'button',
+              onClick: () =>
+                emit('node-expand', {
+                  key: 'group-1-1',
+                  children: [{ key: 'leaf-1' }],
+                }),
+            }),
+            h('button', {
+              'data-testid': 'tree-collapse-parent',
+              type: 'button',
+              onClick: () =>
+                emit('node-collapse', {
+                  key: 'group-1',
+                  children: [{ key: 'group-1-1', children: [{ key: 'leaf-1' }] }],
+                }),
+            }),
+          ])
+      },
+    })
+
+    const wrapper = mount(PropertyFieldTreeInput, {
+      props: {
+        modelValue: {
+          selectedKeys: ['leaf-1'],
+          values: [undefined],
+        },
+        prop: createTreeProp(),
+        options: treeOptions,
+        isOptionsLoading: false,
+        optionsError: '',
+      },
+      global: {
+        stubs: {
+          InputText: createInputTextStub,
+          ElTreeV2: TreeV2ExposeStub,
+        },
+      },
+    })
+
+    await nextTick()
+    setExpandedKeys.mockClear()
+
+    await wrapper.get('[data-testid="tree-expand-parent"]').trigger('click')
+    await nextTick()
+    await wrapper.get('[data-testid="tree-expand-child"]').trigger('click')
+    await nextTick()
+
+    setExpandedKeys.mockClear()
+
+    await wrapper.get('[data-testid="tree-collapse-parent"]').trigger('click')
+    await nextTick()
+    await nextTick()
+
+    expect(setExpandedKeys).toHaveBeenLastCalledWith([])
   })
 })
