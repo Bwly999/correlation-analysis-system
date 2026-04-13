@@ -1706,6 +1706,70 @@ describe('Node Definitions Execution Logic', () => {
       expect(legacy.chartOption.series[0].data).toHaveLength(legacy.meta?.binCount)
     })
 
+    it('should generate styled single-table boxplot chart option', async () => {
+      const input = createTableResult([
+        { score: 10 },
+        { score: 12 },
+        { score: 18 },
+        { score: 21 },
+      ])
+
+      const result = await chartDisplayNode.execute(input, {
+        chartType: 'boxplot',
+        yAxis: 'score',
+      })
+
+      const legacy = asLegacy(result)
+
+      expect(legacy.viewType).toBe('chart')
+      expect(legacy.chartOption.legend.type).toBe('scroll')
+      expect(legacy.chartOption.legend.icon).toBe('rect')
+      expect(legacy.chartOption.tooltip.borderWidth).toBe(1)
+      expect(legacy.chartOption.tooltip.extraCssText).toContain('border-radius: 12px')
+      expect(legacy.chartOption.series[0].itemStyle.color).toMatch(/rgba?\(/)
+      expect(legacy.chartOption.series[0].itemStyle.borderColor).toBeTruthy()
+      expect(legacy.chartOption.series[0].itemStyle.borderWidth).toBeGreaterThanOrEqual(1.5)
+    })
+
+    it('should generate styled grouped boxplot chart option', async () => {
+      const input = createTableCollectionResult([
+        {
+          name: '组一',
+          data: [
+            { score: 10 },
+            { score: 12 },
+            { score: 18 },
+          ],
+        },
+        {
+          name: '组二',
+          data: [
+            { score: 21 },
+            { score: 24 },
+            { score: 30 },
+          ],
+        },
+      ])
+
+      const result = await chartDisplayNode.execute(input, {
+        chartType: 'boxplot',
+        yAxis: 'score',
+      })
+
+      const legacy = asLegacy(result)
+
+      expect(legacy.viewType).toBe('chart')
+      expect(legacy.chartOption.legend.type).toBe('scroll')
+      expect(legacy.chartOption.legend.icon).toBe('rect')
+      expect(legacy.chartOption.legend.left).toBe('center')
+      expect(legacy.chartOption.tooltip.borderWidth).toBe(1)
+      expect(legacy.chartOption.tooltip.extraCssText).toContain('border-radius: 12px')
+      expect(legacy.chartOption.dataZoom[1].height).toBe(12)
+      expect(legacy.chartOption.series[0].itemStyle.color).toMatch(/rgba?\(/)
+      expect(legacy.chartOption.series[0].itemStyle.borderColor).toBeTruthy()
+      expect(legacy.chartOption.series[0].itemStyle.borderWidth).toBeGreaterThanOrEqual(1.5)
+    })
+
     it('should not mutate grouped collection input when rendering non-boxplot charts', async () => {
       const input = createTableCollectionResult([
         {

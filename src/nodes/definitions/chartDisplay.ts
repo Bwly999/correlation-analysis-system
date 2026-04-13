@@ -15,12 +15,122 @@ const resolveRows = (input: unknown) => extractTableRows(input)
 const resolveGroups = (input: unknown) => extractTableCollectionGroups(input)
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
+const BOX_PLOT_COLORS = ['#2563eb', '#10b981', '#f59e0b', '#f43f5e', '#06b6d4', '#475569']
 
 const formatIntervalValue = (value: number) => {
   if (!Number.isFinite(value)) return ''
   if (Number.isInteger(value)) return String(value)
   return value.toFixed(2).replace(/\.?0+$/, '')
 }
+
+const toRgba = (hexColor: string, alpha: number) => {
+  const normalized = hexColor.replace('#', '')
+  const sanitized =
+    normalized.length === 3
+      ? normalized
+          .split('')
+          .map((char) => char + char)
+          .join('')
+      : normalized
+
+  const red = Number.parseInt(sanitized.slice(0, 2), 16)
+  const green = Number.parseInt(sanitized.slice(2, 4), 16)
+  const blue = Number.parseInt(sanitized.slice(4, 6), 16)
+
+  return `rgba(${red}, ${green}, ${blue}, ${alpha})`
+}
+
+const formatBoxValue = (value: unknown) => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '--'
+  if (Number.isInteger(value)) return String(value)
+  return value.toFixed(2).replace(/\.?0+$/, '')
+}
+
+const createBoxplotTooltipFormatter = () => (params: Record<string, unknown>) => {
+  const rawData = Array.isArray(params.data) ? params.data : []
+  const stats = rawData.length >= 5 ? rawData.slice(-5) : []
+  const [min, q1, median, q3, max] = stats
+  const factorName = String(params.name ?? '')
+  const seriesName = String(params.seriesName ?? '')
+  const marker = String(params.marker ?? '')
+  const title = seriesName ? `${factorName} / ${seriesName}` : factorName
+
+  return [
+    `<div style="padding: 4px 2px;">`,
+    `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;color:#0f172a;font-size:13px;font-weight:700;">${marker}<span>${title}</span></div>`,
+    `<div style="display:grid;grid-template-columns:auto auto;gap:4px 16px;font-size:11px;color:#475569;">`,
+    `<span>最大值</span><span style="color:#0f172a;text-align:right;font-weight:600;">${formatBoxValue(max)}</span>`,
+    `<span>上四分位</span><span style="color:#0f172a;text-align:right;font-weight:600;">${formatBoxValue(q3)}</span>`,
+    `<span>中位数</span><span style="color:#0f172a;text-align:right;font-weight:600;">${formatBoxValue(median)}</span>`,
+    `<span>下四分位</span><span style="color:#0f172a;text-align:right;font-weight:600;">${formatBoxValue(q1)}</span>`,
+    `<span>最小值</span><span style="color:#0f172a;text-align:right;font-weight:600;">${formatBoxValue(min)}</span>`,
+    `</div>`,
+    `</div>`,
+  ].join('')
+}
+
+const createBoxplotBaseOption = (
+  categories: string[],
+  title: string,
+): Record<string, any> => ({
+  backgroundColor: 'transparent',
+  title: { text: title, left: 'center' },
+  tooltip: {
+    trigger: 'item',
+    confine: true,
+    backgroundColor: '#ffffff',
+    borderColor: '#e2e8f0',
+    borderWidth: 1,
+    padding: 12,
+    textStyle: { color: '#475569' },
+    extraCssText: 'box-shadow: 0 10px 15px -3px rgba(15, 23, 42, 0.12); border-radius: 12px;',
+    formatter: createBoxplotTooltipFormatter(),
+  },
+  legend: {
+    show: true,
+    left: 'center',
+    top: 25,
+    type: 'scroll',
+    itemWidth: 14,
+    itemHeight: 14,
+    itemGap: 20,
+    textStyle: { color: '#0f172a', fontSize: 12, fontWeight: 600 },
+    icon: 'rect',
+  },
+  grid: { top: '18%', bottom: 40, left: 0, right: 0, containLabel: true },
+  xAxis: {
+    type: 'category',
+    data: categories,
+    boundaryGap: true,
+    axisLine: { lineStyle: { color: '#e2e8f0' } },
+    axisTick: { show: false },
+    axisLabel: { color: '#64748b', fontSize: 12, margin: 15 },
+    splitLine: { show: false },
+  },
+  yAxis: {
+    type: 'value',
+    scale: true,
+    boundaryGap: ['15%', '15%'],
+    axisLine: { show: false },
+    axisLabel: { color: '#64748b' },
+    splitLine: { lineStyle: { color: '#e2e8f0', type: 'dashed' } },
+  },
+  dataZoom: [
+    { type: 'inside' },
+    {
+      show: true,
+      type: 'slider',
+      height: 12,
+      bottom: 5,
+      borderColor: 'transparent',
+      backgroundColor: '#f1f5f9',
+      fillerColor: '#cbd5e1',
+      handleStyle: { color: '#94a3b8', borderWidth: 0 },
+      textStyle: { color: 'transparent' },
+    },
+  ],
+  series: [] as Array<Record<string, unknown>>,
+})
 
 const buildHistogramSeries = (rows: Array<Record<string, unknown>>, key: string) => {
   const values = rows
@@ -155,25 +265,25 @@ export const chartDisplayNode: NodeDefinition = {
       }
 
       if (config.chartType === 'boxplot') {
-        const option = {
-          title: { text: '多组数据分布对比', left: 'center' },
-          tooltip: { trigger: 'item', axisPointer: { type: 'shadow' } },
-          legend: { show: true, top: 25 },
-          grid: { top: '15%', bottom: '15%', left: '5%', right: '5%', containLabel: true },
-          xAxis: { type: 'category', data: targetKeys, boundaryGap: true },
-          yAxis: {
-            type: 'value',
-            scale: true,
-            boundaryGap: ['15%', '15%'],
-            splitArea: { show: true },
-          },
-          series: validGroups.map((group) => ({
+        const option = createBoxplotBaseOption(targetKeys, '多组数据分布对比')
+        option.series = validGroups.map((group, index) => {
+          const color = BOX_PLOT_COLORS[index % BOX_PLOT_COLORS.length]!
+
+          return {
             name: group.name,
             type: 'boxplot',
             data: targetKeys.map((key: string) => calculateBoxValues(group.data, key)),
-            itemStyle: { borderWidth: 1.5 },
-          })),
-        }
+            itemStyle: {
+              color: toRgba(color, 0.2),
+              borderColor: color,
+              borderWidth: 1.5,
+            },
+            emphasis: {
+              focus: 'series',
+              itemStyle: { borderWidth: 2.5 },
+            },
+          }
+        })
 
         return createChartResult(markRaw(option), {
           meta: {
@@ -322,19 +432,23 @@ export const chartDisplayNode: NodeDefinition = {
         series: [{ data: rows.map((row) => row[targetYKey]), type: 'bar' }],
       }
     } else {
-      option = {
-        title: { text: `${targetYKey} 分布`, left: 'center' },
-        grid: { top: '15%', bottom: '15%', left: '10%', right: '10%', containLabel: true },
-        xAxis: { type: 'category', data: [targetYKey] },
-        yAxis: { type: 'value', scale: true, boundaryGap: ['15%', '15%'] },
-        series: [
-          {
-            name: '分布',
-            type: 'boxplot',
-            data: [calculateBoxValues(rows, targetYKey)],
+      option = createBoxplotBaseOption([targetYKey], `${targetYKey} 分布`)
+      option.series = [
+        {
+          name: '数据分布',
+          type: 'boxplot',
+          data: [calculateBoxValues(rows, targetYKey)],
+          itemStyle: {
+            color: toRgba(BOX_PLOT_COLORS[0]!, 0.18),
+            borderColor: BOX_PLOT_COLORS[0],
+            borderWidth: 1.5,
           },
-        ],
-      }
+          emphasis: {
+            focus: 'series',
+            itemStyle: { borderWidth: 2.5 },
+          },
+        },
+      ]
     }
 
     return createChartResult(markRaw(option), {

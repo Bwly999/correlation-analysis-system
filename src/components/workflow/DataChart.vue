@@ -70,6 +70,7 @@ const FILTER_PRESETS_DEFAULT_KEY = 'workflow-data-chart-default-preset'
 const VIEW_MODE_STORAGE_KEY = 'workflow-data-chart-view-mode'
 const NORMALIZATION_METHOD_STORAGE_KEY = 'workflow-data-chart-normalization-method'
 const LINE_CHART_RENDER_LIMIT = 1200
+const BOX_PLOT_COLORS = ['#2563eb', '#10b981', '#f59e0b', '#f43f5e', '#06b6d4', '#475569']
 
 const props = defineProps<{
   data: ChartRow[] | ChartGroup[]
@@ -392,6 +393,115 @@ const presetSummaryText = (preset: ChartFilterPreset) => {
   return `${lower}，${upper}`
 }
 
+const toRgba = (hexColor: string, alpha: number) => {
+  const normalized = hexColor.replace('#', '')
+  const sanitized =
+    normalized.length === 3
+      ? normalized
+          .split('')
+          .map((char) => char + char)
+          .join('')
+      : normalized
+
+  const red = Number.parseInt(sanitized.slice(0, 2), 16)
+  const green = Number.parseInt(sanitized.slice(2, 4), 16)
+  const blue = Number.parseInt(sanitized.slice(4, 6), 16)
+
+  return `rgba(${red}, ${green}, ${blue}, ${alpha})`
+}
+
+const formatBoxValue = (value: unknown) => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '--'
+  if (Number.isInteger(value)) return String(value)
+  return value.toFixed(2).replace(/\.?0+$/, '')
+}
+
+const createBoxplotTooltipFormatter = () => (params: Record<string, unknown>) => {
+  const rawData = Array.isArray(params.data) ? params.data : []
+  const stats = rawData.length >= 5 ? rawData.slice(-5) : []
+  const [min, q1, median, q3, max] = stats
+  const factorName = String(params.name ?? '')
+  const seriesName = String(params.seriesName ?? '')
+  const marker = String(params.marker ?? '')
+  const title = seriesName ? `${factorName} / ${seriesName}` : factorName
+
+  return [
+    `<div style="padding: 4px 2px;">`,
+    `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;color:#0f172a;font-size:13px;font-weight:700;">${marker}<span>${title}</span></div>`,
+    `<div style="display:grid;grid-template-columns:auto auto;gap:4px 16px;font-size:11px;color:#475569;">`,
+    `<span>最大值</span><span style="color:#0f172a;text-align:right;font-weight:600;">${formatBoxValue(max)}</span>`,
+    `<span>上四分位</span><span style="color:#0f172a;text-align:right;font-weight:600;">${formatBoxValue(q3)}</span>`,
+    `<span>中位数</span><span style="color:#0f172a;text-align:right;font-weight:600;">${formatBoxValue(median)}</span>`,
+    `<span>下四分位</span><span style="color:#0f172a;text-align:right;font-weight:600;">${formatBoxValue(q1)}</span>`,
+    `<span>最小值</span><span style="color:#0f172a;text-align:right;font-weight:600;">${formatBoxValue(min)}</span>`,
+    `</div>`,
+    `</div>`,
+  ].join('')
+}
+
+const createBoxplotBaseOption = (keys: string[]): Record<string, any> => ({
+  animation: false,
+  useDirtyRect: true,
+  backgroundColor: 'transparent',
+  hoverLayer: true,
+  tooltip: {
+    trigger: 'item',
+    confine: true,
+    transitionDuration: 0,
+    backgroundColor: '#ffffff',
+    borderColor: '#e2e8f0',
+    borderWidth: 1,
+    padding: 12,
+    textStyle: { color: '#475569' },
+    extraCssText: 'box-shadow: 0 10px 15px -3px rgba(15, 23, 42, 0.12); border-radius: 12px;',
+    formatter: createBoxplotTooltipFormatter(),
+  },
+  legend: {
+    show: true,
+    left: 'center',
+    top: 0,
+    type: 'scroll',
+    icon: 'rect',
+    itemWidth: 14,
+    itemHeight: 14,
+    itemGap: 20,
+    textStyle: { color: '#0f172a', fontSize: 12, fontWeight: 600 },
+  },
+  grid: { left: 0, right: 0, top: 56, bottom: 40, containLabel: true },
+  dataZoom: [
+    { type: 'inside', xAxisIndex: [0] },
+    {
+      show: true,
+      type: 'slider',
+      xAxisIndex: [0],
+      bottom: 5,
+      height: 12,
+      borderColor: 'transparent',
+      backgroundColor: '#f1f5f9',
+      fillerColor: '#cbd5e1',
+      handleStyle: { color: '#94a3b8', borderWidth: 0 },
+      textStyle: { color: 'transparent' },
+    },
+  ],
+  xAxis: {
+    type: 'category',
+    data: keys,
+    axisLine: { lineStyle: { color: '#e2e8f0' } },
+    axisTick: { show: false },
+    axisLabel: { color: '#64748b', fontSize: 12, margin: 15, fontWeight: 500 },
+    splitLine: { show: false },
+  },
+  yAxis: {
+    type: 'value',
+    scale: true,
+    boundaryGap: ['15%', '15%'],
+    axisLine: { show: false },
+    axisLabel: { color: '#64748b', fontSize: 11 },
+    splitLine: { lineStyle: { color: '#e2e8f0', type: 'dashed' } },
+  },
+    series: [] as Array<Record<string, unknown>>,
+  })
+
 const chartOption = computed(() => {
   const sourceData = filteredData.value || []
   const keys = normalizedKeys.value
@@ -447,28 +557,45 @@ const chartOption = computed(() => {
   }
 
   if (isGroupedData.value) {
-    option.series = (sourceData as ChartGroup[]).map((group) => ({
-      name: group.name,
-      type: 'boxplot',
-      data: keys.map((key) => calculateBoxValues(group.data || [], key)),
-      itemStyle: {
-        borderWidth: 1.5,
-      },
-      emphasis: {
+    Object.assign(option, createBoxplotBaseOption(keys))
+    option.series = (sourceData as ChartGroup[]).map((group, index) => {
+      const color = BOX_PLOT_COLORS[index % BOX_PLOT_COLORS.length]!
+
+      return {
+        name: group.name,
+        type: 'boxplot',
+        data: keys.map((key) => calculateBoxValues(group.data || [], key)),
         itemStyle: {
-          borderWidth: 2,
-          shadowBlur: 10,
-          shadowColor: 'rgba(0,0,0,0.1)',
+          color: toRgba(color, 0.2),
+          borderColor: color,
+          borderWidth: 1.5,
         },
-      },
-    }))
+        emphasis: {
+          focus: 'series',
+          itemStyle: {
+            borderWidth: 2.5,
+          },
+        },
+      }
+    })
   } else if (chartType.value === 'boxplot') {
+    Object.assign(option, createBoxplotBaseOption(keys))
     option.series = [
       {
         name: '数据分布',
         type: 'boxplot',
         data: keys.map((key) => calculateBoxValues(sourceData as ChartRow[], key)),
-        itemStyle: { color: '#f8fafc', borderColor: '#4f46e5', borderWidth: 1.5 },
+        itemStyle: {
+          color: toRgba(BOX_PLOT_COLORS[0]!, 0.18),
+          borderColor: BOX_PLOT_COLORS[0],
+          borderWidth: 1.5,
+        },
+        emphasis: {
+          focus: 'series',
+          itemStyle: {
+            borderWidth: 2.5,
+          },
+        },
       },
     ]
   } else {

@@ -187,6 +187,57 @@ describe('DataChart', () => {
     expect(wrapper.find('[data-test="chart-normalization-method-min-max"]').exists()).toBe(false)
   })
 
+  it('uses the richer grouped boxplot presentation style', async () => {
+    const wrapper = mount(DataChart, {
+      props: {
+        data: [
+          { name: 'A', data: [{ score: 1 }, { score: 2 }, { score: 3 }] },
+          { name: 'B', data: [{ score: 4 }, { score: 5 }, { score: 6 }] },
+        ],
+      },
+    })
+
+    await wrapper.get('[data-test="chart-key-select"]').setValue(['score'])
+
+    const option = getChartOption(wrapper)
+
+    expect(option.legend.type).toBe('scroll')
+    expect(option.legend.icon).toBe('rect')
+    expect(option.legend.left).toBe('center')
+    expect(option.tooltip.borderWidth).toBe(1)
+    expect(option.tooltip.extraCssText).toContain('border-radius: 12px')
+    expect(option.dataZoom[1].height).toBe(12)
+    expect(option.series[0].itemStyle.color).toMatch(/rgba?\(/)
+    expect(option.series[0].itemStyle.borderColor).toBeTruthy()
+    expect(option.series[0].itemStyle.borderWidth).toBeGreaterThanOrEqual(1.5)
+  })
+
+  it('uses the richer single-table boxplot presentation style', async () => {
+    const wrapper = mount(DataChart, {
+      props: {
+        data: [
+          { score: 1, cost: 10 },
+          { score: 2, cost: 12 },
+          { score: 3, cost: 15 },
+        ],
+      },
+    })
+
+    await wrapper.get('[data-test="chart-type-select"]').setValue('boxplot')
+    await wrapper.get('[data-test="chart-key-select"]').setValue(['score', 'cost'])
+
+    const option = getChartOption(wrapper)
+
+    expect(option.legend.type).toBe('scroll')
+    expect(option.legend.icon).toBe('rect')
+    expect(option.tooltip.borderWidth).toBe(1)
+    expect(option.tooltip.extraCssText).toContain('border-radius: 12px')
+    expect(option.series[0].itemStyle.color).toMatch(/rgba?\(/)
+    expect(option.series[0].itemStyle.borderColor).toBeTruthy()
+    expect(option.series[0].itemStyle.borderWidth).toBeGreaterThanOrEqual(1.5)
+    expect(option.series[0].emphasis.itemStyle.borderWidth).toBeGreaterThan(2)
+  })
+
   it('discovers grouped numeric factors from all rows and keeps only common fields across groups', () => {
     const wrapper = mount(DataChart, {
       props: {
