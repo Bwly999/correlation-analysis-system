@@ -4,6 +4,11 @@
 
 ### 修复 (Fix)
 
+- **修复构建阶段的测试类型报错**:
+  - 更新 `BaseNode` 测试断言，兼容当前 `@vue/test-utils` 对 `get()` 返回值的类型约束，避免因调用不存在的 `exists()` 方法导致 `vue-tsc` 失败。
+  - `PropertyFieldSelectButton` 改为接受只读 `options` props，并在传给 PrimeVue `SelectButton` 前显式转换为可变数组，兼容测试中的只读配置对象与组件库内部类型要求。
+  - 恢复 `pnpm build` 与 `pnpm vue-tsc --build` 的通过状态。
+
 - **为树形字段补充已选叶子节点数量提示**:
   - `PropertyFieldTreeInput` 在存在已选叶子节点时，会在组件下方显示简洁的 `已选数 / 总叶子数` 提示，例如 `2 / 18`。
   - 未选择任何叶子节点时默认隐藏该提示，避免空状态下增加额外视觉干扰。

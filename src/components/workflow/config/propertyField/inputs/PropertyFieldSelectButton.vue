@@ -6,7 +6,7 @@ import type { NodeProperty } from '@/nodes/types'
 const props = defineProps<{
   modelValue: unknown
   prop: NodeProperty
-  options: any[]
+  options: readonly any[]
   isHero: boolean
 }>()
 
@@ -18,6 +18,8 @@ const configValue = computed({
   get: () => props.modelValue,
   set: (value) => emit('update:modelValue', value),
 })
+
+const selectOptions = computed(() => [...props.options])
 </script>
 
 <template>
@@ -37,7 +39,7 @@ const configValue = computed({
       <div class="mt-3 rounded-[18px] border border-slate-200/80 bg-[linear-gradient(180deg,#f8fafc_0%,#eef4ff_100%)] p-2">
         <SelectButton
           v-model="configValue"
-          :options="options"
+          :options="selectOptions"
           :allow-empty="false"
           option-label="name"
           option-value="value"
@@ -49,7 +51,7 @@ const configValue = computed({
     <SelectButton
       v-else
       v-model="configValue"
-      :options="options"
+      :options="selectOptions"
       :allow-empty="false"
       option-label="name"
       option-value="value"

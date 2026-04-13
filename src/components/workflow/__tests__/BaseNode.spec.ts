@@ -203,7 +203,7 @@ describe('BaseNode', () => {
 
     expect(debugButton.attributes('disabled')).toBeDefined()
     expect(rerunButton.attributes('disabled')).toBeDefined()
-    expect(stopButton.exists()).toBe(true)
+    expect(stopButton).toBeTruthy()
 
     await stopButton.trigger('click')
 
