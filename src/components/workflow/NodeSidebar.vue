@@ -41,6 +41,7 @@ type SidebarNode = {
   desc: string
   summary: string
   category: NodeCategory
+  isMultipleInput: boolean
   libraryGroup: NodeLibraryGroupId | 'misc'
   libraryAliases: string[]
   libraryKeywords: string[]
@@ -139,6 +140,7 @@ const allSidebarNodes = computed<SidebarNode[]>(() =>
     desc: definition.description,
     summary: definition.help?.summary ?? definition.description,
     category: definition.category,
+    isMultipleInput: definition.inputMode === 'multiple',
     libraryGroup: definition.libraryGroup ?? 'misc',
     libraryAliases: definition.libraryAliases ?? [],
     libraryKeywords: definition.libraryKeywords ?? [],
@@ -644,6 +646,7 @@ const categoryBadge = (category: NodeCategory) => {
                       {{ node.label }}
                     </span>
                     <span class="node-category-badge">{{ categoryBadge(node.category) }}</span>
+                    <span v-if="node.isMultipleInput" class="node-input-mode-badge">多输入</span>
                   </div>
                   <span class="text-[10px] text-slate-500 font-medium truncate mt-0.5">
                     {{ node.summary }}
@@ -689,16 +692,17 @@ const categoryBadge = (category: NodeCategory) => {
                 <NodeIcon :type="node.type" :size="30" />
               </div>
               <div class="flex flex-col flex-1 min-w-0">
-                <div class="flex items-center gap-2 min-w-0">
-                  <span class="text-[12px] font-semibold text-slate-800 truncate tracking-tight">
-                    {{ node.label }}
+                  <div class="flex items-center gap-2 min-w-0">
+                    <span class="text-[12px] font-semibold text-slate-800 truncate tracking-tight">
+                      {{ node.label }}
+                    </span>
+                    <span class="node-category-badge">{{ categoryBadge(node.category) }}</span>
+                    <span v-if="node.isMultipleInput" class="node-input-mode-badge">多输入</span>
+                    <span class="search-match-badge">{{ node.matchReason }}</span>
+                  </div>
+                  <span class="text-[10px] text-slate-500 font-medium truncate mt-0.5">
+                    {{ node.summary }}
                   </span>
-                  <span class="node-category-badge">{{ categoryBadge(node.category) }}</span>
-                  <span class="search-match-badge">{{ node.matchReason }}</span>
-                </div>
-                <span class="text-[10px] text-slate-500 font-medium truncate mt-0.5">
-                  {{ node.summary }}
-                </span>
               </div>
               <ChevronRight
                 :size="13"
@@ -778,6 +782,7 @@ const categoryBadge = (category: NodeCategory) => {
                       {{ node.label }}
                     </span>
                     <span class="node-category-badge">{{ categoryBadge(node.category) }}</span>
+                    <span v-if="node.isMultipleInput" class="node-input-mode-badge">多输入</span>
                   </div>
                   <span class="text-[10px] text-slate-500 font-medium truncate mt-0.5">
                     {{ node.summary }}
@@ -976,6 +981,7 @@ const categoryBadge = (category: NodeCategory) => {
 }
 
 .node-category-badge,
+.node-input-mode-badge,
 .search-match-badge {
   display: inline-flex;
   align-items: center;
@@ -991,6 +997,12 @@ const categoryBadge = (category: NodeCategory) => {
   border: 1px solid #dbe4ef;
   background: #f8fafc;
   color: #475569;
+}
+
+.node-input-mode-badge {
+  border: 1px solid #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
 }
 
 .search-match-badge {

@@ -117,6 +117,26 @@ describe('NodeSidebar', () => {
     expect(reconnectWrapper.find('[data-shortcut-section="recent"]').exists()).toBe(false)
   })
 
+  it('shows the multiple-input badge in both browse groups and shortcut sections', async () => {
+    const wrapper = mountSidebar()
+    const mergeBrowseCard = wrapper.find('[data-group-id="merge-aggregate"] [data-node-type="data-merge"]')
+
+    expect(mergeBrowseCard.exists()).toBe(true)
+    expect(mergeBrowseCard.text()).toContain('处理')
+    expect(mergeBrowseCard.text()).toContain('多输入')
+
+    await mergeBrowseCard.trigger('click')
+    wrapper.unmount()
+
+    const shortcutWrapper = mountSidebar()
+    const mergeShortcutCard = shortcutWrapper.find(
+      '[data-shortcut-section="recent"] [data-node-type="data-merge"]',
+    )
+
+    expect(mergeShortcutCard.exists()).toBe(true)
+    expect(mergeShortcutCard.text()).toContain('多输入')
+  })
+
   it('shows context recommendations from the latest workflow node before falling back to static defaults', () => {
     const store = useWorkflowStore()
     store.nodes = [
