@@ -20,15 +20,37 @@ const configValue = computed({
   set: (value) => emit('update:modelValue', value),
 })
 
+const confirmEditableOption = (event?: KeyboardEvent) => {
+  const target = event?.target as HTMLInputElement | null
+  const value = (target?.value ?? query.value).trim()
+  if (!value) return
+
+  configValue.value = value
+  clearQuery()
+  if (target) target.value = ''
+  event?.preventDefault()
+}
+
 const {
+  query,
   enabled,
   errorMessage,
   filterMatchMode,
   filterInputProps,
+  passThrough,
+  clearQuery,
   toggleRegexMode,
   getToggleClass,
 } = useRegexFilter({
   inputTestId: 'options-filter-input',
+  onEnter: confirmEditableOption,
+})
+
+const optionsForceInputHint = computed(() => {
+  if (errorMessage.value) return errorMessage.value
+  if (!props.prop.forceInput) return props.optionsError || undefined
+  if (props.options.length > 0) return props.optionsError || undefined
+  return '暂无可选项，可直接输入后按回车添加'
 })
 </script>
 
@@ -43,7 +65,9 @@ const {
     :filter-match-mode="filterMatchMode"
     :filter-input-props="filterInputProps"
     :editable="prop.editable"
-    :empty-filter-message="errorMessage || props.optionsError || undefined"
+    :empty-filter-message="optionsForceInputHint"
+    :empty-message="optionsForceInputHint"
+    :pt="passThrough"
     :placeholder="prop.placeholder"
     class="w-full ndv-input"
   >

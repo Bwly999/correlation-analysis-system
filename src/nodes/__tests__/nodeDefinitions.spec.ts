@@ -559,6 +559,45 @@ describe('Node Definitions Execution Logic', () => {
       expect(legacy.lineage.fields.target[0].sourceNodeId).toBe('source-b')
     })
 
+    it('should expose source-specific key field options for join mappings', async () => {
+      const mergeNode = nodeDefinitions.find((definition) => definition.name === 'data-merge')
+      const keyMappingsProperty = mergeNode?.properties.find((property) => property.name === 'keyMappings')
+      const mergeKeyProperty = keyMappingsProperty?.properties?.find(
+        (property) => property.name === 'mergeKey',
+      )
+
+      expect(mergeKeyProperty).toMatchObject({
+        type: 'options',
+        editable: true,
+        forceInput: true,
+        dependencies: ['sourceNodeId'],
+      })
+
+      const resolvedOptions = await mergeKeyProperty?.resolveOptions?.({
+        config: { sourceNodeId: 'source-b' },
+        property: mergeKeyProperty!,
+        inputData: {
+          inputs: [
+            {
+              sourceNodeId: 'source-a',
+              sourceNodeLabel: '来源A',
+              result: createTableResult([{ sku: 'A001', city: '上海' }]),
+            },
+            {
+              sourceNodeId: 'source-b',
+              sourceNodeLabel: '来源B',
+              result: createTableResult([{ code: 'A001', target: 1 }]),
+            },
+          ],
+        },
+      })
+
+      expect(resolvedOptions).toEqual([
+        { name: 'code', value: 'code' },
+        { name: 'target', value: 'target' },
+      ])
+    })
+
     it('should suffix conflicting non-key fields from later inputs in join mode', async () => {
       const mergeNode = nodeDefinitions.find((definition) => definition.name === 'data-merge')
 

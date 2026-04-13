@@ -91,6 +91,48 @@ describe('PropertyField', () => {
     expect(wrapper.find('.options-empty-message').text()).toContain('远程选项加载失败')
   })
 
+  it('为开启 forceInput 的 options 在空选项时允许回车写入单个值', async () => {
+    setActivePinia(createPinia())
+
+    const wrapper = mount(PropertyField, {
+      props: {
+        prop: {
+          name: 'mergeKey',
+          displayName: '来源键字段',
+          type: 'options',
+          default: '',
+          editable: true,
+          forceInput: true,
+          options: [],
+        },
+        modelValue: '',
+        upstreamFactors: [],
+      },
+      global: {
+        directives: {
+          tooltip: () => undefined,
+        },
+        stubs: {
+          Select: {
+            props: ['filterInputProps', 'emptyFilterMessage', 'emptyMessage', 'pt'],
+            template:
+              '<div><input class="options-filter-input" v-bind="{ ...(filterInputProps || {}), ...(pt?.pcFilter?.root || {}) }" /><div class="options-empty-message">{{ emptyFilterMessage || emptyMessage }}</div></div>',
+          },
+        },
+      },
+    })
+
+    expect(wrapper.find('.options-empty-message').text()).toContain(
+      '暂无可选项，可直接输入后按回车添加',
+    )
+
+    await wrapper.get('.options-filter-input').setValue('batch_no')
+    await wrapper.get('.options-filter-input').trigger('keydown', { key: 'Enter' })
+
+    const emitted = wrapper.emitted('update:modelValue') || []
+    expect(emitted[emitted.length - 1]).toEqual(['batch_no'])
+  })
+
   it('为 multi-options 默认关闭正则过滤，并允许切换到正则过滤', async () => {
     setActivePinia(createPinia())
 

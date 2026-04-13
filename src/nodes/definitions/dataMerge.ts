@@ -1,7 +1,12 @@
 import { markRaw } from 'vue'
 import type { MultipleNodeExecutionInput, MultipleNodeExecutionItem, NodeDefinition } from '../types'
 import { calculateBoxValues } from '../../utils/stats'
-import { createTableCollectionResult, createTableResult, extractTableRows } from '../result'
+import {
+  createTableCollectionResult,
+  createTableResult,
+  extractTableRows,
+  isNodeResult,
+} from '../result'
 
 type MergeInputItem = MultipleNodeExecutionItem
 type MergeExecutionInput = MultipleNodeExecutionInput
@@ -46,6 +51,29 @@ const getSourceOptions = (inputData: unknown) => {
   return inputs.map((item) => ({
     name: item.sourceNodeLabel || item.sourceNodeId,
     value: item.sourceNodeId,
+  }))
+}
+
+const getSourceFieldOptions = (inputData: unknown, sourceNodeId: string | undefined) => {
+  if (!sourceNodeId) return []
+
+  const inputs = Array.isArray((inputData as MergeExecutionInput | null | undefined)?.inputs)
+    ? (inputData as MergeExecutionInput).inputs!
+    : []
+  const matchedInput = inputs.find((item) => item.sourceNodeId === sourceNodeId)
+  if (!matchedInput) return []
+
+  const schemaFields =
+    isNodeResult(matchedInput.result) && Array.isArray(matchedInput.result.schema?.fields)
+      ? matchedInput.result.schema.fields.map((field) => field.name)
+      : []
+
+  const rowFields = extractTableRows(matchedInput.result)?.flatMap((row) => Object.keys(row)) ?? []
+  const fields = [...new Set([...schemaFields, ...rowFields])]
+
+  return fields.map((field) => ({
+    name: field,
+    value: field,
   }))
 }
 
@@ -149,8 +177,12 @@ export const dataMergeNode: NodeDefinition<MergeExecutionInput | null, MergeConf
           displayName: '来源键字段',
           type: 'options',
           default: '',
-          useUpstreamFactors: true,
+          placeholder: '请选择或手动输入来源键字段',
           editable: true,
+          forceInput: true,
+          dependencies: ['sourceNodeId'],
+          resolveOptions: ({ config, inputData }) =>
+            getSourceFieldOptions(inputData, config.sourceNodeId),
           description: '该来源中用于匹配的字段名。',
         },
       ],
