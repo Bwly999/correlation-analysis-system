@@ -94,6 +94,250 @@ describe('storage routes', () => {
     ])
   })
 
+  it('should list workflow versions in reverse chronological order', async () => {
+    const handler = createServerHandler()
+
+    await handler(
+      createRequest(
+        'POST',
+        '/api/storage/workflows',
+        {
+          id: 'wf_versions',
+          name: '版本工作流',
+          updatedAt: 10,
+          nodes: [{ id: 'node_v1' }],
+          edges: [],
+        },
+        { 'x-user-id': 'version-user' },
+      ),
+      createResponse(),
+    )
+
+    await handler(
+      createRequest(
+        'POST',
+        '/api/storage/workflows',
+        {
+          id: 'wf_versions',
+          name: '版本工作流',
+          updatedAt: 20,
+          nodes: [{ id: 'node_v2' }],
+          edges: [],
+        },
+        { 'x-user-id': 'version-user' },
+      ),
+      createResponse(),
+    )
+
+    const response = createResponse()
+    await handler(
+      createRequest(
+        'GET',
+        '/api/storage/workflows/wf_versions/versions',
+        undefined,
+        { 'x-user-id': 'version-user' },
+      ),
+      response,
+    )
+
+    expect(response.statusCode).toBe(200)
+    expect(JSON.parse(response.body)).toEqual([
+      expect.objectContaining({
+        workflowId: 'wf_versions',
+        workflowName: '版本工作流',
+        source: 'save',
+      }),
+      expect.objectContaining({
+        workflowId: 'wf_versions',
+        workflowName: '版本工作流',
+        source: 'save',
+      }),
+    ])
+    const [latestVersion, firstVersion] = JSON.parse(response.body)
+    expect(latestVersion.createdAt).toBeGreaterThanOrEqual(firstVersion.createdAt)
+    expect(latestVersion.workflowUpdatedAt).toBe(20)
+    expect(firstVersion.workflowUpdatedAt).toBe(10)
+  })
+
+  it('should return a workflow version snapshot by version id', async () => {
+    const handler = createServerHandler()
+
+    await handler(
+      createRequest(
+        'POST',
+        '/api/storage/workflows',
+        {
+          id: 'wf_version_detail',
+          name: '版本详情工作流',
+          updatedAt: 30,
+          nodes: [{ id: 'node_detail_v1' }],
+          edges: [],
+        },
+        { 'x-user-id': 'version-detail-user' },
+      ),
+      createResponse(),
+    )
+
+    await handler(
+      createRequest(
+        'POST',
+        '/api/storage/workflows',
+        {
+          id: 'wf_version_detail',
+          name: '版本详情工作流',
+          updatedAt: 40,
+          nodes: [{ id: 'node_detail_v2' }],
+          edges: [],
+        },
+        { 'x-user-id': 'version-detail-user' },
+      ),
+      createResponse(),
+    )
+
+    const listResponse = createResponse()
+    await handler(
+      createRequest(
+        'GET',
+        '/api/storage/workflows/wf_version_detail/versions',
+        undefined,
+        { 'x-user-id': 'version-detail-user' },
+      ),
+      listResponse,
+    )
+
+    const versions = JSON.parse(listResponse.body)
+    const targetVersionId = versions[1].id as string
+
+    const response = createResponse()
+    await handler(
+      createRequest(
+        'GET',
+        `/api/storage/workflows/wf_version_detail/versions/${encodeURIComponent(targetVersionId)}`,
+        undefined,
+        { 'x-user-id': 'version-detail-user' },
+      ),
+      response,
+    )
+
+    expect(response.statusCode).toBe(200)
+    expect(JSON.parse(response.body)).toEqual(
+      expect.objectContaining({
+        id: targetVersionId,
+        workflowId: 'wf_version_detail',
+        workflowName: '版本详情工作流',
+        source: 'save',
+        workflow: expect.objectContaining({
+          id: 'wf_version_detail',
+          updatedAt: 30,
+          nodes: [{ id: 'node_detail_v1' }],
+          edges: [],
+        }),
+      }),
+    )
+  })
+
+  it('should rollback workflow to a historical version and create a rollback version record', async () => {
+    const handler = createServerHandler()
+
+    await handler(
+      createRequest(
+        'POST',
+        '/api/storage/workflows',
+        {
+          id: 'wf_rollback',
+          name: '回滚工作流',
+          updatedAt: 100,
+          nodes: [{ id: 'node_rb_v1' }],
+          edges: [],
+        },
+        { 'x-user-id': 'rollback-user' },
+      ),
+      createResponse(),
+    )
+
+    await handler(
+      createRequest(
+        'POST',
+        '/api/storage/workflows',
+        {
+          id: 'wf_rollback',
+          name: '回滚工作流',
+          updatedAt: 200,
+          nodes: [{ id: 'node_rb_v2' }],
+          edges: [],
+        },
+        { 'x-user-id': 'rollback-user' },
+      ),
+      createResponse(),
+    )
+
+    const listResponse = createResponse()
+    await handler(
+      createRequest(
+        'GET',
+        '/api/storage/workflows/wf_rollback/versions',
+        undefined,
+        { 'x-user-id': 'rollback-user' },
+      ),
+      listResponse,
+    )
+
+    const versions = JSON.parse(listResponse.body)
+    const targetVersionId = versions[1].id as string
+
+    const rollbackResponse = createResponse()
+    await handler(
+      createRequest(
+        'POST',
+        `/api/storage/workflows/wf_rollback/versions/${encodeURIComponent(targetVersionId)}/rollback`,
+        undefined,
+        { 'x-user-id': 'rollback-user' },
+      ),
+      rollbackResponse,
+    )
+
+    expect(rollbackResponse.statusCode).toBe(200)
+    expect(JSON.parse(rollbackResponse.body)).toEqual({
+      workflow: expect.objectContaining({
+        id: 'wf_rollback',
+        name: '回滚工作流',
+        nodes: [{ id: 'node_rb_v1' }],
+        edges: [],
+      }),
+      version: expect.objectContaining({
+        workflowId: 'wf_rollback',
+        workflowName: '回滚工作流',
+        source: 'rollback',
+      }),
+    })
+
+    const currentWorkflowResponse = createResponse()
+    await handler(
+      createRequest('GET', '/api/storage/workflows/wf_rollback', undefined, { 'x-user-id': 'rollback-user' }),
+      currentWorkflowResponse,
+    )
+    expect(JSON.parse(currentWorkflowResponse.body)).toEqual(
+      expect.objectContaining({
+        id: 'wf_rollback',
+        nodes: [{ id: 'node_rb_v1' }],
+      }),
+    )
+
+    const postRollbackVersionsResponse = createResponse()
+    await handler(
+      createRequest(
+        'GET',
+        '/api/storage/workflows/wf_rollback/versions',
+        undefined,
+        { 'x-user-id': 'rollback-user' },
+      ),
+      postRollbackVersionsResponse,
+    )
+    const postRollbackVersions = JSON.parse(postRollbackVersionsResponse.body)
+    expect(postRollbackVersions).toHaveLength(3)
+    expect(postRollbackVersions[0].source).toBe('rollback')
+  })
+
   it('should proxy lasso analysis requests to the python backend', async () => {
     vi.stubEnv('PYTHON_ANALYSIS_API_BASE_URL', 'http://127.0.0.1:9000')
     const fetchMock = vi.fn().mockResolvedValue({

@@ -16,6 +16,7 @@ describe('Workflow Store', () => {
   })
 
   afterEach(() => {
+    vi.restoreAllMocks()
     vi.useRealTimers()
   })
 
@@ -468,6 +469,101 @@ describe('Workflow Store', () => {
 
     expect(store.nodes.length).toBe(1)
     expect(store.workflowName).toBe('Test Workflow')
+  })
+
+  it('should refresh workflow versions after save and restore the workflow after rollback', async () => {
+    const store = useWorkflowStore()
+    const restoredWorkflow = {
+      id: 'wf_rollback',
+      name: '回滚后的工作流',
+      updatedAt: 220,
+      nodes: [
+        {
+          id: 'node_rollback',
+          type: 'custom',
+          position: { x: 24, y: 48 },
+          data: {
+            label: '回滚节点',
+            type: 'manual-json-import',
+            category: 'trigger' as const,
+            config: {
+              jsonData: JSON.stringify([{ feature: 1, target: 2 }]),
+            },
+            status: 'idle' as const,
+            output: null,
+            logs: [],
+          },
+        },
+      ],
+      edges: [],
+    }
+
+    vi.spyOn(storageProvider, 'saveWorkflow').mockResolvedValue(undefined)
+    vi.spyOn(storageProvider, 'getWorkflows')
+      .mockResolvedValueOnce([
+        {
+          id: 'wf_rollback',
+          name: '版本测试工作流',
+          updatedAt: 120,
+          nodes: [],
+          edges: [],
+        } as any,
+      ])
+      .mockResolvedValueOnce([restoredWorkflow as any])
+    vi.spyOn(storageProvider, 'getWorkflowVersions')
+      .mockResolvedValueOnce([
+        {
+          id: 'ver_2',
+          workflowId: 'wf_rollback',
+          workflowName: '版本测试工作流',
+          createdAt: 200,
+          workflowUpdatedAt: 120,
+          source: 'save',
+        },
+      ] as any)
+      .mockResolvedValueOnce([
+        {
+          id: 'ver_3',
+          workflowId: 'wf_rollback',
+          workflowName: '回滚后的工作流',
+          createdAt: 220,
+          workflowUpdatedAt: 220,
+          source: 'rollback',
+        },
+      ] as any)
+    vi.spyOn(storageProvider, 'rollbackWorkflowVersion').mockResolvedValue({
+      workflow: restoredWorkflow as any,
+      version: {
+        id: 'ver_3',
+        workflowId: 'wf_rollback',
+        workflowName: '回滚后的工作流',
+        createdAt: 220,
+        workflowUpdatedAt: 220,
+        source: 'rollback',
+      },
+    } as any)
+
+    store.workflowName = '版本测试工作流'
+
+    await store.saveWorkflow('版本测试工作流')
+
+    expect(store.workflowVersions).toEqual([
+      expect.objectContaining({
+        id: 'ver_2',
+        workflowId: 'wf_rollback',
+      }),
+    ])
+
+    await store.rollbackWorkflowVersion('ver_2')
+
+    expect(store.workflowName).toBe('回滚后的工作流')
+    expect(store.workflowVersions).toEqual([
+      expect.objectContaining({
+        id: 'ver_3',
+        source: 'rollback',
+      }),
+    ])
+    expect(store.nodes[0]?.data.label).toBe('回滚节点')
   })
 
   it('should strip runtime input values from workflow persistence snapshots', async () => {

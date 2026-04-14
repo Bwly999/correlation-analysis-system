@@ -9,6 +9,11 @@ const {
   submitWorkflowAiSessionInputMock,
   runWorkflowAiSessionMock,
   getWorkflowAiSessionMock,
+  getWorkflowAiSessionRecordMock,
+  runAnalysisAgentSessionLoopMock,
+  runAgentLoopMock,
+  handleWorkflowMcpRequestMock,
+  isWorkflowMcpRequestMock,
 } = vi.hoisted(() => ({
   generateWorkflowAiPlanMock: vi.fn(),
   streamWorkflowAiPlanMock: vi.fn(),
@@ -16,6 +21,11 @@ const {
   submitWorkflowAiSessionInputMock: vi.fn(),
   runWorkflowAiSessionMock: vi.fn(),
   getWorkflowAiSessionMock: vi.fn(),
+  getWorkflowAiSessionRecordMock: vi.fn(),
+  runAnalysisAgentSessionLoopMock: vi.fn(),
+  runAgentLoopMock: vi.fn(),
+  handleWorkflowMcpRequestMock: vi.fn(),
+  isWorkflowMcpRequestMock: vi.fn((pathname: string) => pathname === '/api/opencode/workflow-mcp'),
 }))
 
 vi.mock('../workflowAi/profiles.js', () => ({
@@ -31,6 +41,20 @@ vi.mock('../workflowAi/orchestrator.js', () => ({
   submitWorkflowAiSessionInput: submitWorkflowAiSessionInputMock,
   runWorkflowAiSession: runWorkflowAiSessionMock,
   getWorkflowAiSession: getWorkflowAiSessionMock,
+  getWorkflowAiSessionRecord: getWorkflowAiSessionRecordMock,
+}))
+
+vi.mock('../opencode/gateway.js', () => ({
+  runAnalysisAgentSessionLoop: runAnalysisAgentSessionLoopMock,
+}))
+
+vi.mock('../opencode/workflowMcpServer.js', () => ({
+  handleWorkflowMcpRequest: handleWorkflowMcpRequestMock,
+  isWorkflowMcpRequest: isWorkflowMcpRequestMock,
+}))
+
+vi.mock('../agentLoop/engine.js', () => ({
+  runAgentLoop: runAgentLoopMock,
 }))
 
 import { createServerHandler } from '../app.js'
@@ -80,6 +104,11 @@ afterEach(() => {
   submitWorkflowAiSessionInputMock.mockReset()
   runWorkflowAiSessionMock.mockReset()
   getWorkflowAiSessionMock.mockReset()
+  getWorkflowAiSessionRecordMock.mockReset()
+  runAnalysisAgentSessionLoopMock.mockReset()
+  runAgentLoopMock.mockReset()
+  handleWorkflowMcpRequestMock.mockReset()
+  isWorkflowMcpRequestMock.mockImplementation((pathname: string) => pathname === '/api/opencode/workflow-mcp')
 })
 
 describe('workflow ai routes', () => {
@@ -514,5 +543,121 @@ describe('workflow ai routes', () => {
         status: 'running',
       }),
     })
+  })
+
+  it('delegates workflow MCP requests to the dedicated MCP handler', async () => {
+    handleWorkflowMcpRequestMock.mockImplementationOnce(async (_request, response) => {
+      response.statusCode = 200
+      response.setHeader('Content-Type', 'application/json; charset=utf-8')
+      response.end(JSON.stringify({ ok: true, via: 'mcp' }))
+    })
+
+    const handler = createServerHandler()
+    const response = createResponse()
+
+    await handler(createRequest('POST', '/api/opencode/workflow-mcp'), response)
+
+    expect(isWorkflowMcpRequestMock).toHaveBeenCalledWith('/api/opencode/workflow-mcp')
+    expect(handleWorkflowMcpRequestMock).toHaveBeenCalledTimes(1)
+    expect(response.statusCode).toBe(200)
+    expect(JSON.parse(response.body)).toEqual({
+      ok: true,
+      via: 'mcp',
+    })
+  })
+
+  it('routes analysis agent loop execution through the opencode gateway', async () => {
+    getWorkflowAiSessionRecordMock.mockReturnValueOnce({
+      request: {
+        mode: 'create',
+        prompt: '请自动分析当前工作流',
+        profile: {
+          id: 'custom',
+          name: '测试模型',
+          baseUrl: 'http://example.com',
+          model: 'test',
+          enabled: true,
+          source: 'custom',
+        },
+        nodeCatalog: [],
+      },
+      state: {
+        sessionId: 'session_1',
+        mode: 'create',
+        status: 'completed',
+        prompt: '请自动分析当前工作流',
+        draft: {
+          summary: '已生成',
+          assumptions: [],
+          warnings: [],
+          questions: [],
+          nodes: [],
+          edges: [],
+        },
+        trace: [],
+        diagnostics: {
+          issues: [],
+        },
+        missingInfo: [],
+      },
+    })
+    runAgentLoopMock.mockImplementationOnce(async () => {
+      throw new Error('legacy agent loop should not be used')
+    })
+    runAnalysisAgentSessionLoopMock.mockImplementationOnce(async (_input, emitEvent) => {
+      emitEvent({
+        type: 'loop_started',
+        maxIterations: 2,
+      })
+      emitEvent({
+        type: 'loop_completed',
+        totalIterations: 1,
+        totalDurationMs: 1200,
+        output: {
+          iterations: [],
+          conclusion: null,
+          totalIterations: 1,
+          totalDurationMs: 1200,
+        },
+      })
+      return {
+        iterations: [],
+        conclusion: null,
+        totalIterations: 1,
+        totalDurationMs: 1200,
+      }
+    })
+
+    const handler = createServerHandler()
+    const response = createResponse()
+
+    await handler(
+      createRequest('POST', '/api/analysis-agent/session/session_1/run-agent-loop', {
+        config: {
+          maxIterations: 2,
+        },
+      }),
+      response,
+    )
+
+    expect(response.statusCode).toBe(200)
+    expect(runAnalysisAgentSessionLoopMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: 'session_1',
+        config: {
+          maxIterations: 2,
+        },
+        sessionRecord: expect.objectContaining({
+          request: expect.objectContaining({
+            prompt: '请自动分析当前工作流',
+          }),
+        }),
+      }),
+      expect.any(Function),
+    )
+    expect(runAgentLoopMock).not.toHaveBeenCalled()
+    expect(response.headersMap['Content-Type']).toContain('application/x-ndjson')
+    const lines = response.body.trim().split('\n').map((line) => JSON.parse(line))
+    expect(lines.map((line) => line.type)).toEqual(['loop_started', 'loop_completed'])
   })
 })

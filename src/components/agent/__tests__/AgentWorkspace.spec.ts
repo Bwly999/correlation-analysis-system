@@ -3,6 +3,7 @@ import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import AgentWorkspace from '../AgentWorkspace.vue'
 import { useWorkflowAiStore } from '@/stores/workflowAiStore'
+import { useWorkflowStore } from '@/stores/workflowStore'
 
 describe('AgentWorkspace', () => {
   beforeEach(() => {
@@ -22,6 +23,15 @@ describe('AgentWorkspace', () => {
     source: 'system' as const,
     baseUrl: 'https://open.bigmodel.cn/api/coding/paas/v4',
     model: 'glm-4.7',
+  })
+
+  const buildVersion = (id: string, createdAt: number, source: 'save' | 'rollback' = 'save') => ({
+    id,
+    workflowId: 'workflow_1',
+    workflowName: '销量诊断流程',
+    createdAt,
+    workflowUpdatedAt: createdAt,
+    source,
   })
 
   it('keeps the top progress strip compact before work starts', () => {
@@ -44,9 +54,15 @@ describe('AgentWorkspace', () => {
 
   it('renders compact progress, composer icon controls, tool calls and collapsible thinking blocks', async () => {
     const aiStore = useWorkflowAiStore()
+    const workflowStore = useWorkflowStore()
     aiStore.systemProfiles = [buildProfile()]
     aiStore.selectedProfileId = 'profile_1'
     aiStore.prompt = '帮我分析影响销量的关键因素'
+    workflowStore.currentWorkflowId = 'workflow_1'
+    workflowStore.workflowVersions = [
+      buildVersion('version_2', Date.UTC(2026, 3, 14, 4, 30, 0), 'rollback'),
+      buildVersion('version_1', Date.UTC(2026, 3, 14, 2, 0, 0)),
+    ]
     aiStore.streamStatus = 'streaming'
     aiStore.streamOutputs = [
       {
@@ -115,7 +131,11 @@ describe('AgentWorkspace', () => {
     expect(wrapper.get('[data-testid="agent-workspace-stream"]').text()).toContain('正在检查字段与样本质量')
     expect(wrapper.get('[data-testid="agent-thinking-block"]').text()).toContain('分析思考')
     expect(wrapper.get('[data-testid="agent-step-group"]').text()).toContain('理解问题')
-    expect(wrapper.find('.agent-workspace__rail').exists()).toBe(false)
+    expect(wrapper.find('.agent-workspace__rail').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="agent-runtime-panel"]').text()).toContain('当前运行态')
+    expect(wrapper.get('[data-testid="agent-runtime-panel"]').text()).toContain('可运行')
+    expect(wrapper.get('[data-testid="agent-version-panel"]').text()).toContain('版本历史')
+    expect(wrapper.get('[data-testid="agent-version-panel"]').text()).toContain('回滚版本')
     expect(wrapper.find('[data-testid="agent-workspace-flow"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="agent-composer-preset-toggle"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="agent-composer-model-toggle"]').exists()).toBe(true)
@@ -130,6 +150,121 @@ describe('AgentWorkspace', () => {
     await wrapper.get('[data-testid="agent-composer-model-toggle"]').trigger('click')
     expect(wrapper.get('[data-testid="agent-model-settings-dialog"]').text()).toContain('默认模型')
     expect(wrapper.get('[data-testid="agent-model-settings-dialog"]').text()).toContain('OpenAI 兼容')
+  })
+
+  it('loads workflow versions when the workspace is visible and a workflow is selected', async () => {
+    const workflowStore = useWorkflowStore()
+    workflowStore.currentWorkflowId = 'workflow_1'
+    const loadWorkflowVersionsMock = vi.fn().mockResolvedValue([])
+    ;(workflowStore as any).loadWorkflowVersions = loadWorkflowVersionsMock
+
+    mount(AgentWorkspace, {
+      props: {
+        visible: true,
+      },
+      global: {
+        stubs: {
+          Dialog: dialogStub,
+          Button: { template: '<button @click="$emit(\'click\')"><slot /></button>' },
+        },
+      },
+    })
+
+    await Promise.resolve()
+
+    expect(loadWorkflowVersionsMock).toHaveBeenCalledTimes(1)
+    expect(loadWorkflowVersionsMock).toHaveBeenCalledWith('workflow_1')
+  })
+
+  it('renders workflow version detail and supports rolling back from the side panel', async () => {
+    const aiStore = useWorkflowAiStore()
+    const workflowStore = useWorkflowStore()
+    aiStore.systemProfiles = [buildProfile()]
+    aiStore.selectedProfileId = 'profile_1'
+    aiStore.prompt = '帮我分析影响销量的关键因素'
+    aiStore.agentLoopRunning = true
+    aiStore.streamHeadline = '正在执行节点：Pearson 相关系数'
+    workflowStore.currentWorkflowId = 'workflow_1'
+    workflowStore.workflowVersions = [
+      buildVersion('version_2', Date.UTC(2026, 3, 14, 4, 30, 0), 'rollback'),
+      buildVersion('version_1', Date.UTC(2026, 3, 14, 2, 0, 0)),
+    ]
+
+    const detail = {
+      ...buildVersion('version_2', Date.UTC(2026, 3, 14, 4, 30, 0), 'rollback'),
+      workflow: {
+        id: 'workflow_1',
+        name: '销量诊断流程',
+        updatedAt: Date.UTC(2026, 3, 14, 4, 30, 0),
+        nodes: [
+          {
+            id: 'node_1',
+            position: { x: 0, y: 0 },
+            data: {
+              label: '导入数据',
+              type: 'file-import',
+              category: 'trigger',
+              config: {},
+              status: 'idle',
+              logs: [],
+            },
+          },
+          {
+            id: 'node_2',
+            position: { x: 280, y: 0 },
+            data: {
+              label: 'Pearson 相关系数',
+              type: 'pearson',
+              category: 'terminal',
+              config: {},
+              status: 'idle',
+              logs: [],
+            },
+          },
+        ],
+        edges: [
+          {
+            id: 'edge_1',
+            source: 'node_1',
+            target: 'node_2',
+          },
+        ],
+      },
+    }
+    const loadWorkflowVersionDetailMock = vi.fn().mockImplementation(async () => {
+      workflowStore.selectedWorkflowVersionDetail = detail as any
+      return detail
+    })
+    const rollbackWorkflowVersionMock = vi.fn().mockResolvedValue({
+      workflow: detail.workflow,
+      version: workflowStore.workflowVersions[0],
+    })
+    ;(workflowStore as any).loadWorkflowVersionDetail = loadWorkflowVersionDetailMock
+    ;(workflowStore as any).rollbackWorkflowVersion = rollbackWorkflowVersionMock
+
+    const wrapper = mount(AgentWorkspace, {
+      props: {
+        visible: true,
+      },
+      global: {
+        stubs: {
+          Dialog: dialogStub,
+          Button: { template: '<button @click="$emit(\'click\')"><slot /></button>' },
+        },
+      },
+    })
+
+    await wrapper.get('[data-testid="agent-version-item-version_2"]').trigger('click')
+    await Promise.resolve()
+
+    expect(loadWorkflowVersionDetailMock).toHaveBeenCalledWith('version_2', 'workflow_1')
+    expect(wrapper.get('[data-testid="agent-version-detail"]').text()).toContain('Pearson 相关系数')
+    expect(wrapper.get('[data-testid="agent-version-detail"]').text()).toContain('2 个节点')
+    expect(wrapper.get('[data-testid="agent-version-detail"]').text()).toContain('1 条连线')
+
+    await wrapper.get('[data-testid="agent-version-rollback"]').trigger('click')
+
+    expect(rollbackWorkflowVersionMock).toHaveBeenCalledWith('version_2', 'workflow_1')
   })
 
   it('renders the compact progress bar and keeps conclusion inside the message stream after agent loop finishes', async () => {

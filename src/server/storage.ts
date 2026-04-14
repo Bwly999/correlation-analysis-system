@@ -6,6 +6,18 @@ type ServerSavedWorkflow = {
   edges: unknown[]
 }
 
+type ServerWorkflowVersionSource = 'save' | 'rollback'
+
+type ServerWorkflowVersion = {
+  id: string
+  workflowId: string
+  workflowName: string
+  createdAt: number
+  workflowUpdatedAt: number
+  source: ServerWorkflowVersionSource
+  workflow: ServerSavedWorkflow
+}
+
 type ServerExecutionRecord = {
   id: string
   workflowId: string
@@ -24,6 +36,7 @@ type ServerStorageUser = {
 
 type ServerUserStorage = {
   workflows: ServerSavedWorkflow[]
+  versions: ServerWorkflowVersion[]
   history: ServerExecutionRecord[]
 }
 
@@ -35,11 +48,29 @@ const getUserStorage = (userId: string): ServerUserStorage => {
 
   const created: ServerUserStorage = {
     workflows: [],
+    versions: [],
     history: [],
   }
   userStorageMap.set(userId, created)
   return created
 }
+
+const cloneJson = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
+
+const createWorkflowVersionId = () => `wfver_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+
+const createWorkflowVersion = (
+  workflow: ServerSavedWorkflow,
+  source: ServerWorkflowVersionSource,
+): ServerWorkflowVersion => ({
+  id: createWorkflowVersionId(),
+  workflowId: workflow.id,
+  workflowName: workflow.name,
+  createdAt: Date.now(),
+  workflowUpdatedAt: workflow.updatedAt,
+  source,
+  workflow: cloneJson(workflow),
+})
 
 export const resolveServerStorageUser = (headers: Record<string, string | string[] | undefined>): ServerStorageUser => {
   const headerUserId = headers['x-user-id']
@@ -62,16 +93,66 @@ export const getUserWorkflows = (userId: string): ServerSavedWorkflow[] =>
 export const getUserWorkflowById = (userId: string, workflowId: string): ServerSavedWorkflow | null =>
   getUserStorage(userId).workflows.find((workflow) => workflow.id === workflowId) ?? null
 
-export const saveUserWorkflow = (userId: string, workflow: ServerSavedWorkflow): void => {
+export const saveUserWorkflow = (
+  userId: string,
+  workflow: ServerSavedWorkflow,
+  source: ServerWorkflowVersionSource = 'save',
+): ServerWorkflowVersion => {
   const storage = getUserStorage(userId)
-  storage.workflows = storage.workflows.filter((item) => item.id !== workflow.id).concat(workflow)
+  const normalizedWorkflow = cloneJson(workflow)
+  const version = createWorkflowVersion(normalizedWorkflow, source)
+  storage.workflows = storage.workflows.filter((item) => item.id !== workflow.id).concat(normalizedWorkflow)
+  storage.versions = [version, ...storage.versions.filter((item) => item.id !== version.id)]
+  return version
 }
 
 export const deleteUserWorkflow = (userId: string, workflowId: string): boolean => {
   const storage = getUserStorage(userId)
   const previousLength = storage.workflows.length
   storage.workflows = storage.workflows.filter((workflow) => workflow.id !== workflowId)
+  if (storage.workflows.length !== previousLength) {
+    storage.versions = storage.versions.filter((version) => version.workflowId !== workflowId)
+  }
   return storage.workflows.length !== previousLength
+}
+
+export const getUserWorkflowVersions = (userId: string, workflowId: string): ServerWorkflowVersion[] =>
+  getUserStorage(userId)
+    .versions
+    .filter((version) => version.workflowId === workflowId)
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .map((version) => cloneJson(version))
+
+export const getUserWorkflowVersion = (
+  userId: string,
+  workflowId: string,
+  versionId: string,
+): ServerWorkflowVersion | null =>
+  cloneJson(
+    getUserStorage(userId).versions.find(
+      (version) => version.workflowId === workflowId && version.id === versionId,
+    ) ?? null,
+  )
+
+export const rollbackUserWorkflowVersion = (
+  userId: string,
+  workflowId: string,
+  versionId: string,
+): { workflow: ServerSavedWorkflow; version: ServerWorkflowVersion } | null => {
+  const targetVersion = getUserStorage(userId).versions.find(
+    (version) => version.workflowId === workflowId && version.id === versionId,
+  )
+  if (!targetVersion) return null
+
+  const restoredWorkflow: ServerSavedWorkflow = {
+    ...cloneJson(targetVersion.workflow),
+    updatedAt: Date.now(),
+  }
+  const rollbackVersion = saveUserWorkflow(userId, restoredWorkflow, 'rollback')
+  return {
+    workflow: cloneJson(restoredWorkflow),
+    version: cloneJson(rollbackVersion),
+  }
 }
 
 export const getUserHistory = (userId: string): ServerExecutionRecord[] =>

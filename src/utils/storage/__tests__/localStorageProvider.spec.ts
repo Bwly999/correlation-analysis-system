@@ -119,6 +119,51 @@ describe('LocalStorageProvider', () => {
     it('should not expose a current user in local mode', async () => {
       await expect(provider.getCurrentUser()).resolves.toBeNull()
     })
+
+    it('should create workflow versions on save and support rollback', async () => {
+      await provider.saveWorkflow(mockWorkflow)
+
+      const initialVersions = await provider.getWorkflowVersions(mockWorkflow.id)
+      expect(initialVersions).toHaveLength(1)
+      expect(initialVersions[0]).toMatchObject({
+        workflowId: mockWorkflow.id,
+        source: 'save',
+      })
+
+      await provider.saveWorkflow({
+        ...mockWorkflow,
+        updatedAt: mockWorkflow.updatedAt + 1,
+        name: 'Test Workflow Updated',
+      })
+
+      const updatedVersions = await provider.getWorkflowVersions(mockWorkflow.id)
+      expect(updatedVersions).toHaveLength(2)
+
+      const oldestVersion = updatedVersions[updatedVersions.length - 1]!
+      const versionDetail = await provider.getWorkflowVersion(mockWorkflow.id, oldestVersion.id)
+      expect(versionDetail).toMatchObject({
+        id: oldestVersion.id,
+        workflow: expect.objectContaining({
+          id: mockWorkflow.id,
+          name: 'Test Workflow',
+        }),
+      })
+
+      const rollbackResult = await provider.rollbackWorkflowVersion(mockWorkflow.id, oldestVersion.id)
+      expect(rollbackResult).toMatchObject({
+        workflow: expect.objectContaining({
+          id: mockWorkflow.id,
+          name: 'Test Workflow',
+        }),
+        version: expect.objectContaining({
+          workflowId: mockWorkflow.id,
+          source: 'rollback',
+        }),
+      })
+
+      const restoredWorkflow = await provider.getWorkflow(mockWorkflow.id)
+      expect(restoredWorkflow?.name).toBe('Test Workflow')
+    })
   })
 
   describe('Execution History (IndexedDB Abstraction)', () => {

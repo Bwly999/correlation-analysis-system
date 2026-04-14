@@ -66,6 +66,26 @@ export interface SavedWorkflow extends WorkflowMetadata {
   edges: Edge[]
 }
 
+export type WorkflowVersionSource = 'save' | 'rollback'
+
+export interface WorkflowVersionMetadata {
+  id: string
+  workflowId: string
+  workflowName: string
+  createdAt: number
+  workflowUpdatedAt: number
+  source: WorkflowVersionSource
+}
+
+export interface WorkflowVersionDetail extends WorkflowVersionMetadata {
+  workflow: SavedWorkflow
+}
+
+export interface WorkflowRollbackResult {
+  workflow: SavedWorkflow
+  version: WorkflowVersionMetadata
+}
+
 /**
  * 执行历史记录
  */
@@ -132,6 +152,35 @@ export interface IStorageProvider {
    * - 若目标不存在，可由实现自行决定静默成功或抛错；推荐与当前实现保持幂等。
    */
   deleteWorkflow(id: string): Promise<void>
+
+  /**
+   * 读取某个工作流的版本列表。
+   *
+   * 约束：
+   * - 返回结果应按版本创建时间倒序排列，最新版本排在前面。
+   * - 若工作流不存在或当前作用域无权限访问，应返回空数组。
+   * - 列表项用于版本侧栏展示，应至少包含版本 id、来源、创建时间与对应工作流更新时间。
+   */
+  getWorkflowVersions(workflowId: string): Promise<WorkflowVersionMetadata[]>
+
+  /**
+   * 读取某个工作流的单个版本快照。
+   *
+   * 约束：
+   * - 若版本不存在或不属于当前工作流/作用域，应返回 `null`。
+   * - 返回内容需包含完整工作流快照，供前端预览和回滚前确认。
+   */
+  getWorkflowVersion(workflowId: string, versionId: string): Promise<WorkflowVersionDetail | null>
+
+  /**
+   * 将工作流回滚到某个历史版本，并返回当前工作流与新生成的回滚版本摘要。
+   *
+   * 约束：
+   * - 回滚成功后，当前工作流应立即被历史快照覆盖，并更新 `updatedAt`。
+   * - 回滚操作本身应被记为一个新版本，便于继续查看和再次回滚。
+   * - 若目标版本不存在或不可访问，应返回 `null`。
+   */
+  rollbackWorkflowVersion(workflowId: string, versionId: string): Promise<WorkflowRollbackResult | null>
 
   /**
    * 保存一条执行历史，并返回截断后的最新历史列表。

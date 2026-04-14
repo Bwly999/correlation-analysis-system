@@ -1,7 +1,16 @@
-import type { ExecutionRecord, IStorageProvider, SavedWorkflow } from './types'
+import type {
+  ExecutionRecord,
+  IStorageProvider,
+  SavedWorkflow,
+  WorkflowRollbackResult,
+  WorkflowVersionDetail,
+  WorkflowVersionMetadata,
+  WorkflowVersionSource,
+} from './types'
 
 export class LocalStorageProvider implements IStorageProvider {
   private workflowKey = 'saved_workflows'
+  private workflowVersionKey = 'workflow_versions'
   private historyKey = 'execution_history_fallback'
   private dbName = 'WorkflowSystemDB'
   private workflowStoreName = 'workflows'
@@ -14,6 +23,14 @@ export class LocalStorageProvider implements IStorageProvider {
     return null
   }
 
+  private cloneJson<T>(value: T): T {
+    return JSON.parse(JSON.stringify(value)) as T
+  }
+
+  private createWorkflowVersionId() {
+    return `wfver_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+  }
+
   private getLocalWorkflows(): SavedWorkflow[] {
     const raw = localStorage.getItem(this.workflowKey)
     return raw ? (JSON.parse(raw) as SavedWorkflow[]) : []
@@ -21,6 +38,46 @@ export class LocalStorageProvider implements IStorageProvider {
 
   private saveLocalWorkflows(workflows: SavedWorkflow[]) {
     localStorage.setItem(this.workflowKey, JSON.stringify(workflows))
+  }
+
+  private getLocalWorkflowVersions(): WorkflowVersionDetail[] {
+    const raw = localStorage.getItem(this.workflowVersionKey)
+    return raw ? (JSON.parse(raw) as WorkflowVersionDetail[]) : []
+  }
+
+  private saveLocalWorkflowVersions(versions: WorkflowVersionDetail[]) {
+    localStorage.setItem(this.workflowVersionKey, JSON.stringify(versions))
+  }
+
+  private createWorkflowVersion(
+    workflow: SavedWorkflow,
+    source: WorkflowVersionSource,
+  ): WorkflowVersionDetail {
+    return {
+      id: this.createWorkflowVersionId(),
+      workflowId: workflow.id,
+      workflowName: workflow.name,
+      createdAt: Date.now(),
+      workflowUpdatedAt: workflow.updatedAt,
+      source,
+      workflow: this.cloneJson(workflow),
+    }
+  }
+
+  private recordWorkflowVersion(
+    workflow: SavedWorkflow,
+    source: WorkflowVersionSource,
+  ): WorkflowVersionMetadata {
+    const versions = this.getLocalWorkflowVersions()
+    const version = this.createWorkflowVersion(workflow, source)
+    this.saveLocalWorkflowVersions([version, ...versions])
+    const { workflow: _workflow, ...metadata } = version
+    return metadata
+  }
+
+  private removeWorkflowVersions(workflowId: string) {
+    const versions = this.getLocalWorkflowVersions().filter((item) => item.workflowId !== workflowId)
+    this.saveLocalWorkflowVersions(versions)
   }
 
   private canUseIndexedDB() {
@@ -107,10 +164,10 @@ export class LocalStorageProvider implements IStorageProvider {
     }
   }
 
-  async saveWorkflow(workflow: SavedWorkflow): Promise<void> {
+  private async persistWorkflowSnapshot(workflow: SavedWorkflow): Promise<void> {
     if (!this.canUseIndexedDB()) {
       const workflows = this.getLocalWorkflows()
-      const updated = workflows.filter((item) => item.id !== workflow.id).concat(workflow)
+      const updated = workflows.filter((item) => item.id !== workflow.id).concat(this.cloneJson(workflow))
       this.saveLocalWorkflows(updated)
       return
     }
@@ -120,15 +177,21 @@ export class LocalStorageProvider implements IStorageProvider {
     try {
       const store = await this.getWorkflowStore('readwrite')
       await new Promise<void>((resolve, reject) => {
-        const request = store.put(workflow)
+        const request = store.put(this.cloneJson(workflow))
         request.onsuccess = () => resolve()
         request.onerror = () => reject(request.error)
       })
     } catch (_error) {
       const workflows = this.getLocalWorkflows()
-      const updated = workflows.filter((item) => item.id !== workflow.id).concat(workflow)
+      const updated = workflows.filter((item) => item.id !== workflow.id).concat(this.cloneJson(workflow))
       this.saveLocalWorkflows(updated)
     }
+  }
+
+  async saveWorkflow(workflow: SavedWorkflow): Promise<void> {
+    const normalizedWorkflow = this.cloneJson(workflow)
+    await this.persistWorkflowSnapshot(normalizedWorkflow)
+    this.recordWorkflowVersion(normalizedWorkflow, 'save')
   }
 
   async deleteWorkflow(id: string): Promise<void> {
@@ -136,6 +199,7 @@ export class LocalStorageProvider implements IStorageProvider {
       const workflows = this.getLocalWorkflows()
       const filtered = workflows.filter((workflow) => workflow.id !== id)
       this.saveLocalWorkflows(filtered)
+      this.removeWorkflowVersions(id)
       return
     }
 
@@ -152,6 +216,43 @@ export class LocalStorageProvider implements IStorageProvider {
       const workflows = this.getLocalWorkflows()
       const filtered = workflows.filter((workflow) => workflow.id !== id)
       this.saveLocalWorkflows(filtered)
+    }
+
+    this.removeWorkflowVersions(id)
+  }
+
+  async getWorkflowVersions(workflowId: string): Promise<WorkflowVersionMetadata[]> {
+    return this.getLocalWorkflowVersions()
+      .filter((version) => version.workflowId === workflowId)
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .map((version) => {
+        const { workflow, ...metadata } = this.cloneJson(version)
+        return metadata
+      })
+  }
+
+  async getWorkflowVersion(workflowId: string, versionId: string): Promise<WorkflowVersionDetail | null> {
+    const version = this.getLocalWorkflowVersions().find(
+        (version) => version.workflowId === workflowId && version.id === versionId,
+      ) ?? null
+    return version ? this.cloneJson(version) : null
+  }
+
+  async rollbackWorkflowVersion(workflowId: string, versionId: string): Promise<WorkflowRollbackResult | null> {
+    const targetVersion = await this.getWorkflowVersion(workflowId, versionId)
+    if (!targetVersion) return null
+
+    const restoredWorkflow: SavedWorkflow = {
+      ...this.cloneJson(targetVersion.workflow),
+      updatedAt: Date.now(),
+    }
+
+    await this.persistWorkflowSnapshot(restoredWorkflow)
+    const rollbackVersion = this.recordWorkflowVersion(restoredWorkflow, 'rollback')
+
+    return {
+      workflow: restoredWorkflow,
+      version: rollbackVersion,
     }
   }
 

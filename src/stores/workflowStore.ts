@@ -16,6 +16,9 @@ import {
   type WorkflowNode,
   type SavedWorkflow,
   type ExecutionRecord,
+  type WorkflowRollbackResult,
+  type WorkflowVersionDetail,
+  type WorkflowVersionMetadata,
   type WorkflowNodeOutput,
   type WorkflowNodeSnapshot,
   type StorageUser,
@@ -107,6 +110,8 @@ export const useWorkflowStore = defineStore('workflow', () => {
   const executionHistory = ref([]) as Ref<ExecutionRecord[]>
   const savedWorkflows = ref([]) as Ref<SavedWorkflow[]>
   const currentStorageUser = ref<StorageUser | null>(null)
+  const workflowVersions = ref([]) as Ref<WorkflowVersionMetadata[]>
+  const selectedWorkflowVersionDetail = ref<WorkflowVersionDetail | null>(null)
   const editableSnapshots = ref([]) as Ref<WorkflowAiEditableSnapshot[]>
   const lastSavedWorkflowSignature = ref('')
   const hasExplicitUnsavedChanges = ref(false)
@@ -136,6 +141,44 @@ export const useWorkflowStore = defineStore('workflow', () => {
     return workflows
   }
 
+  const clearWorkflowVersionState = () => {
+    workflowVersions.value = []
+    selectedWorkflowVersionDetail.value = null
+  }
+
+  const loadWorkflowVersions = async (workflowId = currentWorkflowId.value): Promise<WorkflowVersionMetadata[]> => {
+    if (!workflowId) {
+      clearWorkflowVersionState()
+      return []
+    }
+
+    const versions = await storageProvider.getWorkflowVersions(workflowId)
+    workflowVersions.value = versions
+
+    if (
+      selectedWorkflowVersionDetail.value
+      && !versions.some((version) => version.id === selectedWorkflowVersionDetail.value?.id)
+    ) {
+      selectedWorkflowVersionDetail.value = null
+    }
+
+    return versions
+  }
+
+  const loadWorkflowVersionDetail = async (
+    versionId: string,
+    workflowId = currentWorkflowId.value,
+  ): Promise<WorkflowVersionDetail | null> => {
+    if (!workflowId) {
+      selectedWorkflowVersionDetail.value = null
+      return null
+    }
+
+    const detail = await storageProvider.getWorkflowVersion(workflowId, versionId)
+    selectedWorkflowVersionDetail.value = detail
+    return detail
+  }
+
   const getSavedWorkflows = async (): Promise<SavedWorkflow[]> => {
     return refreshWorkflows()
   }
@@ -156,6 +199,9 @@ export const useWorkflowStore = defineStore('workflow', () => {
 
   const deleteWorkflow = async (id: string) => {
     await storageProvider.deleteWorkflow(id)
+    if (currentWorkflowId.value === id) {
+      clearWorkflowVersionState()
+    }
     const updated = await refreshWorkflows()
     addLog('工作流已删除', 'warn')
     return updated
@@ -319,6 +365,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     isHistoryMode.value = false
     originalWorkflowState.value = null
     lastRunDashboard.value = null
+    clearWorkflowVersionState()
     addLog('已创建新工作流', 'info')
     syncSavedWorkflowSignature()
   }
@@ -410,6 +457,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     pendingConnection.value = null
     pendingExecution.value = null
     activeConfigNodeId.value = null
+    clearWorkflowVersionState()
     addLog(`已从模板创建工作流: ${template.name}`, 'info')
     needsViewReset.value = true
     syncSavedWorkflowSignature()
@@ -434,6 +482,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     }
     await storageProvider.saveWorkflow(workflow)
     await refreshWorkflows()
+    await loadWorkflowVersions(id)
     addLog(`工作流 "${workflow.name}" 已保存`, 'info')
     syncSavedWorkflowSignature()
     return workflow
@@ -449,7 +498,9 @@ export const useWorkflowStore = defineStore('workflow', () => {
       addLog(`已加载工作流: ${workflow.name}`, 'info')
       needsViewReset.value = true
       lastRunDashboard.value = null
+      await loadWorkflowVersions(workflow.id)
       syncSavedWorkflowSignature()
+      selectedWorkflowVersionDetail.value = null
     }
   }
 
@@ -473,6 +524,34 @@ export const useWorkflowStore = defineStore('workflow', () => {
       return updatedList
     }
     return null
+  }
+
+  const rollbackWorkflowVersion = async (
+    versionId: string,
+    workflowId = currentWorkflowId.value,
+  ): Promise<WorkflowRollbackResult | null> => {
+    if (!workflowId) return null
+
+    const result = await storageProvider.rollbackWorkflowVersion(workflowId, versionId)
+    if (!result) return null
+
+    nodes.value = resetWorkflowNodeRuntimeState(result.workflow.nodes)
+    edges.value = serializeWorkflowEdges(result.workflow.edges)
+    workflowName.value = result.workflow.name
+    currentWorkflowId.value = result.workflow.id
+    isHistoryMode.value = false
+    originalWorkflowState.value = null
+    lastRunDashboard.value = null
+    needsViewReset.value = true
+    selectedWorkflowVersionDetail.value = null
+
+    await refreshWorkflows()
+    await loadWorkflowVersions(result.workflow.id)
+
+    addLog(`已回滚到版本 ${versionId}`, 'warn')
+    syncSavedWorkflowSignature()
+
+    return result
   }
 
   const exportWorkflow = () => {
@@ -501,6 +580,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
         workflowName.value = workflow.name || '导入的工作流'
         currentWorkflowId.value = null
         lastRunDashboard.value = null
+        clearWorkflowVersionState()
         addLog(`成功导入工作流: ${workflowName.value}`, 'info')
         lastSavedWorkflowSignature.value = getWorkflowPersistenceSignature()
         markWorkflowAsExplicitlyUnsaved()
@@ -1746,6 +1826,8 @@ export const useWorkflowStore = defineStore('workflow', () => {
     executionHistory,
     savedWorkflows,
     currentStorageUser,
+    workflowVersions,
+    selectedWorkflowVersionDetail,
     editableSnapshots,
     isHistoryMode,
     hasUnsavedChanges,
@@ -1762,10 +1844,13 @@ export const useWorkflowStore = defineStore('workflow', () => {
     runGlobal,
     getSavedWorkflows,
     loadCurrentStorageUser,
+    loadWorkflowVersions,
+    loadWorkflowVersionDetail,
     saveWorkflow,
     loadWorkflow,
     deleteWorkflow,
     duplicateWorkflow,
+    rollbackWorkflowVersion,
     getDuplicatedWorkflowName,
     duplicateNode,
     updateNodeConfigById,
@@ -1782,6 +1867,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     exitHistoryMode,
     createNewWorkflow,
     createWorkflowFromTemplate,
+    clearWorkflowVersionState,
     setPendingConnection,
     setActiveConfigNodeId,
     markWorkflowAsExplicitlyUnsaved,

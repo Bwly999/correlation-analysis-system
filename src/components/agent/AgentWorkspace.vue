@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useWorkflowAiStore } from '@/stores/workflowAiStore'
 import { useWorkflowStore } from '@/stores/workflowStore'
 import AgentComposer from './AgentComposer.vue'
@@ -7,7 +7,9 @@ import AgentHeader from './AgentHeader.vue'
 import AgentMessageList from './AgentMessageList.vue'
 import AgentModelSettingsDialog from './AgentModelSettingsDialog.vue'
 import AgentProgressBar from './AgentProgressBar.vue'
+import AgentRuntimePanel from './AgentRuntimePanel.vue'
 import AgentToolCallList from './AgentToolCallList.vue'
+import AgentVersionPanel from './AgentVersionPanel.vue'
 
 const props = defineProps<{
   visible: boolean
@@ -27,12 +29,35 @@ const messages = computed(() => aiStore.agentMessages)
 const hasToolRail = computed(() => railToolCalls.value.length > 0)
 const artifacts = computed(() => session.value?.artifacts ?? [])
 const approvalRequests = computed(() => session.value?.approvalRequests ?? [])
+const workflowId = computed(() => workflowStore.currentWorkflowId)
+const workflowVersions = computed(() => workflowStore.workflowVersions)
+const selectedWorkflowVersionDetail = computed(() => workflowStore.selectedWorkflowVersionDetail)
 const progressHeadline = computed(() =>
   aiStore.streamHeadline
   || aiStore.agentTimeline.find((item) => item.status === 'running' || item.status === 'waiting' || item.status === 'failed')?.description
   || aiStore.agentWorkspaceSteps.find((item) => item.status === 'running' || item.status === 'waiting' || item.status === 'failed')?.description
   || '',
 )
+const versionsLoading = ref(false)
+const versionDetailLoading = ref(false)
+const rollbackingVersionId = ref('')
+
+const ensureWorkflowVersionsLoaded = async (targetWorkflowId: string) => {
+  const hasLoadedCurrentWorkflowVersions =
+    workflowVersions.value.length > 0
+    && workflowVersions.value.every((version) => version.workflowId === targetWorkflowId)
+
+  if (hasLoadedCurrentWorkflowVersions) {
+    return
+  }
+
+  versionsLoading.value = true
+  try {
+    await workflowStore.loadWorkflowVersions(targetWorkflowId)
+  } finally {
+    versionsLoading.value = false
+  }
+}
 
 const handleSubmit = async (value: string) => {
   aiStore.prompt = value
@@ -69,6 +94,40 @@ const openModelSettings = () => {
   aiStore.settingsVisible = true
 }
 
+const handleSelectVersion = async (versionId: string) => {
+  if (!workflowId.value) return
+
+  versionDetailLoading.value = true
+  try {
+    await workflowStore.loadWorkflowVersionDetail(versionId, workflowId.value)
+  } finally {
+    versionDetailLoading.value = false
+  }
+}
+
+const handleRollbackVersion = async (versionId: string) => {
+  if (!workflowId.value) return
+
+  rollbackingVersionId.value = versionId
+  try {
+    const result = await workflowStore.rollbackWorkflowVersion(versionId, workflowId.value)
+    if (result?.version?.id) {
+      await workflowStore.loadWorkflowVersionDetail(result.version.id, result.workflow.id)
+    }
+  } finally {
+    rollbackingVersionId.value = ''
+  }
+}
+
+watch(
+  [() => props.visible, workflowId],
+  async ([visible, currentWorkflowId]) => {
+    if (!visible || !currentWorkflowId) return
+    await ensureWorkflowVersionsLoaded(currentWorkflowId)
+  },
+  { immediate: true },
+)
+
 onMounted(async () => {
   if (!aiStore.profiles.length) {
     await aiStore.loadProfiles()
@@ -97,7 +156,7 @@ onMounted(async () => {
       :has-applied-snapshot="Boolean(aiStore.lastAppliedSnapshotId)"
     />
 
-    <div class="agent-workspace__body" :class="{ 'has-tool-rail': hasToolRail }">
+    <div class="agent-workspace__body">
       <div class="agent-workspace__main">
         <AgentMessageList
           :messages="messages"
@@ -108,8 +167,32 @@ onMounted(async () => {
         />
       </div>
 
-      <div v-if="hasToolRail" class="agent-workspace__rail">
-        <AgentToolCallList :items="railToolCalls" />
+      <div class="agent-workspace__rail">
+        <AgentRuntimePanel
+          :flow="aiStore.agentWorkspaceFlow"
+          :workflow-name="workflowStore.workflowName"
+          :workflow-id="workflowId"
+          :headline="progressHeadline"
+          :approval-requests="approvalRequests"
+          :tool-calls="toolCalls"
+          :version-count="workflowVersions.length"
+          :loop-running="aiStore.agentLoopRunning"
+          :auto-apply-status="aiStore.autoApplyResult.status"
+        />
+
+        <AgentVersionPanel
+          :workflow-id="workflowId"
+          :workflow-name="workflowStore.workflowName"
+          :versions="workflowVersions"
+          :selected-version-detail="selectedWorkflowVersionDetail"
+          :loading="versionsLoading"
+          :detail-loading="versionDetailLoading"
+          :rollbacking="rollbackingVersionId !== ''"
+          @select-version="handleSelectVersion"
+          @rollback="handleRollbackVersion"
+        />
+
+        <AgentToolCallList v-if="hasToolRail" :items="railToolCalls" />
       </div>
     </div>
 
@@ -149,18 +232,15 @@ onMounted(async () => {
 .agent-workspace__body {
   min-height: 0;
   display: grid;
-  grid-template-columns: 1fr;
-}
-
-.agent-workspace__body.has-tool-rail {
-  grid-template-columns: minmax(0, 1fr) 260px;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 16px;
 }
 
 .agent-workspace__main {
   min-width: 0;
   min-height: 0;
   overflow-y: auto;
-  padding: 18px;
+  padding: 18px 0 18px 18px;
 }
 
 .agent-workspace__rail {
@@ -172,13 +252,17 @@ onMounted(async () => {
   gap: 16px;
 }
 
-@media (max-width: 1440px) {
+@media (max-width: 1560px) {
   .agent-workspace__body {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .agent-workspace__rail {
     padding: 0 18px 18px;
+  }
+
+  .agent-workspace__main {
+    padding-right: 18px;
   }
 }
 </style>

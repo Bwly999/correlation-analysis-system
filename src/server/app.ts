@@ -20,14 +20,18 @@ import {
   submitWorkflowAiSessionInput,
 } from './workflowAi/orchestrator.js'
 import { proxyAnalysisRequest } from './analysisProxy.js'
-import { runAgentLoop } from './agentLoop/engine.js'
 import type { AgentLoopConfig } from './agentLoop/types.js'
+import { runAnalysisAgentSessionLoop } from './opencode/gateway.js'
+import { handleWorkflowMcpRequest, isWorkflowMcpRequest } from './opencode/workflowMcpServer.js'
 import {
   clearUserHistory,
   deleteUserWorkflow,
   getUserHistory,
   getUserWorkflowById,
+  getUserWorkflowVersion,
+  getUserWorkflowVersions,
   getUserWorkflows,
+  rollbackUserWorkflowVersion,
   resolveServerStorageUser,
   saveUserHistory,
   saveUserWorkflow,
@@ -110,6 +114,14 @@ const toAnalysisAgentSession = (session: WorkflowAiSessionState) => ({
 export const createServerHandler = () => async (request: IncomingMessage, response: ServerResponse) => {
   const url = new URL(request.url || '/', 'http://127.0.0.1')
   const currentUser = resolveServerStorageUser(request.headers)
+  const workflowVersionRollbackMatch = url.pathname.match(
+    /^\/api\/storage\/workflows\/([^/]+)\/versions\/([^/]+)\/rollback$/,
+  )
+  const workflowVersionDetailMatch = url.pathname.match(
+    /^\/api\/storage\/workflows\/([^/]+)\/versions\/([^/]+)$/,
+  )
+  const workflowVersionsMatch = url.pathname.match(/^\/api\/storage\/workflows\/([^/]+)\/versions$/)
+  const workflowDetailMatch = url.pathname.match(/^\/api\/storage\/workflows\/([^/]+)$/)
 
   if (request.method === 'OPTIONS') {
     setCorsHeaders(response)
@@ -119,6 +131,11 @@ export const createServerHandler = () => async (request: IncomingMessage, respon
   }
 
   try {
+    if (isWorkflowMcpRequest(url.pathname)) {
+      await handleWorkflowMcpRequest(request, response)
+      return
+    }
+
     if (request.method === 'GET' && url.pathname === '/api/storage/me') {
       sendJson(response, 200, currentUser)
       return
@@ -136,8 +153,38 @@ export const createServerHandler = () => async (request: IncomingMessage, respon
       return
     }
 
-    if (request.method === 'GET' && url.pathname.startsWith('/api/storage/workflows/')) {
-      const workflowId = decodeURIComponent(url.pathname.replace('/api/storage/workflows/', ''))
+    if (request.method === 'GET' && workflowVersionsMatch) {
+      const workflowId = decodeURIComponent(workflowVersionsMatch[1] ?? '')
+      sendJson(response, 200, getUserWorkflowVersions(currentUser.id, workflowId))
+      return
+    }
+
+    if (request.method === 'GET' && workflowVersionDetailMatch) {
+      const workflowId = decodeURIComponent(workflowVersionDetailMatch[1] ?? '')
+      const versionId = decodeURIComponent(workflowVersionDetailMatch[2] ?? '')
+      const version = getUserWorkflowVersion(currentUser.id, workflowId, versionId)
+      if (!version) {
+        sendJson(response, 404, { message: '未找到工作流版本' })
+        return
+      }
+      sendJson(response, 200, version)
+      return
+    }
+
+    if (request.method === 'POST' && workflowVersionRollbackMatch) {
+      const workflowId = decodeURIComponent(workflowVersionRollbackMatch[1] ?? '')
+      const versionId = decodeURIComponent(workflowVersionRollbackMatch[2] ?? '')
+      const result = rollbackUserWorkflowVersion(currentUser.id, workflowId, versionId)
+      if (!result) {
+        sendJson(response, 404, { message: '未找到工作流版本' })
+        return
+      }
+      sendJson(response, 200, result)
+      return
+    }
+
+    if (request.method === 'GET' && workflowDetailMatch) {
+      const workflowId = decodeURIComponent(workflowDetailMatch[1] ?? '')
       const workflow = getUserWorkflowById(currentUser.id, workflowId)
       if (!workflow) {
         sendJson(response, 404, { message: '未找到工作流' })
@@ -147,8 +194,8 @@ export const createServerHandler = () => async (request: IncomingMessage, respon
       return
     }
 
-    if (request.method === 'DELETE' && url.pathname.startsWith('/api/storage/workflows/')) {
-      const workflowId = decodeURIComponent(url.pathname.replace('/api/storage/workflows/', ''))
+    if (request.method === 'DELETE' && workflowDetailMatch) {
+      const workflowId = decodeURIComponent(workflowDetailMatch[1] ?? '')
       const deleted = deleteUserWorkflow(currentUser.id, workflowId)
       if (!deleted) {
         sendJson(response, 404, { message: '未找到工作流' })
@@ -365,23 +412,20 @@ export const createServerHandler = () => async (request: IncomingMessage, respon
         sendJson(response, 404, { message: '未找到分析代理会话' })
         return
       }
-      const session = sessionRecord.state
 
-      const body = await readJsonBody<{ config?: Partial<AgentLoopConfig> }>(request)
-      const planRequest: WorkflowAiPlanRequest = {
-        ...sessionRecord.request,
-        mode: session.mode,
-        prompt: session.prompt,
-        contextHints: sessionRecord.request.contextHints ?? session.contextHints,
-        profile: (body as any).profile ?? sessionRecord.request.profile ?? { id: 'system-default-zhipu-glm-4-7', source: 'system' },
-        nodeCatalog: (body as any).nodeCatalog ?? sessionRecord.request.nodeCatalog,
-      }
+      const body = await readJsonBody<{ config?: Partial<AgentLoopConfig>; profile?: WorkflowAiModelProfile }>(request)
 
       let hasWrittenEvent = false
       startNdjsonStream(response)
 
       try {
-        const output = await runAgentLoop(planRequest, body.config, (event) => {
+        const output = await runAnalysisAgentSessionLoop({
+          sessionId,
+          sessionRecord,
+          userId: currentUser.id,
+          profile: body.profile,
+          config: body.config,
+        }, (event) => {
           hasWrittenEvent = true
           writeNdjsonEvent(response, event)
         })

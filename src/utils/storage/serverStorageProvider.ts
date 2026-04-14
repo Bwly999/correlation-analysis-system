@@ -1,4 +1,12 @@
-import type { IStorageProvider, SavedWorkflow, ExecutionRecord, StorageUser } from './types'
+import type {
+  ExecutionRecord,
+  IStorageProvider,
+  SavedWorkflow,
+  StorageUser,
+  WorkflowRollbackResult,
+  WorkflowVersionDetail,
+  WorkflowVersionMetadata,
+} from './types'
 
 /**
  * 服务器存储驱动实现 (Stub)
@@ -47,6 +55,23 @@ export class ServerStorageProvider implements IStorageProvider {
   async deleteWorkflow(id: string): Promise<void> {
     console.log(`[ServerStorage] Deleting workflow: ${id}`)
     await this.request(`/storage/workflows/${id}`, { method: 'DELETE' })
+  }
+
+  async getWorkflowVersions(workflowId: string): Promise<WorkflowVersionMetadata[]> {
+    console.log(`[ServerStorage] Fetching workflow versions: ${workflowId}`)
+    return this.request(`/storage/workflows/${workflowId}/versions`)
+  }
+
+  async getWorkflowVersion(workflowId: string, versionId: string): Promise<WorkflowVersionDetail | null> {
+    console.log(`[ServerStorage] Fetching workflow version detail: ${workflowId}/${versionId}`)
+    return this.request(`/storage/workflows/${workflowId}/versions/${versionId}`, undefined, true)
+  }
+
+  async rollbackWorkflowVersion(workflowId: string, versionId: string): Promise<WorkflowRollbackResult | null> {
+    console.log(`[ServerStorage] Rolling back workflow version: ${workflowId}/${versionId}`)
+    return this.request(`/storage/workflows/${workflowId}/versions/${versionId}/rollback`, {
+      method: 'POST',
+    }, true)
   }
 
   async saveHistory(record: ExecutionRecord, limit = 20): Promise<ExecutionRecord[]> {

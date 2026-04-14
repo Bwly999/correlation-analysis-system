@@ -951,7 +951,7 @@ describe('WorkflowCanvas', () => {
     expect(agentWorkspace.exists()).toBe(true)
     expect(agentWorkspace.attributes('data-visible')).toBe('false')
     expect(wrapper.find('.workflow-workspace').classes()).not.toContain('workflow-workspace--agent')
-    expect(wrapper.find('.execution-canvas-shell__sidebar').exists()).toBe(true)
+    expect(wrapper.find('.workflow-page-sidebar').exists()).toBe(true)
   })
 
   it('collapses the agent workspace from the header action entry', async () => {
@@ -995,7 +995,7 @@ describe('WorkflowCanvas', () => {
     expect(wrapper.findComponent({ name: 'AgentWorkspace' }).attributes('data-visible')).toBe('true')
     expect(wrapper.text()).not.toContain('执行工作区')
     expect(wrapper.find('.workflow-workspace').classes()).toContain('workflow-workspace--agent')
-    expect(wrapper.find('.execution-canvas-shell__sidebar').exists()).toBe(true)
+    expect(wrapper.find('.workflow-page-sidebar').exists()).toBe(true)
   })
 
   it('keeps the canvas-only right workspace after opening the agent panel', async () => {
@@ -1038,7 +1038,7 @@ describe('WorkflowCanvas', () => {
     expect(wrapper.text()).not.toContain('执行工作区')
     expect(wrapper.find('.execution-workspace__header').exists()).toBe(false)
     expect(wrapper.findComponent({ name: 'VueFlow' }).exists()).toBe(true)
-    expect(wrapper.find('.execution-canvas-shell__sidebar').exists()).toBe(true)
+    expect(wrapper.find('.workflow-page-sidebar').exists()).toBe(true)
   })
 
   it('shows an execution workspace banner while agent loop is running and after auto-apply completes', async () => {

@@ -25,6 +25,15 @@ class MockServerStorageProvider implements IStorageProvider {
     // 模拟 DELETE /workflows/:id
     console.log('Deleted from server:', id)
   }
+  async getWorkflowVersions(): Promise<any[]> {
+    return []
+  }
+  async getWorkflowVersion(): Promise<any> {
+    return null
+  }
+  async rollbackWorkflowVersion(): Promise<any> {
+    return null
+  }
   async saveHistory(): Promise<any[]> {
     return []
   }
