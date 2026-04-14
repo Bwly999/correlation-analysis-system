@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { useLocalStorage } from '@vueuse/core'
 import Dialog from 'primevue/dialog'
 import InputNumber from 'primevue/inputnumber'
-import { X, BarChart3, Database, Download, FileJson, Layers, ChevronRight } from 'lucide-vue-next'
+import { X, BarChart3, Database, Download, FileJson, Layers, ChevronRight, PanelLeftClose, PanelLeftOpen } from 'lucide-vue-next'
 import DataChart from './DataChart.vue'
 import { createSafeJsonPreview, stringifySafePreview } from './previewSerialization'
 import { workflowViewerRegistry } from './viewers/registry'
@@ -24,6 +25,7 @@ const props = defineProps<{
 const emit = defineEmits(['close'])
 
 const previewLimit = ref(10)
+const sidebarCollapsed = useLocalStorage('data-analysis-modal:sidebar-collapsed', false)
 
 const normalizedResult = computed(() => normalizeWorkflowResult(props.data))
 const viewerKey = computed(() => getResultViewerKey(props.data))
@@ -159,7 +161,33 @@ const exportData = () => {
     </template>
 
     <div class="flex h-full overflow-hidden bg-slate-50/50 p-4 gap-4">
-      <div class="w-80 flex flex-col gap-4">
+      <!-- 折叠态：竖向图标条 -->
+      <div
+        v-if="sidebarCollapsed"
+        class="flex flex-col items-center gap-3 py-3 w-11 shrink-0"
+      >
+        <button
+          class="sidebar-toggle-btn"
+          title="展开预览面板"
+          @click="sidebarCollapsed = false"
+        >
+          <PanelLeftOpen :size="16" />
+        </button>
+        <div class="w-6 h-px bg-slate-200 my-1"></div>
+        <button
+          class="sidebar-icon-btn"
+          title="结果预览"
+          @click="sidebarCollapsed = false"
+        >
+          <FileJson :size="16" />
+        </button>
+      </div>
+
+      <!-- 展开态：完整侧栏 -->
+      <div
+        v-else
+        class="sidebar-expanded"
+      >
         <div
           class="flex-1 bg-white rounded-2xl border border-slate-200/60 shadow-sm flex flex-col overflow-hidden"
         >
@@ -170,15 +198,24 @@ const exportData = () => {
                 >结果预览</span
               >
             </div>
-            <div v-if="previewCount > 0" class="flex items-center gap-2">
-              <span class="text-[9px] font-bold text-slate-400 uppercase">显示数量</span>
-              <InputNumber
-                v-model="previewLimit"
-                :min="1"
-                :max="100"
-                class="preview-limit-input"
-                :use-grouping="false"
-              />
+            <div class="flex items-center gap-1.5">
+              <div v-if="previewCount > 0" class="flex items-center gap-2">
+                <span class="text-[9px] font-bold text-slate-400 uppercase">显示数量</span>
+                <InputNumber
+                  v-model="previewLimit"
+                  :min="1"
+                  :max="100"
+                  class="preview-limit-input"
+                  :use-grouping="false"
+                />
+              </div>
+              <button
+                class="sidebar-toggle-btn"
+                title="收起预览面板"
+                @click="sidebarCollapsed = true"
+              >
+                <PanelLeftClose :size="16" />
+              </button>
             </div>
           </div>
           <div
@@ -312,5 +349,52 @@ const exportData = () => {
     transform: translateY(-5px);
     opacity: 1;
   }
+}
+
+.sidebar-expanded {
+  width: 20rem;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.sidebar-toggle-btn {
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.625rem;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  background: transparent;
+  border: none;
+}
+.sidebar-toggle-btn:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+.sidebar-toggle-btn:active {
+  transform: scale(0.92);
+}
+
+.sidebar-icon-btn {
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.625rem;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  background: transparent;
+  border: none;
+}
+.sidebar-icon-btn:hover {
+  background: #f1f5f9;
+  color: #2563eb;
 }
 </style>
