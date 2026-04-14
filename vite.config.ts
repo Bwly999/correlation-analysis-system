@@ -11,6 +11,20 @@ import { createServerHandler } from './src/server/app.js'
 
 const workflowAiServerTarget = process.env.WORKFLOW_AI_SERVER_TARGET || 'http://127.0.0.1:8787'
 
+const isVueRuntimeModule = (id: string) =>
+  id.includes('node_modules/@vue/')
+  || id.includes('node_modules/.pnpm/@vue+')
+  || id.includes('/vue/dist/')
+  || id.includes('\\vue\\dist\\')
+
+const isVueEcosystemModule = (id: string) =>
+  isVueRuntimeModule(id)
+  || id.includes('pinia')
+  || id.includes('vue-router')
+  || id.includes('@vueuse/')
+  || id.includes('node_modules/.pnpm/@vueuse+')
+  || id.includes('vue-draggable-plus')
+
 const workflowAiDevMiddleware = (): Plugin => {
   const handler = createServerHandler()
 
@@ -50,11 +64,23 @@ export default defineConfig({
           if (id.includes('echarts') || id.includes('vue-echarts')) {
             return 'vendor-charts'
           }
+          if (id.includes('@primevue/themes')) {
+            return 'vendor-primevue-theme'
+          }
           if (id.includes('primevue') || id.includes('@primevue')) {
             return 'vendor-primevue'
           }
+          if (id.includes('element-plus')) {
+            return 'vendor-element-plus'
+          }
           if (id.includes('html2canvas')) {
             return 'vendor-export-canvas'
+          }
+          if (id.includes('jspdf')) {
+            return 'vendor-export-jspdf'
+          }
+          if (id.includes('canvg') || id.includes('svg2pdf') || id.includes('rgbcolor')) {
+            return 'vendor-export-svg'
           }
           if (id.includes('html2pdf.js')) {
             return 'vendor-export-pdf'
@@ -68,7 +94,7 @@ export default defineConfig({
           ) {
             return 'vendor-ui'
           }
-          if (id.includes('/vue/') || id.includes('\\vue\\') || id.includes('pinia')) {
+          if (isVueEcosystemModule(id)) {
             return 'vendor-vue'
           }
           if (id.includes('@vue-flow')) {

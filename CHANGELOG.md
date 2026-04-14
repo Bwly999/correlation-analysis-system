@@ -2,6 +2,12 @@
 
 ## [2026-04-14]
 
+### 优化 (Improve)
+
+- **优化前端构建拆包并收敛构建告警**:
+  - 调整 Vite `manualChunks` 规则，拆分 Vue 生态、PrimeVue 主题、Element Plus 与 PDF 导出相关依赖，消除 `vendor-vue` 与 `vendor` 之间的循环 chunk 告警。
+  - 将 `html2pdf.js` 改为按需动态加载，避免普通进入工作流页面时提前加载整套 PDF 导出依赖。
+
 ### 新增 (Feat)
 
 - **分析代理主循环切换到 opencode SDK，并接入工作流 MCP 能力**:

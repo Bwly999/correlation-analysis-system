@@ -1,5 +1,3 @@
-import html2pdf from 'html2pdf.js'
-
 const waitForNextFrame = () =>
   new Promise<void>((resolve) => {
     requestAnimationFrame(() => resolve())
@@ -133,6 +131,7 @@ export const exportReportElementToPdf = async (
     filename: string
   },
 ) => {
+  const { default: html2pdf } = await import('html2pdf.js')
   const restoreIgnoredElements = hideExportIgnoredElements(element)
   const exportId = `pdf-export-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
   element.setAttribute(TEMP_EXPORT_ID_ATTR, exportId)
