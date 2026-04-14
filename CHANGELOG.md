@@ -2,6 +2,13 @@
 
 ## [2026-04-14]
 
+### 设计 (Design)
+
+- **补充 opencode 会话化替换设计稿**:
+  - 明确分析代理将彻底移除自研 `agent-loop`、`preset`、`iteration` 与自研编排协议，改为由 `opencode sdk` 的 session / message / event / tool 模型统一驱动。
+  - 设计新的 `agent session bridge + projection + workflow MCP` 架构，并约束前端改为单列对话式业务流，融合工作流业务态、分析业务态与执行业务态展示。
+  - 规划新的 agent API、迁移步骤、异常处理策略与端到端验收标准，作为后续实施依据。
+
 ### 优化 (Improve)
 
 - **优化前端构建拆包并收敛构建告警**:
