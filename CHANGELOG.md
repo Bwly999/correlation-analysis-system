@@ -1,5 +1,14 @@
 # 更新日志 (Changelog)
 
+## [2026-04-15]
+
+### 修复 (Fix)
+
+- **修复 opencode agent 会话收尾阶段的消息解析兼容性问题**:
+  - `gateway` 在收尾读取 opencode assistant 消息时，改为优先选择可解析的 structured / text 消息；若只拿到 error assistant，则直接透传底层错误，不再统一报“未返回可解析的助手消息”。
+  - 对模型偶发返回的字符串型 `findings`、`methods`、`risks`、`recommendations` 做归一化兼容，避免结构化响应因数组字段类型漂移而直接失败。
+  - 补充对应网关回归测试，覆盖 timeout 错误透传和字符串列表字段兼容场景。
+
 ## [2026-04-14]
 
 ### 设计 (Design)

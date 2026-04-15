@@ -347,6 +347,26 @@ const getMessageEntryError = (entry: any) => {
   }
 }
 
+const hasAssistantStructuredPayload = (entry: any) => entry?.info?.structured !== undefined
+
+const hasAssistantTextPayload = (entry: any) => Boolean(extractMessageEntryText(entry))
+
+const getAssistantEntryFailureMessage = (entry: any) => getMessageEntryError(entry)?.message || null
+
+const resolveAssistantMessageEntry = (entries: any[], userMessageId: string) => {
+  const reversedEntries = [...entries].reverse()
+  const assistantEntries = reversedEntries.filter((entry) => entry?.info?.role === 'assistant')
+  const relatedEntries = assistantEntries.filter((entry) => entry?.info?.parentID === userMessageId)
+  const candidates = relatedEntries.length > 0 ? relatedEntries : assistantEntries
+
+  return (
+    candidates.find((entry) => hasAssistantStructuredPayload(entry) || hasAssistantTextPayload(entry))
+    ?? candidates.find((entry) => Boolean(getAssistantEntryFailureMessage(entry)))
+    ?? candidates[0]
+    ?? null
+  )
+}
+
 const coerceStructuredWorkflowPlan = (value: unknown) => {
   if (typeof value !== 'string') return value
 
@@ -360,6 +380,21 @@ const coerceStructuredWorkflowPlan = (value: unknown) => {
   }
 }
 
+const coerceStructuredStringArray = (value: unknown) => {
+  if (Array.isArray(value) || value === undefined) return value
+  if (typeof value !== 'string') return value
+
+  const normalized = value.trim()
+  if (!normalized) return []
+
+  const items = normalized
+    .split(/\r?\n|[；;]+/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+
+  return items.length > 0 ? items : [normalized]
+}
+
 const parseAgentStructuredResponsePayload = (payload: unknown) => {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
     return agentStructuredResponseSchema.parse(payload)
@@ -367,6 +402,10 @@ const parseAgentStructuredResponsePayload = (payload: unknown) => {
 
   return agentStructuredResponseSchema.parse({
     ...payload,
+    findings: coerceStructuredStringArray((payload as Record<string, unknown>).findings),
+    methods: coerceStructuredStringArray((payload as Record<string, unknown>).methods),
+    risks: coerceStructuredStringArray((payload as Record<string, unknown>).risks),
+    recommendations: coerceStructuredStringArray((payload as Record<string, unknown>).recommendations),
     workflowPlan: coerceStructuredWorkflowPlan((payload as Record<string, unknown>).workflowPlan),
   })
 }
@@ -794,13 +833,7 @@ const finalizeAgentRun = async (
       limit: 50,
     })
     const entries = Array.isArray(response?.data) ? response.data : []
-    const assistantEntry =
-      [...entries]
-        .reverse()
-        .find(
-          (entry) => entry?.info?.role === 'assistant' && entry?.info?.parentID === userMessageId,
-        )
-      ?? [...entries].reverse().find((entry) => entry?.info?.role === 'assistant')
+    const assistantEntry = resolveAssistantMessageEntry(entries, userMessageId)
 
     if (!assistantEntry) {
       updateSessionProjection(
@@ -923,7 +956,7 @@ const parseAssistantMessageEntry = (
 
   const text = extractMessageEntryText(entry)
   if (!text) {
-    throw new Error('Opencode 未返回可解析的助手消息')
+    throw new Error(getAssistantEntryFailureMessage(entry) || 'Opencode 未返回可解析的助手消息')
   }
 
   try {

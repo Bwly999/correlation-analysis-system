@@ -677,4 +677,145 @@ describe('agent session bridge', () => {
     expect(snapshot?.projection.workflow.proposedPlan).toBeNull()
     expect(snapshot?.projection.error).toBeNull()
   })
+
+  it('surfaces opencode assistant errors when no structured or text reply is available', async () => {
+    let releaseIdle: (() => void) | null = null
+    eventSubscribeMock.mockResolvedValueOnce({
+      stream: {
+        async *[Symbol.asyncIterator]() {
+          await new Promise<void>((resolve) => {
+            releaseIdle = resolve
+          })
+          yield {
+            type: 'session.idle',
+            properties: {
+              sessionID: 'opencode_session_1',
+            },
+          }
+        },
+      },
+    })
+    sessionPromptAsyncMock.mockImplementationOnce(async () => {
+      releaseIdle?.()
+      return { data: { id: 'run_1' } }
+    })
+    sessionMessagesMock.mockResolvedValueOnce({
+      data: [
+        {
+          info: {
+            id: 'msg_assistant_timeout_1',
+            role: 'assistant',
+            parentID: 'msg_user_1',
+            time: {
+              completed: Date.now(),
+            },
+            error: {
+              name: 'UnknownError',
+              message: 'The operation timed out.',
+            },
+          },
+          parts: [
+            {
+              type: 'reasoning',
+              text: '正在整理业务上下文',
+            },
+          ],
+        },
+      ],
+    })
+
+    const created = await createAgentSession({
+      request: buildAgentRequest(),
+      userId: 'user_1',
+    })
+
+    const result = await sendAgentSessionMessage({
+      sessionId: created.session.id,
+      message: '继续给出当前分析建议',
+    })
+
+    await Promise.resolve()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    const snapshot = getAgentSession(created.session.id)
+    expect(result.session.status).toBe('failed')
+    expect(snapshot?.session.status).toBe('failed')
+    expect(snapshot?.projection.execution.status).toBe('failed')
+    expect(snapshot?.projection.error?.message).toBe('The operation timed out.')
+  })
+
+  it('coerces string list fields from opencode structured payloads and completes the session', async () => {
+    let releaseIdle: (() => void) | null = null
+    eventSubscribeMock.mockResolvedValueOnce({
+      stream: {
+        async *[Symbol.asyncIterator]() {
+          await new Promise<void>((resolve) => {
+            releaseIdle = resolve
+          })
+          yield {
+            type: 'session.idle',
+            properties: {
+              sessionID: 'opencode_session_1',
+            },
+          }
+        },
+      },
+    })
+    sessionPromptAsyncMock.mockImplementationOnce(async () => {
+      releaseIdle?.()
+      return { data: { id: 'run_1' } }
+    })
+    sessionMessagesMock.mockResolvedValueOnce({
+      data: [
+        {
+          info: {
+            id: 'msg_assistant_2',
+            role: 'assistant',
+            parentID: 'msg_user_1',
+            time: {
+              completed: Date.now(),
+            },
+            structured: {
+              assistantMessage: '销量与价格、折扣的相关性分析具备高业务价值。',
+              workflowSummary: '建议先搭建最小相关性分析流程。',
+              findings: '价格和折扣都值得先做相关性筛查',
+              methods: 'Pearson 相关系数',
+              risks: '',
+              recommendations: '先确认销量字段口径',
+              workflowPlan: null,
+            },
+          },
+          parts: [
+            {
+              type: 'text',
+              text: '销量与价格、折扣的相关性分析具备高业务价值。',
+            },
+          ],
+        },
+      ],
+    })
+
+    const created = await createAgentSession({
+      request: buildAgentRequest(),
+      userId: 'user_1',
+    })
+
+    const result = await sendAgentSessionMessage({
+      sessionId: created.session.id,
+      message: '继续给出当前分析建议',
+    })
+
+    await Promise.resolve()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    const snapshot = getAgentSession(created.session.id)
+    expect(result.session.status).toBe('completed')
+    expect(snapshot?.session.status).toBe('completed')
+    expect(snapshot?.projection.execution.status).toBe('completed')
+    expect(snapshot?.projection.analysis.summary).toContain('销量与价格、折扣的相关性分析具备高业务价值')
+    expect(snapshot?.projection.analysis.findings).toEqual(['价格和折扣都值得先做相关性筛查'])
+    expect(snapshot?.projection.analysis.methods).toEqual(['Pearson 相关系数'])
+    expect(snapshot?.projection.analysis.recommendations).toEqual(['先确认销量字段口径'])
+    expect(snapshot?.projection.error).toBeNull()
+  })
 })
