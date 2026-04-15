@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref, watch, nextTick } from 'vue'
 import { useWorkflowAiStore } from '@/stores/workflowAiStore'
 import { useWorkflowStore } from '@/stores/workflowStore'
 import AgentComposer from './AgentComposer.vue'
@@ -19,8 +19,49 @@ const emit = defineEmits<{
 const aiStore = useWorkflowAiStore()
 const workflowStore = useWorkflowStore()
 
+const scrollContainer = ref<HTMLElement | null>(null)
+const isAtBottom = ref(true)
+
 const session = computed(() => aiStore.analysisAgentSession)
 const messages = computed(() => aiStore.agentMessages)
+
+const handleScroll = () => {
+  if (!scrollContainer.value) return
+  const { scrollTop, scrollHeight, clientHeight } = scrollContainer.value
+  // 如果距离底部小于 50px，认为在底部
+  isAtBottom.value = scrollHeight - scrollTop - clientHeight < 50
+}
+
+const scrollToBottom = async () => {
+  await nextTick()
+  if (scrollContainer.value && isAtBottom.value) {
+    scrollContainer.value.scrollTo({
+      top: scrollContainer.value.scrollHeight,
+      behavior: 'smooth',
+    })
+  }
+}
+
+// 监听消息变化，自动滚动
+watch(
+  () => messages.value,
+  () => {
+    scrollToBottom()
+  },
+  { deep: true },
+)
+
+// 监听生成状态，确保开始生成时也在底部
+watch(
+  () => aiStore.isGenerating,
+  (isGenerating) => {
+    if (isGenerating) {
+      isAtBottom.value = true
+      scrollToBottom()
+    }
+  },
+)
+
 const approvalRequests = computed(() => session.value?.approvalRequests ?? [])
 const progressHeadline = computed(() =>
   aiStore.streamHeadline
@@ -96,7 +137,7 @@ onMounted(async () => {
     />
 
     <div class="agent-workspace__body">
-      <div class="agent-workspace__main">
+      <div ref="scrollContainer" class="agent-workspace__main" @scroll="handleScroll">
         <AgentMessageList :messages="messages" />
       </div>
     </div>
@@ -143,6 +184,28 @@ onMounted(async () => {
   min-width: 0;
   min-height: 0;
   overflow-y: auto;
-  padding: 18px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  scroll-behavior: smooth;
+}
+
+/* 美化滚动条 */
+.agent-workspace__main::-webkit-scrollbar {
+  width: 6px;
+}
+
+.agent-workspace__main::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.agent-workspace__main::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 10px;
+}
+
+.agent-workspace__main::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 </style>

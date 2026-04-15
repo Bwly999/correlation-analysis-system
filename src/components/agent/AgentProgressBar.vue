@@ -201,6 +201,15 @@ const getIcon = (status: AnalysisAgentTimelineStep['status']) => {
     0 14px 22px -20px rgba(37, 99, 235, 0.7);
 }
 
+.agent-progress-bar__step.is-running .agent-progress-bar__step-icon :deep(svg) {
+  animation: agent-spin 2s linear infinite;
+}
+
+@keyframes agent-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 .agent-progress-bar__step.is-completed {
   color: #2563eb;
 }

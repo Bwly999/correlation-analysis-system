@@ -117,6 +117,15 @@ const getIcon = (status: AnalysisAgentTimelineStep['status']) => {
   background: #eff6ff;
 }
 
+.is-running .agent-timeline__icon :deep(svg) {
+  animation: agent-spin 2s linear infinite;
+}
+
+@keyframes agent-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 .is-running .agent-timeline__icon,
 .is-waiting .agent-timeline__icon {
   color: #2563eb;

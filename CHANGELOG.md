@@ -2,6 +2,13 @@
 
 ## [2026-04-15]
 
+### 优化 (Improve)
+
+- **优化分析代理工作台的消息流交互与视觉反馈**:
+  - `AgentWorkspace` 增加消息区自动滚动与滚动条样式，生成期间自动保持底部视角，减少长会话中的手动定位成本。
+  - `AgentMessageList` 将执行细节收敛为可折叠的 `AgentThinkingBlock`，并重绘用户 / 助手消息气泡样式，强化流式输出、失败态与业务卡片的视觉层级。
+  - `AgentComposer`、`AgentProgressBar`、`AgentTimeline` 补充输入区聚焦态、按钮层次和运行中旋转反馈，提升分析代理会话过程的可读性与状态感知。
+
 ### 修复 (Fix)
 
 - **修复 opencode agent 会话收尾阶段的消息解析兼容性问题**:

@@ -90,11 +90,13 @@ const submit = () => {
 
 <style scoped>
 .agent-composer {
-  display: grid;
-  gap: 10px;
-  padding: 16px 18px 18px;
-  border-top: 1px solid #dbe4ef;
-  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px 24px 24px;
+  border-top: 1px solid #e2e8f0;
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(8px);
 }
 
 .agent-composer__approval-bar {
@@ -103,34 +105,53 @@ const submit = () => {
   flex-wrap: wrap;
   font-size: 11px;
   color: #9a3412;
+  margin-bottom: 4px;
 }
 
 .agent-composer__approval-bar span {
   border-radius: 999px;
   background: #fff7ed;
-  padding: 4px 8px;
+  border: 1px solid #ffedd5;
+  padding: 4px 10px;
+  font-weight: 600;
 }
 
 .agent-composer__shell {
   border-radius: 20px;
-  border: 1px solid #dbe4ef;
+  border: 1px solid #e2e8f0;
   background: #ffffff;
-  padding: 12px;
-  display: grid;
-  gap: 10px;
-  box-shadow: 0 16px 26px -26px rgba(15, 23, 42, 0.28);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 
+    0 10px 15px -3px rgba(0, 0, 0, 0.05),
+    0 4px 6px -4px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
+}
+
+.agent-composer__shell:focus-within {
+  border-color: #3b82f6;
+  box-shadow: 
+    0 0 0 3px rgba(59, 130, 246, 0.1),
+    0 10px 15px -3px rgba(0, 0, 0, 0.05);
 }
 
 .agent-composer__input {
   width: 100%;
-  min-height: 84px;
-  resize: vertical;
+  min-height: 80px;
+  resize: none;
   border: none;
   outline: none;
   background: transparent;
-  color: #0f172a;
-  font-size: 13px;
+  color: #1e293b;
+  font-size: 14px;
   line-height: 1.6;
+  font-family: inherit;
+}
+
+.agent-composer__input::placeholder {
+  color: #94a3b8;
 }
 
 .agent-composer__footer {
@@ -138,71 +159,78 @@ const submit = () => {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  padding-top: 4px;
 }
 
 .agent-composer__quick-actions {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 8px;
 }
 
 .agent-composer__icon-btn,
 .agent-composer__sync-btn {
-  height: 36px;
-  border-radius: 12px;
-  border: 1px solid #dbe4ef;
+  height: 32px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
   background: #ffffff;
-  color: #475569;
-  display: inline-flex;
+  color: #64748b;
+  display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
   cursor: pointer;
-  transition: all 0.18s ease;
-  padding: 0 12px;
+  transition: all 0.2s ease;
+  padding: 0 10px;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .agent-composer__icon-btn {
-  width: 36px;
+  width: 32px;
   padding: 0;
 }
 
-.agent-composer__icon-btn:hover,
-.agent-composer__sync-btn:hover {
-  border-color: #c4d3e4;
-  color: #0f172a;
-  background: #f8fbff;
+.agent-composer__icon-btn:hover:not(:disabled),
+.agent-composer__sync-btn:hover:not(:disabled) {
+  border-color: #cbd5e1;
+  color: #1e293b;
+  background: #f8fafc;
 }
 
 .agent-composer__submit {
-  justify-self: end;
-  height: 36px;
-  padding: 0 14px;
-  border-radius: 12px;
-  border: 1px solid #1d4ed8;
-  background: #2563eb;
+  height: 34px;
+  padding: 0 16px;
+  border-radius: 10px;
+  border: none;
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
   color: #ffffff;
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 700;
   cursor: pointer;
-  transition: transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2);
 }
 
 .agent-composer__submit:hover:not(:disabled) {
-  background: #1d4ed8;
   transform: translateY(-1px);
-  box-shadow: 0 16px 24px -20px rgba(37, 99, 235, 0.55);
+  box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.3);
+  filter: brightness(1.05);
+}
+
+.agent-composer__submit:active:not(:disabled) {
+  transform: translateY(0);
 }
 
 .agent-composer__icon-btn:disabled,
 .agent-composer__sync-btn:disabled,
 .agent-composer__submit:disabled {
   cursor: not-allowed;
-  opacity: 0.5;
+  opacity: 0.4;
+  filter: grayscale(1);
+  box-shadow: none;
 }
 </style>
