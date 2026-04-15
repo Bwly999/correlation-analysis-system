@@ -394,6 +394,7 @@ describe('runAnalysisAgentSessionLoop', () => {
 describe('agent session bridge', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    delete process.env.WORKFLOW_MCP_AUTH_TOKEN
 
     createOpencodeServerMock.mockResolvedValue({
       url: 'http://127.0.0.1:4096',
@@ -817,5 +818,29 @@ describe('agent session bridge', () => {
     expect(snapshot?.projection.analysis.methods).toEqual(['Pearson 相关系数'])
     expect(snapshot?.projection.analysis.recommendations).toEqual(['先确认销量字段口径'])
     expect(snapshot?.projection.error).toBeNull()
+  })
+
+  it('forwards the internal MCP auth token when workflow MCP auth is enabled', async () => {
+    process.env.WORKFLOW_MCP_AUTH_TOKEN = 'test-mcp-token'
+
+    const created = await createAgentSession({
+      request: buildAgentRequest(),
+      userId: 'user_1',
+    })
+
+    await sendAgentSessionMessage({
+      sessionId: created.session.id,
+      message: '继续给出当前分析建议',
+    })
+
+    expect(mcpAddMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        config: expect.objectContaining({
+          headers: expect.objectContaining({
+            'x-workflow-mcp-auth-token': 'test-mcp-token',
+          }),
+        }),
+      }),
+    )
   })
 })

@@ -17,12 +17,64 @@ export type AgentSessionRecord = {
 }
 
 const records = new Map<string, AgentSessionRecord>()
+let expiredSessionsCleaned = 0
+let maxSessionsEvicted = 0
+
+const DEFAULT_AGENT_SESSION_TTL_MS = 30 * 60 * 1000
+const DEFAULT_AGENT_SESSION_MAX = 200
+
+const resolvePositiveInteger = (raw: string | undefined, fallback: number) => {
+  const value = Number(raw)
+  return Number.isFinite(value) && value > 0 ? value : fallback
+}
+
+const resolveAgentSessionTtlMs = () =>
+  resolvePositiveInteger(process.env.AGENT_SESSION_TTL_MS, DEFAULT_AGENT_SESSION_TTL_MS)
+
+const resolveAgentSessionMax = () =>
+  resolvePositiveInteger(process.env.AGENT_SESSION_MAX, DEFAULT_AGENT_SESSION_MAX)
+
+export const cleanupExpiredAgentSessions = () => {
+  const ttlMs = resolveAgentSessionTtlMs()
+  const now = Date.now()
+
+  for (const [sessionId, record] of records.entries()) {
+    if (now - record.session.updatedAt <= ttlMs) continue
+    records.delete(sessionId)
+    expiredSessionsCleaned += 1
+  }
+}
+
+const evictOverflowSessions = () => {
+  const maxSessions = resolveAgentSessionMax()
+  if (records.size < maxSessions) return
+
+  const oldestSession = [...records.values()]
+    .sort((left, right) => left.session.updatedAt - right.session.updatedAt)[0]
+
+  if (!oldestSession) return
+  records.delete(oldestSession.session.id)
+  maxSessionsEvicted += 1
+}
+
+export const getAgentSessionStoreSnapshot = () => {
+  cleanupExpiredAgentSessions()
+  return {
+    activeSessions: records.size,
+    expiredSessionsCleaned,
+    maxSessionsEvicted,
+    ttlMs: resolveAgentSessionTtlMs(),
+    maxSessions: resolveAgentSessionMax(),
+  }
+}
 
 export const createAgentSessionRecord = (input: {
   request: WorkflowAiPlanRequest
   projection: AgentProjectionSnapshot
   userId?: string
 }) => {
+  cleanupExpiredAgentSessions()
+  evictOverflowSessions()
   const now = Date.now()
   const id = randomUUID()
   const record: AgentSessionRecord = {
@@ -51,7 +103,10 @@ export const createAgentSessionRecord = (input: {
   return record
 }
 
-export const getAgentSessionRecord = (sessionId: string) => records.get(sessionId) ?? null
+export const getAgentSessionRecord = (sessionId: string) => {
+  cleanupExpiredAgentSessions()
+  return records.get(sessionId) ?? null
+}
 
 export const listAgentSessionMessages = (sessionId: string) => getAgentSessionRecord(sessionId)?.messages ?? []
 
@@ -90,4 +145,3 @@ export const publishAgentSessionEvent = (sessionId: string, event: AgentSessionE
     listener(event)
   }
 }
-

@@ -4,6 +4,12 @@
 
 ### 优化 (Improve)
 
+- **加固 workflow MCP 内嵌桥接的生命周期、鉴权与可观测性**:
+  - 新增 `list_workflow_tools` 工具，统一返回当前 workflow MCP 工具清单，减少 opencode 对 prompt 中硬编码工具名的依赖。
+  - `workflow MCP` 现支持可选内部鉴权；当配置 `WORKFLOW_MCP_AUTH_TOKEN` 时，服务端会校验 `x-workflow-mcp-auth-token`，gateway 也会自动透传该请求头。
+  - 新增 `GET /api/opencode/workflow-mcp/health`，用于暴露 MCP 鉴权开关、agent session 会话存活数、过期清理计数与工具调用统计，便于排查挂载失败和会话堆积问题。
+  - `agentSessionStore` 增加基于 TTL 的过期会话清理和最大会话数淘汰策略，避免长时间运行时进程内会话无限增长。
+
 - **优化分析代理工作台的消息流交互与视觉反馈**:
   - `AgentWorkspace` 增加消息区自动滚动与滚动条样式，生成期间自动保持底部视角，减少长会话中的手动定位成本。
   - `AgentMessageList` 将执行细节收敛为可折叠的 `AgentThinkingBlock`，并重绘用户 / 助手消息气泡样式，强化流式输出、失败态与业务卡片的视觉层级。

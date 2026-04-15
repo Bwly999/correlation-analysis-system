@@ -19,6 +19,8 @@ const {
   subscribeToAgentSessionEventsMock,
   syncAgentCanvasMock,
   handleWorkflowMcpRequestMock,
+  getWorkflowMcpHealthSnapshotMock,
+  isWorkflowMcpHealthRequestMock,
   isWorkflowMcpRequestMock,
 } = vi.hoisted(() => ({
   generateWorkflowAiPlanMock: vi.fn(),
@@ -37,6 +39,8 @@ const {
   subscribeToAgentSessionEventsMock: vi.fn(),
   syncAgentCanvasMock: vi.fn(),
   handleWorkflowMcpRequestMock: vi.fn(),
+  getWorkflowMcpHealthSnapshotMock: vi.fn(),
+  isWorkflowMcpHealthRequestMock: vi.fn((pathname: string) => pathname === '/api/opencode/workflow-mcp/health'),
   isWorkflowMcpRequestMock: vi.fn((pathname: string) => pathname === '/api/opencode/workflow-mcp'),
 }))
 
@@ -68,6 +72,8 @@ vi.mock('../opencode/gateway.js', () => ({
 
 vi.mock('../opencode/workflowMcpServer.js', () => ({
   handleWorkflowMcpRequest: handleWorkflowMcpRequestMock,
+  getWorkflowMcpHealthSnapshot: getWorkflowMcpHealthSnapshotMock,
+  isWorkflowMcpHealthRequest: isWorkflowMcpHealthRequestMock,
   isWorkflowMcpRequest: isWorkflowMcpRequestMock,
 }))
 
@@ -132,6 +138,8 @@ afterEach(() => {
   subscribeToAgentSessionEventsMock.mockReset()
   syncAgentCanvasMock.mockReset()
   handleWorkflowMcpRequestMock.mockReset()
+  getWorkflowMcpHealthSnapshotMock.mockReset()
+  isWorkflowMcpHealthRequestMock.mockImplementation((pathname: string) => pathname === '/api/opencode/workflow-mcp/health')
   isWorkflowMcpRequestMock.mockImplementation((pathname: string) => pathname === '/api/opencode/workflow-mcp')
 })
 
@@ -698,6 +706,47 @@ describe('workflow ai routes', () => {
     expect(JSON.parse(response.body)).toEqual({
       ok: true,
       via: 'mcp',
+    })
+  })
+
+  it('returns workflow MCP health snapshot from the dedicated health route', async () => {
+    getWorkflowMcpHealthSnapshotMock.mockReturnValueOnce({
+      status: 'ok',
+      authEnabled: true,
+      sessionStore: {
+        activeSessions: 2,
+        expiredSessionsCleaned: 1,
+        ttlMs: 600000,
+        maxSessions: 200,
+      },
+      toolMetrics: {
+        totalCalls: 3,
+        totalFailures: 1,
+        byTool: {
+          get_analysis_session_context: {
+            calls: 2,
+            failures: 0,
+          },
+        },
+      },
+    })
+
+    const handler = createServerHandler()
+    const response = createResponse()
+
+    await handler(createRequest('GET', '/api/opencode/workflow-mcp/health'), response)
+
+    expect(response.statusCode).toBe(200)
+    expect(JSON.parse(response.body)).toEqual({
+      status: 'ok',
+      authEnabled: true,
+      sessionStore: expect.objectContaining({
+        activeSessions: 2,
+        expiredSessionsCleaned: 1,
+      }),
+      toolMetrics: expect.objectContaining({
+        totalCalls: 3,
+      }),
     })
   })
 

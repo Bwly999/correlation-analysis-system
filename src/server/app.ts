@@ -29,7 +29,12 @@ import {
   subscribeToAgentSessionEvents,
   syncAgentCanvas,
 } from './opencode/gateway.js'
-import { handleWorkflowMcpRequest, isWorkflowMcpRequest } from './opencode/workflowMcpServer.js'
+import {
+  getWorkflowMcpHealthSnapshot,
+  handleWorkflowMcpRequest,
+  isWorkflowMcpHealthRequest,
+  isWorkflowMcpRequest,
+} from './opencode/workflowMcpServer.js'
 import {
   clearUserHistory,
   deleteUserWorkflow,
@@ -119,6 +124,11 @@ export const createServerHandler = () => async (request: IncomingMessage, respon
   }
 
   try {
+    if (request.method === 'GET' && isWorkflowMcpHealthRequest(url.pathname)) {
+      sendJson(response, 200, getWorkflowMcpHealthSnapshot())
+      return
+    }
+
     if (isWorkflowMcpRequest(url.pathname)) {
       await handleWorkflowMcpRequest(request, response)
       return

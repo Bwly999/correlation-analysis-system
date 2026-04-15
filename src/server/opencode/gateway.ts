@@ -220,6 +220,17 @@ const resolveWorkflowServerBaseUrl = () => {
 const resolveWorkflowMcpUrl = (serverBaseUrl?: string) =>
   `${(serverBaseUrl || resolveWorkflowServerBaseUrl()).replace(/\/$/, '')}/api/opencode/workflow-mcp`
 
+const buildWorkflowMcpHeaders = (sessionId: string, userId?: string) => ({
+  'x-workflow-ai-session-id': sessionId,
+  'x-workflow-storage-user-id':
+    userId || process.env.WORKFLOW_STORAGE_DEFAULT_USER_ID || 'server-demo-user',
+  ...(process.env.WORKFLOW_MCP_AUTH_TOKEN?.trim()
+    ? {
+        'x-workflow-mcp-auth-token': process.env.WORKFLOW_MCP_AUTH_TOKEN.trim(),
+      }
+    : {}),
+})
+
 const ensureTempDirectory = (sessionId: string) => {
   mkdirSync(OPENCODE_TEMP_ROOT, { recursive: true })
   return mkdtempSync(join(OPENCODE_TEMP_ROOT, `${sessionId}-`))
@@ -765,11 +776,7 @@ const ensureAgentRuntime = async (record: AgentSessionRecord) => {
     config: {
       type: 'remote',
       url: resolveWorkflowMcpUrl(),
-      headers: {
-        'x-workflow-ai-session-id': record.session.id,
-        'x-workflow-storage-user-id':
-          record.userId || process.env.WORKFLOW_STORAGE_DEFAULT_USER_ID || 'server-demo-user',
-      },
+      headers: buildWorkflowMcpHeaders(record.session.id, record.userId),
     },
   })
   await client.mcp.connect({ name: WORKFLOW_MCP_NAME })
@@ -1226,11 +1233,7 @@ export const runAnalysisAgentSessionLoop = async (
       config: {
         type: 'remote',
         url: resolveWorkflowMcpUrl(input.serverBaseUrl),
-        headers: {
-          'x-workflow-ai-session-id': input.sessionId,
-          'x-workflow-storage-user-id':
-            input.userId || process.env.WORKFLOW_STORAGE_DEFAULT_USER_ID || 'server-demo-user',
-        },
+        headers: buildWorkflowMcpHeaders(input.sessionId, input.userId),
       },
     })
     await client.mcp.connect({ name: WORKFLOW_MCP_NAME })

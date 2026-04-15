@@ -111,6 +111,7 @@ const createResponse = () =>
 describe('workflow MCP server', () => {
   beforeEach(() => {
     currentTools.clear()
+    delete process.env.WORKFLOW_MCP_AUTH_TOKEN
   })
 
   it('serves analysis session context for agent sessions', async () => {
@@ -133,6 +134,60 @@ describe('workflow MCP server', () => {
           name: '销量诊断流程',
         }),
       }),
+    })
+  })
+
+  it('registers a tool discovery endpoint for workflow MCP consumers', async () => {
+    const created = await createAgentSession({
+      request: buildAgentRequest(),
+      userId: 'user_1',
+    })
+
+    const request = createRequest(created.session.id)
+    const response = createResponse()
+
+    await handleWorkflowMcpRequest(request, response)
+
+    const tool = currentTools.get('list_workflow_tools')
+    expect(tool).toBeTypeOf('function')
+
+    const result = await tool?.({})
+    expect(result).toMatchObject({
+      structuredContent: {
+        total: expect.any(Number),
+        items: expect.arrayContaining([
+          expect.objectContaining({
+            name: 'get_analysis_session_context',
+          }),
+          expect.objectContaining({
+            name: 'list_workflow_tools',
+          }),
+        ]),
+      },
+    })
+  })
+
+  it('rejects requests without the internal MCP auth token when auth is enabled', async () => {
+    process.env.WORKFLOW_MCP_AUTH_TOKEN = 'test-mcp-token'
+
+    const created = await createAgentSession({
+      request: buildAgentRequest(),
+      userId: 'user_1',
+    })
+
+    const request = createRequest(created.session.id)
+    const response = createResponse()
+
+    await handleWorkflowMcpRequest(request, response)
+
+    expect(response.statusCode).toBe(401)
+    expect(JSON.parse(response.body)).toEqual({
+      jsonrpc: '2.0',
+      error: {
+        code: -32001,
+        message: 'workflow MCP 鉴权失败',
+      },
+      id: null,
     })
   })
 })
