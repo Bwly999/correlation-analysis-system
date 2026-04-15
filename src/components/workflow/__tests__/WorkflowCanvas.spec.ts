@@ -1041,33 +1041,43 @@ describe('WorkflowCanvas', () => {
     expect(wrapper.find('.workflow-page-sidebar').exists()).toBe(true)
   })
 
-  it('shows an execution workspace banner while agent loop is running and after auto-apply completes', async () => {
+  it('shows an execution workspace banner while agent session is streaming and after canvas sync completes', async () => {
     const aiStore = useWorkflowAiStore()
-    aiStore.agentLoopRunning = true
+    aiStore.streamStatus = 'streaming'
     aiStore.streamHeadline = '正在执行节点：Pearson 相关系数'
-    aiStore.agentLoopOutput = {
-      iterations: [
-        {
-          iteration: 1,
-          plan: {
-            summary: '先做相关性分析',
-            assumptions: [],
-            warnings: [],
-            questions: [],
-            operations: [],
-          },
-          executionResults: [],
-          interpretation: null,
-        },
-      ],
-      conclusion: {
-        summary: '价格和折扣对销量影响最明显',
-        findings: [],
-        recommendations: [],
-        caveats: [],
+    aiStore.projectionSnapshot = {
+      workflow: {
+        workflowId: 'wf_1',
+        workflowName: '销量分析',
+        draftNodeCount: 3,
+        draftEdgeCount: 2,
+        draftSummary: '已生成销量分析工作流草案',
+        versionCount: 1,
+        latestVersionId: 'version_1',
+        proposedPlan: null,
       },
-      totalDurationMs: 1800,
-      totalIterations: 1,
+      analysis: {
+        goal: '分析销量与价格关系',
+        summary: '价格和折扣对销量影响最明显',
+        candidateTargets: ['销量'],
+        candidateFactors: ['价格', '折扣'],
+        methods: ['Pearson 相关性分析'],
+        findings: ['价格和折扣对销量影响最明显'],
+        risks: [],
+        recommendations: [],
+      },
+      execution: {
+        status: 'running',
+        latestAction: '正在执行节点：Pearson 相关系数',
+        toolCalls: [],
+        pendingApprovals: [],
+      },
+      canvasSync: {
+        status: 'synced',
+        message: '已自动同步到画布',
+      },
+      error: null,
+      updatedAt: Date.now(),
     }
     aiStore.lastAppliedSnapshotId = 'snapshot_1'
 

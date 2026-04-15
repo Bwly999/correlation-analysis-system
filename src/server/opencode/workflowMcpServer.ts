@@ -4,6 +4,7 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import * as z from 'zod/v4'
 import type { WorkflowAiPlan, WorkflowAiPlanRequest } from '../../ai/types.js'
 import { validateWorkflowAiPlanAgainstContext } from '../../ai/planValidation.js'
+import { getAgentSessionRecord } from './agentSessionStore.js'
 import {
   getUserWorkflowById,
   getUserWorkflowVersion,
@@ -15,6 +16,32 @@ import { getWorkflowAiSessionRecord } from '../workflowAi/orchestrator.js'
 type WorkflowMcpContext = {
   sessionId: string
   userId: string
+}
+
+type WorkflowMcpSessionRecord = {
+  request: WorkflowAiPlanRequest
+  state: {
+    sessionId: string
+    mode: WorkflowAiPlanRequest['mode']
+    prompt: string
+    status: string
+    contextHints?: WorkflowAiPlanRequest['contextHints'] | null
+    missingInfo: Array<{
+      key: string
+      label: string
+      reason: string
+      blocking: boolean
+      suggestions?: string[]
+    }>
+    diagnostics: {
+      issues: Array<{
+        code: string
+        message: string
+        level: 'info' | 'warn' | 'error'
+      }>
+      lastFailedTool?: string
+    }
+  }
 }
 
 const WORKFLOW_MCP_PATH = '/api/opencode/workflow-mcp'
@@ -53,12 +80,39 @@ const resolveWorkflowMcpContext = (headers: IncomingMessage['headers']): Workflo
   }
 }
 
-const getSessionRecordOrThrow = (context: WorkflowMcpContext) => {
-  const sessionRecord = getWorkflowAiSessionRecord(context.sessionId)
-  if (!sessionRecord) {
-    throw new Error(`未找到会话 ${context.sessionId}`)
+const getSessionRecordOrThrow = (context: WorkflowMcpContext): WorkflowMcpSessionRecord => {
+  const workflowAiRecord = getWorkflowAiSessionRecord(context.sessionId)
+  if (workflowAiRecord) {
+    return workflowAiRecord
   }
-  return sessionRecord
+
+  const agentRecord = getAgentSessionRecord(context.sessionId)
+  if (agentRecord) {
+    return {
+      request: agentRecord.request,
+      state: {
+        sessionId: agentRecord.session.id,
+        mode: agentRecord.session.mode,
+        prompt: agentRecord.session.prompt,
+        status: agentRecord.session.status,
+        contextHints: agentRecord.request.contextHints ?? null,
+        missingInfo: [],
+        diagnostics: {
+          issues: agentRecord.projection.error
+            ? [
+                {
+                  code: 'agent_projection_error',
+                  message: agentRecord.projection.error.message,
+                  level: 'error' as const,
+                },
+              ]
+            : [],
+        },
+      },
+    }
+  }
+
+  throw new Error(`未找到会话 ${context.sessionId}`)
 }
 
 const getExistingWorkflowContext = (request: WorkflowAiPlanRequest) => ({

@@ -12,6 +12,12 @@ const {
   getWorkflowAiSessionRecordMock,
   runAnalysisAgentSessionLoopMock,
   runAgentLoopMock,
+  createAgentSessionMock,
+  getAgentProjectionMock,
+  getAgentSessionSnapshotMock,
+  sendAgentSessionMessageMock,
+  subscribeToAgentSessionEventsMock,
+  syncAgentCanvasMock,
   handleWorkflowMcpRequestMock,
   isWorkflowMcpRequestMock,
 } = vi.hoisted(() => ({
@@ -24,6 +30,12 @@ const {
   getWorkflowAiSessionRecordMock: vi.fn(),
   runAnalysisAgentSessionLoopMock: vi.fn(),
   runAgentLoopMock: vi.fn(),
+  createAgentSessionMock: vi.fn(),
+  getAgentProjectionMock: vi.fn(),
+  getAgentSessionSnapshotMock: vi.fn(),
+  sendAgentSessionMessageMock: vi.fn(),
+  subscribeToAgentSessionEventsMock: vi.fn(),
+  syncAgentCanvasMock: vi.fn(),
   handleWorkflowMcpRequestMock: vi.fn(),
   isWorkflowMcpRequestMock: vi.fn((pathname: string) => pathname === '/api/opencode/workflow-mcp'),
 }))
@@ -45,7 +57,13 @@ vi.mock('../workflowAi/orchestrator.js', () => ({
 }))
 
 vi.mock('../opencode/gateway.js', () => ({
+  createAgentSession: createAgentSessionMock,
+  getAgentProjection: getAgentProjectionMock,
+  getAgentSession: getAgentSessionSnapshotMock,
   runAnalysisAgentSessionLoop: runAnalysisAgentSessionLoopMock,
+  sendAgentSessionMessage: sendAgentSessionMessageMock,
+  subscribeToAgentSessionEvents: subscribeToAgentSessionEventsMock,
+  syncAgentCanvas: syncAgentCanvasMock,
 }))
 
 vi.mock('../opencode/workflowMcpServer.js', () => ({
@@ -107,35 +125,204 @@ afterEach(() => {
   getWorkflowAiSessionRecordMock.mockReset()
   runAnalysisAgentSessionLoopMock.mockReset()
   runAgentLoopMock.mockReset()
+  createAgentSessionMock.mockReset()
+  getAgentProjectionMock.mockReset()
+  getAgentSessionSnapshotMock.mockReset()
+  sendAgentSessionMessageMock.mockReset()
+  subscribeToAgentSessionEventsMock.mockReset()
+  syncAgentCanvasMock.mockReset()
   handleWorkflowMcpRequestMock.mockReset()
   isWorkflowMcpRequestMock.mockImplementation((pathname: string) => pathname === '/api/opencode/workflow-mcp')
 })
 
 describe('workflow ai routes', () => {
-  it('starts an analysis agent session from the new session route', async () => {
-    startWorkflowAiSessionMock.mockReturnValueOnce({
-      sessionId: 'session_1',
-      mode: 'create',
-      status: 'idle',
-      prompt: '帮我分析影响销量的关键因素',
-      draft: {
-        summary: '',
-        assumptions: [],
-        warnings: [],
-        questions: [],
-        nodes: [],
-        edges: [],
+  it('creates an agent session from the new session route', async () => {
+    createAgentSessionMock.mockResolvedValueOnce({
+      session: {
+        id: 'agent_1',
+        mode: 'edit',
+        prompt: '帮我分析影响销量的关键因素',
+        status: 'idle',
+        profile: {
+          id: 'custom',
+          name: '测试模型',
+          model: 'glm-4.7',
+        },
+        workflowId: null,
+        createdAt: 1,
+        updatedAt: 1,
       },
-      trace: [],
-      diagnostics: {
-        issues: [],
+      projection: {
+        workflow: {
+          workflowId: null,
+          workflowName: '销量诊断流程',
+          draftNodeCount: 2,
+          draftEdgeCount: 1,
+          draftSummary: '已载入当前画布，等待开始分析。',
+          versionCount: 0,
+          latestVersionId: null,
+          proposedPlan: null,
+        },
+        analysis: {
+          goal: '帮我分析影响销量的关键因素',
+          summary: '系统已记录当前分析目标，等待模型开始处理。',
+          candidateTargets: ['sales'],
+          candidateFactors: ['price', 'discount'],
+          methods: [],
+          findings: [],
+          risks: [],
+          recommendations: [],
+        },
+        execution: {
+          status: 'idle',
+          latestAction: '等待用户发送分析指令',
+          toolCalls: [],
+          pendingApprovals: [],
+        },
+        canvasSync: {
+          status: 'idle',
+          message: '当前草案尚未同步到画布',
+        },
+        error: null,
+        updatedAt: 1,
       },
-      missingInfo: [],
     })
 
     const handler = createServerHandler()
     const response = createResponse()
 
+    await handler(
+      createRequest('POST', '/api/agent/sessions', {
+        mode: 'edit',
+        prompt: '帮我分析影响销量的关键因素',
+        profile: { id: 'custom', name: '测试模型', baseUrl: 'http://example.com', model: 'glm-4.7', enabled: true, source: 'custom' },
+        workflowSnapshot: {
+          name: '销量诊断流程',
+          nodes: [{ id: 'node_1' }, { id: 'node_2' }],
+          edges: [{ id: 'edge_1', source: 'node_1', target: 'node_2' }],
+        },
+        nodeCatalog: [],
+      }),
+      response,
+    )
+
+    expect(response.statusCode).toBe(200)
+    expect(createAgentSessionMock).toHaveBeenCalledWith({
+      request: expect.objectContaining({
+        prompt: '帮我分析影响销量的关键因素',
+      }),
+      userId: 'server-demo-user',
+    })
+    expect(JSON.parse(response.body)).toEqual({
+      session: expect.objectContaining({
+        id: 'agent_1',
+        status: 'idle',
+      }),
+      projection: expect.objectContaining({
+        workflow: expect.objectContaining({
+          workflowName: '销量诊断流程',
+        }),
+      }),
+    })
+  })
+
+  it('sends a message through the agent session message route', async () => {
+    sendAgentSessionMessageMock.mockResolvedValueOnce({
+      session: {
+        id: 'agent_1',
+        mode: 'edit',
+        prompt: '帮我分析影响销量的关键因素',
+        status: 'completed',
+        profile: {
+          id: 'custom',
+          name: '测试模型',
+          model: 'glm-4.7',
+        },
+        workflowId: null,
+        createdAt: 1,
+        updatedAt: 2,
+      },
+      projection: {
+        workflow: {
+          workflowId: null,
+          workflowName: '销量诊断流程',
+          draftNodeCount: 2,
+          draftEdgeCount: 1,
+          draftSummary: '建议先保留导入、筛选和相关性分析三段主链。',
+          versionCount: 0,
+          latestVersionId: null,
+          proposedPlan: null,
+        },
+        analysis: {
+          goal: '帮我分析影响销量的关键因素',
+          summary: '价格和折扣目前是最值得优先验证的两个候选因子。',
+          candidateTargets: ['sales'],
+          candidateFactors: ['price', 'discount'],
+          methods: ['相关性分析'],
+          findings: ['销量适合作为目标字段'],
+          risks: [],
+          recommendations: ['先校验缺失值和异常值'],
+        },
+        execution: {
+          status: 'completed',
+          latestAction: '本轮分析已完成',
+          toolCalls: [],
+          pendingApprovals: [],
+        },
+        canvasSync: {
+          status: 'idle',
+          message: '当前草案尚未同步到画布',
+        },
+        error: null,
+        updatedAt: 2,
+      },
+      assistantMessage: {
+        id: 'assistant_1',
+        role: 'assistant',
+        content: '价格和折扣目前是最值得优先验证的两个候选因子。',
+        status: 'completed',
+        createdAt: 2,
+      },
+    })
+
+    const handler = createServerHandler()
+    const response = createResponse()
+
+    await handler(
+      createRequest('POST', '/api/agent/sessions/agent_1/messages', {
+        content: '继续分析当前销量问题',
+      }),
+      response,
+    )
+
+    expect(response.statusCode).toBe(200)
+    expect(sendAgentSessionMessageMock).toHaveBeenCalledWith(
+      {
+        sessionId: 'agent_1',
+        message: '继续分析当前销量问题',
+      },
+      expect.any(Function),
+    )
+    expect(JSON.parse(response.body)).toEqual({
+      session: expect.objectContaining({
+        id: 'agent_1',
+        status: 'completed',
+      }),
+      projection: expect.objectContaining({
+        analysis: expect.objectContaining({
+          summary: '价格和折扣目前是最值得优先验证的两个候选因子。',
+        }),
+      }),
+      assistantMessage: expect.objectContaining({
+        role: 'assistant',
+      }),
+    })
+  })
+
+  it('returns 404 for removed legacy analysis-agent routes', async () => {
+    const handler = createServerHandler()
+
+    const startResponse = createResponse()
     await handler(
       createRequest('POST', '/api/analysis-agent/session/start', {
         mode: 'create',
@@ -143,58 +330,10 @@ describe('workflow ai routes', () => {
         profile: { id: 'custom', name: '测试模型', baseUrl: 'http://example.com', model: 'test', enabled: true, source: 'custom' },
         nodeCatalog: [],
       }),
-      response,
+      startResponse,
     )
 
-    expect(response.statusCode).toBe(200)
-    expect(JSON.parse(response.body)).toEqual({
-      session: expect.objectContaining({
-        sessionId: 'session_1',
-        userGoal: '帮我分析影响销量的关键因素',
-        phase: 'intent',
-        conversation: [
-          expect.objectContaining({
-            role: 'user',
-            content: '帮我分析影响销量的关键因素',
-          }),
-        ],
-        artifacts: [],
-        approvalRequests: [],
-      }),
-    })
-  })
-
-  it('syncs canvas state through the analysis agent canvas route', async () => {
-    getWorkflowAiSessionMock.mockReturnValueOnce({
-      sessionId: 'session_1',
-      mode: 'edit',
-      status: 'waiting_user',
-      prompt: '继续分析',
-      draft: {
-        summary: '待补全草稿',
-        assumptions: [],
-        warnings: [],
-        questions: ['请确认目标字段'],
-        nodes: [],
-        edges: [],
-      },
-      trace: [],
-      diagnostics: {
-        issues: [],
-      },
-      missingInfo: [
-        {
-          key: 'question_1',
-          label: '待确认项 1',
-          reason: '请确认目标字段',
-          blocking: true,
-        },
-      ],
-    })
-
-    const handler = createServerHandler()
-    const response = createResponse()
-
+    const canvasResponse = createResponse()
     await handler(
       createRequest('POST', '/api/analysis-agent/session/session_1/canvas-sync', {
         workflowSnapshot: {
@@ -203,17 +342,13 @@ describe('workflow ai routes', () => {
           edges: [],
         },
       }),
-      response,
+      canvasResponse,
     )
 
-    expect(response.statusCode).toBe(200)
-    expect(JSON.parse(response.body)).toEqual({
-      session: expect.objectContaining({
-        sessionId: 'session_1',
-        phase: 'waiting_for_input',
-      }),
-      syncSummary: '已同步当前画布，共 1 个节点、0 条连线',
-    })
+    expect(startResponse.statusCode).toBe(404)
+    expect(canvasResponse.statusCode).toBe(404)
+    expect(JSON.parse(startResponse.body)).toEqual({ message: '未找到接口' })
+    expect(JSON.parse(canvasResponse.body)).toEqual({ message: '未找到接口' })
   })
 
   it('returns diagnostics together with the generated plan', async () => {
@@ -566,68 +701,7 @@ describe('workflow ai routes', () => {
     })
   })
 
-  it('routes analysis agent loop execution through the opencode gateway', async () => {
-    getWorkflowAiSessionRecordMock.mockReturnValueOnce({
-      request: {
-        mode: 'create',
-        prompt: '请自动分析当前工作流',
-        profile: {
-          id: 'custom',
-          name: '测试模型',
-          baseUrl: 'http://example.com',
-          model: 'test',
-          enabled: true,
-          source: 'custom',
-        },
-        nodeCatalog: [],
-      },
-      state: {
-        sessionId: 'session_1',
-        mode: 'create',
-        status: 'completed',
-        prompt: '请自动分析当前工作流',
-        draft: {
-          summary: '已生成',
-          assumptions: [],
-          warnings: [],
-          questions: [],
-          nodes: [],
-          edges: [],
-        },
-        trace: [],
-        diagnostics: {
-          issues: [],
-        },
-        missingInfo: [],
-      },
-    })
-    runAgentLoopMock.mockImplementationOnce(async () => {
-      throw new Error('legacy agent loop should not be used')
-    })
-    runAnalysisAgentSessionLoopMock.mockImplementationOnce(async (_input, emitEvent) => {
-      emitEvent({
-        type: 'loop_started',
-        maxIterations: 2,
-      })
-      emitEvent({
-        type: 'loop_completed',
-        totalIterations: 1,
-        totalDurationMs: 1200,
-        output: {
-          iterations: [],
-          conclusion: null,
-          totalIterations: 1,
-          totalDurationMs: 1200,
-        },
-      })
-      return {
-        iterations: [],
-        conclusion: null,
-        totalIterations: 1,
-        totalDurationMs: 1200,
-      }
-    })
-
+  it('returns 404 for removed legacy run-agent-loop route', async () => {
     const handler = createServerHandler()
     const response = createResponse()
 
@@ -640,24 +714,7 @@ describe('workflow ai routes', () => {
       response,
     )
 
-    expect(response.statusCode).toBe(200)
-    expect(runAnalysisAgentSessionLoopMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        sessionId: 'session_1',
-        config: {
-          maxIterations: 2,
-        },
-        sessionRecord: expect.objectContaining({
-          request: expect.objectContaining({
-            prompt: '请自动分析当前工作流',
-          }),
-        }),
-      }),
-      expect.any(Function),
-    )
-    expect(runAgentLoopMock).not.toHaveBeenCalled()
-    expect(response.headersMap['Content-Type']).toContain('application/x-ndjson')
-    const lines = response.body.trim().split('\n').map((line) => JSON.parse(line))
-    expect(lines.map((line) => line.type)).toEqual(['loop_started', 'loop_completed'])
+    expect(response.statusCode).toBe(404)
+    expect(JSON.parse(response.body)).toEqual({ message: '未找到接口' })
   })
 })

@@ -13,7 +13,7 @@ import {
 import Button from 'primevue/button'
 import { useWorkflowStore } from '@/stores/workflowStore'
 import { useWorkflowAiStore } from '@/stores/workflowAiStore'
-import type { WorkflowAiModelProfile, WorkflowAiStreamEvent } from '@/ai/types'
+import type { AgentSessionEvent, WorkflowAiModelProfile } from '@/ai/types'
 
 defineProps<{
   visible: boolean
@@ -41,7 +41,7 @@ const analysisAgentSession = computed(() => aiStore.analysisAgentSession)
 const systemProfiles = computed(() => aiStore.systemProfiles)
 const customProfiles = computed(() => aiStore.customProfiles)
 const hasRepairAttempt = computed(() =>
-  aiStore.generationDiagnostics?.attempts.some((attempt) => attempt.trigger === 'repair'),
+  aiStore.generationDiagnostics?.attempts.some((attempt: { trigger: string }) => attempt.trigger === 'repair'),
 )
 const sessionState = computed(() => aiStore.sessionState)
 const sessionStatusLabel = computed(() => {
@@ -56,7 +56,16 @@ const localSchemaSummaries = computed(() => aiStore.contextHints?.schemaSummarie
 const hasLocalContext = computed(
   () => aiStore.toolTrace.length > 0 || localRecipes.value.length > 0 || localSchemaSummaries.value.length > 0,
 )
-const timelineEvents = computed(() => aiStore.streamEvents.filter((event) => event.type !== 'text_delta'))
+const timelineEvents = computed(() => aiStore.streamEvents.filter((event) => event.type !== 'message.delta'))
+const latestAssistantOutput = computed(() => {
+  if (aiStore.streamingMessage) {
+    return aiStore.streamingMessage
+  }
+
+  return [...aiStore.agentMessages]
+    .reverse()
+    .find((item) => item.kind === 'assistant')?.content ?? ''
+})
 const missingInfoAnswers = reactive<Record<string, string>>({})
 const streamStatusLabel = computed(() => {
   if (aiStore.streamStatus === 'streaming') return '生成中'
@@ -86,14 +95,19 @@ const describeDraftNodeStatus = (status: string) => {
   return '保留'
 }
 
-const describeTimelineEvent = (event: WorkflowAiStreamEvent) => {
-  if (event.type === 'started') return event.message ?? 'AI 编排已开始'
-  if (event.type === 'attempt_started') {
-    return event.message ?? `第 ${event.attempt} 次${event.trigger === 'repair' ? '自动修复重试' : '首次生成'}`
+const describeTimelineEvent = (event: AgentSessionEvent) => {
+  if (event.type === 'session.status.updated') {
+    if (event.session.status === 'running') return '分析会话正在执行'
+    if (event.session.status === 'completed') return '分析会话已完成'
+    if (event.session.status === 'failed') return '分析会话执行失败'
+    return '分析会话已创建'
   }
-  if (event.type === 'stage_changed') return event.message ?? `当前阶段：${event.stage}`
-  if (event.type === 'diagnostic') return event.message ?? '已收到诊断信息'
-  if (event.type === 'completed') return '计划生成完成'
+  if (event.type === 'projection.workflow.updated') return event.projection.draftSummary || '工作流草案已更新'
+  if (event.type === 'projection.analysis.updated') return event.projection.summary || '分析状态已更新'
+  if (event.type === 'projection.execution.updated') return event.projection.latestAction || '执行状态已更新'
+  if (event.type === 'projection.canvas_sync.updated') return event.projection.message || '画布同步状态已更新'
+  if (event.type === 'projection.error.updated') return event.projection.message
+  if (event.type === 'message.completed') return event.message.content || '代理已返回新消息'
   if (event.type === 'failed') return event.message
   return ''
 }
@@ -500,17 +514,17 @@ watch(
       </section>
 
       <section
-        v-if="aiStore.streamOutputs.length"
+        v-if="latestAssistantOutput"
         data-testid="workflow-ai-stream-output"
         class="workflow-ai-panel__section"
       >
         <div class="workflow-ai-panel__section-title">
           <Bot :size="14" />
-          <span>模型实时输出</span>
+          <span>代理实时输出</span>
         </div>
-        <div v-for="output in aiStore.streamOutputs" :key="`${output.trigger}-${output.attempt}`" class="workflow-ai-panel__list-block">
-          <strong>第 {{ output.attempt }} 次 · {{ output.trigger === 'repair' ? '自动修复重试' : '首次生成' }}</strong>
-          <pre class="workflow-ai-panel__raw-output">{{ output.text || '正在等待模型输出...' }}</pre>
+        <div class="workflow-ai-panel__list-block">
+          <strong>{{ aiStore.streamingMessage ? '正在生成中' : '最新代理消息' }}</strong>
+          <pre class="workflow-ai-panel__raw-output">{{ latestAssistantOutput }}</pre>
         </div>
       </section>
 

@@ -245,6 +245,167 @@ export interface AnalysisAgentSessionState {
   workflowSession: WorkflowAiSessionState
 }
 
+export interface AgentProjectionWorkflowState {
+  workflowId?: string | null
+  workflowName: string
+  draftNodeCount: number
+  draftEdgeCount: number
+  draftSummary: string
+  versionCount: number
+  latestVersionId?: string | null
+  proposedPlan: WorkflowAiPlan | null
+}
+
+export interface AgentProjectionAnalysisState {
+  goal: string
+  summary: string
+  candidateTargets: string[]
+  candidateFactors: string[]
+  methods: string[]
+  findings: string[]
+  risks: string[]
+  recommendations: string[]
+}
+
+export interface AgentProjectionExecutionState {
+  status: 'idle' | 'running' | 'completed' | 'failed'
+  latestAction: string
+  toolCalls: AnalysisAgentToolCall[]
+  pendingApprovals: AnalysisAgentApprovalRequest[]
+  latestToolSummary?: string
+  lastFailure?: string
+}
+
+export interface AgentProjectionCanvasSyncState {
+  status: 'idle' | 'synced' | 'failed'
+  message: string
+  syncedAt?: number
+}
+
+export interface AgentProjectionErrorState {
+  message: string
+  detail?: string
+  occurredAt: number
+}
+
+export interface AgentProjectionSnapshot {
+  workflow: AgentProjectionWorkflowState
+  analysis: AgentProjectionAnalysisState
+  execution: AgentProjectionExecutionState
+  canvasSync: AgentProjectionCanvasSyncState
+  error: AgentProjectionErrorState | null
+  updatedAt: number
+}
+
+export interface AgentSessionMessage {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  status: 'streaming' | 'completed'
+  createdAt: number
+}
+
+export interface AgentConversationEntry {
+  id: string
+  kind:
+    | 'user'
+    | 'assistant'
+    | 'workflow_projection'
+    | 'analysis_projection'
+    | 'execution_projection'
+    | 'canvas_sync'
+    | 'debug'
+  title: string
+  content: string
+  details?: string[]
+  status?: 'streaming' | 'completed' | 'failed'
+}
+
+export interface AgentSessionState {
+  id: string
+  mode: WorkflowAiPlanMode
+  prompt: string
+  status: 'idle' | 'running' | 'completed' | 'failed'
+  profile: Pick<WorkflowAiModelProfile, 'id' | 'name' | 'model'>
+  workflowId?: string | null
+  createdAt: number
+  updatedAt: number
+}
+
+export type AgentSessionEvent =
+  | {
+      type: 'session.status.updated'
+      session: AgentSessionState
+    }
+  | {
+      type: 'message.delta'
+      sessionId: string
+      messageId: string
+      delta: string
+    }
+  | {
+      type: 'message.completed'
+      sessionId: string
+      message: AgentSessionMessage
+    }
+  | {
+      type: 'projection.workflow.updated'
+      projection: AgentProjectionWorkflowState
+    }
+  | {
+      type: 'projection.analysis.updated'
+      projection: AgentProjectionAnalysisState
+    }
+  | {
+      type: 'projection.execution.updated'
+      projection: AgentProjectionExecutionState
+    }
+  | {
+      type: 'projection.canvas_sync.updated'
+      projection: AgentProjectionCanvasSyncState
+    }
+  | {
+      type: 'projection.error.updated'
+      projection: AgentProjectionErrorState
+    }
+  | {
+      type: 'failed'
+      message: string
+    }
+
+export interface AgentSessionStartResponse {
+  session: AgentSessionState
+  projection: AgentProjectionSnapshot
+}
+
+export interface AgentSessionGetResponse {
+  session: AgentSessionState
+  projection: AgentProjectionSnapshot
+}
+
+export interface AgentSessionMessageRequest {
+  content: string
+}
+
+export interface AgentSessionMessageResponse {
+  session: AgentSessionState
+  projection: AgentProjectionSnapshot
+  assistantMessage?: AgentSessionMessage
+}
+
+export interface AgentSessionCanvasSyncRequest {
+  workflowSnapshot: {
+    name: string
+    nodes: unknown[]
+    edges: unknown[]
+  }
+}
+
+export interface AgentSessionCanvasSyncResponse {
+  projection: AgentProjectionSnapshot
+  syncSummary: string
+}
+
 export type WorkflowAiGenerationStage = 'model_request' | 'parse' | 'normalize' | 'validate' | 'apply'
 
 export interface WorkflowAiGenerationIssue {

@@ -1,5 +1,12 @@
 import type {
-  AgentLoopOutput,
+  AgentSessionCanvasSyncRequest,
+  AgentSessionCanvasSyncResponse,
+  AgentSessionEvent,
+  AgentSessionGetResponse,
+  AgentSessionMessageRequest,
+  AgentSessionMessageResponse,
+  AgentSessionStartResponse,
+  AgentProjectionSnapshot,
   WorkflowAiPlanRequest,
   WorkflowAiSessionInputRequest,
   WorkflowAiModelProfile,
@@ -8,17 +15,31 @@ import type {
 import {
   WorkflowAiRequestError,
   fetchSystemModelProfiles as fetchSystemModelProfilesFromWorkflowAi,
+  createAgentSession as createAgentSessionFromWorkflowAi,
+  getAgentProjection as getAgentProjectionFromWorkflowAi,
+  getAgentSession as getAgentSessionFromWorkflowAi,
   requestWorkflowAiPlan as requestWorkflowAiPlanFromWorkflowAi,
-  runAnalysisAgentLoop as runAnalysisAgentLoopFromWorkflowAi,
   runWorkflowAiSession as runWorkflowAiSessionFromWorkflowAi,
+  sendAgentSessionMessage as sendAgentSessionMessageFromWorkflowAi,
+  streamAgentSessionEvents as streamAgentSessionEventsFromWorkflowAi,
   startWorkflowAiSession as startWorkflowAiSessionFromWorkflowAi,
   streamWorkflowAiPlan as streamWorkflowAiPlanFromWorkflowAi,
   submitWorkflowAiSessionInput as submitWorkflowAiSessionInputFromWorkflowAi,
+  syncAgentCanvas as syncAgentCanvasFromWorkflowAi,
   testWorkflowAiModelProfile as testWorkflowAiModelProfileFromWorkflowAi,
 } from '@/services/workflowAi'
 
 export { WorkflowAiRequestError }
-export type { AgentLoopConfig, AgentLoopOutput } from '@/services/workflowAi'
+export type {
+  AgentSessionCanvasSyncRequest,
+  AgentSessionCanvasSyncResponse,
+  AgentSessionEvent,
+  AgentSessionGetResponse,
+  AgentSessionMessageRequest,
+  AgentSessionMessageResponse,
+  AgentSessionStartResponse,
+  AgentProjectionSnapshot,
+}
 
 export const requestWorkflowAiPlan = (request: WorkflowAiPlanRequest) =>
   requestWorkflowAiPlanFromWorkflowAi(request)
@@ -30,6 +51,30 @@ export const streamWorkflowAiPlan = (
 
 export const startWorkflowAiSession = (request: WorkflowAiPlanRequest) =>
   startWorkflowAiSessionFromWorkflowAi(request)
+
+export const createAgentSession = (request: WorkflowAiPlanRequest): Promise<AgentSessionStartResponse> =>
+  createAgentSessionFromWorkflowAi(request)
+
+export const getAgentSession = (sessionId: string): Promise<AgentSessionGetResponse> =>
+  getAgentSessionFromWorkflowAi(sessionId)
+
+export const sendAgentSessionMessage = (
+  sessionId: string,
+  request: AgentSessionMessageRequest,
+): Promise<AgentSessionMessageResponse> => sendAgentSessionMessageFromWorkflowAi(sessionId, request)
+
+export const streamAgentSessionEvents = (
+  sessionId: string,
+  options?: Parameters<typeof streamAgentSessionEventsFromWorkflowAi>[1],
+) => streamAgentSessionEventsFromWorkflowAi(sessionId, options)
+
+export const getAgentProjection = (sessionId: string): Promise<AgentProjectionSnapshot> =>
+  getAgentProjectionFromWorkflowAi(sessionId)
+
+export const syncAgentCanvas = (
+  sessionId: string,
+  request: AgentSessionCanvasSyncRequest,
+): Promise<AgentSessionCanvasSyncResponse> => syncAgentCanvasFromWorkflowAi(sessionId, request)
 
 export const runWorkflowAiSession = (
   sessionId: string,
@@ -47,9 +92,3 @@ export const fetchSystemModelProfiles = (): Promise<WorkflowAiModelProfile[]> =>
 export const testWorkflowAiModelProfile = (
   profile: WorkflowAiModelProfile,
 ): Promise<WorkflowAiModelTestResult> => testWorkflowAiModelProfileFromWorkflowAi(profile)
-
-export const runAnalysisAgentLoop = (
-  sessionId: string,
-  config?: Parameters<typeof runAnalysisAgentLoopFromWorkflowAi>[1],
-  options?: Parameters<typeof runAnalysisAgentLoopFromWorkflowAi>[2],
-): Promise<AgentLoopOutput> => runAnalysisAgentLoopFromWorkflowAi(sessionId, config, options)

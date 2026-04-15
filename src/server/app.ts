@@ -7,21 +7,28 @@ import {
   toPublicModelProfile,
 } from './workflowAi/profiles.js'
 import type {
+  AgentSessionCanvasSyncRequest,
+  AgentSessionEvent,
+  AgentSessionMessageRequest,
   WorkflowAiModelProfile,
   WorkflowAiPlanRequest,
-  WorkflowAiSessionState,
   WorkflowAiStreamEvent,
 } from '../ai/types.js'
 import {
   getWorkflowAiSession,
-  getWorkflowAiSessionRecord,
   runWorkflowAiSession,
   startWorkflowAiSession,
   submitWorkflowAiSessionInput,
 } from './workflowAi/orchestrator.js'
 import { proxyAnalysisRequest } from './analysisProxy.js'
-import type { AgentLoopConfig } from './agentLoop/types.js'
-import { runAnalysisAgentSessionLoop } from './opencode/gateway.js'
+import {
+  createAgentSession,
+  getAgentProjection,
+  getAgentSession,
+  sendAgentSessionMessage,
+  subscribeToAgentSessionEvents,
+  syncAgentCanvas,
+} from './opencode/gateway.js'
 import { handleWorkflowMcpRequest, isWorkflowMcpRequest } from './opencode/workflowMcpServer.js'
 import {
   clearUserHistory,
@@ -61,6 +68,10 @@ const writeNdjsonEvent = (response: ServerResponse, event: WorkflowAiStreamEvent
   response.write(`${JSON.stringify(event)}\n`)
 }
 
+const writeAgentNdjsonEvent = (response: ServerResponse, event: AgentSessionEvent) => {
+  response.write(`${JSON.stringify(event)}\n`)
+}
+
 const readJsonBody = async <T>(request: IncomingMessage): Promise<T> => {
   const chunks: Buffer[] = []
 
@@ -83,34 +94,6 @@ const sendError = (response: ServerResponse, error: unknown) => {
   sendJson(response, statusCode, diagnostics ? { message, diagnostics } : { message })
 }
 
-const mapAnalysisAgentPhase = (session: WorkflowAiSessionState) => {
-  if (session.status === 'waiting_user') return 'waiting_for_input'
-  if (session.status === 'completed') return 'completed'
-  if (session.status === 'failed') return 'failed'
-  if (session.status === 'running') return 'executing'
-  return 'intent'
-}
-
-const toAnalysisAgentSession = (session: WorkflowAiSessionState) => ({
-  ...session,
-  userGoal: session.prompt,
-  phase: mapAnalysisAgentPhase(session),
-  conversation: [
-    {
-      id: 'user_goal',
-      role: 'user',
-      content: session.prompt,
-    },
-  ],
-  artifacts: [],
-  approvalRequests: session.missingInfo.map((item) => ({
-    key: item.key,
-    label: item.label,
-    reason: item.reason,
-    blocking: item.blocking,
-  })),
-})
-
 export const createServerHandler = () => async (request: IncomingMessage, response: ServerResponse) => {
   const url = new URL(request.url || '/', 'http://127.0.0.1')
   const currentUser = resolveServerStorageUser(request.headers)
@@ -122,6 +105,11 @@ export const createServerHandler = () => async (request: IncomingMessage, respon
   )
   const workflowVersionsMatch = url.pathname.match(/^\/api\/storage\/workflows\/([^/]+)\/versions$/)
   const workflowDetailMatch = url.pathname.match(/^\/api\/storage\/workflows\/([^/]+)$/)
+  const agentSessionMessagesMatch = url.pathname.match(/^\/api\/agent\/sessions\/([^/]+)\/messages$/)
+  const agentSessionEventsMatch = url.pathname.match(/^\/api\/agent\/sessions\/([^/]+)\/events$/)
+  const agentSessionProjectionMatch = url.pathname.match(/^\/api\/agent\/sessions\/([^/]+)\/projection$/)
+  const agentSessionCanvasSyncMatch = url.pathname.match(/^\/api\/agent\/sessions\/([^/]+)\/canvas-sync$/)
+  const agentSessionDetailMatch = url.pathname.match(/^\/api\/agent\/sessions\/([^/]+)$/)
 
   if (request.method === 'OPTIONS') {
     setCorsHeaders(response)
@@ -138,6 +126,88 @@ export const createServerHandler = () => async (request: IncomingMessage, respon
 
     if (request.method === 'GET' && url.pathname === '/api/storage/me') {
       sendJson(response, 200, currentUser)
+      return
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/agent/sessions') {
+      const body = await readJsonBody<WorkflowAiPlanRequest>(request)
+      const result = await createAgentSession({
+        request: body,
+        userId: currentUser.id,
+      })
+      sendJson(response, 200, result)
+      return
+    }
+
+    if (request.method === 'GET' && agentSessionDetailMatch) {
+      const sessionId = decodeURIComponent(agentSessionDetailMatch[1] ?? '')
+      const result = getAgentSession(sessionId)
+      if (!result) {
+        sendJson(response, 404, { message: '未找到 Agent 会话' })
+        return
+      }
+      sendJson(response, 200, result)
+      return
+    }
+
+    if (request.method === 'POST' && agentSessionMessagesMatch) {
+      const sessionId = decodeURIComponent(agentSessionMessagesMatch[1] ?? '')
+      const body = await readJsonBody<AgentSessionMessageRequest>(request)
+      const result = await sendAgentSessionMessage(
+        {
+          sessionId,
+          message: body.content,
+        },
+        () => undefined,
+      )
+      sendJson(response, 200, result)
+      return
+    }
+
+    if (request.method === 'GET' && agentSessionEventsMatch) {
+      const sessionId = decodeURIComponent(agentSessionEventsMatch[1] ?? '')
+      const snapshot = getAgentSession(sessionId)
+      if (!snapshot) {
+        sendJson(response, 404, { message: '未找到 Agent 会话' })
+        return
+      }
+
+      startNdjsonStream(response)
+      const unsubscribe = subscribeToAgentSessionEvents(sessionId, (event) => {
+        writeAgentNdjsonEvent(response, event)
+      })
+
+      if (!unsubscribe) {
+        response.end()
+        return
+      }
+
+      request.on('close', () => {
+        unsubscribe()
+        response.end()
+      })
+      return
+    }
+
+    if (request.method === 'GET' && agentSessionProjectionMatch) {
+      const sessionId = decodeURIComponent(agentSessionProjectionMatch[1] ?? '')
+      const projection = getAgentProjection(sessionId)
+      if (!projection) {
+        sendJson(response, 404, { message: '未找到 Agent 会话' })
+        return
+      }
+      sendJson(response, 200, { projection })
+      return
+    }
+
+    if (request.method === 'POST' && agentSessionCanvasSyncMatch) {
+      const sessionId = decodeURIComponent(agentSessionCanvasSyncMatch[1] ?? '')
+      const body = await readJsonBody<AgentSessionCanvasSyncRequest>(request)
+      const result = await syncAgentCanvas({
+        sessionId,
+        workflowSnapshot: body.workflowSnapshot,
+      })
+      sendJson(response, 200, result)
       return
     }
 
@@ -305,13 +375,6 @@ export const createServerHandler = () => async (request: IncomingMessage, respon
       return
     }
 
-    if (request.method === 'POST' && url.pathname === '/api/analysis-agent/session/start') {
-      const body = await readJsonBody<WorkflowAiPlanRequest>(request)
-      const session = startWorkflowAiSession(body)
-      sendJson(response, 200, { session: toAnalysisAgentSession(session) })
-      return
-    }
-
     if (
       request.method === 'POST'
       && /^\/api\/workflow-ai\/session\/[^/]+\/input$/.test(url.pathname)
@@ -320,17 +383,6 @@ export const createServerHandler = () => async (request: IncomingMessage, respon
       const body = await readJsonBody(request)
       const session = await submitWorkflowAiSessionInput(sessionId, body as any)
       sendJson(response, 200, { session })
-      return
-    }
-
-    if (
-      request.method === 'POST'
-      && /^\/api\/analysis-agent\/session\/[^/]+\/input$/.test(url.pathname)
-    ) {
-      const sessionId = decodeURIComponent(url.pathname.replace('/api/analysis-agent/session/', '').replace('/input', ''))
-      const body = await readJsonBody(request)
-      const session = await submitWorkflowAiSessionInput(sessionId, body as any)
-      sendJson(response, 200, { session: toAnalysisAgentSession(session) })
       return
     }
 
@@ -375,93 +427,6 @@ export const createServerHandler = () => async (request: IncomingMessage, respon
         return
       }
       sendJson(response, 200, { session })
-      return
-    }
-
-    if (
-      request.method === 'POST'
-      && /^\/api\/analysis-agent\/session\/[^/]+\/canvas-sync$/.test(url.pathname)
-    ) {
-      const sessionId = decodeURIComponent(url.pathname.replace('/api/analysis-agent/session/', '').replace('/canvas-sync', ''))
-      const body = await readJsonBody<{ workflowSnapshot?: { nodes?: unknown[]; edges?: unknown[] } }>(request)
-      const session = getWorkflowAiSession(sessionId)
-      if (!session) {
-        sendJson(response, 404, { message: '未找到分析代理会话' })
-        return
-      }
-
-      const nodeCount = body.workflowSnapshot?.nodes?.length ?? 0
-      const edgeCount = body.workflowSnapshot?.edges?.length ?? 0
-
-      sendJson(response, 200, {
-        session: toAnalysisAgentSession(session),
-        syncSummary: `已同步当前画布，共 ${nodeCount} 个节点、${edgeCount} 条连线`,
-      })
-      return
-    }
-
-    if (
-      request.method === 'POST'
-      && /^\/api\/analysis-agent\/session\/[^/]+\/run-agent-loop$/.test(url.pathname)
-    ) {
-      const sessionId = decodeURIComponent(
-        url.pathname.replace('/api/analysis-agent/session/', '').replace('/run-agent-loop', ''),
-      )
-      const sessionRecord = getWorkflowAiSessionRecord(sessionId)
-      if (!sessionRecord) {
-        sendJson(response, 404, { message: '未找到分析代理会话' })
-        return
-      }
-
-      const body = await readJsonBody<{ config?: Partial<AgentLoopConfig>; profile?: WorkflowAiModelProfile }>(request)
-
-      let hasWrittenEvent = false
-      startNdjsonStream(response)
-
-      try {
-        const output = await runAnalysisAgentSessionLoop({
-          sessionId,
-          sessionRecord,
-          userId: currentUser.id,
-          profile: body.profile,
-          config: body.config,
-        }, (event) => {
-          hasWrittenEvent = true
-          writeNdjsonEvent(response, event)
-        })
-
-        if (!hasWrittenEvent) {
-          writeNdjsonEvent(response, {
-            type: 'loop_completed',
-            totalIterations: output.totalIterations,
-            totalDurationMs: output.totalDurationMs,
-            output,
-          })
-        }
-      } catch (error) {
-        if (!hasWrittenEvent) {
-          writeNdjsonEvent(response, {
-            type: 'failed',
-            message: error instanceof Error ? error.message : 'Agent Loop 运行失败',
-          })
-        }
-      } finally {
-        response.end()
-      }
-      return
-    }
-
-    if (
-      request.method === 'GET'
-      && /^\/api\/analysis-agent\/session\/[^/]+$/.test(url.pathname)
-    ) {
-      const sessionId = decodeURIComponent(url.pathname.replace('/api/analysis-agent/session/', ''))
-      const session = getWorkflowAiSession(sessionId)
-      if (!session) {
-        sendJson(response, 404, { message: '未找到分析代理会话' })
-        return
-      }
-      sendJson(response, 200, { session: toAnalysisAgentSession(session) })
       return
     }
 

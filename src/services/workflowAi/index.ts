@@ -1,7 +1,14 @@
 import { buildWorkflowAiNodeCatalog } from '@/ai/catalog'
 import type {
-  AgentLoopOutput,
-  AnalysisAgentSessionState,
+  AgentSessionCanvasSyncRequest,
+  AgentSessionCanvasSyncResponse,
+  AgentSessionEvent,
+  AgentSessionGetResponse,
+  AgentSessionMessageRequest,
+  AgentSessionMessageResponse,
+  AgentSessionStartResponse,
+  AgentProjectionSnapshot,
+  WorkflowAiSessionState,
   WorkflowAiGenerationDiagnostics,
   WorkflowAiModelProfile,
   WorkflowAiModelTestResult,
@@ -16,8 +23,6 @@ import type {
   WorkflowAiStreamEvent,
 } from '@/ai/types'
 
-export type { AgentLoopOutput } from '@/ai/types'
-
 const WORKFLOW_AI_API_BASE_URL = import.meta.env.VITE_WORKFLOW_AI_API_BASE_URL || '/api'
 
 type WorkflowAiErrorPayload = {
@@ -25,12 +30,12 @@ type WorkflowAiErrorPayload = {
   diagnostics?: WorkflowAiGenerationDiagnostics
 }
 
-type AnalysisAgentSessionResponse = {
-  session: AnalysisAgentSessionState
-}
-
 type StreamWorkflowAiPlanOptions = {
   onEvent?: (event: WorkflowAiStreamEvent) => void
+}
+
+type AgentSessionStreamOptions = {
+  onEvent?: (event: AgentSessionEvent) => void
 }
 
 export class WorkflowAiRequestError extends Error {
@@ -57,6 +62,12 @@ const parseNdjsonLine = (line: string): WorkflowAiStreamEvent | null => {
   const normalized = line.trim()
   if (!normalized) return null
   return JSON.parse(normalized) as WorkflowAiStreamEvent
+}
+
+const parseAgentNdjsonLine = (line: string): AgentSessionEvent | null => {
+  const normalized = line.trim()
+  if (!normalized) return null
+  return JSON.parse(normalized) as AgentSessionEvent
 }
 
 export const requestWorkflowAiPlan = async (request: WorkflowAiPlanRequest) => {
@@ -208,10 +219,10 @@ export const startWorkflowAiSession = async (
   return payload
 }
 
-export const startAnalysisAgentSession = async (
+export const createAgentSession = async (
   request: WorkflowAiPlanRequest,
-): Promise<AnalysisAgentSessionResponse> => {
-  const response = await fetch(`${WORKFLOW_AI_API_BASE_URL}/analysis-agent/session/start`, {
+): Promise<AgentSessionStartResponse> => {
+  const response = await fetch(`${WORKFLOW_AI_API_BASE_URL}/agent/sessions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -222,10 +233,132 @@ export const startAnalysisAgentSession = async (
     }),
   })
 
-  const payload = (await readResponsePayload(response)) as AnalysisAgentSessionResponse & WorkflowAiErrorPayload
+  const payload = (await readResponsePayload(response)) as AgentSessionStartResponse & WorkflowAiErrorPayload
   if (!response.ok) {
     throw new WorkflowAiRequestError(
-      payload.message || '启动分析代理会话失败',
+      payload.message || '创建 Agent 会话失败',
+      payload.diagnostics,
+      response.status,
+    )
+  }
+
+  return payload
+}
+
+export const sendAgentSessionMessage = async (
+  sessionId: string,
+  request: AgentSessionMessageRequest,
+): Promise<AgentSessionMessageResponse> => {
+  const response = await fetch(`${WORKFLOW_AI_API_BASE_URL}/agent/sessions/${sessionId}/messages`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(request),
+  })
+
+  const payload = (await readResponsePayload(response)) as AgentSessionMessageResponse & WorkflowAiErrorPayload
+  if (!response.ok) {
+    throw new WorkflowAiRequestError(
+      payload.message || '发送 Agent 消息失败',
+      payload.diagnostics,
+      response.status,
+    )
+  }
+
+  return payload
+}
+
+export const streamAgentSessionEvents = async (
+  sessionId: string,
+  options: AgentSessionStreamOptions = {},
+) => {
+  const response = await fetch(`${WORKFLOW_AI_API_BASE_URL}/agent/sessions/${sessionId}/events`)
+  if (!response.ok) {
+    const payload = await readResponsePayload(response)
+    throw new WorkflowAiRequestError(
+      payload.message || '读取 Agent 事件流失败',
+      payload.diagnostics,
+      response.status,
+    )
+  }
+
+  if (!response.body) {
+    throw new Error('Agent 事件流不可用')
+  }
+
+  const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()
+  let buffer = ''
+
+  while (true) {
+    const { value, done } = await reader.read()
+    if (done) break
+
+    buffer += value
+    const lines = buffer.split('\n')
+    buffer = lines.pop() ?? ''
+
+    for (const line of lines) {
+      const event = parseAgentNdjsonLine(line)
+      if (!event) continue
+      options.onEvent?.(event)
+    }
+  }
+
+  const lastEvent = parseAgentNdjsonLine(buffer)
+  if (lastEvent) {
+    options.onEvent?.(lastEvent)
+  }
+}
+
+export const getAgentSession = async (
+  sessionId: string,
+): Promise<AgentSessionGetResponse> => {
+  const response = await fetch(`${WORKFLOW_AI_API_BASE_URL}/agent/sessions/${sessionId}`)
+  const payload = (await readResponsePayload(response)) as AgentSessionGetResponse & WorkflowAiErrorPayload
+
+  if (!response.ok) {
+    throw new WorkflowAiRequestError(
+      payload.message || '读取 Agent 会话失败',
+      payload.diagnostics,
+      response.status,
+    )
+  }
+
+  return payload
+}
+
+export const getAgentProjection = async (sessionId: string): Promise<AgentProjectionSnapshot> => {
+  const response = await fetch(`${WORKFLOW_AI_API_BASE_URL}/agent/sessions/${sessionId}/projection`)
+  const payload = (await readResponsePayload(response)) as { projection: AgentProjectionSnapshot } & WorkflowAiErrorPayload
+
+  if (!response.ok) {
+    throw new WorkflowAiRequestError(
+      payload.message || '读取 Agent 投影失败',
+      payload.diagnostics,
+      response.status,
+    )
+  }
+
+  return payload.projection
+}
+
+export const syncAgentCanvas = async (
+  sessionId: string,
+  request: AgentSessionCanvasSyncRequest,
+): Promise<AgentSessionCanvasSyncResponse> => {
+  const response = await fetch(`${WORKFLOW_AI_API_BASE_URL}/agent/sessions/${sessionId}/canvas-sync`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(request),
+  })
+  const payload = (await readResponsePayload(response)) as AgentSessionCanvasSyncResponse & WorkflowAiErrorPayload
+
+  if (!response.ok) {
+    throw new WorkflowAiRequestError(
+      payload.message || '同步 Agent 画布失败',
       payload.diagnostics,
       response.status,
     )
@@ -336,23 +469,6 @@ export const getWorkflowAiSession = async (
   return payload
 }
 
-export const getAnalysisAgentSession = async (
-  sessionId: string,
-): Promise<AnalysisAgentSessionResponse> => {
-  const response = await fetch(`${WORKFLOW_AI_API_BASE_URL}/analysis-agent/session/${sessionId}`)
-  const payload = (await readResponsePayload(response)) as AnalysisAgentSessionResponse & WorkflowAiErrorPayload
-
-  if (!response.ok) {
-    throw new WorkflowAiRequestError(
-      payload.message || '读取分析代理会话失败',
-      payload.diagnostics,
-      response.status,
-    )
-  }
-
-  return payload
-}
-
 export const submitWorkflowAiSessionInput = async (
   sessionId: string,
   request: WorkflowAiSessionInputRequest,
@@ -375,37 +491,6 @@ export const submitWorkflowAiSessionInput = async (
   }
 
   return payload
-}
-
-export const syncAnalysisAgentCanvas = async (
-  sessionId: string,
-  workflowSnapshot: {
-    name: string
-    nodes: unknown[]
-    edges: unknown[]
-  },
-): Promise<AnalysisAgentSessionResponse & { syncSummary: string }> => {
-  const response = await fetch(`${WORKFLOW_AI_API_BASE_URL}/analysis-agent/session/${sessionId}/canvas-sync`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ workflowSnapshot }),
-  })
-  const payload = (await readResponsePayload(response)) as
-    | (AnalysisAgentSessionResponse & { syncSummary: string })
-    | WorkflowAiErrorPayload
-
-  if (!response.ok) {
-    const errorPayload = payload as WorkflowAiErrorPayload
-    throw new WorkflowAiRequestError(
-      errorPayload.message || '同步分析代理画布失败',
-      errorPayload.diagnostics,
-      response.status,
-    )
-  }
-
-  return payload as AnalysisAgentSessionResponse & { syncSummary: string }
 }
 
 export const fetchSystemModelProfiles = async (): Promise<WorkflowAiModelProfile[]> => {
@@ -435,125 +520,4 @@ export const testWorkflowAiModelProfile = async (
   }
 
   return data
-}
-
-export type AgentLoopConfig = {
-  maxIterations?: number
-  autoExecute?: boolean
-  generateConclusion?: boolean
-}
-
-export const runAnalysisAgentLoop = async (
-  sessionId: string,
-  config?: AgentLoopConfig,
-  options: StreamWorkflowAiPlanOptions = {},
-): Promise<AgentLoopOutput> => {
-  const response = await fetch(
-    `${WORKFLOW_AI_API_BASE_URL}/analysis-agent/session/${sessionId}/run-agent-loop`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ config: config ?? {} }),
-    },
-  )
-
-  if (!response.ok) {
-    const payload = await readResponsePayload(response)
-    throw new WorkflowAiRequestError(
-      payload.message || '运行 Agent Loop 失败',
-      payload.diagnostics,
-      response.status,
-    )
-  }
-
-  if (!response.body) {
-    throw new Error('Agent Loop 流式响应不可用')
-  }
-
-  const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()
-  let buffer = ''
-  let loopOutput: AgentLoopOutput = {
-    iterations: [],
-    conclusion: null,
-    totalDurationMs: 0,
-    totalIterations: 0,
-  }
-
-  const upsertIteration = (event: Extract<WorkflowAiStreamEvent, { type: 'loop_iteration_completed' }>) => {
-    const nextIteration = {
-      iteration: event.iteration,
-      plan: event.plan,
-      executionResults: event.executionResults,
-      interpretation: event.interpretation,
-    }
-    const existingIndex = loopOutput.iterations.findIndex((item) => item.iteration === event.iteration)
-    if (existingIndex >= 0) {
-      loopOutput.iterations.splice(existingIndex, 1, nextIteration)
-      return
-    }
-    loopOutput.iterations.push(nextIteration)
-    loopOutput.iterations.sort((left, right) => left.iteration - right.iteration)
-  }
-
-  while (true) {
-    const { value, done } = await reader.read()
-    if (done) break
-
-    buffer += value
-    const lines = buffer.split('\n')
-    buffer = lines.pop() ?? ''
-
-    for (const line of lines) {
-      const event = parseNdjsonLine(line)
-      if (!event) continue
-      options.onEvent?.(event)
-
-      if (event.type === 'loop_iteration_completed') {
-        upsertIteration(event)
-      }
-
-      if (event.type === 'loop_completed') {
-        loopOutput = event.output
-          ? event.output
-          : {
-              ...loopOutput,
-              totalDurationMs: event.totalDurationMs,
-              totalIterations: event.totalIterations,
-            }
-      }
-      if (event.type === 'conclusion_completed') {
-        loopOutput = {
-          ...loopOutput,
-          conclusion: event.conclusion,
-        }
-      }
-    }
-  }
-
-  const lastEvent = parseNdjsonLine(buffer)
-  if (lastEvent) {
-    options.onEvent?.(lastEvent)
-    if (lastEvent.type === 'loop_iteration_completed') {
-      upsertIteration(lastEvent)
-    }
-    if (lastEvent.type === 'loop_completed') {
-      loopOutput = lastEvent.output
-        ? lastEvent.output
-        : {
-            ...loopOutput,
-            totalDurationMs: lastEvent.totalDurationMs,
-            totalIterations: lastEvent.totalIterations,
-          }
-    }
-    if (lastEvent.type === 'conclusion_completed') {
-      loopOutput = {
-        ...loopOutput,
-        conclusion: lastEvent.conclusion,
-      }
-    }
-  }
-
-  return loopOutput
 }

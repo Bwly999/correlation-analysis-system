@@ -1,50 +1,90 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { useWorkflowAiStore } from '../workflowAiStore'
-import { useWorkflowStore } from '../workflowStore'
-import { createTableResult } from '@/nodes/result'
 
 const {
-  requestWorkflowAiPlanMock,
-  streamWorkflowAiPlanMock,
-  startWorkflowAiSessionMock,
-  submitWorkflowAiSessionInputMock,
-  runWorkflowAiSessionMock,
-  getWorkflowAiSessionMock,
+  createAgentSessionMock,
   fetchSystemModelProfilesMock,
-  testWorkflowAiModelTestResultMock,
-} =
-  vi.hoisted(() => ({
-    requestWorkflowAiPlanMock: vi.fn(),
-    streamWorkflowAiPlanMock: vi.fn(),
-    startWorkflowAiSessionMock: vi.fn(),
-    submitWorkflowAiSessionInputMock: vi.fn(),
-    runWorkflowAiSessionMock: vi.fn(),
-    getWorkflowAiSessionMock: vi.fn(),
-    fetchSystemModelProfilesMock: vi.fn(),
-    testWorkflowAiModelTestResultMock: vi.fn(),
-  }))
+  getAgentProjectionMock,
+  getAgentSessionMock,
+  sendAgentSessionMessageMock,
+  streamAgentSessionEventsMock,
+  syncAgentCanvasMock,
+  testWorkflowAiModelProfileMock,
+} = vi.hoisted(() => ({
+  createAgentSessionMock: vi.fn(),
+  fetchSystemModelProfilesMock: vi.fn(),
+  getAgentProjectionMock: vi.fn(),
+  getAgentSessionMock: vi.fn(),
+  sendAgentSessionMessageMock: vi.fn(),
+  streamAgentSessionEventsMock: vi.fn(),
+  syncAgentCanvasMock: vi.fn(),
+  testWorkflowAiModelProfileMock: vi.fn(),
+}))
 
 vi.mock('@/services/agentWorkspace', () => ({
-  WorkflowAiRequestError: class WorkflowAiRequestError extends Error {
-    diagnostics?: unknown
-    statusCode?: number
-
-    constructor(message: string, diagnostics?: unknown, statusCode?: number) {
-      super(message)
-      this.diagnostics = diagnostics
-      this.statusCode = statusCode
-    }
-  },
-  requestWorkflowAiPlan: requestWorkflowAiPlanMock,
-  streamWorkflowAiPlan: streamWorkflowAiPlanMock,
-  startWorkflowAiSession: startWorkflowAiSessionMock,
-  submitWorkflowAiSessionInput: submitWorkflowAiSessionInputMock,
-  runWorkflowAiSession: runWorkflowAiSessionMock,
-  getWorkflowAiSession: getWorkflowAiSessionMock,
+  WorkflowAiRequestError: class WorkflowAiRequestError extends Error {},
+  createAgentSession: createAgentSessionMock,
   fetchSystemModelProfiles: fetchSystemModelProfilesMock,
-  testWorkflowAiModelProfile: testWorkflowAiModelTestResultMock,
+  getAgentProjection: getAgentProjectionMock,
+  getAgentSession: getAgentSessionMock,
+  sendAgentSessionMessage: sendAgentSessionMessageMock,
+  streamAgentSessionEvents: streamAgentSessionEventsMock,
+  syncAgentCanvas: syncAgentCanvasMock,
+  testWorkflowAiModelProfile: testWorkflowAiModelProfileMock,
 }))
+
+const buildProfile = () => ({
+  id: 'profile_1',
+  name: '默认模型',
+  baseUrl: 'http://example.com',
+  model: 'glm-4.7',
+  apiKey: 'secret',
+  enabled: true,
+  source: 'custom' as const,
+})
+
+const buildProjection = (overrides: Record<string, any> = {}) => ({
+  workflow: {
+    workflowId: null,
+    workflowName: '销量诊断流程',
+    draftNodeCount: 2,
+    draftEdgeCount: 1,
+    draftSummary: '建议先保留导入、筛选和相关性分析三段主链。',
+    versionCount: 0,
+    latestVersionId: null,
+    proposedPlan: {
+      summary: '构建最小销量诊断流程',
+      assumptions: [],
+      warnings: [],
+      questions: [],
+      operations: [],
+    },
+  },
+  analysis: {
+    goal: '帮我分析价格和销量关系',
+    summary: '价格是当前最值得优先验证的候选因子。',
+    candidateTargets: ['sales'],
+    candidateFactors: ['price', 'discount'],
+    methods: ['相关性分析', '随机森林特征重要度'],
+    findings: ['销量适合作为目标字段'],
+    risks: ['当前样本量可能偏少'],
+    recommendations: ['先校验缺失值和异常值'],
+  },
+  execution: {
+    status: 'completed' as const,
+    latestAction: '本轮分析已完成',
+    toolCalls: [],
+    pendingApprovals: [],
+  },
+  canvasSync: {
+    status: 'idle' as const,
+    message: '当前草案尚未同步到画布',
+  },
+  error: null,
+  updatedAt: 1,
+  ...overrides,
+})
 
 describe('workflowAiStore', () => {
   beforeEach(() => {
@@ -53,722 +93,307 @@ describe('workflowAiStore', () => {
     vi.clearAllMocks()
   })
 
-  it('tracks streaming progress, raw model output and the completed plan during generation', async () => {
-    startWorkflowAiSessionMock.mockResolvedValueOnce({
-      session: {
-        sessionId: 'session_1',
-        mode: 'create',
-        status: 'idle',
-        prompt: '导入数据后做 Pearson 分析',
-        draft: {
-          summary: '',
-          assumptions: [],
-          warnings: [],
-          questions: [],
-          nodes: [],
-          edges: [],
-        },
-        trace: [],
-        diagnostics: {
-          issues: [],
-        },
-        missingInfo: [],
-      },
-    })
-    runWorkflowAiSessionMock.mockImplementationOnce(async (_sessionId, { onEvent }) => {
-      onEvent?.({ type: 'started', sessionId: 'session_1', message: 'AI 编排会话已开始' })
-      onEvent?.({ type: 'attempt_started', attempt: 1, trigger: 'initial', message: '开始首次生成' })
-      onEvent?.({ type: 'stage_changed', stage: 'model_request', attempt: 1, message: '正在请求模型输出' })
-      onEvent?.({ type: 'text_delta', attempt: 1, delta: '{"summary":"流式输出"}' })
-      onEvent?.({
-        type: 'recipe_selected',
-        recipeId: 'single-table-correlation',
-        recipeName: '单表相关性分析',
-        reason: '命中关键词：相关、pearson',
-      })
-      const result = {
-        plan: {
-          summary: '流式输出',
-          assumptions: [],
-          warnings: [],
-          questions: [],
-          operations: [],
-        },
-        diagnostics: {
-          status: 'success',
-          stage: 'validate',
-          attempts: [{ attempt: 1, trigger: 'initial', status: 'success', stage: 'validate' }],
-          issues: [],
-          rawOutputExcerpt: '{"summary":"流式输出"}',
-        },
-        draft: {
-          summary: '流式输出',
-          assumptions: [],
-          warnings: [],
-          questions: [],
-          nodes: [],
-          edges: [],
-        },
-      }
-      onEvent?.({ type: 'completed', ...result })
-      return result
-    })
+  it('loads available model profiles', async () => {
+    fetchSystemModelProfilesMock.mockResolvedValueOnce([buildProfile()])
 
-    const workflowStore = useWorkflowStore()
-    const aiStore = useWorkflowAiStore()
+    const store = useWorkflowAiStore()
+    await store.loadProfiles()
 
-    aiStore.selectedProfileId = 'custom-profile'
-    aiStore.systemProfiles = []
-    aiStore.customProfiles = [
-      {
-        id: 'custom-profile',
-        name: '本地模型',
-        baseUrl: 'http://localhost:1234/v1',
-        model: 'test-model',
-        apiKey: 'secret',
-        enabled: true,
-        source: 'custom',
-      },
-    ]
-    aiStore.prompt = '导入数据后做 Pearson 分析'
-
-    await aiStore.generatePlan(workflowStore as any)
-
-    expect(aiStore.streamStatus).toBe('completed')
-    expect(aiStore.streamEvents.map((event) => event.type)).toEqual([
-      'started',
-      'attempt_started',
-      'stage_changed',
-      'text_delta',
-      'recipe_selected',
-      'completed',
-    ])
-    expect(aiStore.streamOutputs).toEqual([
-      {
-        attempt: 1,
-        trigger: 'initial',
-        text: '{"summary":"流式输出"}',
-      },
-    ])
-    expect(aiStore.plan?.summary).toBe('流式输出')
-    expect(aiStore.sessionState?.selectedRecipe?.id).toBe('single-table-correlation')
+    expect(store.profiles).toHaveLength(1)
+    expect(store.selectedProfile?.id).toBe('profile_1')
   })
 
-  it('stores plan diagnostics and writes success logs after generation', async () => {
-    startWorkflowAiSessionMock.mockResolvedValueOnce({
-      session: {
-        sessionId: 'session_1',
-        mode: 'create',
-        status: 'idle',
-        prompt: '导入数据后做 Pearson 分析',
-        draft: {
-          summary: '',
-          assumptions: [],
-          warnings: [],
-          questions: [],
-          nodes: [],
-          edges: [],
-        },
-        trace: [],
-        diagnostics: {
-          issues: [],
-        },
-        missingInfo: [],
-      },
-    })
-    runWorkflowAiSessionMock.mockImplementationOnce(async (_sessionId, { onEvent }) => {
-      onEvent?.({ type: 'attempt_started', attempt: 1, trigger: 'initial', message: '首次生成' })
-      onEvent?.({
-        type: 'diagnostic',
-        diagnostics: {
-          status: 'failed',
-          stage: 'parse',
-          attempts: [
-            { attempt: 1, trigger: 'initial', status: 'failed', stage: 'parse', message: '首次解析失败' },
-          ],
-          issues: [{ stage: 'parse', operationId: 'plan', message: '首次解析失败' }],
-          rawOutputExcerpt: '不是 JSON',
-        },
-        message: '首轮解析失败，准备自动修复',
-      })
-      onEvent?.({ type: 'attempt_started', attempt: 2, trigger: 'repair', message: '重试开始' })
-      const result = {
-        plan: {
-          summary: '已生成最小可行流程',
-          assumptions: [],
-          warnings: [],
-          questions: [],
-          operations: [],
-        },
-        diagnostics: {
-          status: 'success',
-          stage: 'validate',
-          attempts: [
-            { attempt: 1, trigger: 'initial', status: 'failed', stage: 'parse', message: '首次解析失败' },
-            { attempt: 2, trigger: 'repair', status: 'success', stage: 'validate', message: '重试成功' },
-          ],
-          issues: [],
-          rawOutputExcerpt: '{"summary":"已生成最小可行流程"}',
-        },
-        draft: {
-          summary: '已生成最小可行流程',
-          assumptions: [],
-          warnings: [],
-          questions: [],
-          nodes: [],
-          edges: [],
-        },
-      }
-      onEvent?.({ type: 'completed', ...result })
-      return result
-    })
+  it('auto-selects an enabled custom profile restored from local storage', () => {
+    localStorage.setItem(
+      'workflow_ai_custom_profiles',
+      JSON.stringify([buildProfile()]),
+    )
 
-    const workflowStore = useWorkflowStore()
-    const aiStore = useWorkflowAiStore()
+    const store = useWorkflowAiStore()
 
-    aiStore.selectedProfileId = 'custom-profile'
-    aiStore.systemProfiles = []
-    aiStore.customProfiles = [
-      {
-        id: 'custom-profile',
-        name: '本地模型',
-        baseUrl: 'http://localhost:1234/v1',
-        model: 'test-model',
-        apiKey: 'secret',
-        enabled: true,
-        source: 'custom',
-      },
-    ]
-    aiStore.prompt = '导入数据后做 Pearson 分析'
-
-    await aiStore.generatePlan(workflowStore as any)
-
-    expect(aiStore.plan?.summary).toBe('已生成最小可行流程')
-    expect(aiStore.generationDiagnostics?.attempts).toHaveLength(2)
-    expect(workflowStore.logs.some((log) => log.message.includes('AI编排生成成功'))).toBe(true)
-    expect(workflowStore.logs.some((log) => log.message.includes('自动修复重试'))).toBe(true)
+    expect(store.selectedProfileId).toBe('profile_1')
+    expect(store.selectedProfile?.id).toBe('profile_1')
   })
 
-  it('preserves diagnostics when generation fails', async () => {
-    startWorkflowAiSessionMock.mockResolvedValueOnce({
-      session: {
-        sessionId: 'session_1',
-        mode: 'create',
-        status: 'idle',
-        prompt: '创建工作流',
-        draft: {
-          summary: '',
-          assumptions: [],
-          warnings: [],
-          questions: [],
-          nodes: [],
-          edges: [],
-        },
-        trace: [],
-        diagnostics: {
-          issues: [],
-        },
-        missingInfo: [],
+  it('does not auto-select an unavailable system profile', async () => {
+    fetchSystemModelProfilesMock.mockResolvedValueOnce([
+      {
+        id: 'system_profile_1',
+        name: '默认模型',
+        baseUrl: 'http://example.com',
+        model: 'glm-4.7',
+        enabled: false,
+        source: 'system' as const,
       },
-    })
-    runWorkflowAiSessionMock.mockRejectedValueOnce(
-      Object.assign(new Error('AI 计划校验失败'), {
-        status: 'failed',
-        stage: 'validate',
-        attempts: [{ attempt: 1, trigger: 'initial', status: 'failed', stage: 'validate', message: '校验失败' }],
-        issues: [{ stage: 'validate', operationId: 'op_1', message: '空计划缺少追问信息' }],
-        rawOutputExcerpt: '{"summary":"失败"}',
-        diagnostics: {
-          status: 'failed',
-          stage: 'validate',
-          attempts: [
-            { attempt: 1, trigger: 'initial', status: 'failed', stage: 'validate', message: '校验失败' },
-          ],
-          issues: [{ stage: 'validate', operationId: 'op_1', message: '空计划缺少追问信息' }],
-          rawOutputExcerpt: '{"summary":"失败"}',
+    ])
+
+    const store = useWorkflowAiStore()
+    await store.loadProfiles()
+
+    expect(store.selectedProfileId).toBe('')
+    expect(store.selectedProfile).toBeNull()
+  })
+
+  it('creates an agent session, streams events and builds a single-column business message flow', async () => {
+    createAgentSessionMock.mockResolvedValueOnce({
+      session: {
+        id: 'agent_1',
+        mode: 'edit',
+        prompt: '帮我分析价格和销量关系',
+        status: 'idle',
+        profile: {
+          id: 'profile_1',
+          name: '默认模型',
+          model: 'glm-4.7',
+        },
+        workflowId: null,
+        createdAt: 1,
+        updatedAt: 1,
+      },
+      projection: buildProjection({
+        analysis: {
+          goal: '帮我分析价格和销量关系',
+          summary: '系统已记录当前分析目标，等待模型开始处理。',
+          candidateTargets: ['sales'],
+          candidateFactors: ['price', 'discount'],
+          methods: [],
+          findings: [],
+          risks: [],
+          recommendations: [],
+        },
+        execution: {
+          status: 'idle',
+          latestAction: '等待用户发送分析指令',
+          toolCalls: [],
+          pendingApprovals: [],
         },
       }),
-    )
-
-    const workflowStore = useWorkflowStore()
-    const aiStore = useWorkflowAiStore()
-
-    aiStore.selectedProfileId = 'custom-profile'
-    aiStore.customProfiles = [
-      {
-        id: 'custom-profile',
-        name: '本地模型',
-        baseUrl: 'http://localhost:1234/v1',
-        model: 'test-model',
-        apiKey: 'secret',
-        enabled: true,
-        source: 'custom',
-      },
-    ]
-    aiStore.prompt = '创建工作流'
-
-    await expect(aiStore.generatePlan(workflowStore as any)).rejects.toThrow('AI 计划校验失败')
-
-    expect(aiStore.errorMessage).toBe('AI 计划校验失败')
-    expect(aiStore.generationDiagnostics?.stage).toBe('validate')
-    expect(aiStore.generationDiagnostics?.issues).toEqual([
-      { stage: 'validate', operationId: 'op_1', message: '空计划缺少追问信息' },
-    ])
-    expect(workflowStore.logs.some((log) => log.message.includes('AI编排生成失败'))).toBe(true)
-  })
-
-  it('builds local tool context hints before sending the workflow ai request', async () => {
-    startWorkflowAiSessionMock.mockResolvedValueOnce({
+    })
+    streamAgentSessionEventsMock.mockImplementationOnce(async (_sessionId, options) => {
+      options?.onEvent?.({
+        type: 'projection.execution.updated',
+        projection: {
+          status: 'running',
+          latestAction: '正在分析价格字段',
+          toolCalls: [],
+          pendingApprovals: [],
+        },
+      })
+      options?.onEvent?.({
+        type: 'message.delta',
+        sessionId: 'agent_1',
+        messageId: 'assistant_1',
+        delta: '正在分析价格字段…',
+      })
+      options?.onEvent?.({
+        type: 'projection.analysis.updated',
+        projection: {
+          goal: '帮我分析价格和销量关系',
+          summary: '价格是当前最值得优先验证的候选因子。',
+          candidateTargets: ['sales'],
+          candidateFactors: ['price', 'discount'],
+          methods: ['相关性分析', '随机森林特征重要度'],
+          findings: ['销量适合作为目标字段'],
+          risks: ['当前样本量可能偏少'],
+          recommendations: ['先校验缺失值和异常值'],
+        },
+      })
+      options?.onEvent?.({
+        type: 'projection.execution.updated',
+        projection: {
+          status: 'completed',
+          latestAction: '本轮分析已完成',
+          toolCalls: [],
+          pendingApprovals: [],
+        },
+      })
+      options?.onEvent?.({
+        type: 'message.completed',
+        sessionId: 'agent_1',
+        message: {
+          id: 'assistant_1',
+          role: 'assistant',
+          content: '价格是当前最值得优先验证的候选因子。',
+          status: 'completed',
+          createdAt: 2,
+        },
+      })
+      options?.onEvent?.({
+        type: 'session.status.updated',
+        session: {
+          id: 'agent_1',
+          mode: 'edit',
+          prompt: '帮我分析价格和销量关系',
+          status: 'completed',
+          profile: {
+            id: 'profile_1',
+            name: '默认模型',
+            model: 'glm-4.7',
+          },
+          workflowId: null,
+          createdAt: 1,
+          updatedAt: 2,
+        },
+      })
+    })
+    sendAgentSessionMessageMock.mockResolvedValueOnce({
       session: {
-        sessionId: 'session_1',
+        id: 'agent_1',
         mode: 'edit',
-        status: 'idle',
-        prompt: '导入一份 JSON 表格，快速演示 Pearson 相关分析，给我最小可运行流程。',
-        draft: {
-          summary: '',
-          assumptions: [],
-          warnings: [],
-          questions: [],
-          nodes: [],
-          edges: [],
+        prompt: '帮我分析价格和销量关系',
+        status: 'running',
+        profile: {
+          id: 'profile_1',
+          name: '默认模型',
+          model: 'glm-4.7',
         },
-        trace: [],
-        diagnostics: {
-          issues: [],
+        workflowId: null,
+        createdAt: 1,
+        updatedAt: 2,
+      },
+      projection: buildProjection({
+        analysis: {
+          goal: '帮我分析价格和销量关系',
+          summary: '系统已开始处理当前分析请求。',
+          candidateTargets: ['sales'],
+          candidateFactors: ['price', 'discount'],
+          methods: [],
+          findings: [],
+          risks: [],
+          recommendations: [],
         },
-        missingInfo: [],
-      },
-    })
-    runWorkflowAiSessionMock.mockResolvedValueOnce({
-      plan: {
-        summary: '已生成',
-        assumptions: [],
-        warnings: [],
-        questions: [],
-        operations: [],
-      },
-      diagnostics: {
-        status: 'success',
-        stage: 'validate',
-        attempts: [{ attempt: 1, trigger: 'initial', status: 'success', stage: 'validate' }],
-        issues: [],
-      },
-      draft: {
-        summary: '已生成',
-        assumptions: [],
-        warnings: [],
-        questions: [],
-        nodes: [],
-        edges: [],
-      },
+        execution: {
+          status: 'running',
+          latestAction: '正在调用 opencode 分析当前业务问题',
+          toolCalls: [],
+          pendingApprovals: [],
+        },
+      }),
     })
 
-    const aiStore = useWorkflowAiStore()
-    aiStore.selectedProfileId = 'custom-profile'
-    aiStore.customProfiles = [
-      {
-        id: 'custom-profile',
-        name: '本地模型',
-        baseUrl: 'http://localhost:1234/v1',
-        model: 'test-model',
-        apiKey: 'secret',
-        enabled: true,
-        source: 'custom',
-      },
-    ]
-    aiStore.mode = 'edit'
-    aiStore.prompt = '导入一份 JSON 表格，快速演示 Pearson 相关分析，给我最小可运行流程。'
+    const store = useWorkflowAiStore()
+    store.customProfiles = [buildProfile()]
+    store.selectedProfileId = 'profile_1'
+    store.prompt = '帮我分析价格和销量关系'
 
     const workflowStore = {
-      workflowName: '测试工作流',
-      nodes: [
-        {
-          id: 'node_import_1',
-          position: { x: 0, y: 0 },
-          data: {
-            label: '手动输入数据',
-            type: 'manual-json-import',
-            category: 'trigger',
-            config: {},
-            status: 'success',
-            output: createTableResult([
-              { sn: 'SN-001', feature: 1, target: 2 },
-              { sn: 'SN-002', feature: 2, target: 3 },
-            ]),
-            logs: [],
-          },
-        },
-      ],
-      edges: [],
-      logs: [] as Array<{ level: string; message: string }>,
-      addLog(message: string, level = 'info') {
-        this.logs.push({ message, level })
-      },
-      applyWorkflowAiPlan() {
-        return { snapshotId: 'snapshot_1' }
-      },
-      restoreEditableSnapshot() {
-        return true
-      },
-    }
-
-    await aiStore.generatePlan(workflowStore as any)
-
-    const request = startWorkflowAiSessionMock.mock.calls[0]?.[0]
-    expect(request.contextHints?.recipes?.[0]).toMatchObject({
-      id: 'single-table-correlation',
-    })
-    expect(request.contextHints?.schemaSummaries?.[0]).toMatchObject({
-      nodeId: 'node_import_1',
-      resultKind: 'table',
-    })
-    expect(aiStore.toolTrace.map((item) => item.toolName)).toEqual([
-      'get_workflow_context',
-      'search_recipes',
-      'inspect_cached_schema',
-    ])
-    expect(runWorkflowAiSessionMock).toHaveBeenCalledWith('session_1', expect.any(Object))
-  })
-
-  it('uses ephemeral inspection when no cached output is available for schema hints', async () => {
-    startWorkflowAiSessionMock.mockResolvedValueOnce({
-      session: {
-        sessionId: 'session_1',
-        mode: 'edit',
-        status: 'idle',
-        prompt: '继续做 Pearson 相关分析。',
-        draft: {
-          summary: '',
-          assumptions: [],
-          warnings: [],
-          questions: [],
-          nodes: [],
-          edges: [],
-        },
-        trace: [],
-        diagnostics: {
-          issues: [],
-        },
-        missingInfo: [],
-      },
-    })
-    runWorkflowAiSessionMock.mockResolvedValueOnce({
-      plan: {
-        summary: '已生成',
-        assumptions: [],
-        warnings: [],
-        questions: [],
-        operations: [],
-      },
-      diagnostics: {
-        status: 'success',
-        stage: 'validate',
-        attempts: [{ attempt: 1, trigger: 'initial', status: 'success', stage: 'validate' }],
-        issues: [],
-      },
-      draft: {
-        summary: '已生成',
-        assumptions: [],
-        warnings: [],
-        questions: [],
-        nodes: [],
-        edges: [],
-      },
-    })
-
-    const aiStore = useWorkflowAiStore()
-    aiStore.selectedProfileId = 'custom-profile'
-    aiStore.customProfiles = [
-      {
-        id: 'custom-profile',
-        name: '本地模型',
-        baseUrl: 'http://localhost:1234/v1',
-        model: 'test-model',
-        apiKey: 'secret',
-        enabled: true,
-        source: 'custom',
-      },
-    ]
-    aiStore.mode = 'edit'
-    aiStore.prompt = '继续做 Pearson 相关分析。'
-
-    const executeForAiInspection = vi.fn().mockResolvedValue(
-      createTableResult([
-        { feature: 1, target: 2 },
-        { feature: 2, target: 3 },
-      ]),
-    )
-
-    const workflowStore = {
-      workflowName: '测试工作流',
-      nodes: [
-        {
-          id: 'node_clean_1',
-          position: { x: 0, y: 0 },
-          data: {
-            label: '数据清洗',
-            type: 'data-cleaning',
-            category: 'action',
-            config: {},
-            status: 'idle',
-            output: null,
-            logs: [],
-          },
-        },
-      ],
-      edges: [],
-      logs: [] as Array<{ level: string; message: string }>,
-      addLog(message: string, level = 'info') {
-        this.logs.push({ message, level })
-      },
-      applyWorkflowAiPlan() {
-        return { snapshotId: 'snapshot_1' }
-      },
-      restoreEditableSnapshot() {
-        return true
-      },
-      executeForAiInspection,
-    }
-
-    await aiStore.generatePlan(workflowStore as any)
-
-    const request = startWorkflowAiSessionMock.mock.calls[0]?.[0]
-    expect(executeForAiInspection).toHaveBeenCalledWith('node_clean_1')
-    expect(request.contextHints?.schemaSummaries?.[0]).toMatchObject({
-      nodeId: 'node_clean_1',
-      resultKind: 'table',
-      candidateTargetColumns: ['target'],
-      candidateFeatureColumns: ['feature'],
-    })
-    expect(aiStore.toolTrace.map((item) => item.toolName)).toContain('inspect_ephemeral_schema')
-  })
-
-  it('submits missing info answers and continues the current ai session', async () => {
-    submitWorkflowAiSessionInputMock.mockResolvedValueOnce({
-      session: {
-        sessionId: 'session_1',
-        mode: 'edit',
-        status: 'idle',
-        prompt: '继续完成相关分析',
-        draft: {
-          summary: '待补全草稿',
-          assumptions: [],
-          warnings: [],
-          questions: ['请确认目标字段'],
-          nodes: [],
-          edges: [],
-        },
-        trace: [],
-        diagnostics: {
-          issues: [],
-        },
-        missingInfo: [],
-        contextHints: {
-          userAnswers: [
-            {
-              key: 'question_1',
-              value: '目标字段就是 target',
-            },
-          ],
-        },
-      },
-    })
-    runWorkflowAiSessionMock.mockImplementationOnce(async (_sessionId, { onEvent }) => {
-      const result = {
-        plan: {
-          summary: '已补齐目标字段并完成工作流',
-          assumptions: ['目标字段使用 target'],
-          warnings: [],
-          questions: [],
-          operations: [],
-        },
-        diagnostics: {
-          status: 'success',
-          stage: 'validate',
-          attempts: [{ attempt: 1, trigger: 'initial', status: 'success', stage: 'validate' }],
-          issues: [],
-        },
-        draft: {
-          summary: '已补齐目标字段并完成工作流',
-          assumptions: [],
-          warnings: [],
-          questions: [],
-          nodes: [],
-          edges: [],
-        },
-      }
-      onEvent?.({ type: 'started', sessionId: 'session_1', message: 'AI 编排会话已开始' })
-      onEvent?.({ type: 'completed', ...result })
-      return result
-    })
-
-    const aiStore = useWorkflowAiStore()
-    const workflowStore = useWorkflowStore()
-
-    aiStore.sessionState = {
-      sessionId: 'session_1',
-      mode: 'edit',
-      status: 'waiting_user',
-      prompt: '继续完成相关分析',
-      draft: {
-        summary: '待补全草稿',
-        assumptions: [],
-        warnings: [],
-        questions: ['请确认目标字段'],
-        nodes: [],
-        edges: [],
-      },
-      trace: [],
-      diagnostics: {
-        issues: [],
-      },
-      missingInfo: [
-        {
-          key: 'question_1',
-          label: '待确认项 1',
-          reason: '请确认目标字段',
-          blocking: true,
-        },
-      ],
-    }
-
-    await (aiStore as any).continueSession(workflowStore as any, {
-      question_1: '目标字段就是 target',
-    })
-
-    expect(submitWorkflowAiSessionInputMock).toHaveBeenCalledWith('session_1', {
-      answers: {
-        question_1: '目标字段就是 target',
-      },
-    })
-    expect(runWorkflowAiSessionMock).toHaveBeenCalledWith('session_1', expect.any(Object))
-    expect(aiStore.plan?.summary).toBe('已补齐目标字段并完成工作流')
-    expect(aiStore.sessionState?.status).toBe('completed')
-  })
-
-  it('derives an analysis agent session with conversation, artifacts and approval requests', () => {
-    const aiStore = useWorkflowAiStore()
-
-    aiStore.prompt = '帮我找出影响销量的关键因素'
-    aiStore.plan = {
-      summary: '价格和折扣对销量影响最明显',
-      assumptions: ['默认以销量作为目标字段'],
-      warnings: ['样本量偏小，建议结合更多周期数据复核'],
-      questions: [],
-      operations: [],
-    }
-    aiStore.sessionState = {
-      sessionId: 'session_1',
-      mode: 'edit',
-      status: 'waiting_user',
-      prompt: '帮我找出影响销量的关键因素',
-      draft: {
-        summary: '先清洗数据，再执行相关性与特征重要性分析',
-        assumptions: [],
-        warnings: [],
-        questions: [],
-        nodes: [],
-        edges: [],
-      },
-      trace: [],
-      diagnostics: {
-        issues: [],
-      },
-      contextHints: {
-        schemaSummaries: [
-          {
-            nodeId: 'node_1',
-            nodeLabel: '销量明细表',
-            resultKind: 'table',
-            numericColumns: ['销量', '价格', '折扣'],
-            candidateTargetColumns: ['销量'],
-            candidateFeatureColumns: ['价格', '折扣'],
-            blockedReasons: [],
-          },
-        ],
-      },
-      missingInfo: [
-        {
-          key: 'question_1',
-          label: '目标字段',
-          reason: '请确认销量字段',
-          blocking: true,
-        },
-      ],
-    }
-
-    expect(aiStore.analysisAgentSession).toMatchObject({
-      sessionId: 'session_1',
-      userGoal: '帮我找出影响销量的关键因素',
-      phase: 'waiting_for_input',
-    })
-    expect(aiStore.analysisAgentSession?.artifacts).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          id: 'data_understanding',
-          title: '数据理解完成',
-        }),
-        expect.objectContaining({
-          id: 'missing_info_summary',
-          title: '待确认信息',
-        }),
-        expect.objectContaining({
-          type: 'conclusion_card',
-          title: '分析结论',
-        }),
-      ]),
-    )
-    expect(aiStore.analysisAgentSession?.approvalRequests).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          key: 'question_1',
-          label: '目标字段',
-        }),
-      ]),
-    )
-    expect(aiStore.analysisAgentSession?.conversation).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          role: 'user',
-          content: '帮我找出影响销量的关键因素',
-        }),
-      ]),
-    )
-  })
-
-  it('syncs the current canvas into the analysis session summary', () => {
-    const aiStore = useWorkflowAiStore()
-
-    aiStore.sessionState = {
-      sessionId: 'session_1',
-      mode: 'edit',
-      status: 'running',
-      prompt: '继续分析',
-      draft: {
-        summary: '旧草稿',
-        assumptions: [],
-        warnings: [],
-        questions: [],
-        nodes: [],
-        edges: [],
-      },
-      trace: [],
-      diagnostics: {
-        issues: [],
-      },
-      missingInfo: [],
-    }
-
-    aiStore.syncAnalysisCanvas({
-      workflowName: '测试工作流',
+      workflowName: '销量诊断流程',
       nodes: [{ id: 'node_1' }, { id: 'node_2' }],
-      edges: [{ id: 'edge_1' }],
-    } as any)
+      edges: [{ id: 'edge_1', source: 'node_1', target: 'node_2' }],
+      addLog: vi.fn(),
+      applyWorkflowAiPlan: vi.fn(() => ({ snapshotId: 'snapshot_1' })),
+      restoreEditableSnapshot: vi.fn(() => true),
+    }
 
-    expect(aiStore.analysisAgentSession?.conversation[aiStore.analysisAgentSession.conversation.length - 1]).toMatchObject({
-      role: 'assistant',
-      content: '已同步当前画布，共 2 个节点、1 条连线。',
+    await store.submitAgentMessage(workflowStore as any)
+
+    expect(store.activeSession?.id).toBe('agent_1')
+    expect(store.activeSession?.status).toBe('completed')
+    expect(store.projectionSnapshot?.analysis.summary).toBe('价格是当前最值得优先验证的候选因子。')
+    expect(store.projectionSnapshot?.execution.status).toBe('completed')
+    expect(store.streamStatus).toBe('completed')
+    expect(store.agentMessages.map((item) => item.kind)).toEqual([
+      'user',
+      'workflow_projection',
+      'analysis_projection',
+      'execution_projection',
+      'assistant',
+    ])
+    expect(store.streamingMessage).toBe('')
+  })
+
+  it('applies projection events into the active snapshot and visible business messages', () => {
+    const store = useWorkflowAiStore()
+    store.activeSession = {
+      id: 'agent_1',
+      mode: 'edit',
+      prompt: '帮我分析价格和销量关系',
+      status: 'idle',
+      profile: {
+        id: 'profile_1',
+        name: '默认模型',
+        model: 'glm-4.7',
+      },
+      workflowId: null,
+      createdAt: 1,
+      updatedAt: 1,
+    }
+    store.projectionSnapshot = buildProjection({
+      execution: {
+        status: 'idle',
+        latestAction: '等待用户发送分析指令',
+        toolCalls: [],
+        pendingApprovals: [],
+      },
+    }) as any
+
+    store.applyAgentEvent({
+      type: 'projection.execution.updated',
+      projection: {
+        status: 'running',
+        latestAction: '正在分析价格字段',
+        toolCalls: [],
+        pendingApprovals: [],
+      },
     })
-    expect(aiStore.analysisAgentSession?.workflowSummary).toBe('当前画布共 2 个节点、1 条连线')
+    store.applyAgentEvent({
+      type: 'message.delta',
+      sessionId: 'agent_1',
+      messageId: 'assistant_1',
+      delta: '正在分析价格字段…',
+    })
+
+    expect(store.projectionSnapshot?.execution.latestAction).toBe('正在分析价格字段')
+    expect(store.streamingMessage).toBe('正在分析价格字段…')
+    expect(store.agentMessages.some((item) => item.kind === 'execution_projection')).toBe(true)
+  })
+
+  it('syncs the current projected plan to the workflow canvas and updates canvas status', async () => {
+    syncAgentCanvasMock.mockResolvedValueOnce({
+      projection: buildProjection({
+        canvasSync: {
+          status: 'synced',
+          message: '已同步当前画布，共 2 个节点、1 条连线',
+          syncedAt: 3,
+        },
+      }),
+      syncSummary: '已同步当前画布，共 2 个节点、1 条连线',
+    })
+
+    const store = useWorkflowAiStore()
+    store.activeSession = {
+      id: 'agent_1',
+      mode: 'edit',
+      prompt: '帮我分析价格和销量关系',
+      status: 'completed',
+      profile: {
+        id: 'profile_1',
+        name: '默认模型',
+        model: 'glm-4.7',
+      },
+      workflowId: null,
+      createdAt: 1,
+      updatedAt: 2,
+    }
+    store.projectionSnapshot = buildProjection() as any
+
+    const workflowStore = {
+      workflowName: '销量诊断流程',
+      nodes: [{ id: 'node_1' }, { id: 'node_2' }],
+      edges: [{ id: 'edge_1', source: 'node_1', target: 'node_2' }],
+      addLog: vi.fn(),
+      applyWorkflowAiPlan: vi.fn(() => ({ snapshotId: 'snapshot_1' })),
+      restoreEditableSnapshot: vi.fn(() => true),
+    }
+
+    await store.syncCanvas(workflowStore as any)
+
+    expect(workflowStore.applyWorkflowAiPlan).toHaveBeenCalledWith(
+      expect.objectContaining({
+        summary: '构建最小销量诊断流程',
+      }),
+    )
+    expect(store.projectionSnapshot?.canvasSync.status).toBe('synced')
+    expect(store.agentMessages.some((item) => item.kind === 'canvas_sync')).toBe(true)
   })
 })

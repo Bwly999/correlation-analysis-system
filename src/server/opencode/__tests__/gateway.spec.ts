@@ -5,6 +5,8 @@ const {
   createOpencodeClientMock,
   sessionCreateMock,
   sessionPromptMock,
+  sessionPromptAsyncMock,
+  sessionMessagesMock,
   mcpAddMock,
   mcpConnectMock,
   toolIdsMock,
@@ -18,6 +20,8 @@ const {
   createOpencodeClientMock: vi.fn(),
   sessionCreateMock: vi.fn(),
   sessionPromptMock: vi.fn(),
+  sessionPromptAsyncMock: vi.fn(),
+  sessionMessagesMock: vi.fn(),
   mcpAddMock: vi.fn(),
   mcpConnectMock: vi.fn(),
   toolIdsMock: vi.fn(),
@@ -37,7 +41,59 @@ vi.mock('../../agentLoop/nodeExecutor.js', () => ({
   executeNodesForAgent: executeNodesForAgentMock,
 }))
 
-import { runAnalysisAgentSessionLoop } from '../gateway.js'
+import {
+  createAgentSession,
+  getAgentSession,
+  runAnalysisAgentSessionLoop,
+  sendAgentSessionMessage,
+} from '../gateway.js'
+
+const buildAgentRequest = () => ({
+  mode: 'edit' as const,
+  prompt: '帮我分析价格、折扣和销量之间的关系',
+  profile: {
+    id: 'custom-model',
+    name: '自定义模型',
+    baseUrl: 'http://example.com/v1',
+    model: 'test-model',
+    apiKey: 'test-key',
+    enabled: true,
+    source: 'custom' as const,
+  },
+  workflowSnapshot: {
+    name: '销量诊断流程',
+    nodes: [{ id: 'node_1' }, { id: 'node_2' }],
+    edges: [{ id: 'edge_1', source: 'node_1', target: 'node_2' }],
+  },
+  contextHints: {
+    schemaSummaries: [
+      {
+        nodeId: 'node_2',
+        nodeLabel: '销量结果表',
+        resultKind: 'table' as const,
+        numericColumns: ['price', 'discount', 'sales'],
+        candidateTargetColumns: ['sales'],
+        candidateFeatureColumns: ['price', 'discount'],
+        blockedReasons: [],
+      },
+    ],
+  },
+  nodeCatalog: [
+    {
+      name: 'manual-json-import',
+      displayName: '手动输入数据',
+      category: 'trigger',
+      description: '手动输入 JSON 数据',
+      inputMode: 'single' as const,
+      minInputs: 0,
+      maxInputs: 0,
+      allowedNextCategories: ['action'],
+      properties: [],
+      help: null,
+      assistantHints: null,
+    },
+  ],
+})
 
 describe('runAnalysisAgentSessionLoop', () => {
   beforeEach(() => {
@@ -49,9 +105,6 @@ describe('runAnalysisAgentSessionLoop', () => {
     })
 
     const eventStream = {
-      controller: {
-        abort: eventAbortMock,
-      },
       async *[Symbol.asyncIterator]() {
         yield {
           type: 'permission.asked',
@@ -67,12 +120,13 @@ describe('runAnalysisAgentSessionLoop', () => {
       },
     }
 
-    eventSubscribeMock.mockResolvedValue(eventStream)
+    eventSubscribeMock.mockResolvedValue({
+      stream: eventStream,
+    })
     toolIdsMock.mockResolvedValue({
       data: [
-        'workflow_get_analysis_session_context',
-        'workflow_validate_workflow_plan',
-        'workflow_get_node_definition',
+        'invalid',
+        'question',
         'bash',
       ],
     })
@@ -269,10 +323,27 @@ describe('runAnalysisAgentSessionLoop', () => {
             permission: 'workflow_*',
             action: 'allow',
           }),
+          expect.objectContaining({
+            permission: 'get_analysis_session_context',
+            action: 'allow',
+          }),
+          expect.objectContaining({
+            permission: 'validate_workflow_plan',
+            action: 'allow',
+          }),
         ]),
       }),
     )
     expect(sessionPromptMock).toHaveBeenCalledTimes(3)
+    expect(sessionPromptMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tools: expect.objectContaining({
+          get_analysis_session_context: true,
+          get_node_catalog: true,
+          validate_workflow_plan: true,
+        }),
+      }),
+    )
     expect(permissionReplyMock).toHaveBeenCalledWith({
       requestID: 'perm_1',
       reply: 'once',
@@ -316,7 +387,294 @@ describe('runAnalysisAgentSessionLoop', () => {
       'conclusion_completed',
       'loop_completed',
     ])
-    expect(eventAbortMock).toHaveBeenCalledTimes(1)
     expect(serverCloseMock).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('agent session bridge', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+
+    createOpencodeServerMock.mockResolvedValue({
+      url: 'http://127.0.0.1:4096',
+      close: serverCloseMock,
+    })
+
+    eventSubscribeMock.mockResolvedValue({
+      stream: {
+        async *[Symbol.asyncIterator]() {},
+      },
+    })
+
+    sessionCreateMock.mockResolvedValue({
+      data: {
+        id: 'opencode_session_1',
+      },
+    })
+
+    sessionPromptAsyncMock.mockResolvedValue({
+      data: {
+        id: 'run_1',
+      },
+    })
+
+    sessionPromptMock.mockResolvedValue({
+      data: {
+        info: {
+          structured: {
+            assistantMessage: '价格与折扣目前是最值得优先验证的两个候选因子。',
+            workflowSummary: '建议先保留导入、筛选和相关性分析三段主链。',
+            findings: ['销量适合作为目标字段', 'price 和 discount 适合作为候选因子'],
+            methods: ['相关性分析', '随机森林特征重要度'],
+            risks: ['当前样本量可能偏少'],
+            recommendations: ['先校验缺失值和异常值'],
+            workflowPlan: {
+              summary: '构建最小销量诊断流程',
+              assumptions: [],
+              warnings: [],
+              questions: [],
+              operations: [
+                {
+                  id: 'node_1',
+                  type: 'createNode',
+                  nodeType: 'manual-json-import',
+                  nodeLabel: '手动输入数据',
+                },
+              ],
+            },
+          },
+        },
+        parts: [],
+      },
+    })
+
+    createOpencodeClientMock.mockReturnValue({
+      mcp: {
+        add: mcpAddMock,
+        connect: mcpConnectMock,
+      },
+      tool: {
+        ids: toolIdsMock,
+      },
+      session: {
+        create: sessionCreateMock,
+        prompt: sessionPromptMock,
+        promptAsync: sessionPromptAsyncMock,
+        messages: sessionMessagesMock,
+      },
+      event: {
+        subscribe: eventSubscribeMock,
+      },
+      permission: {
+        reply: permissionReplyMock,
+      },
+    })
+
+    toolIdsMock.mockResolvedValue({
+      data: ['workflow_get_analysis_session_context', 'workflow_validate_workflow_plan'],
+    })
+    sessionMessagesMock.mockResolvedValue({
+      data: [],
+    })
+  })
+
+  it('creates an agent session with an initial business projection', async () => {
+    const result = await createAgentSession({
+      request: buildAgentRequest(),
+      userId: 'user_1',
+    })
+
+    expect(result.session).toMatchObject({
+      prompt: '帮我分析价格、折扣和销量之间的关系',
+      mode: 'edit',
+      status: 'idle',
+    })
+    expect(result.projection).toMatchObject({
+      workflow: expect.objectContaining({
+        workflowName: '销量诊断流程',
+        draftNodeCount: 2,
+        draftEdgeCount: 1,
+      }),
+      analysis: expect.objectContaining({
+        goal: '帮我分析价格、折扣和销量之间的关系',
+        candidateTargets: ['sales'],
+        candidateFactors: ['price', 'discount'],
+      }),
+      execution: expect.objectContaining({
+        status: 'idle',
+      }),
+    })
+  })
+
+  it('captures event pump failures as projection errors instead of throwing a network reset', async () => {
+    const created = await createAgentSession({
+      request: buildAgentRequest(),
+      userId: 'user_1',
+    })
+
+    eventSubscribeMock.mockRejectedValueOnce(new Error('boom'))
+
+    const events: Array<{ type: string; [key: string]: unknown }> = []
+    const result = await sendAgentSessionMessage(
+      {
+        sessionId: created.session.id,
+        message: '继续给出当前分析建议',
+      },
+      (event) => events.push(event as any),
+    )
+
+    expect(result.session.status).toBe('running')
+    expect(result.projection.execution.status).toBe('running')
+    expect(result.projection.error).toMatchObject({
+      message: '监听 opencode 事件流失败',
+    })
+    expect(events.map((event) => event.type)).toEqual(
+      expect.arrayContaining([
+        'projection.execution.updated',
+        'projection.error.updated',
+        'session.status.updated',
+      ]),
+    )
+  })
+
+  it('starts a background opencode run with promptAsync and returns a running snapshot immediately', async () => {
+    const created = await createAgentSession({
+      request: buildAgentRequest(),
+      userId: 'user_1',
+    })
+
+    const events: Array<{ type: string; [key: string]: unknown }> = []
+
+    const result = await sendAgentSessionMessage(
+      {
+        sessionId: created.session.id,
+        message: '继续给出当前分析建议',
+      },
+      (event) => events.push(event as any),
+    )
+
+    expect(sessionPromptAsyncMock).toHaveBeenCalledTimes(1)
+    expect(sessionPromptAsyncMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionID: 'opencode_session_1',
+        messageID: expect.stringMatching(/^msg_/),
+        tools: expect.objectContaining({
+          get_analysis_session_context: true,
+          validate_workflow_plan: true,
+        }),
+        parts: [
+          {
+            type: 'text',
+            text: '继续给出当前分析建议',
+          },
+        ],
+      }),
+    )
+    expect(sessionPromptMock).not.toHaveBeenCalled()
+    expect(result.session.status).toBe('running')
+    expect(result.projection.execution).toMatchObject({
+      status: 'running',
+      latestAction: '正在调用 opencode 分析当前业务问题',
+    })
+    expect(result.assistantMessage).toBeUndefined()
+    expect(events.map((event) => event.type)).toEqual(
+      expect.arrayContaining([
+        'session.status.updated',
+        'projection.execution.updated',
+      ]),
+    )
+  })
+
+  it('marks the session as failed when promptAsync cannot be started', async () => {
+    const created = await createAgentSession({
+      request: buildAgentRequest(),
+      userId: 'user_1',
+    })
+
+    sessionPromptAsyncMock.mockRejectedValueOnce(new Error('启动 opencode session 失败'))
+
+    await expect(
+      sendAgentSessionMessage({
+        sessionId: created.session.id,
+        message: '继续给出当前分析建议',
+      }),
+    ).rejects.toThrow('启动 opencode session 失败')
+
+    const snapshot = await getAgentSession(created.session.id)
+    expect(snapshot?.session.status).toBe('failed')
+    expect(snapshot?.projection.execution.status).toBe('failed')
+    expect(snapshot?.projection.error?.message).toBe('启动 opencode session 失败')
+  })
+
+  it('tolerates string workflowPlan payloads from opencode and completes the session', async () => {
+    let releaseIdle: (() => void) | null = null
+    eventSubscribeMock.mockResolvedValueOnce({
+      stream: {
+        async *[Symbol.asyncIterator]() {
+          await new Promise<void>((resolve) => {
+            releaseIdle = resolve
+          })
+          yield {
+            type: 'session.idle',
+            properties: {
+              sessionID: 'opencode_session_1',
+            },
+          }
+        },
+      },
+    })
+    sessionPromptAsyncMock.mockImplementationOnce(async () => {
+      releaseIdle?.()
+      return { data: { id: 'run_1' } }
+    })
+    sessionMessagesMock.mockResolvedValueOnce({
+      data: [
+        {
+          info: {
+            id: 'msg_assistant_1',
+            role: 'assistant',
+            parentID: 'msg_user_1',
+            time: {
+              completed: Date.now(),
+            },
+            structured: {
+              assistantMessage: '建议先验证价格与折扣对销量的影响。',
+              workflowSummary: '先搭一个最小分析链路。',
+              findings: ['销量适合作为目标字段'],
+              methods: ['相关性分析'],
+              risks: [],
+              recommendations: ['先清洗异常值'],
+              workflowPlan: '暂不输出结构化工作流，先完成字段核验。',
+            },
+          },
+          parts: [
+            {
+              type: 'text',
+              text: '建议先验证价格与折扣对销量的影响。',
+            },
+          ],
+        },
+      ],
+    })
+
+    const created = await createAgentSession({
+      request: buildAgentRequest(),
+      userId: 'user_1',
+    })
+
+    const result = await sendAgentSessionMessage({
+      sessionId: created.session.id,
+      message: '继续给出当前分析建议',
+    })
+
+    await Promise.resolve()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    const snapshot = getAgentSession(created.session.id)
+    expect(result.session.status).toBe('completed')
+    expect(snapshot?.session.status).toBe('completed')
+    expect(snapshot?.projection.execution.status).toBe('completed')
+    expect(snapshot?.projection.workflow.proposedPlan).toBeNull()
+    expect(snapshot?.projection.error).toBeNull()
   })
 })

@@ -47,20 +47,43 @@ describe('WorkflowAiPanel', () => {
     expect(wrapper.get('[data-testid="workflow-ai-raw-output"]').text()).toContain('{"summary":"失败"}')
   })
 
-  it('renders streaming progress and live model output while ai orchestration is running', () => {
+  it('renders streaming progress from agent session and projection events', () => {
     const aiStore = useWorkflowAiStore()
     useWorkflowStore()
 
     aiStore.isGenerating = true
     aiStore.streamStatus = 'streaming'
+    aiStore.streamHeadline = '正在执行销量与价格相关性分析'
     aiStore.streamEvents = [
-      { type: 'started', message: 'AI 编排已开始' },
-      { type: 'attempt_started', attempt: 1, trigger: 'initial', message: '开始首次生成' },
-      { type: 'stage_changed', stage: 'model_request', attempt: 1, message: '正在请求模型输出' },
+      {
+        type: 'session.status.updated',
+        session: {
+          id: 'agent_1',
+          mode: 'edit',
+          prompt: '分析销量与价格关系',
+          status: 'running',
+          profile: {
+            id: 'profile_1',
+            name: 'GLM',
+            model: 'glm-4.7',
+          },
+          workflowId: 'wf_1',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        },
+      },
+      {
+        type: 'projection.execution.updated',
+        projection: {
+          status: 'running',
+          latestAction: '正在执行 Pearson 相关性分析',
+          toolCalls: [],
+          pendingApprovals: [],
+          latestToolSummary: '已读取销量数据',
+        },
+      },
     ]
-    aiStore.streamOutputs = [
-      { attempt: 1, trigger: 'initial', text: '{"summary":"实时输出中"}' },
-    ]
+    aiStore.streamingMessage = '正在生成业务结论...'
 
     const wrapper = mount(WorkflowAiPanel, {
       props: {
@@ -74,8 +97,8 @@ describe('WorkflowAiPanel', () => {
     })
 
     expect(wrapper.get('[data-testid="workflow-ai-stream-progress"]').text()).toContain('实时进度')
-    expect(wrapper.get('[data-testid="workflow-ai-stream-progress"]').text()).toContain('正在请求模型输出')
-    expect(wrapper.get('[data-testid="workflow-ai-stream-output"]').text()).toContain('实时输出中')
+    expect(wrapper.get('[data-testid="workflow-ai-stream-progress"]').text()).toContain('正在执行 Pearson 相关性分析')
+    expect(wrapper.get('[data-testid="workflow-ai-stream-output"]').text()).toContain('正在生成业务结论')
   })
 
   it('renders app-internal context hints and tool trace for local tool-first orchestration', () => {
@@ -271,7 +294,7 @@ describe('WorkflowAiPanel', () => {
     })
   })
 
-  it('renders chat-first analysis workspace sections with conclusion cards and workflow sync action', async () => {
+  it('renders chat-first analysis workspace sections with projection cards and workflow sync action', async () => {
     const aiStore = useWorkflowAiStore()
     const workflowStore = useWorkflowStore()
 
@@ -279,32 +302,76 @@ describe('WorkflowAiPanel', () => {
     ;(aiStore as any).syncAnalysisCanvas = syncAnalysisCanvasMock
 
     aiStore.prompt = '帮我分析影响销量的关键因素'
-    aiStore.plan = {
-      summary: '价格和折扣对销量影响最明显',
-      assumptions: ['默认以销量作为目标字段'],
-      warnings: ['样本量偏小，建议补充更多周期数据'],
-      questions: [],
-      operations: [],
-    }
-    aiStore.sessionState = {
-      sessionId: 'session_1',
+    aiStore.activeSession = {
+      id: 'session_1',
       mode: 'edit',
       status: 'completed',
       prompt: '帮我分析影响销量的关键因素',
-      draft: {
-        summary: '先清洗数据，再执行相关性和特征重要性分析',
-        assumptions: [],
-        warnings: [],
-        questions: [],
-        nodes: [],
-        edges: [],
+      profile: {
+        id: 'profile_1',
+        name: 'GLM',
+        model: 'glm-4.7',
       },
-      trace: [],
-      diagnostics: {
-        issues: [],
-      },
-      missingInfo: [],
+      workflowId: 'wf_sales',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
     }
+    aiStore.projectionSnapshot = {
+      workflow: {
+        workflowId: 'wf_sales',
+        workflowName: '销量分析',
+        draftNodeCount: 3,
+        draftEdgeCount: 2,
+        draftSummary: '先清洗数据，再执行相关性和特征重要性分析',
+        versionCount: 4,
+        latestVersionId: 'version_4',
+        proposedPlan: {
+          summary: '价格和折扣对销量影响最明显',
+          assumptions: ['默认以销量作为目标字段'],
+          warnings: ['样本量偏小，建议补充更多周期数据'],
+          questions: [],
+          operations: [],
+        },
+      },
+      analysis: {
+        goal: '帮我分析影响销量的关键因素',
+        summary: '价格和折扣对销量影响最明显',
+        candidateTargets: ['销量'],
+        candidateFactors: ['价格', '折扣'],
+        methods: ['Pearson 相关性分析', '特征重要性分析'],
+        findings: ['价格和折扣对销量影响最明显'],
+        risks: ['样本量偏小，建议补充更多周期数据'],
+        recommendations: ['继续按地区分层验证'],
+      },
+      execution: {
+        status: 'completed',
+        latestAction: '已生成分析草案与结论',
+        toolCalls: [],
+        pendingApprovals: [],
+      },
+      canvasSync: {
+        status: 'idle',
+        message: '当前还没有同步画布，可手动同步。',
+      },
+      error: null,
+      updatedAt: Date.now(),
+    }
+    aiStore.sessionMessages = [
+      {
+        id: 'user_1',
+        role: 'user',
+        content: '帮我分析影响销量的关键因素',
+        status: 'completed',
+        createdAt: Date.now(),
+      },
+      {
+        id: 'assistant_1',
+        role: 'assistant',
+        content: '我已经基于当前业务上下文整理出分析结论和工作流草案。',
+        status: 'completed',
+        createdAt: Date.now(),
+      },
+    ]
 
     workflowStore.workflowName = '销量分析'
     workflowStore.nodes = [
@@ -336,7 +403,8 @@ describe('WorkflowAiPanel', () => {
     })
 
     expect(wrapper.get('[data-testid="analysis-agent-chat"]').text()).toContain('帮我分析影响销量的关键因素')
-    expect(wrapper.get('[data-testid="analysis-agent-artifacts"]').text()).toContain('分析结论')
+    expect(wrapper.get('[data-testid="analysis-agent-artifacts"]').text()).toContain('当前工作流草案')
+    expect(wrapper.get('[data-testid="analysis-agent-artifacts"]').text()).toContain('当前分析状态')
     expect(wrapper.get('[data-testid="analysis-agent-artifacts"]').text()).toContain('价格和折扣对销量影响最明显')
     expect(wrapper.get('[data-testid="analysis-agent-artifacts"]').text()).toContain('样本量偏小')
 

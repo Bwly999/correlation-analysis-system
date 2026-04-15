@@ -17,20 +17,20 @@
 
 ### 新增 (Feat)
 
-- **分析代理主循环切换到 opencode SDK，并接入工作流 MCP 能力**:
-  - 新增基于 `@opencode-ai/sdk/v2` 的 Agent Loop 网关，使用远程 HTTP MCP 暴露当前分析会话、节点目录、计划校验、已保存工作流与版本历史能力。
-  - `analysis-agent/session/:id/run-agent-loop` 现已通过 opencode 驱动规划、执行、解读与结论生成，并复用现有节点执行器完成真实节点运行。
-  - 新增服务端 `workflow-mcp` 入口与相关回归测试，保证 opencode 会话能在隔离 runtime 中安全调用 `workflow_*` 工具。
+- **分析代理主链完全切换为 opencode session / message / projection 架构**:
+  - 服务端新增 `/api/agent/sessions/*` 会话接口，覆盖会话创建、消息发送、事件流订阅、projection 恢复与画布同步，不再以内置 `agent-loop` 为主路径。
+  - 新增 `agentSessionStore` 与 `projection` 映射层，把 `opencode sdk` 原始事件收敛为工作流业务态、分析业务态、执行业务态、画布同步态与错误态。
+  - `workflow MCP` 继续作为 agent 的业务能力入口，供 opencode 会话访问当前工作流、节点目录、版本与画布执行能力。
 
-- **工作流版本历史补齐前后端存储协议，并接入代理工作台**:
-  - 服务端与前端存储层统一新增工作流版本列表、版本详情和回滚接口，保存与回滚时都会生成可追溯版本快照。
-  - 本地存储新增 `workflow_versions` 版本快照持久化，服务端存储补齐对应 REST API 与客户端封装。
-  - 左侧分析代理工作台新增“当前运行态”和“版本历史”侧栏，支持查看版本详情、预览节点快照并直接回滚指定版本。
+- **分析代理工作台切换为面向数据分析业务的单列对话流**:
+  - `AgentWorkspace` 现以单列消息流融合工作流草案、分析结论、执行动作、画布同步与异常信息，不再保留自研 `preset`、`iteration` 和左右割裂的运行 rail。
+  - `WorkflowCanvas` 的联动横幅改为直接读取 session/projection 状态，保持与当前多因子分析业务语义一致。
+  - `WorkflowAiPanel` 和相关 workflow 侧兼容入口已切到新 session/projection 模型，保留业务摘要、上下文提示和模型配置能力。
 
 ### 测试 (Test)
 
-- 补充分析代理工作台、工作流画布、服务端存储路由、opencode 网关和存储客户端的回归测试。
-- 重新验证 `pnpm test:unit` 与 `pnpm build`，确保前后端类型检查、构建与单元测试全部通过。
+- 补充并更新分析代理工作台、工作流画布、opencode 网关、路由、service 和 store 的回归测试。
+- 已验证 `pnpm test:unit`、`pnpm build` 与基于真实 `opencode + glm-4.7` 的服务端会话链路复测通过。
 
 ## [2026-04-13]
 

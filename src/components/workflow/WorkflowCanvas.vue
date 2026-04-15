@@ -76,16 +76,17 @@ const isAgentMode = computed(() => isAiPanelVisible.value)
 const executionWorkspaceBanner = computed(() => {
   const hasAppliedPlan = Boolean(aiStore.lastAppliedSnapshotId) || aiStore.autoApplyResult.status === 'applied'
   const hasFailedApply = aiStore.autoApplyResult.status === 'failed'
+  const isAgentStreaming = aiStore.streamStatus === 'streaming'
 
-  if (!aiStore.agentLoopRunning && !hasAppliedPlan && !hasFailedApply) {
+  if (!isAgentStreaming && !hasAppliedPlan && !hasFailedApply) {
     return null
   }
 
   return {
-    tone: aiStore.agentLoopRunning ? 'running' : hasFailedApply ? 'failed' : 'applied',
+    tone: isAgentStreaming ? 'running' : hasFailedApply ? 'failed' : 'applied',
     headline:
       aiStore.streamHeadline
-      || aiStore.agentLoopOutput?.conclusion?.summary
+      || aiStore.projectionSnapshot?.analysis.summary
       || '自动分析已完成',
     detail: hasFailedApply
       ? (aiStore.autoApplyResult.message || '最终计划已生成，但同步到画布失败。')
@@ -372,7 +373,7 @@ watch(
 watch(
   () => `${store.nodes.map((node) => node.id).join('|')}::${store.edges.map((edge) => edge.id).join('|')}`,
   () => {
-    if (!aiStore.sessionState) return
+    if (!aiStore.activeSession) return
     aiStore.syncAnalysisCanvas(store as any)
   },
 )

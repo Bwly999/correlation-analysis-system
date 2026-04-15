@@ -1,31 +1,23 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { Cpu, SendHorizonal, SlidersHorizontal } from 'lucide-vue-next'
+import { Cpu, RefreshCcw, SendHorizonal } from 'lucide-vue-next'
 import type { AnalysisAgentApprovalRequest } from '@/ai/types'
-
-type AgentLoopPresetOption = {
-  id: 'standard' | 'deep'
-  label: string
-  description: string
-}
 
 const props = defineProps<{
   prompt: string
   approvalRequests: AnalysisAgentApprovalRequest[]
-  preset: 'standard' | 'deep'
-  presetOptions: AgentLoopPresetOption[]
   disabled?: boolean
+  canSyncCanvas?: boolean
 }>()
 
 const emit = defineEmits<{
   submit: [value: string]
   updatePrompt: [value: string]
-  updatePreset: [value: 'standard' | 'deep']
   openModelSettings: []
+  syncCanvas: []
 }>()
 
 const draft = ref(props.prompt)
-const isPresetMenuOpen = ref(false)
 
 watch(
   () => props.prompt,
@@ -35,9 +27,6 @@ watch(
 )
 
 const canSubmit = computed(() => !props.disabled && draft.value.trim().length > 0)
-const selectedPreset = computed(() =>
-  props.presetOptions.find((item) => item.id === props.preset) ?? props.presetOptions[0],
-)
 
 const handleInput = (event: Event) => {
   const value = (event.target as HTMLTextAreaElement).value
@@ -45,19 +34,8 @@ const handleInput = (event: Event) => {
   emit('updatePrompt', value)
 }
 
-const togglePresetMenu = () => {
-  if (props.disabled) return
-  isPresetMenuOpen.value = !isPresetMenuOpen.value
-}
-
-const selectPreset = (preset: 'standard' | 'deep') => {
-  emit('updatePreset', preset)
-  isPresetMenuOpen.value = false
-}
-
 const submit = () => {
   if (!canSubmit.value) return
-  isPresetMenuOpen.value = false
   emit('submit', draft.value.trim())
 }
 </script>
@@ -78,33 +56,6 @@ const submit = () => {
 
       <div class="agent-composer__footer">
         <div class="agent-composer__quick-actions">
-          <div class="agent-composer__menu-anchor">
-            <button
-              data-testid="agent-composer-preset-toggle"
-              type="button"
-              class="agent-composer__icon-btn"
-              :disabled="disabled"
-              :title="selectedPreset?.label ?? '分析强度'"
-              @click="togglePresetMenu"
-            >
-              <SlidersHorizontal :size="16" />
-            </button>
-
-            <div v-if="isPresetMenuOpen" data-testid="agent-preset-menu" class="agent-composer__preset-menu">
-              <button
-                v-for="item in presetOptions"
-                :key="item.id"
-                type="button"
-                class="agent-composer__preset-option"
-                :class="{ 'is-active': item.id === preset }"
-                @click="selectPreset(item.id)"
-              >
-                <strong>{{ item.label }}</strong>
-                <span>{{ item.description }}</span>
-              </button>
-            </div>
-          </div>
-
           <button
             data-testid="agent-composer-model-toggle"
             type="button"
@@ -113,6 +64,18 @@ const submit = () => {
             @click="emit('openModelSettings')"
           >
             <Cpu :size="16" />
+          </button>
+
+          <button
+            v-if="canSyncCanvas"
+            data-testid="agent-composer-sync"
+            type="button"
+            class="agent-composer__sync-btn"
+            :disabled="disabled"
+            @click="emit('syncCanvas')"
+          >
+            <RefreshCcw :size="14" />
+            <span>同步画布</span>
           </button>
         </div>
 
@@ -183,12 +146,8 @@ const submit = () => {
   gap: 8px;
 }
 
-.agent-composer__menu-anchor {
-  position: relative;
-}
-
-.agent-composer__icon-btn {
-  width: 36px;
+.agent-composer__icon-btn,
+.agent-composer__sync-btn {
   height: 36px;
   border-radius: 12px;
   border: 1px solid #dbe4ef;
@@ -197,56 +156,24 @@ const submit = () => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
   cursor: pointer;
   transition: all 0.18s ease;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 700;
 }
 
-.agent-composer__icon-btn:hover {
+.agent-composer__icon-btn {
+  width: 36px;
+  padding: 0;
+}
+
+.agent-composer__icon-btn:hover,
+.agent-composer__sync-btn:hover {
   border-color: #c4d3e4;
   color: #0f172a;
   background: #f8fbff;
-}
-
-.agent-composer__preset-menu {
-  position: absolute;
-  left: 0;
-  bottom: calc(100% + 10px);
-  z-index: 10;
-  width: 260px;
-  padding: 10px;
-  border-radius: 18px;
-  border: 1px solid #dbe4ef;
-  background: #ffffff;
-  box-shadow: 0 24px 40px -30px rgba(15, 23, 42, 0.45);
-  display: grid;
-  gap: 8px;
-}
-
-.agent-composer__preset-option {
-  border: 1px solid #dbe4ef;
-  border-radius: 14px;
-  background: #fbfdff;
-  padding: 10px 12px;
-  display: grid;
-  gap: 4px;
-  text-align: left;
-  cursor: pointer;
-}
-
-.agent-composer__preset-option.is-active {
-  border-color: #2563eb;
-  background: #f3f8ff;
-}
-
-.agent-composer__preset-option strong {
-  color: #0f172a;
-  font-size: 12px;
-}
-
-.agent-composer__preset-option span {
-  color: #64748b;
-  font-size: 11px;
-  line-height: 1.5;
 }
 
 .agent-composer__submit {
@@ -273,6 +200,7 @@ const submit = () => {
 }
 
 .agent-composer__icon-btn:disabled,
+.agent-composer__sync-btn:disabled,
 .agent-composer__submit:disabled {
   cursor: not-allowed;
   opacity: 0.5;

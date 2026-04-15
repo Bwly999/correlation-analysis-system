@@ -1,13 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  getAnalysisAgentSession,
+  createAgentSession,
+  getAgentProjection,
   getWorkflowAiSession,
   requestWorkflowAiPlan,
-  runAnalysisAgentLoop,
   runWorkflowAiSession,
-  startAnalysisAgentSession,
+  sendAgentSessionMessage,
   startWorkflowAiSession,
+  streamAgentSessionEvents,
   streamWorkflowAiPlan,
+  syncAgentCanvas,
 } from '../index'
 import * as workflowAiService from '../index'
 import type { WorkflowAiPlanRequest } from '@/ai/types'
@@ -432,137 +434,186 @@ describe('workflowAi service', () => {
     })
   })
 
-  it('starts and loads analysis agent sessions through the dedicated endpoints', async () => {
-    vi.mocked(globalThis.fetch)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          session: {
-            sessionId: 'session_1',
-            userGoal: '帮我分析影响销量的关键因素',
-            phase: 'intent',
-            conversation: [{ id: 'user_goal', role: 'user', content: '帮我分析影响销量的关键因素' }],
-            artifacts: [],
-            approvalRequests: [],
-            workflowSession: {
-              sessionId: 'session_1',
-              mode: 'create',
-              status: 'idle',
-              prompt: '帮我分析影响销量的关键因素',
-              draft: { summary: '', assumptions: [], warnings: [], questions: [], nodes: [], edges: [] },
-              trace: [],
-              diagnostics: { issues: [] },
-              missingInfo: [],
-            },
+  it('does not expose removed legacy analysis-agent helpers', () => {
+    expect('startAnalysisAgentSession' in workflowAiService).toBe(false)
+    expect('getAnalysisAgentSession' in workflowAiService).toBe(false)
+    expect('runAnalysisAgentLoop' in workflowAiService).toBe(false)
+  })
+
+  it('creates an agent session through the new session endpoint', async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        session: {
+          id: 'agent_1',
+          mode: 'edit',
+          prompt: '帮我分析价格和销量关系',
+          status: 'idle',
+          profile: {
+            id: 'profile_1',
+            name: '默认模型',
+            model: 'glm-4.7',
           },
-        }),
-      } as Response)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          session: {
-            sessionId: 'session_1',
-            userGoal: '帮我分析影响销量的关键因素',
-            phase: 'completed',
-            conversation: [{ id: 'user_goal', role: 'user', content: '帮我分析影响销量的关键因素' }],
-            artifacts: [],
-            approvalRequests: [],
-            workflowSession: {
-              sessionId: 'session_1',
-              mode: 'create',
-              status: 'completed',
-              prompt: '帮我分析影响销量的关键因素',
-              draft: { summary: '', assumptions: [], warnings: [], questions: [], nodes: [], edges: [] },
-              trace: [],
-              diagnostics: { issues: [] },
-              missingInfo: [],
-            },
+          workflowId: null,
+          createdAt: 1,
+          updatedAt: 1,
+        },
+        projection: {
+          workflow: {
+            workflowId: null,
+            workflowName: '销量诊断流程',
+            draftNodeCount: 2,
+            draftEdgeCount: 1,
+            draftSummary: '已载入当前画布，等待开始分析。',
+            versionCount: 0,
+            latestVersionId: null,
+            proposedPlan: null,
           },
-        }),
-      } as Response)
+          analysis: {
+            goal: '帮我分析价格和销量关系',
+            summary: '系统已记录当前分析目标，等待模型开始处理。',
+            candidateTargets: ['sales'],
+            candidateFactors: ['price'],
+            methods: [],
+            findings: [],
+            risks: [],
+            recommendations: [],
+          },
+          execution: {
+            status: 'idle',
+            latestAction: '等待用户发送分析指令',
+            toolCalls: [],
+            pendingApprovals: [],
+          },
+          canvasSync: {
+            status: 'idle',
+            message: '当前草案尚未同步到画布',
+          },
+          error: null,
+          updatedAt: 1,
+        },
+      }),
+    } as Response)
 
     const request: WorkflowAiPlanRequest = {
-      mode: 'create',
-      prompt: '帮我分析影响销量的关键因素',
+      mode: 'edit',
+      prompt: '帮我分析价格和销量关系',
       profile: {
-        id: 'system-default-zhipu-glm-4-7',
-        name: '默认智谱 GLM-4.7',
-        baseUrl: 'https://open.bigmodel.cn/api/coding/paas/v4',
+        id: 'profile_1',
+        name: '默认模型',
+        baseUrl: 'http://example.com',
         model: 'glm-4.7',
+        apiKey: 'test-key',
         enabled: true,
-        source: 'system',
+        source: 'custom',
+      },
+      workflowSnapshot: {
+        name: '销量诊断流程',
+        nodes: [{ id: 'node_1' }, { id: 'node_2' }],
+        edges: [{ id: 'edge_1', source: 'node_1', target: 'node_2' }],
       },
       nodeCatalog: [],
     }
 
-    const startResponse = await startAnalysisAgentSession(request)
-    const getResponse = await getAnalysisAgentSession('session_1')
+    const response = await createAgentSession(request)
 
-    expect(startResponse.session.phase).toBe('intent')
-    expect(getResponse.session.phase).toBe('completed')
-    expect(globalThis.fetch).toHaveBeenNthCalledWith(
-      1,
-      '/api/analysis-agent/session/start',
-      expect.objectContaining({ method: 'POST' }),
+    expect(response.session.id).toBe('agent_1')
+    expect(response.projection.workflow.workflowName).toBe('销量诊断流程')
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      '/api/agent/sessions',
+      expect.objectContaining({
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }),
     )
-    expect(globalThis.fetch).toHaveBeenNthCalledWith(2, '/api/analysis-agent/session/session_1')
   })
 
-  it('reconstructs the full agent loop output from ndjson events', async () => {
+  it('sends agent session messages and returns projection updates', async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        session: {
+          id: 'agent_1',
+          mode: 'edit',
+          prompt: '帮我分析价格和销量关系',
+          status: 'running',
+          profile: {
+            id: 'profile_1',
+            name: '默认模型',
+            model: 'glm-4.7',
+          },
+          workflowId: null,
+          createdAt: 1,
+          updatedAt: 2,
+        },
+        projection: {
+          workflow: {
+            workflowId: null,
+            workflowName: '销量诊断流程',
+            draftNodeCount: 2,
+            draftEdgeCount: 1,
+            draftSummary: '建议先保留导入、筛选和相关性分析三段主链。',
+            versionCount: 0,
+            latestVersionId: null,
+            proposedPlan: null,
+          },
+          analysis: {
+            goal: '帮我分析价格和销量关系',
+            summary: '系统已开始处理当前分析请求。',
+            candidateTargets: ['sales'],
+            candidateFactors: ['price'],
+            methods: [],
+            findings: [],
+            risks: [],
+            recommendations: [],
+          },
+          execution: {
+            status: 'running',
+            latestAction: '正在调用 opencode 分析当前业务问题',
+            toolCalls: [],
+            pendingApprovals: [],
+          },
+          canvasSync: {
+            status: 'idle',
+            message: '当前草案尚未同步到画布',
+          },
+          error: null,
+          updatedAt: 2,
+        },
+      }),
+    } as Response)
+
+    const response = await sendAgentSessionMessage('agent_1', {
+      content: '继续分析',
+    })
+
+    expect(response.session.status).toBe('running')
+    expect(response.projection.execution.status).toBe('running')
+    expect(response.projection.analysis.summary).toBe('系统已开始处理当前分析请求。')
+    expect(response.assistantMessage).toBeUndefined()
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/agent/sessions/agent_1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        content: '继续分析',
+      }),
+    })
+  })
+
+  it('streams agent session events from the dedicated events endpoint', async () => {
     const encoder = new TextEncoder()
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
         controller.enqueue(
           encoder.encode(
             [
-              JSON.stringify({ type: 'loop_started', maxIterations: 2 }),
-              JSON.stringify({
-                type: 'loop_iteration_completed',
-                iteration: 1,
-                plan: {
-                  summary: '第一轮计划',
-                  assumptions: [],
-                  warnings: [],
-                  questions: [],
-                  operations: [
-                    {
-                      id: 'node_import_1',
-                      type: 'createNode',
-                      nodeType: 'manual-json-import',
-                      nodeLabel: '手动输入数据',
-                    },
-                  ],
-                },
-                executionResults: [
-                  {
-                    nodeId: 'node_import_1',
-                    nodeLabel: '手动输入数据',
-                    nodeType: 'manual-json-import',
-                    success: true,
-                    resultKind: 'table',
-                    resultSummary: '表格数据，5 行',
-                    rowCount: 5,
-                  },
-                ],
-                interpretation: {
-                  text: '当前结果已足够',
-                  shouldContinue: false,
-                },
-              }),
-              JSON.stringify({
-                type: 'conclusion_completed',
-                conclusion: {
-                  summary: '分析已完成',
-                  findings: ['发现一'],
-                  recommendations: ['建议一'],
-                  caveats: [],
-                },
-              }),
-              JSON.stringify({
-                type: 'loop_completed',
-                totalIterations: 1,
-                totalDurationMs: 1234,
-              }),
+              JSON.stringify({ type: 'projection.execution.updated', projection: { status: 'running', latestAction: '正在分析', toolCalls: [], pendingApprovals: [] } }),
+              JSON.stringify({ type: 'message.delta', sessionId: 'agent_1', messageId: 'assistant_1', delta: '正在分析价格字段…' }),
+              JSON.stringify({ type: 'message.completed', sessionId: 'agent_1', message: { id: 'assistant_1', role: 'assistant', content: '分析完成', status: 'completed', createdAt: 2 } }),
             ].join('\n'),
           ),
         )
@@ -575,55 +626,122 @@ describe('workflowAi service', () => {
       body: stream,
     } as Response)
 
-    const events: string[] = []
-    const response = await runAnalysisAgentLoop('session_1', { maxIterations: 2 }, {
+    const receivedEvents: string[] = []
+    await streamAgentSessionEvents('agent_1', {
       onEvent(event) {
-        events.push(event.type)
+        receivedEvents.push(event.type)
       },
     })
 
-    expect(events).toEqual([
-      'loop_started',
-      'loop_iteration_completed',
-      'conclusion_completed',
-      'loop_completed',
+    expect(receivedEvents).toEqual([
+      'projection.execution.updated',
+      'message.delta',
+      'message.completed',
     ])
-    expect(response.totalIterations).toBe(1)
-    expect(response.totalDurationMs).toBe(1234)
-    expect(response.conclusion?.summary).toBe('分析已完成')
-    expect(response.iterations).toEqual([
-      {
-        iteration: 1,
-        plan: {
-          summary: '第一轮计划',
-          assumptions: [],
-          warnings: [],
-          questions: [],
-          operations: [
-            {
-              id: 'node_import_1',
-              type: 'createNode',
-              nodeType: 'manual-json-import',
-              nodeLabel: '手动输入数据',
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/agent/sessions/agent_1/events')
+  })
+
+  it('loads projection snapshots and canvas sync results through the new endpoints', async () => {
+    vi.mocked(globalThis.fetch)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          projection: {
+            workflow: {
+              workflowId: null,
+              workflowName: '销量诊断流程',
+              draftNodeCount: 2,
+              draftEdgeCount: 1,
+              draftSummary: '建议先保留导入、筛选和相关性分析三段主链。',
+              versionCount: 0,
+              latestVersionId: null,
+              proposedPlan: null,
             },
-          ],
-        },
-        executionResults: [
-          {
-            nodeId: 'node_import_1',
-            nodeLabel: '手动输入数据',
-            nodeType: 'manual-json-import',
-            success: true,
-            resultKind: 'table',
-            resultSummary: '表格数据，5 行',
-            rowCount: 5,
+            analysis: {
+              goal: '帮我分析价格和销量关系',
+              summary: '价格是当前最值得优先验证的候选因子。',
+              candidateTargets: ['sales'],
+              candidateFactors: ['price'],
+              methods: ['相关性分析'],
+              findings: ['销量适合作为目标字段'],
+              risks: [],
+              recommendations: ['先校验缺失值和异常值'],
+            },
+            execution: {
+              status: 'completed',
+              latestAction: '本轮分析已完成',
+              toolCalls: [],
+              pendingApprovals: [],
+            },
+            canvasSync: {
+              status: 'idle',
+              message: '当前草案尚未同步到画布',
+            },
+            error: null,
+            updatedAt: 2,
           },
-        ],
-        interpretation: {
-          text: '当前结果已足够',
-          shouldContinue: false,
-        },
+        }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          projection: {
+            workflow: {
+              workflowId: null,
+              workflowName: '销量诊断流程',
+              draftNodeCount: 3,
+              draftEdgeCount: 2,
+              draftSummary: '同步后草案已更新。',
+              versionCount: 0,
+              latestVersionId: null,
+              proposedPlan: null,
+            },
+            analysis: {
+              goal: '帮我分析价格和销量关系',
+              summary: '价格是当前最值得优先验证的候选因子。',
+              candidateTargets: ['sales'],
+              candidateFactors: ['price'],
+              methods: ['相关性分析'],
+              findings: ['销量适合作为目标字段'],
+              risks: [],
+              recommendations: ['先校验缺失值和异常值'],
+            },
+            execution: {
+              status: 'completed',
+              latestAction: '本轮分析已完成',
+              toolCalls: [],
+              pendingApprovals: [],
+            },
+            canvasSync: {
+              status: 'synced',
+              message: '已同步当前画布，共 3 个节点、2 条连线',
+              syncedAt: 3,
+            },
+            error: null,
+            updatedAt: 3,
+          },
+          syncSummary: '已同步当前画布，共 3 个节点、2 条连线',
+        }),
+      } as Response)
+
+    const projection = await getAgentProjection('agent_1')
+    const syncResult = await syncAgentCanvas('agent_1', {
+      workflowSnapshot: {
+        name: '销量诊断流程',
+        nodes: [{ id: 'node_1' }, { id: 'node_2' }, { id: 'node_3' }],
+        edges: [{ id: 'edge_1' }, { id: 'edge_2' }],
       },
-    ])
+    })
+
+    expect(projection.workflow.workflowName).toBe('销量诊断流程')
+    expect(syncResult.syncSummary).toBe('已同步当前画布，共 3 个节点、2 条连线')
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(1, '/api/agent/sessions/agent_1/projection')
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(
+      2,
+      '/api/agent/sessions/agent_1/canvas-sync',
+      expect.objectContaining({
+        method: 'POST',
+      }),
+    )
   })
 })
