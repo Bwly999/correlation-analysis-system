@@ -92,6 +92,7 @@ PYTHON_ANALYSIS_API_BASE_URL=http://127.0.0.1:8000
 OPENAI_API_KEY=你的系统模型密钥
 OPENAI_COMPAT_BASE_URL=https://open.bigmodel.cn/api/coding/paas/v4
 WORKFLOW_AI_DEFAULT_MODEL=glm-4.7
+WORKFLOW_STORAGE_DATA_DIR=.workflow-storage
 ```
 
 ### 4.2 启动命令
@@ -115,6 +116,11 @@ Node 服务当前统一提供以下接口：
 - `/api/analysis/lasso`
 - `/api/analysis/random-forest-feature-importance`
 - `/api/analysis/xgboost-shap`
+
+其中 `/api/storage/*` 当前基于 `lowdb` 进行本地文件持久化：
+
+- `WORKFLOW_STORAGE_DATA_DIR` 用于指定工作流、版本历史和执行历史的落盘目录
+- 默认按单 Node 实例假设运行，不建议多个实例直接共享同一目录
 
 其中算法接口会继续转发到 Python：
 

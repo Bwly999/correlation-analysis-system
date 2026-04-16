@@ -222,27 +222,27 @@ export const createServerHandler = () => async (request: IncomingMessage, respon
     }
 
     if (request.method === 'GET' && url.pathname === '/api/storage/workflows') {
-      sendJson(response, 200, getUserWorkflows(currentUser.id))
+      sendJson(response, 200, await getUserWorkflows(currentUser.id))
       return
     }
 
     if (request.method === 'POST' && url.pathname === '/api/storage/workflows') {
       const workflow = await readJsonBody(request)
-      saveUserWorkflow(currentUser.id, workflow as any)
+      await saveUserWorkflow(currentUser.id, workflow as any)
       sendJson(response, 200, { ok: true })
       return
     }
 
     if (request.method === 'GET' && workflowVersionsMatch) {
       const workflowId = decodeURIComponent(workflowVersionsMatch[1] ?? '')
-      sendJson(response, 200, getUserWorkflowVersions(currentUser.id, workflowId))
+      sendJson(response, 200, await getUserWorkflowVersions(currentUser.id, workflowId))
       return
     }
 
     if (request.method === 'GET' && workflowVersionDetailMatch) {
       const workflowId = decodeURIComponent(workflowVersionDetailMatch[1] ?? '')
       const versionId = decodeURIComponent(workflowVersionDetailMatch[2] ?? '')
-      const version = getUserWorkflowVersion(currentUser.id, workflowId, versionId)
+      const version = await getUserWorkflowVersion(currentUser.id, workflowId, versionId)
       if (!version) {
         sendJson(response, 404, { message: '未找到工作流版本' })
         return
@@ -254,7 +254,7 @@ export const createServerHandler = () => async (request: IncomingMessage, respon
     if (request.method === 'POST' && workflowVersionRollbackMatch) {
       const workflowId = decodeURIComponent(workflowVersionRollbackMatch[1] ?? '')
       const versionId = decodeURIComponent(workflowVersionRollbackMatch[2] ?? '')
-      const result = rollbackUserWorkflowVersion(currentUser.id, workflowId, versionId)
+      const result = await rollbackUserWorkflowVersion(currentUser.id, workflowId, versionId)
       if (!result) {
         sendJson(response, 404, { message: '未找到工作流版本' })
         return
@@ -265,7 +265,7 @@ export const createServerHandler = () => async (request: IncomingMessage, respon
 
     if (request.method === 'GET' && workflowDetailMatch) {
       const workflowId = decodeURIComponent(workflowDetailMatch[1] ?? '')
-      const workflow = getUserWorkflowById(currentUser.id, workflowId)
+      const workflow = await getUserWorkflowById(currentUser.id, workflowId)
       if (!workflow) {
         sendJson(response, 404, { message: '未找到工作流' })
         return
@@ -276,7 +276,7 @@ export const createServerHandler = () => async (request: IncomingMessage, respon
 
     if (request.method === 'DELETE' && workflowDetailMatch) {
       const workflowId = decodeURIComponent(workflowDetailMatch[1] ?? '')
-      const deleted = deleteUserWorkflow(currentUser.id, workflowId)
+      const deleted = await deleteUserWorkflow(currentUser.id, workflowId)
       if (!deleted) {
         sendJson(response, 404, { message: '未找到工作流' })
         return
@@ -286,7 +286,7 @@ export const createServerHandler = () => async (request: IncomingMessage, respon
     }
 
     if (request.method === 'GET' && url.pathname === '/api/storage/history') {
-      sendJson(response, 200, getUserHistory(currentUser.id))
+      sendJson(response, 200, await getUserHistory(currentUser.id))
       return
     }
 
@@ -296,13 +296,13 @@ export const createServerHandler = () => async (request: IncomingMessage, respon
         sendJson(response, 400, { message: '缺少运行记录' })
         return
       }
-      const history = saveUserHistory(currentUser.id, body.record, body.limit)
+      const history = await saveUserHistory(currentUser.id, body.record, body.limit)
       sendJson(response, 200, history)
       return
     }
 
     if (request.method === 'DELETE' && url.pathname === '/api/storage/history') {
-      clearUserHistory(currentUser.id)
+      await clearUserHistory(currentUser.id)
       sendJson(response, 200, { ok: true })
       return
     }

@@ -183,8 +183,8 @@ const getWorkflowToolDefinitions = (
     inputSchema: {
       workflowId: z.string().describe('工作流 ID'),
     },
-    handler: ({ workflowId }) => {
-      const workflow = getUserWorkflowById(context.userId, workflowId)
+    handler: async ({ workflowId }) => {
+      const workflow = await getUserWorkflowById(context.userId, workflowId)
       return buildToolResult({
         found: Boolean(workflow),
         workflow,
@@ -197,10 +197,10 @@ const getWorkflowToolDefinitions = (
     inputSchema: {
       workflowId: z.string().describe('工作流 ID'),
     },
-    handler: ({ workflowId }) =>
+    handler: async ({ workflowId }) =>
       buildToolResult({
         workflowId,
-        items: getUserWorkflowVersions(context.userId, workflowId),
+        items: await getUserWorkflowVersions(context.userId, workflowId),
       }),
   },
   {
@@ -210,11 +210,11 @@ const getWorkflowToolDefinitions = (
       workflowId: z.string().describe('工作流 ID'),
       versionId: z.string().describe('版本 ID'),
     },
-    handler: ({ workflowId, versionId }) =>
+    handler: async ({ workflowId, versionId }) =>
       buildToolResult({
         workflowId,
         versionId,
-        version: getUserWorkflowVersion(context.userId, workflowId, versionId),
+        version: await getUserWorkflowVersion(context.userId, workflowId, versionId),
       }),
   },
   {
@@ -224,11 +224,11 @@ const getWorkflowToolDefinitions = (
       workflowId: z.string().describe('工作流 ID'),
       versionId: z.string().describe('要回滚到的版本 ID'),
     },
-    handler: ({ workflowId, versionId }) =>
+    handler: async ({ workflowId, versionId }) =>
       buildToolResult({
         workflowId,
         versionId,
-        result: rollbackUserWorkflowVersion(context.userId, workflowId, versionId),
+        result: await rollbackUserWorkflowVersion(context.userId, workflowId, versionId),
       }),
   },
 ]

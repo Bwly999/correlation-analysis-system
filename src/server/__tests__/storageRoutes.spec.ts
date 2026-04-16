@@ -1,5 +1,8 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Readable } from 'node:stream'
+import { mkdtempSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { createServerHandler } from '../app.js'
 
@@ -36,9 +39,19 @@ const createResponse = () => {
   return response
 }
 
+const loadHandlerFresh = async () => {
+  vi.resetModules()
+  const module = await import('../app.js')
+  return module.createServerHandler()
+}
+
 afterEach(() => {
   vi.unstubAllEnvs()
   vi.restoreAllMocks()
+})
+
+beforeEach(() => {
+  vi.stubEnv('WORKFLOW_STORAGE_DATA_DIR', mkdtempSync(join(tmpdir(), 'cas-storage-test-')))
 })
 
 describe('storage routes', () => {
@@ -484,5 +497,113 @@ describe('storage routes', () => {
 
     expect(response.statusCode).toBe(400)
     expect(JSON.parse(response.body)).toEqual({ detail: '目标字段不存在' })
+  })
+
+  it('should persist workflows and versions after reloading the server module', async () => {
+    const storageDir = mkdtempSync(join(tmpdir(), 'cas-storage-routes-'))
+    vi.stubEnv('WORKFLOW_STORAGE_DATA_DIR', storageDir)
+
+    const initialHandler = await loadHandlerFresh()
+    await initialHandler(
+      createRequest(
+        'POST',
+        '/api/storage/workflows',
+        {
+          id: 'wf_persisted',
+          name: '持久化工作流',
+          updatedAt: 50,
+          nodes: [{ id: 'node_persisted_v1' }],
+          edges: [],
+        },
+        { 'x-user-id': 'persist-user' },
+      ),
+      createResponse(),
+    )
+
+    const reloadedHandler = await loadHandlerFresh()
+    const workflowResponse = createResponse()
+    await reloadedHandler(
+      createRequest(
+        'GET',
+        '/api/storage/workflows/wf_persisted',
+        undefined,
+        { 'x-user-id': 'persist-user' },
+      ),
+      workflowResponse,
+    )
+
+    expect(workflowResponse.statusCode).toBe(200)
+    expect(JSON.parse(workflowResponse.body)).toEqual(
+      expect.objectContaining({
+        id: 'wf_persisted',
+        name: '持久化工作流',
+      }),
+    )
+
+    const versionsResponse = createResponse()
+    await reloadedHandler(
+      createRequest(
+        'GET',
+        '/api/storage/workflows/wf_persisted/versions',
+        undefined,
+        { 'x-user-id': 'persist-user' },
+      ),
+      versionsResponse,
+    )
+
+    expect(JSON.parse(versionsResponse.body)).toEqual([
+      expect.objectContaining({
+        workflowId: 'wf_persisted',
+        source: 'save',
+      }),
+    ])
+  })
+
+  it('should persist history after reloading the server module', async () => {
+    const storageDir = mkdtempSync(join(tmpdir(), 'cas-storage-history-'))
+    vi.stubEnv('WORKFLOW_STORAGE_DATA_DIR', storageDir)
+
+    const initialHandler = await loadHandlerFresh()
+    await initialHandler(
+      createRequest(
+        'POST',
+        '/api/storage/history',
+        {
+          record: {
+            id: 'exec_1',
+            workflowId: 'wf_1',
+            workflowName: '历史工作流',
+            startTime: 100,
+            duration: 20,
+            status: 'success',
+            nodes: [],
+            edges: [],
+          },
+          limit: 20,
+        },
+        { 'x-user-id': 'history-user' },
+      ),
+      createResponse(),
+    )
+
+    const reloadedHandler = await loadHandlerFresh()
+    const response = createResponse()
+    await reloadedHandler(
+      createRequest(
+        'GET',
+        '/api/storage/history',
+        undefined,
+        { 'x-user-id': 'history-user' },
+      ),
+      response,
+    )
+
+    expect(response.statusCode).toBe(200)
+    expect(JSON.parse(response.body)).toEqual([
+      expect.objectContaining({
+        id: 'exec_1',
+        workflowName: '历史工作流',
+      }),
+    ])
   })
 })

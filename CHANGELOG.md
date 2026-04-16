@@ -1,5 +1,24 @@
 # 更新日志 (Changelog)
 
+## [2026-04-16]
+
+### 新增 (Feat)
+
+- **完成 server storage 的 lowdb 文件持久化实现**:
+  - 将 `src/server/storage.ts` 从进程内 `Map` 存储改为基于 `lowdb` 的文件持久化，并新增 `storageRepository` 统一管理用户目录、工作流文件和历史文件读写。
+  - server 模式现按“每用户目录 + 每工作流一个文件 + 单独 history 文件”落盘，支持工作流、版本历史和执行历史在服务重启后继续保留。
+  - `/api/storage/*` 与 workflow MCP 相关存储读取链路已同步改为异步持久化访问，保持前端协议不变。
+
+### 测试 (Test)
+
+- **补充 storage 持久化回归测试**:
+  - 为 `storageRoutes` 增加服务端模块重载后的工作流/版本/历史恢复测试，覆盖真实落盘场景。
+
+### 文档 (Docs)
+
+- **补充 server storage 部署说明**:
+  - 在部署文档、环境变量示例和 `工作流系统.md` 中新增 `WORKFLOW_STORAGE_DATA_DIR`、单实例假设和 lowdb 落盘说明。
+
 ## [2026-04-15]
 
 ### 优化 (Improve)

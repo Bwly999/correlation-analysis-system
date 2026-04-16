@@ -37,6 +37,7 @@
     "element-plus": "^2.13.6",
     "html2canvas": "^1.4.1",
     "html2pdf.js": "^0.14.0",
+    "lowdb": "^7.0.1",
     "lucide-vue-next": "^0.577.0",
     "papaparse": "^5.5.3",
     "pinia": "^3.0.4",

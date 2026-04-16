@@ -1,3 +1,5 @@
+import { WorkflowStorageRepository } from './storageRepository.js'
+
 type ServerSavedWorkflow = {
   id: string
   name: string
@@ -34,27 +36,6 @@ type ServerStorageUser = {
   name?: string
 }
 
-type ServerUserStorage = {
-  workflows: ServerSavedWorkflow[]
-  versions: ServerWorkflowVersion[]
-  history: ServerExecutionRecord[]
-}
-
-const userStorageMap = new Map<string, ServerUserStorage>()
-
-const getUserStorage = (userId: string): ServerUserStorage => {
-  const existing = userStorageMap.get(userId)
-  if (existing) return existing
-
-  const created: ServerUserStorage = {
-    workflows: [],
-    versions: [],
-    history: [],
-  }
-  userStorageMap.set(userId, created)
-  return created
-}
-
 const cloneJson = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
 
 const createWorkflowVersionId = () => `wfver_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
@@ -72,6 +53,12 @@ const createWorkflowVersion = (
   workflow: cloneJson(workflow),
 })
 
+const storageRepository = new WorkflowStorageRepository<
+  ServerSavedWorkflow,
+  ServerWorkflowVersion,
+  ServerExecutionRecord
+>()
+
 export const resolveServerStorageUser = (headers: Record<string, string | string[] | undefined>): ServerStorageUser => {
   const headerUserId = headers['x-user-id']
   const headerUserName = headers['x-user-name']
@@ -87,59 +74,72 @@ export const resolveServerStorageUser = (headers: Record<string, string | string
   return { id, name }
 }
 
-export const getUserWorkflows = (userId: string): ServerSavedWorkflow[] =>
-  [...getUserStorage(userId).workflows].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+export const getUserWorkflows = async (userId: string): Promise<ServerSavedWorkflow[]> => {
+  const documents = await storageRepository.listWorkflowDocuments(userId)
+  return documents
+    .map((document) => document.current)
+    .filter((workflow): workflow is ServerSavedWorkflow => Boolean(workflow))
+    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+}
 
-export const getUserWorkflowById = (userId: string, workflowId: string): ServerSavedWorkflow | null =>
-  getUserStorage(userId).workflows.find((workflow) => workflow.id === workflowId) ?? null
+export const getUserWorkflowById = async (
+  userId: string,
+  workflowId: string,
+): Promise<ServerSavedWorkflow | null> => {
+  const document = await storageRepository.readWorkflowDocument(userId, workflowId)
+  return document.current ? cloneJson(document.current) : null
+}
 
-export const saveUserWorkflow = (
+export const saveUserWorkflow = async (
   userId: string,
   workflow: ServerSavedWorkflow,
   source: ServerWorkflowVersionSource = 'save',
-): ServerWorkflowVersion => {
-  const storage = getUserStorage(userId)
+): Promise<ServerWorkflowVersion> => {
   const normalizedWorkflow = cloneJson(workflow)
   const version = createWorkflowVersion(normalizedWorkflow, source)
-  storage.workflows = storage.workflows.filter((item) => item.id !== workflow.id).concat(normalizedWorkflow)
-  storage.versions = [version, ...storage.versions.filter((item) => item.id !== version.id)]
-  return version
+
+  await storageRepository.writeWorkflowDocument(userId, workflow.id, (document) => ({
+    current: normalizedWorkflow,
+    versions: [version, ...document.versions.filter((item) => item.id !== version.id)],
+  }))
+
+  return cloneJson(version)
 }
 
-export const deleteUserWorkflow = (userId: string, workflowId: string): boolean => {
-  const storage = getUserStorage(userId)
-  const previousLength = storage.workflows.length
-  storage.workflows = storage.workflows.filter((workflow) => workflow.id !== workflowId)
-  if (storage.workflows.length !== previousLength) {
-    storage.versions = storage.versions.filter((version) => version.workflowId !== workflowId)
-  }
-  return storage.workflows.length !== previousLength
-}
+export const deleteUserWorkflow = async (userId: string, workflowId: string): Promise<boolean> =>
+  storageRepository.deleteWorkflowDocument(userId, workflowId)
 
-export const getUserWorkflowVersions = (userId: string, workflowId: string): ServerWorkflowVersion[] =>
-  getUserStorage(userId)
-    .versions
+export const getUserWorkflowVersions = async (
+  userId: string,
+  workflowId: string,
+): Promise<ServerWorkflowVersion[]> => {
+  const document = await storageRepository.readWorkflowDocument(userId, workflowId)
+  return document.versions
     .filter((version) => version.workflowId === workflowId)
     .sort((a, b) => b.createdAt - a.createdAt)
     .map((version) => cloneJson(version))
+}
 
-export const getUserWorkflowVersion = (
+export const getUserWorkflowVersion = async (
   userId: string,
   workflowId: string,
   versionId: string,
-): ServerWorkflowVersion | null =>
-  cloneJson(
-    getUserStorage(userId).versions.find(
+): Promise<ServerWorkflowVersion | null> => {
+  const document = await storageRepository.readWorkflowDocument(userId, workflowId)
+  return cloneJson(
+    document.versions.find(
       (version) => version.workflowId === workflowId && version.id === versionId,
     ) ?? null,
   )
+}
 
-export const rollbackUserWorkflowVersion = (
+export const rollbackUserWorkflowVersion = async (
   userId: string,
   workflowId: string,
   versionId: string,
-): { workflow: ServerSavedWorkflow; version: ServerWorkflowVersion } | null => {
-  const targetVersion = getUserStorage(userId).versions.find(
+): Promise<{ workflow: ServerSavedWorkflow; version: ServerWorkflowVersion } | null> => {
+  const document = await storageRepository.readWorkflowDocument(userId, workflowId)
+  const targetVersion = document.versions.find(
     (version) => version.workflowId === workflowId && version.id === versionId,
   )
   if (!targetVersion) return null
@@ -148,26 +148,32 @@ export const rollbackUserWorkflowVersion = (
     ...cloneJson(targetVersion.workflow),
     updatedAt: Date.now(),
   }
-  const rollbackVersion = saveUserWorkflow(userId, restoredWorkflow, 'rollback')
+  const rollbackVersion = await saveUserWorkflow(userId, restoredWorkflow, 'rollback')
   return {
     workflow: cloneJson(restoredWorkflow),
     version: cloneJson(rollbackVersion),
   }
 }
 
-export const getUserHistory = (userId: string): ServerExecutionRecord[] =>
-  [...getUserStorage(userId).history].sort((a, b) => (b.startTime || 0) - (a.startTime || 0))
+export const getUserHistory = async (userId: string): Promise<ServerExecutionRecord[]> => {
+  const document = await storageRepository.readHistoryDocument(userId)
+  return [...document.records].sort((a, b) => (b.startTime || 0) - (a.startTime || 0))
+}
 
-export const saveUserHistory = (
+export const saveUserHistory = async (
   userId: string,
   record: ServerExecutionRecord,
   limit = 20,
-): ServerExecutionRecord[] => {
-  const storage = getUserStorage(userId)
-  storage.history = [record, ...storage.history.filter((item) => item.id !== record.id)].slice(0, limit)
-  return getUserHistory(userId)
+): Promise<ServerExecutionRecord[]> => {
+  const nextDocument = await storageRepository.writeHistoryDocument(userId, (document) => ({
+    records: [record, ...document.records.filter((item) => item.id !== record.id)].slice(0, limit),
+  }))
+
+  return [...nextDocument.records].sort((a, b) => (b.startTime || 0) - (a.startTime || 0))
 }
 
-export const clearUserHistory = (userId: string): void => {
-  getUserStorage(userId).history = []
+export const clearUserHistory = async (userId: string): Promise<void> => {
+  await storageRepository.writeHistoryDocument(userId, () => ({
+    records: [],
+  }))
 }
