@@ -47,6 +47,11 @@ export const useRegexFilter = ({
     errorMessage.value = ''
   }
 
+  const setQuery = (nextQuery: string) => {
+    query.value = nextQuery
+    updateRegexError(query.value)
+  }
+
   const filterMatchMode = computed(() =>
     enabled.value ? REGEX_FILTER_MODE : 'contains',
   )
@@ -92,6 +97,7 @@ export const useRegexFilter = ({
     filterInputProps,
     passThrough,
     clearQuery,
+    setQuery,
     toggleRegexMode,
     getToggleClass,
   }

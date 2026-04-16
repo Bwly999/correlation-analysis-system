@@ -15,10 +15,53 @@ const emit = defineEmits<{
   'update:modelValue': [value: unknown]
 }>()
 
+interface MultiSelectFilterEvent {
+  value?: string
+}
+
+interface MultiSelectAllChangeEvent {
+  checked: boolean
+}
+
 const configValue = computed({
   get: () => props.modelValue,
   set: (value) => emit('update:modelValue', value),
 })
+
+const selectedValues = computed(() =>
+  Array.isArray(configValue.value) ? configValue.value.filter((value): value is string => typeof value === 'string') : [],
+)
+
+const getOptionLabel = (option: any) => String(option?.name ?? option?.label ?? option?.value ?? option ?? '')
+const getOptionValue = (option: any) => String(option?.value ?? option)
+const isOptionDisabled = (option: any) => Boolean(option?.disabled)
+
+const matchesCurrentFilter = (option: any) => {
+  const normalizedQuery = query.value.trim()
+  if (!normalizedQuery) return true
+
+  const label = getOptionLabel(option)
+  if (enabled.value) {
+    try {
+      return new RegExp(normalizedQuery, 'i').test(label)
+    } catch {
+      return false
+    }
+  }
+
+  return label.toLowerCase().includes(normalizedQuery.toLowerCase())
+}
+
+const visibleSelectableOptionValues = computed(() =>
+  props.options
+    .filter((option) => !isOptionDisabled(option) && matchesCurrentFilter(option))
+    .map((option) => getOptionValue(option)),
+)
+
+const isAllVisibleSelected = computed(() =>
+  visibleSelectableOptionValues.value.length > 0
+  && visibleSelectableOptionValues.value.every((value) => selectedValues.value.includes(value)),
+)
 
 const confirmEditableMultiOption = (event?: KeyboardEvent) => {
   const target = event?.target as HTMLInputElement | null
@@ -44,6 +87,7 @@ const {
   filterInputProps,
   passThrough,
   clearQuery,
+  setQuery,
   toggleRegexMode,
   getToggleClass,
 } = useRegexFilter({
@@ -58,6 +102,29 @@ const multiOptionsForceInputHint = computed(() => {
   if (props.sourceOptionCount > 0) return undefined
   return '暂无可选项，可直接输入后按回车添加'
 })
+
+const handleFilter = (event: MultiSelectFilterEvent) => {
+  setQuery(event.value ?? '')
+}
+
+const handleSelectAllChange = (event: MultiSelectAllChangeEvent) => {
+  const visibleValues = visibleSelectableOptionValues.value
+  if (visibleValues.length === 0) return
+
+  if (event.checked) {
+    const nextValues = [...selectedValues.value]
+    visibleValues.forEach((value) => {
+      if (!nextValues.includes(value)) {
+        nextValues.push(value)
+      }
+    })
+    configValue.value = nextValues
+    return
+  }
+
+  const visibleValueSet = new Set(visibleValues)
+  configValue.value = selectedValues.value.filter((value) => !visibleValueSet.has(value))
+}
 </script>
 
 <template>
@@ -73,9 +140,12 @@ const multiOptionsForceInputHint = computed(() => {
     :empty-filter-message="multiOptionsForceInputHint"
     :empty-message="multiOptionsForceInputHint"
     :pt="passThrough"
+    :select-all="isAllVisibleSelected"
     display="chip"
     :placeholder="prop.placeholder"
     class="w-full ndv-input ndv-multi-options"
+    @filter="handleFilter"
+    @selectall-change="handleSelectAllChange"
   >
     <template v-if="prop.allowRegexSearch !== false" #filtericon>
       <button

@@ -87,6 +87,15 @@ const collectTreeNodeMap = (nodes: any[]) => {
 
 const treeNodeMap = computed(() => collectTreeNodeMap(normalizedTreeOptions.value))
 
+const collectLeafKeys = (nodes: TreeNode[]): string[] =>
+  nodes.flatMap((node) => {
+    if (isLeafNode(node)) {
+      return node.key === undefined ? [] : [String(node.key)]
+    }
+
+    return collectLeafKeys((node.children || []) as TreeNode[])
+  })
+
 const countLeafNodes = (nodes: TreeNode[]): number =>
   nodes.reduce((count, node) => {
     if (isLeafNode(node)) return count + 1
@@ -199,6 +208,9 @@ const {
 
 const treeRef = ref<TreeV2Expose | null>(null)
 
+const orderedLeafKeys = computed(() => collectLeafKeys(normalizedTreeOptions.value as TreeNode[]))
+const visibleFilteredLeafKeys = computed(() => collectLeafKeys(filteredTreeOptions.value as TreeNode[]))
+
 const checkedKeysList = computed(() =>
   getCheckedKeys(modelValueToSelectionKeys(configValue.value)),
 )
@@ -278,9 +290,30 @@ const handleTreeCheck = (
     halfCheckedKeys?: Array<string | number>
   },
 ) => {
-  treeSelectionValue.value = selectionKeysFromCheckedState(
+  const nextSelectionKeys = selectionKeysFromCheckedState(
     payload.checkedKeys || [],
     payload.halfCheckedKeys || [],
+  )
+
+  if (!treeFilterQuery.value.trim() || props.prop.singleSelect) {
+    treeSelectionValue.value = nextSelectionKeys
+    return
+  }
+
+  const visibleLeafKeySet = new Set(visibleFilteredLeafKeys.value)
+  const currentSelectedLeafKeys = getCheckedLeafEntries(treeSelectionValue.value).map(([key]) => key)
+  const hiddenSelectedLeafKeys = currentSelectedLeafKeys.filter((key) => !visibleLeafKeySet.has(key))
+  const nextVisibleSelectedLeafKeys = getCheckedLeafEntries(nextSelectionKeys)
+    .map(([key]) => key)
+    .filter((key) => visibleLeafKeySet.has(key))
+
+  const mergedSelectionKeySet = new Set([
+    ...hiddenSelectedLeafKeys,
+    ...nextVisibleSelectedLeafKeys,
+  ])
+
+  treeSelectionValue.value = toSelectionStateMap(
+    orderedLeafKeys.value.filter((key) => mergedSelectionKeySet.has(key)),
   )
 }
 
