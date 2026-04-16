@@ -81,18 +81,6 @@ export default defineConfig({
           if (id.includes('element-plus')) {
             return 'vendor-element-plus'
           }
-          if (id.includes('html2canvas')) {
-            return 'vendor-export-canvas'
-          }
-          if (id.includes('jspdf')) {
-            return 'vendor-export-jspdf'
-          }
-          if (id.includes('canvg') || id.includes('svg2pdf') || id.includes('rgbcolor')) {
-            return 'vendor-export-svg'
-          }
-          if (id.includes('html2pdf.js')) {
-            return 'vendor-export-pdf'
-          }
           if (
             id.includes('lucide-vue-next') ||
             id.includes('radix-vue') ||

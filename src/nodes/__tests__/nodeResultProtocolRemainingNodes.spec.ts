@@ -722,7 +722,7 @@ describe('remaining nodes standardized result protocol', () => {
     expect(result.preview?.viewer).toBe('file-viewer')
   })
 
-  it('data-export should support report pdf exports as standardized file results', async () => {
+  it('data-export should support report html exports as standardized file results', async () => {
     const result = await dataExportNode.execute(
       createReportResult({
         title: 'Pearson 相关系数矩阵分析',
@@ -735,13 +735,13 @@ describe('remaining nodes standardized result protocol', () => {
           },
         ],
       }),
-      { format: 'pdf', filename: '相关性分析报告' },
+      { format: 'html', filename: '相关性分析报告' },
     )
 
     expect(result.kind).toBe('file')
-    expect(result.payload.filename).toMatch(/^相关性分析报告_\d{8}_\d{6}\.pdf$/)
-    expect(result.payload.format).toBe('pdf')
-    expect(result.payload.contentKind).toBe('report-pdf')
+    expect(result.payload.filename).toMatch(/^相关性分析报告_\d{8}_\d{6}\.html$/)
+    expect(result.payload.format).toBe('html')
+    expect(result.payload.contentKind).toBe('report-html')
     expect(result.payload.url).toBeUndefined()
     expect(result.meta?.sourceKind).toBe('report')
     expect(result.preview?.viewer).toBe('file-viewer')

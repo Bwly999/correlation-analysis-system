@@ -1,52 +1,36 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
-import { defineComponent } from 'vue'
 import ExportViewer from '../viewers/ExportViewer.vue'
 
-const { mockAdd, mockExportReportElementToPdf } = vi.hoisted(() => ({
+const { mockAdd, mockExportReportToHtmlFile } = vi.hoisted(() => ({
   mockAdd: vi.fn(),
-  mockExportReportElementToPdf: vi.fn().mockResolvedValue(undefined),
+  mockExportReportToHtmlFile: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock('primevue/usetoast', () => ({
   useToast: () => ({ add: mockAdd }),
 }))
 
-vi.mock('../reportPdfExport', () => ({
-  exportReportElementToPdf: mockExportReportElementToPdf,
-}))
-
-vi.mock('../viewers/ReportViewer.vue', () => ({
-  default: defineComponent({
-    props: ['data', 'exportMode'],
-    template: '<div data-test="report-export-stub">{{ data?.report?.title || data?.payload?.title }}</div>',
-  }),
+vi.mock('../reportHtmlExport', () => ({
+  exportReportToHtmlFile: mockExportReportToHtmlFile,
 }))
 
 describe('ExportViewer', () => {
   beforeEach(() => {
     mockAdd.mockReset()
-    mockExportReportElementToPdf.mockReset()
-    mockExportReportElementToPdf.mockResolvedValue(undefined)
+    mockExportReportToHtmlFile.mockReset()
+    mockExportReportToHtmlFile.mockResolvedValue(undefined)
   })
 
-  it('renders pdf export preview only when download starts', async () => {
-    let resolveExport: (() => void) | undefined
-    mockExportReportElementToPdf.mockImplementationOnce(
-      () =>
-        new Promise<void>((resolve) => {
-          resolveExport = resolve
-        }),
-    )
-
+  it('shows offline-html copy for on-demand report exports', () => {
     const wrapper = mount(ExportViewer, {
       props: {
         data: {
           kind: 'file',
           payload: {
-            filename: '相关性分析报告.pdf',
-            format: 'pdf',
-            contentKind: 'report-pdf',
+            filename: '相关性分析报告.html',
+            format: 'html',
+            contentKind: 'report-html',
             report: {
               title: 'Pearson 相关系数矩阵分析',
               sections: [],
@@ -56,29 +40,19 @@ describe('ExportViewer', () => {
       },
     })
 
-    expect(wrapper.find('[data-test="report-export-stub"]').exists()).toBe(false)
-
-    const downloadPromise = wrapper.get('[data-test="file-download-button"]').trigger('click')
-    await wrapper.vm.$nextTick()
-
-    expect(wrapper.find('[data-test="report-export-stub"]').exists()).toBe(true)
-
-    resolveExport?.()
-    await downloadPromise
-    await wrapper.vm.$nextTick()
-
-    expect(wrapper.find('[data-test="report-export-stub"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('已准备就绪，点击后将下载离线 HTML 报告。')
+    expect(wrapper.get('[data-test="file-download-button"]').text()).toContain('下载离线报告')
   })
 
-  it('triggers on-demand pdf export for report file payloads', async () => {
+  it('exports an offline html report for report file payloads', async () => {
     const wrapper = mount(ExportViewer, {
       props: {
         data: {
           kind: 'file',
           payload: {
-            filename: '相关性分析报告.pdf',
-            format: 'pdf',
-            contentKind: 'report-pdf',
+            filename: '相关性分析报告.html',
+            format: 'html',
+            contentKind: 'report-html',
             report: {
               title: 'Pearson 相关系数矩阵分析',
               sections: [],
@@ -90,11 +64,14 @@ describe('ExportViewer', () => {
 
     await wrapper.get('[data-test="file-download-button"]').trigger('click')
 
-    expect(mockExportReportElementToPdf).toHaveBeenCalledTimes(1)
-    expect(mockExportReportElementToPdf).toHaveBeenCalledWith(
-      expect.any(HTMLElement),
+    expect(mockExportReportToHtmlFile).toHaveBeenCalledTimes(1)
+    expect(mockExportReportToHtmlFile).toHaveBeenCalledWith(
       expect.objectContaining({
-        filename: '相关性分析报告.pdf',
+        title: 'Pearson 相关系数矩阵分析',
+        sections: [],
+      }),
+      expect.objectContaining({
+        filename: '相关性分析报告.html',
       }),
     )
   })

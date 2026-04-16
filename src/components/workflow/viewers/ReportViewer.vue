@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch, useTemplateRef, type Component } from 'vue'
+import { computed, ref, watch, type Component } from 'vue'
 import { ChevronDown, FileText, Image as ImageIcon, Loader2 } from 'lucide-vue-next'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
@@ -61,8 +61,6 @@ const props = defineProps<{
   exportMode?: boolean
 }>()
 
-const exportRootRef = useTemplateRef<HTMLElement>('exportRootRef')
-
 const {
   report,
   sections,
@@ -96,7 +94,7 @@ const {
 } = useReportPreview(() => supplements.value.fullReportImage as string | undefined)
 
 const { isExporting, exportCurrentReport, exportOriginalImage } = useReportExport({
-  exportRootRef,
+  reportPayload: () => report.value,
   reportTitle: () => report.value.title || '分析报告',
   fullReportImage: () => supplements.value.fullReportImage as string | undefined,
 })
@@ -238,7 +236,6 @@ const renderedSections = computed<RenderedSection[]>(() =>
     :class="{ 'report-viewer--export px-0 py-0 bg-white overflow-visible': isExportMode }"
   >
     <div
-      ref="exportRootRef"
       class="max-w-5xl mx-auto bg-white p-8 rounded-2xl shadow-sm border border-slate-100 relative"
       :class="{ 'max-w-none rounded-none border-0 shadow-none': isExportMode }"
     >
@@ -256,12 +253,12 @@ const renderedSections = computed<RenderedSection[]>(() =>
             :disabled="isExporting"
             data-test="report-export-current"
             class="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white text-sm font-bold rounded-xl hover:bg-slate-800 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
-            title="导出当前报告"
+            title="导出离线报告"
             @click="exportCurrentReport"
           >
             <Loader2 v-if="isExporting" class="animate-spin" :size="16" />
             <FileText v-else :size="16" />
-            导出当前报告
+            导出离线报告
           </button>
           <button
             v-if="supplements.fullReportImage"

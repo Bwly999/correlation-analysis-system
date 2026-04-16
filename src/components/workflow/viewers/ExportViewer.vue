@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import { computed, nextTick, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { Download, CheckCircle } from 'lucide-vue-next'
 import { useToast } from 'primevue/usetoast'
 import { getResultFileInfo } from '../resultView'
-import { exportReportElementToPdf } from '../reportPdfExport'
-import ReportViewer from './ReportViewer.vue'
+import { exportReportToHtmlFile } from '../reportHtmlExport'
 
 const props = defineProps<{
   data: any
@@ -12,19 +11,11 @@ const props = defineProps<{
 
 const toast = useToast()
 const fileInfo = computed(() => getResultFileInfo(props.data))
-const reportExportRoot = ref<HTMLElement | null>(null)
 const isExporting = ref(false)
-const shouldRenderPdfPreview = ref(false)
-const isOnDemandPdf = computed(
-  () => fileInfo.value?.format === 'pdf' && fileInfo.value?.contentKind === 'report-pdf' && fileInfo.value?.report,
-)
-const reportExportData = computed(() =>
-  shouldRenderPdfPreview.value && isOnDemandPdf.value && fileInfo.value?.report
-    ? {
-        kind: 'report',
-        payload: fileInfo.value.report,
-      }
-    : null,
+const isOnDemandReport = computed(
+  () =>
+    String(fileInfo.value?.contentKind || '') === 'report-html' &&
+    !!fileInfo.value?.report,
 )
 
 const handleDownload = async () => {
@@ -38,7 +29,7 @@ const handleDownload = async () => {
     return
   }
 
-  if (!isOnDemandPdf.value) {
+  if (!isOnDemandReport.value) {
     toast.add({
       severity: 'error',
       summary: '导出失败',
@@ -49,40 +40,34 @@ const handleDownload = async () => {
   }
 
   isExporting.value = true
-  const exportFilename = String(fileInfo.value?.filename || '分析报告.pdf')
+  const fallbackFilename = String(fileInfo.value?.filename || '分析报告.html')
   toast.add({
     severity: 'info',
-    summary: '正在生成 PDF',
-    detail: '正在准备导出内容，请稍候。',
+    summary: '正在生成离线报告',
+    detail: '将生成并下载单文件 HTML 报告。',
     life: 2000,
   })
 
   try {
-    shouldRenderPdfPreview.value = true
-    await nextTick()
-    if (!reportExportRoot.value) {
-      throw new Error('报告导出容器未就绪')
-    }
-    await exportReportElementToPdf(reportExportRoot.value, {
-      filename: exportFilename,
+    await exportReportToHtmlFile(fileInfo.value.report, {
+      filename: fallbackFilename,
     })
     toast.add({
       severity: 'success',
-      summary: '导出成功',
-      detail: 'PDF 已生成并开始下载。',
+      summary: '离线报告已下载',
+      detail: '可直接双击 HTML 文件离线查看。',
       life: 2500,
     })
   } catch (error) {
-    console.error('生成报告 PDF 失败:', error)
+    console.error('生成离线报告失败:', error)
     toast.add({
       severity: 'error',
       summary: '导出失败',
-      detail: '生成 PDF 时发生错误。',
+      detail: error instanceof Error ? error.message : '生成离线报告时发生错误。',
       life: 4000,
     })
   } finally {
     isExporting.value = false
-    shouldRenderPdfPreview.value = false
   }
 }
 </script>
@@ -100,7 +85,7 @@ const handleDownload = async () => {
       <p class="text-slate-500 mb-8 leading-relaxed">
         文件
         <strong>{{ fileInfo?.filename || 'export.csv' }}</strong>
-        {{ isOnDemandPdf ? '已准备就绪，点击后将生成并下载 PDF。' : '已经成功生成，可以进行下载。' }}
+        {{ isOnDemandReport ? '已准备就绪，点击后将下载离线 HTML 报告。' : '已经成功生成，可以进行下载。' }}
       </p>
 
       <button
@@ -110,14 +95,8 @@ const handleDownload = async () => {
         @click="handleDownload"
       >
         <Download :size="20" />
-        <span>{{ isOnDemandPdf ? '生成并下载 PDF' : '立即下载文件' }}</span>
+        <span>{{ isOnDemandReport ? '下载离线报告' : '立即下载文件' }}</span>
       </button>
-    </div>
-  </div>
-
-  <div v-if="reportExportData" class="pointer-events-none fixed left-[-200vw] top-0 w-[1120px] opacity-0">
-    <div ref="reportExportRoot" class="bg-white">
-      <ReportViewer :data="reportExportData" export-mode />
     </div>
   </div>
 </template>

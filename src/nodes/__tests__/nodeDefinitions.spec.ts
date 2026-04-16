@@ -1828,7 +1828,7 @@ describe('Node Definitions Execution Logic', () => {
       expect(legacy.exportInfo.filename).toBe('test_export.json')
     })
 
-    it('should generate on-demand pdf export info for report inputs', async () => {
+    it('should generate offline html export info for report inputs', async () => {
       const input = createReportResult({
         title: '多元线性回归分析',
         sections: [
@@ -1847,23 +1847,23 @@ describe('Node Definitions Execution Logic', () => {
       })
 
       const result = await dataExportNode.execute(input, {
-        format: 'pdf',
+        format: 'html',
         filename: '回归分析报告',
       })
 
       const legacy = asLegacy(result)
 
       expect(legacy.viewType).toBe('export')
-      expect(legacy.exportInfo.filename).toMatch(/^回归分析报告_\d{8}_\d{6}\.pdf$/)
-      expect(legacy.exportInfo.format).toBe('pdf')
+      expect(legacy.exportInfo.filename).toMatch(/^回归分析报告_\d{8}_\d{6}\.html$/)
+      expect(legacy.exportInfo.format).toBe('html')
       expect(legacy.exportInfo.url).toBeUndefined()
-      expect(legacy.exportInfo.contentKind).toBe('report-pdf')
+      expect(legacy.exportInfo.contentKind).toBe('report-html')
       expect(legacy.exportInfo.report.title).toBe('多元线性回归分析')
       expect(legacy.exportInfo.report.supplements).toEqual({})
       expect(legacy.meta?.sourceKind).toBe('report')
     })
 
-    it('should reject non-pdf exports for report inputs with a clear message', async () => {
+    it('should reject non-html exports for report inputs with a clear message', async () => {
       const input = createReportResult({
         title: 'Pearson 相关系数矩阵分析',
         sections: [],
@@ -1874,7 +1874,7 @@ describe('Node Definitions Execution Logic', () => {
           format: 'csv',
           filename: 'report_export',
         }),
-      ).rejects.toThrow('分析报告当前仅支持 PDF 导出')
+      ).rejects.toThrow('分析报告当前仅支持 HTML 导出')
     })
   })
 })

@@ -20,7 +20,7 @@ export const dataExportNode: NodeDefinition = {
   displayName: '数据导出',
   icon: 'download',
   category: 'terminal',
-  description: '将当前节点的数据导出为 CSV、Excel、JSON，或把分析报告导出为 PDF。',
+  description: '将当前节点的数据导出为 CSV、Excel、JSON，或把分析报告导出为离线 HTML。',
   properties: [
     {
       name: 'format',
@@ -31,7 +31,7 @@ export const dataExportNode: NodeDefinition = {
         { name: 'CSV', value: 'csv' },
         { name: 'Excel (.xlsx)', value: 'xlsx' },
         { name: 'JSON', value: 'json' },
-        { name: 'PDF（分析报告）', value: 'pdf' },
+        { name: 'HTML（离线报告）', value: 'html' },
       ],
     },
     {
@@ -46,23 +46,23 @@ export const dataExportNode: NodeDefinition = {
     const format = typeof config.format === 'string' ? config.format : 'csv'
     const report = extractReportPayload(input)
 
-    if (format === 'pdf') {
+    if (format === 'html') {
       if (!report) {
-        throw new Error('PDF 导出仅支持分析报告输入')
+        throw new Error('HTML 导出仅支持分析报告输入')
       }
 
       const portableReport = createPortableReportExportPayload(report)
       const reportTitle =
         typeof report.title === 'string' && report.title.trim() !== '' ? report.title : '分析报告'
-      const filename = resolveExportFilename(config.filename, reportTitle, 'pdf', {
+      const filename = resolveExportFilename(config.filename, reportTitle, 'html', {
         appendTimestamp: true,
       })
 
       return createFileResult(
         {
           filename,
-          format: 'pdf',
-          contentKind: 'report-pdf',
+          format: 'html',
+          contentKind: 'report-html',
           report: portableReport,
         },
         {
@@ -73,14 +73,14 @@ export const dataExportNode: NodeDefinition = {
           preview: {
             viewer: 'file-viewer',
             title: '导出文件',
-            summary: `已准备 ${filename}，点击后将生成 PDF。`,
+            summary: `已准备 ${filename}，点击后将下载离线 HTML 报告。`,
           },
         },
       )
     }
 
     if (report) {
-      throw new Error('分析报告当前仅支持 PDF 导出')
+      throw new Error('分析报告当前仅支持 HTML 导出')
     }
 
     const rows = extractTableRows(input)

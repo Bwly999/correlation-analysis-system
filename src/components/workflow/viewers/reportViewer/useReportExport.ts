@@ -1,16 +1,17 @@
-import { ref, type Ref } from 'vue'
+import { ref } from 'vue'
 import { useToast } from 'primevue/usetoast'
-import { exportReportElementToPdf } from '../../reportPdfExport'
+import { exportReportToHtmlFile } from '../../reportHtmlExport'
 import { resolveExportFilename } from '@/utils/exportNaming'
+import type { ReportPayload } from './reportTypes'
 
 interface UseReportExportOptions {
-  exportRootRef: Ref<HTMLElement | null>
+  reportPayload: () => ReportPayload
   reportTitle: () => string
   fullReportImage: () => string | undefined
 }
 
 export const useReportExport = ({
-  exportRootRef,
+  reportPayload,
   reportTitle,
   fullReportImage,
 }: UseReportExportOptions) => {
@@ -18,27 +19,27 @@ export const useReportExport = ({
   const isExporting = ref(false)
 
   const exportCurrentReport = async () => {
-    if (!exportRootRef.value || isExporting.value) return
+    if (isExporting.value) return
 
     isExporting.value = true
     toast.add({
       severity: 'info',
-      summary: '正在导出当前报告',
-      detail: '正在生成 PDF，请稍候。',
+      summary: '正在生成离线报告',
+      detail: '将生成并下载单文件 HTML 报告。',
       life: 2000,
     })
 
     try {
-      const filename = resolveExportFilename(undefined, reportTitle() || '分析报告', 'pdf', {
+      const filename = resolveExportFilename(undefined, reportTitle() || '分析报告', 'html', {
         appendTimestamp: true,
       })
 
-      await exportReportElementToPdf(exportRootRef.value, { filename })
+      await exportReportToHtmlFile(reportPayload(), { filename })
 
       toast.add({
         severity: 'success',
-        summary: '导出成功',
-        detail: '当前报告已导出。',
+        summary: '离线报告已下载',
+        detail: '可直接双击 HTML 文件离线查看。',
         life: 2500,
       })
     } catch (error) {
@@ -46,7 +47,7 @@ export const useReportExport = ({
       toast.add({
         severity: 'error',
         summary: '导出失败',
-        detail: '生成当前报告 PDF 时发生错误。',
+        detail: error instanceof Error ? error.message : '生成离线报告时发生错误。',
         life: 4000,
       })
     } finally {

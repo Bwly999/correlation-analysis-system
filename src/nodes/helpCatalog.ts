@@ -818,14 +818,14 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
   ),
   'data-export': createEntry(
     {
-      summary: '把当前表格结果导出成 CSV、Excel、JSON，或把分析报告导出成 PDF。',
+      summary: '把当前表格结果导出成 CSV、Excel、JSON，或把分析报告导出成离线 HTML。',
       whenToUse: ['你需要把工作流结果交给其他人，或保存到本地继续处理。'],
       inputGuide: ['可接表格数据，也可接分析报告。', '当前节点通常放在流程末尾作为导出终点。'],
       parameterGuide: [
         {
           property: 'format',
           title: '导出格式',
-          content: 'CSV / Excel / JSON 适合导出表格结果；PDF 适合把分析报告整理成可直接汇报的阅读版。',
+          content: 'CSV / Excel / JSON 适合导出表格结果；HTML 适合把分析报告导出为可双击打开的离线阅读版。',
         },
       ],
       outputGuide: ['输出结果是可下载文件信息，而不是继续流转的数据表。'],
@@ -836,14 +836,14 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
           resolution: '说明上游没有产生表格数据，先返回检查输入和筛选结果。',
         },
         {
-          title: 'PDF 无法生成',
-          resolution: '请确认当前输入是分析报告结果；PDF 导出不支持直接导出普通表格节点。',
+          title: '离线报告无法生成',
+          resolution: '请确认当前输入是分析报告结果；HTML 离线报告不支持直接导出普通表格节点。',
         },
       ],
     },
     {
-      useCases: ['导出结果为 CSV', '导出 Excel 报表', '导出 JSON 数据', '导出分析报告 PDF'],
-      keywords: ['导出', '下载', 'CSV', 'Excel', 'JSON', 'PDF', '分析报告'],
+      useCases: ['导出结果为 CSV', '导出 Excel 报表', '导出 JSON 数据', '导出离线 HTML 报告'],
+      keywords: ['导出', '下载', 'CSV', 'Excel', 'JSON', 'HTML', '离线报告', '分析报告'],
       workflowRoles: ['分析终点'],
       inputKinds: ['table', 'report'],
       outputKinds: ['file'],
