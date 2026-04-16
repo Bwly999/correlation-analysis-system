@@ -1,4 +1,5 @@
-import { fileURLToPath, URL } from 'node:url'
+import { resolve } from 'node:path'
+import { fileURLToPath, pathToFileURL, URL } from 'node:url'
 
 import { defineConfig } from 'vite'
 import type { Plugin } from 'vite'
@@ -7,7 +8,6 @@ import vueDevTools from 'vite-plugin-vue-devtools'
 import tailwindcss from '@tailwindcss/vite'
 import monacoEditorPlugin from 'vite-plugin-monaco-editor'
 import AutoImport from 'unplugin-auto-import/vite'
-import { createServerHandler } from './src/server/app.js'
 
 const workflowAiServerTarget = process.env.WORKFLOW_AI_SERVER_TARGET || 'http://127.0.0.1:8787'
 
@@ -26,18 +26,26 @@ const isVueEcosystemModule = (id: string) =>
   || id.includes('vue-draggable-plus')
 
 const workflowAiDevMiddleware = (): Plugin => {
-  const handler = createServerHandler()
+  let handlerPromise: Promise<(request: unknown, response: unknown) => Promise<void>> | null = null
+  const serverAppUrl = pathToFileURL(resolve(process.cwd(), 'src/server/app.ts')).href
 
   return {
     name: 'workflow-ai-dev-middleware',
     apply: 'serve',
     configureServer(server) {
-      server.middlewares.use((request, response, next) => {
+      server.middlewares.use(async (request, response, next) => {
         if (!request.url?.startsWith('/api/')) {
           next()
           return
         }
 
+        if (!handlerPromise) {
+          handlerPromise = import(/* @vite-ignore */ serverAppUrl).then((module) =>
+            module.createServerHandler(),
+          )
+        }
+
+        const handler = await handlerPromise
         void handler(request, response)
       })
     },

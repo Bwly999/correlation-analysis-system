@@ -1,11 +1,10 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent } from 'vue'
+import { computed } from 'vue'
 import { Maximize2, GripVertical } from 'lucide-vue-next'
+import JsonViewer from './viewers/JsonViewer.vue'
 import { workflowViewerRegistry } from './viewers/registry'
 import { getResultViewerKey, normalizeWorkflowResult } from './resultView'
 import type { ResultDashboardNode } from './resultDashboard'
-
-const JsonViewer = defineAsyncComponent(() => import('./viewers/JsonViewer.vue'))
 
 const props = defineProps<{
   node: ResultDashboardNode

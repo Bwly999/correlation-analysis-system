@@ -243,25 +243,12 @@ const exportData = () => {
       <div
         class="flex-1 flex flex-col min-w-0 bg-white rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden"
       >
-        <Suspense v-if="activeViewer" :timeout="0">
-          <component :is="activeViewer" :key="String(viewerKey ?? viewLabel)" :data="props.data" />
-          <template #fallback>
-            <div
-              data-test="result-viewer-loading"
-              class="h-full flex flex-col items-center justify-center gap-4 bg-slate-50 px-6"
-            >
-              <div class="flex items-center gap-3">
-                <span class="viewer-loading-dot viewer-loading-dot--primary" />
-                <span class="viewer-loading-dot viewer-loading-dot--secondary" />
-                <span class="viewer-loading-dot viewer-loading-dot--tertiary" />
-              </div>
-              <div class="text-center">
-                <p class="text-sm font-bold text-slate-700">正在加载结果视图</p>
-                <p class="mt-1 text-xs text-slate-500">图表或表格组件已命中按需加载，请稍候片刻。</p>
-              </div>
-            </div>
-          </template>
-        </Suspense>
+        <component
+          v-if="activeViewer"
+          :is="activeViewer"
+          :key="String(viewerKey ?? viewLabel)"
+          :data="props.data"
+        />
         <DataChart v-else :data="fallbackChartData" />
       </div>
     </div>
@@ -300,39 +287,6 @@ const exportData = () => {
   border-radius: 6px;
   text-align: center;
   font-family: monospace;
-}
-
-.viewer-loading-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 999px;
-  background: #cbd5e1;
-  animation: viewer-loading-bounce 1s ease-in-out infinite;
-}
-
-.viewer-loading-dot--primary {
-  background: #2563eb;
-}
-
-.viewer-loading-dot--secondary {
-  animation-delay: 0.12s;
-}
-
-.viewer-loading-dot--tertiary {
-  animation-delay: 0.24s;
-}
-
-@keyframes viewer-loading-bounce {
-  0%,
-  80%,
-  100% {
-    transform: translateY(0);
-    opacity: 0.45;
-  }
-  40% {
-    transform: translateY(-5px);
-    opacity: 1;
-  }
 }
 
 .sidebar-expanded {
