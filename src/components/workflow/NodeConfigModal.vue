@@ -275,6 +275,7 @@ const saveConfig = () => {
     node.value.data.useManualInput = localUseManualInput.value
     node.value.data.manualInput = localManualInput.value
     toast.add({
+      group: 'node-config',
       severity: 'success',
       summary: '保存成功',
       detail: '节点配置已应用',
@@ -396,6 +397,7 @@ const buildManualInputTemplate = () => {
     modal
     class="ndv-dialog"
     :style="{ width: '92vw', maxWidth: '1600px', height: '88vh' }"
+    :draggable="false"
     :closable="false"
     @update:visible="emit('close')"
   >
@@ -673,6 +675,7 @@ const buildManualInputTemplate = () => {
       modal
       class="node-help-dialog"
       :style="{ width: 'min(840px, 88vw)', maxHeight: '80vh' }"
+      :draggable="false"
       @update:visible="isHelpDialogVisible = false"
     >
       <template #header>

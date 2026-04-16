@@ -648,6 +648,7 @@ onBeforeUnmount(() => {
     <HelpCenterModal :visible="isHelpCenterVisible" @close="isHelpCenterVisible = false" />
     <ConfirmDialog />
     <Toast />
+    <Toast group="node-config" position="bottom-left" />
   </div>
 </template>
 

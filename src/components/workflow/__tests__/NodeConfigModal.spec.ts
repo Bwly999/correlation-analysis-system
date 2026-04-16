@@ -27,8 +27,10 @@ describe('NodeConfigModal', () => {
   })
 
   const dialogStub = {
-    props: ['visible'],
-    template: '<div><template v-if="visible"><slot name="header" /><slot /></template></div>',
+    name: 'Dialog',
+    props: ['visible', 'draggable'],
+    template:
+      '<div class="dialog-stub" :data-visible="String(visible)" :data-draggable="String(draggable)"><template v-if="visible"><slot name="header" /><slot /></template></div>',
   }
 
   it('passes a multi-input summary to the input display panel for multi-input nodes', () => {
@@ -1053,11 +1055,63 @@ describe('NodeConfigModal', () => {
 
     expect(mockToastAdd).toHaveBeenCalledWith(
       expect.objectContaining({
+        group: 'node-config',
         severity: 'success',
         summary: '保存成功',
         detail: '节点配置已应用',
       }),
     )
+  })
+
+  it('disables dragging for the node config dialog and help dialog', async () => {
+    const store = useWorkflowStore()
+    store.nodes = [
+      {
+        id: 'data-cleaning-node',
+        type: 'custom',
+        position: { x: 300, y: 0 },
+        label: '数据清洗',
+        data: {
+          label: '数据清洗',
+          type: 'data-cleaning',
+          category: 'action',
+          status: 'idle',
+          config: { scaling: 'none' },
+          logs: [],
+          useManualInput: false,
+          manualInput: '',
+          isPinned: false,
+        },
+      } as any,
+    ]
+
+    const wrapper = mount(NodeConfigModal, {
+      props: { visible: true, nodeId: 'data-cleaning-node' },
+      global: {
+        stubs: {
+          Dialog: dialogStub,
+          DataDisplayPanel: true,
+          DataAnalysisModal: true,
+          ConfigHeader: { template: '<div />', props: ['nodeLabel', 'isPinned', 'nodeType'] },
+          ConfigFooter: { template: '<div />' },
+          ConfigForm: { template: '<div />', props: ['config', 'properties', 'upstreamFactors'] },
+          RuntimeInputs: { template: '<div />', props: ['config', 'properties', 'upstreamFactors'] },
+        },
+      },
+    })
+
+    const initialDialogs = wrapper.findAll('.dialog-stub')
+    expect(initialDialogs).toHaveLength(2)
+    expect(initialDialogs[0]?.attributes('data-draggable')).toBe('false')
+    expect(initialDialogs[1]?.attributes('data-draggable')).toBe('false')
+
+    await wrapper.get('[data-testid="node-help-trigger"]').trigger('click')
+    await nextTick()
+
+    const helpDialogs = wrapper.findAll('.dialog-stub')
+    expect(helpDialogs[0]?.attributes('data-draggable')).toBe('false')
+    expect(helpDialogs[1]?.attributes('data-draggable')).toBe('false')
+    expect(helpDialogs[1]?.attributes('data-visible')).toBe('true')
   })
 
   it('does not persist runtime input values when applying trigger node settings', async () => {

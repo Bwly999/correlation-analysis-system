@@ -44,6 +44,15 @@ const workflowAiPanelStub = defineComponent({
   },
   template: '<div class="workflow-ai-panel-stub" :data-visible="visible"></div>',
 })
+const toastStub = defineComponent({
+  name: 'Toast',
+  props: {
+    group: String,
+    position: String,
+  },
+  template:
+    '<div class="toast-stub" :data-group="group ?? \'default\'" :data-position="position ?? \'top-right\'"></div>',
+})
 
 const agentWorkspaceStub = defineComponent({
   name: 'AgentWorkspace',
@@ -1110,6 +1119,43 @@ describe('WorkflowCanvas', () => {
 
     expect(wrapper.get('[data-testid="execution-workspace-banner"]').text()).toContain('正在执行节点：Pearson 相关系数')
     expect(wrapper.get('[data-testid="execution-workspace-banner"]').text()).toContain('已自动同步到画布')
+  })
+
+  it('mounts a dedicated bottom-left toast for node config feedback', () => {
+    const wrapper = mount(WorkflowCanvas, {
+      global: {
+        stubs: {
+          Background: { template: '<div />' },
+          Controls: { template: '<div />' },
+          NodeSidebar: { template: '<div />' },
+          WorkflowHeader: { template: '<div />' },
+          AgentWorkspace: agentWorkspaceStub,
+          BaseNode: { template: '<div />' },
+          LogPanel: { template: '<div />' },
+          NodeConfigModal: { template: '<div />' },
+          RuntimeInputModal: runtimeInputModalStub,
+          WorkflowResultDashboardModal: workflowResultDashboardModalStub,
+          WorkflowManagerModal: workflowManagerModalStub,
+          UnsavedWorkflowDialog: { template: '<div />' },
+          HelpCenterModal: { template: '<div />' },
+          ConfirmDialog: { template: '<div />' },
+          Toast: toastStub,
+          Button: { template: '<button><slot /></button>' },
+          N8nEdge: { template: '<div />' },
+        },
+        directives: {
+          tooltip: () => undefined,
+        },
+      },
+    })
+
+    const toasts = wrapper.findAll('.toast-stub')
+
+    expect(toasts).toHaveLength(2)
+    expect(toasts[0]?.attributes('data-group')).toBe('default')
+    expect(toasts[0]?.attributes('data-position')).toBe('top-right')
+    expect(toasts[1]?.attributes('data-group')).toBe('node-config')
+    expect(toasts[1]?.attributes('data-position')).toBe('bottom-left')
   })
 })
 
