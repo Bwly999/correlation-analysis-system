@@ -10,6 +10,7 @@ import {
   normalizePropertyFieldTreeOptions,
   usePropertyFieldTreeSearch,
 } from '../usePropertyFieldTreeSearch'
+import { useRegexFilter } from '../useRegexFilter'
 
 const props = defineProps<{
   modelValue: unknown
@@ -192,10 +193,21 @@ const modelValueToSelectionKeys = (value: unknown): TreeSelectionKeys | undefine
 }
 
 const {
+  enabled: regexEnabled,
+  errorMessage: regexErrorMessage,
+  setQuery,
+  toggleRegexMode,
+  getToggleClass,
+} = useRegexFilter({
+  inputTestId: 'tree-filter-input',
+})
+
+const {
   query: treeFilterQuery,
   expandedKeys: treeExpandedKeys,
   filteredOptions: filteredTreeOptions,
   isSearchResultTruncated,
+  searchErrorMessage,
   searchResultMessage,
   expandAllLabel,
   expandAllNodes,
@@ -204,6 +216,7 @@ const {
   options: normalizedTreeOptions,
   enableSearchResultGuard: ENABLE_SEARCH_RESULT_GUARD,
   maxExpandKeys: ENABLE_SAFE_EXPAND_LIMIT ? undefined : Number.MAX_SAFE_INTEGER,
+  matchMode: computed(() => (regexEnabled.value ? 'regex' : 'contains')),
 })
 
 const treeRef = ref<TreeV2Expose | null>(null)
@@ -261,6 +274,10 @@ watch(filteredTreeOptions, () => {
   void syncCheckedState()
   void syncExpandedState()
 }, { immediate: true })
+
+watch(treeFilterQuery, (value) => {
+  setQuery(value)
+})
 
 watch(checkedKeysList, () => {
   void syncCheckedState()
@@ -347,6 +364,9 @@ const treeSelectionValue = computed<TreeSelectionKeys | undefined>({
   },
 })
 
+const treeSearchMessage = computed(() => searchErrorMessage.value || regexErrorMessage.value)
+const regexToggleTitle = computed(() => (regexEnabled.value ? '已开启正则搜索' : '开启正则搜索'))
+
 </script>
 
 <template>
@@ -364,6 +384,18 @@ const treeSelectionValue = computed<TreeSelectionKeys | undefined>({
             :placeholder="prop.placeholder || '搜索...'"
           />
         </div>
+        <button
+          v-if="prop.allowRegexSearch !== false"
+          type="button"
+          data-testid="tree-regex-toggle"
+          :class="getToggleClass(regexEnabled)"
+          :title="regexToggleTitle"
+          :aria-label="regexToggleTitle"
+          @mousedown.prevent
+          @click="toggleRegexMode"
+        >
+          .*
+        </button>
         <button
           type="button"
           data-testid="tree-expand-all"
@@ -388,6 +420,12 @@ const treeSelectionValue = computed<TreeSelectionKeys | undefined>({
     </div>
 
     <div class="p-2">
+      <div
+        v-if="treeSearchMessage"
+        class="mb-2 rounded-lg border border-rose-100 bg-rose-50 px-3 py-2 text-[11px] leading-5 text-rose-600"
+      >
+        {{ treeSearchMessage }}
+      </div>
       <div
         v-if="isSearchResultTruncated"
         class="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-5 text-amber-700"

@@ -45,6 +45,7 @@ const createSearchHarness = (
     maxSearchLeafMatches?: number
     maxExpandKeys?: number
     enableSearchResultGuard?: boolean
+    matchMode?: 'contains' | 'regex'
   },
 ) =>
   defineComponent({
@@ -247,6 +248,69 @@ describe('usePropertyFieldTreeSearch', () => {
         label: '目标节点',
       }),
     ])
+
+    vi.useRealTimers()
+  })
+
+  it('正则模式下按表达式匹配节点', async () => {
+    vi.useFakeTimers()
+    const wrapper = mount(
+      createSearchHarness([
+        {
+          key: 'group-1',
+          label: '工序一',
+          children: [
+            { key: 'leaf-1', label: '温度-01' },
+            { key: 'leaf-2', label: '压力-01' },
+          ],
+        },
+      ], {
+        matchMode: 'regex',
+      }),
+    )
+    const exposed = wrapper.vm as unknown as {
+      query: string
+      filteredOptions: Array<{ label?: string; children?: Array<{ label?: string }> }>
+      searchErrorMessage: string
+    }
+
+    exposed.query = '^温度-\\d+$'
+    await wrapper.vm.$nextTick()
+    vi.advanceTimersByTime(150)
+    await wrapper.vm.$nextTick()
+
+    expect(exposed.searchErrorMessage).toBe('')
+    expect(exposed.filteredOptions).toHaveLength(1)
+    expect(exposed.filteredOptions[0]?.children).toEqual([
+      expect.objectContaining({
+        key: 'leaf-1',
+        label: '温度-01',
+      }),
+    ])
+
+    vi.useRealTimers()
+  })
+
+  it('正则模式下表达式无效时显示错误且返回空结果', async () => {
+    vi.useFakeTimers()
+    const wrapper = mount(
+      createSearchHarness(treeOptions, {
+        matchMode: 'regex',
+      }),
+    )
+    const exposed = wrapper.vm as unknown as {
+      query: string
+      filteredOptions: Array<{ label?: string }>
+      searchErrorMessage: string
+    }
+
+    exposed.query = '['
+    await wrapper.vm.$nextTick()
+    vi.advanceTimersByTime(150)
+    await wrapper.vm.$nextTick()
+
+    expect(exposed.searchErrorMessage).toBe('正则表达式无效，请检查输入格式')
+    expect(exposed.filteredOptions).toEqual([])
 
     vi.useRealTimers()
   })

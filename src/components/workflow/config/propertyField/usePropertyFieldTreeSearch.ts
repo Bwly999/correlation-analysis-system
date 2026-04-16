@@ -1,11 +1,12 @@
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
-import type { Ref } from 'vue'
+import type { MaybeRef, Ref } from 'vue'
 import type { TreeNode } from 'primevue/treenode'
 
 export type PropertyFieldTreeNode = TreeNode & {
   children?: PropertyFieldTreeNode[]
   data?: Record<string, unknown> & {
     searchText?: string
+    rawSearchText?: string
     normalizedSearchText?: string
   }
 }
@@ -24,15 +25,46 @@ interface UsePropertyFieldTreeSearchOptions {
   maxSearchLeafMatches?: number
   maxExpandKeys?: number
   enableSearchResultGuard?: boolean
+  matchMode?: MaybeRef<'contains' | 'regex'>
 }
 
 const DEFAULT_MAX_SEARCH_LEAF_MATCHES = 120
 const DEFAULT_MAX_EXPAND_KEYS = 160
 const SEARCH_SUMMARY_KEY_PREFIX = '__search-summary__'
 const SEARCH_SUMMARY_MESSAGE_SUFFIX = '请继续缩小搜索范围'
+const INVALID_REGEX_MESSAGE = '正则表达式无效，请检查输入格式'
 
-const normalizeSearchText = (node: TreeNode) =>
-  String(node.data?.searchText || node.label || '').trim().toLowerCase()
+const resolveRawSearchText = (node: TreeNode) => String(node.data?.searchText || node.label || '').trim()
+const normalizeSearchText = (node: TreeNode) => resolveRawSearchText(node).toLowerCase()
+
+const createQueryMatcher = (
+  query: string,
+  matchMode: 'contains' | 'regex',
+): {
+  matches: (searchText: string) => boolean
+  errorMessage: string
+} => {
+  if (matchMode !== 'regex') {
+    const normalizedQuery = query.toLowerCase()
+    return {
+      matches: (searchText: string) => searchText.toLowerCase().includes(normalizedQuery),
+      errorMessage: '',
+    }
+  }
+
+  try {
+    const regex = new RegExp(query, 'i')
+    return {
+      matches: (searchText: string) => regex.test(searchText),
+      errorMessage: '',
+    }
+  } catch {
+    return {
+      matches: () => false,
+      errorMessage: INVALID_REGEX_MESSAGE,
+    }
+  }
+}
 
 const normalizeTreeOptions = (
   nodes: TreeNode[],
@@ -49,6 +81,7 @@ const normalizeTreeOptions = (
       children: normalizedChildren,
       data: {
         ...(node.data as Record<string, unknown> | undefined),
+        rawSearchText: resolveRawSearchText(node),
         normalizedSearchText: normalizeSearchText(node),
       },
       selectable: leafOnlySelectable && !leaf ? false : node.selectable,
@@ -85,13 +118,13 @@ const createSearchSummaryNode = (
 
 const visitFilteredNode = (
   node: PropertyFieldTreeNode,
-  normalizedQuery: string,
+  matchesQuery: (searchText: string) => boolean,
   budget: SearchFilterBudget,
 ): SearchVisitResult => {
   const children = Array.isArray(node.children) ? node.children : []
   const isLeaf = children.length === 0
-  const searchText = node.data?.normalizedSearchText || ''
-  const selfMatched = searchText.includes(normalizedQuery)
+  const searchText = String(node.data?.rawSearchText || node.data?.normalizedSearchText || '')
+  const selfMatched = matchesQuery(searchText)
 
   if (isLeaf) {
     if (!selfMatched) {
@@ -131,7 +164,7 @@ const visitFilteredNode = (
   const hiddenBefore = budget.hiddenLeafMatchCount
 
   children.forEach((child) => {
-    const childResult = visitFilteredNode(child, normalizedQuery, budget)
+    const childResult = visitFilteredNode(child, matchesQuery, budget)
 
     if (!childResult.matched) {
       return
@@ -185,12 +218,12 @@ const visitFilteredNode = (
 
 const visitFilteredNodeWithoutGuard = (
   node: PropertyFieldTreeNode,
-  normalizedQuery: string,
+  matchesQuery: (searchText: string) => boolean,
 ): SearchVisitResult => {
   const children = Array.isArray(node.children) ? node.children : []
   const isLeaf = children.length === 0
-  const searchText = node.data?.normalizedSearchText || ''
-  const selfMatched = searchText.includes(normalizedQuery)
+  const searchText = String(node.data?.rawSearchText || node.data?.normalizedSearchText || '')
+  const selfMatched = matchesQuery(searchText)
 
   if (isLeaf) {
     return selfMatched
@@ -213,7 +246,7 @@ const visitFilteredNodeWithoutGuard = (
   const expandedKeys: string[] = []
 
   children.forEach((child) => {
-    const result = visitFilteredNodeWithoutGuard(child, normalizedQuery)
+    const result = visitFilteredNodeWithoutGuard(child, matchesQuery)
     if (!result.matched) return
     if (result.node) {
       visibleChildren.push(result.node)
@@ -247,6 +280,7 @@ const filterTreeNodes = (
   normalizedQuery: string,
   maxSearchLeafMatches: number,
   enableSearchResultGuard: boolean,
+  matchMode: 'contains' | 'regex',
 ): FilteredTreeState => {
   if (!normalizedQuery) {
     return {
@@ -258,10 +292,22 @@ const filterTreeNodes = (
     }
   }
 
+  const { matches, errorMessage } = createQueryMatcher(normalizedQuery, matchMode)
+
+  if (errorMessage) {
+    return {
+      nodes: [],
+      expandedKeys: {},
+      isTruncated: false,
+      hiddenLeafMatchCount: 0,
+      message: errorMessage,
+    }
+  }
+
   if (!enableSearchResultGuard) {
     const expandedKeys: Record<string, boolean> = {}
     const filteredNodes = nodes.reduce<PropertyFieldTreeNode[]>((acc, node) => {
-      const result = visitFilteredNodeWithoutGuard(node, normalizedQuery)
+      const result = visitFilteredNodeWithoutGuard(node, matches)
       if (!result.node) return acc
       result.expandedKeys.forEach((key) => {
         expandedKeys[key] = true
@@ -287,7 +333,7 @@ const filterTreeNodes = (
   }
   const expandedKeys: Record<string, boolean> = {}
   const filteredNodes = nodes.reduce<PropertyFieldTreeNode[]>((acc, node) => {
-    const result = visitFilteredNode(node, normalizedQuery, budget)
+    const result = visitFilteredNode(node, matches, budget)
     if (!result.node) {
       return acc
     }
@@ -337,13 +383,18 @@ export const usePropertyFieldTreeSearch = ({
   maxSearchLeafMatches = DEFAULT_MAX_SEARCH_LEAF_MATCHES,
   maxExpandKeys = DEFAULT_MAX_EXPAND_KEYS,
   enableSearchResultGuard = true,
+  matchMode,
 }: UsePropertyFieldTreeSearchOptions) => {
   const query = ref('')
   const debouncedQuery = ref('')
   const expandedKeys = shallowRef<Record<string, boolean>>({})
   let filterTimer: ReturnType<typeof setTimeout> | null = null
 
-  const normalizedTreeFilterQuery = computed(() => debouncedQuery.value.trim().toLowerCase())
+  const normalizedTreeFilterQuery = computed(() => debouncedQuery.value.trim())
+  const resolvedMatchMode = computed(() => {
+    if (!matchMode) return 'contains'
+    return typeof matchMode === 'object' && 'value' in matchMode ? matchMode.value : matchMode
+  })
 
   const filteredTreeState = computed(() =>
     filterTreeNodes(
@@ -351,12 +402,18 @@ export const usePropertyFieldTreeSearch = ({
       normalizedTreeFilterQuery.value,
       maxSearchLeafMatches,
       enableSearchResultGuard,
+      resolvedMatchMode.value,
     ),
   )
 
   const filteredOptions = computed(() => filteredTreeState.value.nodes)
   const isSearchResultTruncated = computed(() => filteredTreeState.value.isTruncated)
-  const searchResultMessage = computed(() => filteredTreeState.value.message)
+  const searchErrorMessage = computed(() =>
+    filteredTreeState.value.message === INVALID_REGEX_MESSAGE ? filteredTreeState.value.message : '',
+  )
+  const searchResultMessage = computed(() =>
+    filteredTreeState.value.message === INVALID_REGEX_MESSAGE ? '' : filteredTreeState.value.message,
+  )
   const expandAllLabel = '安全展开'
 
   const expandAllNodes = () => {
@@ -379,7 +436,7 @@ export const usePropertyFieldTreeSearch = ({
   })
 
   watch([normalizedTreeFilterQuery, filteredTreeState], ([normalizedQuery, state]) => {
-    if (!normalizedQuery) return
+    if (!normalizedQuery || state.message === INVALID_REGEX_MESSAGE) return
     expandedKeys.value = collectExpandedKeys(state.nodes, maxExpandKeys)
   })
 
@@ -393,6 +450,7 @@ export const usePropertyFieldTreeSearch = ({
     expandedKeys,
     filteredOptions,
     isSearchResultTruncated,
+    searchErrorMessage,
     searchResultMessage,
     expandAllLabel,
     expandAllNodes,

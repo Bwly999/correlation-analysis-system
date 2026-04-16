@@ -143,6 +143,60 @@ describe('PropertyFieldTreeInput', () => {
     vi.useRealTimers()
   })
 
+  it('点击图标后开启正则搜索，并按正则过滤树节点', async () => {
+    vi.useFakeTimers()
+    const wrapper = mount(PropertyFieldTreeInput, {
+      props: {
+        modelValue: {},
+        prop: createTreeProp(),
+        options: [
+          {
+            key: 'group-1',
+            label: '工序一',
+            children: [
+              { key: 'leaf-1', label: '温度-01' },
+              { key: 'leaf-2', label: '压力-01' },
+            ],
+          },
+        ],
+        isOptionsLoading: false,
+        optionsError: '',
+      },
+      global: {
+        stubs: {
+          InputText: createInputTextStub,
+          ElTreeV2: createTreeV2Stub(),
+        },
+      },
+    })
+
+    await wrapper.get('[data-testid="tree-regex-toggle"]').trigger('click')
+    await wrapper.get('input').setValue('^温度-\\d+$')
+    vi.advanceTimersByTime(150)
+    await nextTick()
+
+    expect(wrapper.get('[data-testid="tree-regex-toggle"]').attributes('title')).toBe('已开启正则搜索')
+    expect(wrapper.get('[data-testid="tree-value"]').text()).toContain('"label":"温度-01"')
+    expect(wrapper.get('[data-testid="tree-value"]').text()).not.toContain('"label":"压力-01"')
+
+    vi.useRealTimers()
+  })
+
+  it('正则表达式无效时显示错误提示且树结果为空', async () => {
+    vi.useFakeTimers()
+    const wrapper = mountTreeInput()
+
+    await wrapper.get('[data-testid="tree-regex-toggle"]').trigger('click')
+    await wrapper.get('input').setValue('[')
+    vi.advanceTimersByTime(150)
+    await nextTick()
+
+    expect(wrapper.text()).toContain('正则表达式无效，请检查输入格式')
+    expect(wrapper.text()).toContain('暂无数据')
+
+    vi.useRealTimers()
+  })
+
   it('关闭搜索保护时不过滤为摘要节点', async () => {
     vi.useFakeTimers()
     const largeTreeOptions = [
