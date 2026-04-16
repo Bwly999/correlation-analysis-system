@@ -4,6 +4,26 @@ import { CONNECTION_RULES } from '../../workflow/connectionRules.js'
 type NodeCategory = 'trigger' | 'action' | 'terminal'
 type NodeInputMode = WorkflowAiNodeCatalogItem['inputMode']
 type NodeProperty = WorkflowAiNodeCatalogItem['properties'][number]
+type NodePropertyOption = {
+  value: string
+  label: string
+  description?: string
+}
+type NodePropertyOptionsResolver = (
+  input: {
+    config: Record<string, unknown>
+    upstreamSample?: unknown
+  },
+) => NodePropertyOption[] | Promise<NodePropertyOption[]>
+type ServerNodeProperty = NodeProperty & {
+  options?: NodePropertyOption[]
+  dependsOn?: string[]
+  visibleWhen?: (config: Record<string, unknown>) => boolean
+  resolveOptions?: NodePropertyOptionsResolver
+}
+type ServerNodeCatalogItem = Omit<WorkflowAiNodeCatalogItem, 'properties'> & {
+  properties: ServerNodeProperty[]
+}
 
 type NodeCatalogSeed = {
   name: string
@@ -13,19 +33,54 @@ type NodeCatalogSeed = {
   inputMode?: NodeInputMode
   minInputs?: number
   maxInputs?: number | null
-  properties?: NodeProperty[]
+  properties?: ServerNodeProperty[]
   assistantHints?: {
     keywords?: string[]
     useCases?: string[]
   } | null
 }
 
+type CreatePropertyOptions = Partial<
+  Omit<NodeProperty, 'name' | 'displayName' | 'type'>
+> & {
+  options?: NodePropertyOption[]
+  dependsOn?: string[]
+  visibleWhen?: (config: Record<string, unknown>) => boolean
+  resolveOptions?: NodePropertyOptionsResolver
+}
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
+const extractSampleRows = (value: unknown): Array<Record<string, unknown>> => {
+  if (Array.isArray(value)) {
+    return value.filter(isPlainObject)
+  }
+  if (isPlainObject(value)) {
+    const normalized = value as { kind?: string; payload?: unknown }
+    if (normalized.kind === 'table' && Array.isArray(normalized.payload)) {
+      return normalized.payload.filter(isPlainObject)
+    }
+  }
+  return []
+}
+
+const collectFieldOptions = (upstreamSample?: unknown): NodePropertyOption[] => {
+  const rows = extractSampleRows(upstreamSample)
+  if (!rows.length) return []
+
+  return [...new Set(rows.flatMap((row) => Object.keys(row)))].map((field) => ({
+    value: field,
+    label: field,
+  }))
+}
+
 const createProperty = (
   name: string,
   displayName: string,
   type: string,
-  options: Partial<Omit<NodeProperty, 'name' | 'displayName' | 'type'>> = {},
-): NodeProperty => ({
+  options: CreatePropertyOptions = {},
+): ServerNodeProperty => ({
   name,
   displayName,
   type,
@@ -36,7 +91,7 @@ const createProperty = (
   ...options,
 })
 
-const createCatalogItem = (seed: NodeCatalogSeed): WorkflowAiNodeCatalogItem => {
+const createCatalogItem = (seed: NodeCatalogSeed): ServerNodeCatalogItem => {
   const inputMode = seed.inputMode ?? 'single'
   const minInputs =
     seed.minInputs
@@ -75,6 +130,12 @@ const SERVER_SAFE_NODE_CATALOG: WorkflowAiNodeCatalogItem[] = [
       createProperty('format', '文件格式', 'options', {
         defaultValue: 'auto',
         description: '通常保持自动识别，只有识别失败时再手动指定格式。',
+        options: [
+          { value: 'auto', label: '自动识别' },
+          { value: 'csv', label: 'CSV' },
+          { value: 'xlsx', label: 'Excel' },
+          { value: 'json', label: 'JSON' },
+        ],
       }),
       createProperty('autoClean', '自动转换数字', 'boolean', {
         defaultValue: true,
@@ -83,6 +144,8 @@ const SERVER_SAFE_NODE_CATALOG: WorkflowAiNodeCatalogItem[] = [
       createProperty('excludeFields', '排除字段', 'tags', {
         defaultValue: [],
         description: '这些字段保持原始字符串格式，不参与自动数值转换。',
+        dependsOn: ['autoClean'],
+        visibleWhen: (config) => config.autoClean !== false,
       }),
     ],
     assistantHints: {
@@ -193,6 +256,13 @@ const SERVER_SAFE_NODE_CATALOG: WorkflowAiNodeCatalogItem[] = [
       createProperty('groupByMethods', '统计指标', 'multi-options', {
         defaultValue: ['mean'],
         description: '分组统计时可选 mean、sum、count、std、median。',
+        options: [
+          { value: 'mean', label: 'mean' },
+          { value: 'sum', label: 'sum' },
+          { value: 'count', label: 'count' },
+          { value: 'std', label: 'std' },
+          { value: 'median', label: 'median' },
+        ],
       }),
       createProperty('windowSize', '窗口长度', 'number', {
         defaultValue: 5,
@@ -209,14 +279,32 @@ const SERVER_SAFE_NODE_CATALOG: WorkflowAiNodeCatalogItem[] = [
       createProperty('timeWindowUnit', '时间单位', 'options', {
         defaultValue: 'hour',
         description: '可选 minute、hour、day。',
+        options: [
+          { value: 'minute', label: 'minute' },
+          { value: 'hour', label: 'hour' },
+          { value: 'day', label: 'day' },
+        ],
       }),
       createProperty('timeWindowMethods', '窗口统计指标', 'multi-options', {
         defaultValue: ['mean'],
         description: '时间窗口模式下要计算的统计指标。',
+        options: [
+          { value: 'mean', label: 'mean' },
+          { value: 'sum', label: 'sum' },
+          { value: 'count', label: 'count' },
+          { value: 'std', label: 'std' },
+          { value: 'median', label: 'median' },
+        ],
       }),
       createProperty('rollingMethod', '窗口算法', 'options', {
         defaultValue: 'mean',
         description: '移动窗口模式下可选 mean、sum、max、min。',
+        options: [
+          { value: 'mean', label: 'mean' },
+          { value: 'sum', label: 'sum' },
+          { value: 'max', label: 'max' },
+          { value: 'min', label: 'min' },
+        ],
       }),
       createProperty('targetColumns', '目标处理字段', 'tags', {
         defaultValue: [],
@@ -229,6 +317,74 @@ const SERVER_SAFE_NODE_CATALOG: WorkflowAiNodeCatalogItem[] = [
     },
   }),
   createCatalogItem({
+    name: 'data-merge',
+    displayName: '数据合并',
+    category: 'action',
+    description: '支持多输入纵向追加、横向关联或分组集合，适合把多个上游数据集汇总成一个结果。',
+    inputMode: 'multiple',
+    minInputs: 2,
+    maxInputs: null,
+    properties: [
+      createProperty('mergeMode', '合并模式', 'options', {
+        defaultValue: 'append',
+        description: '可选 append、join、collection；join 适合按来源键字段做横向关联。',
+        options: [
+          { value: 'append', label: '纵向追加' },
+          { value: 'join', label: '横向关联' },
+          { value: 'collection', label: '分组集合' },
+        ],
+      }),
+      createProperty('alignFieldsMode', '字段对齐方式', 'options', {
+        defaultValue: 'union',
+        description: 'append 模式下控制采用字段并集还是交集。',
+        options: [
+          { value: 'union', label: '字段并集' },
+          { value: 'intersection', label: '字段交集' },
+        ],
+        visibleWhen: (config) => (config.mergeMode ?? 'append') === 'append',
+        dependsOn: ['mergeMode'],
+      }),
+      createProperty('fillMissingValue', '缺失值填充', 'options', {
+        defaultValue: 'null',
+        description: 'append 模式下控制缺失字段填充值。',
+        options: [
+          { value: 'null', label: '填充 null' },
+          { value: 'empty_string', label: '空字符串' },
+        ],
+        visibleWhen: (config) => (config.mergeMode ?? 'append') === 'append',
+        dependsOn: ['mergeMode'],
+      }),
+      createProperty('addSourceTag', '添加来源标记', 'boolean', {
+        defaultValue: false,
+        description: 'append 模式下给每行补来源标记。',
+        visibleWhen: (config) => (config.mergeMode ?? 'append') === 'append',
+        dependsOn: ['mergeMode'],
+      }),
+      createProperty('sourceTagName', '来源字段名', 'string', {
+        defaultValue: '__source',
+        description: 'append 且启用来源标记时使用的字段名。',
+        visibleWhen: (config) => (config.mergeMode ?? 'append') === 'append' && config.addSourceTag === true,
+        dependsOn: ['mergeMode', 'addSourceTag'],
+      }),
+      createProperty('unifiedKeyName', '统一键名称', 'string', {
+        defaultValue: '合并键',
+        description: 'join 模式下输出结果中统一保留的主键字段名称。',
+        visibleWhen: (config) => config.mergeMode === 'join',
+        dependsOn: ['mergeMode'],
+      }),
+      createProperty('keyMappings', '来源键配置', 'collection', {
+        defaultValue: [],
+        description: 'join 模式下为每个上游来源单独指定来源节点与 mergeKey 字段。',
+        visibleWhen: (config) => config.mergeMode === 'join',
+        dependsOn: ['mergeMode'],
+      }),
+    ],
+    assistantHints: {
+      keywords: ['数据合并', '多输入', 'append', 'join', 'collection', '多表关联'],
+      useCases: ['纵向追加多个数据源', '按来源键字段做 join', '并行保留多个上游结果'],
+    },
+  }),
+  createCatalogItem({
     name: 'data-filter',
     displayName: '数据筛选',
     category: 'action',
@@ -237,6 +393,10 @@ const SERVER_SAFE_NODE_CATALOG: WorkflowAiNodeCatalogItem[] = [
       createProperty('matchMode', '条件关系', 'options', {
         defaultValue: 'all',
         description: '可选 all 或 any，控制多个条件之间是且还是或。',
+        options: [
+          { value: 'all', label: '全部满足' },
+          { value: 'any', label: '任一满足' },
+        ],
       }),
       createProperty('conditions', '筛选条件', 'collection', {
         defaultValue: [],
@@ -274,10 +434,15 @@ const SERVER_SAFE_NODE_CATALOG: WorkflowAiNodeCatalogItem[] = [
       createProperty('mode', '选择模式', 'options', {
         defaultValue: 'include',
         description: '可选 include 或 exclude，决定保留还是排除选中字段。',
+        options: [
+          { value: 'include', label: '包含' },
+          { value: 'exclude', label: '不包含' },
+        ],
       }),
       createProperty('fields', '目标字段', 'multi-options', {
         defaultValue: [],
         description: '填写需要保留或排除的字段名，可来自上游表头。',
+        resolveOptions: ({ upstreamSample }) => collectFieldOptions(upstreamSample),
       }),
     ],
     assistantHints: {
@@ -310,6 +475,10 @@ const SERVER_SAFE_NODE_CATALOG: WorkflowAiNodeCatalogItem[] = [
       createProperty('mode', '保留方式', 'options', {
         defaultValue: 'head',
         description: '可选 head 或 tail，分别表示保留前 n 条或后 n 条。',
+        options: [
+          { value: 'head', label: '前 N 条' },
+          { value: 'tail', label: '后 N 条' },
+        ],
       }),
       createProperty('limit', '保留数量', 'number', {
         defaultValue: 100,
@@ -420,6 +589,12 @@ const SERVER_SAFE_NODE_CATALOG: WorkflowAiNodeCatalogItem[] = [
       createProperty('chartType', '图表类型', 'options', {
         defaultValue: 'scatter',
         description: '可选 scatter、bar、histogram、boxplot。',
+        options: [
+          { value: 'scatter', label: 'scatter' },
+          { value: 'bar', label: 'bar' },
+          { value: 'histogram', label: 'histogram' },
+          { value: 'boxplot', label: 'boxplot' },
+        ],
       }),
       createProperty('xAxis', 'X 轴字段', 'string', {
         defaultValue: '',
@@ -440,10 +615,63 @@ const SERVER_SAFE_NODE_CATALOG: WorkflowAiNodeCatalogItem[] = [
 export const buildServerWorkflowAiNodeCatalog = (): WorkflowAiNodeCatalogItem[] =>
   SERVER_SAFE_NODE_CATALOG.map((item) => ({
     ...item,
-    properties: item.properties.map((property) => ({ ...property })),
+    properties: item.properties.map((property) => ({
+      name: property.name,
+      displayName: property.displayName,
+      type: property.type,
+      required: property.required,
+      isRuntimeInput: property.isRuntimeInput,
+      defaultValue: property.defaultValue,
+      description: property.description,
+    })),
     assistantHints: item.assistantHints
       ? {
           ...(item.assistantHints as Record<string, unknown>),
         }
       : null,
   }))
+
+export const getServerNodeCatalogItem = (nodeType: string): ServerNodeCatalogItem | null =>
+  SERVER_SAFE_NODE_CATALOG.find((item) => item.name === nodeType) ?? null
+
+export const resolveServerNodePropertyOptions = async (
+  nodeType: string,
+  propertyName: string,
+  config: Record<string, unknown> = {},
+  upstreamSample?: unknown,
+) => {
+  const item = getServerNodeCatalogItem(nodeType)
+  if (!item) {
+    return {
+      found: false,
+      propertyName,
+      visible: false,
+      options: [],
+      message: `未找到节点定义: ${nodeType}`,
+    }
+  }
+
+  const property = item.properties.find((candidate) => candidate.name === propertyName)
+  if (!property) {
+    return {
+      found: false,
+      propertyName,
+      visible: false,
+      options: [],
+      message: `未找到属性 ${propertyName}`,
+    }
+  }
+
+  const visible = !property.visibleWhen || property.visibleWhen(config)
+  const options = property.resolveOptions
+    ? await property.resolveOptions({ config, upstreamSample })
+    : property.options ?? []
+
+  return {
+    found: true,
+    propertyName,
+    visible,
+    dependsOn: property.dependsOn ?? [],
+    options,
+  }
+}

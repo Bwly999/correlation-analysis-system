@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { buildServerWorkflowAiNodeCatalog } from '../nodeCatalog.js'
+import {
+  buildServerWorkflowAiNodeCatalog,
+  getServerNodeCatalogItem,
+  resolveServerNodePropertyOptions,
+} from '../nodeCatalog.js'
 
 describe('buildServerWorkflowAiNodeCatalog', () => {
   it('builds a server-safe node catalog for benchmark and agent planning', () => {
@@ -23,7 +27,72 @@ describe('buildServerWorkflowAiNodeCatalog', () => {
           displayName: '字段选择',
           category: 'action',
         }),
+        expect.objectContaining({
+          name: 'data-merge',
+          displayName: '数据合并',
+          category: 'action',
+          inputMode: 'multiple',
+        }),
       ]),
     )
+  })
+
+  it('exposes static property options for server-safe MCP introspection', async () => {
+    const result = await resolveServerNodePropertyOptions('file-import', 'format')
+
+    expect(result).toMatchObject({
+      found: true,
+      propertyName: 'format',
+      visible: true,
+      options: expect.arrayContaining([
+        expect.objectContaining({ value: 'auto', label: '自动识别' }),
+        expect.objectContaining({ value: 'csv', label: 'CSV' }),
+        expect.objectContaining({ value: 'xlsx', label: 'Excel' }),
+      ]),
+    })
+  })
+
+  it('derives selectable field options from upstream sample rows', async () => {
+    const result = await resolveServerNodePropertyOptions(
+      'field-selection',
+      'fields',
+      {},
+      {
+        kind: 'table',
+        payload: [
+          { price: 10, sales: 100, channel: 'A' },
+          { price: 11, sales: 120, channel: 'B' },
+        ],
+      },
+    )
+
+    expect(result).toMatchObject({
+      found: true,
+      propertyName: 'fields',
+      visible: true,
+      options: expect.arrayContaining([
+        expect.objectContaining({ value: 'price', label: 'price' }),
+        expect.objectContaining({ value: 'sales', label: 'sales' }),
+        expect.objectContaining({ value: 'channel', label: 'channel' }),
+      ]),
+    })
+  })
+
+  it('returns a rich catalog item for MCP runtime lookup', () => {
+    const item = getServerNodeCatalogItem('file-import')
+
+    expect(item).toMatchObject({
+      name: 'file-import',
+      displayName: '本地文件导入',
+      properties: expect.arrayContaining([
+        expect.objectContaining({
+          name: 'fileData',
+          isRuntimeInput: true,
+        }),
+        expect.objectContaining({
+          name: 'format',
+        }),
+      ]),
+    })
   })
 })

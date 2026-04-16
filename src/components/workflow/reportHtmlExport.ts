@@ -91,11 +91,11 @@ const DEPENDENCE_CHART_HEIGHT = 280
 
 const escapeHtml = (value: unknown) =>
   String(value ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
 
 const renderChartToSvg = (option: Record<string, unknown>, width: number, height: number) => {
   const chart = init(null as unknown as HTMLElement, undefined, {
@@ -125,13 +125,12 @@ const resolveOfflineSections = (report: ReportPayload) => {
   const scope = effectScope()
 
   try {
-    return scope.run(() => {
+    const resolved = scope.run(() => {
       const {
         sections,
         supplements,
         expandedDependence,
         visibleDependence,
-        getChartSelectedValue,
         resolveChartOption,
       } = useReportSections(() => ({
         kind: 'report',
@@ -201,6 +200,13 @@ const resolveOfflineSections = (report: ReportPayload) => {
         supplements: supplements.value,
       }
     })
+
+    return (
+      resolved ?? {
+        sections: [] as ResolvedReportSection[],
+        supplements: {} as Record<string, unknown>,
+      }
+    )
   } finally {
     scope.stop()
   }
@@ -278,10 +284,12 @@ export const buildOfflineReportHtml = async (
   report: ReportPayload,
   options: OfflineReportExportOptions,
 ) => {
-  const { sections, supplements } = resolveOfflineSections(report)
+  const resolved = resolveOfflineSections(report)
+  const sections = resolved.sections
+  const supplements = resolved.supplements
 
   const sectionHtml = sections
-    .map((section) => {
+    .map((section: ResolvedReportSection) => {
       if (section.kind === 'summary') {
         return buildSummarySectionHtml(section.section)
       }
@@ -302,7 +310,7 @@ export const buildOfflineReportHtml = async (
             <h2>${escapeHtml(section.title)}</h2>
             <div class="dependence-grid">
               ${section.items
-                .map((item) => {
+                .map((item: ResolvedDependenceSection['items'][number]) => {
                   const svg = renderChartToSvg(item.option, DEPENDENCE_CHART_WIDTH, DEPENDENCE_CHART_HEIGHT)
                   return `
                     <article class="dependence-card">

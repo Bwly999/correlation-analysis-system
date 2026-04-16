@@ -26,27 +26,30 @@ const isVueEcosystemModule = (id: string) =>
   || id.includes('vue-draggable-plus')
 
 const workflowAiDevMiddleware = (): Plugin => {
-  let handlerPromise: Promise<(request: unknown, response: unknown) => Promise<void>> | null = null
+  let handlerPromise: Promise<(request: any, response: any) => Promise<void>> | null = null
   const serverAppUrl = pathToFileURL(resolve(process.cwd(), 'src/server/app.ts')).href
+
+  const getHandler = async () => {
+    if (!handlerPromise) {
+      handlerPromise = import(/* @vite-ignore */ serverAppUrl)
+        .then(({ createServerHandler }) => createServerHandler())
+    }
+    return handlerPromise
+  }
 
   return {
     name: 'workflow-ai-dev-middleware',
     apply: 'serve',
     configureServer(server) {
-      server.middlewares.use(async (request, response, next) => {
+      server.middlewares.use((request, response, next) => {
         if (!request.url?.startsWith('/api/')) {
           next()
           return
         }
 
-        if (!handlerPromise) {
-          handlerPromise = import(/* @vite-ignore */ serverAppUrl).then((module) =>
-            module.createServerHandler(),
-          )
-        }
-
-        const handler = await handlerPromise
-        void handler(request, response)
+        void getHandler()
+          .then((handler) => handler(request, response))
+          .catch(next)
       })
     },
   }
@@ -80,6 +83,18 @@ export default defineConfig({
           }
           if (id.includes('element-plus')) {
             return 'vendor-element-plus'
+          }
+          if (id.includes('html2canvas')) {
+            return 'vendor-export-canvas'
+          }
+          if (id.includes('jspdf')) {
+            return 'vendor-export-jspdf'
+          }
+          if (id.includes('canvg') || id.includes('svg2pdf') || id.includes('rgbcolor')) {
+            return 'vendor-export-svg'
+          }
+          if (id.includes('html2pdf.js')) {
+            return 'vendor-export-pdf'
           }
           if (
             id.includes('lucide-vue-next') ||

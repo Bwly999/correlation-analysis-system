@@ -490,6 +490,7 @@ const executeSingleNode = async (
       success: true,
       resultKind,
       resultSummary: generateResultSummary(normalized),
+      result: normalized,
       rowCount: rows?.length,
       sampleRows: rows?.slice(0, 3),
       _rawResult: normalized,

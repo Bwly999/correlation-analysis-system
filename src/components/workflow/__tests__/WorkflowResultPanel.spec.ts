@@ -46,7 +46,7 @@ describe('WorkflowResultPanel', () => {
     node.resultKindLabel = 'JSON 数据'
     node.output = createJsonResult({
       message: '即时渲染',
-    }).payload
+    })
 
     const wrapper = mount(WorkflowResultPanel, {
       props: {

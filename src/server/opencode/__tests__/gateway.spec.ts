@@ -296,6 +296,7 @@ describe('runAnalysisAgentSessionLoop', () => {
     expect(createOpencodeServerMock).toHaveBeenCalledTimes(1)
     expect(createOpencodeServerMock).toHaveBeenCalledWith(
       expect.objectContaining({
+        timeout: 20_000,
         config: expect.objectContaining({
           enabled_providers: ['workflow_ai_custom_model'],
           model: 'workflow_ai_custom_model/test-model',
@@ -338,9 +339,9 @@ describe('runAnalysisAgentSessionLoop', () => {
     expect(sessionPromptMock).toHaveBeenCalledWith(
       expect.objectContaining({
         tools: expect.objectContaining({
-          get_analysis_session_context: true,
-          get_node_catalog: true,
-          validate_workflow_plan: true,
+          bash: false,
+          invalid: false,
+          question: false,
         }),
       }),
     )
@@ -560,8 +561,8 @@ describe('agent session bridge', () => {
         sessionID: 'opencode_session_1',
         messageID: expect.stringMatching(/^msg_/),
         tools: expect.objectContaining({
-          get_analysis_session_context: true,
-          validate_workflow_plan: true,
+          workflow_get_analysis_session_context: true,
+          workflow_validate_workflow_plan: true,
         }),
         parts: [
           {

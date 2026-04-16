@@ -1,0 +1,42 @@
+<evaluation>
+  <qa_pair>
+    <question>你要在不上传文件的前提下，直接录入一小段对象数组样例数据来快速调试工作流。请通过节点搜索和节点详情能力确认，最合适的入口节点类型是什么？只返回 nodeType。</question>
+    <answer>manual-json-import</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>你拿到的是一个会话级文件数据源，入口类型要求和 CSV/Excel 上传一致，并且后续还要让模型绑定这个数据源执行工作流。请确认应该选择哪个入口节点类型。只返回 nodeType。</question>
+    <answer>file-import</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>你想在保留现有工作流 ID 不变的情况下，按 diff 逐步新增节点和连线，而不是整包替换。根据当前 MCP 工具设计，应该调用哪个工具最合适？只返回 tool name。</question>
+    <answer>workflow_update_partial_workflow</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>你需要读取某个节点的候选属性选项，而且这些选项可能依赖当前配置或上游输入样本。根据当前 MCP 设计，应该调用哪个工具？只返回 tool name。</question>
+    <answer>workflow_get_node_options</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>你已经有一个保存好的工作流，现在只想验证目标节点及其上游子图是否能跑通，并拿到当前节点的报错信息和 upstream trace，不想直接整流执行。应该调用哪个工具？只返回 tool name。</question>
+    <answer>workflow_debug_node</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>你需要查询已保存工作流的历史版本，并在确认后回滚到指定版本。当前统一处理这个需求的 MCP 工具是什么？只返回 tool name。</question>
+    <answer>workflow_workflow_versions</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>对“数据清洗”节点做运行时要求检查时，你要找的是“缺失值处理”这个属性的字段名。请通过节点详情能力确认，该属性的 property name 是什么？只返回 property name。</question>
+    <answer>missingValueStrategy</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>你想做多输入数据合并，并且希望模型能够为每个上游来源单独指定 join 键字段。请通过节点搜索和节点说明确认，最合适的节点类型是什么？只返回 nodeType。</question>
+    <answer>data-merge</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>对“数据聚合”节点做能力探索时，你要找到用于选择聚合模式的属性字段名。请确认这个 property name。只返回 property name。</question>
+    <answer>mode</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>如果你已经执行过完整工作流，现在想继续只读查询某次执行记录里的单节点结果或产物摘要，而不是重新执行工作流。当前统一查询这个需求的 MCP 工具是什么？只返回 tool name。</question>
+    <answer>workflow_executions</answer>
+  </qa_pair>
+</evaluation>

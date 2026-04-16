@@ -4,7 +4,11 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import * as z from 'zod/v4'
 import type { WorkflowAiPlan, WorkflowAiPlanRequest } from '../../ai/types.js'
 import { validateWorkflowAiPlanAgainstContext } from '../../ai/planValidation.js'
-import { getAgentSessionRecord, getAgentSessionStoreSnapshot } from './agentSessionStore.js'
+import {
+  getAgentExecutionRecord,
+  getAgentSessionRecord,
+  getAgentSessionStoreSnapshot,
+} from './agentSessionStore.js'
 import {
   getUserWorkflowById,
   getUserWorkflowVersion,
@@ -12,6 +16,8 @@ import {
   rollbackUserWorkflowVersion,
 } from '../storage.js'
 import { getWorkflowAiSessionRecord } from '../workflowAi/orchestrator.js'
+import { executeWorkflowPlanForSession } from './planExecution.js'
+import { workflowMcpRuntime } from './workflowMcpRuntime.js'
 
 type WorkflowMcpContext = {
   sessionId: string
@@ -139,6 +145,81 @@ const getWorkflowToolDefinitions = (
       }),
   },
   {
+    name: 'list_session_data_sources',
+    description: '列出当前分析会话可绑定的数据源、入口节点类型和摘要信息。',
+    handler: () =>
+      buildToolResult({
+        total: sessionRecord.request.dataSources?.length ?? 0,
+        items: sessionRecord.request.dataSources ?? [],
+      }),
+  },
+  {
+    name: 'get_data_source_schema',
+    description: '按数据源 ID 读取字段摘要、候选目标和候选因子。',
+    inputSchema: {
+      dataSourceId: z.string().describe('会话内数据源 ID'),
+    },
+    handler: ({ dataSourceId }) => {
+      const item = (sessionRecord.request.dataSources ?? []).find((source) => source.id === dataSourceId)
+      if (!item) {
+        return buildToolResult({
+          found: false,
+          message: `未找到数据源: ${dataSourceId}`,
+        })
+      }
+
+      return buildToolResult({
+        found: true,
+        item,
+      })
+    },
+  },
+  {
+    name: 'workflow_get_session_context',
+    description: '读取当前分析会话上下文，供 AI 规划工作流和补充缺失参数。',
+    handler: () =>
+      buildToolResult({
+        sessionId: sessionRecord.state.sessionId,
+        mode: sessionRecord.state.mode,
+        prompt: sessionRecord.state.prompt,
+        status: sessionRecord.state.status,
+        workflowSnapshot: sessionRecord.request.workflowSnapshot ?? null,
+        contextHints: sessionRecord.request.contextHints ?? sessionRecord.state.contextHints ?? null,
+        missingInfo: sessionRecord.state.missingInfo,
+        diagnostics: sessionRecord.state.diagnostics,
+      }),
+  },
+  {
+    name: 'workflow_list_data_sources',
+    description: '列出当前分析会话可用的数据源及绑定入口。',
+    handler: () =>
+      buildToolResult({
+        total: sessionRecord.request.dataSources?.length ?? 0,
+        items: sessionRecord.request.dataSources ?? [],
+      }),
+  },
+  {
+    name: 'workflow_get_data_source_schema',
+    description: '读取指定数据源的字段摘要、候选目标和候选因子。',
+    inputSchema: {
+      dataSourceId: z.string().describe('会话内数据源 ID'),
+    },
+    handler: ({ dataSourceId }) => {
+      const item = (sessionRecord.request.dataSources ?? []).find((source) => source.id === dataSourceId)
+      if (!item) {
+        return buildToolResult({
+          found: false,
+          message: `未找到数据源: ${dataSourceId}`,
+        })
+      }
+
+      return buildToolResult({
+        found: true,
+        item,
+      })
+    },
+  },
+  {
     name: 'get_node_definition',
     description: '按节点类型读取单个节点定义。',
     inputSchema: {
@@ -160,6 +241,38 @@ const getWorkflowToolDefinitions = (
     },
   },
   {
+    name: 'workflow_search_nodes',
+    description: '按关键字搜索适合当前任务的工作流节点。',
+    inputSchema: {
+      query: z.string().optional().describe('节点搜索关键词，可为空'),
+    },
+    handler: ({ query }) => buildToolResult(workflowMcpRuntime.searchNodes(query ?? '')),
+  },
+  {
+    name: 'workflow_get_node',
+    description: '读取单个节点定义，可切换为说明文档、属性搜索或运行时要求模式。',
+    inputSchema: {
+      nodeType: z.string().describe('节点类型名称'),
+      mode: z.enum(['info', 'docs', 'search_properties', 'runtime_requirements']).optional(),
+      propertyQuery: z.string().optional().describe('属性搜索关键词'),
+      config: z.record(z.string(), z.unknown()).optional().describe('当前节点配置'),
+    },
+    handler: ({ nodeType, mode, propertyQuery, config }) =>
+      buildToolResult(workflowMcpRuntime.getNode(nodeType, mode, propertyQuery, config)),
+  },
+  {
+    name: 'workflow_get_node_options',
+    description: '解析节点某个属性的候选选项，支持依赖当前配置和上游样本。',
+    inputSchema: {
+      nodeType: z.string().describe('节点类型名称'),
+      propertyName: z.string().describe('属性路径'),
+      config: z.record(z.string(), z.unknown()).optional().describe('当前节点配置'),
+      upstreamSample: z.unknown().optional().describe('上游样本数据'),
+    },
+    handler: async ({ nodeType, propertyName, config, upstreamSample }) =>
+      buildToolResult(await workflowMcpRuntime.getNodeOptions(nodeType, propertyName, config, upstreamSample)),
+  },
+  {
     name: 'validate_workflow_plan',
     description: '校验工作流计划是否满足当前节点目录、现有画布上下文和连接规则。',
     inputSchema: {
@@ -178,13 +291,178 @@ const getWorkflowToolDefinitions = (
     },
   },
   {
+    name: 'workflow_create_workflow',
+    description: '创建一个空白工作流，供后续增量搭建。',
+    inputSchema: {
+      workflowId: z.string().optional().describe('工作流 ID，不传则自动生成'),
+      name: z.string().optional().describe('工作流名称'),
+    },
+    handler: async ({ workflowId, name }) =>
+      buildToolResult({
+        ok: true,
+        workflow: await workflowMcpRuntime.createWorkflow(context.userId, { workflowId, name }),
+      }),
+  },
+  {
+    name: 'workflow_get_workflow',
+    description: '按 ID 读取工作流，可返回完整结构、摘要结构或最小信息。',
+    inputSchema: {
+      workflowId: z.string().describe('工作流 ID'),
+      mode: z.enum(['full', 'structure', 'minimal']).optional(),
+    },
+    handler: async ({ workflowId, mode }) =>
+      buildToolResult(await workflowMcpRuntime.getWorkflow(context.userId, workflowId, mode)),
+  },
+  {
+    name: 'workflow_update_partial_workflow',
+    description: '按操作列表增量修改工作流，适合 AI 逐步搭建和调试。',
+    inputSchema: {
+      workflowId: z.string().describe('工作流 ID'),
+      operations: z.array(z.any()).describe('增量操作列表'),
+      summary: z.string().optional().describe('本次操作摘要'),
+      validateAfterApply: z.boolean().optional().describe('应用后是否自动校验'),
+    },
+    handler: async ({ workflowId, operations, summary, validateAfterApply }) =>
+      buildToolResult(
+        await workflowMcpRuntime.updatePartialWorkflow(
+          context.userId,
+          workflowId,
+          operations as WorkflowAiPlan['operations'],
+          summary,
+          validateAfterApply,
+        ),
+      ),
+  },
+  {
+    name: 'workflow_update_full_workflow',
+    description: '整包替换工作流内容，适合已有完整草案时一次性写入。',
+    inputSchema: {
+      workflow: z.object({
+        id: z.string(),
+        name: z.string(),
+        updatedAt: z.number().optional(),
+        nodes: z.array(z.record(z.string(), z.unknown())),
+        edges: z.array(z.record(z.string(), z.unknown())),
+      }),
+    },
+    handler: async ({ workflow }) =>
+      buildToolResult(
+        await workflowMcpRuntime.updateFullWorkflow(context.userId, {
+          ...workflow,
+          updatedAt: workflow.updatedAt ?? Date.now(),
+        }),
+      ),
+  },
+  {
+    name: 'workflow_validate_workflow',
+    description: '校验工作流结构，可传 workflowId 或直接传 workflowSnapshot。',
+    inputSchema: {
+      workflowId: z.string().optional().describe('已保存工作流 ID'),
+      workflowSnapshot: z.object({
+        name: z.string(),
+        nodes: z.array(z.record(z.string(), z.unknown())),
+        edges: z.array(z.record(z.string(), z.unknown())),
+      }).optional(),
+    },
+    handler: async ({ workflowId, workflowSnapshot }) =>
+      buildToolResult(await workflowMcpRuntime.validateWorkflow(context.userId, { workflowId, workflowSnapshot })),
+  },
+  {
+    name: 'workflow_debug_node',
+    description: '复用上游链路调试单个节点，并返回节点报错或结果摘要。',
+    inputSchema: {
+      workflowId: z.string().describe('工作流 ID'),
+      nodeId: z.string().describe('目标节点 ID'),
+      mode: z.enum(['reuse_cached_upstream', 'rerun_upstream']).optional(),
+      includeUpstreamTrace: z.boolean().optional().describe('是否返回上游执行轨迹'),
+    },
+    handler: async ({ workflowId, nodeId, mode, includeUpstreamTrace }) =>
+      buildToolResult(
+        await workflowMcpRuntime.debugNode(context.userId, sessionRecord.request, {
+          workflowId,
+          nodeId,
+          mode,
+          includeUpstreamTrace,
+        }),
+      ),
+  },
+  {
+    name: 'workflow_test_workflow',
+    description: '执行一次完整工作流并落历史记录，供 AI 读取结果和继续调试。',
+    inputSchema: {
+      workflowId: z.string().describe('工作流 ID'),
+    },
+    handler: async ({ workflowId }) =>
+      buildToolResult(await workflowMcpRuntime.testWorkflow(context.userId, sessionRecord.request, { workflowId })),
+  },
+  {
+    name: 'workflow_executions',
+    description: '查询历史执行记录、单节点结果或产物摘要。',
+    inputSchema: {
+      mode: z.enum(['list', 'get', 'node_result', 'artifacts']).optional(),
+      executionId: z.string().optional().describe('执行记录 ID'),
+      nodeId: z.string().optional().describe('节点 ID'),
+    },
+    handler: async ({ mode, executionId, nodeId }) =>
+      buildToolResult(await workflowMcpRuntime.executions(context.userId, { mode, executionId, nodeId })),
+  },
+  {
+    name: 'workflow_workflow_versions',
+    description: '查询、读取或回滚工作流版本历史。',
+    inputSchema: {
+      mode: z.enum(['list', 'get', 'rollback']).optional(),
+      workflowId: z.string().describe('工作流 ID'),
+      versionId: z.string().optional().describe('版本 ID'),
+    },
+    handler: async ({ mode, workflowId, versionId }) =>
+      buildToolResult(await workflowMcpRuntime.workflowVersions(context.userId, { mode, workflowId, versionId })),
+  },
+  {
+    name: 'execute_workflow_plan',
+    description: '使用会话内数据源绑定执行工作流计划，并生成可查询的执行结果。',
+    inputSchema: {
+      plan: planSchema.describe('待执行的工作流计划 JSON'),
+      bindings: z.record(z.string(), z.string()).describe('节点 ID 到数据源 ID 的绑定表'),
+    },
+    handler: async ({ plan, bindings }) => {
+      const execution = await executeWorkflowPlanForSession({
+        sessionId: context.sessionId,
+        request: sessionRecord.request,
+        plan: plan as WorkflowAiPlan,
+        bindings,
+      })
+
+      return buildToolResult({
+        ok: true,
+        executionId: execution.executionId,
+        status: execution.status,
+        finalResults: execution.finalResults,
+        error: execution.error ?? null,
+      })
+    },
+  },
+  {
+    name: 'get_execution_result',
+    description: '读取指定 executionId 的节点执行摘要和终止节点结果。',
+    inputSchema: {
+      executionId: z.string().describe('执行记录 ID'),
+    },
+    handler: ({ executionId }) => {
+      const execution = getAgentExecutionRecord(context.sessionId, executionId)
+      return buildToolResult({
+        found: Boolean(execution),
+        execution,
+      })
+    },
+  },
+  {
     name: 'get_saved_workflow',
     description: '按工作流 ID 读取当前用户已保存的工作流快照。',
     inputSchema: {
       workflowId: z.string().describe('工作流 ID'),
     },
-    handler: async ({ workflowId }) => {
-      const workflow = await getUserWorkflowById(context.userId, workflowId)
+    handler: ({ workflowId }) => {
+      const workflow = getUserWorkflowById(context.userId, workflowId)
       return buildToolResult({
         found: Boolean(workflow),
         workflow,
@@ -197,10 +475,10 @@ const getWorkflowToolDefinitions = (
     inputSchema: {
       workflowId: z.string().describe('工作流 ID'),
     },
-    handler: async ({ workflowId }) =>
+    handler: ({ workflowId }) =>
       buildToolResult({
         workflowId,
-        items: await getUserWorkflowVersions(context.userId, workflowId),
+        items: getUserWorkflowVersions(context.userId, workflowId),
       }),
   },
   {
@@ -210,11 +488,11 @@ const getWorkflowToolDefinitions = (
       workflowId: z.string().describe('工作流 ID'),
       versionId: z.string().describe('版本 ID'),
     },
-    handler: async ({ workflowId, versionId }) =>
+    handler: ({ workflowId, versionId }) =>
       buildToolResult({
         workflowId,
         versionId,
-        version: await getUserWorkflowVersion(context.userId, workflowId, versionId),
+        version: getUserWorkflowVersion(context.userId, workflowId, versionId),
       }),
   },
   {
@@ -224,11 +502,11 @@ const getWorkflowToolDefinitions = (
       workflowId: z.string().describe('工作流 ID'),
       versionId: z.string().describe('要回滚到的版本 ID'),
     },
-    handler: async ({ workflowId, versionId }) =>
+    handler: ({ workflowId, versionId }) =>
       buildToolResult({
         workflowId,
         versionId,
-        result: await rollbackUserWorkflowVersion(context.userId, workflowId, versionId),
+        result: rollbackUserWorkflowVersion(context.userId, workflowId, versionId),
       }),
   },
 ]

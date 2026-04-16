@@ -1,6 +1,6 @@
-import type { NodeResult } from './result'
-import type { NodeLibraryGroupId } from './libraryGroups'
-import type { NodeAssistantHints, NodeHelpDoc } from '@/help/types'
+import type { NodeResult } from './result.js'
+import type { NodeLibraryGroupId } from './libraryGroups.js'
+import type { NodeAssistantHints, NodeHelpDoc } from '../help/types.js'
 
 export type NodeCategory = 'trigger' | 'action' | 'terminal'
 export type NodeInputMode = 'single' | 'multiple'

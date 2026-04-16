@@ -1,5 +1,11 @@
 import { randomUUID } from 'node:crypto'
 import type {
+  AgentExecutionRecord,
+  AgentSessionDebugEvent,
+  AgentSessionDebugParseFailure,
+  AgentSessionDebugRawMessage,
+  AgentSessionDebugToolCall,
+  AgentSessionDebugTrace,
   AgentProjectionSnapshot,
   AgentSessionEvent,
   AgentSessionMessage,
@@ -12,6 +18,8 @@ export type AgentSessionRecord = {
   request: WorkflowAiPlanRequest
   projection: AgentProjectionSnapshot
   messages: AgentSessionMessage[]
+  executions: Map<string, AgentExecutionRecord>
+  debugTrace: AgentSessionDebugTrace
   userId?: string
   listeners: Set<(event: AgentSessionEvent) => void>
 }
@@ -22,6 +30,14 @@ let maxSessionsEvicted = 0
 
 const DEFAULT_AGENT_SESSION_TTL_MS = 30 * 60 * 1000
 const DEFAULT_AGENT_SESSION_MAX = 200
+const MAX_AGENT_DEBUG_ITEMS = 200
+
+const pushCapped = <T>(items: T[], nextItem: T, limit = MAX_AGENT_DEBUG_ITEMS) => {
+  items.push(nextItem)
+  if (items.length > limit) {
+    items.splice(0, items.length - limit)
+  }
+}
 
 const resolvePositiveInteger = (raw: string | undefined, fallback: number) => {
   const value = Number(raw)
@@ -95,6 +111,13 @@ export const createAgentSessionRecord = (input: {
     request: input.request,
     projection: input.projection,
     messages: [],
+    executions: new Map(),
+    debugTrace: {
+      events: [],
+      toolCalls: [],
+      rawMessages: [],
+      parseFailures: [],
+    },
     userId: input.userId,
     listeners: new Set(),
   }
@@ -124,6 +147,76 @@ export const updateAgentSessionRecord = (
 export const appendAgentSessionMessage = (sessionId: string, message: AgentSessionMessage) =>
   updateAgentSessionRecord(sessionId, (record) => {
     record.messages.push(message)
+  })
+
+export const createAgentExecutionRecord = (
+  sessionId: string,
+  input: Omit<AgentExecutionRecord, 'executionId' | 'createdAt'>,
+) => {
+  const executionId = randomUUID()
+  const createdAt = Date.now()
+  const execution: AgentExecutionRecord = {
+    executionId,
+    createdAt,
+    ...input,
+  }
+
+  const record = updateAgentSessionRecord(sessionId, (draft) => {
+    draft.executions.set(executionId, execution)
+  })
+
+  return record ? execution : null
+}
+
+export const getAgentExecutionRecord = (sessionId: string, executionId: string) =>
+  getAgentSessionRecord(sessionId)?.executions.get(executionId) ?? null
+
+export const getAgentSessionDebugTrace = (sessionId: string) =>
+  getAgentSessionRecord(sessionId)?.debugTrace ?? null
+
+export const appendAgentSessionDebugEvent = (
+  sessionId: string,
+  event: AgentSessionDebugEvent,
+) =>
+  updateAgentSessionRecord(sessionId, (record) => {
+    pushCapped(record.debugTrace.events, event)
+  })
+
+export const appendAgentSessionDebugToolCall = (
+  sessionId: string,
+  toolCall: AgentSessionDebugToolCall,
+) =>
+  updateAgentSessionRecord(sessionId, (record) => {
+    const existing = toolCall.toolCallId
+      ? record.debugTrace.toolCalls.find((item) => item.toolCallId === toolCall.toolCallId)
+      : null
+
+    if (existing) {
+      existing.status = toolCall.status
+      existing.timestamp = toolCall.timestamp
+      existing.payload = toolCall.payload
+      existing.title = toolCall.title ?? existing.title
+      existing.toolName = toolCall.toolName || existing.toolName
+      return
+    }
+
+    pushCapped(record.debugTrace.toolCalls, toolCall)
+  })
+
+export const appendAgentSessionDebugRawMessage = (
+  sessionId: string,
+  rawMessage: AgentSessionDebugRawMessage,
+) =>
+  updateAgentSessionRecord(sessionId, (record) => {
+    pushCapped(record.debugTrace.rawMessages, rawMessage)
+  })
+
+export const appendAgentSessionDebugParseFailure = (
+  sessionId: string,
+  parseFailure: AgentSessionDebugParseFailure,
+) =>
+  updateAgentSessionRecord(sessionId, (record) => {
+    pushCapped(record.debugTrace.parseFailures, parseFailure)
   })
 
 export const subscribeAgentSessionEvents = (

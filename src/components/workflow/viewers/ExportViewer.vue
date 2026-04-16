@@ -4,6 +4,7 @@ import { Download, CheckCircle } from 'lucide-vue-next'
 import { useToast } from 'primevue/usetoast'
 import { getResultFileInfo } from '../resultView'
 import { exportReportToHtmlFile } from '../reportHtmlExport'
+import type { ReportPayload } from './reportViewer/reportTypes'
 
 const props = defineProps<{
   data: any
@@ -11,11 +12,15 @@ const props = defineProps<{
 
 const toast = useToast()
 const fileInfo = computed(() => getResultFileInfo(props.data))
+const reportPayload = computed<ReportPayload | null>(() => {
+  const report = fileInfo.value?.report
+  return report && typeof report === 'object' ? (report as ReportPayload) : null
+})
 const isExporting = ref(false)
 const isOnDemandReport = computed(
   () =>
     String(fileInfo.value?.contentKind || '') === 'report-html' &&
-    !!fileInfo.value?.report,
+    !!reportPayload.value,
 )
 
 const handleDownload = async () => {
@@ -41,6 +46,17 @@ const handleDownload = async () => {
 
   isExporting.value = true
   const fallbackFilename = String(fileInfo.value?.filename || '分析报告.html')
+  const report = reportPayload.value
+  if (!report) {
+    isExporting.value = false
+    toast.add({
+      severity: 'error',
+      summary: '导出失败',
+      detail: '当前结果缺少可导出的报告内容。',
+      life: 3000,
+    })
+    return
+  }
   toast.add({
     severity: 'info',
     summary: '正在生成离线报告',
@@ -49,7 +65,7 @@ const handleDownload = async () => {
   })
 
   try {
-    await exportReportToHtmlFile(fileInfo.value.report, {
+    await exportReportToHtmlFile(report, {
       filename: fallbackFilename,
     })
     toast.add({

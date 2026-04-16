@@ -8,6 +8,7 @@ import * as z from 'zod/v4'
 import type {
   AgentProjectionSnapshot,
   AgentSessionEvent,
+  AgentSessionDebugRawMessage,
   AgentSessionMessage,
   AgentSessionMessageResponse,
   AgentSessionStartResponse,
@@ -32,7 +33,12 @@ import { resolveModelProfile } from '../workflowAi/profiles.js'
 import { getWorkflowAiSessionRecord } from '../workflowAi/orchestrator.js'
 import {
   appendAgentSessionMessage,
+  appendAgentSessionDebugEvent,
+  appendAgentSessionDebugParseFailure,
+  appendAgentSessionDebugRawMessage,
+  appendAgentSessionDebugToolCall,
   createAgentSessionRecord,
+  getAgentSessionDebugTrace as getAgentSessionDebugTraceFromStore,
   getAgentSessionRecord,
   publishAgentSessionEvent,
   subscribeAgentSessionEvents,
@@ -63,15 +69,36 @@ export type RunAnalysisAgentSessionLoopInput = {
 const WORKFLOW_MCP_NAME = 'workflow'
 const OPENCODE_TEMP_ROOT = join(tmpdir(), 'correlation-analysis-system', 'opencode-runtime')
 const OPENCODE_AGENT_REQUEST_TIMEOUT_MS = 45_000
+const OPENCODE_SERVER_START_TIMEOUT_MS = Number(process.env.OPENCODE_SERVER_START_TIMEOUT_MS || '20000')
+const ENABLE_AGENT_SESSION_DEBUG_STDOUT = process.env.AGENT_SESSION_DEBUG_STDOUT === '1'
 const WORKFLOW_MCP_TOOL_NAMES = [
   'get_analysis_session_context',
   'get_node_catalog',
   'get_node_definition',
+  'list_session_data_sources',
+  'get_data_source_schema',
   'validate_workflow_plan',
+  'execute_workflow_plan',
+  'get_execution_result',
   'get_saved_workflow',
   'list_workflow_versions',
   'get_workflow_version',
   'rollback_workflow_version',
+  'workflow_get_session_context',
+  'workflow_list_data_sources',
+  'workflow_get_data_source_schema',
+  'workflow_search_nodes',
+  'workflow_get_node',
+  'workflow_get_node_options',
+  'workflow_create_workflow',
+  'workflow_get_workflow',
+  'workflow_update_partial_workflow',
+  'workflow_update_full_workflow',
+  'workflow_validate_workflow',
+  'workflow_debug_node',
+  'workflow_test_workflow',
+  'workflow_executions',
+  'workflow_workflow_versions',
 ] as const
 
 const positionSchema = z.object({
@@ -305,14 +332,17 @@ const buildOpencodeConfig = (profile: WorkflowAiModelProfile) => {
   }
 }
 
-const buildWorkflowToolSelectionMap = (toolIds: string[]) =>
-  Object.fromEntries(
-    [
-      ...WORKFLOW_MCP_TOOL_NAMES,
-      ...WORKFLOW_MCP_TOOL_NAMES.map((toolName) => `${WORKFLOW_MCP_NAME}_${toolName}`),
-      ...toolIds.filter((toolId) => isWorkflowMcpToolId(toolId)),
-    ].map((toolId) => [toolId, true]),
+const buildWorkflowToolSelectionMap = (toolIds: string[]) => {
+  const allowedToolIds = new Set([
+    ...WORKFLOW_MCP_TOOL_NAMES,
+    ...WORKFLOW_MCP_TOOL_NAMES.map((toolName) => `${WORKFLOW_MCP_NAME}_${toolName}`),
+    ...toolIds.filter((toolId) => isWorkflowMcpToolId(toolId)),
+  ])
+
+  return Object.fromEntries(
+    toolIds.map((toolId) => [toolId, allowedToolIds.has(toolId)]),
   )
+}
 
 const isWorkflowMcpToolId = (toolId: string) =>
   toolId.startsWith(`${WORKFLOW_MCP_NAME}_`)
@@ -334,6 +364,107 @@ const extractMessageEntryText = (entry: any) =>
     .map((part: any) => part.text)
     .join('\n')
     .trim()
+
+const safeSerializeDebugPayload = (value: unknown) => {
+  try {
+    return JSON.parse(JSON.stringify(value)) as unknown
+  } catch {
+    return {
+      nonSerializable: true,
+      type: typeof value,
+    }
+  }
+}
+
+const writeAgentSessionDebugLine = (sessionId: string, category: string, payload: unknown) => {
+  if (!ENABLE_AGENT_SESSION_DEBUG_STDOUT) return
+  console.log(
+    JSON.stringify({
+      scope: 'agent-session-debug',
+      sessionId,
+      category,
+      payload: safeSerializeDebugPayload(payload),
+    }),
+  )
+}
+
+const appendDebugEvent = (
+  sessionId: string,
+  eventType: string,
+  summary: string,
+  payload?: unknown,
+) => {
+  const nextEvent = {
+    eventType,
+    summary,
+    timestamp: Date.now(),
+    ...(payload !== undefined ? { payload: safeSerializeDebugPayload(payload) } : {}),
+  }
+  appendAgentSessionDebugEvent(sessionId, nextEvent)
+  writeAgentSessionDebugLine(sessionId, 'event', nextEvent)
+}
+
+const appendDebugToolCall = (
+  sessionId: string,
+  input: {
+    toolCallId?: string
+    toolName: string
+    title?: string
+    status: 'started' | 'completed' | 'failed'
+    payload?: unknown
+  },
+) => {
+  const toolCall = {
+    ...input,
+    timestamp: Date.now(),
+    ...(input.payload !== undefined ? { payload: safeSerializeDebugPayload(input.payload) } : {}),
+  }
+  appendAgentSessionDebugToolCall(sessionId, toolCall)
+  writeAgentSessionDebugLine(sessionId, 'tool_call', toolCall)
+}
+
+const buildDebugRawMessage = (entry: any): AgentSessionDebugRawMessage => ({
+  messageId: entry?.info?.id || `assistant_${Date.now()}`,
+  role: typeof entry?.info?.role === 'string' ? entry.info.role : 'unknown',
+  ...(typeof entry?.info?.parentID === 'string' ? { parentId: entry.info.parentID } : {}),
+  timestamp:
+    entry?.info?.time?.completed
+    ?? entry?.info?.time?.created
+    ?? Date.now(),
+  ...(extractMessageEntryText(entry) ? { text: extractMessageEntryText(entry) } : {}),
+  ...(entry?.info?.structured !== undefined
+    ? { structured: safeSerializeDebugPayload(entry.info.structured) }
+    : {}),
+  parts: Array.isArray(entry?.parts)
+    ? entry.parts.map((part: unknown) => safeSerializeDebugPayload(part) as Record<string, unknown>)
+    : [],
+  ...(typeof entry?.info?.error?.name === 'string' ? { errorName: entry.info.error.name } : {}),
+  ...(typeof entry?.info?.error?.message === 'string' ? { errorMessage: entry.info.error.message } : {}),
+})
+
+const appendDebugRawMessage = (sessionId: string, entry: any) => {
+  const rawMessage = buildDebugRawMessage(entry)
+  appendAgentSessionDebugRawMessage(sessionId, rawMessage)
+  writeAgentSessionDebugLine(sessionId, 'raw_message', rawMessage)
+}
+
+const appendDebugParseFailure = (
+  sessionId: string,
+  input: {
+    messageId?: string
+    reason: string
+    rawText?: string
+    payload?: unknown
+  },
+) => {
+  const parseFailure = {
+    ...input,
+    timestamp: Date.now(),
+    ...(input.payload !== undefined ? { payload: safeSerializeDebugPayload(input.payload) } : {}),
+  }
+  appendAgentSessionDebugParseFailure(sessionId, parseFailure)
+  writeAgentSessionDebugLine(sessionId, 'parse_failure', parseFailure)
+}
 
 const parsePromptResponse = <T>(response: any, schema: z.ZodType<T>): T => {
   const structured = response?.data?.info?.structured
@@ -431,9 +562,9 @@ const buildPlanningSystemPrompt = () =>
   [
     '你是多因子相关性分析系统的自动分析代理。',
     '你当前运行在隔离的临时目录中，不要读取本地文件、不要执行 shell，也不要尝试编辑工作区。',
-    '你只能使用 workflow MCP 工具获取上下文、节点定义、已保存工作流与版本信息。',
-    `在输出最终计划前，必须至少调用 ${buildWorkflowToolAlias('get_analysis_session_context')}、${buildWorkflowToolAlias('get_node_catalog')}，并用 ${buildWorkflowToolAlias('validate_workflow_plan')} 校验最终计划。`,
-    `如需确认节点属性或连接约束，可调用 ${buildWorkflowToolAlias('get_node_definition')}。`,
+    '你只能使用 workflow MCP 工具获取上下文、节点定义、会话数据源、执行结果和版本信息。',
+    `在输出最终计划前，必须至少调用 ${buildWorkflowToolAlias('get_analysis_session_context')}、${buildWorkflowToolAlias('get_node_catalog')}，必要时调用 list_session_data_sources（或 workflow_list_data_sources）、get_data_source_schema（或 workflow_get_data_source_schema），并用 ${buildWorkflowToolAlias('validate_workflow_plan')} 校验最终计划。`,
+    `如需确认节点属性、候选节点或连接约束，可调用 ${buildWorkflowToolAlias('get_node_definition')}、workflow_search_nodes、workflow_get_node、workflow_get_node_options。`,
     '所有 summary、warnings、questions、nodeLabel 必须使用中文。',
     '默认优先输出最小可运行计划，不要堆砌多余节点。',
     '只返回符合 JSON Schema 的对象。',
@@ -762,6 +893,7 @@ const ensureAgentRuntime = async (record: AgentSessionRecord) => {
   const port = await findAvailablePort()
   const server = await createOpencodeServer({
     port,
+    timeout: OPENCODE_SERVER_START_TIMEOUT_MS,
     config: buildOpencodeConfig(resolvedProfile),
   })
 
@@ -787,6 +919,11 @@ const ensureAgentRuntime = async (record: AgentSessionRecord) => {
     title: `agent-session-${record.session.id}`,
     permission: [
       {
+        permission: '*',
+        pattern: '*',
+        action: 'deny',
+      },
+      {
         permission: `${WORKFLOW_MCP_NAME}_*`,
         pattern: '*',
         action: 'allow',
@@ -796,11 +933,6 @@ const ensureAgentRuntime = async (record: AgentSessionRecord) => {
         pattern: '*',
         action: 'allow' as const,
       })),
-      {
-        permission: '*',
-        pattern: '*',
-        action: 'deny',
-      },
     ],
   })
 
@@ -840,9 +972,17 @@ const finalizeAgentRun = async (
       limit: 50,
     })
     const entries = Array.isArray(response?.data) ? response.data : []
+    entries.forEach((entry: any) => {
+      appendDebugRawMessage(sessionId, entry)
+    })
     const assistantEntry = resolveAssistantMessageEntry(entries, userMessageId)
 
     if (!assistantEntry) {
+      appendDebugParseFailure(sessionId, {
+        messageId: userMessageId,
+        reason: '未找到 assistant entry',
+        payload: entries,
+      })
       updateSessionProjection(
         sessionId,
         (projection) => ({
@@ -854,7 +994,7 @@ const finalizeAgentRun = async (
       return
     }
 
-    const structured = parseAssistantMessageEntry(record, assistantEntry)
+    const structured = parseAssistantMessageEntry(sessionId, record, assistantEntry)
     const assistantContent = resolveAssistantMessageText(structured)
     const assistantMessage: AgentSessionMessage = {
       id: assistantEntry.info?.id || `assistant_${Date.now()}`,
@@ -914,12 +1054,69 @@ const startAgentEventPump = async (sessionId: string, runtime: AgentSessionRunti
   const subscription = await subscribeToOpencodeEvents(runtime.client)
   const task = (async () => {
     for await (const event of subscription.stream) {
+      appendDebugEvent(
+        sessionId,
+        String(event?.type ?? 'unknown'),
+        `收到 opencode 事件 ${String(event?.type ?? 'unknown')}`,
+        event,
+      )
+
       if (event?.type === 'permission.asked' && event.properties?.sessionID === runtime.sessionID) {
         await runtime.client.permission.reply({
           requestID: event.properties.id,
           reply: 'once',
         })
         continue
+      }
+
+      if (
+        typeof event?.type === 'string'
+        && event.type.startsWith('tool.call.')
+        && event.properties?.sessionID === runtime.sessionID
+      ) {
+        const toolName =
+          typeof event.properties?.toolID === 'string'
+            ? event.properties.toolID
+            : typeof event.properties?.toolName === 'string'
+              ? event.properties.toolName
+              : 'unknown_tool'
+        appendDebugToolCall(sessionId, {
+          toolCallId:
+            typeof event.properties?.toolCallID === 'string' ? event.properties.toolCallID : undefined,
+          toolName,
+          title: typeof event.properties?.title === 'string' ? event.properties.title : undefined,
+          status:
+            event.type === 'tool.call.started'
+              ? 'started'
+              : event.type === 'tool.call.completed'
+                ? 'completed'
+                : 'failed',
+          payload: event.properties,
+        })
+        continue
+      }
+
+      if (
+        event?.type === 'message.part.updated'
+        && event.properties?.part?.type === 'tool'
+        && (
+          event.properties?.part?.sessionID === runtime.sessionID
+          || event.properties?.sessionID === runtime.sessionID
+        )
+      ) {
+        const part = event.properties.part
+        appendDebugToolCall(sessionId, {
+          toolCallId: typeof part.callID === 'string' ? part.callID : undefined,
+          toolName: typeof part.tool === 'string' ? part.tool : 'unknown_tool',
+          title: typeof part.state?.title === 'string' ? part.state.title : undefined,
+          status:
+            part.state?.status === 'completed'
+              ? 'completed'
+              : part.state?.status === 'error'
+                ? 'failed'
+                : 'started',
+          payload: part,
+        })
       }
 
       if (event?.type === 'message.part.updated' && event.properties?.part?.type === 'text') {
@@ -953,17 +1150,33 @@ const startAgentEventPump = async (sessionId: string, runtime: AgentSessionRunti
 }
 
 const parseAssistantMessageEntry = (
+  sessionId: string,
   record: AgentSessionRecord,
   entry: any,
 ): AgentStructuredResponse => {
   const structured = entry?.info?.structured
   if (structured !== undefined) {
-    return normalizeStructuredResponse(record, parseAgentStructuredResponsePayload(structured))
+    try {
+      return normalizeStructuredResponse(record, parseAgentStructuredResponsePayload(structured))
+    } catch (error) {
+      appendDebugParseFailure(sessionId, {
+        messageId: entry?.info?.id,
+        reason: error instanceof Error ? error.message : 'structured payload parse failed',
+        payload: structured,
+      })
+      throw error
+    }
   }
 
   const text = extractMessageEntryText(entry)
   if (!text) {
-    throw new Error(getAssistantEntryFailureMessage(entry) || 'Opencode 未返回可解析的助手消息')
+    const reason = getAssistantEntryFailureMessage(entry) || 'Opencode 未返回可解析的助手消息'
+    appendDebugParseFailure(sessionId, {
+      messageId: entry?.info?.id,
+      reason,
+      payload: entry,
+    })
+    throw new Error(reason)
   }
 
   try {
@@ -971,7 +1184,13 @@ const parseAssistantMessageEntry = (
       record,
       parseAgentStructuredResponsePayload(JSON.parse(extractJsonObject(stripCodeFence(text)))),
     )
-  } catch {
+  } catch (error) {
+    appendDebugParseFailure(sessionId, {
+      messageId: entry?.info?.id,
+      reason: error instanceof Error ? error.message : 'assistant text parse failed',
+      rawText: text,
+      payload: entry,
+    })
     const messageError = getMessageEntryError(entry)
     if (messageError?.name === 'StructuredOutputError') {
       return normalizeStructuredResponse(record, {
@@ -1044,6 +1263,9 @@ export const getAgentSession = (sessionId: string) => {
 }
 
 export const getAgentProjection = (sessionId: string) => getAgentSessionRecord(sessionId)?.projection ?? null
+
+export const getAgentSessionDebugTrace = (sessionId: string) =>
+  getAgentSessionDebugTraceFromStore(sessionId)
 
 export const subscribeToAgentSessionEvents = subscribeAgentSessionEvents
 
@@ -1216,6 +1438,7 @@ export const runAnalysisAgentSessionLoop = async (
   const port = await findAvailablePort()
   const server = await createOpencodeServer({
     port,
+    timeout: OPENCODE_SERVER_START_TIMEOUT_MS,
     config: buildOpencodeConfig(resolvedProfile),
   })
 
@@ -1245,6 +1468,11 @@ export const runAnalysisAgentSessionLoop = async (
       title: `workflow-analysis-${input.sessionId}`,
       permission: [
         {
+          permission: '*',
+          pattern: '*',
+          action: 'deny',
+        },
+        {
           permission: `${WORKFLOW_MCP_NAME}_*`,
           pattern: '*',
           action: 'allow',
@@ -1254,11 +1482,6 @@ export const runAnalysisAgentSessionLoop = async (
           pattern: '*',
           action: 'allow' as const,
         })),
-        {
-          permission: '*',
-          pattern: '*',
-          action: 'deny',
-        },
       ],
     })
     const opencodeSessionID = session.data?.id

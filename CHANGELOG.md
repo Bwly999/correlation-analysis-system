@@ -2,6 +2,32 @@
 
 ## [2026-04-16]
 
+### 新增 (Feat)
+
+- **补齐 workflow MCP 的节点发现、工作流搭建与调试工具链**:
+  - 新增 `workflowMcpRuntime` 与 `planExecution`，支持节点搜索、节点属性选项解析、增量/整包工作流写入、单节点调试、完整执行记录查询与基于会话数据源的计划执行。
+  - `workflowMcpServer` 扩展 `workflow_*` 工具集合，并补充执行结果、tool trace、raw message 与 parse failure 调试留痕，便于追踪模型是否真实调用 MCP。
+  - 服务端安全节点目录补充 `data-merge` 等关键节点元数据，支持 MCP 侧节点搜索、运行时要求检查与属性选项探索。
+
+### 修复 (Fix)
+
+- **修复 opencode agent 与 workflow MCP 的服务端构建阻塞问题**:
+  - `workflowMcpRuntime` 改为依赖服务端安全节点目录，避免将整套前端节点定义卷入 `type-check:server` / `build:server` 的 NodeNext 编译。
+  - 修正 gateway 的 workflow MCP 权限放行顺序，并为 `createOpencodeServer` 显式增加启动超时，降低 Windows 环境下的本地 `opencode serve` 启动超时风险。
+  - 修复离线 HTML 报告导出、结果面板测试与导出 viewer 的类型问题，恢复 `pnpm build` 全链路通过。
+
+### 测试 (Test)
+
+- **补充 workflow MCP 与服务端安全节点目录回归测试**:
+  - 新增节点目录静态选项、上游字段推导与 `data-merge` 暴露断言。
+  - 覆盖 workflow MCP 节点发现、节点属性选项解析、单节点调试与 gateway 启动参数回归场景。
+
+### 文档 (Docs)
+
+- **新增 workflow MCP 评测题集并同步系统文档**:
+  - 新增 `docs/evaluations/workflow-mcp-evaluation.xml` 作为 MCP 能力评测题库。
+  - 同步更新 `工作流系统.md` 中的 workflow MCP 能力说明与调试链路描述。
+
 ### 优化 (Improve)
 
 - **优化树形字段与参数面板的嵌套滚动体验**:

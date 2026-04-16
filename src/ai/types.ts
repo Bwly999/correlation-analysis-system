@@ -112,6 +112,16 @@ export interface WorkflowAiContextHints {
   userAnswers?: WorkflowAiContextUserAnswer[]
 }
 
+export interface WorkflowAiDataSourceDescriptor {
+  id: string
+  kind: 'file' | 'kanban-recording'
+  entryNodeType: 'file-import' | 'neighbor-system'
+  label: string
+  sourceMeta?: Record<string, unknown>
+  schemaSummary: WorkflowAiContextSchemaSummary
+  bindingPayload: Record<string, unknown>
+}
+
 export interface WorkflowAiToolTraceItem {
   id?: string
   toolName: string
@@ -332,6 +342,49 @@ export interface AgentSessionState {
   updatedAt: number
 }
 
+export interface AgentSessionDebugEvent {
+  eventType: string
+  summary: string
+  timestamp: number
+  payload?: unknown
+}
+
+export interface AgentSessionDebugToolCall {
+  toolCallId?: string
+  toolName: string
+  title?: string
+  status: 'started' | 'completed' | 'failed'
+  timestamp: number
+  payload?: unknown
+}
+
+export interface AgentSessionDebugRawMessage {
+  messageId: string
+  role: string
+  parentId?: string
+  timestamp: number
+  text?: string
+  structured?: unknown
+  parts: Array<Record<string, unknown>>
+  errorName?: string
+  errorMessage?: string
+}
+
+export interface AgentSessionDebugParseFailure {
+  messageId?: string
+  reason: string
+  timestamp: number
+  rawText?: string
+  payload?: unknown
+}
+
+export interface AgentSessionDebugTrace {
+  events: AgentSessionDebugEvent[]
+  toolCalls: AgentSessionDebugToolCall[]
+  rawMessages: AgentSessionDebugRawMessage[]
+  parseFailures: AgentSessionDebugParseFailure[]
+}
+
 export type AgentSessionEvent =
   | {
       type: 'session.status.updated'
@@ -506,8 +559,27 @@ export interface AgentExecutionResult {
   success: boolean
   resultKind: string | null
   resultSummary: string
+  result?: unknown
   rowCount?: number
   sampleRows?: Record<string, unknown>[]
+  error?: string
+}
+
+export interface AgentExecutionFinalResult {
+  nodeId: string
+  nodeLabel: string
+  resultKind: string
+  result: unknown
+}
+
+export interface AgentExecutionRecord {
+  executionId: string
+  planSummary: string
+  status: 'completed' | 'failed'
+  bindings: Record<string, string>
+  nodeResults: AgentExecutionResult[]
+  finalResults: AgentExecutionFinalResult[]
+  createdAt: number
   error?: string
 }
 
@@ -677,6 +749,7 @@ export interface WorkflowAiPlanRequest {
     edges: unknown[]
   }
   contextHints?: WorkflowAiContextHints
+  dataSources?: WorkflowAiDataSourceDescriptor[]
   profile: WorkflowAiModelProfile
   nodeCatalog: WorkflowAiNodeCatalogItem[]
 }
