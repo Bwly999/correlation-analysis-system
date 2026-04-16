@@ -68,6 +68,7 @@ export interface NodeProperty {
   forceInput?: boolean
   filterable?: boolean
   singleSelect?: boolean
+  treeViewport?: 'sm' | 'md' | 'lg'
   allowRegexSearch?: boolean
   autoSelectAllOnOptionsChange?: boolean
   filterPlaceholder?: string

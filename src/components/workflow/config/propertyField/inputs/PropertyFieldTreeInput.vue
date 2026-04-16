@@ -221,6 +221,16 @@ const {
 
 const treeRef = ref<TreeV2Expose | null>(null)
 
+const TREE_VIEWPORT_HEIGHT_CLASS_MAP = {
+  sm: 'max-h-[220px]',
+  md: 'max-h-[300px]',
+  lg: 'max-h-[360px]',
+} as const
+
+const treeViewportClass = computed(
+  () => TREE_VIEWPORT_HEIGHT_CLASS_MAP[props.prop.treeViewport || 'lg'],
+)
+
 const orderedLeafKeys = computed(() => collectLeafKeys(normalizedTreeOptions.value as TreeNode[]))
 const visibleFilteredLeafKeys = computed(() => collectLeafKeys(filteredTreeOptions.value as TreeNode[]))
 
@@ -367,6 +377,60 @@ const treeSelectionValue = computed<TreeSelectionKeys | undefined>({
 const treeSearchMessage = computed(() => searchErrorMessage.value || regexErrorMessage.value)
 const regexToggleTitle = computed(() => (regexEnabled.value ? '已开启正则搜索' : '开启正则搜索'))
 
+const isScrollable = (element: HTMLElement) => element.scrollHeight > element.clientHeight
+
+const clampScrollTop = (element: HTMLElement, nextScrollTop: number) => {
+  const maxScrollTop = Math.max(0, element.scrollHeight - element.clientHeight)
+  return Math.min(Math.max(nextScrollTop, 0), maxScrollTop)
+}
+
+const findNearestScrollableAncestor = (element: HTMLElement | null) => {
+  let current = element?.parentElement ?? null
+
+  while (current) {
+    if (isScrollable(current)) {
+      return current
+    }
+    current = current.parentElement
+  }
+
+  return null
+}
+
+const scrollElementBy = (element: HTMLElement, deltaY: number) => {
+  const nextScrollTop = clampScrollTop(element, element.scrollTop + deltaY)
+  const consumedDelta = nextScrollTop - element.scrollTop
+  element.scrollTop = nextScrollTop
+  return consumedDelta
+}
+
+const handleTreeWheel = (event: WheelEvent) => {
+  const treeViewport = event.currentTarget as HTMLElement | null
+
+  if (!treeViewport) return
+
+  const outerScrollableContainer = findNearestScrollableAncestor(treeViewport)
+
+  if (!isScrollable(treeViewport)) {
+    if (!outerScrollableContainer) return
+    event.preventDefault()
+    scrollElementBy(outerScrollableContainer, event.deltaY)
+    return
+  }
+
+  const consumedDelta = scrollElementBy(treeViewport, event.deltaY)
+  const remainingDelta = event.deltaY - consumedDelta
+
+  if (consumedDelta !== 0) {
+    event.preventDefault()
+  }
+
+  if (remainingDelta === 0 || !outerScrollableContainer) return
+
+  event.preventDefault()
+  scrollElementBy(outerScrollableContainer, remainingDelta)
+}
+
 </script>
 
 <template>
@@ -459,8 +523,10 @@ const regexToggleTitle = computed(() => (regexEnabled.value ? '已开启正则�
         check-on-click-node
         :check-strictly="false"
         highlight-current
-        class="ndv-tree max-h-[360px] overflow-auto"
+        class="ndv-tree overflow-auto overscroll-contain"
+        :class="treeViewportClass"
         :props="{ value: 'key', label: 'label', children: 'children' }"
+        @wheel="handleTreeWheel"
         @check="handleTreeCheck"
         @node-expand="handleTreeExpand"
         @node-collapse="handleTreeCollapse"

@@ -148,6 +148,7 @@ export const neighborSystemNode: NodeDefinition = {
       type: 'tree',
       required: true,
       default: {},
+      treeViewport: 'sm',
       singleSelect: true,
       filterable: true,
       placeholder: '搜索场景 / 子场景',

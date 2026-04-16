@@ -64,6 +64,35 @@ const mountTreeInput = () =>
     },
   })
 
+const setElementScrollMetrics = (
+  element: Element,
+  metrics: {
+    clientHeight: number
+    scrollHeight: number
+    scrollTop?: number
+    clientWidth?: number
+    scrollWidth?: number
+    scrollLeft?: number
+  },
+) => {
+  Object.defineProperties(element, {
+    clientHeight: { configurable: true, value: metrics.clientHeight },
+    scrollHeight: { configurable: true, value: metrics.scrollHeight },
+    scrollTop: {
+      configurable: true,
+      writable: true,
+      value: metrics.scrollTop ?? 0,
+    },
+    clientWidth: { configurable: true, value: metrics.clientWidth ?? 0 },
+    scrollWidth: { configurable: true, value: metrics.scrollWidth ?? 0 },
+    scrollLeft: {
+      configurable: true,
+      writable: true,
+      value: metrics.scrollLeft ?? 0,
+    },
+  })
+}
+
 describe('PropertyFieldTreeInput', () => {
   it('singleSelect 时将非叶子节点标记为不可选', () => {
     const wrapper = mount(PropertyFieldTreeInput, {
@@ -654,5 +683,164 @@ describe('PropertyFieldTreeInput', () => {
     await nextTick()
 
     expect(setExpandedKeys).toHaveBeenLastCalledWith([])
+  })
+
+  it('treeViewport 为 sm 时使用更紧凑的树高度', () => {
+    const wrapper = mount(PropertyFieldTreeInput, {
+      props: {
+        modelValue: {},
+        prop: createTreeProp({ treeViewport: 'sm' }),
+        options: treeOptions,
+        isOptionsLoading: false,
+        optionsError: '',
+      },
+      global: {
+        stubs: {
+          InputText: createInputTextStub,
+          ElTreeV2: createTreeV2Stub(),
+        },
+      },
+    })
+
+    expect(wrapper.get('[data-testid="tree-v2-stub"]').classes()).toContain('max-h-[220px]')
+    expect(wrapper.get('[data-testid="tree-v2-stub"]').classes()).not.toContain('max-h-[360px]')
+  })
+
+  it('tree 可滚动且未到边界时，滚轮只驱动 tree 自身滚动', async () => {
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    setElementScrollMetrics(host, {
+      clientHeight: 400,
+      scrollHeight: 1000,
+      scrollTop: 120,
+    })
+
+    const wrapper = mount(PropertyFieldTreeInput, {
+      attachTo: host,
+      props: {
+        modelValue: {},
+        prop: createTreeProp(),
+        options: treeOptions,
+        isOptionsLoading: false,
+        optionsError: '',
+      },
+      global: {
+        stubs: {
+          InputText: createInputTextStub,
+          ElTreeV2: createTreeV2Stub(),
+        },
+      },
+    })
+
+    const treeViewport = wrapper.get('[data-testid="tree-v2-stub"]').element
+    setElementScrollMetrics(treeViewport, {
+      clientHeight: 180,
+      scrollHeight: 540,
+      scrollTop: 40,
+    })
+
+    treeViewport.dispatchEvent(new WheelEvent('wheel', {
+      deltaY: 60,
+      bubbles: true,
+      cancelable: true,
+    }))
+
+    expect((treeViewport as HTMLElement).scrollTop).toBe(100)
+    expect(host.scrollTop).toBe(120)
+
+    wrapper.unmount()
+    host.remove()
+  })
+
+  it('tree 不可滚动时，滚轮会直接交给外层滚动容器', async () => {
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    setElementScrollMetrics(host, {
+      clientHeight: 400,
+      scrollHeight: 1000,
+      scrollTop: 120,
+    })
+
+    const wrapper = mount(PropertyFieldTreeInput, {
+      attachTo: host,
+      props: {
+        modelValue: {},
+        prop: createTreeProp(),
+        options: treeOptions,
+        isOptionsLoading: false,
+        optionsError: '',
+      },
+      global: {
+        stubs: {
+          InputText: createInputTextStub,
+          ElTreeV2: createTreeV2Stub(),
+        },
+      },
+    })
+
+    const treeViewport = wrapper.get('[data-testid="tree-v2-stub"]').element
+    setElementScrollMetrics(treeViewport, {
+      clientHeight: 180,
+      scrollHeight: 180,
+      scrollTop: 0,
+    })
+
+    treeViewport.dispatchEvent(new WheelEvent('wheel', {
+      deltaY: 60,
+      bubbles: true,
+      cancelable: true,
+    }))
+
+    expect((treeViewport as HTMLElement).scrollTop).toBe(0)
+    expect(host.scrollTop).toBe(180)
+
+    wrapper.unmount()
+    host.remove()
+  })
+
+  it('tree 滚到底后继续向下滚时，会把滚动交给外层容器', async () => {
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    setElementScrollMetrics(host, {
+      clientHeight: 400,
+      scrollHeight: 1000,
+      scrollTop: 120,
+    })
+
+    const wrapper = mount(PropertyFieldTreeInput, {
+      attachTo: host,
+      props: {
+        modelValue: {},
+        prop: createTreeProp(),
+        options: treeOptions,
+        isOptionsLoading: false,
+        optionsError: '',
+      },
+      global: {
+        stubs: {
+          InputText: createInputTextStub,
+          ElTreeV2: createTreeV2Stub(),
+        },
+      },
+    })
+
+    const treeViewport = wrapper.get('[data-testid="tree-v2-stub"]').element
+    setElementScrollMetrics(treeViewport, {
+      clientHeight: 180,
+      scrollHeight: 540,
+      scrollTop: 360,
+    })
+
+    treeViewport.dispatchEvent(new WheelEvent('wheel', {
+      deltaY: 60,
+      bubbles: true,
+      cancelable: true,
+    }))
+
+    expect((treeViewport as HTMLElement).scrollTop).toBe(360)
+    expect(host.scrollTop).toBe(180)
+
+    wrapper.unmount()
+    host.remove()
   })
 })

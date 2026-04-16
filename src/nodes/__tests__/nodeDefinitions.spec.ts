@@ -147,19 +147,18 @@ describe('Node Definitions Execution Logic', () => {
   })
 
   it('should expose readable Chinese labels for the board integration node', () => {
+    const sceneSelection = neighborSystemNode.properties.find((property) => property.name === 'sceneSelection')
+    const selectedFactors = neighborSystemNode.properties.find((property) => property.name === 'selectedFactors')
+
     expect(neighborSystemNode.displayName).toBe('看板数据对接')
     expect(
       neighborSystemNode.properties.find((property) => property.name === 'productName')
         ?.displayName,
     ).toBe('产品名称')
-    expect(
-      neighborSystemNode.properties.find((property) => property.name === 'sceneSelection')
-        ?.displayName,
-    ).toBe('场景选择')
-    expect(
-      neighborSystemNode.properties.find((property) => property.name === 'selectedFactors')
-        ?.displayName,
-    ).toBe('因子全集')
+    expect(sceneSelection?.displayName).toBe('场景选择')
+    expect(sceneSelection?.treeViewport).toBe('sm')
+    expect(selectedFactors?.displayName).toBe('因子全集')
+    expect(selectedFactors?.treeViewport).toBeUndefined()
     expect(
       neighborSystemNode.properties.find((property) => property.name === 'selectedProcesses')
         ?.displayName,
