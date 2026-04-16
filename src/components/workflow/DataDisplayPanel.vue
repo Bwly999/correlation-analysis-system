@@ -2,17 +2,11 @@
 import { computed, defineAsyncComponent } from 'vue'
 import { Maximize, Zap, FileJson, Pin } from 'lucide-vue-next'
 import ToggleSwitch from 'primevue/toggleswitch'
+import StructuredDataPreview from './StructuredDataPreview.vue'
 import {
-  getResultChartOption,
-  getResultFileInfo,
-  getResultGroups,
-  getResultKindLabel,
-  getResultPreviewSummary,
-  getResultReport,
-  getResultRows,
-  getResultSchemaFields,
-  normalizeWorkflowResult,
-} from './resultView'
+  DEFAULT_STRUCTURED_PREVIEW_OPTIONS,
+  createStructuredPreview,
+} from './previewSerialization'
 
 const MonacoEditor = defineAsyncComponent(() => import('./MonacoEditor.vue'))
 
@@ -32,107 +26,18 @@ const emit = defineEmits<{
   generateMock: []
 }>()
 
-const normalizedResult = computed(() => normalizeWorkflowResult(props.data))
-
-const smartPreview = computed(() => {
-  if (!props.data) return '暂无数据可用。'
-
-  if (normalizedResult.value?.kind === 'table') {
-    const rows = getResultRows(normalizedResult.value)
-    const fields = getResultSchemaFields(normalizedResult.value).map((field) => field.name)
-    return [
-      `// ${getResultKindLabel(normalizedResult.value)}`,
-      `// ${getResultPreviewSummary(normalizedResult.value)}`,
-      fields.length > 0 ? `// 字段：${fields.join(', ')}` : '',
-      '',
-      JSON.stringify(rows.slice(0, 5), null, 2),
-      rows.length > 5 ? '\n// ... 已截断更多行' : '',
-    ]
-      .filter(Boolean)
-      .join('\n')
-  }
-
-  if (normalizedResult.value?.kind === 'tableCollection') {
-    const groups = getResultGroups(normalizedResult.value)
-    const summary = groups
-      .map((group) => `  - ${group.name}: ${group.data.length} 行`)
-      .join('\n')
-    const previewGroups = groups.map((group) => ({
-      name: group.name,
-      data: group.data.slice(0, 2),
-      rowCount: group.data.length,
-    }))
-
-    return [
-      `// ${getResultKindLabel(normalizedResult.value)}`,
-      `// ${getResultPreviewSummary(normalizedResult.value)}`,
-      summary,
-      '',
-      JSON.stringify(previewGroups, null, 2),
-      groups.some((group) => group.data.length > 2) ? '\n// ... 已截断更多分组样本' : '',
-    ]
-      .filter(Boolean)
-      .join('\n')
-  }
-
-  if (normalizedResult.value?.kind === 'report') {
-    const report = getResultReport(normalizedResult.value)
-    return JSON.stringify(
-      {
-        kind: normalizedResult.value.kind,
-        title: report?.title,
-        summary: getResultPreviewSummary(normalizedResult.value),
-        sections: Array.isArray(report?.sections)
-          ? report.sections.map((section: any) => ({
-              type: section.type,
-              title: section.title,
-            }))
-          : [],
-      },
-      null,
-      2,
-    )
-  }
-
-  if (normalizedResult.value?.kind === 'chart') {
-    const option = getResultChartOption(normalizedResult.value)
-    return JSON.stringify(
-      {
-        kind: normalizedResult.value.kind,
-        summary: getResultPreviewSummary(normalizedResult.value),
-        chartKeys: option ? Object.keys(option) : [],
-      },
-      null,
-      2,
-    )
-  }
-
-  if (normalizedResult.value?.kind === 'file') {
-    const fileInfo = getResultFileInfo(normalizedResult.value)
-    return JSON.stringify(
-      {
-        kind: normalizedResult.value.kind,
-        filename: fileInfo?.filename,
-        format: fileInfo?.format,
-        summary: getResultPreviewSummary(normalizedResult.value),
-      },
-      null,
-      2,
-    )
-  }
-
-  const legacyRows = getResultRows(props.data)
-  const legacyGroups = getResultGroups(props.data)
-  if (legacyRows.length > 0) {
-    return `// 表格预览\n${JSON.stringify(legacyRows.slice(0, 5), null, 2)}`
-  }
-  if (legacyGroups.length > 0) {
-    return `// 分组集合预览\n${JSON.stringify(legacyGroups.slice(0, 3), null, 2)}`
-  }
-
-  const str = JSON.stringify(props.data, null, 2)
-  return str.length > 1200 ? `${str.slice(0, 1200)}\n\n// ... 已截断` : str
-})
+const structuredPreview = computed(() =>
+  createStructuredPreview(props.data, {
+    ...DEFAULT_STRUCTURED_PREVIEW_OPTIONS,
+    maxRows: 3,
+    maxColumns: 8,
+    maxStringLength: 20,
+    maxGroups: 3,
+    maxGroupRows: 2,
+    maxObjectEntries: 6,
+    maxTextLength: 2400,
+  }),
+)
 </script>
 
 <template>
@@ -172,7 +77,12 @@ const smartPreview = computed(() => {
         v-if="!useManualInput"
         class="h-full overflow-y-auto p-4 font-mono text-[11px] text-slate-600 custom-scrollbar"
       >
-        <pre class="whitespace-pre-wrap break-all leading-relaxed">{{ smartPreview }}</pre>
+        <StructuredDataPreview
+          :preview="structuredPreview"
+          :text-max-length="2400"
+          prefix="data-preview"
+          allow-text-toggle
+        />
       </div>
 
       <div v-else class="h-full flex flex-col p-2 min-h-0">

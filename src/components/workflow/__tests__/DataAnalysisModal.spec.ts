@@ -10,7 +10,7 @@ vi.mock('../viewers/registry', () => ({
   workflowViewerRegistry: {
     'json-viewer': {
       props: ['data'],
-      template: '<div class="json-viewer-stub">{{ JSON.stringify(data) }}</div>',
+      template: '<div class="json-viewer-stub">json-viewer</div>',
     },
     'report-viewer': defineAsyncComponent(
       () =>
@@ -69,7 +69,7 @@ describe('DataAnalysisModal', () => {
     expect(wrapper.get('.report-viewer-stub').text()).toContain('延迟报告')
   })
 
-  it('shows truncated json preview instead of full oversized payload', () => {
+  it('shows truncated json preview instead of full oversized payload', async () => {
     const data = createJsonResult({
       rows: Array.from({ length: 25 }, (_, index) => ({
         id: index,
@@ -99,10 +99,15 @@ describe('DataAnalysisModal', () => {
       },
     })
 
-    const previewText = wrapper.get('pre').text()
-    expect(previewText).toContain('__truncated')
-    expect(previewText).toContain('__omittedItems')
-    expect(previewText).not.toContain('z'.repeat(260))
+    const sidebarText = wrapper.get('.structured-preview').text()
+    expect(wrapper.get('[data-test="analysis-preview-summary"]').text()).toContain('JSON 数据')
+    expect(sidebarText).not.toContain('z'.repeat(260))
+
+    await wrapper.get('[data-test="analysis-preview-toggle-text"]').trigger('click')
+
+    const previewText = wrapper.get('[data-test="analysis-preview-text"]').text()
+    expect(previewText).toContain('__truncatedString')
+    expect(previewText).toContain('已截断')
   })
 
   it('shows report summary preview instead of the full report items', () => {
@@ -145,11 +150,10 @@ describe('DataAnalysisModal', () => {
       },
     })
 
-    const previewText = wrapper.get('pre').text()
-    expect(previewText).toContain('sectionCount')
-    expect(previewText).toContain('itemCount')
-    expect(previewText).toContain('sampleCount')
-    expect(previewText).not.toContain('values')
+    const sidebarText = wrapper.get('.structured-preview').text()
+    expect(wrapper.get('[data-test="analysis-preview-summary"]').text()).toContain('分析报告')
+    expect(sidebarText).toContain('分节数')
+    expect(sidebarText).not.toContain('values')
   })
 
   it('shows a guarded fallback preview for oversized plain json objects', () => {
@@ -185,13 +189,54 @@ describe('DataAnalysisModal', () => {
       },
     })
 
-    const previewText = wrapper.get('pre').text()
-    expect(previewText).toContain('budgetExceeded')
-    expect(previewText).toContain('__previewTruncated')
-    expect(previewText).not.toContain('field_4999')
+    const sidebarText = wrapper.get('.structured-preview').text()
+    expect(wrapper.get('[data-test="analysis-preview-summary"]').text()).toContain('JSON 数据')
+    expect(sidebarText).toContain('已截断')
+    expect(sidebarText).not.toContain('field_4999')
   })
 
-  it('does not dump oversized report meta blocks into the preview text', () => {
+  it('renders a structured sidebar preview for wide tables without dumping tail columns', () => {
+    const rows = Array.from({ length: 8 }, (_, rowIndex) =>
+      Object.fromEntries(
+        Array.from({ length: 18 }, (_, colIndex) => [
+          `field_${colIndex}`,
+          colIndex === 0 ? `row-${rowIndex}` : `value-${rowIndex}-${colIndex}-${'x'.repeat(30)}`,
+        ]),
+      ),
+    )
+
+    const wrapper = mount(DataAnalysisModal, {
+      props: {
+        visible: true,
+        title: '宽表结果',
+        data: createJsonResult(rows),
+      },
+      global: {
+        stubs: {
+          Dialog: {
+            props: ['visible'],
+            template: '<div class="dialog-stub"><slot name="header" /><slot /></div>',
+          },
+          InputNumber: {
+            props: ['modelValue'],
+            emits: ['update:modelValue'],
+            template: '<input class="input-number-stub" :value="modelValue" />',
+          },
+          DataChart: true,
+        },
+      },
+    })
+
+    expect(wrapper.get('[data-test="analysis-preview-summary"]').text()).toContain('表格数据')
+    expect(wrapper.get('[data-test="analysis-preview-omitted-columns"]').text()).toContain('已省略')
+    expect(wrapper.find('[data-test="analysis-preview-text"]').exists()).toBe(false)
+    const sidebarText = wrapper.get('.structured-preview').text()
+    expect(sidebarText).not.toContain('field_17')
+    expect(sidebarText).not.toContain('x'.repeat(20))
+    expect(wrapper.find('pre').exists()).toBe(false)
+  })
+
+  it('does not dump oversized report meta blocks into the preview text', async () => {
     const data = createReportResult(
       {
         title: 'Pearson 结果',
@@ -238,9 +283,13 @@ describe('DataAnalysisModal', () => {
       },
     })
 
-    const previewText = wrapper.get('pre').text()
-    expect(previewText).toContain('budgetExceeded')
-    expect(previewText).not.toContain('f399-target')
+    const sidebarText = wrapper.get('.structured-preview').text()
+    expect(wrapper.get('[data-test="analysis-preview-summary"]').text()).toContain('分析报告')
+    expect(sidebarText).not.toContain('f399-target')
+
+    await wrapper.get('[data-test="analysis-preview-toggle-text"]').trigger('click')
+    const previewText = wrapper.get('[data-test="analysis-preview-text"]').text()
+    expect(previewText).toContain('已截断')
   })
 
   it('passes appendTo through to the underlying dialog', () => {

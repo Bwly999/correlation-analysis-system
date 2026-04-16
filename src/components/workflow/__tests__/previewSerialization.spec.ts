@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { createJsonResult, createReportResult } from '@/nodes/result'
 import {
   DEFAULT_PREVIEW_SERIALIZE_OPTIONS,
+  createStructuredPreview,
   createSafeJsonPreview,
+  stringifyStructuredPreview,
   stringifySafePreview,
 } from '../previewSerialization'
 
@@ -114,5 +116,64 @@ describe('previewSerialization', () => {
     expect(json).toContain('"__reason": "budgetExceeded"')
     expect(json).toContain('"__previewTruncated": true')
     expect(json).not.toContain('field_4999')
+  })
+
+  it('creates a structured table preview with column and cell truncation', () => {
+    const rows = Array.from({ length: 6 }, (_, rowIndex) =>
+      Object.fromEntries(
+        Array.from({ length: 14 }, (_, colIndex) => [
+          `field_${colIndex}`,
+          colIndex === 0 ? `row-${rowIndex}` : `value-${rowIndex}-${colIndex}-${'x'.repeat(40)}`,
+        ]),
+      ),
+    )
+    const data = createJsonResult(rows)
+
+    const preview = createStructuredPreview(data, {
+      maxRows: 3,
+      maxColumns: 5,
+      maxStringLength: 24,
+      maxGroups: 2,
+      maxGroupRows: 2,
+      maxObjectEntries: 6,
+      maxTextLength: 400,
+    })
+
+    expect(preview.kind).toBe('table')
+    expect(preview.summary.rowCount).toBe(6)
+    expect(preview.summary.columnCount).toBe(14)
+    expect(preview.summary.omittedRowCount).toBe(3)
+    expect(preview.summary.omittedColumnCount).toBe(9)
+    expect(preview.columns).toEqual(['field_0', 'field_1', 'field_2', 'field_3', 'field_4'])
+    expect(preview.rows).toHaveLength(3)
+    expect(preview.rows[0]?.field_1).toContain('...')
+    expect(preview.rows[0]?.field_1).not.toContain('x'.repeat(20))
+  })
+
+  it('stringifies structured previews within the final text budget', () => {
+    const preview = createStructuredPreview(
+      createJsonResult({
+        detail: 'y'.repeat(2000),
+        nested: {
+          text: 'z'.repeat(2000),
+        },
+      }),
+      {
+        maxRows: 3,
+        maxColumns: 5,
+        maxStringLength: 40,
+        maxGroups: 2,
+        maxGroupRows: 2,
+        maxObjectEntries: 6,
+        maxTextLength: 220,
+      },
+    )
+
+    const text = stringifyStructuredPreview(preview, 220)
+
+    expect(text.length).toBeLessThanOrEqual(240)
+    expect(text).toContain('已截断')
+    expect(text).not.toContain('y'.repeat(120))
+    expect(text).not.toContain('z'.repeat(120))
   })
 })

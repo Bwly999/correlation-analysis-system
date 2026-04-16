@@ -5,7 +5,8 @@ import Dialog from 'primevue/dialog'
 import InputNumber from 'primevue/inputnumber'
 import { X, BarChart3, Database, Download, FileJson, Layers, ChevronRight, PanelLeftClose, PanelLeftOpen } from 'lucide-vue-next'
 import DataChart from './DataChart.vue'
-import { createSafeJsonPreview, stringifySafePreview } from './previewSerialization'
+import StructuredDataPreview from './StructuredDataPreview.vue'
+import { DEFAULT_STRUCTURED_PREVIEW_OPTIONS, createStructuredPreview } from './previewSerialization'
 import { workflowViewerRegistry } from './viewers/registry'
 import {
   getResultGroups,
@@ -24,7 +25,7 @@ const props = defineProps<{
 
 const emit = defineEmits(['close'])
 
-const previewLimit = ref(10)
+const previewLimit = ref(3)
 const sidebarCollapsed = useLocalStorage('data-analysis-modal:sidebar-collapsed', false)
 
 const normalizedResult = computed(() => normalizeWorkflowResult(props.data))
@@ -36,39 +37,6 @@ const activeViewer = computed(() => {
 
 const normalizedRows = computed(() => getResultRows(props.data))
 const normalizedGroups = computed(() => getResultGroups(props.data))
-
-const previewJson = computed(() => {
-  if (normalizedResult.value?.kind === 'table') {
-    return {
-      kind: normalizedResult.value.kind,
-      schema: normalizedResult.value.schema,
-      meta: normalizedResult.value.meta,
-      payload: normalizedRows.value.slice(0, previewLimit.value),
-    }
-  }
-
-  if (normalizedResult.value?.kind === 'tableCollection') {
-    return {
-      kind: normalizedResult.value.kind,
-      meta: normalizedResult.value.meta,
-      payload: normalizedGroups.value.map((group) => ({
-        name: group.name,
-        data: group.data.slice(0, Math.max(1, Math.min(3, previewLimit.value))),
-        rowCount: group.data.length,
-      })),
-    }
-  }
-
-  if (normalizedResult.value) {
-    return createSafeJsonPreview(normalizedResult.value)
-  }
-
-  if (Array.isArray(props.data)) {
-    return props.data.slice(0, previewLimit.value)
-  }
-
-  return createSafeJsonPreview(props.data)
-})
 
 const previewCount = computed(() => {
   if (normalizedResult.value?.kind === 'table') return normalizedRows.value.length
@@ -86,7 +54,18 @@ const fallbackChartData = computed(() => {
 })
 
 const viewLabel = computed(() => getResultKindLabel(props.data))
-const previewText = computed(() => stringifySafePreview(previewJson.value))
+const structuredPreview = computed(() =>
+  createStructuredPreview(props.data, {
+    ...DEFAULT_STRUCTURED_PREVIEW_OPTIONS,
+    maxRows: Math.min(3, previewLimit.value),
+    maxColumns: 12,
+    maxStringLength: 18,
+    maxGroups: 4,
+    maxGroupRows: Math.max(1, Math.min(3, previewLimit.value)),
+    maxObjectEntries: 8,
+    maxTextLength: 3600,
+  }),
+)
 
 const exportData = () => {
   const blob = new Blob([JSON.stringify(props.data, null, 2)], { type: 'application/json' })
@@ -204,7 +183,7 @@ const exportData = () => {
                 <InputNumber
                   v-model="previewLimit"
                   :min="1"
-                  :max="100"
+                  :max="3"
                   class="preview-limit-input"
                   :use-grouping="false"
                 />
@@ -221,7 +200,12 @@ const exportData = () => {
           <div
             class="flex-1 overflow-auto p-5 font-mono text-[11px] leading-relaxed text-slate-600 custom-scrollbar bg-[#fafafa]"
           >
-            <pre>{{ previewText }}</pre>
+            <StructuredDataPreview
+              :preview="structuredPreview"
+              :text-max-length="3600"
+              prefix="analysis-preview"
+              allow-text-toggle
+            />
           </div>
           <div
             v-if="previewCount > 0"
