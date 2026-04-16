@@ -173,7 +173,9 @@ describe('DataChart', () => {
     expect(option.yAxis.name).toBe('标准分值')
   })
 
-  it('does not show normalization controls for grouped boxplot charts', () => {
+  it('shows normalization controls for grouped boxplot charts', () => {
+    localStorage.clear()
+
     const wrapper = mount(DataChart, {
       props: {
         data: [
@@ -183,8 +185,57 @@ describe('DataChart', () => {
       },
     })
 
-    expect(wrapper.find('[data-test="chart-view-mode-raw"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="chart-view-mode-raw"]').exists()).toBe(true)
     expect(wrapper.find('[data-test="chart-normalization-method-min-max"]').exists()).toBe(false)
+  })
+
+  it('normalizes single-table boxplot data with min-max scaling', async () => {
+    localStorage.clear()
+
+    const wrapper = mount(DataChart, {
+      props: {
+        data: [
+          { score: 1, cost: 10 },
+          { score: 2, cost: 12 },
+          { score: 3, cost: 14 },
+        ],
+      },
+    })
+
+    await wrapper.get('[data-test="chart-type-select"]').setValue('boxplot')
+    await wrapper.get('[data-test="chart-key-select"]').setValue(['score'])
+    await wrapper.get('[data-test="chart-view-mode-normalized"]').trigger('click')
+
+    const option = getChartOption(wrapper)
+
+    expect(option.yAxis.name).toBe('归一化值')
+    expect(option.yAxis.min).toBe(0)
+    expect(option.yAxis.max).toBe(1)
+    expect(option.series[0].data).toEqual([[0, 0, 0.5, 1, 1]])
+  })
+
+  it('normalizes grouped boxplot data with min-max scaling', async () => {
+    localStorage.clear()
+
+    const wrapper = mount(DataChart, {
+      props: {
+        data: [
+          { name: 'A', data: [{ score: 1 }, { score: 2 }, { score: 3 }] },
+          { name: 'B', data: [{ score: 4 }, { score: 5 }, { score: 6 }] },
+        ],
+      },
+    })
+
+    await wrapper.get('[data-test="chart-key-select"]').setValue(['score'])
+    await wrapper.get('[data-test="chart-view-mode-normalized"]').trigger('click')
+
+    const option = getChartOption(wrapper)
+
+    expect(option.yAxis.name).toBe('归一化值')
+    expect(option.yAxis.min).toBe(0)
+    expect(option.yAxis.max).toBe(1)
+    expect(option.series[0].data).toEqual([[0, 0, 0.2, 0.4, 0.4]])
+    expect(option.series[1].data).toEqual([[0.6, 0.6, 0.8, 1, 1]])
   })
 
   it('uses the richer grouped boxplot presentation style', async () => {

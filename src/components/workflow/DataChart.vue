@@ -33,6 +33,7 @@ import { calculateBoxValues } from '@/utils/stats'
 import {
   buildNormalizationStats,
   isFiniteNumber,
+  normalizeChartRows,
   normalizeSeriesValue,
   type ChartRow,
   type NormalizationMethod,
@@ -290,11 +291,19 @@ const normalizedKeys = computed(() =>
   selectedKeys.value.length > 0 ? selectedKeys.value : availableKeys.value.slice(0, 1),
 )
 
-const supportsNormalization = computed(() => !isGroupedData.value && chartType.value === 'line')
+const normalizationSourceRows = computed(() => {
+  if (isGroupedData.value) {
+    return (filteredData.value as ChartGroup[]).flatMap((group) => group.data ?? [])
+  }
+
+  return filteredData.value as ChartRow[]
+})
+
+const supportsNormalization = computed(() => normalizedKeys.value.length > 0)
 
 const normalizationStats = computed(() => {
   if (!supportsNormalization.value) return buildNormalizationStats([], [])
-  return buildNormalizationStats(filteredData.value as ChartRow[], normalizedKeys.value)
+  return buildNormalizationStats(normalizationSourceRows.value, normalizedKeys.value)
 })
 
 const isNormalizedView = computed(
@@ -502,6 +511,19 @@ const createBoxplotBaseOption = (keys: string[]): Record<string, any> => ({
     series: [] as Array<Record<string, unknown>>,
   })
 
+const applyNormalizationAxis = (axis: Record<string, any>) => {
+  if (!isNormalizedView.value) {
+    axis.name = undefined
+    axis.min = undefined
+    axis.max = undefined
+    return
+  }
+
+  axis.name = normalizationMethod.value === 'min-max' ? '归一化值' : '标准分值'
+  axis.min = normalizationMethod.value === 'min-max' ? 0 : undefined
+  axis.max = normalizationMethod.value === 'min-max' ? 1 : undefined
+}
+
 const chartOption = computed(() => {
   const sourceData = filteredData.value || []
   const keys = normalizedKeys.value
@@ -558,13 +580,21 @@ const chartOption = computed(() => {
 
   if (isGroupedData.value) {
     Object.assign(option, createBoxplotBaseOption(keys))
+    applyNormalizationAxis(option.yAxis)
+    const normalizedGroups = isNormalizedView.value
+      ? (sourceData as ChartGroup[]).map((group) => ({
+          ...group,
+          data: normalizeChartRows(group.data ?? [], keys, normalizationStats.value, normalizationMethod.value),
+        }))
+      : (sourceData as ChartGroup[])
     option.series = (sourceData as ChartGroup[]).map((group, index) => {
       const color = BOX_PLOT_COLORS[index % BOX_PLOT_COLORS.length]!
+      const activeGroup = normalizedGroups[index] ?? group
 
       return {
         name: group.name,
         type: 'boxplot',
-        data: keys.map((key) => calculateBoxValues(group.data || [], key)),
+        data: keys.map((key) => calculateBoxValues(activeGroup.data || [], key)),
         itemStyle: {
           color: toRgba(color, 0.2),
           borderColor: color,
@@ -580,11 +610,15 @@ const chartOption = computed(() => {
     })
   } else if (chartType.value === 'boxplot') {
     Object.assign(option, createBoxplotBaseOption(keys))
+    applyNormalizationAxis(option.yAxis)
+    const boxplotRows = isNormalizedView.value
+      ? normalizeChartRows(sourceData as ChartRow[], keys, normalizationStats.value, normalizationMethod.value)
+      : (sourceData as ChartRow[])
     option.series = [
       {
         name: '数据分布',
         type: 'boxplot',
-        data: keys.map((key) => calculateBoxValues(sourceData as ChartRow[], key)),
+        data: keys.map((key) => calculateBoxValues(boxplotRows, key)),
         itemStyle: {
           color: toRgba(BOX_PLOT_COLORS[0]!, 0.18),
           borderColor: BOX_PLOT_COLORS[0],
@@ -643,15 +677,7 @@ const chartOption = computed(() => {
 
       return lines.join('<br/>')
     }
-    if (isNormalizedView.value) {
-      option.yAxis.name = activeNormalizationMethod === 'min-max' ? '归一化值' : '标准分值'
-      option.yAxis.min = activeNormalizationMethod === 'min-max' ? 0 : undefined
-      option.yAxis.max = activeNormalizationMethod === 'min-max' ? 1 : undefined
-    } else {
-      option.yAxis.name = undefined
-      option.yAxis.min = undefined
-      option.yAxis.max = undefined
-    }
+    applyNormalizationAxis(option.yAxis)
     option.series = keys.map((key) => ({
       name: key,
       type: 'line',

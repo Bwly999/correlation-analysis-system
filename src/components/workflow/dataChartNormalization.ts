@@ -2,7 +2,7 @@ export type ChartRow = Record<string, unknown>
 
 export type NormalizationMethod = 'min-max' | 'z-score'
 
-type SeriesStats = {
+export type SeriesStats = {
   min: number
   max: number
   mean: number
@@ -53,3 +53,19 @@ export const normalizeSeriesValue = (
   if (stats.std === 0) return 0
   return (value - stats.mean) / stats.std
 }
+
+export const normalizeChartRows = (
+  rows: ChartRow[],
+  keys: string[],
+  stats: Map<string, SeriesStats>,
+  method: NormalizationMethod,
+) =>
+  rows.map((row) => {
+    const normalizedRow: ChartRow = { ...row }
+
+    keys.forEach((key) => {
+      normalizedRow[key] = normalizeSeriesValue(row[key], stats.get(key), method)
+    })
+
+    return normalizedRow
+  })
