@@ -131,6 +131,7 @@ archive.glob('**/*', {
     '.DS_Store',
     '.eslintcache',
     '*.timestamp-*-*.mjs',
+    '.workflow-storage/**',
     `${PROJECT_NAME}*.zip`,
   ],
   dot: true, // 包含 .git 等点开头的文件/目录
