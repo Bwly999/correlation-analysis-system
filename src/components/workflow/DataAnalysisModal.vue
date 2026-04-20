@@ -217,27 +217,6 @@ const exportData = () => {
             <Layers :size="12" class="text-slate-400" />
           </div>
         </div>
-
-        <div
-          class="bg-slate-900 rounded-2xl p-5 text-slate-100 shadow-xl shadow-slate-200/50 relative overflow-hidden group border border-slate-800"
-        >
-          <div class="relative z-10">
-            <div class="flex items-center gap-2 mb-2 opacity-80">
-              <BarChart3 :size="12" class="text-slate-300" />
-              <h4 class="text-[10px] font-black uppercase tracking-widest text-slate-300">
-                系统提示
-              </h4>
-            </div>
-            <p class="text-[11px] leading-relaxed font-medium text-slate-300">
-              系统会优先根据 `NodeResult.preview.viewer` 自动选择最合适的结果查看器。
-            </p>
-          </div>
-          <div
-            class="absolute -right-4 -bottom-4 opacity-[0.03] group-hover:scale-110 transition-transform duration-700 pointer-events-none"
-          >
-            <BarChart3 :size="80" class="text-white" />
-          </div>
-        </div>
       </div>
 
       <div
