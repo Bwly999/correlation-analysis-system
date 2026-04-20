@@ -319,6 +319,24 @@ describe('DataChart', () => {
     expect(options).toEqual(['score', 'temperature'])
   })
 
+  it('discovers numeric factors from all table rows when the first row is null', () => {
+    const wrapper = mount(DataChart, {
+      props: {
+        data: [
+          { score: null, temperature: 10, note: 'cold' },
+          { score: 2, temperature: 12, note: 'warm' },
+        ],
+      },
+    })
+
+    const options = wrapper
+      .get('[data-test="chart-key-select"]')
+      .findAll('option')
+      .map((option) => option.text())
+
+    expect(options).toEqual(['score', 'temperature'])
+  })
+
   it('saves presets locally, applies them, and restores default preset on remount', async () => {
     localStorage.clear()
 

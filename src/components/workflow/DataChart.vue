@@ -39,6 +39,7 @@ import {
   type NormalizationMethod,
 } from './dataChartNormalization'
 import { getCommonNumericFieldsFromGroups } from './groupedResultSchema'
+import { inferSchemaFromRows } from '@/nodes/result'
 
 use([
   CanvasRenderer,
@@ -248,9 +249,9 @@ const availableKeys = computed(() => {
     return getCommonNumericFieldsFromGroups(props.data as ChartGroup[])
   }
 
-  return Object.keys((props.data as ChartRow[])[0] ?? {}).filter(
-    (key) => typeof (props.data as ChartRow[])[0]?.[key] === 'number',
-  )
+  return (inferSchemaFromRows(props.data as ChartRow[]).fields ?? [])
+    .filter((field) => field.type === 'number')
+    .map((field) => field.name)
 })
 
 watch(
