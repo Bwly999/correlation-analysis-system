@@ -15,6 +15,7 @@ import {
   Pin,
   PinOff,
   Square,
+  Eye,
 } from 'lucide-vue-next'
 import { useWorkflowStore, type PendingConnectionState } from '@/stores/workflowStore'
 import { getNodeDefinition } from '@/nodes/registry'
@@ -104,6 +105,12 @@ const openConfig = () => {
   store.addLog(`打开配置: ${currentLabel.value}`, 'info', props.id)
 }
 
+const openPreview = () => {
+  if (!currentNode.value?.data.output) return
+  store.setActivePreviewNodeId(props.id)
+  store.addLog(`打开结果预览: ${currentLabel.value}`, 'info', props.id)
+}
+
 const duplicateNode = () => {
   store.duplicateNode(props.id)
 }
@@ -152,6 +159,8 @@ const isCurrentNodeDebugRunning = computed(
     && store.activeExecutionScope === 'single'
     && store.activeExecutionNodeId === props.id,
 )
+
+const hasPreviewResult = computed(() => currentNode.value?.data.output != null)
 </script>
 
 <template>
@@ -313,6 +322,15 @@ const isCurrentNodeDebugRunning = computed(
         @click.stop="store.stopExecution()"
       >
         <Square :size="14" fill="currentColor" />
+      </button>
+      <button
+        v-tooltip.top="hasPreviewResult ? '结果预览' : '暂无节点结果'"
+        data-testid="preview-node-button"
+        :disabled="!hasPreviewResult"
+        class="p-1.5 hover:bg-blue-50 rounded-lg text-blue-600 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+        @click.stop="openPreview"
+      >
+        <Eye :size="14" />
       </button>
       <button
         v-tooltip.top="isPinned ? '取消冻结数据' : '冻结当前数据 (Pin)'"

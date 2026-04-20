@@ -11,6 +11,7 @@ import AgentWorkspace from '../agent/AgentWorkspace.vue'
 import BaseNode from './nodes/BaseNode.vue'
 import LogPanel from './LogPanel.vue'
 import NodeConfigModal from './NodeConfigModal.vue'
+import DataAnalysisModal from './DataAnalysisModal.vue'
 import RuntimeInputModal from './RuntimeInputModal.vue'
 import WorkflowResultDashboardModal from './WorkflowResultDashboardModal.vue'
 import WorkflowManagerModal from './WorkflowManagerModal.vue'
@@ -252,6 +253,14 @@ const resultDashboardModal = ref<{
 }>({
   visible: false,
   summary: null,
+})
+
+const activePreviewNode = computed(() =>
+  store.nodes.find((node) => node.id === store.activePreviewNodeId) ?? null,
+)
+const activePreviewTitle = computed(() => {
+  if (!activePreviewNode.value) return ''
+  return `${activePreviewNode.value.data.label} · 结果预览`
 })
 
 const openWorkflowList = async (initialTab = '0') => {
@@ -627,6 +636,12 @@ onBeforeUnmount(() => {
       :visible="isConfigVisible"
       :node-id="store.activeConfigNodeId"
       @close="isConfigVisible = false"
+    />
+    <DataAnalysisModal
+      :visible="!!activePreviewNode"
+      :title="activePreviewTitle"
+      :data="activePreviewNode?.data.output ?? null"
+      @close="store.setActivePreviewNodeId(null)"
     />
     <RuntimeInputModal
       :visible="!!store.pendingExecution"

@@ -91,6 +91,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
   const pendingConnection = ref<PendingConnectionState>(null)
 
   const activeConfigNodeId = ref<string | null>(null)
+  const activePreviewNodeId = ref<string | null>(null)
   const pendingExecution = ref<
     {
       nodeId: string
@@ -457,6 +458,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     pendingConnection.value = null
     pendingExecution.value = null
     activeConfigNodeId.value = null
+    activePreviewNodeId.value = null
     clearWorkflowVersionState()
     addLog(`已从模板创建工作流: ${template.name}`, 'info')
     needsViewReset.value = true
@@ -1181,6 +1183,10 @@ export const useWorkflowStore = defineStore('workflow', () => {
     activeConfigNodeId.value = nodeId
   }
 
+  const setActivePreviewNodeId = (nodeId: string | null) => {
+    activePreviewNodeId.value = nodeId
+  }
+
   const isValueValid = (value: any, type: string) => {
     if (value === undefined || value === null) return false
     if (typeof value === 'string') return value.trim().length > 0
@@ -1820,6 +1826,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     needsViewReset,
     pendingConnection,
     activeConfigNodeId,
+    activePreviewNodeId,
     pendingExecution,
     lastExecutedTerminalNodeId,
     lastRunDashboard,
@@ -1870,6 +1877,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     clearWorkflowVersionState,
     setPendingConnection,
     setActiveConfigNodeId,
+    setActivePreviewNodeId,
     markWorkflowAsExplicitlyUnsaved,
     createEditableSnapshot,
     restoreEditableSnapshot,

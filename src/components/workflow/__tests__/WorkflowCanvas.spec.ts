@@ -62,6 +62,18 @@ const agentWorkspaceStub = defineComponent({
   template: '<div class="agent-workspace-stub" :data-visible="visible"></div>',
 })
 
+const dataAnalysisModalStub = defineComponent({
+  name: 'DataAnalysisModal',
+  props: {
+    visible: Boolean,
+    title: String,
+    data: null,
+  },
+  emits: ['close'],
+  template:
+    '<div class="data-analysis-modal-stub" :data-visible="String(visible)">{{ title }}</div>',
+})
+
 vi.mock('../WorkflowAiPanel.vue', () => ({
   default: {
     name: 'WorkflowAiPanel',
@@ -369,6 +381,70 @@ describe('WorkflowCanvas', () => {
     await wrapper.vm.$nextTick()
 
     expect(cancelSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows a standalone result preview dialog for the active preview node', async () => {
+    const store = useWorkflowStore()
+    store.nodes = [
+      {
+        id: 'node_1',
+        type: 'custom',
+        position: { x: 0, y: 0 },
+        label: 'Pearson 分析',
+        data: {
+          label: 'Pearson 分析',
+          type: 'pearson',
+          category: 'terminal',
+          status: 'success',
+          config: {},
+          logs: [],
+          useManualInput: false,
+          manualInput: '',
+          isPinned: false,
+          output: {
+            kind: 'report',
+            payload: {
+              summary: '完成',
+              sections: [],
+            },
+          },
+        },
+      } as any,
+    ]
+
+    const wrapper = mount(WorkflowCanvas, {
+      global: {
+        stubs: {
+          Background: { template: '<div />' },
+          Controls: { template: '<div />' },
+          NodeSidebar: { template: '<div />' },
+          WorkflowHeader: { template: '<div />' },
+          BaseNode: { template: '<div />' },
+          LogPanel: { template: '<div />' },
+          NodeConfigModal: { template: '<div />' },
+          DataAnalysisModal: dataAnalysisModalStub,
+          RuntimeInputModal: runtimeInputModalStub,
+          WorkflowResultDashboardModal: { template: '<div />' },
+          WorkflowManagerModal: workflowManagerModalStub,
+          UnsavedWorkflowDialog: { template: '<div />' },
+          HelpCenterModal: { template: '<div />' },
+          ConfirmDialog: { template: '<div />' },
+          Toast: toastStub,
+          Button: { template: '<button><slot /></button>' },
+          N8nEdge: { template: '<div />' },
+        },
+        directives: {
+          tooltip: () => undefined,
+        },
+      },
+    })
+
+    store.activePreviewNodeId = 'node_1'
+    await flushAsyncWork()
+
+    const modal = wrapper.get('.data-analysis-modal-stub')
+    expect(modal.attributes('data-visible')).toBe('true')
+    expect(modal.text()).toContain('Pearson 分析')
   })
 
   it('opens the result dashboard when a run dashboard summary is published', async () => {
