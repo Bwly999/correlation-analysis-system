@@ -590,7 +590,7 @@ describe('remaining nodes standardized result protocol', () => {
     expect(pearson.payload.sections?.[1]?.controls?.toggle?.modelKey).toBe('showHeatmapLabels')
     expect(pearson.payload.sections?.[2]?.controls?.select?.options).toEqual(['target'])
     expect(pearson.payload.sections?.[2]?.option?.yAxis?.data).toEqual(['f1'])
-    expect(pearson.payload.sections?.[2]?.option?.series?.[0]?.data).toEqual([{ value: 1, itemStyle: { color: '#2563eb' } }])
+    expect(pearson.payload.sections?.[2]?.option?.series?.[0]?.data).toEqual([{ value: 1, itemStyle: { color: '#991b1b' } }])
     expect(pearson.payload.sections?.[3]?.title).toBe('结果可信提示')
     expect(pearson.payload.sections?.[3]?.type).toBe('risk-list')
     expect(Array.isArray(pearson.meta?.risks)).toBe(true)

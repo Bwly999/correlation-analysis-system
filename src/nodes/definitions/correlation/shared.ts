@@ -51,6 +51,15 @@ type CorrelationMethodMeta = {
 export type CorrelationMethod = 'pearson' | 'spearman' | 'kendall'
 
 const EPSILON = 1e-12
+const CORRELATION_NEGATIVE_COLOR = '#60a5fa'
+const CORRELATION_POSITIVE_COLOR = '#991b1b'
+const CORRELATION_HEATMAP_COLOR_SCALE = [
+  '#0f172a',
+  CORRELATION_NEGATIVE_COLOR,
+  '#f8fafc',
+  '#fca5a5',
+  CORRELATION_POSITIVE_COLOR,
+]
 
 const methodMeta: Record<CorrelationMethod, CorrelationMethodMeta> = {
   pearson: {
@@ -507,7 +516,8 @@ const buildRankingOption = (
       data: rankingRows.map((item) => ({
         value: item.correlation,
         itemStyle: {
-          color: item.correlation >= 0 ? '#2563eb' : '#ef4444',
+          color:
+            item.correlation >= 0 ? CORRELATION_POSITIVE_COLOR : CORRELATION_NEGATIVE_COLOR,
         },
       })),
       label: {
@@ -806,7 +816,7 @@ export const executeCorrelationAnalysis = async (
       top: 8,
       bottom: 'auto',
       inRange: {
-        color: ['#0f172a', '#60a5fa', '#f8fafc', '#fca5a5', '#991b1b'],
+        color: CORRELATION_HEATMAP_COLOR_SCALE,
       },
     },
     series: [
