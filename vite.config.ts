@@ -1,5 +1,4 @@
-import { resolve } from 'node:path'
-import { fileURLToPath, pathToFileURL, URL } from 'node:url'
+import { fileURLToPath, URL } from 'node:url'
 
 import { defineConfig } from 'vite'
 import type { Plugin } from 'vite'
@@ -27,20 +26,20 @@ const isVueEcosystemModule = (id: string) =>
 
 const workflowAiDevMiddleware = (): Plugin => {
   let handlerPromise: Promise<(request: any, response: any) => Promise<void>> | null = null
-  const serverAppUrl = pathToFileURL(resolve(process.cwd(), 'src/server/app.ts')).href
-
-  const getHandler = async () => {
-    if (!handlerPromise) {
-      handlerPromise = import(/* @vite-ignore */ serverAppUrl)
-        .then(({ createServerHandler }) => createServerHandler())
-    }
-    return handlerPromise
-  }
 
   return {
     name: 'workflow-ai-dev-middleware',
     apply: 'serve',
     configureServer(server) {
+      const getHandler = async () => {
+        if (!handlerPromise) {
+          handlerPromise = server
+            .ssrLoadModule('/src/server/app.ts')
+            .then(({ createServerHandler }) => createServerHandler())
+        }
+        return handlerPromise
+      }
+
       server.middlewares.use((request, response, next) => {
         if (!request.url?.startsWith('/api/')) {
           next()

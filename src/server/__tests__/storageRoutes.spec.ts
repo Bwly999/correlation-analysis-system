@@ -499,6 +499,33 @@ describe('storage routes', () => {
     expect(JSON.parse(response.body)).toEqual({ detail: '目标字段不存在' })
   })
 
+  it('should surface a clear error when the python analysis backend is unreachable', async () => {
+    vi.stubEnv('PYTHON_ANALYSIS_API_BASE_URL', 'http://127.0.0.1:9000')
+    const fetchMock = vi.fn().mockRejectedValue(new TypeError('fetch failed'))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const handler = createServerHandler()
+    const response = createResponse()
+
+    await handler(
+      createRequest('POST', '/api/analysis/lasso', {
+        data: [{ target: 1, f1: 2 }],
+        target: 'target',
+        config: { alpha: 0.1 },
+      }),
+      response,
+    )
+
+    expect(response.statusCode).toBe(502)
+    expect(JSON.parse(response.body)).toEqual({
+      message: 'Python 分析服务不可用，请确认算法后端已启动',
+      diagnostics: {
+        targetUrl: 'http://127.0.0.1:9000/analyze/lasso',
+        cause: 'fetch failed',
+      },
+    })
+  })
+
   it('should persist workflows and versions after reloading the server module', async () => {
     const storageDir = mkdtempSync(join(tmpdir(), 'cas-storage-routes-'))
     vi.stubEnv('WORKFLOW_STORAGE_DATA_DIR', storageDir)

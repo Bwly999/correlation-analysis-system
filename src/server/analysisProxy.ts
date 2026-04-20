@@ -34,13 +34,27 @@ export const proxyAnalysisRequest = async (
   const body = await readJsonBody<unknown>(request)
   const targetUrl = `${resolvePythonAnalysisApiBaseUrl()}${ANALYSIS_ROUTE_MAP[route]}`
 
-  const upstreamResponse = await fetch(targetUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  })
+  let upstreamResponse: Response
+  try {
+    upstreamResponse = await fetch(targetUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    })
+  } catch (error) {
+    const proxyError = new Error('Python 分析服务不可用，请确认算法后端已启动') as Error & {
+      statusCode: number
+      diagnostics: { targetUrl: string; cause: string }
+    }
+    proxyError.statusCode = 502
+    proxyError.diagnostics = {
+      targetUrl,
+      cause: error instanceof Error ? error.message : String(error),
+    }
+    throw proxyError
+  }
 
   const rawText = await upstreamResponse.text()
   const contentType =
