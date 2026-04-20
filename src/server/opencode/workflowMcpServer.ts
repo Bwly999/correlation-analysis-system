@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { ToolAnnotations } from '@modelcontextprotocol/sdk/types.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import * as z from 'zod/v4'
 import type { WorkflowAiPlan, WorkflowAiPlanRequest } from '../../ai/types.js'
@@ -9,12 +10,6 @@ import {
   getAgentSessionRecord,
   getAgentSessionStoreSnapshot,
 } from './agentSessionStore.js'
-import {
-  getUserWorkflowById,
-  getUserWorkflowVersion,
-  getUserWorkflowVersions,
-  rollbackUserWorkflowVersion,
-} from '../storage.js'
 import { getWorkflowAiSessionRecord } from '../workflowAi/orchestrator.js'
 import { executeWorkflowPlanForSession } from './planExecution.js'
 import { workflowMcpRuntime } from './workflowMcpRuntime.js'
@@ -76,6 +71,7 @@ type WorkflowMcpToolDefinition = {
   name: string
   description: string
   inputSchema?: Record<string, z.ZodTypeAny>
+  annotations?: ToolAnnotations
   handler: (input: any) => ReturnType<typeof buildToolResult> | Promise<ReturnType<typeof buildToolResult>>
 }
 
@@ -111,6 +107,7 @@ const getWorkflowToolDefinitions = (
   {
     name: 'list_workflow_tools',
     description: '列出当前 workflow MCP 可用工具及其用途。',
+    annotations: { readOnlyHint: true, openWorldHint: false },
     handler: () =>
       buildToolResult({
         total: getWorkflowToolDefinitions(context, sessionRecord).length,
@@ -121,8 +118,9 @@ const getWorkflowToolDefinitions = (
       }),
   },
   {
-    name: 'get_analysis_session_context',
-    description: '读取当前分析会话上下文，包括目标、工作流快照、上下文提示和缺失信息。',
+    name: 'workflow_get_session_context',
+    description: '读取当前分析会话上下文，供 AI 规划工作流和补充缺失参数。',
+    annotations: { readOnlyHint: true, openWorldHint: false },
     handler: () =>
       buildToolResult({
         sessionId: sessionRecord.state.sessionId,
@@ -136,8 +134,9 @@ const getWorkflowToolDefinitions = (
       }),
   },
   {
-    name: 'get_node_catalog',
+    name: 'workflow_get_node_catalog',
     description: '返回当前系统可用的工作流节点目录、连接约束和配置描述。',
+    annotations: { readOnlyHint: true, openWorldHint: false },
     handler: () =>
       buildToolResult({
         total: sessionRecord.request.nodeCatalog.length,
@@ -145,53 +144,9 @@ const getWorkflowToolDefinitions = (
       }),
   },
   {
-    name: 'list_session_data_sources',
-    description: '列出当前分析会话可绑定的数据源、入口节点类型和摘要信息。',
-    handler: () =>
-      buildToolResult({
-        total: sessionRecord.request.dataSources?.length ?? 0,
-        items: sessionRecord.request.dataSources ?? [],
-      }),
-  },
-  {
-    name: 'get_data_source_schema',
-    description: '按数据源 ID 读取字段摘要、候选目标和候选因子。',
-    inputSchema: {
-      dataSourceId: z.string().describe('会话内数据源 ID'),
-    },
-    handler: ({ dataSourceId }) => {
-      const item = (sessionRecord.request.dataSources ?? []).find((source) => source.id === dataSourceId)
-      if (!item) {
-        return buildToolResult({
-          found: false,
-          message: `未找到数据源: ${dataSourceId}`,
-        })
-      }
-
-      return buildToolResult({
-        found: true,
-        item,
-      })
-    },
-  },
-  {
-    name: 'workflow_get_session_context',
-    description: '读取当前分析会话上下文，供 AI 规划工作流和补充缺失参数。',
-    handler: () =>
-      buildToolResult({
-        sessionId: sessionRecord.state.sessionId,
-        mode: sessionRecord.state.mode,
-        prompt: sessionRecord.state.prompt,
-        status: sessionRecord.state.status,
-        workflowSnapshot: sessionRecord.request.workflowSnapshot ?? null,
-        contextHints: sessionRecord.request.contextHints ?? sessionRecord.state.contextHints ?? null,
-        missingInfo: sessionRecord.state.missingInfo,
-        diagnostics: sessionRecord.state.diagnostics,
-      }),
-  },
-  {
     name: 'workflow_list_data_sources',
     description: '列出当前分析会话可用的数据源及绑定入口。',
+    annotations: { readOnlyHint: true, openWorldHint: false },
     handler: () =>
       buildToolResult({
         total: sessionRecord.request.dataSources?.length ?? 0,
@@ -201,6 +156,7 @@ const getWorkflowToolDefinitions = (
   {
     name: 'workflow_get_data_source_schema',
     description: '读取指定数据源的字段摘要、候选目标和候选因子。',
+    annotations: { readOnlyHint: true, openWorldHint: false },
     inputSchema: {
       dataSourceId: z.string().describe('会话内数据源 ID'),
     },
@@ -220,8 +176,9 @@ const getWorkflowToolDefinitions = (
     },
   },
   {
-    name: 'get_node_definition',
+    name: 'workflow_get_node_definition',
     description: '按节点类型读取单个节点定义。',
+    annotations: { readOnlyHint: true, openWorldHint: false },
     inputSchema: {
       nodeType: z.string().describe('节点类型名称，例如 pearson 或 manual-json-import'),
     },
@@ -243,6 +200,7 @@ const getWorkflowToolDefinitions = (
   {
     name: 'workflow_search_nodes',
     description: '按关键字搜索适合当前任务的工作流节点。',
+    annotations: { readOnlyHint: true, openWorldHint: false },
     inputSchema: {
       query: z.string().optional().describe('节点搜索关键词，可为空'),
     },
@@ -251,6 +209,7 @@ const getWorkflowToolDefinitions = (
   {
     name: 'workflow_get_node',
     description: '读取单个节点定义，可切换为说明文档、属性搜索或运行时要求模式。',
+    annotations: { readOnlyHint: true, openWorldHint: false },
     inputSchema: {
       nodeType: z.string().describe('节点类型名称'),
       mode: z.enum(['info', 'docs', 'search_properties', 'runtime_requirements']).optional(),
@@ -263,6 +222,7 @@ const getWorkflowToolDefinitions = (
   {
     name: 'workflow_get_node_options',
     description: '解析节点某个属性的候选选项，支持依赖当前配置和上游样本。',
+    annotations: { readOnlyHint: true, openWorldHint: false },
     inputSchema: {
       nodeType: z.string().describe('节点类型名称'),
       propertyName: z.string().describe('属性路径'),
@@ -273,8 +233,9 @@ const getWorkflowToolDefinitions = (
       buildToolResult(await workflowMcpRuntime.getNodeOptions(nodeType, propertyName, config, upstreamSample)),
   },
   {
-    name: 'validate_workflow_plan',
+    name: 'workflow_validate_plan',
     description: '校验工作流计划是否满足当前节点目录、现有画布上下文和连接规则。',
+    annotations: { readOnlyHint: true, openWorldHint: false },
     inputSchema: {
       plan: planSchema.describe('待校验的工作流计划 JSON'),
     },
@@ -293,6 +254,7 @@ const getWorkflowToolDefinitions = (
   {
     name: 'workflow_create_workflow',
     description: '创建一个空白工作流，供后续增量搭建。',
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     inputSchema: {
       workflowId: z.string().optional().describe('工作流 ID，不传则自动生成'),
       name: z.string().optional().describe('工作流名称'),
@@ -306,6 +268,7 @@ const getWorkflowToolDefinitions = (
   {
     name: 'workflow_get_workflow',
     description: '按 ID 读取工作流，可返回完整结构、摘要结构或最小信息。',
+    annotations: { readOnlyHint: true, openWorldHint: false },
     inputSchema: {
       workflowId: z.string().describe('工作流 ID'),
       mode: z.enum(['full', 'structure', 'minimal']).optional(),
@@ -316,6 +279,7 @@ const getWorkflowToolDefinitions = (
   {
     name: 'workflow_update_partial_workflow',
     description: '按操作列表增量修改工作流，适合 AI 逐步搭建和调试。',
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     inputSchema: {
       workflowId: z.string().describe('工作流 ID'),
       operations: z.array(z.any()).describe('增量操作列表'),
@@ -336,6 +300,7 @@ const getWorkflowToolDefinitions = (
   {
     name: 'workflow_update_full_workflow',
     description: '整包替换工作流内容，适合已有完整草案时一次性写入。',
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
     inputSchema: {
       workflow: z.object({
         id: z.string(),
@@ -356,6 +321,7 @@ const getWorkflowToolDefinitions = (
   {
     name: 'workflow_validate_workflow',
     description: '校验工作流结构，可传 workflowId 或直接传 workflowSnapshot。',
+    annotations: { readOnlyHint: true, openWorldHint: false },
     inputSchema: {
       workflowId: z.string().optional().describe('已保存工作流 ID'),
       workflowSnapshot: z.object({
@@ -370,6 +336,7 @@ const getWorkflowToolDefinitions = (
   {
     name: 'workflow_debug_node',
     description: '复用上游链路调试单个节点，并返回节点报错或结果摘要。',
+    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     inputSchema: {
       workflowId: z.string().describe('工作流 ID'),
       nodeId: z.string().describe('目标节点 ID'),
@@ -389,6 +356,7 @@ const getWorkflowToolDefinitions = (
   {
     name: 'workflow_test_workflow',
     description: '执行一次完整工作流并落历史记录，供 AI 读取结果和继续调试。',
+    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     inputSchema: {
       workflowId: z.string().describe('工作流 ID'),
     },
@@ -398,6 +366,7 @@ const getWorkflowToolDefinitions = (
   {
     name: 'workflow_executions',
     description: '查询历史执行记录、单节点结果或产物摘要。',
+    annotations: { readOnlyHint: true, openWorldHint: false },
     inputSchema: {
       mode: z.enum(['list', 'get', 'node_result', 'artifacts']).optional(),
       executionId: z.string().optional().describe('执行记录 ID'),
@@ -409,6 +378,7 @@ const getWorkflowToolDefinitions = (
   {
     name: 'workflow_workflow_versions',
     description: '查询、读取或回滚工作流版本历史。',
+    annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
     inputSchema: {
       mode: z.enum(['list', 'get', 'rollback']).optional(),
       workflowId: z.string().describe('工作流 ID'),
@@ -418,8 +388,24 @@ const getWorkflowToolDefinitions = (
       buildToolResult(await workflowMcpRuntime.workflowVersions(context.userId, { mode, workflowId, versionId })),
   },
   {
-    name: 'execute_workflow_plan',
+    name: 'workflow_get_execution_result',
+    description: '按 executionId 读取会话内的节点执行摘要和终止节点结果。',
+    annotations: { readOnlyHint: true, openWorldHint: false },
+    inputSchema: {
+      executionId: z.string().describe('执行记录 ID'),
+    },
+    handler: ({ executionId }) => {
+      const execution = getAgentExecutionRecord(context.sessionId, executionId)
+      return buildToolResult({
+        found: Boolean(execution),
+        execution,
+      })
+    },
+  },
+  {
+    name: 'workflow_execute_plan',
     description: '使用会话内数据源绑定执行工作流计划，并生成可查询的执行结果。',
+    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     inputSchema: {
       plan: planSchema.describe('待执行的工作流计划 JSON'),
       bindings: z.record(z.string(), z.string()).describe('节点 ID 到数据源 ID 的绑定表'),
@@ -440,74 +426,6 @@ const getWorkflowToolDefinitions = (
         error: execution.error ?? null,
       })
     },
-  },
-  {
-    name: 'get_execution_result',
-    description: '读取指定 executionId 的节点执行摘要和终止节点结果。',
-    inputSchema: {
-      executionId: z.string().describe('执行记录 ID'),
-    },
-    handler: ({ executionId }) => {
-      const execution = getAgentExecutionRecord(context.sessionId, executionId)
-      return buildToolResult({
-        found: Boolean(execution),
-        execution,
-      })
-    },
-  },
-  {
-    name: 'get_saved_workflow',
-    description: '按工作流 ID 读取当前用户已保存的工作流快照。',
-    inputSchema: {
-      workflowId: z.string().describe('工作流 ID'),
-    },
-    handler: ({ workflowId }) => {
-      const workflow = getUserWorkflowById(context.userId, workflowId)
-      return buildToolResult({
-        found: Boolean(workflow),
-        workflow,
-      })
-    },
-  },
-  {
-    name: 'list_workflow_versions',
-    description: '列出某个工作流的历史版本。',
-    inputSchema: {
-      workflowId: z.string().describe('工作流 ID'),
-    },
-    handler: ({ workflowId }) =>
-      buildToolResult({
-        workflowId,
-        items: getUserWorkflowVersions(context.userId, workflowId),
-      }),
-  },
-  {
-    name: 'get_workflow_version',
-    description: '读取某个工作流的指定历史版本快照。',
-    inputSchema: {
-      workflowId: z.string().describe('工作流 ID'),
-      versionId: z.string().describe('版本 ID'),
-    },
-    handler: ({ workflowId, versionId }) =>
-      buildToolResult({
-        workflowId,
-        versionId,
-        version: getUserWorkflowVersion(context.userId, workflowId, versionId),
-      }),
-  },
-  {
-    name: 'rollback_workflow_version',
-    description: '将某个工作流回滚到指定历史版本，并创建新的回滚版本记录。',
-    inputSchema: {
-      workflowId: z.string().describe('工作流 ID'),
-      versionId: z.string().describe('要回滚到的版本 ID'),
-    },
-    handler: ({ workflowId, versionId }) =>
-      buildToolResult({
-        workflowId,
-        versionId,
-        result: rollbackUserWorkflowVersion(context.userId, workflowId, versionId),
-      }),
   },
 ]
 
@@ -602,6 +520,7 @@ const createWorkflowMcpServer = (context: WorkflowMcpContext) => {
       {
         description: tool.description,
         ...(tool.inputSchema ? { inputSchema: tool.inputSchema } : {}),
+        ...(tool.annotations ? { annotations: tool.annotations } : {}),
       },
       async (input) => {
         try {

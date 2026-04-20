@@ -111,7 +111,7 @@ describe('runAnalysisAgentSessionLoop', () => {
           properties: {
             id: 'perm_1',
             sessionID: 'opencode_session_1',
-            permission: 'workflow_get_analysis_session_context',
+            permission: 'workflow_get_session_context',
             patterns: ['*'],
             metadata: {},
             always: ['*'],
@@ -325,11 +325,11 @@ describe('runAnalysisAgentSessionLoop', () => {
             action: 'allow',
           }),
           expect.objectContaining({
-            permission: 'get_analysis_session_context',
+            permission: 'workflow_get_session_context',
             action: 'allow',
           }),
           expect.objectContaining({
-            permission: 'validate_workflow_plan',
+            permission: 'workflow_validate_plan',
             action: 'allow',
           }),
         ]),
@@ -473,7 +473,7 @@ describe('agent session bridge', () => {
     })
 
     toolIdsMock.mockResolvedValue({
-      data: ['workflow_get_analysis_session_context', 'workflow_validate_workflow_plan'],
+      data: ['workflow_get_session_context', 'workflow_validate_plan'],
     })
     sessionMessagesMock.mockResolvedValue({
       data: [],
@@ -561,8 +561,8 @@ describe('agent session bridge', () => {
         sessionID: 'opencode_session_1',
         messageID: expect.stringMatching(/^msg_/),
         tools: expect.objectContaining({
-          workflow_get_analysis_session_context: true,
-          workflow_validate_workflow_plan: true,
+          workflow_get_session_context: true,
+          workflow_validate_plan: true,
         }),
         parts: [
           {

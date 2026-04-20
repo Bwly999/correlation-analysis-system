@@ -20,7 +20,7 @@ vi.mock('@modelcontextprotocol/sdk/server/mcp.js', () => ({
 vi.mock('@modelcontextprotocol/sdk/server/streamableHttp.js', () => ({
   StreamableHTTPServerTransport: class MockTransport {
     async handleRequest(_request: IncomingMessage, response: ServerResponse) {
-      const tool = currentTools.get('get_analysis_session_context')
+      const tool = currentTools.get('workflow_get_session_context')
       if (!tool) {
         response.statusCode = 500
         response.end(JSON.stringify({ message: 'tool not registered' }))
@@ -215,10 +215,10 @@ describe('workflow MCP server', () => {
         total: expect.any(Number),
         items: expect.arrayContaining([
           expect.objectContaining({
-            name: 'get_analysis_session_context',
+            name: 'workflow_get_session_context',
           }),
           expect.objectContaining({
-            name: 'list_session_data_sources',
+            name: 'workflow_list_data_sources',
           }),
           expect.objectContaining({
             name: 'list_workflow_tools',
@@ -263,8 +263,8 @@ describe('workflow MCP server', () => {
 
     await handleWorkflowMcpRequest(request, response)
 
-    const listDataSources = currentTools.get('list_session_data_sources')
-    const getDataSourceSchema = currentTools.get('get_data_source_schema')
+    const listDataSources = currentTools.get('workflow_list_data_sources')
+    const getDataSourceSchema = currentTools.get('workflow_get_data_source_schema')
 
     expect(listDataSources).toBeTypeOf('function')
     expect(getDataSourceSchema).toBeTypeOf('function')
@@ -305,8 +305,8 @@ describe('workflow MCP server', () => {
 
     await handleWorkflowMcpRequest(request, response)
 
-    const executePlan = currentTools.get('execute_workflow_plan')
-    const getExecutionResult = currentTools.get('get_execution_result')
+    const executePlan = currentTools.get('workflow_execute_plan')
+    const getExecutionResult = currentTools.get('workflow_get_execution_result')
 
     expect(executePlan).toBeTypeOf('function')
     expect(getExecutionResult).toBeTypeOf('function')

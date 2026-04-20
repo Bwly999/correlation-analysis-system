@@ -109,10 +109,10 @@ describe('workflow MCP transport', () => {
     await client.connect(transport)
 
     const tools = await client.listTools()
-    expect(tools.tools.map((tool) => tool.name)).toContain('get_analysis_session_context')
+    expect(tools.tools.map((tool) => tool.name)).toContain('workflow_get_session_context')
 
     const sessionContext = await client.callTool({
-      name: 'get_analysis_session_context',
+      name: 'workflow_get_session_context',
       arguments: {},
     })
 

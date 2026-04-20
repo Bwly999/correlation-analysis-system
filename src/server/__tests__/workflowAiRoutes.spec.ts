@@ -723,7 +723,7 @@ describe('workflow ai routes', () => {
         totalCalls: 3,
         totalFailures: 1,
         byTool: {
-          get_analysis_session_context: {
+          workflow_get_session_context: {
             calls: 2,
             failures: 0,
           },
