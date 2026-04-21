@@ -31,6 +31,8 @@
     "@vue-flow/core": "^1.48.2",
     "@vue-flow/node-toolbar": "^1.1.1",
     "@vueuse/core": "^14.2.1",
+    "ag-grid-community": "^35.2.1",
+    "ag-grid-vue3": "^35.2.1",
     "ai": "^6.0.134",
     "clsx": "^2.1.1",
     "echarts": "^6.0.0",

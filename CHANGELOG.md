@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### 修复 (Fix)
+
+- **将结果预览表格重构为 AG Grid 高性能虚拟滚动内核**:
+  - `table-preview` 结果 viewer 从 PrimeVue `DataTable` 切换为 `AG Grid Community`，改为整表虚拟滚动预览，显著降低宽表在打开、滚动和关闭阶段的卡顿。
+  - 新增表格 grid 模型适配层与 AG Grid 预览组件，保留只读 tooltip 与列宽拖拽，并移除旧分页式 DOM 表格主路径。
+  - 重写 `TableViewer` 回归测试并同步更新 `工作流系统.md` 中的 viewer 实现说明。
+
 ### 新增 (Feat)
 
 - **为节点悬浮工具栏新增结果预览快捷入口**:
