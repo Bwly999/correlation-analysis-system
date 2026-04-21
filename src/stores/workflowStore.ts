@@ -1,7 +1,7 @@
 ﻿import { defineStore } from 'pinia'
-import { computed, ref, markRaw, toRaw } from 'vue'
+import { ref, markRaw, toRaw, watch } from 'vue'
 import type { Ref } from 'vue'
-import { type Node, type Edge } from '@vue-flow/core'
+import { type Node, type Edge, type NodeChange, type EdgeChange } from '@vue-flow/core'
 import { getNodeDefinition } from '@/nodes/registry'
 import type { MultipleNodeExecutionInput, MultipleNodeExecutionItem } from '@/nodes/types'
 import { isNodeResult, normalizeNodeResult } from '@/nodes/result'
@@ -114,8 +114,12 @@ export const useWorkflowStore = defineStore('workflow', () => {
   const workflowVersions = ref([]) as Ref<WorkflowVersionMetadata[]>
   const selectedWorkflowVersionDetail = ref<WorkflowVersionDetail | null>(null)
   const editableSnapshots = ref([]) as Ref<WorkflowAiEditableSnapshot[]>
-  const lastSavedWorkflowSignature = ref('')
+  const lastSavedWorkflowStructureSignature = ref('')
+  const lastSavedWorkflowLayoutSignature = ref('')
   const hasExplicitUnsavedChanges = ref(false)
+  const hasStructureUnsavedChanges = ref(false)
+  const hasLayoutUnsavedChanges = ref(false)
+  const hasUnsavedChanges = ref(false)
 
   // 历史模式相关状态
   const isHistoryMode = ref(false)
@@ -317,28 +321,110 @@ export const useWorkflowStore = defineStore('workflow', () => {
       })
     })
 
-  const getWorkflowPersistenceSignature = () =>
+  const serializeWorkflowStructureNodes = (
+    sourceNodes: WorkflowNode[],
+    options: { includePinnedOutput?: boolean } = {},
+  ) =>
+    sourceNodes.map((node) => {
+      const normalizedNode = normalizeNodeConfigWithDefaults(node)
+      return cloneJsonValue({
+        id: normalizedNode.id,
+        type: normalizedNode.type,
+        label: normalizedNode.label,
+        data: {
+          ...normalizedNode.data,
+          config: stripRuntimeInputValuesFromConfig(
+            normalizedNode.data.type,
+            normalizedNode.data.config,
+          ),
+          status: 'idle' as const,
+          output:
+            options.includePinnedOutput && normalizedNode.data.isPinned ? normalizedNode.data.output : null,
+        },
+      })
+    })
+
+  const getWorkflowStructureSignature = () =>
     JSON.stringify({
       id: currentWorkflowId.value,
       name: workflowName.value,
-      nodes: serializeWorkflowNodes(getCurrentNodes(), { includePinnedOutput: true }),
+      nodes: serializeWorkflowStructureNodes(getCurrentNodes(), { includePinnedOutput: true }),
       edges: serializeWorkflowEdges(getCurrentEdges()),
     })
 
+  const getWorkflowLayoutSignature = () =>
+    JSON.stringify(
+      getCurrentNodes().map((node) => ({
+        id: node.id,
+        position: cloneJsonValue(node.position),
+      })),
+    )
+
+  const syncUnsavedChangesState = () => {
+    hasUnsavedChanges.value =
+      hasExplicitUnsavedChanges.value ||
+      hasStructureUnsavedChanges.value ||
+      hasLayoutUnsavedChanges.value
+  }
+
+  const refreshUnsavedChanges = () => {
+    hasStructureUnsavedChanges.value =
+      getWorkflowStructureSignature() !== lastSavedWorkflowStructureSignature.value
+    hasLayoutUnsavedChanges.value =
+      getWorkflowLayoutSignature() !== lastSavedWorkflowLayoutSignature.value
+    syncUnsavedChangesState()
+  }
+
+  const refreshStructureUnsavedChanges = () => {
+    hasStructureUnsavedChanges.value =
+      getWorkflowStructureSignature() !== lastSavedWorkflowStructureSignature.value
+    syncUnsavedChangesState()
+  }
+
+  const refreshLayoutUnsavedChanges = () => {
+    hasLayoutUnsavedChanges.value =
+      getWorkflowLayoutSignature() !== lastSavedWorkflowLayoutSignature.value
+    syncUnsavedChangesState()
+  }
+
   const syncSavedWorkflowSignature = () => {
-    lastSavedWorkflowSignature.value = getWorkflowPersistenceSignature()
+    lastSavedWorkflowStructureSignature.value = getWorkflowStructureSignature()
+    lastSavedWorkflowLayoutSignature.value = getWorkflowLayoutSignature()
     hasExplicitUnsavedChanges.value = false
+    hasStructureUnsavedChanges.value = false
+    hasLayoutUnsavedChanges.value = false
+    hasUnsavedChanges.value = false
   }
 
   const markWorkflowAsExplicitlyUnsaved = () => {
     hasExplicitUnsavedChanges.value = true
+    syncUnsavedChangesState()
   }
 
-  const hasUnsavedChanges = computed(
-    () =>
-      hasExplicitUnsavedChanges.value ||
-      getWorkflowPersistenceSignature() !== lastSavedWorkflowSignature.value,
-  )
+  const handleNodeChangesForUnsavedState = (changes: NodeChange[]) => {
+    if (!changes.length) return
+
+    const shouldRefresh = changes.some((change) => change.type === 'add' || change.type === 'remove')
+
+    if (shouldRefresh) {
+      refreshStructureUnsavedChanges()
+      refreshLayoutUnsavedChanges()
+    }
+  }
+
+  const handleEdgeChangesForUnsavedState = (changes: EdgeChange[]) => {
+    if (!changes.length) return
+
+    const shouldRefresh = changes.some((change) => change.type === 'add' || change.type === 'remove')
+
+    if (shouldRefresh) {
+      refreshStructureUnsavedChanges()
+    }
+  }
+
+  const handleNodeDragStopForUnsavedState = (_nodeId?: string) => {
+    refreshLayoutUnsavedChanges()
+  }
 
   const resetWorkflowNodeRuntimeState = (sourceNodes: Array<WorkflowNode | WorkflowNodeSnapshot>): WorkflowNode[] =>
     sourceNodes.map((node) =>
@@ -584,7 +670,10 @@ export const useWorkflowStore = defineStore('workflow', () => {
         lastRunDashboard.value = null
         clearWorkflowVersionState()
         addLog(`成功导入工作流: ${workflowName.value}`, 'info')
-        lastSavedWorkflowSignature.value = getWorkflowPersistenceSignature()
+        lastSavedWorkflowStructureSignature.value = getWorkflowStructureSignature()
+        lastSavedWorkflowLayoutSignature.value = getWorkflowLayoutSignature()
+        hasStructureUnsavedChanges.value = false
+        hasLayoutUnsavedChanges.value = false
         markWorkflowAsExplicitlyUnsaved()
       } catch (_err) {
         addLog(`导入失败: 格式错误`, 'error')
@@ -805,6 +894,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
 
     node.data.reuseLastRuntimeInputs = false
     node.data.config = nextConfig
+    refreshUnsavedChanges()
   }
 
   const collectUpstreamNodeIds = (targetNodeId: string, acc = new Set<string>()) => {
@@ -920,6 +1010,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
       }
       pendingConnection.value = null
     }
+    refreshUnsavedChanges()
     return newNode
   }
 
@@ -944,6 +1035,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
         ...node.data.config,
         ...cloneJsonValue(config),
       }
+      refreshUnsavedChanges()
     }
 
     return node
@@ -958,6 +1050,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
       ...node.data.config,
       ...cloneJsonValue(config),
     }
+    refreshUnsavedChanges()
     return node
   }
 
@@ -968,6 +1061,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     }
     node.data.label = label
     node.label = label
+    refreshUnsavedChanges()
     return node
   }
 
@@ -977,6 +1071,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
       throw new Error(`未找到节点: ${nodeId}`)
     }
     node.position = cloneJsonValue(position)
+    refreshLayoutUnsavedChanges()
     return node
   }
 
@@ -1012,6 +1107,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
       animated: true,
     }
     edges.value = [...currentEdges, nextEdge]
+    refreshUnsavedChanges()
     return nextEdge
   }
 
@@ -1043,6 +1139,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     workflowName.value = snapshot.workflowName
     currentWorkflowId.value = snapshot.workflowId
     needsViewReset.value = true
+    refreshUnsavedChanges()
     return true
   }
 
@@ -1149,6 +1246,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
 
     nodes.value = [...currentNodes, newNode]
     addLog(`已复制节点: ${original.data.label}`, 'info')
+    refreshUnsavedChanges()
     return newNode
   }
 
@@ -1166,6 +1264,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     nodes.value = nextNodes
     edges.value = nextEdges
     addLog(`已删除节点: ${removedNode.data.label}`, 'warn')
+    refreshUnsavedChanges()
     return removedNode
   }
 
@@ -1173,6 +1272,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     const currentEdges = getCurrentEdges()
     const nextEdges: Edge[] = currentEdges.filter((edge) => edge.id !== edgeId)
     edges.value = nextEdges
+    refreshUnsavedChanges()
   }
 
   const setPendingConnection = (nextConnection: PendingConnectionState) => {
@@ -1812,6 +1912,13 @@ export const useWorkflowStore = defineStore('workflow', () => {
   loadHistory()
   void loadCurrentStorageUser()
   syncSavedWorkflowSignature()
+  watch(
+    workflowName,
+    () => {
+      refreshUnsavedChanges()
+    },
+    { flush: 'sync' },
+  )
 
   return {
     nodes,
@@ -1879,6 +1986,10 @@ export const useWorkflowStore = defineStore('workflow', () => {
     setActiveConfigNodeId,
     setActivePreviewNodeId,
     markWorkflowAsExplicitlyUnsaved,
+    refreshUnsavedChanges,
+    handleNodeChangesForUnsavedState,
+    handleEdgeChangesForUnsavedState,
+    handleNodeDragStopForUnsavedState,
     createEditableSnapshot,
     restoreEditableSnapshot,
     resetNodeRuntimeInputs,

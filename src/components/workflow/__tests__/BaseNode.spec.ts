@@ -274,4 +274,53 @@ describe('BaseNode', () => {
 
     expect(store.activePreviewNodeId).toBe('pearson-node')
   })
+
+  it('renders label and pin state directly from node props without requiring a store lookup', () => {
+    const wrapper = mount(BaseNode, {
+      props: {
+        id: 'missing-in-store',
+        type: 'custom',
+        selected: false,
+        dragging: false,
+        connectable: true,
+        resizing: false,
+        position: { x: 0, y: 0 },
+        dimensions: { width: 110, height: 110 },
+        isValidTargetPos: () => true,
+        isValidSourcePos: () => true,
+        zIndex: 1,
+        targetPosition: Position.Left,
+        sourcePosition: Position.Right,
+        data: {
+          label: '仅来自 props 的节点',
+          type: 'file-import',
+          category: 'trigger',
+          status: 'idle',
+          config: {},
+          logs: [],
+          useManualInput: false,
+          manualInput: '',
+          isPinned: true,
+          output: {
+            kind: 'table',
+            payload: [{ id: 1 }],
+          },
+        },
+        events: {} as any,
+      } as any,
+      global: {
+        plugins: [PrimeVue],
+        directives: { tooltip: () => undefined },
+        stubs: {
+          Handle: { template: '<div />' },
+          NodeToolbar: { template: '<div><slot /></div>' },
+          NodeIcon: { template: '<div>ICON</div>' },
+        },
+      },
+    })
+
+    expect(wrapper.text()).toContain('仅来自 props 的节点')
+    expect(wrapper.find('[data-testid="preview-node-button"]').attributes('disabled')).toBeUndefined()
+    expect(wrapper.html()).toContain('amber-100')
+  })
 })

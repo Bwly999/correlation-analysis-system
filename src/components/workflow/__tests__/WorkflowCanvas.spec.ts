@@ -1233,6 +1233,82 @@ describe('WorkflowCanvas', () => {
     expect(toasts[1]?.attributes('data-group')).toBe('node-config')
     expect(toasts[1]?.attributes('data-position')).toBe('bottom-left')
   })
+
+  it('defers unsaved recalculation during dragging and refreshes it after drag stop', async () => {
+    const store = useWorkflowStore()
+    store.nodes = [
+      {
+        id: 'node_1',
+        type: 'custom',
+        position: { x: 0, y: 0 },
+        label: '导入数据',
+        data: {
+          label: '导入数据',
+          type: 'file-import',
+          category: 'trigger',
+          status: 'idle',
+          config: {},
+          logs: [],
+          useManualInput: false,
+          manualInput: '',
+          isPinned: false,
+        },
+      } as any,
+    ]
+
+    const nodeChangeSpy = vi.spyOn(store, 'handleNodeChangesForUnsavedState')
+    const dragStopSpy = vi.spyOn(store, 'handleNodeDragStopForUnsavedState')
+
+    const wrapper = mount(WorkflowCanvas, {
+      global: {
+        stubs: {
+          Background: { template: '<div />' },
+          Controls: { template: '<div />' },
+          NodeSidebar: { template: '<div />' },
+          WorkflowHeader: { template: '<div />' },
+          BaseNode: { template: '<div />' },
+          LogPanel: { template: '<div />' },
+          NodeConfigModal: { template: '<div />' },
+          RuntimeInputModal: runtimeInputModalStub,
+          WorkflowResultDashboardModal: { template: '<div />' },
+          WorkflowManagerModal: workflowManagerModalStub,
+          UnsavedWorkflowDialog: { template: '<div />' },
+          HelpCenterModal: { template: '<div />' },
+          ConfirmDialog: { template: '<div />' },
+          Toast: { template: '<div />' },
+          Button: { template: '<button><slot /></button>' },
+          N8nEdge: { template: '<div />' },
+        },
+        directives: {
+          tooltip: () => undefined,
+        },
+      },
+    })
+
+    const vueFlow = wrapper.findComponent({ name: 'VueFlow' })
+
+    await vueFlow.vm.$emit('nodesChange', [
+      {
+        id: 'node_1',
+        type: 'position',
+        position: { x: 120, y: 48 },
+        from: { x: 0, y: 0 },
+        dragging: true,
+      },
+    ])
+    await vueFlow.vm.$emit('nodeDragStop', {
+      node: { id: 'node_1' },
+    })
+
+    expect(nodeChangeSpy).toHaveBeenCalledWith([
+      expect.objectContaining({
+        id: 'node_1',
+        type: 'position',
+        dragging: true,
+      }),
+    ])
+    expect(dragStopSpy).toHaveBeenCalledWith('node_1')
+  })
 })
 
 

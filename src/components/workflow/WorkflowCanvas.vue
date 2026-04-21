@@ -488,6 +488,9 @@ onBeforeUnmount(() => {
                 :class="{ 'grayscale-[0.2] sepia-[0.1]': store.isHistoryMode }"
                 @dragover="onDragOverLocal"
                 @drop="onDropLocal"
+                @nodes-change="store.handleNodeChangesForUnsavedState"
+                @edges-change="store.handleEdgeChangesForUnsavedState"
+                @node-drag-stop="({ node }) => store.handleNodeDragStopForUnsavedState(node?.id)"
               >
                 <template #node-custom="props"><BaseNode v-bind="props" /></template>
                 <template #edge-n8n="props"><N8nEdge v-bind="props" /></template>

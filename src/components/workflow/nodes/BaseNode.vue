@@ -19,7 +19,6 @@ import {
 } from 'lucide-vue-next'
 import { useWorkflowStore, type PendingConnectionState } from '@/stores/workflowStore'
 import { getNodeDefinition } from '@/nodes/registry'
-import type { WorkflowNode } from '@/utils/storage'
 import NodeIcon from './NodeIcon.vue'
 
 const props = defineProps<NodeProps>()
@@ -32,21 +31,11 @@ const editedLabel = ref(props.data.label)
 const nameInputRef = ref<HTMLInputElement | null>(null)
 let hoverTimeout: any = null
 
-const workflowNodes = computed<WorkflowNode[]>(() => store.nodes as WorkflowNode[])
-const currentNode = computed<WorkflowNode | undefined>(() =>
-  workflowNodes.value.find((node) => node.id === props.id),
-)
 const pendingConnection = computed<PendingConnectionState>(() => store.pendingConnection)
 const isPendingConnectionSource = computed(() => pendingConnection.value?.sourceNodeId === props.id)
 
-// 从 Store 获取最新的 Label 确保同步
-const currentLabel = computed(() => {
-  return currentNode.value?.data.label || props.data.label
-})
-
-const isPinned = computed(() => {
-  return currentNode.value?.data.isPinned || false
-})
+const currentLabel = computed(() => props.data.label)
+const isPinned = computed(() => Boolean(props.data.isPinned))
 
 const onMouseEnter = () => {
   if (hoverTimeout) clearTimeout(hoverTimeout)
@@ -60,15 +49,15 @@ const onMouseLeave = () => {
 }
 
 const togglePin = () => {
-  const nodeInStore = currentNode.value
-  if (nodeInStore) {
-    nodeInStore.data.isPinned = !nodeInStore.data.isPinned
-    store.addLog(
-      `节点 ${currentLabel.value} 数据已${nodeInStore.data.isPinned ? '冻结 (Pin)' : '解除冻结'}`,
-      nodeInStore.data.isPinned ? 'warn' : 'info',
-      props.id,
-    )
-  }
+  const nextPinned = !isPinned.value
+
+  props.data.isPinned = nextPinned
+  store.refreshUnsavedChanges()
+  store.addLog(
+    `节点 ${currentLabel.value} 数据已${nextPinned ? '冻结 (Pin)' : '解除冻结'}`,
+    nextPinned ? 'warn' : 'info',
+    props.id,
+  )
 }
 
 const startEditing = async () => {
@@ -84,11 +73,9 @@ const saveName = () => {
   isEditingName.value = false
   const newName = editedLabel.value.trim()
   if (newName) {
-    const nodeInStore = currentNode.value
-    if (nodeInStore) {
-      nodeInStore.data.label = newName
-      store.addLog(`节点重命名为: ${newName}`, 'info', props.id)
-    }
+    props.data.label = newName
+    store.refreshUnsavedChanges()
+    store.addLog(`节点重命名为: ${newName}`, 'info', props.id)
   }
 }
 
@@ -106,7 +93,7 @@ const openConfig = () => {
 }
 
 const openPreview = () => {
-  if (!currentNode.value?.data.output) return
+  if (!props.data.output) return
   store.setActivePreviewNodeId(props.id)
   store.addLog(`打开结果预览: ${currentLabel.value}`, 'info', props.id)
 }
@@ -160,7 +147,7 @@ const isCurrentNodeDebugRunning = computed(
     && store.activeExecutionNodeId === props.id,
 )
 
-const hasPreviewResult = computed(() => currentNode.value?.data.output != null)
+const hasPreviewResult = computed(() => props.data.output != null)
 </script>
 
 <template>

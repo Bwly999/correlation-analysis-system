@@ -3,14 +3,13 @@ import { ref, computed } from 'vue'
 import { EdgeLabelRenderer, getSmoothStepPath, type EdgeProps } from '@vue-flow/core'
 import { Plus, Trash2 } from 'lucide-vue-next'
 import { useWorkflowStore } from '@/stores/workflowStore'
-import type { WorkflowNode } from '@/utils/storage'
 
 const props = defineProps<EdgeProps>()
 const store = useWorkflowStore()
 
 const isHovered = ref(false)
 const path = computed(() => getSmoothStepPath(props))
-const workflowNodes = computed<WorkflowNode[]>(() => store.nodes as WorkflowNode[])
+const sourceNodeStatus = computed(() => props.sourceNode?.data?.status)
 
 const onAddNode = () => {
   store.setPendingConnection({
@@ -25,9 +24,6 @@ const onDeleteEdge = () => {
   store.addLog('连线已删除', 'info')
 }
 
-const sourceNode = computed<WorkflowNode | undefined>(() =>
-  workflowNodes.value.find((node) => node.id === props.source),
-)
 </script>
 
 <template>
@@ -38,10 +34,10 @@ const sourceNode = computed<WorkflowNode | undefined>(() =>
     fill="none"
     class="n8n-edge-path transition-all duration-300"
     :class="{
-      'stroke-slate-400': sourceNode?.data?.status === 'idle' || !sourceNode?.data?.status,
-      'stroke-indigo-500 is-running': sourceNode?.data?.status === 'running',
-      'stroke-emerald-500': sourceNode?.data?.status === 'success',
-      'stroke-rose-500': sourceNode?.data?.status === 'error',
+      'stroke-slate-400': sourceNodeStatus === 'idle' || !sourceNodeStatus,
+      'stroke-indigo-500 is-running': sourceNodeStatus === 'running',
+      'stroke-emerald-500': sourceNodeStatus === 'success',
+      'stroke-rose-500': sourceNodeStatus === 'error',
       'is-hovered': isHovered,
     }"
     :stroke-width="isHovered ? 2.5 : 1.5"
@@ -96,9 +92,9 @@ const sourceNode = computed<WorkflowNode | undefined>(() =>
         v-if="!isHovered"
         class="absolute w-1.5 h-1.5 bg-white border-[1.5px] border-slate-300 rounded-full transition-all duration-200"
         :class="{
-          '!border-indigo-500 bg-indigo-50': sourceNode?.data?.status === 'running',
-          '!border-emerald-500 bg-emerald-50': sourceNode?.data?.status === 'success',
-          '!border-rose-500 bg-rose-50': sourceNode?.data?.status === 'error',
+          '!border-indigo-500 bg-indigo-50': sourceNodeStatus === 'running',
+          '!border-emerald-500 bg-emerald-50': sourceNodeStatus === 'success',
+          '!border-rose-500 bg-rose-50': sourceNodeStatus === 'error',
         }"
       ></div>
     </div>

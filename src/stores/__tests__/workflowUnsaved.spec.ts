@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { useWorkflowStore } from '../workflowStore'
 import { storageProvider } from '@/utils/storage'
+import type { NodeChange } from '@vue-flow/core'
 
 describe('workflow unsaved state', () => {
   beforeEach(() => {
@@ -167,5 +168,51 @@ describe('workflow unsaved state', () => {
     ;(store.edges[0] as any).targetX = 360
 
     expect(store.hasUnsavedChanges).toBe(false)
+  })
+
+  it('keeps drag-in-progress changes clean until the node drag ends', async () => {
+    const store = useWorkflowStore()
+
+    const node = store.addAndConnectNode('file-import', '导入数据', { x: 0, y: 0 })
+    await store.saveWorkflow('拖拽后应变脏')
+
+    expect(store.hasUnsavedChanges).toBe(false)
+
+    store.handleNodeChangesForUnsavedState([
+      {
+        id: node.id,
+        type: 'position',
+        position: { x: 120, y: 60 },
+        from: { x: 0, y: 0 },
+        dragging: true,
+      } satisfies NodeChange,
+    ])
+
+    expect(store.hasUnsavedChanges).toBe(false)
+
+    node.position = { x: 120, y: 60 }
+    store.handleNodeDragStopForUnsavedState(node.id)
+
+    expect(store.hasUnsavedChanges).toBe(true)
+  })
+
+  it('keeps non-layout unsaved changes after a later node drag stop', async () => {
+    const store = useWorkflowStore()
+
+    const node = store.addAndConnectNode('file-import', '导入数据', { x: 0, y: 0 })
+    await store.saveWorkflow('结构与布局脏状态')
+
+    store.workflowName = '结构与布局脏状态-已修改'
+    expect(store.hasUnsavedChanges).toBe(true)
+
+    node.position = { x: 120, y: 60 }
+    store.handleNodeDragStopForUnsavedState(node.id)
+
+    expect(store.hasUnsavedChanges).toBe(true)
+
+    node.position = { x: 0, y: 0 }
+    store.handleNodeDragStopForUnsavedState(node.id)
+
+    expect(store.hasUnsavedChanges).toBe(true)
   })
 })

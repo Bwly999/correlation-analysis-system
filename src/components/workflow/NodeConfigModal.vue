@@ -143,7 +143,10 @@ watch(
 
 // 同步回 Store
 watch(localIsPinned, (val) => {
-  if (node.value) node.value.data.isPinned = val
+  if (node.value) {
+    node.value.data.isPinned = val
+    store.refreshUnsavedChanges()
+  }
 })
 watch(localUseManualInput, (val) => {
   if (node.value) node.value.data.useManualInput = val
@@ -264,6 +267,7 @@ const runCurrentNode = async (rerunUpstream = false) => {
     node.value.data.useManualInput = localUseManualInput.value
     node.value.data.manualInput = localManualInput.value
     node.value.data.reuseLastRuntimeInputs = localReuseLastRuntimeInputs.value
+    store.refreshUnsavedChanges()
     await store.executeNode(node.value.id, true, 'single', { rerunUpstream })
   }
 }
@@ -274,6 +278,7 @@ const saveConfig = () => {
     node.value.data.config = stripRuntimeInputValuesFromConfig(node.value.data.type, config.value)
     node.value.data.useManualInput = localUseManualInput.value
     node.value.data.manualInput = localManualInput.value
+    store.refreshUnsavedChanges()
     toast.add({
       group: 'node-config',
       severity: 'success',
