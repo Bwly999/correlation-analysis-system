@@ -1,6 +1,7 @@
 import { defineComponent, h } from 'vue'
 import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
+import * as resultModule from '@/nodes/result'
 import DataChart from '../DataChart.vue'
 
 vi.mock('vue-echarts', () => ({
@@ -160,7 +161,7 @@ describe('DataChart', () => {
       },
     })
 
-    await wrapper.get('[data-test="chart-key-select"]').setValue(['score', 'revenue'])
+    await wrapper.get('[data-test="chart-key-select"]').setValue(['score'])
     await wrapper.get('[data-test="chart-view-mode-normalized"]').trigger('click')
     await wrapper.get('[data-test="chart-normalization-method-z-score"]').trigger('click')
     await wrapper.get('[data-test="chart-lower-bound"]').setValue('15')
@@ -169,7 +170,6 @@ describe('DataChart', () => {
     const option = getChartOption(wrapper)
     expect(option.xAxis.data).toEqual([1])
     expect(option.series[0].data).toEqual([0])
-    expect(option.series[1].data).toEqual([0])
     expect(option.yAxis.name).toBe('标准分值')
   })
 
@@ -337,6 +337,37 @@ describe('DataChart', () => {
     expect(options).toEqual(['score', 'temperature'])
   })
 
+  it('reuses provided table schema instead of inferring fields from all rows again', () => {
+    const inferSchemaSpy = vi.spyOn(resultModule, 'inferSchemaFromRows')
+
+    const wrapper = mount(DataChart, {
+      props: {
+        data: {
+          kind: 'table',
+          schema: {
+            fields: [
+              { name: 'score', type: 'number' },
+              { name: 'temperature', type: 'number' },
+              { name: 'label', type: 'string' },
+            ],
+          },
+          payload: [
+            { score: 1, temperature: 10, label: 'cold' },
+            { score: 2, temperature: 12, label: 'warm' },
+          ],
+        },
+      },
+    })
+
+    const options = wrapper
+      .get('[data-test="chart-key-select"]')
+      .findAll('option')
+      .map((option) => option.text())
+
+    expect(options).toEqual(['score', 'temperature'])
+    expect(inferSchemaSpy).not.toHaveBeenCalled()
+  })
+
   it('saves presets locally, applies them, and restores default preset on remount', async () => {
     localStorage.clear()
 
@@ -436,6 +467,29 @@ describe('DataChart', () => {
 
     expect(option.xAxis.data).toEqual([1])
     expect(option.series[0].data).toEqual([15])
+  })
+
+  it('requires all selected factors to satisfy bounds when multiple fields are selected', async () => {
+    const wrapper = mount(DataChart, {
+      props: {
+        data: [
+          { score: 15, other: 18 },
+          { score: 15, other: 30 },
+          { score: null, other: 16 },
+          { score: 12, other: 19 },
+        ],
+      },
+    })
+
+    await wrapper.get('[data-test="chart-key-select"]').setValue(['score', 'other'])
+    await wrapper.get('[data-test="chart-lower-bound"]').setValue('10')
+    await wrapper.get('[data-test="chart-upper-bound"]').setValue('20')
+
+    const option = getChartOption(wrapper)
+
+    expect(option.xAxis.data).toEqual([1, 2])
+    expect(option.series[0].data).toEqual([15, 12])
+    expect(option.series[1].data).toEqual([18, 19])
   })
 
   it('uses lighter interactive settings for large line charts', () => {

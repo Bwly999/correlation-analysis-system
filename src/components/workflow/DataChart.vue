@@ -40,6 +40,7 @@ import {
 } from './dataChartNormalization'
 import { getCommonNumericFieldsFromGroups } from './groupedResultSchema'
 import { inferSchemaFromRows } from '@/nodes/result'
+import { getResultGroups, getResultRows, getResultSchemaFields } from './resultView'
 
 use([
   CanvasRenderer,
@@ -75,7 +76,7 @@ const LINE_CHART_RENDER_LIMIT = 1200
 const BOX_PLOT_COLORS = ['#2563eb', '#10b981', '#f59e0b', '#f43f5e', '#06b6d4', '#475569']
 
 const props = defineProps<{
-  data: ChartRow[] | ChartGroup[]
+  data: unknown
 }>()
 
 const chartType = ref('line')
@@ -164,7 +165,7 @@ const applyDefaultPreset = () => {
 const rowMatchesBounds = (row: ChartRow, keys: string[]) => {
   if (keys.length === 0) return true
 
-  return keys.some((key) => {
+  return keys.every((key) => {
     const value = row[key]
     if (!isFiniteNumber(value)) return false
     if (lowerBound.value !== null && value < lowerBound.value) return false
@@ -214,15 +215,14 @@ const downsampleLineRows = (rows: ChartRow[], keys: string[], limit: number) => 
 }
 
 const isGroupedData = computed(() => {
-  return (
-    Array.isArray(props.data) &&
-    props.data.length > 0 &&
-    props.data[0] &&
-    typeof props.data[0] === 'object' &&
-    'name' in props.data[0] &&
-    'data' in props.data[0]
-  )
+  return groupedData.value.length > 0
 })
+
+const groupedData = computed<ChartGroup[]>(() => getResultGroups(props.data) as ChartGroup[])
+
+const tableRows = computed<ChartRow[]>(() => getResultRows(props.data) as ChartRow[])
+
+const hasRenderableData = computed(() => groupedData.value.length > 0 || tableRows.value.length > 0)
 
 const chartTypes = computed(() => {
   if (isGroupedData.value) {
@@ -243,13 +243,16 @@ watch(
 )
 
 const availableKeys = computed(() => {
-  if (!Array.isArray(props.data) || props.data.length === 0) return []
+  if (!hasRenderableData.value) return []
 
   if (isGroupedData.value) {
-    return getCommonNumericFieldsFromGroups(props.data as ChartGroup[])
+    return getCommonNumericFieldsFromGroups(groupedData.value)
   }
 
-  return (inferSchemaFromRows(props.data as ChartRow[]).fields ?? [])
+  const schemaFields = getResultSchemaFields(props.data)
+  const fields = schemaFields.length > 0 ? schemaFields : (inferSchemaFromRows(tableRows.value).fields ?? [])
+
+  return fields
     .filter((field) => field.type === 'number')
     .map((field) => field.name)
 })
@@ -322,7 +325,7 @@ const normalizationMethodOptions = [
 ]
 
 const filteredData = computed(() => {
-  const sourceData = props.data || []
+  const sourceData = isGroupedData.value ? groupedData.value : tableRows.value
   const keys = normalizedKeys.value
 
   if (lowerBound.value === null && upperBound.value === null) {
@@ -961,7 +964,7 @@ watch(normalizationMethod, (nextMethod) => {
     <div class="flex-1 p-4 relative min-h-0">
       <div class="h-full flex gap-4 min-h-0">
         <div class="flex-1 min-w-0">
-          <div v-if="isGroupedData || (props.data && props.data.length > 0)" class="h-full w-full">
+          <div v-if="hasRenderableData" class="h-full w-full">
             <VChart ref="chartRef" :option="chartOption" autoresize />
           </div>
         </div>
