@@ -61,3 +61,4 @@ cloc-2.06.exe
 dist-server/
 
 .workflow-storage
+test/resource/demo_data_2000x300.xlsx
