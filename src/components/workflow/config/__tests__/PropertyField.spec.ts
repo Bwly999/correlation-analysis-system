@@ -38,20 +38,20 @@ describe('PropertyField', () => {
         },
         stubs: {
           Select: {
-            props: ['editable', 'filter', 'filterMatchMode', 'filterInputProps'],
+            props: ['editable', 'filter', 'filterMatchMode', 'filterInputProps', 'virtualScrollerOptions'],
             template:
-              '<div><input class="options-filter-input" v-bind="filterInputProps" /><div class="select-props">{{ editable }}|{{ filter }}|{{ filterMatchMode }}|{{ typeof filterInputProps.onKeydown }}</div><slot name="filtericon" /></div>',
+              '<div><input class="options-filter-input" v-bind="filterInputProps" /><div class="select-props">{{ editable }}|{{ filter }}|{{ filterMatchMode }}|{{ virtualScrollerOptions?.itemSize }}|{{ typeof filterInputProps.onKeydown }}</div><slot name="filtericon" /></div>',
           },
         },
       },
     })
 
-    expect(wrapper.find('.select-props').text()).toBe('true|true|contains|undefined')
+    expect(wrapper.find('.select-props').text()).toBe('true|true|contains|44|undefined')
     expect(wrapper.get('[data-testid="options-regex-toggle"]').classes()).toContain('bg-white')
 
     await wrapper.get('[data-testid="options-regex-toggle"]').trigger('click')
 
-    expect(wrapper.find('.select-props').text()).toBe('true|true|custom_regex|undefined')
+    expect(wrapper.find('.select-props').text()).toBe('true|true|custom_regex|44|undefined')
     expect(wrapper.get('[data-testid="options-regex-toggle"]').classes()).toContain('!bg-blue-50')
   })
 
@@ -160,21 +160,21 @@ describe('PropertyField', () => {
         },
         stubs: {
           MultiSelect: {
-            props: ['filter', 'filterMatchMode', 'filterInputProps'],
+            props: ['filter', 'filterMatchMode', 'filterInputProps', 'virtualScrollerOptions', 'maxSelectedLabels', 'selectedItemsLabel'],
             template:
-              '<div v-bind="$attrs"><input class="multi-options-filter-input" v-bind="filterInputProps" /><div class="multi-select-props">{{ filter }}|{{ filterMatchMode }}</div><slot name="filtericon" /></div>',
+              '<div v-bind="$attrs"><input class="multi-options-filter-input" v-bind="filterInputProps" /><div class="multi-select-props">{{ filter }}|{{ filterMatchMode }}|{{ virtualScrollerOptions?.itemSize }}|{{ maxSelectedLabels }}|{{ selectedItemsLabel }}</div><slot name="filtericon" /></div>',
           },
         },
       },
     })
 
-    expect(wrapper.find('.multi-select-props').text()).toBe('true|contains')
+    expect(wrapper.find('.multi-select-props').text()).toBe('true|contains|44|3|{0} 项已选')
     expect(wrapper.find('.ndv-multi-options').exists()).toBe(true)
     expect(wrapper.get('[data-testid="multi-options-regex-toggle"]').classes()).toContain('bg-white')
 
     await wrapper.get('[data-testid="multi-options-regex-toggle"]').trigger('click')
 
-    expect(wrapper.find('.multi-select-props').text()).toBe('true|custom_regex')
+    expect(wrapper.find('.multi-select-props').text()).toBe('true|custom_regex|44|3|{0} 项已选')
     expect(wrapper.get('[data-testid="multi-options-regex-toggle"]').classes()).toContain('!bg-blue-50')
   })
 
@@ -203,15 +203,15 @@ describe('PropertyField', () => {
         },
         stubs: {
           MultiSelect: {
-            props: ['filter', 'filterMatchMode'],
+            props: ['filter', 'filterMatchMode', 'virtualScrollerOptions', 'maxSelectedLabels', 'selectedItemsLabel'],
             template:
-              '<div v-bind="$attrs"><div class="multi-select-props">{{ filter }}|{{ filterMatchMode }}</div><slot name="filtericon" /></div>',
+              '<div v-bind="$attrs"><div class="multi-select-props">{{ filter }}|{{ filterMatchMode }}|{{ virtualScrollerOptions?.itemSize }}|{{ maxSelectedLabels }}|{{ selectedItemsLabel }}</div><slot name="filtericon" /></div>',
           },
         },
       },
     })
 
-    expect(wrapper.find('.multi-select-props').text()).toBe('true|contains')
+    expect(wrapper.find('.multi-select-props').text()).toBe('true|contains|44|3|{0} 项已选')
     expect(wrapper.find('[data-testid="multi-options-regex-toggle"]').exists()).toBe(false)
   })
 

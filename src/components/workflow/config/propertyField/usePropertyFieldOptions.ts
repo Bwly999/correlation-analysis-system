@@ -1,11 +1,11 @@
-import { computed, ref, watch } from 'vue'
+import { computed, shallowRef, watch } from 'vue'
 import { NUMERIC_ANALYSIS_FIELD_NAMES } from './constants'
 import type { PropertyFieldProps } from './types'
 
 export const usePropertyFieldOptions = (props: PropertyFieldProps) => {
-  const remoteOptions = ref<any[]>([])
-  const isOptionsLoading = ref(false)
-  const optionsError = ref('')
+  const remoteOptions = shallowRef<any[]>([])
+  const isOptionsLoading = shallowRef(false)
+  const optionsError = shallowRef('')
 
   const isHeroSelectButton = computed(
     () => props.prop.type === 'select-button' && props.prop.name === 'fetchMode',
@@ -70,41 +70,46 @@ export const usePropertyFieldOptions = (props: PropertyFieldProps) => {
 
     return rawOptions.map((option) => {
       if (!option || typeof option !== 'object') return option
-
-      const normalizedOption = { ...(option as Record<string, any>) }
       if (
         requiresNumericAnalysisField.value &&
         props.prop.useUpstreamFactors &&
-        normalizedOption.dataType &&
-        normalizedOption.dataType !== 'number'
+        'dataType' in option &&
+        (option as Record<string, any>).dataType &&
+        (option as Record<string, any>).dataType !== 'number'
       ) {
-        normalizedOption.disabled = true
-        normalizedOption.hint = normalizedOption.hint || '仅支持数值字段参与当前分析'
+        return {
+          ...(option as Record<string, any>),
+          disabled: true,
+          hint: (option as Record<string, any>).hint || '仅支持数值字段参与当前分析',
+        }
       }
 
-      return normalizedOption
+      return option
     })
   })
 
   const normalizedMultiOptionsSource = computed(() => {
-    const baseOptions = Array.isArray(normalizedOptionSource.value) ? [...normalizedOptionSource.value] : []
+    const baseOptions = Array.isArray(normalizedOptionSource.value) ? normalizedOptionSource.value : []
     const selectedValues = Array.isArray(props.modelValue) ? props.modelValue : []
     const existingValues = new Set(
       baseOptions.map((option) =>
         option && typeof option === 'object' && 'value' in option ? option.value : option,
       ),
     )
+    const missingOptions: Array<{ name: string; value: unknown }> = []
 
     selectedValues.forEach((value) => {
       if (existingValues.has(value)) return
-      baseOptions.push({
+      missingOptions.push({
         name: String(value),
         value,
       })
       existingValues.add(value)
     })
 
-    return baseOptions
+    if (missingOptions.length === 0) return baseOptions
+
+    return [...baseOptions, ...missingOptions]
   })
 
   const nonAnalyzableUpstreamFactors = computed(() => {

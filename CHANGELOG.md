@@ -4,6 +4,12 @@
 
 ### 修复 (Fix)
 
+- **优化 `options` 与 `multi-options` 在大选项集下的卡顿问题**:
+  - 为单选 `Select` 与多选 `MultiSelect` 启用 PrimeVue 原生虚拟滚动，降低大列表下拉展开时的 DOM 渲染开销。
+  - 将多选字段的筛选全选状态计算改为基于单次扫描与 `Set` 查找，并在闭合态改用“已选数量”汇总文案，减少大量已选标签带来的渲染负担。
+  - `usePropertyFieldOptions` 改为按需克隆选项对象，仅在需要禁用提示或补齐手工输入值时创建新对象，降低大数组响应式复制成本。
+  - 补充 `PropertyField` 与 `usePropertyFieldOptions` 回归测试，覆盖虚拟滚动参数、多选汇总文案与增量补齐手工值行为。
+
 - **修复本地文件导入后台解析时 worker 参数克隆失败的问题**:
   - `file-import` 后台解析任务在发送给 Web Worker 前，改为先将解析选项归一化为可结构化克隆的普通对象，避免 `excludeFields` 等响应式数组触发 `postMessage` 克隆异常。
   - 补充文件导入后台任务回归测试，覆盖响应式 `excludeFields` 传入时仍可正常启动 worker 解析的场景。

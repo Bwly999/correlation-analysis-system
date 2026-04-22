@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import Select from 'primevue/select'
 import type { NodeProperty } from '@/nodes/types'
+import { PROPERTY_FIELD_OPTION_ITEM_SIZE } from '../constants'
 import { useRegexFilter } from '../useRegexFilter'
 
 const props = defineProps<{
@@ -52,6 +53,10 @@ const optionsForceInputHint = computed(() => {
   if (props.options.length > 0) return props.optionsError || undefined
   return '暂无可选项，可直接输入后按回车添加'
 })
+
+const virtualScrollerOptions = {
+  itemSize: PROPERTY_FIELD_OPTION_ITEM_SIZE,
+}
 </script>
 
 <template>
@@ -69,6 +74,7 @@ const optionsForceInputHint = computed(() => {
     :empty-message="optionsForceInputHint"
     :pt="passThrough"
     :placeholder="prop.placeholder"
+    :virtual-scroller-options="virtualScrollerOptions"
     class="w-full ndv-input"
   >
     <template v-if="prop.allowRegexSearch" #filtericon>

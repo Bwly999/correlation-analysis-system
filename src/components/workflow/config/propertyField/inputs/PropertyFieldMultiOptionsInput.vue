@@ -2,6 +2,11 @@
 import { computed } from 'vue'
 import MultiSelect from 'primevue/multiselect'
 import type { NodeProperty } from '@/nodes/types'
+import {
+  PROPERTY_FIELD_MULTI_OPTIONS_MAX_SELECTED_LABELS,
+  PROPERTY_FIELD_MULTI_OPTIONS_SELECTED_LABEL,
+  PROPERTY_FIELD_OPTION_ITEM_SIZE,
+} from '../constants'
 import { useRegexFilter } from '../useRegexFilter'
 
 const props = defineProps<{
@@ -32,6 +37,8 @@ const selectedValues = computed(() =>
   Array.isArray(configValue.value) ? configValue.value.filter((value): value is string => typeof value === 'string') : [],
 )
 
+const selectedValueSet = computed(() => new Set(selectedValues.value))
+
 const getOptionLabel = (option: any) => String(option?.name ?? option?.label ?? option?.value ?? option ?? '')
 const getOptionValue = (option: any) => String(option?.value ?? option)
 const isOptionDisabled = (option: any) => Boolean(option?.disabled)
@@ -52,16 +59,30 @@ const matchesCurrentFilter = (option: any) => {
   return label.toLowerCase().includes(normalizedQuery.toLowerCase())
 }
 
-const visibleSelectableOptionValues = computed(() =>
-  props.options
-    .filter((option) => !isOptionDisabled(option) && matchesCurrentFilter(option))
-    .map((option) => getOptionValue(option)),
-)
+const visibleSelectionState = computed(() => {
+  const visibleValues: string[] = []
+  const currentSelectedValueSet = selectedValueSet.value
+  let allVisibleSelected = true
 
-const isAllVisibleSelected = computed(() =>
-  visibleSelectableOptionValues.value.length > 0
-  && visibleSelectableOptionValues.value.every((value) => selectedValues.value.includes(value)),
-)
+  props.options.forEach((option) => {
+    if (isOptionDisabled(option) || !matchesCurrentFilter(option)) return
+
+    const optionValue = getOptionValue(option)
+    visibleValues.push(optionValue)
+
+    if (!currentSelectedValueSet.has(optionValue)) {
+      allVisibleSelected = false
+    }
+  })
+
+  return {
+    visibleValues,
+    allVisibleSelected: visibleValues.length > 0 && allVisibleSelected,
+  }
+})
+
+const visibleSelectableOptionValues = computed(() => visibleSelectionState.value.visibleValues)
+const isAllVisibleSelected = computed(() => visibleSelectionState.value.allVisibleSelected)
 
 const confirmEditableMultiOption = (event?: KeyboardEvent) => {
   const target = event?.target as HTMLInputElement | null
@@ -103,6 +124,10 @@ const multiOptionsForceInputHint = computed(() => {
   return '暂无可选项，可直接输入后按回车添加'
 })
 
+const virtualScrollerOptions = {
+  itemSize: PROPERTY_FIELD_OPTION_ITEM_SIZE,
+}
+
 const handleFilter = (event: MultiSelectFilterEvent) => {
   setQuery(event.value ?? '')
 }
@@ -113,9 +138,11 @@ const handleSelectAllChange = (event: MultiSelectAllChangeEvent) => {
 
   if (event.checked) {
     const nextValues = [...selectedValues.value]
+    const nextValueSet = new Set(nextValues)
     visibleValues.forEach((value) => {
-      if (!nextValues.includes(value)) {
+      if (!nextValueSet.has(value)) {
         nextValues.push(value)
+        nextValueSet.add(value)
       }
     })
     configValue.value = nextValues
@@ -142,7 +169,10 @@ const handleSelectAllChange = (event: MultiSelectAllChangeEvent) => {
     :pt="passThrough"
     :select-all="isAllVisibleSelected"
     display="chip"
+    :max-selected-labels="PROPERTY_FIELD_MULTI_OPTIONS_MAX_SELECTED_LABELS"
+    :selected-items-label="PROPERTY_FIELD_MULTI_OPTIONS_SELECTED_LABEL"
     :placeholder="prop.placeholder"
+    :virtual-scroller-options="virtualScrollerOptions"
     class="w-full ndv-input ndv-multi-options"
     @filter="handleFilter"
     @selectall-change="handleSelectAllChange"
