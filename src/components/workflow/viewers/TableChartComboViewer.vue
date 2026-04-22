@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, watch } from 'vue'
 import { BarChart3, LayoutPanelTop, Rows3 } from 'lucide-vue-next'
 import ChartViewer from './ChartViewer.vue'
 import TableViewer from './TableViewer.vue'
 import TableCollectionViewer from './TableCollectionViewer.vue'
 import DataChart from '../DataChart.vue'
+import { useScopedResultPreviewStorage } from '../useScopedResultPreviewStorage'
 import {
   getResultChartOption,
   getResultGroups,
@@ -14,29 +15,25 @@ import {
 
 const props = defineProps<{
   data: unknown
+  storageScopeKey?: string
 }>()
 
 type ComboMode = 'chart' | 'table' | 'split'
 
-const mode = ref<ComboMode>('chart')
+const mode = useScopedResultPreviewStorage<ComboMode>(props.storageScopeKey, 'combo-mode', 'chart')
 const normalizedResult = computed(() => normalizeWorkflowResult(props.data))
 const explicitChartOption = computed(() => getResultChartOption(props.data))
 const groups = computed(() => getResultGroups(props.data))
 const rows = computed(() => getResultRows(props.data))
 const isTableCollection = computed(() => normalizedResult.value?.kind === 'tableCollection')
-const fallbackChartData = computed(() => {
-  if (groups.value.length > 0) return groups.value
-  if (rows.value.length > 0) return rows.value
-  return []
-})
-const hasChart = computed(() => Boolean(explicitChartOption.value) || fallbackChartData.value.length > 0)
+const hasChart = computed(() => Boolean(explicitChartOption.value) || groups.value.length > 0 || rows.value.length > 0)
 const hasTable = computed(() => {
   const normalized = normalizedResult.value
   if (normalized?.kind === 'tableCollection') return true
   return rows.value.length > 0
 })
-const showChartPane = computed(() => hasChart.value && mode.value !== 'table')
-const showTablePane = computed(() => hasTable.value && mode.value !== 'chart')
+const showChartPane = computed(() => hasChart.value && (mode.value === 'chart' || mode.value === 'split'))
+const showTablePane = computed(() => hasTable.value && (mode.value === 'table' || mode.value === 'split'))
 const isSplitMode = computed(() => mode.value === 'split' && hasChart.value && hasTable.value)
 const contentClass = computed(() =>
   isSplitMode.value
@@ -109,15 +106,15 @@ watch(
       </div>
 
       <div v-if="showChartPane || showTablePane" :class="contentClass">
-        <div v-if="hasChart" v-show="showChartPane" data-test="combo-chart-pane" :class="paneClass">
-          <DataChart v-if="isTableCollection" :data="fallbackChartData" />
-          <ChartViewer v-else-if="explicitChartOption" :data="props.data" />
-          <DataChart v-else :data="fallbackChartData" />
+        <div v-if="showChartPane" data-test="combo-chart-pane" :class="paneClass">
+          <DataChart v-if="isTableCollection" :data="props.data" :storage-scope-key="props.storageScopeKey" />
+          <ChartViewer v-else-if="explicitChartOption" :data="props.data" :storage-scope-key="props.storageScopeKey" />
+          <DataChart v-else :data="props.data" :storage-scope-key="props.storageScopeKey" />
         </div>
 
-        <div v-if="hasTable" v-show="showTablePane" data-test="combo-table-pane" :class="paneClass">
-          <TableCollectionViewer v-if="isTableCollection" :data="props.data" />
-          <TableViewer v-else :data="props.data" />
+        <div v-if="showTablePane" data-test="combo-table-pane" :class="paneClass">
+          <TableCollectionViewer v-if="isTableCollection" :data="props.data" :storage-scope-key="props.storageScopeKey" />
+          <TableViewer v-else :data="props.data" :storage-scope-key="props.storageScopeKey" />
         </div>
       </div>
 

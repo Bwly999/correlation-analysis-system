@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { useLocalStorage } from '@vueuse/core'
+import { computed, watch } from 'vue'
 import Dialog from 'primevue/dialog'
 import InputNumber from 'primevue/inputnumber'
 import { X, BarChart3, Database, Download, FileJson, Layers, ChevronRight, PanelLeftClose, PanelLeftOpen } from 'lucide-vue-next'
 import DataChart from './DataChart.vue'
 import StructuredDataPreview from './StructuredDataPreview.vue'
+import { useScopedResultPreviewStorage } from './useScopedResultPreviewStorage'
 import { DEFAULT_STRUCTURED_PREVIEW_OPTIONS, createStructuredPreview } from './previewSerialization'
 import { workflowViewerRegistry } from './viewers/registry'
 import {
@@ -21,12 +21,22 @@ const props = defineProps<{
   title: string
   data: any
   appendTo?: HTMLElement | 'body' | 'self'
+  storageScopeKey?: string
 }>()
 
 const emit = defineEmits(['close'])
 
-const previewLimit = ref(3)
-const sidebarCollapsed = useLocalStorage('data-analysis-modal:sidebar-collapsed', false)
+const previewLimit = useScopedResultPreviewStorage(props.storageScopeKey, 'modal-preview-limit', 3)
+const sidebarCollapsed = useScopedResultPreviewStorage(props.storageScopeKey, 'modal-sidebar-collapsed', false)
+
+watch(
+  previewLimit,
+  (value) => {
+    const normalized = Number.isFinite(value) ? Math.min(3, Math.max(1, Math.round(value))) : 3
+    if (normalized !== value) previewLimit.value = normalized
+  },
+  { immediate: true },
+)
 
 const normalizedResult = computed(() => normalizeWorkflowResult(props.data))
 const viewerKey = computed(() => getResultViewerKey(props.data))
@@ -227,8 +237,9 @@ const exportData = () => {
           :is="activeViewer"
           :key="String(viewerKey ?? viewLabel)"
           :data="props.data"
+          :storage-scope-key="props.storageScopeKey"
         />
-        <DataChart v-else :data="fallbackChartData" />
+        <DataChart v-else :data="fallbackChartData" :storage-scope-key="props.storageScopeKey" />
       </div>
     </div>
   </Dialog>

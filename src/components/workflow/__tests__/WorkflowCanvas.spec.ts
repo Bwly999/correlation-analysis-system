@@ -68,10 +68,11 @@ const dataAnalysisModalStub = defineComponent({
     visible: Boolean,
     title: String,
     data: null,
+    storageScopeKey: String,
   },
   emits: ['close'],
   template:
-    '<div class="data-analysis-modal-stub" :data-visible="String(visible)">{{ title }}</div>',
+    '<div class="data-analysis-modal-stub" :data-visible="String(visible)" :data-storage-scope-key="storageScopeKey ?? \'\'">{{ title }}</div>',
 })
 
 vi.mock('../WorkflowAiPanel.vue', () => ({
@@ -444,6 +445,7 @@ describe('WorkflowCanvas', () => {
 
     const modal = wrapper.get('.data-analysis-modal-stub')
     expect(modal.attributes('data-visible')).toBe('true')
+    expect(modal.attributes('data-storage-scope-key')).toBe('node_1')
     expect(modal.text()).toContain('Pearson 分析')
   })
 

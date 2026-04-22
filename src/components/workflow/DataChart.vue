@@ -30,6 +30,7 @@ import {
   Trash2,
 } from 'lucide-vue-next'
 import { calculateBoxValues } from '@/utils/stats'
+import { useScopedResultPreviewStorage } from './useScopedResultPreviewStorage'
 import {
   buildNormalizationStats,
   isFiniteNumber,
@@ -68,32 +69,39 @@ type ChartFilterPreset = {
   updatedAt: number
 }
 
-const FILTER_PRESETS_STORAGE_KEY = 'workflow-data-chart-filter-presets'
-const FILTER_PRESETS_DEFAULT_KEY = 'workflow-data-chart-default-preset'
-const VIEW_MODE_STORAGE_KEY = 'workflow-data-chart-view-mode'
-const NORMALIZATION_METHOD_STORAGE_KEY = 'workflow-data-chart-normalization-method'
 const LINE_CHART_RENDER_LIMIT = 1200
 const BOX_PLOT_COLORS = ['#2563eb', '#10b981', '#f59e0b', '#f43f5e', '#06b6d4', '#475569']
 
 const props = defineProps<{
   data: unknown
+  storageScopeKey?: string
 }>()
 
-const chartType = ref('line')
-const maxPoints = ref(5000)
-const selectedKeys = ref<string[]>([])
-const lowerBound = ref<number | null>(null)
-const upperBound = ref<number | null>(null)
-const viewMode = ref<'raw' | 'normalized'>('raw')
-const normalizationMethod = ref<NormalizationMethod>('min-max')
+const chartType = useScopedResultPreviewStorage(props.storageScopeKey, 'chart-type', 'line')
+const maxPoints = useScopedResultPreviewStorage(props.storageScopeKey, 'chart-max-points', 5000)
+const selectedKeys = useScopedResultPreviewStorage<string[]>(props.storageScopeKey, 'chart-selected-keys', [])
+const lowerBound = useScopedResultPreviewStorage<number | null>(props.storageScopeKey, 'chart-lower-bound', null)
+const upperBound = useScopedResultPreviewStorage<number | null>(props.storageScopeKey, 'chart-upper-bound', null)
+const viewMode = useScopedResultPreviewStorage<'raw' | 'normalized'>(props.storageScopeKey, 'chart-view-mode', 'raw')
+const normalizationMethod = useScopedResultPreviewStorage<NormalizationMethod>(
+  props.storageScopeKey,
+  'chart-normalization-method',
+  'min-max',
+)
 const isPresetPanelOpen = ref(false)
 const presetNameInput = ref('')
-const selectedPresetId = ref<string | null>(null)
-const savedPresets = ref<ChartFilterPreset[]>([])
-const defaultPresetId = ref<string | 'none' | null>(null)
+const selectedPresetId = useScopedResultPreviewStorage<string | null>(props.storageScopeKey, 'chart-selected-preset', null)
+const savedPresets = useScopedResultPreviewStorage<ChartFilterPreset[]>(
+  props.storageScopeKey,
+  'chart-saved-presets',
+  [],
+)
+const defaultPresetId = useScopedResultPreviewStorage<string | 'none' | null>(
+  props.storageScopeKey,
+  'chart-default-preset',
+  null,
+)
 const chartRef = shallowRef<any>(null)
-
-const isBrowser = typeof window !== 'undefined'
 
 const createDefaultPresetName = () => {
   const now = new Date()
@@ -101,41 +109,10 @@ const createDefaultPresetName = () => {
   return `过滤条件 ${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`
 }
 
-const persistPresets = () => {
-  if (!isBrowser) return
-  localStorage.setItem(FILTER_PRESETS_STORAGE_KEY, JSON.stringify(savedPresets.value))
-}
-
 const persistDefaultPreset = () => {
-  if (!isBrowser) return
   if (defaultPresetId.value === null) {
-    localStorage.removeItem(FILTER_PRESETS_DEFAULT_KEY)
     return
   }
-  localStorage.setItem(FILTER_PRESETS_DEFAULT_KEY, defaultPresetId.value)
-}
-
-const loadPresetState = () => {
-  if (!isBrowser) return
-
-  try {
-    const rawPresets = localStorage.getItem(FILTER_PRESETS_STORAGE_KEY)
-    const parsedPresets = rawPresets ? JSON.parse(rawPresets) : []
-    savedPresets.value = Array.isArray(parsedPresets)
-      ? parsedPresets.filter((item): item is ChartFilterPreset => Boolean(item?.id))
-      : []
-  } catch {
-    savedPresets.value = []
-  }
-
-  const rawDefault = localStorage.getItem(FILTER_PRESETS_DEFAULT_KEY)
-  defaultPresetId.value = rawDefault === 'none' ? 'none' : rawDefault
-
-  const rawViewMode = localStorage.getItem(VIEW_MODE_STORAGE_KEY)
-  viewMode.value = rawViewMode === 'normalized' ? 'normalized' : 'raw'
-
-  const rawNormalizationMethod = localStorage.getItem(NORMALIZATION_METHOD_STORAGE_KEY)
-  normalizationMethod.value = rawNormalizationMethod === 'z-score' ? 'z-score' : 'min-max'
 }
 
 const applyPreset = (preset: ChartFilterPreset | null) => {
@@ -372,7 +349,6 @@ const saveCurrentPreset = () => {
   savedPresets.value = [preset, ...savedPresets.value]
   selectedPresetId.value = preset.id
   presetNameInput.value = preset.name
-  persistPresets()
 }
 
 const markCurrentSelectionAsDefault = () => {
@@ -393,7 +369,6 @@ const deletePreset = (presetId: string) => {
     defaultPresetId.value = null
     persistDefaultPreset()
   }
-  persistPresets()
 }
 
 const selectAndApplyPreset = (preset: ChartFilterPreset) => {
@@ -708,18 +683,79 @@ const chartOption = computed(() => {
   return markRaw(option)
 })
 
-loadPresetState()
+watch(
+  maxPoints,
+  (value) => {
+    const normalized = Number.isFinite(value) ? Math.min(50000, Math.max(100, Math.round(value))) : 5000
+    if (normalized !== value) maxPoints.value = normalized
+  },
+  { immediate: true },
+)
+
+watch(
+  viewMode,
+  (value) => {
+    if (value !== 'raw' && value !== 'normalized') viewMode.value = 'raw'
+  },
+  { immediate: true },
+)
+
+watch(
+  normalizationMethod,
+  (value) => {
+    if (value !== 'min-max' && value !== 'z-score') normalizationMethod.value = 'min-max'
+  },
+  { immediate: true },
+)
+
+watch(
+  savedPresets,
+  (presets) => {
+    const normalizedPresets = Array.isArray(presets)
+      ? presets.filter((item): item is ChartFilterPreset => Boolean(item?.id))
+      : []
+    if (normalizedPresets.length !== presets.length) {
+      savedPresets.value = normalizedPresets
+    }
+  },
+  { immediate: true, deep: true },
+)
+
+watch(
+  defaultPresetId,
+  (value) => {
+    if (value === 'none' || value === null) return
+    if (!savedPresets.value.some((preset) => preset.id === value)) {
+      defaultPresetId.value = null
+    }
+  },
+  { immediate: true },
+)
+
+watch(
+  selectedPresetId,
+  (value) => {
+    if (value === null) return
+    if (!savedPresets.value.some((preset) => preset.id === value)) {
+      selectedPresetId.value = null
+    }
+  },
+  { immediate: true },
+)
+
+watch(
+  availableKeys,
+  () => {
+    if (selectedKeys.value.length === 0) return
+    const normalizedSelected = selectedKeys.value.filter((key) => availableKeys.value.includes(key))
+    if (normalizedSelected.length !== selectedKeys.value.length) {
+      selectedKeys.value = normalizedSelected
+    }
+  },
+  { immediate: true },
+)
+
 applyDefaultPreset()
-
-watch(viewMode, (nextViewMode) => {
-  if (!isBrowser) return
-  localStorage.setItem(VIEW_MODE_STORAGE_KEY, nextViewMode)
-}, { immediate: true })
-
-watch(normalizationMethod, (nextMethod) => {
-  if (!isBrowser) return
-  localStorage.setItem(NORMALIZATION_METHOD_STORAGE_KEY, nextMethod)
-}, { immediate: true })
 </script>
 
 <template>

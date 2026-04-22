@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { defineComponent, h } from 'vue'
 import { mount } from '@vue/test-utils'
 import { createJsonResult, createReportResult } from '@/nodes/result'
 import DataAnalysisModal from '../DataAnalysisModal.vue'
@@ -15,6 +16,41 @@ vi.mock('../viewers/registry', () => ({
     },
   },
 }))
+
+const dialogStub = defineComponent({
+  name: 'DialogStub',
+  props: ['visible', 'appendTo'],
+  emits: ['update:visible'],
+  template: '<div class="dialog-stub"><slot name="header" /><slot /></div>',
+})
+
+const inputNumberStub = defineComponent({
+  name: 'InputNumberStub',
+  props: ['modelValue'],
+  emits: ['update:modelValue'],
+  setup(props, { emit }) {
+    return () =>
+      h('input', {
+        class: 'input-number-stub',
+        type: 'number',
+        value: props.modelValue,
+        onInput: (event: Event) =>
+          emit('update:modelValue', Number((event.target as HTMLInputElement).value)),
+      })
+  },
+})
+
+const createWrapper = (props: any) =>
+  mount(DataAnalysisModal, {
+    props,
+    global: {
+      stubs: {
+        Dialog: dialogStub,
+        InputNumber: inputNumberStub,
+        DataChart: true,
+      },
+    },
+  })
 
 describe('DataAnalysisModal', () => {
   it('renders the matched viewer immediately without async loading fallback', () => {
@@ -305,5 +341,51 @@ describe('DataAnalysisModal', () => {
     })
 
     expect(wrapper.get('.dialog-stub').attributes('data-append-to-type')).toBe('element')
+  })
+
+  it('persists sidebar state and preview limit per node storage scope', async () => {
+    localStorage.clear()
+
+    const wrapper = createWrapper({
+      visible: true,
+      title: '宽表结果',
+      storageScopeKey: 'node-a',
+      data: [
+        { id: 1, score: 10 },
+        { id: 2, score: 20 },
+      ],
+    })
+
+    await wrapper.get('.input-number-stub').setValue('2')
+    await wrapper.get('button[title="收起预览面板"]').trigger('click')
+    await wrapper.unmount()
+
+    const remounted = createWrapper({
+      visible: true,
+      title: '宽表结果',
+      storageScopeKey: 'node-a',
+      data: [
+        { id: 1, score: 10 },
+        { id: 2, score: 20 },
+      ],
+    })
+
+    expect(remounted.find('button[title="展开预览面板"]').exists()).toBe(true)
+
+    await remounted.get('button[title="展开预览面板"]').trigger('click')
+    expect((remounted.get('.input-number-stub').element as HTMLInputElement).value).toBe('2')
+
+    const otherNode = createWrapper({
+      visible: true,
+      title: '宽表结果',
+      storageScopeKey: 'node-b',
+      data: [
+        { id: 1, score: 10 },
+        { id: 2, score: 20 },
+      ],
+    })
+
+    expect(otherNode.find('button[title="收起预览面板"]').exists()).toBe(true)
+    expect((otherNode.get('.input-number-stub').element as HTMLInputElement).value).toBe('3')
   })
 })

@@ -122,12 +122,59 @@ vi.mock('primevue/inputnumber', () => ({
 }))
 
 describe('TableChartComboViewer', () => {
-  const expectPaneVisible = (wrapper: ReturnType<typeof mount>, selector: string) => {
-    expect(wrapper.get(selector).attributes('style') ?? '').not.toContain('display: none')
+  it('persists combo mode per node storage scope and keeps nodes isolated', async () => {
+    localStorage.clear()
+
+    const sharedData = {
+      kind: 'table',
+      payload: [
+        { score: 1, revenue: 1000 },
+        { score: 2, revenue: 2000 },
+      ],
+    }
+
+    const wrapper = mount(TableChartComboViewer, {
+      props: {
+        data: sharedData,
+        storageScopeKey: 'node-a',
+      },
+    })
+
+    await wrapper.get('[data-test="combo-mode-split"]').trigger('click')
+    await wrapper.unmount()
+
+    const remounted = mount(TableChartComboViewer, {
+      props: {
+        data: sharedData,
+        storageScopeKey: 'node-a',
+      },
+    })
+
+    expect(remounted.get('[data-test="combo-mode-split"]').classes()).toContain(
+      'combo-mode-button--active',
+    )
+
+    const otherNode = mount(TableChartComboViewer, {
+      props: {
+        data: sharedData,
+        storageScopeKey: 'node-b',
+      },
+    })
+
+    expect(otherNode.get('[data-test="combo-mode-chart"]').classes()).toContain(
+      'combo-mode-button--active',
+    )
+    expect(otherNode.get('[data-test="combo-mode-split"]').classes()).not.toContain(
+      'combo-mode-button--active',
+    )
+  })
+
+  const expectPaneMounted = (wrapper: ReturnType<typeof mount>, selector: string) => {
+    expect(wrapper.find(selector).exists()).toBe(true)
   }
 
-  const expectPaneHidden = (wrapper: ReturnType<typeof mount>, selector: string) => {
-    expect(wrapper.get(selector).attributes('style') ?? '').toContain('display: none')
+  const expectPaneUnmounted = (wrapper: ReturnType<typeof mount>, selector: string) => {
+    expect(wrapper.find(selector).exists()).toBe(false)
   }
 
   it('supports chart, table and split modes', async () => {
@@ -147,20 +194,21 @@ describe('TableChartComboViewer', () => {
       },
     })
 
-    expectPaneVisible(wrapper, '[data-test="combo-chart-pane"]')
-    expectPaneHidden(wrapper, '[data-test="combo-table-pane"]')
+    expectPaneMounted(wrapper, '[data-test="combo-chart-pane"]')
+    expectPaneUnmounted(wrapper, '[data-test="combo-table-pane"]')
+    expect(wrapper.find('[data-test="table-collection-viewer-stub"]').exists()).toBe(false)
 
     await wrapper.get('[data-test="combo-mode-chart"]').trigger('click')
-    expectPaneVisible(wrapper, '[data-test="combo-chart-pane"]')
-    expectPaneHidden(wrapper, '[data-test="combo-table-pane"]')
+    expectPaneMounted(wrapper, '[data-test="combo-chart-pane"]')
+    expectPaneUnmounted(wrapper, '[data-test="combo-table-pane"]')
 
     await wrapper.get('[data-test="combo-mode-split"]').trigger('click')
-    expectPaneVisible(wrapper, '[data-test="combo-table-pane"]')
-    expectPaneVisible(wrapper, '[data-test="combo-chart-pane"]')
+    expectPaneMounted(wrapper, '[data-test="combo-table-pane"]')
+    expectPaneMounted(wrapper, '[data-test="combo-chart-pane"]')
 
     await wrapper.get('[data-test="combo-mode-table"]').trigger('click')
-    expectPaneVisible(wrapper, '[data-test="combo-table-pane"]')
-    expectPaneHidden(wrapper, '[data-test="combo-chart-pane"]')
+    expectPaneMounted(wrapper, '[data-test="combo-table-pane"]')
+    expectPaneUnmounted(wrapper, '[data-test="combo-chart-pane"]')
   })
 
   it('uses interactive grouped charts and grouped tables for tableCollection results', async () => {
@@ -205,8 +253,8 @@ describe('TableChartComboViewer', () => {
 
     await wrapper.get('[data-test="combo-mode-split"]').trigger('click')
 
-    expectPaneVisible(wrapper, '[data-test="combo-chart-pane"]')
-    expectPaneVisible(wrapper, '[data-test="combo-table-pane"]')
+    expectPaneMounted(wrapper, '[data-test="combo-chart-pane"]')
+    expectPaneMounted(wrapper, '[data-test="combo-table-pane"]')
   })
 
   it('enables chart mode for plain table results by using derived data charts', async () => {
@@ -219,7 +267,7 @@ describe('TableChartComboViewer', () => {
       },
     })
 
-    expect(wrapper.html()).toContain('data-test="table-viewer-stub"')
+    expect(wrapper.find('[data-test="table-viewer-stub"]').exists()).toBe(false)
     expect(wrapper.html()).not.toContain('data-test="chart-viewer-stub"')
     expect(wrapper.get('[data-test="combo-mode-chart"]').attributes('disabled')).toBeUndefined()
 
@@ -242,7 +290,7 @@ describe('TableChartComboViewer', () => {
       },
     })
 
-    expectPaneHidden(wrapper, '[data-test="combo-table-pane"]')
+    expectPaneUnmounted(wrapper, '[data-test="combo-table-pane"]')
     expect((wrapper.get('[data-test="chart-lower-bound"]').element as HTMLInputElement).value).toBe('')
 
     await wrapper.get('[data-test="chart-key-select"]').setValue(['other'])
@@ -251,7 +299,7 @@ describe('TableChartComboViewer', () => {
     await wrapper.get('[data-test="chart-upper-bound"]').setValue('28')
 
     await wrapper.get('[data-test="combo-mode-split"]').trigger('click')
-    expectPaneVisible(wrapper, '[data-test="combo-table-pane"]')
+    expectPaneMounted(wrapper, '[data-test="combo-table-pane"]')
 
     await wrapper.get('[data-test="combo-mode-chart"]').trigger('click')
 

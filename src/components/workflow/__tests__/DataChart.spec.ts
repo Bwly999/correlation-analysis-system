@@ -110,6 +110,7 @@ describe('DataChart', () => {
 
     const wrapper = mount(DataChart, {
       props: {
+        storageScopeKey: 'node-a',
         data: [
           { small: 1, large: 1000 },
           { small: 3, large: 3000 },
@@ -126,13 +127,14 @@ describe('DataChart', () => {
     expect(option.yAxis.max).toBe(1)
     expect(option.series[0].data).toEqual([0, 0.5, 1])
     expect(option.series[1].data).toEqual([0, 0.5, 1])
-    expect(localStorage.getItem('workflow-data-chart-view-mode')).toBe('normalized')
-    expect(localStorage.getItem('workflow-data-chart-normalization-method')).toBe('min-max')
+    expect(localStorage.getItem('workflow-result-preview:node-a:chart-view-mode')).toBe('normalized')
+    expect(localStorage.getItem('workflow-result-preview:node-a:chart-normalization-method')).toBe('min-max')
 
     await wrapper.unmount()
 
     const remounted = mount(DataChart, {
       props: {
+        storageScopeKey: 'node-a',
         data: [
           { small: 2, large: 2000 },
           { small: 4, large: 4000 },
@@ -373,6 +375,7 @@ describe('DataChart', () => {
 
     const wrapper = mount(DataChart, {
       props: {
+        storageScopeKey: 'node-a',
         data: [
           { score: 5, other: 10 },
           { score: 15, other: 11 },
@@ -395,6 +398,7 @@ describe('DataChart', () => {
 
     const remounted = mount(DataChart, {
       props: {
+        storageScopeKey: 'node-a',
         data: [
           { score: 5, other: 10 },
           { score: 15, other: 11 },
@@ -416,6 +420,7 @@ describe('DataChart', () => {
 
     const wrapper = mount(DataChart, {
       props: {
+        storageScopeKey: 'node-a',
         data: [
           { score: 5, other: 10 },
           { score: 15, other: 11 },
@@ -434,6 +439,7 @@ describe('DataChart', () => {
 
     const remounted = mount(DataChart, {
       props: {
+        storageScopeKey: 'node-a',
         data: [
           { score: 5, other: 10 },
           { score: 15, other: 11 },

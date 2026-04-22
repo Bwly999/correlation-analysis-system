@@ -1,13 +1,15 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, watch } from 'vue'
+import { useScopedResultPreviewStorage } from '../useScopedResultPreviewStorage'
 import { getResultGroups } from '../resultView'
 
 const props = defineProps<{
   data: unknown
+  storageScopeKey?: string
 }>()
 
 const groups = computed(() => getResultGroups(props.data))
-const activeGroupName = ref('')
+const activeGroupName = useScopedResultPreviewStorage(props.storageScopeKey, 'table-collection-group', '')
 
 watch(
   groups,

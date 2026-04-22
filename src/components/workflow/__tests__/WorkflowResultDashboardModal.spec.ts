@@ -92,7 +92,7 @@ const createWrapper = () =>
         },
         DataAnalysisModal: defineComponent({
           name: 'DataAnalysisModal',
-          props: ['visible', 'title', 'data', 'appendTo'],
+          props: ['visible', 'title', 'data', 'appendTo', 'storageScopeKey'],
           computed: {
             appendToType(): string {
               return this.appendTo && typeof this.appendTo === 'object'
@@ -101,7 +101,7 @@ const createWrapper = () =>
             },
           },
           template:
-            '<div class="data-analysis-modal-stub" :data-visible="String(visible)" :data-title="title" :data-append-to-type="appendToType"></div>',
+            '<div class="data-analysis-modal-stub" :data-visible="String(visible)" :data-title="title" :data-append-to-type="appendToType" :data-storage-scope-key="storageScopeKey ?? \'\'"></div>',
         }),
       },
     },
@@ -280,5 +280,6 @@ describe('WorkflowResultDashboardModal', () => {
     expect(modalStub.attributes('data-visible')).toBe('true')
     expect(modalStub.attributes('data-title')).toContain('报告 A 结果详情')
     expect(modalStub.attributes('data-append-to-type')).toBe('element')
+    expect(modalStub.attributes('data-storage-scope-key')).toBe('node_a')
   })
 })

@@ -644,6 +644,7 @@ onBeforeUnmount(() => {
       :visible="!!activePreviewNode"
       :title="activePreviewTitle"
       :data="activePreviewNode?.data.output ?? null"
+      :storage-scope-key="activePreviewNode?.id"
       @close="store.setActivePreviewNodeId(null)"
     />
     <RuntimeInputModal

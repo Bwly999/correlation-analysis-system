@@ -672,6 +672,7 @@ const buildManualInputTemplate = () => {
       :visible="analysisModal.visible"
       :title="analysisModal.title"
       :data="analysisModal.data"
+      :storage-scope-key="node?.id"
       @close="analysisModal.visible = false"
     />
 

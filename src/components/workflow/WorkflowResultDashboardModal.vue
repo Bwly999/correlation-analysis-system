@@ -615,6 +615,7 @@ const formatDuration = (duration: number) => {
       :visible="!!detailNode"
       :title="detailNode ? `${detailNode.label} 结果详情` : ''"
       :data="detailNode?.output"
+      :storage-scope-key="detailNode?.nodeId"
       :append-to="detailDialogAppendTarget"
       @close="detailNode = null"
     />

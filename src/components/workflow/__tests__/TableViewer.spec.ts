@@ -3,6 +3,11 @@ import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import TableViewer from '../viewers/TableViewer.vue'
 
+const gridApiCalls = vi.hoisted(() => ({
+  setFilterModel: vi.fn(),
+  applyColumnState: vi.fn(),
+}))
+
 vi.mock('primevue/button', () => ({
   default: defineComponent({
     name: 'PrimeButtonStub',
@@ -119,13 +124,18 @@ vi.mock('ag-grid-vue3', () => ({
       'suppressRowVirtualisation',
       'tooltipShowDelay',
     ],
-    emits: ['columnResized', 'columnMoved', 'gridReady'],
+    emits: ['columnResized', 'columnMoved', 'gridReady', 'sortChanged', 'filterChanged'],
     setup(props, { emit }) {
       const rowCount = computed(() => props.rowData?.length ?? 0)
       const columnCount = computed(() => props.columnDefs?.length ?? 0)
 
       onMounted(() => {
-        emit('gridReady', { api: {} })
+        emit('gridReady', {
+          api: {
+            setFilterModel: gridApiCalls.setFilterModel,
+            applyColumnState: gridApiCalls.applyColumnState,
+          },
+        })
       })
 
       return () =>
@@ -405,5 +415,85 @@ describe('TableViewer', () => {
     expect(grid.attributes('data-theme')).toBe('legacy')
     expect(grid.attributes('data-animate-rows')).toBe('false')
     expect(grid.attributes('data-row-buffer')).toBe('4')
+  })
+
+  it('persists density and column layout per node scope but does not persist quick filter text', async () => {
+    localStorage.clear()
+
+    const wrapper = mount(TableViewer, {
+      props: {
+        data: createResult(createRows(5)),
+        storageScopeKey: 'node-a',
+      },
+    })
+
+    await wrapper.get('[data-test="table-density-compact"]').trigger('click')
+    await wrapper.get('[data-test="table-column-panel-toggle"]').trigger('click')
+    await wrapper.get('[data-test="table-hide-column-name"]').trigger('click')
+    await wrapper.get('[data-test="table-quick-filter"]').setValue('Beijing')
+    await wrapper.unmount()
+
+    const remounted = mount(TableViewer, {
+      props: {
+        data: createResult(createRows(5)),
+        storageScopeKey: 'node-a',
+      },
+    })
+
+    const gridVm = remounted.getComponent({ name: 'AgGridVueStub' }).vm as {
+      columnDefs: Array<{ field?: string; hide?: boolean }>
+      rowHeight: number
+    }
+
+    expect(gridVm.rowHeight).toBe(30)
+    expect(gridVm.columnDefs.find((column) => column.field === 'name')?.hide).toBe(true)
+    expect(remounted.get('[data-test="ag-grid-stub"]').attributes('data-quick-filter-text')).toBe('')
+
+    const otherNode = mount(TableViewer, {
+      props: {
+        data: createResult(createRows(5)),
+        storageScopeKey: 'node-b',
+      },
+    })
+
+    const otherGridVm = otherNode.getComponent({ name: 'AgGridVueStub' }).vm as {
+      columnDefs: Array<{ field?: string; hide?: boolean }>
+      rowHeight: number
+    }
+
+    expect(otherGridVm.rowHeight).toBe(36)
+    expect(otherGridVm.columnDefs.find((column) => column.field === 'name')?.hide).toBe(false)
+  })
+
+  it('replays persisted grid sort and filter models on remount', async () => {
+    localStorage.clear()
+    gridApiCalls.setFilterModel.mockReset()
+    gridApiCalls.applyColumnState.mockReset()
+    localStorage.setItem(
+      'workflow-result-preview:node-a:table-sort-model',
+      JSON.stringify([{ colId: 'name', sort: 'asc', sortIndex: 0 }]),
+    )
+    localStorage.setItem(
+      'workflow-result-preview:node-a:table-filter-model',
+      JSON.stringify({
+        id: { filterType: 'number', type: 'greaterThan', filter: 2 },
+      }),
+    )
+
+    mount(TableViewer, {
+      props: {
+        data: createResult(createRows(5)),
+        storageScopeKey: 'node-a',
+      },
+    })
+
+    expect(gridApiCalls.applyColumnState).toHaveBeenCalledWith(
+      expect.objectContaining({
+        state: expect.arrayContaining([expect.objectContaining({ colId: 'name', sort: 'asc' })]),
+      }),
+    )
+    expect(gridApiCalls.setFilterModel).toHaveBeenCalledWith({
+      id: { filterType: 'number', type: 'greaterThan', filter: 2 },
+    })
   })
 })
