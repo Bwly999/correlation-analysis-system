@@ -20,46 +20,9 @@ const config = ref<Record<string, any>>({})
 const reuseLastRuntimeInputs = ref(false)
 const store = useWorkflowStore()
 
-// 分割线逻辑
-const topHeight = ref(228)
-const isResizing = ref(false)
-
-const startResizing = (e: MouseEvent) => {
-  isResizing.value = true
-  const startY = e.clientY
-  const startHeight = topHeight.value
-
-  const onMouseMove = (moveEvent: MouseEvent) => {
-    if (!isResizing.value) return
-    const deltaY = moveEvent.clientY - startY
-    // 限制高度范围：180px 到 420px
-    topHeight.value = Math.max(180, Math.min(420, startHeight + deltaY))
-  }
-
-  const onMouseUp = () => {
-    isResizing.value = false
-    document.removeEventListener('mousemove', onMouseMove)
-    document.removeEventListener('mouseup', onMouseUp)
-  }
-
-  document.addEventListener('mousemove', onMouseMove)
-  document.addEventListener('mouseup', onMouseUp)
-}
-
 const nodeDefinition = computed(() => (props.node ? getNodeDefinition(props.node.data.type) : null))
 const runtimeProperties = computed(
   () => nodeDefinition.value?.properties.filter((property) => property.isRuntimeInput) || [],
-)
-
-// 将属性拆分为首个属性（启动方式）和其余属性
-const firstProperty = computed(() => runtimeProperties.value[0] || null)
-const otherProperties = computed(() => runtimeProperties.value.slice(1))
-const hasSplitLayout = computed(() => otherProperties.value.length > 0)
-const singlePaneProperties = computed(() =>
-  !hasSplitLayout.value && firstProperty.value ? [firstProperty.value] : [],
-)
-const splitPaneProperties = computed(() =>
-  hasSplitLayout.value && firstProperty.value ? [firstProperty.value] : [],
 )
 const isGlobalContinuation = computed(() => store.pendingExecution?.executionScope === 'global')
 const globalPromptProgressText = computed(() => {
@@ -222,7 +185,7 @@ const handleConfirm = () => {
       </div>
     </template>
 
-    <div class="flex flex-col gap-4 py-2" :class="{ 'cursor-row-resize select-none': isResizing }">
+    <div class="flex flex-col gap-4 py-2">
       <div class="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-3 shadow-sm shrink-0">
         <div class="min-w-0">
           <div class="text-sm font-semibold text-slate-900">{{ currentNodeLabel }}</div>
@@ -290,57 +253,9 @@ const handleConfirm = () => {
           </div>
         </div>
 
-        <div
-          v-if="singlePaneProperties.length > 0"
-          data-testid="runtime-input-single-pane"
-          class="min-h-0"
-        >
-          <PropertyField
-            v-for="prop in singlePaneProperties"
-            :key="prop.name"
-            :prop="prop"
-            :model-value="config[prop.name]"
-            :upstream-factors="[]"
-            :config-context="config"
-            @update:model-value="(val) => updateConfig(prop.name, val)"
-          />
-        </div>
-
-        <!-- 顶部固定区域：通常是启动方式 -->
-        <div
-          v-if="splitPaneProperties.length > 0"
-          data-testid="runtime-input-first-pane"
-          class="mb-3 shrink-0 overflow-hidden"
-          :style="{ height: topHeight + 'px' }"
-        >
-          <PropertyField
-            v-for="prop in splitPaneProperties"
-            :key="prop.name"
-            :prop="prop"
-            :model-value="config[prop.name]"
-            :upstream-factors="[]"
-            :config-context="config"
-            @update:model-value="(val) => updateConfig(prop.name, val)"
-          />
-        </div>
-
-        <!-- 可调节分割线 -->
-        <div
-          v-if="hasSplitLayout"
-          class="group flex items-center justify-center h-4 cursor-row-resize select-none my-1"
-          @mousedown="startResizing"
-        >
-          <div class="w-12 h-1 bg-slate-200 rounded-full group-hover:bg-blue-400 transition-colors" />
-        </div>
-
-        <!-- 底部滚动区域：其余属性 -->
-        <div
-          v-if="hasSplitLayout"
-          data-testid="runtime-input-scroll-pane"
-          class="custom-scrollbar flex-1 overflow-y-auto pr-2 pb-8 space-y-6"
-        >
+        <div class="space-y-6">
           <div
-            v-for="prop in otherProperties"
+            v-for="prop in runtimeProperties"
             v-show="!prop.displayIf || prop.displayIf(config)"
             :key="prop.name"
             class="runtime-prop-item"

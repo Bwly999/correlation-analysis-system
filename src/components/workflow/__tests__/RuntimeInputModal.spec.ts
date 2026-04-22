@@ -17,7 +17,7 @@ describe('RuntimeInputModal', () => {
     setActivePinia(createPinia())
   })
 
-  it('does not clamp a single runtime field into the resizable top pane', () => {
+  it('renders a single runtime field without any split panes', () => {
     const wrapper = mount(RuntimeInputModal, {
       props: {
         visible: true,
@@ -53,11 +53,12 @@ describe('RuntimeInputModal', () => {
     })
 
     expect(wrapper.find('[data-testid="runtime-input-first-pane"]').exists()).toBe(false)
-    expect(wrapper.find('[data-testid="runtime-input-single-pane"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="runtime-input-single-pane"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="runtime-input-scroll-pane"]').exists()).toBe(false)
     expect(wrapper.text()).toContain('选择数据文件')
   })
 
-  it('adds bottom-safe scroll space when runtime inputs use the split layout', () => {
+  it('renders multiple runtime fields in one continuous form without split panes', () => {
     const wrapper = mount(RuntimeInputModal, {
       props: {
         visible: true,
@@ -92,10 +93,11 @@ describe('RuntimeInputModal', () => {
       },
     })
 
-    const scrollPane = wrapper.get('[data-testid="runtime-input-scroll-pane"]')
-
-    expect(wrapper.find('[data-testid="runtime-input-first-pane"]').exists()).toBe(true)
-    expect(scrollPane.classes()).toContain('pb-8')
+    expect(wrapper.find('[data-testid="runtime-input-first-pane"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="runtime-input-single-pane"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="runtime-input-scroll-pane"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('启动方式')
+    expect(wrapper.text()).toContain('查询日期')
   })
 
   it('shows the runtime input reuse toggle in a compact help layout', () => {
