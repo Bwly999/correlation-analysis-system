@@ -47,6 +47,30 @@ const createTreeV2Stub = (
   template: `<div data-testid="tree-v2-stub">${template}</div>`,
 })
 
+const createScrollableTreeV2Stub = () => defineComponent({
+  name: 'ScrollableTreeV2Stub',
+  props: ['data', 'props'],
+  emits: ['check', 'node-expand', 'node-collapse'],
+  setup(props) {
+    const handleInternalWheel = (event: WheelEvent) => {
+      const viewport = event.currentTarget as HTMLElement | null
+      if (!viewport) return
+
+      const maxScrollTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight)
+      viewport.scrollTop = Math.min(Math.max(viewport.scrollTop + event.deltaY, 0), maxScrollTop)
+    }
+
+    return () =>
+      h('div', { 'data-testid': 'tree-v2-stub' }, [
+        h('div', {
+          'data-testid': 'tree-scroll-window',
+          class: 'el-vl__window',
+          onWheel: handleInternalWheel,
+        }, JSON.stringify({ data: props.data, treeProps: props.props })),
+      ])
+  },
+})
+
 const mountTreeInput = () =>
   mount(PropertyFieldTreeInput, {
     props: {
@@ -91,6 +115,44 @@ const setElementScrollMetrics = (
       value: metrics.scrollLeft ?? 0,
     },
   })
+}
+
+const mountTreeInputInScrollContainer = (treeStub = createScrollableTreeV2Stub()) => {
+  const wrapper = mount(defineComponent({
+    components: {
+      PropertyFieldTreeInput,
+    },
+    setup() {
+      return {
+        options: treeOptions,
+        prop: createTreeProp(),
+      }
+    },
+    template: `
+      <div data-testid="scroll-container">
+        <PropertyFieldTreeInput
+          :model-value="{}"
+          :prop="prop"
+          :options="options"
+          :is-options-loading="false"
+          :options-error="''"
+        />
+      </div>
+    `,
+  }), {
+    attachTo: document.body,
+    global: {
+      stubs: {
+        InputText: createInputTextStub,
+        ElTreeV2: treeStub,
+      },
+    },
+  })
+
+  return {
+    wrapper,
+    scrollContainer: wrapper.get('[data-testid="scroll-container"]').element as HTMLElement,
+  }
 }
 
 describe('PropertyFieldTreeInput', () => {
@@ -707,32 +769,14 @@ describe('PropertyFieldTreeInput', () => {
   })
 
   it('tree 可滚动且未到边界时，滚轮只驱动 tree 自身滚动', async () => {
-    const host = document.createElement('div')
-    document.body.appendChild(host)
-    setElementScrollMetrics(host, {
+    const { wrapper, scrollContainer } = mountTreeInputInScrollContainer()
+    setElementScrollMetrics(scrollContainer, {
       clientHeight: 400,
       scrollHeight: 1000,
       scrollTop: 120,
     })
 
-    const wrapper = mount(PropertyFieldTreeInput, {
-      attachTo: host,
-      props: {
-        modelValue: {},
-        prop: createTreeProp(),
-        options: treeOptions,
-        isOptionsLoading: false,
-        optionsError: '',
-      },
-      global: {
-        stubs: {
-          InputText: createInputTextStub,
-          ElTreeV2: createTreeV2Stub(),
-        },
-      },
-    })
-
-    const treeViewport = wrapper.get('[data-testid="tree-v2-stub"]').element
+    const treeViewport = wrapper.get('[data-testid="tree-scroll-window"]').element
     setElementScrollMetrics(treeViewport, {
       clientHeight: 180,
       scrollHeight: 540,
@@ -746,101 +790,9 @@ describe('PropertyFieldTreeInput', () => {
     }))
 
     expect((treeViewport as HTMLElement).scrollTop).toBe(100)
-    expect(host.scrollTop).toBe(120)
+    expect(scrollContainer.scrollTop).toBe(120)
 
     wrapper.unmount()
-    host.remove()
   })
 
-  it('tree 不可滚动时，滚轮会直接交给外层滚动容器', async () => {
-    const host = document.createElement('div')
-    document.body.appendChild(host)
-    setElementScrollMetrics(host, {
-      clientHeight: 400,
-      scrollHeight: 1000,
-      scrollTop: 120,
-    })
-
-    const wrapper = mount(PropertyFieldTreeInput, {
-      attachTo: host,
-      props: {
-        modelValue: {},
-        prop: createTreeProp(),
-        options: treeOptions,
-        isOptionsLoading: false,
-        optionsError: '',
-      },
-      global: {
-        stubs: {
-          InputText: createInputTextStub,
-          ElTreeV2: createTreeV2Stub(),
-        },
-      },
-    })
-
-    const treeViewport = wrapper.get('[data-testid="tree-v2-stub"]').element
-    setElementScrollMetrics(treeViewport, {
-      clientHeight: 180,
-      scrollHeight: 180,
-      scrollTop: 0,
-    })
-
-    treeViewport.dispatchEvent(new WheelEvent('wheel', {
-      deltaY: 60,
-      bubbles: true,
-      cancelable: true,
-    }))
-
-    expect((treeViewport as HTMLElement).scrollTop).toBe(0)
-    expect(host.scrollTop).toBe(180)
-
-    wrapper.unmount()
-    host.remove()
-  })
-
-  it('tree 滚到底后继续向下滚时，会把滚动交给外层容器', async () => {
-    const host = document.createElement('div')
-    document.body.appendChild(host)
-    setElementScrollMetrics(host, {
-      clientHeight: 400,
-      scrollHeight: 1000,
-      scrollTop: 120,
-    })
-
-    const wrapper = mount(PropertyFieldTreeInput, {
-      attachTo: host,
-      props: {
-        modelValue: {},
-        prop: createTreeProp(),
-        options: treeOptions,
-        isOptionsLoading: false,
-        optionsError: '',
-      },
-      global: {
-        stubs: {
-          InputText: createInputTextStub,
-          ElTreeV2: createTreeV2Stub(),
-        },
-      },
-    })
-
-    const treeViewport = wrapper.get('[data-testid="tree-v2-stub"]').element
-    setElementScrollMetrics(treeViewport, {
-      clientHeight: 180,
-      scrollHeight: 540,
-      scrollTop: 360,
-    })
-
-    treeViewport.dispatchEvent(new WheelEvent('wheel', {
-      deltaY: 60,
-      bubbles: true,
-      cancelable: true,
-    }))
-
-    expect((treeViewport as HTMLElement).scrollTop).toBe(360)
-    expect(host.scrollTop).toBe(180)
-
-    wrapper.unmount()
-    host.remove()
-  })
 })

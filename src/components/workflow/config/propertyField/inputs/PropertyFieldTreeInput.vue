@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue'
 import { ChevronDown, ChevronUp, LoaderCircle, Search } from 'lucide-vue-next'
 import { ElTreeV2 } from 'element-plus'
 import InputText from 'primevue/inputtext'
@@ -220,6 +220,7 @@ const {
 })
 
 const treeRef = ref<TreeV2Expose | null>(null)
+const treeHostRef = useTemplateRef<HTMLElement>('treeHost')
 
 const TREE_VIEWPORT_HEIGHT_CLASS_MAP = {
   sm: 'max-h-[220px]',
@@ -378,6 +379,9 @@ const treeSearchMessage = computed(() => searchErrorMessage.value || regexErrorM
 const regexToggleTitle = computed(() => (regexEnabled.value ? '已开启正则搜索' : '开启正则搜索'))
 
 const isScrollable = (element: HTMLElement) => element.scrollHeight > element.clientHeight
+const TREE_V2_SCROLL_VIEWPORT_SELECTOR = '.el-vl__window'
+const wheelSnapshotMap = new WeakMap<WheelEvent, { scrollTop: number }>()
+let activeTreeWheelViewport: HTMLElement | null = null
 
 const clampScrollTop = (element: HTMLElement, nextScrollTop: number) => {
   const maxScrollTop = Math.max(0, element.scrollHeight - element.clientHeight)
@@ -404,32 +408,109 @@ const scrollElementBy = (element: HTMLElement, deltaY: number) => {
   return consumedDelta
 }
 
-const handleTreeWheel = (event: WheelEvent) => {
-  const treeViewport = event.currentTarget as HTMLElement | null
+const resolveTreeViewport = (event: WheelEvent) => {
+  const target = event.target
+  if (!(target instanceof HTMLElement)) return activeTreeWheelViewport
 
+  const matchedViewport = target.closest(TREE_V2_SCROLL_VIEWPORT_SELECTOR) as HTMLElement | null
+  if (matchedViewport) return matchedViewport
+
+  if (activeTreeWheelViewport && activeTreeWheelViewport.contains(target)) {
+    return activeTreeWheelViewport
+  }
+
+  return activeTreeWheelViewport
+}
+
+const handleTreeWheelCapture = (event: WheelEvent) => {
+  const treeViewport = resolveTreeViewport(event)
+  if (!treeViewport) return
+
+  wheelSnapshotMap.set(event, {
+    scrollTop: treeViewport.scrollTop,
+  })
+}
+
+const handleTreeWheel = (event: WheelEvent) => {
+  const treeViewport = resolveTreeViewport(event)
   if (!treeViewport) return
 
   const outerScrollableContainer = findNearestScrollableAncestor(treeViewport)
+    ?? findNearestScrollableAncestor(treeHostRef.value)
+  const isVirtualListViewport = treeViewport.matches(TREE_V2_SCROLL_VIEWPORT_SELECTOR)
 
-  if (!isScrollable(treeViewport)) {
-    if (!outerScrollableContainer) return
+  if (!isVirtualListViewport) {
+    if (!isScrollable(treeViewport)) {
+      if (!outerScrollableContainer) return
+      event.preventDefault()
+      scrollElementBy(outerScrollableContainer, event.deltaY)
+      return
+    }
+
+    const consumedDelta = scrollElementBy(treeViewport, event.deltaY)
+    const remainingDelta = event.deltaY - consumedDelta
+
+    if (consumedDelta !== 0) {
+      event.preventDefault()
+    }
+
+    if (remainingDelta === 0 || !outerScrollableContainer) return
+
     event.preventDefault()
-    scrollElementBy(outerScrollableContainer, event.deltaY)
+    scrollElementBy(outerScrollableContainer, remainingDelta)
     return
   }
 
-  const consumedDelta = scrollElementBy(treeViewport, event.deltaY)
+  const snapshot = wheelSnapshotMap.get(event)
+  const consumedDelta = snapshot ? treeViewport.scrollTop - snapshot.scrollTop : 0
   const remainingDelta = event.deltaY - consumedDelta
 
   if (consumedDelta !== 0) {
     event.preventDefault()
   }
-
   if (remainingDelta === 0 || !outerScrollableContainer) return
 
   event.preventDefault()
   scrollElementBy(outerScrollableContainer, remainingDelta)
 }
+
+let removeTreeWheelListeners: (() => void) | null = null
+
+const syncTreeWheelListeners = async () => {
+  await nextTick()
+
+  removeTreeWheelListeners?.()
+  removeTreeWheelListeners = null
+  activeTreeWheelViewport = null
+
+  const treeHost = treeHostRef.value
+  if (!treeHost) return
+
+  const treeViewport = treeHost.querySelector(TREE_V2_SCROLL_VIEWPORT_SELECTOR) ?? treeHost.firstElementChild
+  if (!(treeViewport instanceof HTMLElement)) return
+  activeTreeWheelViewport = treeViewport
+
+  treeHost.addEventListener('wheel', handleTreeWheelCapture, { capture: true, passive: false })
+  treeHost.addEventListener('wheel', handleTreeWheel, { passive: false })
+
+  removeTreeWheelListeners = () => {
+    treeHost.removeEventListener('wheel', handleTreeWheelCapture, { capture: true })
+    treeHost.removeEventListener('wheel', handleTreeWheel)
+  }
+}
+
+watch(
+  [treeViewData, () => props.isOptionsLoading, () => props.optionsError],
+  () => {
+    void syncTreeWheelListeners()
+  },
+  { immediate: true, flush: 'post' },
+)
+
+onBeforeUnmount(() => {
+  removeTreeWheelListeners?.()
+  activeTreeWheelViewport = null
+})
 
 </script>
 
@@ -514,32 +595,32 @@ const handleTreeWheel = (event: WheelEvent) => {
       >
         {{ prop.emptyMessage || '暂无数据' }}
       </div>
-      <ElTreeV2
-        v-else
-        ref="treeRef"
-        :data="treeViewData"
-        node-key="key"
-        show-checkbox
-        check-on-click-node
-        :check-strictly="false"
-        highlight-current
-        class="ndv-tree overflow-auto overscroll-contain"
-        :class="treeViewportClass"
-        :props="{ value: 'key', label: 'label', children: 'children' }"
-        @wheel="handleTreeWheel"
-        @check="handleTreeCheck"
-        @node-expand="handleTreeExpand"
-        @node-collapse="handleTreeCollapse"
-      >
-        <template #default="{ node, data }">
-          <span
-            class="block rounded-lg px-1 py-1 text-[12px] font-medium text-slate-600"
-            :class="data?.data?.searchSummary ? 'text-amber-700 italic' : ''"
-          >
-            {{ node.label }}
-          </span>
-        </template>
-      </ElTreeV2>
+      <div v-else ref="treeHost">
+        <ElTreeV2
+          ref="treeRef"
+          :data="treeViewData"
+          node-key="key"
+          show-checkbox
+          check-on-click-node
+          :check-strictly="false"
+          highlight-current
+          class="ndv-tree"
+          :class="treeViewportClass"
+          :props="{ value: 'key', label: 'label', children: 'children' }"
+          @check="handleTreeCheck"
+          @node-expand="handleTreeExpand"
+          @node-collapse="handleTreeCollapse"
+        >
+          <template #default="{ node, data }">
+            <span
+              class="block rounded-lg px-1 py-1 text-[12px] font-medium text-slate-600"
+              :class="data?.data?.searchSummary ? 'text-amber-700 italic' : ''"
+            >
+              {{ node.label }}
+            </span>
+          </template>
+        </ElTreeV2>
+      </div>
       <div
         v-if="selectionSummary"
         class="mt-2 text-right text-[11px] leading-5 text-slate-400"
