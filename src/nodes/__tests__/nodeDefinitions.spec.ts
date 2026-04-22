@@ -222,6 +222,10 @@ describe('Node Definitions Execution Logic', () => {
       expect(legacy.data).toBeDefined()
       expect(legacy.data.length).toBeGreaterThan(0)
       expect(legacy.type).toBe('csv')
+      expect(result.schema?.fields?.length).toBeGreaterThan(0)
+      expect(result.meta?.rowCount).toBe(legacy.data.length)
+      expect(typeof result.preview?.summary).toBe('string')
+      expect(String(result.preview?.summary)).toContain('行')
     })
 
     it('should parse an XLSX file correctly', async () => {
@@ -239,6 +243,10 @@ describe('Node Definitions Execution Logic', () => {
       expect(legacy.data).toBeDefined()
       expect(legacy.data.length).toBeGreaterThan(0)
       expect(legacy.type).toBe('excel')
+      expect(result.schema?.fields?.length).toBeGreaterThan(0)
+      expect(result.meta?.rowCount).toBe(legacy.data.length)
+      expect(typeof result.preview?.summary).toBe('string')
+      expect(String(result.preview?.summary)).toContain('行')
     })
   })
 

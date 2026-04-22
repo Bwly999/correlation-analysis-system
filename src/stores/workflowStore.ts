@@ -3,7 +3,9 @@ import { ref, markRaw, toRaw, watch } from 'vue'
 import type { Ref } from 'vue'
 import { type Node, type Edge, type NodeChange, type EdgeChange } from '@vue-flow/core'
 import { getNodeDefinition } from '@/nodes/registry'
+import { createFileImportTask, isFileImportCancelledError } from '@/nodes/fileImport/task'
 import type { MultipleNodeExecutionInput, MultipleNodeExecutionItem } from '@/nodes/types'
+import type { FileImportProgress, FileImportParseOptions } from '@/nodes/fileImport/types'
 import { isNodeResult, normalizeNodeResult } from '@/nodes/result'
 import { buildWorkflowAiNodeCatalog } from '@/ai/catalog'
 import { validateWorkflowAiPlanAgainstContext } from '@/ai/planValidation'
@@ -68,6 +70,15 @@ type DebugExecutionOptions = {
   isNested?: boolean
 }
 
+export type FileImportTaskState = {
+  phase: FileImportProgress['phase']
+  progress: number
+  fileName: string
+  format: string
+  canCancel: boolean
+  startedAt: number
+}
+
 const MAX_LOG_ENTRIES = 500
 const HISTORY_TABLE_ROW_LIMIT = 10
 const HISTORY_TABLE_COLLECTION_ROW_LIMIT = 5
@@ -92,6 +103,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
 
   const activeConfigNodeId = ref<string | null>(null)
   const activePreviewNodeId = ref<string | null>(null)
+  const fileImportTasks = ref<Record<string, FileImportTaskState>>({})
   const pendingExecution = ref<
     {
       nodeId: string
@@ -104,6 +116,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     } | null
   >(null)
   let pendingExecutionResolver: ((result: 'RESUMED' | 'STOPPED') => void) | null = null
+  const activeFileImportCancels = new Map<string, () => void>()
   let skipGlobalRunSummaryOnCancel = false
   let globalRuntimeQueueNodeIds: string[] = []
   const lastExecutedTerminalNodeId = ref<string | null>(null)
@@ -768,6 +781,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
   const stopExecution = () => {
     if (isRunning.value || pendingExecution.value) {
       isStopping.value = true
+      cancelActiveFileImportTasks()
       pendingExecution.value = null
       isRunning.value = false
       activeExecutionScope.value = null
@@ -895,6 +909,43 @@ export const useWorkflowStore = defineStore('workflow', () => {
     node.data.reuseLastRuntimeInputs = false
     node.data.config = nextConfig
     refreshUnsavedChanges()
+  }
+
+  const setFileImportTaskState = (nodeId: string, taskState: FileImportTaskState) => {
+    fileImportTasks.value = {
+      ...fileImportTasks.value,
+      [nodeId]: taskState,
+    }
+  }
+
+  const updateFileImportTaskProgress = (
+    nodeId: string,
+    progress: FileImportProgress,
+  ) => {
+    const currentTask = fileImportTasks.value[nodeId]
+    if (!currentTask) return
+
+    setFileImportTaskState(nodeId, {
+      ...currentTask,
+      phase: progress.phase,
+      progress: progress.progress,
+    })
+  }
+
+  const clearFileImportTaskState = (nodeId: string) => {
+    if (!(nodeId in fileImportTasks.value)) return
+
+    const nextState = { ...fileImportTasks.value }
+    delete nextState[nodeId]
+    fileImportTasks.value = nextState
+  }
+
+  const cancelActiveFileImportTasks = () => {
+    activeFileImportCancels.forEach((cancel) => {
+      cancel()
+    })
+    activeFileImportCancels.clear()
+    fileImportTasks.value = {}
   }
 
   const collectUpstreamNodeIds = (targetNodeId: string, acc = new Set<string>()) => {
@@ -1612,6 +1663,55 @@ export const useWorkflowStore = defineStore('workflow', () => {
       node.data.status = 'running'
       node.data.error = undefined
 
+      if (node.data.type === 'file-import') {
+        const file = resolvedConfig.fileData as File | undefined
+        if (!file) {
+          throw new Error('未选择任何文件')
+        }
+
+        const fileImportOptions: FileImportParseOptions = {
+          format: typeof resolvedConfig.format === 'string' ? resolvedConfig.format : 'auto',
+          autoClean: resolvedConfig.autoClean !== false,
+          excludeFields: resolvedConfig.excludeFields as string[] | string | undefined,
+        }
+
+        setFileImportTaskState(nodeId, {
+          phase: 'reading',
+          progress: 0,
+          fileName: file.name,
+          format: fileImportOptions.format ?? 'auto',
+          canCancel: true,
+          startedAt: Date.now(),
+        })
+
+        const task = createFileImportTask(file, fileImportOptions, (progress) => {
+          updateFileImportTaskProgress(nodeId, progress)
+        })
+        activeFileImportCancels.set(nodeId, task.cancel)
+
+        let result
+        try {
+          result = await task.result
+        } catch (error) {
+          if (isStopping.value || isFileImportCancelledError(error)) {
+            throw new Error('User Aborted')
+          }
+          throw error
+        } finally {
+          activeFileImportCancels.delete(nodeId)
+          clearFileImportTaskState(nodeId)
+        }
+
+        if (isStopping.value) throw new Error('User Aborted')
+
+        node.data.output = markRaw(toStoredOutput(result))
+        node.data.status = 'success'
+        node.data.error = undefined
+        resetRuntimeInputValues(node)
+        addLog(`执行成功: ${node.data.label}`, 'info', nodeId)
+        return node.data.output
+      }
+
       const currentEdges = getCurrentEdges()
       const incomingEdges = currentEdges.filter((e) => e.target === nodeId)
       const inputs: unknown[] = []
@@ -1725,6 +1825,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
       nodes: cloneInspectionValue(getCurrentNodes()),
       edges: cloneInspectionValue(getCurrentEdges()),
       logs: cloneInspectionValue(logs.value),
+      fileImportTasks: cloneInspectionValue(fileImportTasks.value),
       pendingExecution: cloneInspectionValue(pendingExecution.value),
       isRunning: isRunning.value,
       isStopping: isStopping.value,
@@ -1746,6 +1847,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
       nodes.value = stateSnapshot.nodes
       edges.value = stateSnapshot.edges
       logs.value = stateSnapshot.logs
+      fileImportTasks.value = stateSnapshot.fileImportTasks
       pendingExecution.value = stateSnapshot.pendingExecution
       isRunning.value = stateSnapshot.isRunning
       isStopping.value = stateSnapshot.isStopping
@@ -1934,6 +2036,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     pendingConnection,
     activeConfigNodeId,
     activePreviewNodeId,
+    fileImportTasks,
     pendingExecution,
     lastExecutedTerminalNodeId,
     lastRunDashboard,

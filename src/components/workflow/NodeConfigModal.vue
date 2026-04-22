@@ -89,6 +89,19 @@ const isResizingHorizontally = computed(
 
 // 获取当前节点的定义
 const nodeDefinition = computed(() => (node.value ? getNodeDefinition(node.value.data.type) ?? null : null))
+const currentFileImportTask = computed(() =>
+  node.value ? (store.fileImportTasks[node.value.id] ?? null) : null,
+)
+const fileImportPhaseTextMap = {
+  reading: '正在读取文件',
+  parsing: '正在解析文件内容',
+  cleaning: '正在清洗并识别字段',
+  finalizing: '正在整理结果',
+} as const
+const currentFileImportPhaseText = computed(() => {
+  const phase = currentFileImportTask.value?.phase
+  return phase ? fileImportPhaseTextMap[phase] : ''
+})
 const nodeHelpSummary = computed(() => {
   if (!nodeDefinition.value) {
     return {
@@ -549,6 +562,20 @@ const buildManualInputTemplate = () => {
 
         <div class="flex-1 p-8 overflow-y-auto custom-scrollbar bg-white min-h-0">
           <div v-if="activeTab === 'parameters'" class="mx-auto max-w-3xl space-y-6">
+            <div
+              v-if="currentFileImportTask"
+              class="rounded-2xl border border-blue-200 bg-blue-50/80 px-4 py-3"
+            >
+              <div class="flex items-center justify-between gap-3">
+                <div class="text-sm font-semibold text-blue-900">后台解析中</div>
+                <div class="text-[12px] font-semibold text-blue-700">
+                  {{ currentFileImportTask.progress }}%
+                </div>
+              </div>
+              <div class="mt-1 text-[12px] text-blue-700">
+                {{ currentFileImportTask.fileName }} · {{ currentFileImportPhaseText }}
+              </div>
+            </div>
             <div
               class="flex items-center gap-3 rounded-2xl border px-4 py-3"
               :class="

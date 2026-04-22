@@ -70,6 +70,19 @@ const globalPromptProgressText = computed(() => {
   return `${current}/${total}`
 })
 const currentNodeLabel = computed(() => props.node?.data.label || '当前节点')
+const currentFileImportTask = computed(() =>
+  props.node ? (store.fileImportTasks[props.node.id] ?? null) : null,
+)
+const fileImportPhaseTextMap = {
+  reading: '正在读取文件',
+  parsing: '正在解析文件内容',
+  cleaning: '正在清洗并识别字段',
+  finalizing: '正在整理结果',
+} as const
+const currentFileImportPhaseText = computed(() => {
+  const phase = currentFileImportTask.value?.phase
+  return phase ? fileImportPhaseTextMap[phase] : ''
+})
 const runtimeInputHelpText = computed(() =>
   [
     `请为节点 ${currentNodeLabel.value} 补充本次运行所需的动态参数。`,
@@ -230,6 +243,21 @@ const handleConfirm = () => {
           >
             <HelpCircle :size="15" />
           </button>
+        </div>
+      </div>
+
+      <div
+        v-if="currentFileImportTask"
+        class="rounded-xl border border-blue-200 bg-blue-50/80 px-4 py-3 text-sm text-blue-900"
+      >
+        <div class="flex items-center justify-between gap-3">
+          <div class="font-semibold">正在后台解析文件</div>
+          <div class="text-[12px] font-semibold text-blue-700">
+            {{ currentFileImportTask.progress }}%
+          </div>
+        </div>
+        <div class="mt-1 text-[12px] text-blue-700">
+          {{ currentFileImportTask.fileName }} · {{ currentFileImportPhaseText }}
         </div>
       </div>
 
