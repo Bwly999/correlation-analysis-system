@@ -1,8 +1,13 @@
-import { describe, expect, it } from 'vitest'
+import { reactive } from 'vue'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createFileImportTask } from '../fileImport/task'
 
 describe('createFileImportTask', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
   it('should report progress and resolve a table result with schema metadata', async () => {
     const file = new File(['feature,target\n1,2\n3,4'], 'metrics.csv', {
       type: 'text/csv',
@@ -45,5 +50,55 @@ describe('createFileImportTask', () => {
     task.cancel()
 
     await expect(task.result).rejects.toThrow('IMPORT_CANCELLED')
+  })
+
+  it('should clone reactive worker options before posting to the background parser', async () => {
+    const expectedResult = {
+      kind: 'table',
+      data: [{ feature: 1, target: '2' }],
+      schema: {
+        fields: [
+          { name: 'feature', type: 'number', nullable: false },
+          { name: 'target', type: 'string', nullable: false },
+        ],
+      },
+      meta: {
+        rowCount: 1,
+      },
+      preview: {
+        summary: '共 1 行，2 个字段',
+      },
+    }
+
+    class WorkerMock {
+      onmessage: ((event: MessageEvent) => void) | null = null
+      onerror: ((event: Event) => void) | null = null
+
+      postMessage = vi.fn((payload: unknown) => {
+        const cloned = structuredClone(payload) as { id: string }
+        this.onmessage?.({
+          data: {
+            type: 'completed',
+            id: cloned.id,
+            result: expectedResult,
+          },
+        } as MessageEvent)
+      })
+      terminate = vi.fn()
+    }
+
+    vi.stubGlobal('Worker', WorkerMock)
+
+    const file = new File(['feature,target\n1,2'], 'metrics.csv', {
+      type: 'text/csv',
+    })
+
+    const task = createFileImportTask(file, {
+      format: 'csv',
+      autoClean: true,
+      excludeFields: reactive(['target']),
+    })
+
+    await expect(task.result).resolves.toMatchObject(expectedResult)
   })
 })

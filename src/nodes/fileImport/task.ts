@@ -18,12 +18,27 @@ const supportsWorkerParsing = () =>
   && typeof Worker !== 'undefined'
   && typeof URL !== 'undefined'
 
+const normalizeParseOptions = (
+  options: FileImportParseOptions = {},
+): FileImportParseOptions => {
+  const normalizedExcludeFields = Array.isArray(options.excludeFields)
+    ? [...options.excludeFields]
+    : options.excludeFields
+
+  return {
+    format: options.format,
+    autoClean: options.autoClean,
+    excludeFields: normalizedExcludeFields,
+  }
+}
+
 export const createFileImportTask = (
   file: File,
   options: FileImportParseOptions = {},
   onProgress?: (progress: FileImportProgress) => void,
 ): FileImportTask => {
   let cancelled = false
+  const normalizedOptions = normalizeParseOptions(options)
 
   const cancel = () => {
     cancelled = true
@@ -35,7 +50,7 @@ export const createFileImportTask = (
 
       return parseFileImportResult(
         file,
-        options,
+        normalizedOptions,
         (progress) => {
           if (!cancelled) {
             onProgress?.(progress)
@@ -97,7 +112,7 @@ export const createFileImportTask = (
       type: 'start',
       id: taskId,
       file,
-      options,
+      options: normalizedOptions,
     })
   })
 
