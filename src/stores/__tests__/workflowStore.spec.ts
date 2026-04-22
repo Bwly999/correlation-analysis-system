@@ -2,11 +2,23 @@
 import { setActivePinia, createPinia } from 'pinia'
 import { afterEach } from 'vitest'
 import { vi } from 'vitest'
+import type { FileImportProgress } from '../../nodes/fileImport/types'
+import * as fileImportTaskModule from '../../nodes/fileImport/task'
 import { useWorkflowStore } from '../workflowStore'
 import { nodeDefinitions } from '../../nodes/registry'
 import { createJsonResult, createTableResult } from '../../nodes/result'
 import { storageProvider } from '../../utils/storage'
 import { workflowTemplateDefinitions } from '../../workflow/templates'
+
+const createDeferred = <T>() => {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
 
 describe('Workflow Store', () => {
   beforeEach(() => {
@@ -456,6 +468,53 @@ describe('Workflow Store', () => {
     expect(result.payload.length).toBeGreaterThan(0)
   })
 
+  it('should track file import background progress and clear task state after completion', async () => {
+    const deferred = createDeferred<ReturnType<typeof createTableResult>>()
+    let progressHandler: ((progress: FileImportProgress) => void) | undefined
+
+    vi.spyOn(fileImportTaskModule, 'createFileImportTask').mockImplementation((_file, _options, onProgress) => {
+      progressHandler = onProgress
+      return {
+        result: deferred.promise,
+        cancel: vi.fn(),
+      }
+    })
+
+    const store = useWorkflowStore()
+    const node = store.addAndConnectNode('file-import', 'Trigger', { x: 0, y: 0 })!
+    node.data.config.fileData = new File(['col1,col2\n1,2'], 'test.csv', { type: 'text/csv' })
+
+    const executionPromise = store.executeNode(node.id, true)
+
+    progressHandler?.({ phase: 'parsing', progress: 35 })
+    await Promise.resolve()
+
+    expect(store.fileImportTasks[node.id]).toMatchObject({
+      phase: 'parsing',
+      progress: 35,
+      fileName: 'test.csv',
+      canCancel: true,
+    })
+
+    deferred.resolve(
+      createTableResult([{ col1: 1, col2: 2 }], {
+        schema: {
+          fields: [
+            { name: 'col1', type: 'number' },
+            { name: 'col2', type: 'number' },
+          ],
+        },
+        meta: { rowCount: 1, filename: 'test.csv', sourceType: 'csv' },
+        preview: { summary: '共 1 行，2 个字段', viewer: 'table-chart-combo-viewer' },
+      }),
+    )
+
+    await executionPromise
+
+    expect(store.fileImportTasks[node.id]).toBeUndefined()
+    expect(node.data.status).toBe('success')
+  })
+
   it('should support workflow persistence (save/load)', async () => {
     const store = useWorkflowStore()
     store.workflowName = 'Test Workflow'
@@ -623,6 +682,36 @@ describe('Workflow Store', () => {
       const nodeIndex = nodeDefinitions.findIndex((definition) => definition.name === 'test-stoppable-node')
       if (nodeIndex >= 0) nodeDefinitions.splice(nodeIndex, 1)
     }
+  })
+
+  it('should cancel active file import tasks when stopExecution is called', async () => {
+    const deferred = createDeferred<ReturnType<typeof createTableResult>>()
+    const cancel = vi.fn(() => {
+      deferred.reject(new Error('IMPORT_CANCELLED'))
+    })
+
+    vi.spyOn(fileImportTaskModule, 'createFileImportTask').mockImplementation(() => ({
+      result: deferred.promise,
+      cancel,
+    }))
+
+    const store = useWorkflowStore()
+    const node = store.addAndConnectNode('file-import', 'Trigger', { x: 0, y: 0 })!
+    node.data.config.fileData = new File(['col1,col2\n1,2'], 'test.csv', { type: 'text/csv' })
+
+    const executionPromise = store.executeNode(node.id, true)
+
+    expect(store.fileImportTasks[node.id]).toMatchObject({
+      fileName: 'test.csv',
+      canCancel: true,
+    })
+
+    store.stopExecution()
+
+    await expect(executionPromise).resolves.toBe('STOPPED')
+    expect(cancel).toHaveBeenCalledTimes(1)
+    expect(store.fileImportTasks[node.id]).toBeUndefined()
+    expect(node.data.status).toBe('idle')
   })
 
   it('should return WAIT_INPUT if trigger node lacks runtime input', async () => {

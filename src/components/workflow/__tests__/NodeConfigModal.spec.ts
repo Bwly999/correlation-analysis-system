@@ -354,6 +354,59 @@ describe('NodeConfigModal', () => {
     expect(wrapper.text()).toContain('可用数值字段 3 个')
   })
 
+  it('shows file import background parsing status in the debug workspace', () => {
+    const store = useWorkflowStore()
+    store.fileImportTasks = {
+      'file-import-node': {
+        phase: 'cleaning',
+        progress: 70,
+        fileName: 'demo.xlsx',
+        format: 'xlsx',
+        canCancel: true,
+        startedAt: Date.now(),
+      },
+    } as any
+    store.nodes = [
+      {
+        id: 'file-import-node',
+        type: 'custom',
+        position: { x: 0, y: 0 },
+        label: '文件导入',
+        data: {
+          label: '文件导入',
+          type: 'file-import',
+          category: 'trigger',
+          status: 'running',
+          config: {},
+          logs: [],
+          useManualInput: false,
+          manualInput: '',
+          isPinned: false,
+          output: null,
+        },
+      } as any,
+    ]
+
+    const wrapper = mount(NodeConfigModal, {
+      props: { visible: true, nodeId: 'file-import-node' },
+      global: {
+        stubs: {
+          Dialog: dialogStub,
+          DataDisplayPanel: true,
+          DataAnalysisModal: true,
+          ConfigHeader: { template: '<div />', props: ['nodeLabel', 'isPinned', 'nodeType'] },
+          ConfigFooter: { template: '<div />' },
+          ConfigForm: { template: '<div />', props: ['config', 'properties', 'upstreamFactors'] },
+          RuntimeInputs: { template: '<div />', props: ['config', 'properties', 'upstreamFactors'] },
+        },
+      },
+    })
+
+    expect(wrapper.text()).toContain('后台解析中')
+    expect(wrapper.text()).toContain('demo.xlsx')
+    expect(wrapper.text()).toContain('正在清洗并识别字段')
+  })
+
   it('generates a standard table result template for single-input debugging', async () => {
     const store = useWorkflowStore()
     store.nodes = [

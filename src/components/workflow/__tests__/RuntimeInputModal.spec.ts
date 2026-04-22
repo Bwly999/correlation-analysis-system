@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import RuntimeInputModal from '../RuntimeInputModal.vue'
+import { useWorkflowStore } from '@/stores/workflowStore'
 
 const dialogStub = {
   props: ['visible'],
@@ -198,5 +199,58 @@ describe('RuntimeInputModal', () => {
     expect(wrapper.text()).toContain('schemeSelection:{"checkedKeys":{"阶段A":true}}')
     expect(wrapper.text()).toContain('taskOrderType:首件')
     expect(wrapper.text()).toContain('selectedProcesses:["涂布"]')
+  })
+
+  it('shows file import parsing progress when the current node is importing in background', () => {
+    const store = useWorkflowStore()
+    store.fileImportTasks = {
+      'file-import-node': {
+        phase: 'parsing',
+        progress: 35,
+        fileName: 'demo.csv',
+        format: 'csv',
+        canCancel: true,
+        startedAt: Date.now(),
+      },
+    } as any
+
+    const wrapper = mount(RuntimeInputModal, {
+      props: {
+        visible: true,
+        node: {
+          id: 'file-import-node',
+          type: 'custom',
+          position: { x: 0, y: 0 },
+          label: '文件导入',
+          data: {
+            label: '文件导入',
+            type: 'file-import',
+            category: 'trigger',
+            status: 'running',
+            config: {},
+            logs: [],
+            useManualInput: false,
+            manualInput: '',
+            isPinned: false,
+            reuseLastRuntimeInputs: false,
+          },
+        } as any,
+      },
+      global: {
+        directives: tooltipDirectives,
+        stubs: {
+          Dialog: dialogStub,
+          Button: true,
+          PropertyField: {
+            props: ['prop'],
+            template: '<div class="property-field-stub">{{ prop.displayName }}</div>',
+          },
+        },
+      },
+    })
+
+    expect(wrapper.text()).toContain('正在后台解析文件')
+    expect(wrapper.text()).toContain('demo.csv')
+    expect(wrapper.text()).toContain('正在解析文件内容')
   })
 })
