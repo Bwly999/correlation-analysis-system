@@ -116,7 +116,13 @@ cp deploy/env/server.env.example deploy/env/server.env
 ```env
 WORKFLOW_AI_SERVER_HOST=127.0.0.1
 WORKFLOW_AI_SERVER_PORT=8787
+WORKFLOW_STORAGE_BACKEND=lowdb
 WORKFLOW_STORAGE_DATA_DIR=.workflow-storage
+WORKFLOW_STORAGE_MYSQL_HOST=127.0.0.1
+WORKFLOW_STORAGE_MYSQL_PORT=3306
+WORKFLOW_STORAGE_MYSQL_USER=root
+WORKFLOW_STORAGE_MYSQL_PASSWORD=
+WORKFLOW_STORAGE_MYSQL_DATABASE=correlation_analysis_system
 PYTHON_ANALYSIS_API_BASE_URL=http://127.0.0.1:8000
 OPENAI_API_KEY=
 OPENAI_COMPAT_BASE_URL=https://open.bigmodel.cn/api/coding/paas/v4
@@ -127,8 +133,11 @@ WORKFLOW_AI_DEFAULT_MODEL=glm-4.7
 
 - `OPENAI_API_KEY` 只在你启用系统默认 AI 编排模型时必填
 - Python 服务建议只监听本机回环地址，不对外暴露
-- `/api/storage/*` 当前基于 `lowdb` 落盘，`WORKFLOW_STORAGE_DATA_DIR` 用于指定工作流与历史数据目录
-- 当前 storage 默认按单 Node 实例设计，不建议多个实例直接共享同一落盘目录
+- `WORKFLOW_STORAGE_BACKEND` 支持 `lowdb` 与 `mysql`
+- 当 `WORKFLOW_STORAGE_BACKEND=lowdb` 时，`WORKFLOW_STORAGE_DATA_DIR` 用于指定工作流与历史数据目录
+- 当 `WORKFLOW_STORAGE_BACKEND=mysql` 时，Node 会在目标数据库内自动建表，但不会自动建库；请先手工创建 `WORKFLOW_STORAGE_MYSQL_DATABASE`
+- `lowdb` 模式默认按单 Node 实例设计，不建议多个实例直接共享同一落盘目录
+- `mysql` 模式适合多实例共享同一套工作流、版本和历史数据
 
 ---
 

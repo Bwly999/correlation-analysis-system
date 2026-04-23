@@ -1,4 +1,4 @@
-import { WorkflowStorageRepository } from './storageRepository.js'
+import { createWorkflowStorageRepository } from './storageRepositoryFactory.js'
 
 type ServerSavedWorkflow = {
   id: string
@@ -53,7 +53,7 @@ const createWorkflowVersion = (
   workflow: cloneJson(workflow),
 })
 
-const storageRepository = new WorkflowStorageRepository<
+const storageRepository = createWorkflowStorageRepository<
   ServerSavedWorkflow,
   ServerWorkflowVersion,
   ServerExecutionRecord

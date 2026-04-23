@@ -17,6 +17,33 @@ type MiddlewareHandler = (
 ) => void
 
 describe('workflow ai dev middleware', () => {
+  it('loads non-VITE env vars from .env into process.env for the dev server middleware', async () => {
+    const previousBackend = process.env.WORKFLOW_STORAGE_BACKEND
+    const previousMysqlPassword = process.env.WORKFLOW_STORAGE_MYSQL_PASSWORD
+
+    delete process.env.WORKFLOW_STORAGE_BACKEND
+    delete process.env.WORKFLOW_STORAGE_MYSQL_PASSWORD
+
+    vi.resetModules()
+
+    await import('../../vite.config.ts')
+
+    expect(process.env.WORKFLOW_STORAGE_BACKEND).toBe('mysql')
+    expect(process.env.WORKFLOW_STORAGE_MYSQL_PASSWORD).toBe('123456')
+
+    if (previousBackend === undefined) {
+      delete process.env.WORKFLOW_STORAGE_BACKEND
+    } else {
+      process.env.WORKFLOW_STORAGE_BACKEND = previousBackend
+    }
+
+    if (previousMysqlPassword === undefined) {
+      delete process.env.WORKFLOW_STORAGE_MYSQL_PASSWORD
+    } else {
+      process.env.WORKFLOW_STORAGE_MYSQL_PASSWORD = previousMysqlPassword
+    }
+  })
+
   it('loads the server handler through vite ssrLoadModule for api requests', async () => {
     const { default: viteConfig } = await import('../../vite.config.ts')
     const plugin = viteConfig.plugins?.find(

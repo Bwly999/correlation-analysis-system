@@ -3,13 +3,33 @@ import { dirname, join } from 'node:path'
 import { Low } from 'lowdb'
 import { JSONFile } from 'lowdb/node'
 
-type UserHistoryDocument<TRecord> = {
+export type UserHistoryDocument<TRecord> = {
   records: TRecord[]
 }
 
-type UserWorkflowDocument<TWorkflow, TVersion> = {
+export type UserWorkflowDocument<TWorkflow, TVersion> = {
   current: TWorkflow | null
   versions: TVersion[]
+}
+
+export interface WorkflowStorageRepository<TWorkflow, TVersion, THistoryRecord> {
+  listWorkflowDocuments(userId: string): Promise<Array<UserWorkflowDocument<TWorkflow, TVersion>>>
+  readWorkflowDocument(userId: string, workflowId: string): Promise<UserWorkflowDocument<TWorkflow, TVersion>>
+  writeWorkflowDocument(
+    userId: string,
+    workflowId: string,
+    updater: (
+      document: UserWorkflowDocument<TWorkflow, TVersion>,
+    ) => Promise<UserWorkflowDocument<TWorkflow, TVersion>> | UserWorkflowDocument<TWorkflow, TVersion>,
+  ): Promise<UserWorkflowDocument<TWorkflow, TVersion>>
+  deleteWorkflowDocument(userId: string, workflowId: string): Promise<boolean>
+  readHistoryDocument(userId: string): Promise<UserHistoryDocument<THistoryRecord>>
+  writeHistoryDocument(
+    userId: string,
+    updater: (
+      document: UserHistoryDocument<THistoryRecord>,
+    ) => Promise<UserHistoryDocument<THistoryRecord>> | UserHistoryDocument<THistoryRecord>,
+  ): Promise<UserHistoryDocument<THistoryRecord>>
 }
 
 const DEFAULT_STORAGE_DIR = join(process.cwd(), '.workflow-storage')
@@ -33,7 +53,8 @@ const createLowDb = async <T>(filePath: string, defaultData: T) => {
   return db
 }
 
-export class WorkflowStorageRepository<TWorkflow, TVersion, THistoryRecord> {
+export class LowDbWorkflowStorageRepository<TWorkflow, TVersion, THistoryRecord>
+  implements WorkflowStorageRepository<TWorkflow, TVersion, THistoryRecord> {
   private userWriteQueues = new Map<string, Promise<unknown>>()
 
   private getUserDir(userId: string) {

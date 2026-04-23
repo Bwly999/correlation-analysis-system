@@ -1,12 +1,20 @@
 import { fileURLToPath, URL } from 'node:url'
 
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import type { Plugin } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
 import tailwindcss from '@tailwindcss/vite'
 import monacoEditorPlugin from 'vite-plugin-monaco-editor'
 import AutoImport from 'unplugin-auto-import/vite'
+
+const devEnv = loadEnv(process.env.NODE_ENV || 'development', process.cwd(), '')
+
+Object.entries(devEnv).forEach(([key, value]) => {
+  if (process.env[key] === undefined) {
+    process.env[key] = value
+  }
+})
 
 const workflowAiServerTarget = process.env.WORKFLOW_AI_SERVER_TARGET || 'http://127.0.0.1:8787'
 
