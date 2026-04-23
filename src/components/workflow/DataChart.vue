@@ -31,6 +31,7 @@ import {
 } from 'lucide-vue-next'
 import { calculateBoxValues } from '@/utils/stats'
 import { useScopedResultPreviewStorage } from './useScopedResultPreviewStorage'
+import { useWorkflowOverlayHost } from './workflowOverlayHost'
 import {
   buildNormalizationStats,
   isFiniteNumber,
@@ -76,6 +77,7 @@ const props = defineProps<{
   data: unknown
   storageScopeKey?: string
 }>()
+const { overlayAppendTo } = useWorkflowOverlayHost()
 
 const chartType = useScopedResultPreviewStorage(props.storageScopeKey, 'chart-type', 'line')
 const maxPoints = useScopedResultPreviewStorage(props.storageScopeKey, 'chart-max-points', 5000)
@@ -768,6 +770,7 @@ applyDefaultPreset()
           <MultiSelect
             v-model="selectedKeys"
             :options="availableKeys"
+            :append-to="overlayAppendTo"
             placeholder="选择对比因子"
             class="property-select"
             :filter="true"
@@ -973,6 +976,7 @@ applyDefaultPreset()
       <Select
         v-model="chartType"
         :options="chartTypes"
+        :append-to="overlayAppendTo"
         option-label="label"
         option-value="value"
         class="chart-type-select"

@@ -2,6 +2,7 @@
 import { mount } from '@vue/test-utils'
 import { defineComponent } from 'vue'
 import ReportViewer from '../viewers/ReportViewer.vue'
+import { provideWorkflowOverlayHost } from '../workflowOverlayHost'
 const { mockExportReportToHtmlFile } = vi.hoisted(() => ({
   mockExportReportToHtmlFile: vi.fn().mockResolvedValue(undefined),
 }))
@@ -29,10 +30,10 @@ vi.mock('primevue/usetoast', () => ({
 
 vi.mock('primevue/dialog', () => ({
   default: defineComponent({
-    props: ['visible'],
+    props: ['visible', 'appendTo'],
     emits: ['update:visible'],
     template:
-      '<div v-if="visible" data-test="dialog-stub"><slot /><slot name="header" /></div>',
+      '<div v-if="visible" data-test="dialog-stub" :data-append-to-type="appendTo && typeof appendTo === \'object\' ? \'element\' : String(appendTo ?? \'\')"><slot /><slot name="header" /></div>',
   }),
 }))
 
@@ -455,5 +456,29 @@ describe('ReportViewer', () => {
         filename: expect.stringMatching(/^多元线性回归分析.*\.html$/),
       }),
     )
+  })
+
+  it('uses the injected overlay host for the full report preview dialog', async () => {
+    const host = document.createElement('div')
+
+    const wrapper = mount(
+      defineComponent({
+        components: { ReportViewer },
+        setup() {
+          provideWorkflowOverlayHost({
+            overlayAppendTo: host,
+            teleportTarget: host,
+          })
+          return {
+            data: createShapReport(),
+          }
+        },
+        template: '<ReportViewer :data="data" />',
+      }),
+    )
+
+    await wrapper.get('[data-test="full-report-image"]').trigger('click')
+
+    expect(wrapper.get('[data-test="dialog-stub"]').attributes('data-append-to-type')).toBe('element')
   })
 })

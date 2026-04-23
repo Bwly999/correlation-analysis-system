@@ -8,6 +8,7 @@ defineProps<{
   previewScale: number
   isPreviewDragging: boolean
   previewImageTransform: string
+  appendTo?: HTMLElement | 'body'
 }>()
 
 const emit = defineEmits<{
@@ -23,6 +24,7 @@ const emit = defineEmits<{
 <template>
   <Dialog
     :visible="visible"
+    :append-to="appendTo"
     modal
     dismissable-mask
     maximizable

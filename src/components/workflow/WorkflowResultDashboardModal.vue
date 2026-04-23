@@ -18,6 +18,7 @@ import {
 } from 'lucide-vue-next'
 import DataAnalysisModal from './DataAnalysisModal.vue'
 import WorkflowResultPanel from './WorkflowResultPanel.vue'
+import { provideWorkflowOverlayHost } from './workflowOverlayHost'
 import {
   buildResultDashboardGroups,
   type ResultDashboardNode,
@@ -81,6 +82,12 @@ const nodeSidebarWidthClass = computed(() => (isNodeSidebarCollapsed.value ? 'w-
 const detailDialogAppendTarget = computed(() =>
   isFullscreen.value ? dashboardShellRef.value ?? undefined : undefined,
 )
+const dashboardOverlayTarget = computed(() => (isFullscreen.value ? dashboardShellRef.value ?? 'body' : 'body'))
+
+provideWorkflowOverlayHost({
+  overlayAppendTo: () => dashboardOverlayTarget.value,
+  teleportTarget: () => dashboardOverlayTarget.value,
+})
 
 const selectedNodes = computed(() => {
   const allNodes = props.summary?.nodes ?? []

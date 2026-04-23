@@ -4,6 +4,7 @@ import Dialog from 'primevue/dialog'
 import InputNumber from 'primevue/inputnumber'
 import { X, BarChart3, Database, Download, FileJson, Layers, ChevronRight, PanelLeftClose, PanelLeftOpen } from 'lucide-vue-next'
 import DataChart from './DataChart.vue'
+import { provideWorkflowOverlayHost, useWorkflowOverlayHost } from './workflowOverlayHost'
 import StructuredDataPreview from './StructuredDataPreview.vue'
 import { useScopedResultPreviewStorage } from './useScopedResultPreviewStorage'
 import { DEFAULT_STRUCTURED_PREVIEW_OPTIONS, createStructuredPreview } from './previewSerialization'
@@ -23,9 +24,19 @@ const props = defineProps<{
   appendTo?: HTMLElement | 'body' | 'self'
   storageScopeKey?: string
 }>()
+const inheritedOverlayHost = useWorkflowOverlayHost()
+const dialogOverlayHost = computed(() =>
+  props.appendTo && props.appendTo !== 'self' ? props.appendTo : inheritedOverlayHost.overlayAppendTo.value,
+)
+
+provideWorkflowOverlayHost({
+  overlayAppendTo: () => dialogOverlayHost.value,
+  teleportTarget: () => dialogOverlayHost.value,
+})
 
 const emit = defineEmits(['close'])
 
+const resolvedDialogAppendTarget = computed(() => props.appendTo ?? inheritedOverlayHost.overlayAppendTo.value)
 const previewLimit = useScopedResultPreviewStorage(props.storageScopeKey, 'modal-preview-limit', 3)
 const sidebarCollapsed = useScopedResultPreviewStorage(props.storageScopeKey, 'modal-sidebar-collapsed', false)
 
@@ -92,7 +103,7 @@ const exportData = () => {
   <Dialog
     :visible="visible"
     modal
-    :append-to="appendTo"
+    :append-to="resolvedDialogAppendTarget"
     class="analysis-dialog"
     :style="{ width: '90vw', height: '90vh' }"
     :closable="false"

@@ -2,6 +2,7 @@ import { computed, defineComponent, h, nextTick, onMounted } from 'vue'
 import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import TableViewer from '../viewers/TableViewer.vue'
+import { provideWorkflowOverlayHost } from '../workflowOverlayHost'
 
 const gridApiCalls = vi.hoisted(() => ({
   setFilterModel: vi.fn(),
@@ -76,7 +77,7 @@ vi.mock('primevue/inputnumber', () => ({
 vi.mock('primevue/multiselect', () => ({
   default: defineComponent({
     name: 'PrimeMultiSelectStub',
-    props: ['modelValue', 'options', 'optionLabel', 'optionValue'],
+    props: ['modelValue', 'options', 'optionLabel', 'optionValue', 'appendTo'],
     emits: ['update:modelValue'],
     inheritAttrs: false,
     setup(props, { attrs, emit }) {
@@ -90,6 +91,7 @@ vi.mock('primevue/multiselect', () => ({
           'select',
           {
             ...attrs,
+            'data-append-to-type': props.appendTo && typeof props.appendTo === 'object' ? 'element' : String(props.appendTo ?? ''),
             multiple: true,
             value: props.modelValue,
             onChange: (event: Event) => {
@@ -203,6 +205,24 @@ const createResult = (payload: Array<Record<string, unknown>>, schemaFields?: Ar
   payload,
   schema: schemaFields ? { fields: schemaFields } : undefined,
 })
+
+const mountWithOverlayHost = (host: HTMLElement) =>
+  mount(
+    defineComponent({
+      components: { TableViewer },
+      setup() {
+        provideWorkflowOverlayHost({
+          overlayAppendTo: host,
+          teleportTarget: host,
+        })
+        return {
+          data: createResult(createRows(5)),
+        }
+      },
+      template: '<TableViewer :data="data" />',
+    }),
+    { attachTo: document.body },
+  )
 
 describe('TableViewer', () => {
   it('没有表格行时显示空态', () => {
@@ -495,5 +515,20 @@ describe('TableViewer', () => {
     expect(gridApiCalls.setFilterModel).toHaveBeenCalledWith({
       id: { filterType: 'number', type: 'greaterThan', filter: 2 },
     })
+  })
+
+  it('uses the injected overlay host for the width multiselect and column menu teleport', async () => {
+    const host = document.createElement('div')
+    host.setAttribute('data-test', 'overlay-host')
+    document.body.appendChild(host)
+
+    const wrapper = mountWithOverlayHost(host)
+
+    await wrapper.get('[data-test="table-width-panel-toggle"]').trigger('click')
+    expect(wrapper.get('[data-test="table-width-fields"]').attributes('data-append-to-type')).toBe('element')
+
+    await wrapper.get('[data-test="header-menu-trigger-name"]').trigger('click')
+    expect(host.querySelector('[data-test="table-column-menu"]')).not.toBeNull()
+    expect(document.body.querySelector('[data-test="table-column-menu"]')).not.toBeNull()
   })
 })

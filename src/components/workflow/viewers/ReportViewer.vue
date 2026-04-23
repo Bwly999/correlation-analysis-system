@@ -19,6 +19,7 @@ import ReportImageSection from './reportViewer/sections/ReportImageSection.vue'
 import ReportRiskListSection from './reportViewer/sections/ReportRiskListSection.vue'
 import ReportSummarySection from './reportViewer/sections/ReportSummarySection.vue'
 import ReportTextSection from './reportViewer/sections/ReportTextSection.vue'
+import { useWorkflowOverlayHost } from '../workflowOverlayHost'
 import { useReportExport } from './reportViewer/useReportExport'
 import { useReportPreview } from './reportViewer/useReportPreview'
 import { useReportSections } from './reportViewer/useReportSections'
@@ -60,6 +61,7 @@ const props = defineProps<{
   data: unknown
   exportMode?: boolean
 }>()
+const { overlayAppendTo } = useWorkflowOverlayHost()
 
 const {
   report,
@@ -327,6 +329,7 @@ const renderedSections = computed<RenderedSection[]>(() =>
       :preview-scale="previewScale"
       :is-preview-dragging="isPreviewDragging"
       :preview-image-transform="previewImageTransform"
+      :append-to="overlayAppendTo"
       @close="closeFullReportPreview"
       @zoom-in="zoomInPreview"
       @zoom-out="zoomOutPreview"

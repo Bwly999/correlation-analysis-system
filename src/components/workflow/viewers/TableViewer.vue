@@ -9,6 +9,7 @@ import { Columns3, RotateCcw, Search, SlidersHorizontal, StretchHorizontal } fro
 import AgGridTablePreview from './AgGridTablePreview.vue'
 import TableColumnMenuPopover from './TableColumnMenuPopover.vue'
 import { useTablePreviewGridModel } from './useTablePreviewGridModel'
+import { useWorkflowOverlayHost } from '../workflowOverlayHost'
 
 type TableRow = Record<string, unknown>
 
@@ -45,6 +46,7 @@ const props = defineProps<{
   data: unknown
   storageScopeKey?: string
 }>()
+const { overlayAppendTo, teleportTarget } = useWorkflowOverlayHost()
 
 defineModel<number>('pageSize', { default: 50 })
 defineModel<number>('page', { default: 1 })
@@ -397,6 +399,7 @@ onBeforeUnmount(() => {
                   v-model="selectedWidthFields"
                   data-test="table-width-fields"
                   class="table-multi-select"
+                  :append-to="overlayAppendTo"
                   :options="columnOptions"
                   option-label="name"
                   option-value="value"
@@ -460,7 +463,7 @@ onBeforeUnmount(() => {
     </div>
   </div>
 
-  <Teleport to="body">
+  <Teleport :to="teleportTarget">
     <TableColumnMenuPopover
       v-if="activeColumnMenu"
       :field="activeColumnMenu.field"

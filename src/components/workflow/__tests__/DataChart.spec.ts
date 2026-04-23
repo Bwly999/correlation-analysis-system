@@ -3,6 +3,7 @@ import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import * as resultModule from '@/nodes/result'
 import DataChart from '../DataChart.vue'
+import { provideWorkflowOverlayHost } from '../workflowOverlayHost'
 
 vi.mock('vue-echarts', () => ({
   default: defineComponent({
@@ -26,7 +27,7 @@ vi.mock('vue-echarts', () => ({
 vi.mock('primevue/select', () => ({
   default: defineComponent({
     name: 'PrimeSelectStub',
-    props: ['modelValue', 'options', 'optionLabel', 'optionValue', 'disabled'],
+    props: ['modelValue', 'options', 'optionLabel', 'optionValue', 'disabled', 'appendTo'],
     emits: ['update:modelValue'],
     setup(props, { emit }) {
       return () =>
@@ -34,6 +35,7 @@ vi.mock('primevue/select', () => ({
           'select',
           {
             'data-test': 'chart-type-select',
+            'data-append-to-type': props.appendTo && typeof props.appendTo === 'object' ? 'element' : String(props.appendTo ?? ''),
             disabled: props.disabled,
             value: props.modelValue,
             onChange: (event: Event) =>
@@ -56,7 +58,7 @@ vi.mock('primevue/select', () => ({
 vi.mock('primevue/multiselect', () => ({
   default: defineComponent({
     name: 'PrimeMultiSelectStub',
-    props: ['modelValue', 'options'],
+    props: ['modelValue', 'options', 'appendTo'],
     emits: ['update:modelValue'],
     setup(props, { emit }) {
       return () =>
@@ -64,6 +66,7 @@ vi.mock('primevue/multiselect', () => ({
           'select',
           {
             'data-test': 'chart-key-select',
+            'data-append-to-type': props.appendTo && typeof props.appendTo === 'object' ? 'element' : String(props.appendTo ?? ''),
             multiple: true,
             value: props.modelValue,
             onChange: (event: Event) => {
@@ -103,6 +106,23 @@ vi.mock('primevue/inputnumber', () => ({
 
 const getChartOption = (wrapper: ReturnType<typeof mount>) =>
   JSON.parse(wrapper.get('[data-test="chart-option"]').attributes('data-option') || '{}')
+
+const mountWithOverlayHost = (component: any, host: HTMLElement) =>
+  mount(
+    defineComponent({
+      components: { TestComponent: component },
+      setup() {
+        provideWorkflowOverlayHost({
+          overlayAppendTo: host,
+          teleportTarget: host,
+        })
+        return {
+          component,
+        }
+      },
+      template: '<TestComponent />',
+    }),
+  )
 
 describe('DataChart', () => {
   it('normalizes selected line series with min-max scaling and restores the saved mode on remount', async () => {
@@ -572,5 +592,20 @@ describe('DataChart', () => {
 
     expect(wrapper.get('[data-test="chart-preset-panel"]').classes()).toContain('max-h-[min(75vh,640px)]')
     expect(wrapper.get('[data-test="chart-preset-scroll"]').classes()).toContain('overflow-y-auto')
+  })
+
+  it('uses the injected overlay host for chart selects', () => {
+    const host = document.createElement('div')
+
+    const wrapper = mountWithOverlayHost(
+      defineComponent({
+        components: { DataChart },
+        template: `<DataChart :data="[{ score: 1, cost: 10 }, { score: 2, cost: 12 }]" />`,
+      }),
+      host,
+    )
+
+    expect(wrapper.get('[data-test="chart-key-select"]').attributes('data-append-to-type')).toBe('element')
+    expect(wrapper.get('[data-test="chart-type-select"]').attributes('data-append-to-type')).toBe('element')
   })
 })
