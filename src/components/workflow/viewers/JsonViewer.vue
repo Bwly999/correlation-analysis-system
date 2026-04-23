@@ -10,9 +10,9 @@ const previewText = computed(() => stringifySafePreview(createSafeJsonPreview(pr
 </script>
 
 <template>
-  <div class="h-full w-full p-4">
+  <div class="flex h-full min-h-0 w-full flex-col overflow-hidden">
     <div
-      class="h-full w-full bg-slate-950 text-slate-100 rounded-xl border border-slate-800 overflow-auto p-4 custom-scrollbar"
+      class="h-full w-full overflow-auto rounded-xl border border-slate-800 bg-slate-950 p-4 text-slate-100 custom-scrollbar"
     >
       <pre class="text-xs leading-6 whitespace-pre-wrap break-all">{{ previewText }}</pre>
     </div>

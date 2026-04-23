@@ -4,6 +4,11 @@
 
 ### 修复 (Fix)
 
+- **系统性修复结果看板标准网格下图表预览被卡片高度遮挡的问题**:
+  - 结果看板标准网格改为分层最小高度策略，普通结果卡片至少保留 `360px`，`chart` / `table` / `tableCollection` 等图表优先型结果卡片至少保留 `420px`，避免头部、摘要与工具栏挤压后图表绘图区塌陷。
+  - `chart-viewer`、`table-chart-combo-viewer`、`table-collection-preview` 与 `json-viewer` 收敛为统一的全高嵌入布局，移除重复消耗空间的外层 padding/card 壳体，稳定结果看板与详情弹窗中的高度传导链路。
+  - 新增 `ChartViewer`、组合预览与结果看板回归测试，并在 `工作流系统.md` 中补充 viewer 嵌入布局约束，防止后续新增 viewer 再次引入同类遮挡问题。
+
 - **修复结果看板全屏模式下 viewer 内浮层不可见的问题**:
   - 新增工作流级 `overlay host` 上下文，统一为结果看板全屏容器内的 PrimeVue 下拉、弹窗和自定义 `Teleport` 浮层提供宿主目标，避免 overlay 落到全屏树外后实际打开但不可见。
   - `DataChart`、`TableViewer` 与 `ReportViewer` 改为消费统一宿主，覆盖分析因子下拉、图表类型切换、表格列菜单、批量列宽多选和报告整图预览弹窗。

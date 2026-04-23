@@ -47,12 +47,20 @@ const chartOption = computed(() => getResultChartOption(props.data))
 </script>
 
 <template>
-  <div class="h-full w-full p-4">
-    <div class="h-full w-full bg-white rounded-xl border border-slate-100 shadow-sm p-4">
-      <VChart v-if="chartOption" :option="chartOption" autoresize />
-      <div v-else class="h-full flex items-center justify-center text-slate-400">
+  <div data-test="chart-viewer-root" class="flex h-full min-h-0 w-full flex-col overflow-hidden">
+    <div
+      v-if="chartOption"
+      data-test="chart-viewer-host"
+      class="flex min-h-0 flex-1 overflow-hidden rounded-xl border border-slate-200 bg-white"
+    >
+      <VChart class="h-full w-full" :option="chartOption" autoresize />
+    </div>
+    <div
+      v-else
+      data-test="chart-viewer-host"
+      class="flex min-h-0 flex-1 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-400"
+    >
         无图表配置数据
-      </div>
     </div>
   </div>
 </template>

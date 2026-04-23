@@ -69,11 +69,11 @@ const summary: WorkflowResultDashboardSummary = {
   ],
 }
 
-const createWrapper = () =>
+const createWrapper = (overrideSummary: WorkflowResultDashboardSummary = summary) =>
   mount(WorkflowResultDashboardModal, {
     props: {
       visible: true,
-      summary,
+      summary: overrideSummary,
     },
     global: {
       stubs: {
@@ -178,8 +178,37 @@ describe('WorkflowResultDashboardModal', () => {
     window.dispatchEvent(new MouseEvent('mouseup'))
   })
 
-  it('keeps a usable minimum panel height in grid mode when only one node is selected', async () => {
-    const wrapper = createWrapper()
+  it('keeps a taller minimum panel height for chart-first panels in grid mode', async () => {
+    const chartSummary: WorkflowResultDashboardSummary = {
+      ...summary,
+      selectedDefaultNodeIds: ['node_chart', 'node_report'],
+      nodes: [
+        {
+          nodeId: 'node_chart',
+          label: '图表结果',
+          type: 'chart-display',
+          category: 'terminal',
+          isExecutionTarget: true,
+          status: 'success',
+          hasOutput: true,
+          isTerminal: true,
+          resultKind: 'chart',
+          resultKindLabel: '图表结果',
+          summary: '图表摘要',
+          output: {
+            kind: 'chart',
+            payload: {
+              xAxis: { type: 'category', data: ['A'] },
+              yAxis: { type: 'value' },
+              series: [{ type: 'bar', data: [1] }],
+            },
+          },
+        },
+        summary.nodes[0]!,
+      ],
+    }
+
+    const wrapper = createWrapper(chartSummary)
 
     const secondCheckbox = wrapper.findAll('input[type="checkbox"]')[1]
     if (!secondCheckbox) {
@@ -189,11 +218,49 @@ describe('WorkflowResultDashboardModal', () => {
 
     const draggable = wrapper.findComponent({ name: 'VueDraggable' })
     expect(draggable.exists()).toBe(true)
-    expect(draggable.attributes('style')).toContain('grid-auto-rows: minmax(320px, auto);')
+    expect(draggable.attributes('style')).toContain('grid-auto-rows: minmax(360px, auto);')
 
     const gridItem = wrapper.find('.dashboard-grid__item')
     expect(gridItem.exists()).toBe(true)
-    expect(gridItem.attributes('style')).toContain('min-height: 320px;')
+    expect(gridItem.attributes('style')).toContain('min-height: 420px;')
+  })
+
+  it('uses higher min height only for chart-first cards in mixed grid layouts', () => {
+    const chartSummary: WorkflowResultDashboardSummary = {
+      ...summary,
+      selectedDefaultNodeIds: ['node_chart', 'node_a'],
+      nodes: [
+        {
+          nodeId: 'node_chart',
+          label: '图表结果',
+          type: 'chart-display',
+          category: 'terminal',
+          isExecutionTarget: true,
+          status: 'success',
+          hasOutput: true,
+          isTerminal: true,
+          resultKind: 'chart',
+          resultKindLabel: '图表结果',
+          summary: '图表摘要',
+          output: {
+            kind: 'chart',
+            payload: {
+              xAxis: { type: 'category', data: ['A'] },
+              yAxis: { type: 'value' },
+              series: [{ type: 'bar', data: [1] }],
+            },
+          },
+        },
+        summary.nodes[0]!,
+      ],
+    }
+
+    const wrapper = createWrapper(chartSummary)
+
+    const gridItems = wrapper.findAll('.dashboard-grid__item')
+    expect(gridItems).toHaveLength(2)
+    expect(gridItems[0]!.attributes('style')).toContain('min-height: 420px;')
+    expect(gridItems[1]!.attributes('style')).toContain('min-height: 360px;')
   })
 
   it('toggles the node selector sidebar and expands the workspace width', async () => {

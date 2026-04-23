@@ -122,6 +122,26 @@ vi.mock('primevue/inputnumber', () => ({
 }))
 
 describe('TableChartComboViewer', () => {
+  it('uses a full-height viewer shell without outer padding wrappers', () => {
+    const wrapper = mount(TableChartComboViewer, {
+      props: {
+        data: {
+          kind: 'table',
+          payload: [{ score: 1, revenue: 1000 }],
+        },
+      },
+    })
+
+    const root = wrapper.get('[data-test="table-chart-combo-root"]')
+    expect(root.classes()).toContain('h-full')
+    expect(root.classes()).toContain('min-h-0')
+    expect(root.classes()).not.toContain('p-4')
+
+    const content = wrapper.get('[data-test="table-chart-combo-content"]')
+    expect(content.classes()).toContain('min-h-0')
+    expect(content.classes()).toContain('flex-1')
+  })
+
   it('persists combo mode per node storage scope and keeps nodes isolated', async () => {
     localStorage.clear()
 
