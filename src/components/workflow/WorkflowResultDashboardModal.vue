@@ -62,7 +62,8 @@ const FREE_GRID_DEFAULT_HEIGHT = 320
 const FREE_GRID_GAP = 16
 const FREE_GRID_MIN_WIDTH = 280
 const FREE_GRID_MIN_HEIGHT = 220
-const GRID_PANEL_MIN_HEIGHT = 320
+const GRID_PANEL_BASE_MIN_HEIGHT = 360
+const GRID_PANEL_CHART_MIN_HEIGHT = 420
 const dashboardShellRef = useTemplateRef<HTMLElement>('dashboardShell')
 
 const dashboardGroups = computed(() =>
@@ -119,12 +120,15 @@ const orderedSelectedNodes = computed<ResultDashboardNode[]>({
 
 const gridLayoutStyle = computed(() => ({
   gridTemplateColumns: `repeat(${gridColumns.value}, minmax(0, 1fr))`,
-  gridAutoRows: `minmax(${GRID_PANEL_MIN_HEIGHT}px, auto)`,
+  gridAutoRows: `minmax(${GRID_PANEL_BASE_MIN_HEIGHT}px, auto)`,
 }))
 
-const gridItemStyle = computed(() => ({
-  minHeight: `${GRID_PANEL_MIN_HEIGHT}px`,
-}))
+const isChartFirstResult = (node: ResultDashboardNode) =>
+  node.resultKind === 'chart' || node.resultKind === 'table' || node.resultKind === 'tableCollection'
+
+const getGridItemStyle = (node: ResultDashboardNode) => ({
+  minHeight: `${isChartFirstResult(node) ? GRID_PANEL_CHART_MIN_HEIGHT : GRID_PANEL_BASE_MIN_HEIGHT}px`,
+})
 
 const createDefaultFreeGridLayout = (_index: number): FreeGridItemLayout => {
   return {
@@ -570,7 +574,7 @@ const formatDuration = (duration: number) => {
                 v-for="node in orderedSelectedNodes"
                 :key="node.nodeId"
                 class="dashboard-grid__item"
-                :style="gridItemStyle"
+                :style="getGridItemStyle(node)"
               >
                 <WorkflowResultPanel
                   :node="node"

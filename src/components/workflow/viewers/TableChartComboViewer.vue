@@ -64,8 +64,8 @@ watch(
 </script>
 
 <template>
-  <div class="h-full w-full p-4">
-    <div class="h-full w-full bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col">
+  <div data-test="table-chart-combo-root" class="flex h-full min-h-0 w-full flex-col overflow-hidden">
+    <div class="flex h-full min-h-0 w-full flex-col overflow-hidden rounded-xl border border-slate-200 bg-white">
       <div class="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between gap-3">
         <div class="text-xs font-bold text-slate-500">
           组合预览
@@ -105,7 +105,7 @@ watch(
         </div>
       </div>
 
-      <div v-if="showChartPane || showTablePane" :class="contentClass">
+      <div v-if="showChartPane || showTablePane" data-test="table-chart-combo-content" :class="contentClass">
         <div v-if="showChartPane" data-test="combo-chart-pane" :class="paneClass">
           <DataChart v-if="isTableCollection" :data="props.data" :storage-scope-key="props.storageScopeKey" />
           <ChartViewer v-else-if="explicitChartOption" :data="props.data" :storage-scope-key="props.storageScopeKey" />

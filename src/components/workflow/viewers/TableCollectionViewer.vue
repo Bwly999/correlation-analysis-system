@@ -37,8 +37,8 @@ const fields = computed(() => {
 </script>
 
 <template>
-  <div class="h-full w-full p-4">
-    <div class="h-full w-full bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col">
+  <div class="flex h-full min-h-0 w-full flex-col overflow-hidden">
+    <div class="flex h-full min-h-0 w-full flex-col overflow-hidden rounded-xl border border-slate-200 bg-white">
       <div
         v-if="groups.length === 0"
         class="flex-1 flex items-center justify-center text-sm font-medium text-slate-400"
