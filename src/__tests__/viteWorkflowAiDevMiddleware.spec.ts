@@ -45,6 +45,7 @@ describe('workflow ai dev middleware', () => {
   })
 
   it('loads the server handler through vite ssrLoadModule for api requests', async () => {
+    vi.resetModules()
     const { default: viteConfig } = await import('../../vite.config.ts')
     const plugin = viteConfig.plugins?.find(
       (candidate) => candidate && typeof candidate === 'object' && 'name' in candidate && candidate.name === 'workflow-ai-dev-middleware',
@@ -76,5 +77,50 @@ describe('workflow ai dev middleware', () => {
 
     expect(ssrLoadModule).toHaveBeenCalledWith('/src/server/app.ts')
     expect(next).not.toHaveBeenCalled()
+  })
+
+  it('reloads the server handler for later api requests so new routes can take effect without restarting vite', async () => {
+    vi.resetModules()
+    const { default: viteConfig } = await import('../../vite.config.ts')
+    const plugin = viteConfig.plugins?.find(
+      (candidate) => candidate && typeof candidate === 'object' && 'name' in candidate && candidate.name === 'workflow-ai-dev-middleware',
+    ) as { configureServer?: (server: any) => void } | undefined
+
+    expect(plugin).toBeTruthy()
+
+    let middleware: MiddlewareHandler | null = null
+    const firstHandler = vi.fn(async () => undefined)
+    const secondHandler = vi.fn(async () => undefined)
+    const ssrLoadModule = vi
+      .fn()
+      .mockResolvedValueOnce({ createServerHandler: () => firstHandler })
+      .mockResolvedValueOnce({ createServerHandler: () => secondHandler })
+    const next = vi.fn()
+
+    plugin?.configureServer?.({
+      middlewares: {
+        use(handler: MiddlewareHandler) {
+          middleware = handler
+        },
+      },
+      ssrLoadModule,
+    } as any)
+
+    expect(middleware).toBeTypeOf('function')
+
+    middleware!({ url: '/api/analysis/lasso' }, {}, next)
+    await Promise.resolve()
+    await Promise.resolve()
+
+    middleware!({ url: '/api/analysis/logistic-regression-classification' }, {}, next)
+    await Promise.resolve()
+    await Promise.resolve()
+
+    await vi.waitFor(() => {
+      expect(ssrLoadModule).toHaveBeenCalledTimes(2)
+      expect(firstHandler).toHaveBeenCalledTimes(1)
+      expect(secondHandler).toHaveBeenCalledTimes(1)
+      expect(next).not.toHaveBeenCalled()
+    })
   })
 })

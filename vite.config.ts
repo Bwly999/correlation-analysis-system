@@ -33,20 +33,14 @@ const isVueEcosystemModule = (id: string) =>
   || id.includes('vue-draggable-plus')
 
 const workflowAiDevMiddleware = (): Plugin => {
-  let handlerPromise: Promise<(request: any, response: any) => Promise<void>> | null = null
-
   return {
     name: 'workflow-ai-dev-middleware',
     apply: 'serve',
     configureServer(server) {
-      const getHandler = async () => {
-        if (!handlerPromise) {
-          handlerPromise = server
-            .ssrLoadModule('/src/server/app.ts')
-            .then(({ createServerHandler }) => createServerHandler())
-        }
-        return handlerPromise
-      }
+      const getHandler = async () =>
+        server
+          .ssrLoadModule('/src/server/app.ts')
+          .then(({ createServerHandler }) => createServerHandler())
 
       server.middlewares.use((request, response, next) => {
         if (!request.url?.startsWith('/api/')) {
