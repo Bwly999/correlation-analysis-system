@@ -1,22 +1,22 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Readable } from 'node:stream'
+import { readFile } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { createPool } from 'mysql2/promise'
+import { resolveMysqlIntegrationTestConfig } from './mysqlStorageTestConfig.js'
 
 const mysqlEnabled = process.env.RUN_MYSQL_STORAGE_TESTS === '1'
+
+vi.setConfig({
+  testTimeout: 15000,
+})
 
 type MockResponse = ServerResponse & {
   body: string
   headersMap: Record<string, string>
 }
 
-const mysqlConfig = {
-  host: process.env.WORKFLOW_STORAGE_MYSQL_HOST || '127.0.0.1',
-  port: Number(process.env.WORKFLOW_STORAGE_MYSQL_PORT || '3306'),
-  user: process.env.WORKFLOW_STORAGE_MYSQL_USER || 'root',
-  password: process.env.WORKFLOW_STORAGE_MYSQL_PASSWORD || '123456',
-  database: process.env.WORKFLOW_STORAGE_MYSQL_DATABASE || 'correlation_analysis_system',
-}
+const mysqlConfig = resolveMysqlIntegrationTestConfig(process.env)
 
 const createRequest = (method: string, url: string, body?: unknown, headers?: Record<string, string>) => {
   const payload = body === undefined ? '' : JSON.stringify(body)
@@ -83,11 +83,19 @@ describe.runIf(mysqlEnabled)('mysql storage routes', () => {
     })
 
     try {
+      const migrationSql = await readFile('drizzle/mysql-storage/0000_init.sql', 'utf-8')
+      const statements = migrationSql
+        .split(/;\s*\r?\n/)
+        .map((statement) => statement.trim())
+        .filter(Boolean)
+
+      for (const statement of statements) {
+        await cleanupPool.query(statement)
+      }
+
       await cleanupPool.query('DELETE FROM execution_history')
       await cleanupPool.query('DELETE FROM workflow_versions')
       await cleanupPool.query('DELETE FROM workflow_current')
-    } catch {
-      // Ignore missing-table errors before the storage backend creates schema.
     } finally {
       await cleanupPool.end()
     }

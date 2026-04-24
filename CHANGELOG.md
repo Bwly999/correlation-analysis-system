@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### 修复 (Fix)
+
+- **将 MySQL 工作流存储重构为 Drizzle 管理并隔离集成测试库**:
+  - 将 MySQL storage 从集中式手写 SQL 重构为 `schema`、`client`、`serialization`、`repositories`、`migrator` 分层结构，引入 Drizzle schema 与迁移文件管理表结构，服务启动时仅校验 schema 是否已就绪。
+  - 新增 `pnpm db:mysql:generate` 与 `pnpm db:mysql:migrate`，部署文档与工作流系统文档同步改为“先建库、再执行迁移”的使用方式。
+  - 新增 MySQL 序列化与路由持久化测试，并将 MySQL 集成测试默认保持显式开启；测试库默认自动映射到 `*_test`，避免再清理开发库数据。
+
 ### 新增 (Added)
 
 - **新增 pm2 统一进程管理配置**:

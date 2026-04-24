@@ -13,9 +13,12 @@ const providers: Record<string, new () => IStorageProvider> = {
 
 /**
  * 根据环境变量选择存储策略
- * 优先级: VITE_STORAGE_TYPE > 'local'
+ * 测试环境固定走 local，避免单测被开发态 server 配置污染
+ * 其他环境优先级: VITE_STORAGE_TYPE > 'local'
  */
-const storageType = import.meta.env.VITE_STORAGE_TYPE || 'local'
+const storageType = import.meta.env.MODE === 'test'
+  ? 'local'
+  : import.meta.env.VITE_STORAGE_TYPE || 'local'
 const ProviderClass = providers[storageType] || LocalStorageProvider
 
 /**

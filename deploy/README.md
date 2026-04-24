@@ -135,7 +135,7 @@ WORKFLOW_AI_DEFAULT_MODEL=glm-4.7
 - Python 服务建议只监听本机回环地址，不对外暴露
 - `WORKFLOW_STORAGE_BACKEND` 支持 `lowdb` 与 `mysql`
 - 当 `WORKFLOW_STORAGE_BACKEND=lowdb` 时，`WORKFLOW_STORAGE_DATA_DIR` 用于指定工作流与历史数据目录
-- 当 `WORKFLOW_STORAGE_BACKEND=mysql` 时，Node 会在目标数据库内自动建表，但不会自动建库；请先手工创建 `WORKFLOW_STORAGE_MYSQL_DATABASE`
+- 当 `WORKFLOW_STORAGE_BACKEND=mysql` 时，请先手工创建 `WORKFLOW_STORAGE_MYSQL_DATABASE`，再执行 `pnpm db:mysql:migrate` 应用 Drizzle 迁移
 - `lowdb` 模式默认按单 Node 实例设计，不建议多个实例直接共享同一落盘目录
 - `mysql` 模式适合多实例共享同一套工作流、版本和历史数据
 
@@ -178,6 +178,7 @@ bash deploy/scripts/build.sh
 脚本行为：
 
 - 执行 `pnpm install`
+- 若使用 MySQL storage，先执行 `pnpm db:mysql:migrate`
 - 执行 `pnpm build`
 
 构建产物：
