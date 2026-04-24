@@ -2,15 +2,14 @@ import { mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { Low } from 'lowdb'
 import { JSONFile } from 'lowdb/node'
+import type {
+  StorageHistoryDocumentDto,
+  StorageWorkflowDocumentDto,
+} from '../shared/contracts/storage.js'
 
-export type UserHistoryDocument<TRecord> = {
-  records: TRecord[]
-}
+export type UserHistoryDocument<TRecord> = StorageHistoryDocumentDto<TRecord>
 
-export type UserWorkflowDocument<TWorkflow, TVersion> = {
-  current: TWorkflow | null
-  versions: TVersion[]
-}
+export type UserWorkflowDocument<TWorkflow, TVersion> = StorageWorkflowDocumentDto<TWorkflow, TVersion>
 
 export interface WorkflowStorageRepository<TWorkflow, TVersion, THistoryRecord> {
   listWorkflowDocuments(userId: string): Promise<Array<UserWorkflowDocument<TWorkflow, TVersion>>>

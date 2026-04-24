@@ -12,7 +12,13 @@ import {
 } from './agentSessionStore.js'
 import { getWorkflowAiSessionRecord } from '../workflowAi/orchestrator.js'
 import { executeWorkflowPlanForSession } from './planExecution.js'
-import { workflowMcpRuntime } from './workflowMcpRuntime.js'
+import type { WorkflowMcpRuntime } from './workflowMcpRuntime.js'
+import {
+  WORKFLOW_SESSION_ID_HEADER,
+  WORKFLOW_USER_ID_HEADER,
+  resolveSingleHeaderValue,
+  type WorkflowRequestHeaders,
+} from '../http/workflowHeaders.js'
 
 type WorkflowMcpContext = {
   sessionId: string
@@ -54,7 +60,7 @@ const planSchema = z.object({
   assumptions: z.array(z.string()),
   warnings: z.array(z.string()),
   questions: z.array(z.string()).optional(),
-  operations: z.array(z.any()),
+  operations: z.array(z.unknown()),
 })
 
 const buildToolResult = <T extends Record<string, unknown>>(structuredContent: T) => ({
@@ -103,6 +109,7 @@ const trackWorkflowToolCall = (toolName: string, failed: boolean) => {
 const getWorkflowToolDefinitions = (
   context: WorkflowMcpContext,
   sessionRecord: WorkflowMcpSessionRecord,
+  runtime: WorkflowMcpRuntime,
 ): WorkflowMcpToolDefinition[] => [
   {
     name: 'list_workflow_tools',
@@ -110,8 +117,8 @@ const getWorkflowToolDefinitions = (
     annotations: { readOnlyHint: true, openWorldHint: false },
     handler: () =>
       buildToolResult({
-        total: getWorkflowToolDefinitions(context, sessionRecord).length,
-        items: getWorkflowToolDefinitions(context, sessionRecord).map((tool) => ({
+        total: getWorkflowToolDefinitions(context, sessionRecord, runtime).length,
+        items: getWorkflowToolDefinitions(context, sessionRecord, runtime).map((tool) => ({
           name: tool.name,
           description: tool.description,
         })),
@@ -204,7 +211,7 @@ const getWorkflowToolDefinitions = (
     inputSchema: {
       query: z.string().optional().describe('节点搜索关键词，可为空'),
     },
-    handler: ({ query }) => buildToolResult(workflowMcpRuntime.searchNodes(query ?? '')),
+    handler: ({ query }) => buildToolResult(runtime.searchNodes(query ?? '')),
   },
   {
     name: 'workflow_get_node',
@@ -217,7 +224,7 @@ const getWorkflowToolDefinitions = (
       config: z.record(z.string(), z.unknown()).optional().describe('当前节点配置'),
     },
     handler: ({ nodeType, mode, propertyQuery, config }) =>
-      buildToolResult(workflowMcpRuntime.getNode(nodeType, mode, propertyQuery, config)),
+      buildToolResult(runtime.getNode(nodeType, mode, propertyQuery, config)),
   },
   {
     name: 'workflow_get_node_options',
@@ -230,7 +237,7 @@ const getWorkflowToolDefinitions = (
       upstreamSample: z.unknown().optional().describe('上游样本数据'),
     },
     handler: async ({ nodeType, propertyName, config, upstreamSample }) =>
-      buildToolResult(await workflowMcpRuntime.getNodeOptions(nodeType, propertyName, config, upstreamSample)),
+      buildToolResult(await runtime.getNodeOptions(nodeType, propertyName, config, upstreamSample)),
   },
   {
     name: 'workflow_validate_plan',
@@ -262,7 +269,7 @@ const getWorkflowToolDefinitions = (
     handler: async ({ workflowId, name }) =>
       buildToolResult({
         ok: true,
-        workflow: await workflowMcpRuntime.createWorkflow(context.userId, { workflowId, name }),
+        workflow: await runtime.createWorkflow(context.userId, { workflowId, name }),
       }),
   },
   {
@@ -274,7 +281,7 @@ const getWorkflowToolDefinitions = (
       mode: z.enum(['full', 'structure', 'minimal']).optional(),
     },
     handler: async ({ workflowId, mode }) =>
-      buildToolResult(await workflowMcpRuntime.getWorkflow(context.userId, workflowId, mode)),
+      buildToolResult(await runtime.getWorkflow(context.userId, workflowId, mode)),
   },
   {
     name: 'workflow_update_partial_workflow',
@@ -282,13 +289,13 @@ const getWorkflowToolDefinitions = (
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     inputSchema: {
       workflowId: z.string().describe('工作流 ID'),
-      operations: z.array(z.any()).describe('增量操作列表'),
+      operations: z.array(z.unknown()).describe('增量操作列表'),
       summary: z.string().optional().describe('本次操作摘要'),
       validateAfterApply: z.boolean().optional().describe('应用后是否自动校验'),
     },
     handler: async ({ workflowId, operations, summary, validateAfterApply }) =>
       buildToolResult(
-        await workflowMcpRuntime.updatePartialWorkflow(
+        await runtime.updatePartialWorkflow(
           context.userId,
           workflowId,
           operations as WorkflowAiPlan['operations'],
@@ -312,7 +319,7 @@ const getWorkflowToolDefinitions = (
     },
     handler: async ({ workflow }) =>
       buildToolResult(
-        await workflowMcpRuntime.updateFullWorkflow(context.userId, {
+        await runtime.updateFullWorkflow(context.userId, {
           ...workflow,
           updatedAt: workflow.updatedAt ?? Date.now(),
         }),
@@ -331,7 +338,7 @@ const getWorkflowToolDefinitions = (
       }).optional(),
     },
     handler: async ({ workflowId, workflowSnapshot }) =>
-      buildToolResult(await workflowMcpRuntime.validateWorkflow(context.userId, { workflowId, workflowSnapshot })),
+      buildToolResult(await runtime.validateWorkflow(context.userId, { workflowId, workflowSnapshot })),
   },
   {
     name: 'workflow_debug_node',
@@ -345,7 +352,7 @@ const getWorkflowToolDefinitions = (
     },
     handler: async ({ workflowId, nodeId, mode, includeUpstreamTrace }) =>
       buildToolResult(
-        await workflowMcpRuntime.debugNode(context.userId, sessionRecord.request, {
+        await runtime.debugNode(context.userId, sessionRecord.request, {
           workflowId,
           nodeId,
           mode,
@@ -361,7 +368,7 @@ const getWorkflowToolDefinitions = (
       workflowId: z.string().describe('工作流 ID'),
     },
     handler: async ({ workflowId }) =>
-      buildToolResult(await workflowMcpRuntime.testWorkflow(context.userId, sessionRecord.request, { workflowId })),
+      buildToolResult(await runtime.testWorkflow(context.userId, sessionRecord.request, { workflowId })),
   },
   {
     name: 'workflow_executions',
@@ -373,7 +380,7 @@ const getWorkflowToolDefinitions = (
       nodeId: z.string().optional().describe('节点 ID'),
     },
     handler: async ({ mode, executionId, nodeId }) =>
-      buildToolResult(await workflowMcpRuntime.executions(context.userId, { mode, executionId, nodeId })),
+      buildToolResult(await runtime.executions(context.userId, { mode, executionId, nodeId })),
   },
   {
     name: 'workflow_workflow_versions',
@@ -385,7 +392,7 @@ const getWorkflowToolDefinitions = (
       versionId: z.string().optional().describe('版本 ID'),
     },
     handler: async ({ mode, workflowId, versionId }) =>
-      buildToolResult(await workflowMcpRuntime.workflowVersions(context.userId, { mode, workflowId, versionId })),
+      buildToolResult(await runtime.workflowVersions(context.userId, { mode, workflowId, versionId })),
   },
   {
     name: 'workflow_get_execution_result',
@@ -429,19 +436,25 @@ const getWorkflowToolDefinitions = (
   },
 ]
 
-const resolveWorkflowMcpContext = (headers: IncomingMessage['headers']): WorkflowMcpContext => {
-  const sessionIdHeader = headers['x-workflow-ai-session-id']
-  const userIdHeader = headers['x-workflow-storage-user-id']
-  const sessionId = Array.isArray(sessionIdHeader) ? sessionIdHeader[0] : sessionIdHeader
-  const userId = Array.isArray(userIdHeader) ? userIdHeader[0] : userIdHeader
-
+const resolveWorkflowMcpContext = (
+  headers: IncomingMessage['headers'],
+  resolveStorageUser?: (headers: WorkflowRequestHeaders) => { id: string },
+): WorkflowMcpContext => {
+  const sessionId = resolveSingleHeaderValue(headers[WORKFLOW_SESSION_ID_HEADER])
   if (!sessionId) {
-    throw new Error('缺少 x-workflow-ai-session-id 请求头')
+    throw new Error(`缺少 ${WORKFLOW_SESSION_ID_HEADER} 请求头`)
+  }
+
+  const userId =
+    resolveStorageUser?.(headers as WorkflowRequestHeaders).id
+    ?? resolveSingleHeaderValue(headers[WORKFLOW_USER_ID_HEADER])
+  if (!userId) {
+    throw new Error(`缺少 ${WORKFLOW_USER_ID_HEADER} 请求头`)
   }
 
   return {
     sessionId,
-    userId: userId || process.env.WORKFLOW_STORAGE_DEFAULT_USER_ID || 'server-demo-user',
+    userId,
   }
 }
 
@@ -495,26 +508,54 @@ const getSessionRecordOrThrow = (context: WorkflowMcpContext): WorkflowMcpSessio
 }
 
 const getExistingWorkflowContext = (request: WorkflowAiPlanRequest) => ({
-  existingNodes: request.workflowSnapshot?.nodes.map((node: any) => ({
-    id: node.id,
-    type: node.type,
-    config: node.config,
-  })) ?? [],
-  existingEdges: request.workflowSnapshot?.edges.map((edge: any) => ({
-    id: edge.id,
-    source: edge.source,
-    target: edge.target,
-  })) ?? [],
+  existingNodes:
+    request.workflowSnapshot?.nodes
+      .map((node) => {
+        if (!node || typeof node !== 'object') return null
+        const payload = node as Record<string, unknown>
+        const id = typeof payload.id === 'string' ? payload.id : ''
+        const type = typeof payload.type === 'string' ? payload.type : ''
+        if (!id || !type) return null
+        return {
+          id,
+          type,
+          config:
+            payload.config && typeof payload.config === 'object'
+              ? (payload.config as Record<string, unknown>)
+              : undefined,
+        }
+      })
+      .filter((item) => item !== null)
+    ?? [],
+  existingEdges:
+    request.workflowSnapshot?.edges
+      .map((edge) => {
+        if (!edge || typeof edge !== 'object') return null
+        const payload = edge as Record<string, unknown>
+        const source = typeof payload.source === 'string' ? payload.source : ''
+        const target = typeof payload.target === 'string' ? payload.target : ''
+        if (!source || !target) return null
+        return {
+          id: typeof payload.id === 'string' ? payload.id : undefined,
+          source,
+          target,
+        }
+      })
+      .filter((item) => item !== null)
+    ?? [],
 })
 
-const createWorkflowMcpServer = (context: WorkflowMcpContext) => {
+const createWorkflowMcpServer = (
+  context: WorkflowMcpContext,
+  runtime: WorkflowMcpRuntime,
+) => {
   const sessionRecord = getSessionRecordOrThrow(context)
   const server = new McpServer({
     name: 'correlation-analysis-workflow-mcp',
     version: '1.0.0',
   })
 
-  for (const tool of getWorkflowToolDefinitions(context, sessionRecord)) {
+  for (const tool of getWorkflowToolDefinitions(context, sessionRecord, runtime)) {
     server.registerTool(
       tool.name,
       {
@@ -575,14 +616,21 @@ export const getWorkflowMcpHealthSnapshot = () => ({
 export const handleWorkflowMcpRequest = async (
   request: IncomingMessage,
   response: ServerResponse,
+  dependencies: {
+    runtime: WorkflowMcpRuntime
+    resolveStorageUser?: (headers: WorkflowRequestHeaders) => { id: string }
+  },
 ) => {
   let server: McpServer | null = null
   let transport: StreamableHTTPServerTransport | null = null
 
   try {
+    if (!dependencies.runtime) {
+      throw new Error('workflow MCP runtime 未注入')
+    }
     assertWorkflowMcpAuth(request.headers)
-    const context = resolveWorkflowMcpContext(request.headers)
-    server = createWorkflowMcpServer(context)
+    const context = resolveWorkflowMcpContext(request.headers, dependencies.resolveStorageUser)
+    server = createWorkflowMcpServer(context, dependencies.runtime)
     transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
     })

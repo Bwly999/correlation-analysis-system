@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### 重构 (Refactor)
+
+- **收敛 Node 后端装配层、存储服务与 MCP 依赖边界**:
+  - 新增 `storageService`、`storageCompositionRoot`、`serverDependencies` 与共享存储 DTO，统一服务端存储读写、用户解析和仓储装配，避免路由与运行时直接依赖隐式全局实现。
+  - 将 `app.ts` 拆回轻量装配入口，新增 `http/` 与 `modules/` 分层，统一请求上下文、响应、错误处理与各业务域路由组织。
+  - 统一 `x-workflow-user-id`、`x-workflow-user-name`、`x-workflow-session-id` 请求头，补齐 MCP runtime 注入与后端相关测试，并更新 Node 后端架构整改清单。
+
 ### 修复 (Fix)
 
 - **将 MySQL 工作流存储重构为 Drizzle 管理并隔离集成测试库**:

@@ -38,6 +38,7 @@ vi.mock('@modelcontextprotocol/sdk/server/streamableHttp.js', () => ({
 
 import { createAgentSession } from '../gateway.js'
 import { handleWorkflowMcpRequest } from '../workflowMcpServer.js'
+import { createServerDependencies } from '../../bootstrap/serverDependencies.js'
 import { saveUserWorkflow } from '../../storage.js'
 
 type MockResponse = ServerResponse & {
@@ -144,8 +145,8 @@ const createRequest = (sessionId: string) =>
     method: 'POST',
     url: '/api/opencode/workflow-mcp',
     headers: {
-      'x-workflow-ai-session-id': sessionId,
-      'x-workflow-storage-user-id': 'user_1',
+      'x-workflow-session-id': sessionId,
+      'x-workflow-user-id': 'user_1',
     },
   }) as unknown as IncomingMessage
 
@@ -166,6 +167,14 @@ const createResponse = () =>
     },
   }) as unknown as MockResponse
 
+const createWorkflowMcpDependencies = () => {
+  const dependencies = createServerDependencies()
+  return {
+    runtime: dependencies.workflowMcpRuntime,
+    resolveStorageUser: dependencies.resolveStorageUser,
+  }
+}
+
 describe('workflow MCP server', () => {
   beforeEach(() => {
     currentTools.clear()
@@ -181,7 +190,7 @@ describe('workflow MCP server', () => {
     const request = createRequest(created.session.id)
     const response = createResponse()
 
-    await handleWorkflowMcpRequest(request, response)
+    await handleWorkflowMcpRequest(request, response, createWorkflowMcpDependencies())
 
     expect(response.statusCode).toBe(200)
     expect(JSON.parse(response.body)).toMatchObject({
@@ -204,7 +213,7 @@ describe('workflow MCP server', () => {
     const request = createRequest(created.session.id)
     const response = createResponse()
 
-    await handleWorkflowMcpRequest(request, response)
+    await handleWorkflowMcpRequest(request, response, createWorkflowMcpDependencies())
 
     const tool = currentTools.get('list_workflow_tools')
     expect(tool).toBeTypeOf('function')
@@ -239,7 +248,7 @@ describe('workflow MCP server', () => {
     const request = createRequest(created.session.id)
     const response = createResponse()
 
-    await handleWorkflowMcpRequest(request, response)
+    await handleWorkflowMcpRequest(request, response, createWorkflowMcpDependencies())
 
     expect(response.statusCode).toBe(401)
     expect(JSON.parse(response.body)).toEqual({
@@ -261,7 +270,7 @@ describe('workflow MCP server', () => {
     const request = createRequest(created.session.id)
     const response = createResponse()
 
-    await handleWorkflowMcpRequest(request, response)
+    await handleWorkflowMcpRequest(request, response, createWorkflowMcpDependencies())
 
     const listDataSources = currentTools.get('workflow_list_data_sources')
     const getDataSourceSchema = currentTools.get('workflow_get_data_source_schema')
@@ -303,7 +312,7 @@ describe('workflow MCP server', () => {
     const request = createRequest(created.session.id)
     const response = createResponse()
 
-    await handleWorkflowMcpRequest(request, response)
+    await handleWorkflowMcpRequest(request, response, createWorkflowMcpDependencies())
 
     const executePlan = currentTools.get('workflow_execute_plan')
     const getExecutionResult = currentTools.get('workflow_get_execution_result')
@@ -381,7 +390,7 @@ describe('workflow MCP server', () => {
 
     const request = createRequest(created.session.id)
     const response = createResponse()
-    await handleWorkflowMcpRequest(request, response)
+    await handleWorkflowMcpRequest(request, response, createWorkflowMcpDependencies())
 
     const searchNodes = currentTools.get('workflow_search_nodes')
     const getNode = currentTools.get('workflow_get_node')
@@ -418,7 +427,7 @@ describe('workflow MCP server', () => {
 
     const request = createRequest(created.session.id)
     const response = createResponse()
-    await handleWorkflowMcpRequest(request, response)
+    await handleWorkflowMcpRequest(request, response, createWorkflowMcpDependencies())
 
     const getNodeOptions = currentTools.get('workflow_get_node_options')
     expect(getNodeOptions).toBeTypeOf('function')
@@ -456,7 +465,7 @@ describe('workflow MCP server', () => {
 
     const request = createRequest(created.session.id)
     const response = createResponse()
-    await handleWorkflowMcpRequest(request, response)
+    await handleWorkflowMcpRequest(request, response, createWorkflowMcpDependencies())
 
     const updatePartialWorkflow = currentTools.get('workflow_update_partial_workflow')
     const getWorkflow = currentTools.get('workflow_get_workflow')
@@ -578,7 +587,7 @@ describe('workflow MCP server', () => {
 
     const request = createRequest(created.session.id)
     const response = createResponse()
-    await handleWorkflowMcpRequest(request, response)
+    await handleWorkflowMcpRequest(request, response, createWorkflowMcpDependencies())
 
     const debugNode = currentTools.get('workflow_debug_node')
     expect(debugNode).toBeTypeOf('function')

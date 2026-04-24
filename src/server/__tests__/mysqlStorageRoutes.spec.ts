@@ -119,7 +119,7 @@ describe.runIf(mysqlEnabled)('mysql storage routes', () => {
           nodes: [{ id: 'node_mysql_v1' }],
           edges: [],
         },
-        { 'x-user-id': 'mysql-user' },
+        { 'x-workflow-user-id': 'mysql-user' },
       ),
       createResponse(),
     )
@@ -131,7 +131,7 @@ describe.runIf(mysqlEnabled)('mysql storage routes', () => {
         'GET',
         '/api/storage/workflows/wf_mysql_persisted',
         undefined,
-        { 'x-user-id': 'mysql-user' },
+        { 'x-workflow-user-id': 'mysql-user' },
       ),
       workflowResponse,
     )
@@ -150,7 +150,7 @@ describe.runIf(mysqlEnabled)('mysql storage routes', () => {
         'GET',
         '/api/storage/workflows/wf_mysql_persisted/versions',
         undefined,
-        { 'x-user-id': 'mysql-user' },
+        { 'x-workflow-user-id': 'mysql-user' },
       ),
       versionsResponse,
     )
@@ -182,7 +182,7 @@ describe.runIf(mysqlEnabled)('mysql storage routes', () => {
           },
           limit: 20,
         },
-        { 'x-user-id': 'mysql-history-user' },
+        { 'x-workflow-user-id': 'mysql-history-user' },
       ),
       createResponse(),
     )
@@ -194,7 +194,7 @@ describe.runIf(mysqlEnabled)('mysql storage routes', () => {
         'GET',
         '/api/storage/history',
         undefined,
-        { 'x-user-id': 'mysql-history-user' },
+        { 'x-workflow-user-id': 'mysql-history-user' },
       ),
       response,
     )

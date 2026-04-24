@@ -310,8 +310,8 @@ describe('runAnalysisAgentSessionLoop', () => {
           type: 'remote',
           url: 'http://127.0.0.1:8787/api/opencode/workflow-mcp',
           headers: expect.objectContaining({
-            'x-workflow-ai-session-id': 'session_1',
-            'x-workflow-storage-user-id': 'user_1',
+            'x-workflow-session-id': 'session_1',
+            'x-workflow-user-id': 'user_1',
           }),
         }),
       }),

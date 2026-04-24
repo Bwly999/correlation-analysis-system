@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { createServerHandler } from '../app.js'
+import { createStorageCompositionRoot } from '../bootstrap/storageCompositionRoot.js'
 
 type MockResponse = ServerResponse & {
   body: string
@@ -41,8 +42,8 @@ const createResponse = () => {
 
 const loadHandlerFresh = async () => {
   vi.resetModules()
-  const module = await import('../app.js')
-  return module.createServerHandler()
+  const appModule = await import('../app.js')
+  return appModule.createServerHandler()
 }
 
 afterEach(() => {
@@ -55,11 +56,31 @@ beforeEach(() => {
 })
 
 describe('storage routes', () => {
+  it('should allow explicit dependency injection for storage user resolution', async () => {
+    const root = createStorageCompositionRoot()
+    const handler = createServerHandler({
+      storageService: root.storageService,
+      resolveStorageUser: () => ({
+        id: 'injected-user',
+        name: '注入用户',
+      }),
+    })
+    const response = createResponse()
+
+    await handler(createRequest('GET', '/api/storage/me'), response)
+
+    expect(response.statusCode).toBe(200)
+    expect(JSON.parse(response.body)).toEqual({
+      id: 'injected-user',
+      name: '注入用户',
+    })
+  })
+
   it('should expose the current storage user', async () => {
     const handler = createServerHandler()
     const request = createRequest('GET', '/api/storage/me', undefined, {
-      'x-user-id': 'server-user-1',
-      'x-user-name': '服务端用户',
+      'x-workflow-user-id': 'server-user-1',
+      'x-workflow-user-name': '服务端用户',
     })
     const response = createResponse()
 
@@ -80,7 +101,7 @@ describe('storage routes', () => {
         'POST',
         '/api/storage/workflows',
         { id: 'wf_user_a', name: '用户A工作流', updatedAt: 1, nodes: [], edges: [] },
-        { 'x-user-id': 'user-a' },
+        { 'x-workflow-user-id': 'user-a' },
       ),
       createResponse(),
     )
@@ -90,13 +111,13 @@ describe('storage routes', () => {
         'POST',
         '/api/storage/workflows',
         { id: 'wf_user_b', name: '用户B工作流', updatedAt: 2, nodes: [], edges: [] },
-        { 'x-user-id': 'user-b' },
+        { 'x-workflow-user-id': 'user-b' },
       ),
       createResponse(),
     )
 
     const response = createResponse()
-    await handler(createRequest('GET', '/api/storage/workflows', undefined, { 'x-user-id': 'user-a' }), response)
+    await handler(createRequest('GET', '/api/storage/workflows', undefined, { 'x-workflow-user-id': 'user-a' }), response)
 
     expect(response.statusCode).toBe(200)
     expect(JSON.parse(response.body)).toEqual([
@@ -121,7 +142,7 @@ describe('storage routes', () => {
           nodes: [{ id: 'node_v1' }],
           edges: [],
         },
-        { 'x-user-id': 'version-user' },
+        { 'x-workflow-user-id': 'version-user' },
       ),
       createResponse(),
     )
@@ -137,7 +158,7 @@ describe('storage routes', () => {
           nodes: [{ id: 'node_v2' }],
           edges: [],
         },
-        { 'x-user-id': 'version-user' },
+        { 'x-workflow-user-id': 'version-user' },
       ),
       createResponse(),
     )
@@ -148,7 +169,7 @@ describe('storage routes', () => {
         'GET',
         '/api/storage/workflows/wf_versions/versions',
         undefined,
-        { 'x-user-id': 'version-user' },
+        { 'x-workflow-user-id': 'version-user' },
       ),
       response,
     )
@@ -186,7 +207,7 @@ describe('storage routes', () => {
           nodes: [{ id: 'node_detail_v1' }],
           edges: [],
         },
-        { 'x-user-id': 'version-detail-user' },
+        { 'x-workflow-user-id': 'version-detail-user' },
       ),
       createResponse(),
     )
@@ -202,7 +223,7 @@ describe('storage routes', () => {
           nodes: [{ id: 'node_detail_v2' }],
           edges: [],
         },
-        { 'x-user-id': 'version-detail-user' },
+        { 'x-workflow-user-id': 'version-detail-user' },
       ),
       createResponse(),
     )
@@ -213,7 +234,7 @@ describe('storage routes', () => {
         'GET',
         '/api/storage/workflows/wf_version_detail/versions',
         undefined,
-        { 'x-user-id': 'version-detail-user' },
+        { 'x-workflow-user-id': 'version-detail-user' },
       ),
       listResponse,
     )
@@ -227,7 +248,7 @@ describe('storage routes', () => {
         'GET',
         `/api/storage/workflows/wf_version_detail/versions/${encodeURIComponent(targetVersionId)}`,
         undefined,
-        { 'x-user-id': 'version-detail-user' },
+        { 'x-workflow-user-id': 'version-detail-user' },
       ),
       response,
     )
@@ -263,7 +284,7 @@ describe('storage routes', () => {
           nodes: [{ id: 'node_rb_v1' }],
           edges: [],
         },
-        { 'x-user-id': 'rollback-user' },
+        { 'x-workflow-user-id': 'rollback-user' },
       ),
       createResponse(),
     )
@@ -279,7 +300,7 @@ describe('storage routes', () => {
           nodes: [{ id: 'node_rb_v2' }],
           edges: [],
         },
-        { 'x-user-id': 'rollback-user' },
+        { 'x-workflow-user-id': 'rollback-user' },
       ),
       createResponse(),
     )
@@ -290,7 +311,7 @@ describe('storage routes', () => {
         'GET',
         '/api/storage/workflows/wf_rollback/versions',
         undefined,
-        { 'x-user-id': 'rollback-user' },
+        { 'x-workflow-user-id': 'rollback-user' },
       ),
       listResponse,
     )
@@ -304,7 +325,7 @@ describe('storage routes', () => {
         'POST',
         `/api/storage/workflows/wf_rollback/versions/${encodeURIComponent(targetVersionId)}/rollback`,
         undefined,
-        { 'x-user-id': 'rollback-user' },
+        { 'x-workflow-user-id': 'rollback-user' },
       ),
       rollbackResponse,
     )
@@ -326,7 +347,7 @@ describe('storage routes', () => {
 
     const currentWorkflowResponse = createResponse()
     await handler(
-      createRequest('GET', '/api/storage/workflows/wf_rollback', undefined, { 'x-user-id': 'rollback-user' }),
+      createRequest('GET', '/api/storage/workflows/wf_rollback', undefined, { 'x-workflow-user-id': 'rollback-user' }),
       currentWorkflowResponse,
     )
     expect(JSON.parse(currentWorkflowResponse.body)).toEqual(
@@ -342,7 +363,7 @@ describe('storage routes', () => {
         'GET',
         '/api/storage/workflows/wf_rollback/versions',
         undefined,
-        { 'x-user-id': 'rollback-user' },
+        { 'x-workflow-user-id': 'rollback-user' },
       ),
       postRollbackVersionsResponse,
     )
@@ -542,7 +563,7 @@ describe('storage routes', () => {
           nodes: [{ id: 'node_persisted_v1' }],
           edges: [],
         },
-        { 'x-user-id': 'persist-user' },
+        { 'x-workflow-user-id': 'persist-user' },
       ),
       createResponse(),
     )
@@ -554,7 +575,7 @@ describe('storage routes', () => {
         'GET',
         '/api/storage/workflows/wf_persisted',
         undefined,
-        { 'x-user-id': 'persist-user' },
+        { 'x-workflow-user-id': 'persist-user' },
       ),
       workflowResponse,
     )
@@ -573,7 +594,7 @@ describe('storage routes', () => {
         'GET',
         '/api/storage/workflows/wf_persisted/versions',
         undefined,
-        { 'x-user-id': 'persist-user' },
+        { 'x-workflow-user-id': 'persist-user' },
       ),
       versionsResponse,
     )
@@ -608,7 +629,7 @@ describe('storage routes', () => {
           },
           limit: 20,
         },
-        { 'x-user-id': 'history-user' },
+        { 'x-workflow-user-id': 'history-user' },
       ),
       createResponse(),
     )
@@ -620,7 +641,7 @@ describe('storage routes', () => {
         'GET',
         '/api/storage/history',
         undefined,
-        { 'x-user-id': 'history-user' },
+        { 'x-workflow-user-id': 'history-user' },
       ),
       response,
     )

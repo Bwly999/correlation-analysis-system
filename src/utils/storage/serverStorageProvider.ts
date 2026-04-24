@@ -15,11 +15,23 @@ import type {
 export class ServerStorageProvider implements IStorageProvider {
   private baseUrl = import.meta.env.VITE_API_BASE_URL || '/api'
 
+  private resolveWorkflowHeaders() {
+    const userId = import.meta.env.VITE_WORKFLOW_USER_ID?.trim()
+    const userName = import.meta.env.VITE_WORKFLOW_USER_NAME?.trim()
+    if (!userId) return {}
+
+    return {
+      'x-workflow-user-id': userId,
+      ...(userName ? { 'x-workflow-user-name': userName } : {}),
+    }
+  }
+
   private async request(path: string, options?: RequestInit, allowNotFound = false) {
     const response = await fetch(`${this.baseUrl}${path}`, {
       ...options,
       headers: {
         'Content-Type': 'application/json',
+        ...this.resolveWorkflowHeaders(),
         ...options?.headers,
       },
     })

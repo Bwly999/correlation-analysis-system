@@ -88,12 +88,20 @@ type MockResponse = ServerResponse & {
   headersMap: Record<string, string>
 }
 
-const createRequest = (method: string, url: string, body?: unknown) => {
+const createRequest = (
+  method: string,
+  url: string,
+  body?: unknown,
+  headers: Record<string, string> = {
+    'x-workflow-user-id': 'workflow-ai-route-user',
+    'x-workflow-user-name': 'Workflow AI 路由测试用户',
+  },
+) => {
   const payload = body === undefined ? '' : JSON.stringify(body)
   const stream = Readable.from(payload ? [payload] : []) as IncomingMessage
   stream.method = method
   stream.url = url
-  stream.headers = {}
+  stream.headers = headers
   return stream
 }
 
@@ -144,6 +152,89 @@ afterEach(() => {
 })
 
 describe('workflow ai routes', () => {
+  it('uses explicitly injected current user when creating agent session', async () => {
+    createAgentSessionMock.mockResolvedValueOnce({
+      session: {
+        id: 'agent_injected',
+        mode: 'edit',
+        prompt: '帮我分析影响销量的关键因素',
+        status: 'idle',
+        profile: {
+          id: 'custom',
+          name: '测试模型',
+          model: 'glm-4.7',
+        },
+        workflowId: null,
+        createdAt: 1,
+        updatedAt: 1,
+      },
+      projection: {
+        workflow: {
+          workflowId: null,
+          workflowName: '销量诊断流程',
+          draftNodeCount: 2,
+          draftEdgeCount: 1,
+          draftSummary: '已载入当前画布，等待开始分析。',
+          versionCount: 0,
+          latestVersionId: null,
+          proposedPlan: null,
+        },
+        analysis: {
+          goal: '帮我分析影响销量的关键因素',
+          summary: '系统已记录当前分析目标，等待模型开始处理。',
+          candidateTargets: ['sales'],
+          candidateFactors: ['price', 'discount'],
+          methods: [],
+          findings: [],
+          risks: [],
+          recommendations: [],
+        },
+        execution: {
+          status: 'idle',
+          latestAction: '等待用户发送分析指令',
+          toolCalls: [],
+          pendingApprovals: [],
+        },
+        canvasSync: {
+          status: 'idle',
+          message: '当前草案尚未同步到画布',
+        },
+        error: null,
+        updatedAt: 1,
+      },
+    })
+
+    const handler = createServerHandler({
+      resolveStorageUser: () => ({
+        id: 'injected-user-id',
+        name: '注入用户',
+      }),
+    })
+    const response = createResponse()
+
+    await handler(
+      createRequest('POST', '/api/agent/sessions', {
+        mode: 'edit',
+        prompt: '帮我分析影响销量的关键因素',
+        profile: { id: 'custom', name: '测试模型', baseUrl: 'http://example.com', model: 'glm-4.7', enabled: true, source: 'custom' },
+        workflowSnapshot: {
+          name: '销量诊断流程',
+          nodes: [{ id: 'node_1' }, { id: 'node_2' }],
+          edges: [{ id: 'edge_1', source: 'node_1', target: 'node_2' }],
+        },
+        nodeCatalog: [],
+      }),
+      response,
+    )
+
+    expect(response.statusCode).toBe(200)
+    expect(createAgentSessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'injected-user-id',
+      }),
+    )
+  })
+
   it('creates an agent session from the new session route', async () => {
     createAgentSessionMock.mockResolvedValueOnce({
       session: {
@@ -219,7 +310,7 @@ describe('workflow ai routes', () => {
       request: expect.objectContaining({
         prompt: '帮我分析影响销量的关键因素',
       }),
-      userId: 'server-demo-user',
+      userId: 'workflow-ai-route-user',
     })
     expect(JSON.parse(response.body)).toEqual({
       session: expect.objectContaining({

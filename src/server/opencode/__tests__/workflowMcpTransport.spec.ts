@@ -97,8 +97,8 @@ describe('workflow MCP transport', () => {
     const transport = new StreamableHTTPClientTransport(new URL(`${baseUrl}/api/opencode/workflow-mcp`), {
       requestInit: {
         headers: new Headers({
-          'x-workflow-ai-session-id': created.session.id,
-          'x-workflow-storage-user-id': 'user_1',
+          'x-workflow-session-id': created.session.id,
+          'x-workflow-user-id': 'user_1',
         }),
       },
     })

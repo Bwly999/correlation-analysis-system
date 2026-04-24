@@ -1,5 +1,14 @@
 import type { Edge } from '@vue-flow/core'
 import type { NodeResult } from '@/nodes/result'
+import type {
+  StorageExecutionRecordDto,
+  StorageUserDto,
+  StorageWorkflowDto,
+  StorageWorkflowRollbackResultDto,
+  StorageWorkflowVersionDto,
+  StorageWorkflowVersionMetadataDto,
+  TransportWorkflowVersionSource,
+} from '@/shared/contracts/storage'
 
 export type WorkflowSerializablePrimitive = string | number | boolean | null
 export type WorkflowSerializableValue =
@@ -53,52 +62,25 @@ export interface WorkflowMetadata {
   updatedAt: number
 }
 
-export interface StorageUser {
-  id: string
-  name?: string
-}
+export type StorageUser = StorageUserDto
 
 /**
  * 完整保存的工作流数据
  */
-export interface SavedWorkflow extends WorkflowMetadata {
-  nodes: WorkflowNodeSnapshot[]
-  edges: Edge[]
-}
+export interface SavedWorkflow extends StorageWorkflowDto<WorkflowNodeSnapshot, Edge> {}
 
-export type WorkflowVersionSource = 'save' | 'rollback'
+export type WorkflowVersionSource = TransportWorkflowVersionSource
 
-export interface WorkflowVersionMetadata {
-  id: string
-  workflowId: string
-  workflowName: string
-  createdAt: number
-  workflowUpdatedAt: number
-  source: WorkflowVersionSource
-}
+export type WorkflowVersionMetadata = StorageWorkflowVersionMetadataDto
 
-export interface WorkflowVersionDetail extends WorkflowVersionMetadata {
-  workflow: SavedWorkflow
-}
+export type WorkflowVersionDetail = StorageWorkflowVersionDto<SavedWorkflow>
 
-export interface WorkflowRollbackResult {
-  workflow: SavedWorkflow
-  version: WorkflowVersionMetadata
-}
+export type WorkflowRollbackResult = StorageWorkflowRollbackResultDto<SavedWorkflow, WorkflowVersionMetadata>
 
 /**
  * 执行历史记录
  */
-export interface ExecutionRecord {
-  id: string
-  workflowId: string
-  workflowName: string
-  startTime: number
-  duration: number
-  status: 'success' | 'error' | 'stopped'
-  nodes: WorkflowNodeSnapshot[]
-  edges: Edge[]
-}
+export type ExecutionRecord = StorageExecutionRecordDto<WorkflowNodeSnapshot, Edge>
 
 /**
  * 存储提供者接口定义

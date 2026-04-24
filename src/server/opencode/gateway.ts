@@ -32,6 +32,10 @@ import { buildNextIterationRequest } from '../agentLoop/phases.js'
 import { resolveModelProfile } from '../workflowAi/profiles.js'
 import { getWorkflowAiSessionRecord } from '../workflowAi/orchestrator.js'
 import {
+  WORKFLOW_SESSION_ID_HEADER,
+  WORKFLOW_USER_ID_HEADER,
+} from '../http/workflowHeaders.js'
+import {
   appendAgentSessionMessage,
   appendAgentSessionDebugEvent,
   appendAgentSessionDebugParseFailure,
@@ -240,10 +244,18 @@ const resolveWorkflowServerBaseUrl = () => {
 const resolveWorkflowMcpUrl = (serverBaseUrl?: string) =>
   `${(serverBaseUrl || resolveWorkflowServerBaseUrl()).replace(/\/$/, '')}/api/opencode/workflow-mcp`
 
+const resolveWorkflowMcpUserId = (userId?: string) => {
+  const normalizedUserId = userId?.trim()
+  if (normalizedUserId) {
+    return normalizedUserId
+  }
+
+  throw new Error(`缺少 workflow MCP 用户上下文，请显式注入 ${WORKFLOW_USER_ID_HEADER}`)
+}
+
 const buildWorkflowMcpHeaders = (sessionId: string, userId?: string) => ({
-  'x-workflow-ai-session-id': sessionId,
-  'x-workflow-storage-user-id':
-    userId || process.env.WORKFLOW_STORAGE_DEFAULT_USER_ID || 'server-demo-user',
+  [WORKFLOW_SESSION_ID_HEADER]: sessionId,
+  [WORKFLOW_USER_ID_HEADER]: resolveWorkflowMcpUserId(userId),
   ...(process.env.WORKFLOW_MCP_AUTH_TOKEN?.trim()
     ? {
         'x-workflow-mcp-auth-token': process.env.WORKFLOW_MCP_AUTH_TOKEN.trim(),
@@ -278,16 +290,41 @@ const findAvailablePort = async () =>
   })
 
 const getExistingWorkflowContext = (request: WorkflowAiPlanRequest) => ({
-  existingNodes: request.workflowSnapshot?.nodes.map((node: any) => ({
-    id: node.id,
-    type: node.type,
-    config: node.config,
-  })) ?? [],
-  existingEdges: request.workflowSnapshot?.edges.map((edge: any) => ({
-    id: edge.id,
-    source: edge.source,
-    target: edge.target,
-  })) ?? [],
+  existingNodes:
+    request.workflowSnapshot?.nodes
+      .map((node) => {
+        if (!node || typeof node !== 'object') return null
+        const payload = node as Record<string, unknown>
+        const id = typeof payload.id === 'string' ? payload.id : ''
+        const type = typeof payload.type === 'string' ? payload.type : ''
+        if (!id || !type) return null
+        return {
+          id,
+          type,
+          config:
+            payload.config && typeof payload.config === 'object'
+              ? (payload.config as Record<string, unknown>)
+              : undefined,
+        }
+      })
+      .filter((item) => item !== null)
+    ?? [],
+  existingEdges:
+    request.workflowSnapshot?.edges
+      .map((edge) => {
+        if (!edge || typeof edge !== 'object') return null
+        const payload = edge as Record<string, unknown>
+        const source = typeof payload.source === 'string' ? payload.source : ''
+        const target = typeof payload.target === 'string' ? payload.target : ''
+        if (!source || !target) return null
+        return {
+          id: typeof payload.id === 'string' ? payload.id : undefined,
+          source,
+          target,
+        }
+      })
+      .filter((item) => item !== null)
+    ?? [],
 })
 
 const buildOpencodeConfig = (profile: WorkflowAiModelProfile) => {
