@@ -50,3 +50,6 @@ export const requestRandomForestFeatureImportanceAnalysis = <T>(body: AnalysisRe
 
 export const requestXgboostShapAnalysis = <T>(body: AnalysisRequestBody) =>
   postAnalysis<T>('/analysis/xgboost-shap', body)
+
+export const requestLogisticRegressionClassificationAnalysis = <T>(body: AnalysisRequestBody) =>
+  postAnalysis<T>('/analysis/logistic-regression-classification', body)

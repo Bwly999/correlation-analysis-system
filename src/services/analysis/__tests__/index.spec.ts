@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { requestLassoAnalysis } from '../index'
+import {
+  requestLassoAnalysis,
+  requestLogisticRegressionClassificationAnalysis,
+} from '../index'
 
 describe('analysis service', () => {
   beforeEach(() => {
@@ -35,5 +38,29 @@ describe('analysis service', () => {
         config: {},
       }),
     ).rejects.toThrow('算法执行失败: 输入数据缺少目标字段')
+  })
+
+  it('calls the logistic regression classification endpoint with the common analysis request shape', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ results: { summary: { ok: true } } }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await requestLogisticRegressionClassificationAnalysis({
+      data: [{ label: 'A', f1: 2 }],
+      target: 'label',
+      config: { factorNames: ['f1'] },
+    })
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/analysis/logistic-regression-classification', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        data: [{ label: 'A', f1: 2 }],
+        target: 'label',
+        config: { factorNames: ['f1'] },
+      }),
+    })
   })
 })

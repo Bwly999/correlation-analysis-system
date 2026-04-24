@@ -746,11 +746,89 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       recommendedNextNodes: ['multiple-linear-regression', 'data-export'],
     },
   ),
+  'classification-factor-screening': createEntry(
+    {
+      summary: '针对二分类或多分类标签，逐个筛查多个因子与目标标签之间的差异或关联强度。',
+      whenToUse: ['你希望先做单因子筛查，快速识别哪些因子和分类标签关系更强。'],
+      inputGuide: ['需要上游提供表格数据。', '目标标签必须是二分类或多分类字段。'],
+      parameterGuide: [
+        {
+          property: 'targetField',
+          title: '目标标签',
+          content: '选择要解释的分类标签字段，节点会自动识别二分类或多分类场景。',
+        },
+        {
+          property: 'factorNames',
+          title: '候选因子',
+          content: '选择需要逐个检验的因子；数值因子和类别因子会自动走不同的统计检验路径。',
+        },
+      ],
+      outputGuide: ['输出结果是单因子筛查报告，包含显著性排行、检验明细和风险提示。'],
+      nextSteps: ['若筛出显著因子，建议继续接逻辑回归分类分析节点做联合建模解释。'],
+      commonIssues: [
+        {
+          title: '筛查结果不稳定',
+          resolution: '先检查目标标签是否严重不均衡，以及候选因子是否存在大量缺失或极端稀疏取值。',
+        },
+      ],
+    },
+    {
+      useCases: ['单因子分类筛查', '筛查影响分类标签的候选因子', '分类标签差异检验'],
+      keywords: ['分类筛查', '单因子', '显著性', '卡方', 'Kruskal-Wallis', 'Mann-Whitney'],
+      workflowRoles: ['分析终点'],
+      inputKinds: ['table'],
+      outputKinds: ['report'],
+      requiredConfig: ['targetField'],
+      recommendedConfigPatterns: ['先明确分类标签，再选择多个候选因子做一轮单因子筛查。'],
+      commonMistakes: ['目标标签只有一个类别仍尝试筛查', '把 ID 类字段直接当成高价值因子解释'],
+      recommendedPrevNodes: ['data-cleaning', 'field-selection', 'data-profiling'],
+      recommendedNextNodes: ['logistic-regression-classification', 'chart-display', 'data-export'],
+    },
+  ),
+  'logistic-regression-classification': createEntry(
+    {
+      summary: '针对二分类或多分类标签执行逻辑回归分类分析，输出分类指标、混淆矩阵和因子解释。',
+      whenToUse: ['你需要评估多个因子联合起来对分类标签的影响方向、强度和分类效果。'],
+      inputGuide: ['需要上游提供表格数据。', '依赖本地 Python 后端分析服务。', '目标标签必须是二分类或多分类字段。'],
+      parameterGuide: [
+        {
+          property: 'targetField',
+          title: '目标标签',
+          content: '选择需要联合建模解释的分类标签字段。',
+        },
+        {
+          property: 'factorNames',
+          title: '影响因子',
+          content: '建议优先放入已清洗、已筛查的一组候选因子，再观察联合建模表现和系数方向。',
+        },
+      ],
+      outputGuide: ['输出结果是分类分析报告，包含分类指标、混淆矩阵、ROC 曲线（二分类）和系数解释。'],
+      nextSteps: ['若结果需要留档，可继续接数据导出。', '若分类效果偏弱，建议先回到单因子筛查收敛因子集合。'],
+      commonIssues: [
+        {
+          title: '模型无法运行',
+          resolution: '先确认本地 Python 后端已启动，并检查目标标签是否至少包含两个有效类别。',
+        },
+      ],
+    },
+    {
+      useCases: ['逻辑回归分类解释', '多因子分类分析', '分类标签联合建模'],
+      keywords: ['逻辑回归', '分类', '混淆矩阵', 'ROC', 'AUC', 'F1'],
+      workflowRoles: ['分析终点'],
+      inputKinds: ['table'],
+      outputKinds: ['report'],
+      requiredConfig: ['targetField'],
+      recommendedConfigPatterns: ['先通过单因子筛查缩小范围，再用多因子逻辑回归做联合解释。'],
+      commonMistakes: ['未先处理明显脏字段就直接建模', '类别极度不均衡时只看 Accuracy'],
+      recommendedPrevNodes: ['classification-factor-screening', 'data-cleaning', 'field-selection'],
+      recommendedNextNodes: ['data-export'],
+    },
+  ),
   'xgboost-shap': createEntry(
     {
       summary: '通过 Xgboost 结合 SHAP 值解释模型，查看各因子对目标的贡献和趋势。',
       whenToUse: ['你希望得到更强的特征贡献解释，而不仅是简单相关性。'],
-      inputGuide: ['需要上游提供表格数据。', '依赖本地后端分析服务，且输入应尽量为数值型。'],
+      inputGuide: ['需要上游提供表格数据。', '依赖本地后端分析服务，且输入应尽量为数值型连续目标与数值因子。'],
       parameterGuide: [
         {
           property: 'targetField',
@@ -878,9 +956,11 @@ const nodeLibraryGroups: Record<string, NodeLibraryGroupId> = {
   spearman: 'stat-analysis',
   kendall: 'stat-analysis',
   anova: 'stat-analysis',
+  'classification-factor-screening': 'stat-analysis',
   vif: 'stat-analysis',
   pca: 'stat-analysis',
   lasso: 'model-analysis',
+  'logistic-regression-classification': 'model-analysis',
   'multiple-linear-regression': 'model-analysis',
   'random-forest-feature-importance': 'model-analysis',
   'xgboost-shap': 'model-analysis',
