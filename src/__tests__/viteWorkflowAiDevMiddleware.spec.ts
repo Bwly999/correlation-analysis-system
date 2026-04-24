@@ -1,6 +1,7 @@
 // @vitest-environment node
 
 import { describe, expect, it, vi } from 'vitest'
+import { loadEnv } from 'vite'
 
 vi.mock('vite-plugin-monaco-editor', () => ({
   default: {
@@ -19,17 +20,18 @@ type MiddlewareHandler = (
 describe('workflow ai dev middleware', () => {
   it('loads non-VITE env vars from .env into process.env for the dev server middleware', async () => {
     const previousBackend = process.env.WORKFLOW_STORAGE_BACKEND
-    const previousMysqlPassword = process.env.WORKFLOW_STORAGE_MYSQL_PASSWORD
+    const previousStorageDir = process.env.WORKFLOW_STORAGE_DATA_DIR
+    const resolvedEnv = loadEnv(process.env.NODE_ENV || 'development', process.cwd(), '')
 
     delete process.env.WORKFLOW_STORAGE_BACKEND
-    delete process.env.WORKFLOW_STORAGE_MYSQL_PASSWORD
+    delete process.env.WORKFLOW_STORAGE_DATA_DIR
 
     vi.resetModules()
 
     await import('../../vite.config.ts')
 
-    expect(process.env.WORKFLOW_STORAGE_BACKEND).toBe('mysql')
-    expect(process.env.WORKFLOW_STORAGE_MYSQL_PASSWORD).toBe('123456')
+    expect(process.env.WORKFLOW_STORAGE_BACKEND).toBe(resolvedEnv.WORKFLOW_STORAGE_BACKEND)
+    expect(process.env.WORKFLOW_STORAGE_DATA_DIR).toBe(resolvedEnv.WORKFLOW_STORAGE_DATA_DIR)
 
     if (previousBackend === undefined) {
       delete process.env.WORKFLOW_STORAGE_BACKEND
@@ -37,10 +39,10 @@ describe('workflow ai dev middleware', () => {
       process.env.WORKFLOW_STORAGE_BACKEND = previousBackend
     }
 
-    if (previousMysqlPassword === undefined) {
-      delete process.env.WORKFLOW_STORAGE_MYSQL_PASSWORD
+    if (previousStorageDir === undefined) {
+      delete process.env.WORKFLOW_STORAGE_DATA_DIR
     } else {
-      process.env.WORKFLOW_STORAGE_MYSQL_PASSWORD = previousMysqlPassword
+      process.env.WORKFLOW_STORAGE_DATA_DIR = previousStorageDir
     }
   })
 

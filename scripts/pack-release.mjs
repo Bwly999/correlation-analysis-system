@@ -49,6 +49,7 @@ const EXCLUDE_DIRS = new Set([
 const EXCLUDE_FILES = new Set([
   '.DS_Store',
   '.eslintcache',
+  '.env.local',
 ])
 
 // 排除匹配模式（文件名前缀或后缀）
@@ -130,6 +131,7 @@ archive.glob('**/*', {
     '*.py[cod]',
     '.DS_Store',
     '.eslintcache',
+    '.env.local',
     '*.timestamp-*-*.mjs',
     '.workflow-storage/**',
     `${PROJECT_NAME}*.zip`,
