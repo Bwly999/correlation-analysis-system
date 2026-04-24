@@ -327,6 +327,11 @@ export const createServerHandler = () => async (request: IncomingMessage, respon
       return
     }
 
+    if (request.method === 'POST' && url.pathname === '/api/analysis/logistic-regression-classification') {
+      await proxyAnalysisRequest(request, response, 'logistic-regression-classification', setCorsHeaders)
+      return
+    }
+
     if (request.method === 'GET' && url.pathname === '/api/workflow-ai/model-profiles') {
       sendJson(response, 200, { profiles: getSystemModelProfiles().map(toPublicModelProfile) })
       return

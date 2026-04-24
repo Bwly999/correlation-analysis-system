@@ -135,7 +135,7 @@ export const xgboostShapNode: NodeDefinition = {
       default: 'target',
       useUpstreamFactors: true,
       editable: true,
-      description: '选择回归或分类任务的目标字段名称，支持从上游自动获取。',
+      description: '选择回归任务的目标字段名称，支持从上游自动获取。',
     },
     {
       name: 'factorNames',

@@ -7,6 +7,7 @@ const ANALYSIS_ROUTE_MAP = {
   'multiple-linear-regression': '/analyze/multiple-linear-regression',
   'random-forest-feature-importance': '/analyze/random-forest-feature-importance',
   'xgboost-shap': '/analyze/xgboost-shap',
+  'logistic-regression-classification': '/analyze/logistic-regression-classification',
 } as const
 
 export type AnalysisRouteKey = keyof typeof ANALYSIS_ROUTE_MAP

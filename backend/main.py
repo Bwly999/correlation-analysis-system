@@ -5,6 +5,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 try:
     from backend.algorithms.lasso_analysis import analyze_lasso as run_lasso_analysis
+    from backend.algorithms.logistic_regression_classification_analysis import (
+        analyze_logistic_regression_classification as run_logistic_regression_classification_analysis,
+    )
     from backend.algorithms.multiple_linear_regression_analysis import (
         analyze_multiple_linear_regression as run_multiple_linear_regression_analysis,
     )
@@ -16,6 +19,9 @@ try:
     )
 except ImportError:
     from algorithms.lasso_analysis import analyze_lasso as run_lasso_analysis
+    from algorithms.logistic_regression_classification_analysis import (
+        analyze_logistic_regression_classification as run_logistic_regression_classification_analysis,
+    )
     from algorithms.multiple_linear_regression_analysis import (
         analyze_multiple_linear_regression as run_multiple_linear_regression_analysis,
     )
@@ -77,6 +83,27 @@ async def analyze_lasso(
 ):
     try:
         return _success_response(run_lasso_analysis(data, target, config))
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error))
+    except HTTPException as error:
+        raise error
+    except Exception as error:
+        import traceback
+
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f'算法执行失败: {str(error)}')
+
+
+@app.post('/analyze/logistic-regression-classification')
+async def analyze_logistic_regression_classification(
+    data: List[Dict[str, Any]] = Body(...),
+    target: str = Body(...),
+    config: Dict[str, Any] = Body({}),
+):
+    try:
+        return _success_response(
+            run_logistic_regression_classification_analysis(data, target, config)
+        )
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error))
     except HTTPException as error:

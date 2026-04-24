@@ -17,6 +17,7 @@ import { lassoNode } from './definitions/lasso.js'
 import { multipleLinearRegressionNode } from './definitions/multipleLinearRegression.js'
 import { randomForestFeatureImportanceNode } from './definitions/randomForestFeatureImportance.js'
 import { anovaNode } from './definitions/anova.js'
+import { classificationFactorScreeningNode } from './definitions/classificationFactorScreening.js'
 import { pcaNode } from './definitions/pca.js'
 import { pearsonNode } from './definitions/pearson.js'
 import { spearmanNode } from './definitions/spearman.js'
@@ -24,6 +25,7 @@ import { kendallNode } from './definitions/kendall.js'
 import { vifNode } from './definitions/vif.js'
 import { dataExportNode } from './definitions/dataExport.js'
 import { chartDisplayNode } from './definitions/chartDisplay.js'
+import { logisticRegressionClassificationNode } from './definitions/logisticRegressionClassification.js'
 
 const rawNodeDefinitions: NodeDefinition[] = [
   fileImportNode,
@@ -43,11 +45,13 @@ const rawNodeDefinitions: NodeDefinition[] = [
   multipleLinearRegressionNode,
   randomForestFeatureImportanceNode,
   anovaNode,
+  classificationFactorScreeningNode,
   pcaNode,
   vifNode,
   pearsonNode,
   spearmanNode,
   kendallNode,
+  logisticRegressionClassificationNode,
   dataExportNode,
   chartDisplayNode,
 ]

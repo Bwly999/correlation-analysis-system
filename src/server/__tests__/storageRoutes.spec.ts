@@ -474,6 +474,48 @@ describe('storage routes', () => {
     })
   })
 
+  it('should proxy logistic regression classification analysis requests to the python backend', async () => {
+    vi.stubEnv('PYTHON_ANALYSIS_API_BASE_URL', 'http://127.0.0.1:9000')
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ status: 'success', results: { summary: { ok: true } } }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const handler = createServerHandler()
+    const response = createResponse()
+
+    await handler(
+      createRequest('POST', '/api/analysis/logistic-regression-classification', {
+        data: [{ label: 'A', f1: 2 }],
+        target: 'label',
+        config: { factorNames: ['f1'] },
+      }),
+      response,
+    )
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:9000/analyze/logistic-regression-classification',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          data: [{ label: 'A', f1: 2 }],
+          target: 'label',
+          config: { factorNames: ['f1'] },
+        }),
+      },
+    )
+    expect(response.statusCode).toBe(200)
+    expect(JSON.parse(response.body)).toEqual({
+      status: 'success',
+      results: { summary: { ok: true } },
+    })
+  })
+
   it('should return python backend errors for analysis requests', async () => {
     vi.stubEnv('PYTHON_ANALYSIS_API_BASE_URL', 'http://127.0.0.1:9000')
     const fetchMock = vi.fn().mockResolvedValue({
