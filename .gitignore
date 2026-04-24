@@ -60,5 +60,8 @@ cloc-2.06.exe
 # TypeScript backend build output
 dist-server/
 
+# pm2 日志
+deploy/logs/
+
 .workflow-storage
 test/resource/demo_data_2000x300.xlsx

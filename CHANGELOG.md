@@ -2,7 +2,17 @@
 
 ## [Unreleased]
 
+### 新增 (Added)
+
+- **新增 pm2 统一进程管理配置**:
+  - 新增 `ecosystem.config.js`，支持通过 pm2 统一管理 Node 和 Python 两个服务，自动检测平台选择正确的 venv 可执行文件路径。
+  - 新增 `deploy/scripts/start_pm2.sh` 和 `deploy/scripts/stop_pm2.sh` 辅助脚本。
+  - pm2 日志输出到 `deploy/logs/` 目录。
+
 ### 修复 (Fix)
+
+- **跨平台 venv 路径支持**:
+  - `start_python.sh` 和 `setup_python_env.sh` 新增操作系统检测，在 Windows (Git Bash) 上使用 `Scripts/` 目录，在 Linux/macOS 上使用 `bin/` 目录，修复 Windows 环境下虚拟环境启动失败的问题。
 
 - **系统性修复结果看板标准网格下图表预览被卡片高度遮挡的问题**:
   - 结果看板标准网格改为分层最小高度策略，普通结果卡片至少保留 `360px`，`chart` / `table` / `tableCollection` 等图表优先型结果卡片至少保留 `420px`，避免头部、摘要与工具栏挤压后图表绘图区塌陷。

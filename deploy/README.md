@@ -419,9 +419,63 @@ bash deploy/scripts/healthcheck.sh
 
 ---
 
-## 13. 常见排障
+## 13. 使用 pm2 管理（跨平台）
 
-### 13.1 前端还在请求 `localhost:8000`
+如果你需要在 Windows 或不想配置 systemd 的环境运行，可以使用 pm2 统一管理 Node 和 Python 服务。
+
+### 13.1 安装 pm2
+
+```bash
+npm install -g pm2
+```
+
+### 13.2 启动服务
+
+```bash
+bash deploy/scripts/start_pm2.sh
+```
+
+或者直接执行：
+
+```bash
+pm2 start ecosystem.config.cjs
+```
+
+### 13.3 停止服务
+
+```bash
+bash deploy/scripts/stop_pm2.sh
+```
+
+或者直接执行：
+
+```bash
+pm2 stop ecosystem.config.cjs
+```
+
+### 13.4 常用命令
+
+```bash
+pm2 status          # 查看服务状态
+pm2 logs            # 查看实时日志
+pm2 logs cas-node   # 只看 Node 服务日志
+pm2 logs cas-python # 只看 Python 服务日志
+pm2 restart all     # 重启所有服务
+pm2 monit           # 监控面板
+```
+
+### 13.5 日志位置
+
+pm2 日志输出到 `deploy/logs/` 目录：
+
+- `node-out.log` / `node-error.log`：Node 服务日志
+- `python-out.log` / `python-error.log`：Python 服务日志
+
+---
+
+## 14. 常见排障
+
+### 14.1 前端还在请求 `localhost:8000`
 
 原因通常有两个：
 
@@ -437,7 +491,7 @@ sudo systemctl reload nginx
 
 然后浏览器强刷。
 
-### 13.2 Node 能启动，但 `/api/analysis/*` 返回 500
+### 14.2 Node 能启动，但 `/api/analysis/*` 返回 500
 
 重点检查：
 
@@ -452,7 +506,7 @@ curl http://127.0.0.1:8000/
 curl http://127.0.0.1:8787/api/storage/me
 ```
 
-### 13.3 Python 启动失败
+### 14.3 Python 启动失败
 
 通常是：
 
@@ -465,7 +519,7 @@ curl http://127.0.0.1:8787/api/storage/me
 bash deploy/scripts/setup_python_env.sh
 ```
 
-### 13.4 AI 编排不可用
+### 14.4 AI 编排不可用
 
 检查：
 
@@ -475,7 +529,7 @@ bash deploy/scripts/setup_python_env.sh
 
 ---
 
-## 14. 推荐做法
+## 15. 推荐做法
 
 如果你要最稳妥的线上方案，建议：
 

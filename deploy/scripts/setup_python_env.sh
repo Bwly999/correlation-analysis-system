@@ -6,6 +6,13 @@ BACKEND_DIR="$ROOT_DIR/backend"
 VENV_DIR="$BACKEND_DIR/.venv"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 
+# 跨平台 venv 可执行文件目录
+if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]]; then
+  BIN_DIR="$VENV_DIR/Scripts"
+else
+  BIN_DIR="$VENV_DIR/bin"
+fi
+
 if ! command -v "$PYTHON_BIN" >/dev/null 2>&1; then
   echo "[python-env] 未找到 Python: $PYTHON_BIN" >&2
   exit 1
@@ -19,7 +26,7 @@ if [ ! -d "$VENV_DIR" ]; then
   "$PYTHON_BIN" -m venv "$VENV_DIR"
 fi
 
-source "$VENV_DIR/bin/activate"
+source "$BIN_DIR/activate"
 
 python -m pip install --upgrade pip setuptools wheel
 
