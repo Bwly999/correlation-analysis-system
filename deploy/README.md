@@ -183,7 +183,7 @@ bash deploy/scripts/build.sh
 构建产物：
 
 - 前端：`dist/`
-- Node：`dist-server/`
+- Node：`dist-server/`（自包含单文件，不依赖 `node_modules`）
 
 ---
 
