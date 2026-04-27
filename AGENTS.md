@@ -109,3 +109,6 @@ PrimeVue 相关参考文档统一放在 `./ref/primeVue/` 目录下，按以下�
 6. 最后更新 `CHANGELOG.md`（若准备提交）
 
 如果任务明确涉及节点流、节点协议、节点设计或工作流架构，但没有同步更新对应文档，应视为未完成。
+
+## 8.Git worktree限制
+除非特殊说明，禁止使用worktree开发，如果使用worktree开发，合并时也必须使用rebase，不能merge
