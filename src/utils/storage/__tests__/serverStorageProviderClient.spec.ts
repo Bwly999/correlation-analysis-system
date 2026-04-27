@@ -26,6 +26,8 @@ describe('ServerStorageProvider', () => {
       expect.objectContaining({
         headers: expect.objectContaining({
           'Content-Type': 'application/json',
+          'x-workflow-user-id': expect.any(String),
+          'x-workflow-user-name': expect.any(String),
         }),
       }),
     )
@@ -70,6 +72,7 @@ describe('ServerStorageProvider', () => {
       expect.objectContaining({
         headers: expect.objectContaining({
           Authorization: 'Bearer jwt-from-host',
+          'x-workflow-user-id': expect.any(String),
         }),
       }),
     )
