@@ -125,6 +125,8 @@ vi.mock('ag-grid-vue3', () => ({
       'suppressColumnVirtualisation',
       'suppressRowVirtualisation',
       'tooltipShowDelay',
+      'enableCellTextSelection',
+      'ensureDomOrder',
     ],
     emits: ['columnResized', 'columnMoved', 'gridReady', 'sortChanged', 'filterChanged'],
     setup(props, { emit }) {
@@ -158,6 +160,8 @@ vi.mock('ag-grid-vue3', () => ({
               'data-suppress-column-virtualisation': String(Boolean(props.suppressColumnVirtualisation)),
               'data-suppress-row-virtualisation': String(Boolean(props.suppressRowVirtualisation)),
               'data-tooltip-show-delay': String(props.tooltipShowDelay ?? ''),
+              'data-enable-cell-text-selection': String(Boolean(props.enableCellTextSelection)),
+              'data-ensure-dom-order': String(Boolean(props.ensureDomOrder)),
               onCustomColumnMove: () =>
                 emit('columnMoved', {
                   finished: true,
@@ -435,6 +439,8 @@ describe('TableViewer', () => {
     expect(grid.attributes('data-theme')).toBe('legacy')
     expect(grid.attributes('data-animate-rows')).toBe('false')
     expect(grid.attributes('data-row-buffer')).toBe('4')
+    expect(grid.attributes('data-enable-cell-text-selection')).toBe('true')
+    expect(grid.attributes('data-ensure-dom-order')).toBe('true')
   })
 
   it('persists density and column layout per node scope but does not persist quick filter text', async () => {

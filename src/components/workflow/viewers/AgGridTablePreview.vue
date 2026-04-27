@@ -149,6 +149,8 @@ onBeforeUnmount(() => {
       :suppress-row-virtualisation="false"
       :tooltip-show-delay="200"
       :suppress-cell-focus="true"
+      :enable-cell-text-selection="true"
+      :ensure-dom-order="true"
       @column-resized="emit('columnResized', $event)"
       @column-moved="emit('columnMoved', $event)"
       @grid-ready="handleGridReady"
@@ -180,6 +182,11 @@ onBeforeUnmount(() => {
 
 .table-grid-shell :deep(.ag-header-cell-label) {
   font-weight: 700;
+}
+
+.table-grid-shell :deep(.ag-cell),
+.table-grid-shell :deep(.ag-cell-value) {
+  user-select: text;
 }
 
 .table-grid-shell :deep(.ag-header-cell-comp-wrapper) {
