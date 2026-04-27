@@ -1167,6 +1167,193 @@ describe('NodeConfigModal', () => {
     expect(helpDialogs[1]?.attributes('data-visible')).toBe('true')
   })
 
+  it('renders neighbor rails outside dialog with direct upstream and downstream nodes only', async () => {
+    const store = useWorkflowStore()
+    store.nodes = [
+      {
+        id: 'upstream-node',
+        type: 'custom',
+        position: { x: 0, y: 0 },
+        label: '上游节点',
+        data: {
+          label: '上游节点',
+          type: 'manual-json-import',
+          category: 'trigger',
+          status: 'idle',
+          config: {},
+          logs: [],
+          useManualInput: false,
+          manualInput: '',
+          isPinned: false,
+        },
+      } as any,
+      {
+        id: 'current-node',
+        type: 'custom',
+        position: { x: 320, y: 60 },
+        label: '当前节点',
+        data: {
+          label: '当前节点',
+          type: 'data-cleaning',
+          category: 'action',
+          status: 'idle',
+          config: {},
+          logs: [],
+          useManualInput: false,
+          manualInput: '',
+          isPinned: false,
+        },
+      } as any,
+      {
+        id: 'downstream-node',
+        type: 'custom',
+        position: { x: 640, y: 120 },
+        label: '下游节点',
+        data: {
+          label: '下游节点',
+          type: 'pearson',
+          category: 'terminal',
+          status: 'idle',
+          config: {},
+          logs: [],
+          useManualInput: false,
+          manualInput: '',
+          isPinned: false,
+        },
+      } as any,
+    ]
+    store.edges = [
+      { id: 'e1', source: 'upstream-node', target: 'current-node', type: 'n8n', animated: true },
+      { id: 'e2', source: 'current-node', target: 'downstream-node', type: 'n8n', animated: true },
+    ] as any
+
+    const wrapper = mount(NodeConfigModal, {
+      props: { visible: true, nodeId: 'current-node' },
+      attachTo: document.body,
+      global: {
+        stubs: {
+          Dialog: dialogStub,
+          DataDisplayPanel: true,
+          DataAnalysisModal: true,
+          ConfigHeader: { template: '<div />', props: ['nodeLabel', 'isPinned', 'nodeType'] },
+          ConfigFooter: { template: '<div />' },
+          ConfigForm: { template: '<div />', props: ['config', 'properties', 'upstreamFactors'] },
+          RuntimeInputs: { template: '<div />', props: ['config', 'properties', 'upstreamFactors'] },
+        },
+      },
+    })
+
+    await nextTick()
+
+    const leftRail = document.body.querySelector('[data-testid="debug-neighbor-left-rail"]')
+    const rightRail = document.body.querySelector('[data-testid="debug-neighbor-right-rail"]')
+
+    expect(leftRail).not.toBeNull()
+    expect(rightRail).not.toBeNull()
+    expect(document.body.textContent).toContain('上游节点')
+    expect(document.body.textContent).toContain('下游节点')
+
+    wrapper.unmount()
+  })
+
+  it('switches target node by clicking neighbor button without auto-saving current draft', async () => {
+    const store = useWorkflowStore()
+    store.nodes = [
+      {
+        id: 'upstream-node',
+        type: 'custom',
+        position: { x: 0, y: 0 },
+        label: '上游节点',
+        data: {
+          label: '上游节点',
+          type: 'manual-json-import',
+          category: 'trigger',
+          status: 'idle',
+          config: {},
+          logs: [],
+          useManualInput: false,
+          manualInput: '',
+          isPinned: false,
+        },
+      } as any,
+      {
+        id: 'current-node',
+        type: 'custom',
+        position: { x: 320, y: 60 },
+        label: '当前节点',
+        data: {
+          label: '当前节点',
+          type: 'data-cleaning',
+          category: 'action',
+          status: 'idle',
+          config: { scaling: 'none' },
+          logs: [],
+          useManualInput: false,
+          manualInput: '',
+          isPinned: false,
+        },
+      } as any,
+      {
+        id: 'downstream-node',
+        type: 'custom',
+        position: { x: 640, y: 120 },
+        label: '下游节点',
+        data: {
+          label: '下游节点',
+          type: 'pearson',
+          category: 'terminal',
+          status: 'idle',
+          config: {},
+          logs: [],
+          useManualInput: false,
+          manualInput: '',
+          isPinned: false,
+        },
+      } as any,
+    ]
+    store.edges = [
+      { id: 'e1', source: 'upstream-node', target: 'current-node', type: 'n8n', animated: true },
+      { id: 'e2', source: 'current-node', target: 'downstream-node', type: 'n8n', animated: true },
+    ] as any
+
+    const switchSpy = vi.spyOn(store, 'setActiveConfigNodeId')
+
+    const wrapper = mount(NodeConfigModal, {
+      props: { visible: true, nodeId: 'current-node' },
+      attachTo: document.body,
+      global: {
+        stubs: {
+          Dialog: dialogStub,
+          DataDisplayPanel: true,
+          DataAnalysisModal: true,
+          ConfigHeader: { template: '<div />', props: ['nodeLabel', 'isPinned', 'nodeType'] },
+          ConfigFooter: { template: '<div />' },
+          ConfigForm: {
+            props: ['config'],
+            emits: ['update:config'],
+            template:
+              '<button class="change-config-btn" @click="$emit(\'update:config\', { ...config, scaling: \'minmax\' })">改配置</button>',
+          },
+          RuntimeInputs: { template: '<div />', props: ['config', 'properties', 'upstreamFactors'] },
+        },
+      },
+    })
+
+    await wrapper.get('.change-config-btn').trigger('click')
+    await nextTick()
+
+    const downstreamButton = document.body.querySelector(
+      '[data-testid="debug-neighbor-downstream-downstream-node"]',
+    ) as HTMLButtonElement | null
+    expect(downstreamButton).not.toBeNull()
+    downstreamButton?.click()
+
+    expect(switchSpy).toHaveBeenCalledWith('downstream-node')
+    expect(store.nodes.find((item) => item.id === 'current-node')?.data.config.scaling).toBe('none')
+
+    wrapper.unmount()
+  })
+
   it('does not persist runtime input values when applying trigger node settings', async () => {
     const store = useWorkflowStore()
     store.nodes = [

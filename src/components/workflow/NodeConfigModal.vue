@@ -1,5 +1,5 @@
 ﻿<script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import type { Edge } from '@vue-flow/core'
 import { Loader2, Bug, HelpCircle, Square } from 'lucide-vue-next'
 import { useWorkflowStore } from '@/stores/workflowStore'
@@ -23,6 +23,7 @@ import RuntimeInputs from './config/RuntimeInputs.vue'
 import RuntimeSettingsPanel from './config/RuntimeSettingsPanel.vue'
 import NodeHelpPanel from './help/NodeHelpPanel.vue'
 import NodeDebugErrorCard from './NodeDebugErrorCard.vue'
+import NodeIcon from './nodes/NodeIcon.vue'
 import {
   getResultGroups,
   getResultRows,
@@ -205,6 +206,164 @@ const inputData = computed(() => {
 
   return currentNodes.find((item) => item.id === incomingEdges[0]?.source)?.data.output ?? null
 })
+
+type NeighborNodeEntry = {
+  id: string
+  label: string
+  type: string
+}
+
+const sortNodesByPosition = (left: WorkflowNode, right: WorkflowNode) => {
+  if (left.position.y !== right.position.y) {
+    return left.position.y - right.position.y
+  }
+
+  return left.position.x - right.position.x
+}
+
+const neighborNodes = computed(() => {
+  if (!node.value) {
+    return {
+      upstream: [] as NeighborNodeEntry[],
+      downstream: [] as NeighborNodeEntry[],
+    }
+  }
+
+  const nodeMap = new Map(workflowNodes.value.map((item) => [item.id, item]))
+  const upstreamIdSet = new Set<string>()
+  const downstreamIdSet = new Set<string>()
+
+  workflowEdges.value.forEach((edge) => {
+    if (edge.target === node.value?.id) {
+      upstreamIdSet.add(edge.source)
+    }
+
+    if (edge.source === node.value?.id) {
+      downstreamIdSet.add(edge.target)
+    }
+  })
+
+  const toEntries = (idSet: Set<string>) =>
+    [...idSet]
+      .map((id) => nodeMap.get(id))
+      .filter((item): item is WorkflowNode => Boolean(item))
+      .sort(sortNodesByPosition)
+      .map((item) => ({
+        id: item.id,
+        label: item.data.label,
+        type: item.data.type,
+      }))
+
+  return {
+    upstream: toEntries(upstreamIdSet),
+    downstream: toEntries(downstreamIdSet),
+  }
+})
+
+const hasNeighborNavigator = computed(
+  () => neighborNodes.value.upstream.length > 0 || neighborNodes.value.downstream.length > 0,
+)
+
+const openNeighborNodeConfig = (targetNodeId: string) => {
+  if (!node.value || targetNodeId === node.value.id) return
+  store.setActiveConfigNodeId(targetNodeId)
+}
+
+const debugWorkspaceRef = ref<HTMLElement | null>(null)
+const debugWorkspaceRect = ref<DOMRect | null>(null)
+let debugWorkspaceResizeObserver: ResizeObserver | null = null
+
+const updateDebugWorkspaceRect = () => {
+  const element = debugWorkspaceRef.value
+  if (!props.visible || !element) {
+    debugWorkspaceRect.value = null
+    return
+  }
+
+  const dialogElement = element.closest('.p-dialog')
+  debugWorkspaceRect.value = (dialogElement instanceof HTMLElement
+    ? dialogElement
+    : element).getBoundingClientRect()
+}
+
+const reconnectDebugWorkspaceObserver = () => {
+  debugWorkspaceResizeObserver?.disconnect()
+  debugWorkspaceResizeObserver = null
+
+  if (typeof ResizeObserver === 'undefined' || !debugWorkspaceRef.value) return
+
+  debugWorkspaceResizeObserver = new ResizeObserver(() => {
+    updateDebugWorkspaceRect()
+  })
+  debugWorkspaceResizeObserver.observe(debugWorkspaceRef.value)
+}
+
+const handleViewportUpdate = () => {
+  updateDebugWorkspaceRect()
+}
+
+const createNeighborRailStyle = (side: 'left' | 'right') => {
+  const railWidth = 128
+  const railSpacing = 24
+
+  const rect = debugWorkspaceRect.value
+  if (!rect) {
+    return {
+      top: '50%',
+      left: '-9999px',
+      transform: 'translateY(-50%)',
+    }
+  }
+
+  const top = Math.round(rect.top + rect.height / 2)
+
+  if (side === 'left') {
+    return {
+      top: `${top}px`,
+      left: `${Math.round(rect.left - railWidth - railSpacing)}px`,
+      transform: 'translateY(-50%)',
+    }
+  }
+
+  return {
+    top: `${top}px`,
+    left: `${Math.round(rect.right + railSpacing)}px`,
+    transform: 'translateY(-50%)',
+  }
+}
+
+const leftNeighborRailStyle = computed(() => createNeighborRailStyle('left'))
+const rightNeighborRailStyle = computed(() => createNeighborRailStyle('right'))
+let debugWorkspaceRafId: number | null = null
+let debugWorkspaceSyncTimers: Array<ReturnType<typeof setTimeout>> = []
+
+const clearDebugWorkspaceSyncQueue = () => {
+  if (debugWorkspaceRafId !== null) {
+    cancelAnimationFrame(debugWorkspaceRafId)
+    debugWorkspaceRafId = null
+  }
+
+  debugWorkspaceSyncTimers.forEach((timer) => clearTimeout(timer))
+  debugWorkspaceSyncTimers = []
+}
+
+const scheduleDebugWorkspaceRectSync = () => {
+  clearDebugWorkspaceSyncQueue()
+  updateDebugWorkspaceRect()
+
+  debugWorkspaceRafId = requestAnimationFrame(() => {
+    updateDebugWorkspaceRect()
+    debugWorkspaceRafId = null
+  })
+
+  ;[80, 180].forEach((delay) => {
+    const timer = setTimeout(() => {
+      updateDebugWorkspaceRect()
+      debugWorkspaceSyncTimers = debugWorkspaceSyncTimers.filter((item) => item !== timer)
+    }, delay)
+    debugWorkspaceSyncTimers.push(timer)
+  })
+}
 
 const upstreamFactors = computed(() => {
   let data = localUseManualInput.value ? localManualInput.value : inputData.value
@@ -407,6 +566,38 @@ const buildManualInputTemplate = () => {
 
   return JSON.stringify(resolveStandardMockResult(inputData.value), null, 2)
 }
+
+watch(
+  [() => props.visible, () => props.nodeId],
+  async () => {
+    await nextTick()
+    reconnectDebugWorkspaceObserver()
+    scheduleDebugWorkspaceRectSync()
+  },
+  { immediate: true, flush: 'post' },
+)
+
+watch(
+  () => debugWorkspaceRef.value,
+  async () => {
+    await nextTick()
+    reconnectDebugWorkspaceObserver()
+    scheduleDebugWorkspaceRectSync()
+  },
+)
+
+onMounted(() => {
+  window.addEventListener('resize', handleViewportUpdate)
+  window.addEventListener('scroll', handleViewportUpdate, true)
+})
+
+onBeforeUnmount(() => {
+  clearDebugWorkspaceSyncQueue()
+  debugWorkspaceResizeObserver?.disconnect()
+  debugWorkspaceResizeObserver = null
+  window.removeEventListener('resize', handleViewportUpdate)
+  window.removeEventListener('scroll', handleViewportUpdate, true)
+})
 </script>
 
 <template>
@@ -432,6 +623,7 @@ const buildManualInputTemplate = () => {
 
     <div
       v-if="node"
+      ref="debugWorkspaceRef"
       class="ndv-body flex h-full bg-white border-t -mx-6 overflow-hidden"
       :class="{
         'cursor-row-resize select-none': isResizingLeft,
@@ -694,6 +886,50 @@ const buildManualInputTemplate = () => {
         </div>
       </div>
     </div>
+
+    <Teleport to="body">
+      <div
+        v-if="visible && node && hasNeighborNavigator && neighborNodes.upstream.length > 0"
+        data-testid="debug-neighbor-left-rail"
+        class="fixed z-[1300] flex max-h-[68vh] w-32 flex-col gap-2 overflow-y-auto rounded-2xl border border-slate-200 bg-white/95 p-2 shadow-xl backdrop-blur-sm"
+        :style="leftNeighborRailStyle"
+      >
+        <button
+          v-for="item in neighborNodes.upstream"
+          :key="`upstream-${item.id}`"
+          :data-testid="`debug-neighbor-upstream-${item.id}`"
+          type="button"
+          class="flex w-full flex-col items-center gap-2 rounded-xl border border-slate-200 bg-white px-2 py-2 text-center transition-colors hover:border-blue-300 hover:bg-blue-50"
+          @click="openNeighborNodeConfig(item.id)"
+        >
+          <NodeIcon :type="item.type" :size="32" />
+          <span class="line-clamp-2 text-[11px] font-semibold leading-4 text-slate-700">
+            {{ item.label }}
+          </span>
+        </button>
+      </div>
+
+      <div
+        v-if="visible && node && hasNeighborNavigator && neighborNodes.downstream.length > 0"
+        data-testid="debug-neighbor-right-rail"
+        class="fixed z-[1300] flex max-h-[68vh] w-32 flex-col gap-2 overflow-y-auto rounded-2xl border border-slate-200 bg-white/95 p-2 shadow-xl backdrop-blur-sm"
+        :style="rightNeighborRailStyle"
+      >
+        <button
+          v-for="item in neighborNodes.downstream"
+          :key="`downstream-${item.id}`"
+          :data-testid="`debug-neighbor-downstream-${item.id}`"
+          type="button"
+          class="flex w-full flex-col items-center gap-2 rounded-xl border border-slate-200 bg-white px-2 py-2 text-center transition-colors hover:border-blue-300 hover:bg-blue-50"
+          @click="openNeighborNodeConfig(item.id)"
+        >
+          <NodeIcon :type="item.type" :size="32" />
+          <span class="line-clamp-2 text-[11px] font-semibold leading-4 text-slate-700">
+            {{ item.label }}
+          </span>
+        </button>
+      </div>
+    </Teleport>
 
     <DataAnalysisModal
       :visible="analysisModal.visible"
