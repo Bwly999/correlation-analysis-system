@@ -388,19 +388,6 @@ const clampScrollTop = (element: HTMLElement, nextScrollTop: number) => {
   return Math.min(Math.max(nextScrollTop, 0), maxScrollTop)
 }
 
-const findNearestScrollableAncestor = (element: HTMLElement | null) => {
-  let current = element?.parentElement ?? null
-
-  while (current) {
-    if (isScrollable(current)) {
-      return current
-    }
-    current = current.parentElement
-  }
-
-  return null
-}
-
 const scrollElementBy = (element: HTMLElement, deltaY: number) => {
   const nextScrollTop = clampScrollTop(element, element.scrollTop + deltaY)
   const consumedDelta = nextScrollTop - element.scrollTop
@@ -435,29 +422,16 @@ const handleTreeWheel = (event: WheelEvent) => {
   const treeViewport = resolveTreeViewport(event)
   if (!treeViewport) return
 
-  const outerScrollableContainer = findNearestScrollableAncestor(treeViewport)
-    ?? findNearestScrollableAncestor(treeHostRef.value)
   const isVirtualListViewport = treeViewport.matches(TREE_V2_SCROLL_VIEWPORT_SELECTOR)
 
   if (!isVirtualListViewport) {
     if (!isScrollable(treeViewport)) {
-      if (!outerScrollableContainer) return
       event.preventDefault()
-      scrollElementBy(outerScrollableContainer, event.deltaY)
       return
     }
 
-    const consumedDelta = scrollElementBy(treeViewport, event.deltaY)
-    const remainingDelta = event.deltaY - consumedDelta
-
-    if (consumedDelta !== 0) {
-      event.preventDefault()
-    }
-
-    if (remainingDelta === 0 || !outerScrollableContainer) return
-
+    scrollElementBy(treeViewport, event.deltaY)
     event.preventDefault()
-    scrollElementBy(outerScrollableContainer, remainingDelta)
     return
   }
 
@@ -465,13 +439,9 @@ const handleTreeWheel = (event: WheelEvent) => {
   const consumedDelta = snapshot ? treeViewport.scrollTop - snapshot.scrollTop : 0
   const remainingDelta = event.deltaY - consumedDelta
 
-  if (consumedDelta !== 0) {
+  if (consumedDelta !== 0 || remainingDelta !== 0) {
     event.preventDefault()
   }
-  if (remainingDelta === 0 || !outerScrollableContainer) return
-
-  event.preventDefault()
-  scrollElementBy(outerScrollableContainer, remainingDelta)
 }
 
 let removeTreeWheelListeners: (() => void) | null = null
@@ -489,6 +459,7 @@ const syncTreeWheelListeners = async () => {
   const treeViewport = treeHost.querySelector(TREE_V2_SCROLL_VIEWPORT_SELECTOR) ?? treeHost.firstElementChild
   if (!(treeViewport instanceof HTMLElement)) return
   activeTreeWheelViewport = treeViewport
+  treeViewport.style.overscrollBehavior = 'contain'
 
   treeHost.addEventListener('wheel', handleTreeWheelCapture, { capture: true, passive: false })
   treeHost.addEventListener('wheel', handleTreeWheel, { passive: false })
