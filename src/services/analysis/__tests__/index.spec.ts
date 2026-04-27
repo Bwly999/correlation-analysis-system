@@ -8,6 +8,7 @@ import {
 describe('analysis service', () => {
   beforeEach(() => {
     vi.unstubAllGlobals()
+    delete (globalThis as typeof globalThis & { __WORKFLOW_API_AUTH_TOKEN__?: string }).__WORKFLOW_API_AUTH_TOKEN__
   })
 
   it('surfaces a clear message when fetch rejects before a response is returned', async () => {
@@ -62,5 +63,30 @@ describe('analysis service', () => {
         config: { factorNames: ['f1'] },
       }),
     })
+  })
+
+  it('attaches the workflow API bearer token when available', async () => {
+    ;(globalThis as typeof globalThis & { __WORKFLOW_API_AUTH_TOKEN__?: string }).__WORKFLOW_API_AUTH_TOKEN__ =
+      'jwt-from-host'
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ results: { summary: { ok: true } } }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await requestLassoAnalysis({
+      data: [{ target: 1, f1: 2 }],
+      target: 'target',
+      config: {},
+    })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/analysis/lasso',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer jwt-from-host',
+        }),
+      }),
+    )
   })
 })

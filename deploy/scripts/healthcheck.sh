@@ -3,19 +3,26 @@ set -euo pipefail
 
 PYTHON_BASE_URL="${PYTHON_BASE_URL:-http://127.0.0.1:8000}"
 NODE_BASE_URL="${NODE_BASE_URL:-http://127.0.0.1:8787}"
+NODE_AUTH_TOKEN="${NODE_AUTH_TOKEN:-}"
+
+NODE_AUTH_ARGS=()
+if [ -n "$NODE_AUTH_TOKEN" ]; then
+  NODE_AUTH_ARGS=(-H "Authorization: Bearer $NODE_AUTH_TOKEN")
+fi
 
 echo "[healthcheck] 检查 Python 根接口"
 curl --fail --silent --show-error "$PYTHON_BASE_URL/" >/dev/null
 echo "[healthcheck] Python 服务可访问"
 
 echo "[healthcheck] 检查 Node 存储接口"
-curl --fail --silent --show-error "$NODE_BASE_URL/api/storage/me" >/dev/null
+curl --fail --silent --show-error "${NODE_AUTH_ARGS[@]}" "$NODE_BASE_URL/api/storage/me" >/dev/null
 echo "[healthcheck] Node 服务可访问"
 
 echo "[healthcheck] 检查 Node -> Python Lasso 代理链路"
 HTTP_CODE="$(
   curl --silent --show-error --output /tmp/correlation_analysis_lasso_check.json \
     --write-out "%{http_code}" \
+    "${NODE_AUTH_ARGS[@]}" \
     -H "Content-Type: application/json" \
     -X POST \
     "$NODE_BASE_URL/api/analysis/lasso" \

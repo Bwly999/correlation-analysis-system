@@ -19,6 +19,7 @@ describe('workflowAi service', () => {
 
   beforeEach(() => {
     globalThis.fetch = vi.fn()
+    delete (globalThis as typeof globalThis & { __WORKFLOW_API_AUTH_TOKEN__?: string }).__WORKFLOW_API_AUTH_TOKEN__
   })
 
   afterEach(() => {
@@ -438,6 +439,52 @@ describe('workflowAi service', () => {
     expect('startAnalysisAgentSession' in workflowAiService).toBe(false)
     expect('getAnalysisAgentSession' in workflowAiService).toBe(false)
     expect('runAnalysisAgentLoop' in workflowAiService).toBe(false)
+  })
+
+  it('attaches the workflow API bearer token when available', async () => {
+    ;(globalThis as typeof globalThis & { __WORKFLOW_API_AUTH_TOKEN__?: string }).__WORKFLOW_API_AUTH_TOKEN__ =
+      'jwt-from-host'
+    vi.mocked(globalThis.fetch).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        plan: {
+          summary: '已生成',
+          assumptions: [],
+          warnings: [],
+          questions: [],
+          operations: [],
+        },
+        diagnostics: {
+          status: 'success',
+          stage: 'validate',
+          attempts: [],
+          issues: [],
+        },
+      }),
+    } as Response)
+
+    await requestWorkflowAiPlan({
+      mode: 'create',
+      prompt: '创建一个工作流',
+      profile: {
+        id: 'system-default-zhipu-glm-4-7',
+        name: '默认智谱 GLM-4.7',
+        baseUrl: 'https://open.bigmodel.cn/api/coding/paas/v4',
+        model: 'glm-4.7',
+        enabled: true,
+        source: 'system',
+      },
+      nodeCatalog: [],
+    })
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      '/api/workflow-ai/plan',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer jwt-from-host',
+        }),
+      }),
+    )
   })
 
   it('creates an agent session through the new session endpoint', async () => {

@@ -4,6 +4,11 @@
 
 ### 新增 (Added)
 
+- **新增 Node API JWT 鉴权接入**:
+  - 新增独立 `jwtAuth` 鉴权模块，并基于 `jose` 标准库校验 HS256 Bearer JWT；配置 `WORKFLOW_JWT_SECRET` 后会保护所有非 `OPTIONS` Node API。
+  - JWT payload 默认通过 `w3Account` / `cnName` 解析当前用户，并覆盖客户端用户头，服务端存储继续按解析用户隔离数据。
+  - 新增前端 API token 适配入口，统一为存储、分析、AI 编排和 Agent 请求注入 `Authorization`，并补充 `jose` 交叉验证测试与部署/工作流文档。
+
 - **新增二分类 / 多分类因子分析能力**:
   - 前端新增单因素筛查节点，支持数值型、分类型因子与二分类 / 多分类标签的常见检验与排序展示。
   - 后端新增逻辑回归分类节点，支持分类建模、混淆矩阵、ROC 与系数结果展示。

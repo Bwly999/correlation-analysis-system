@@ -7,6 +7,7 @@ describe('ServerStorageProvider', () => {
   beforeEach(() => {
     provider = new ServerStorageProvider()
     vi.unstubAllGlobals()
+    delete (globalThis as typeof globalThis & { __WORKFLOW_API_AUTH_TOKEN__?: string }).__WORKFLOW_API_AUTH_TOKEN__
   })
 
   it('should load current user from the server storage endpoint', async () => {
@@ -49,6 +50,27 @@ describe('ServerStorageProvider', () => {
       expect.stringMatching(/\/storage\/workflows$/),
       expect.objectContaining({
         method: 'POST',
+      }),
+    )
+  })
+
+  it('should attach a bearer token when the auth resolver provides one', async () => {
+    ;(globalThis as typeof globalThis & { __WORKFLOW_API_AUTH_TOKEN__?: string }).__WORKFLOW_API_AUTH_TOKEN__ =
+      'jwt-from-host'
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      text: async () => JSON.stringify({ id: 'server-user-1', name: '服务端用户' }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await provider.getCurrentUser()
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringMatching(/\/storage\/me$/),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer jwt-from-host',
+        }),
       }),
     )
   })

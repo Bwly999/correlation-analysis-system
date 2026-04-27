@@ -1,4 +1,7 @@
+// @vitest-environment node
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createHmac } from 'node:crypto'
 import { Readable } from 'node:stream'
 import { mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
@@ -38,6 +41,16 @@ const createResponse = () => {
   } as MockResponse
 
   return response
+}
+
+const base64UrlEncode = (value: unknown) =>
+  Buffer.from(typeof value === 'string' ? value : JSON.stringify(value)).toString('base64url')
+
+const createJwtToken = (payload: Record<string, unknown>, secret = 'route-secret') => {
+  const header = base64UrlEncode({ alg: 'HS256', typ: 'JWT' })
+  const body = base64UrlEncode(payload)
+  const signature = createHmac('sha256', secret).update(`${header}.${body}`).digest('base64url')
+  return `${header}.${body}.${signature}`
 }
 
 const loadHandlerFresh = async () => {
@@ -91,6 +104,55 @@ describe('storage routes', () => {
       id: 'server-user-1',
       name: '服务端用户',
     })
+  })
+
+  it('should resolve the current user from a valid JWT when auth is enabled', async () => {
+    vi.stubEnv('WORKFLOW_JWT_SECRET', 'route-secret')
+    const handler = createServerHandler()
+    const token = createJwtToken({
+      w3Account: 'jwt-user-1',
+      cnName: 'JWT 用户',
+      exp: Math.floor(Date.now() / 1000) + 60,
+    })
+    const response = createResponse()
+
+    await handler(
+      createRequest('GET', '/api/storage/me', undefined, {
+        authorization: `Bearer ${token}`,
+        'x-workflow-user-id': 'spoofed-user',
+      }),
+      response,
+    )
+
+    expect(response.statusCode).toBe(200)
+    expect(JSON.parse(response.body)).toEqual({
+      id: 'jwt-user-1',
+      name: 'JWT 用户',
+    })
+  })
+
+  it('should reject node api requests without JWT when auth is enabled', async () => {
+    vi.stubEnv('WORKFLOW_JWT_SECRET', 'route-secret')
+    const handler = createServerHandler()
+    const response = createResponse()
+
+    await handler(createRequest('GET', '/api/workflow-ai/model-profiles'), response)
+
+    expect(response.statusCode).toBe(401)
+    expect(JSON.parse(response.body)).toEqual({
+      message: '缺少 Authorization Bearer token',
+    })
+  })
+
+  it('should keep CORS preflight requests public when auth is enabled', async () => {
+    vi.stubEnv('WORKFLOW_JWT_SECRET', 'route-secret')
+    const handler = createServerHandler()
+    const response = createResponse()
+
+    await handler(createRequest('OPTIONS', '/api/storage/me'), response)
+
+    expect(response.statusCode).toBe(204)
+    expect(response.body).toBe('')
   })
 
   it('should isolate workflows by current user', async () => {

@@ -1,4 +1,5 @@
 import { buildWorkflowAiNodeCatalog } from '@/ai/catalog'
+import { createWorkflowApiAuthHeaders } from '@/services/apiAuth'
 import type {
   AgentSessionCanvasSyncRequest,
   AgentSessionCanvasSyncResponse,
@@ -24,6 +25,24 @@ import type {
 } from '@/ai/types'
 
 const WORKFLOW_AI_API_BASE_URL = import.meta.env.VITE_WORKFLOW_AI_API_BASE_URL || '/api'
+
+const withWorkflowApiAuth = (init: RequestInit = {}): RequestInit => {
+  const authHeaders = createWorkflowApiAuthHeaders()
+  if (!Object.keys(authHeaders).length) return init
+
+  return {
+    ...init,
+    headers: {
+      ...(init.headers as Record<string, string> | undefined),
+      ...authHeaders,
+    },
+  }
+}
+
+const fetchWorkflowApi = (url: string, init?: RequestInit) => {
+  const nextInit = withWorkflowApiAuth(init ?? {})
+  return init || Object.keys(nextInit).length ? fetch(url, nextInit) : fetch(url)
+}
 
 type WorkflowAiErrorPayload = {
   message?: string
@@ -75,7 +94,7 @@ export const requestWorkflowAiPlan = async (request: WorkflowAiPlanRequest) => {
     throw new Error('当前模型配置不可用，请先检查模型设置')
   }
 
-  const response = await fetch(`${WORKFLOW_AI_API_BASE_URL}/workflow-ai/plan`, {
+  const response = await fetchWorkflowApi(`${WORKFLOW_AI_API_BASE_URL}/workflow-ai/plan`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -107,7 +126,7 @@ export const streamWorkflowAiPlan = async (
     throw new Error('当前模型配置不可用，请先检查模型设置')
   }
 
-  const response = await fetch(`${WORKFLOW_AI_API_BASE_URL}/workflow-ai/plan/stream`, {
+  const response = await fetchWorkflowApi(`${WORKFLOW_AI_API_BASE_URL}/workflow-ai/plan/stream`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -196,7 +215,7 @@ export const streamWorkflowAiPlan = async (
 export const startWorkflowAiSession = async (
   request: WorkflowAiPlanRequest,
 ): Promise<WorkflowAiSessionStartResponse> => {
-  const response = await fetch(`${WORKFLOW_AI_API_BASE_URL}/workflow-ai/session/start`, {
+  const response = await fetchWorkflowApi(`${WORKFLOW_AI_API_BASE_URL}/workflow-ai/session/start`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -222,7 +241,7 @@ export const startWorkflowAiSession = async (
 export const createAgentSession = async (
   request: WorkflowAiPlanRequest,
 ): Promise<AgentSessionStartResponse> => {
-  const response = await fetch(`${WORKFLOW_AI_API_BASE_URL}/agent/sessions`, {
+  const response = await fetchWorkflowApi(`${WORKFLOW_AI_API_BASE_URL}/agent/sessions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -249,7 +268,7 @@ export const sendAgentSessionMessage = async (
   sessionId: string,
   request: AgentSessionMessageRequest,
 ): Promise<AgentSessionMessageResponse> => {
-  const response = await fetch(`${WORKFLOW_AI_API_BASE_URL}/agent/sessions/${sessionId}/messages`, {
+  const response = await fetchWorkflowApi(`${WORKFLOW_AI_API_BASE_URL}/agent/sessions/${sessionId}/messages`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -273,7 +292,7 @@ export const streamAgentSessionEvents = async (
   sessionId: string,
   options: AgentSessionStreamOptions = {},
 ) => {
-  const response = await fetch(`${WORKFLOW_AI_API_BASE_URL}/agent/sessions/${sessionId}/events`)
+  const response = await fetchWorkflowApi(`${WORKFLOW_AI_API_BASE_URL}/agent/sessions/${sessionId}/events`)
   if (!response.ok) {
     const payload = await readResponsePayload(response)
     throw new WorkflowAiRequestError(
@@ -314,7 +333,7 @@ export const streamAgentSessionEvents = async (
 export const getAgentSession = async (
   sessionId: string,
 ): Promise<AgentSessionGetResponse> => {
-  const response = await fetch(`${WORKFLOW_AI_API_BASE_URL}/agent/sessions/${sessionId}`)
+  const response = await fetchWorkflowApi(`${WORKFLOW_AI_API_BASE_URL}/agent/sessions/${sessionId}`)
   const payload = (await readResponsePayload(response)) as AgentSessionGetResponse & WorkflowAiErrorPayload
 
   if (!response.ok) {
@@ -329,7 +348,7 @@ export const getAgentSession = async (
 }
 
 export const getAgentProjection = async (sessionId: string): Promise<AgentProjectionSnapshot> => {
-  const response = await fetch(`${WORKFLOW_AI_API_BASE_URL}/agent/sessions/${sessionId}/projection`)
+  const response = await fetchWorkflowApi(`${WORKFLOW_AI_API_BASE_URL}/agent/sessions/${sessionId}/projection`)
   const payload = (await readResponsePayload(response)) as { projection: AgentProjectionSnapshot } & WorkflowAiErrorPayload
 
   if (!response.ok) {
@@ -347,7 +366,7 @@ export const syncAgentCanvas = async (
   sessionId: string,
   request: AgentSessionCanvasSyncRequest,
 ): Promise<AgentSessionCanvasSyncResponse> => {
-  const response = await fetch(`${WORKFLOW_AI_API_BASE_URL}/agent/sessions/${sessionId}/canvas-sync`, {
+  const response = await fetchWorkflowApi(`${WORKFLOW_AI_API_BASE_URL}/agent/sessions/${sessionId}/canvas-sync`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -371,7 +390,7 @@ export const runWorkflowAiSession = async (
   sessionId: string,
   options: StreamWorkflowAiPlanOptions = {},
 ): Promise<WorkflowAiSessionRunResponse> => {
-  const response = await fetch(`${WORKFLOW_AI_API_BASE_URL}/workflow-ai/session/${sessionId}/run`, {
+  const response = await fetchWorkflowApi(`${WORKFLOW_AI_API_BASE_URL}/workflow-ai/session/${sessionId}/run`, {
     method: 'POST',
   })
 
@@ -455,7 +474,7 @@ export const runWorkflowAiSession = async (
 export const getWorkflowAiSession = async (
   sessionId: string,
 ): Promise<WorkflowAiSessionGetResponse> => {
-  const response = await fetch(`${WORKFLOW_AI_API_BASE_URL}/workflow-ai/session/${sessionId}`)
+  const response = await fetchWorkflowApi(`${WORKFLOW_AI_API_BASE_URL}/workflow-ai/session/${sessionId}`)
   const payload = (await readResponsePayload(response)) as WorkflowAiSessionGetResponse & WorkflowAiErrorPayload
 
   if (!response.ok) {
@@ -473,7 +492,7 @@ export const submitWorkflowAiSessionInput = async (
   sessionId: string,
   request: WorkflowAiSessionInputRequest,
 ): Promise<WorkflowAiSessionInputResponse> => {
-  const response = await fetch(`${WORKFLOW_AI_API_BASE_URL}/workflow-ai/session/${sessionId}/input`, {
+  const response = await fetchWorkflowApi(`${WORKFLOW_AI_API_BASE_URL}/workflow-ai/session/${sessionId}/input`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -494,7 +513,7 @@ export const submitWorkflowAiSessionInput = async (
 }
 
 export const fetchSystemModelProfiles = async (): Promise<WorkflowAiModelProfile[]> => {
-  const response = await fetch(`${WORKFLOW_AI_API_BASE_URL}/workflow-ai/model-profiles`)
+  const response = await fetchWorkflowApi(`${WORKFLOW_AI_API_BASE_URL}/workflow-ai/model-profiles`)
   const payload = await readResponsePayload(response)
   if (!response.ok) {
     throw new Error(payload.message || '加载系统模型配置失败')
@@ -506,7 +525,7 @@ export const fetchSystemModelProfiles = async (): Promise<WorkflowAiModelProfile
 export const testWorkflowAiModelProfile = async (
   profile: WorkflowAiModelProfile,
 ): Promise<WorkflowAiModelTestResult> => {
-  const response = await fetch(`${WORKFLOW_AI_API_BASE_URL}/workflow-ai/model-profiles/test`, {
+  const response = await fetchWorkflowApi(`${WORKFLOW_AI_API_BASE_URL}/workflow-ai/model-profiles/test`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

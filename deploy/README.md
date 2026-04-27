@@ -96,12 +96,14 @@ cp deploy/env/frontend.env.example .env.production.local
 ```env
 VITE_STORAGE_TYPE=server
 VITE_API_BASE_URL=/api
+# VITE_WORKFLOW_API_AUTH_TOKEN=仅本地调试使用的 JWT
 ```
 
 说明：
 
 - 如果前端与 Node 通过同一个域名由 Nginx 承接，推荐直接写 `/api`
 - 如果你们必须分离域名，也可以改成完整地址，例如 `https://api.example.com/api`
+- `VITE_WORKFLOW_API_AUTH_TOKEN` 只建议本地调试固定 token；生产环境建议在 `src/services/apiAuth.ts` 对接内部系统获取的 JWT
 
 ### 4.2 Node 运行环境变量
 
@@ -123,6 +125,7 @@ WORKFLOW_STORAGE_MYSQL_PORT=3306
 WORKFLOW_STORAGE_MYSQL_USER=root
 WORKFLOW_STORAGE_MYSQL_PASSWORD=
 WORKFLOW_STORAGE_MYSQL_DATABASE=correlation_analysis_system
+WORKFLOW_JWT_SECRET=
 PYTHON_ANALYSIS_API_BASE_URL=http://127.0.0.1:8000
 OPENAI_API_KEY=
 OPENAI_COMPAT_BASE_URL=https://open.bigmodel.cn/api/coding/paas/v4
@@ -138,6 +141,8 @@ WORKFLOW_AI_DEFAULT_MODEL=glm-4.7
 - 当 `WORKFLOW_STORAGE_BACKEND=mysql` 时，请先手工创建 `WORKFLOW_STORAGE_MYSQL_DATABASE`，再执行 `pnpm db:mysql:migrate` 应用 Drizzle 迁移
 - `lowdb` 模式默认按单 Node 实例设计，不建议多个实例直接共享同一落盘目录
 - `mysql` 模式适合多实例共享同一套工作流、版本和历史数据
+- `WORKFLOW_JWT_SECRET` 非空时启用全局 Node API JWT 鉴权；除 `OPTIONS` 预检外，请求必须携带 `Authorization: Bearer <JWT>`
+- JWT payload 默认使用 `w3Account` 作为用户 ID、`cnName` 作为用户名称；未配置 `WORKFLOW_JWT_SECRET` 时保持本地无鉴权模式
 
 ---
 
@@ -241,6 +246,8 @@ bash deploy/scripts/healthcheck.sh
 - Node 到 Python 的 Lasso 代理链路是否可用
 
 如果 Python 算法因样本问题返回 400，脚本会明确标明是“链路已通但样本校验失败”，不会误报成 Node 代理故障。
+
+如果已配置 `WORKFLOW_JWT_SECRET`，健康检查也需要携带内部系统签发的 JWT；执行脚本时可临时设置 `NODE_AUTH_TOKEN=<JWT>`，也可用带 `Authorization` 头的 `curl` 命令单独排查。
 
 ---
 
@@ -505,6 +512,8 @@ sudo systemctl reload nginx
 ```bash
 curl http://127.0.0.1:8000/
 curl http://127.0.0.1:8787/api/storage/me
+# 已启用 WORKFLOW_JWT_SECRET 时：
+curl -H "Authorization: Bearer <JWT>" http://127.0.0.1:8787/api/storage/me
 ```
 
 ### 14.3 Python 启动失败

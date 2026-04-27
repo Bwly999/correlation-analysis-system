@@ -7,6 +7,7 @@ import type {
   WorkflowVersionDetail,
   WorkflowVersionMetadata,
 } from './types'
+import { createWorkflowApiAuthHeaders } from '@/services/apiAuth'
 
 /**
  * 服务器存储驱动实现 (Stub)
@@ -31,6 +32,7 @@ export class ServerStorageProvider implements IStorageProvider {
       ...options,
       headers: {
         'Content-Type': 'application/json',
+        ...createWorkflowApiAuthHeaders(),
         ...this.resolveWorkflowHeaders(),
         ...options?.headers,
       },

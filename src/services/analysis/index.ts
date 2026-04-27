@@ -1,3 +1,5 @@
+import { createWorkflowApiAuthHeaders } from '@/services/apiAuth'
+
 type AnalysisRequestBody = {
   data: Array<Record<string, unknown>>
   target: string
@@ -24,7 +26,10 @@ const postAnalysis = async <T>(path: string, body: AnalysisRequestBody): Promise
   try {
     response = await fetch(`${ANALYSIS_API_BASE_URL}${path}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...createWorkflowApiAuthHeaders(),
+      },
       body: JSON.stringify(body),
     })
   } catch {
