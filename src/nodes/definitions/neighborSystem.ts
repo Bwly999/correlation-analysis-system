@@ -207,6 +207,7 @@ export const neighborSystemNode: NodeDefinition = {
       required: true,
       isRuntimeInput: true,
       editable: true,
+      autoSelectFirstOnOptionsChange: true,
       placeholder: '请选择或输入物料类型',
       dependencies: ['productName'],
       resolveOptions: async ({ config }) => listMaterialTypes(ensureToken(), config.productName),

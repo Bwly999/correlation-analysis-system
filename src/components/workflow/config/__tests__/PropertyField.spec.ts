@@ -355,6 +355,111 @@ describe('PropertyField', () => {
     expect(wrapper.emitted('update:modelValue')).toBeUndefined()
   })
 
+  it('为开启自动首选的 options 在依赖刷新后默认选中第一个可用选项', async () => {
+    setActivePinia(createPinia())
+
+    const wrapper = mount(PropertyField, {
+      props: {
+        prop: {
+          name: 'materialType',
+          displayName: '物料类型',
+          type: 'options',
+          default: '',
+          autoSelectFirstOnOptionsChange: true,
+          dependencies: ['productName'],
+          resolveOptions: async ({ config }) => {
+            if (!config.productName) return []
+            return [
+              { name: '正极', value: '正极' },
+              { name: '负极', value: '负极' },
+            ]
+          },
+        },
+        modelValue: '',
+        upstreamFactors: [],
+        configContext: {
+          productName: '',
+        },
+      },
+      global: {
+        directives: {
+          tooltip: () => undefined,
+        },
+        stubs: {
+          Select: {
+            props: ['options'],
+            template: '<div class="options-options">{{ options.length }}</div>',
+          },
+        },
+      },
+    })
+
+    await flushPromises()
+
+    await wrapper.setProps({
+      configContext: {
+        productName: '电池A',
+      },
+    })
+
+    await flushPromises()
+
+    const emitted = wrapper.emitted('update:modelValue') || []
+    expect(emitted[emitted.length - 1]).toEqual(['正极'])
+  })
+
+  it('为开启自动首选的 options 在已有值时不覆盖当前选择', async () => {
+    setActivePinia(createPinia())
+
+    const wrapper = mount(PropertyField, {
+      props: {
+        prop: {
+          name: 'materialType',
+          displayName: '物料类型',
+          type: 'options',
+          default: '',
+          autoSelectFirstOnOptionsChange: true,
+          dependencies: ['productName'],
+          resolveOptions: async ({ config }) => {
+            if (!config.productName) return []
+            return [
+              { name: '正极', value: '正极' },
+              { name: '负极', value: '负极' },
+            ]
+          },
+        },
+        modelValue: '自定义物料',
+        upstreamFactors: [],
+        configContext: {
+          productName: '',
+        },
+      },
+      global: {
+        directives: {
+          tooltip: () => undefined,
+        },
+        stubs: {
+          Select: {
+            props: ['options'],
+            template: '<div class="options-options">{{ options.length }}</div>',
+          },
+        },
+      },
+    })
+
+    await flushPromises()
+
+    await wrapper.setProps({
+      configContext: {
+        productName: '电池A',
+      },
+    })
+
+    await flushPromises()
+
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+  })
+
   it('为启动方式提供独立的强调样式容器', () => {
     setActivePinia(createPinia())
 

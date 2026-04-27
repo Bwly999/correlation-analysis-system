@@ -71,6 +71,7 @@ export interface NodeProperty {
   treeViewport?: 'sm' | 'md' | 'lg'
   allowRegexSearch?: boolean
   autoSelectAllOnOptionsChange?: boolean
+  autoSelectFirstOnOptionsChange?: boolean
   textareaImport?: {
     kind: 'file-column'
     valueLabel?: string

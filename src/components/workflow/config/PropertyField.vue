@@ -48,6 +48,22 @@ const autoSelectableMultiOptionValues = computed(() => {
     .filter((value): value is string => typeof value === 'string' && Boolean(value))
 })
 
+const autoSelectableSingleOptionValue = computed(() => {
+  if (props.prop.type !== 'options') return undefined
+
+  const firstEnabledOption = normalizedOptionSource.value.find((option) => {
+    if (!option || typeof option !== 'object') return true
+    return !('disabled' in option && option.disabled)
+  })
+
+  if (!firstEnabledOption) return undefined
+  if (typeof firstEnabledOption === 'object' && 'value' in firstEnabledOption) {
+    return firstEnabledOption.value
+  }
+
+  return firstEnabledOption
+})
+
 watch(
   autoSelectableMultiOptionValues,
   (values) => {
@@ -56,6 +72,18 @@ watch(
     if (values.length === 0) return
 
     emit('update:modelValue', values)
+  },
+  { immediate: true },
+)
+
+watch(
+  autoSelectableSingleOptionValue,
+  (value) => {
+    if (props.prop.type !== 'options' || !props.prop.autoSelectFirstOnOptionsChange) return
+    if (props.modelValue !== '' && props.modelValue !== null && props.modelValue !== undefined) return
+    if (value === '' || value === null || value === undefined) return
+
+    emit('update:modelValue', value)
   },
   { immediate: true },
 )
