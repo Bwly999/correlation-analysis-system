@@ -231,6 +231,37 @@ describe('TableChartComboViewer', () => {
     expectPaneUnmounted(wrapper, '[data-test="combo-chart-pane"]')
   })
 
+  it('supports a data pivot mode alongside chart, table and split modes', async () => {
+    const wrapper = mount(TableChartComboViewer, {
+      props: {
+        data: {
+          kind: 'table',
+          payload: [
+            { score: 10, temp: 20, note: '' },
+            { score: null, temp: 30, note: 'ok' },
+            { score: 30, temp: 40, note: undefined },
+          ],
+        },
+      },
+    })
+
+    const pivotButton = wrapper.get('[data-test="combo-mode-profile"]')
+    expect(pivotButton.attributes('disabled')).toBeUndefined()
+
+    await pivotButton.trigger('click')
+
+    expectPaneMounted(wrapper, '[data-test="combo-profile-pane"]')
+    expectPaneUnmounted(wrapper, '[data-test="combo-chart-pane"]')
+    expectPaneUnmounted(wrapper, '[data-test="combo-table-pane"]')
+    expect(wrapper.get('[data-test="data-quality-summary"]').text()).toContain('字段数')
+    expect(wrapper.get('[data-test="data-quality-threshold-list"]').text()).toContain('score')
+    expect(wrapper.get('[data-test="data-quality-threshold-list"]').text()).toContain('note')
+
+    await wrapper.get('[data-test="combo-mode-table"]').trigger('click')
+    expectPaneMounted(wrapper, '[data-test="combo-table-pane"]')
+    expectPaneUnmounted(wrapper, '[data-test="combo-profile-pane"]')
+  })
+
   it('uses interactive grouped charts and grouped tables for tableCollection results', async () => {
     const wrapper = mount(TableChartComboViewer, {
       props: {

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, watch } from 'vue'
-import { BarChart3, LayoutPanelTop, Rows3 } from 'lucide-vue-next'
+import { BarChart3, Database, LayoutPanelTop, Rows3 } from 'lucide-vue-next'
 import ChartViewer from './ChartViewer.vue'
+import DataQualityPivotViewer from './DataQualityPivotViewer.vue'
 import TableViewer from './TableViewer.vue'
 import TableCollectionViewer from './TableCollectionViewer.vue'
 import DataChart from '../DataChart.vue'
@@ -18,7 +19,7 @@ const props = defineProps<{
   storageScopeKey?: string
 }>()
 
-type ComboMode = 'chart' | 'table' | 'split'
+type ComboMode = 'chart' | 'table' | 'split' | 'profile'
 
 const mode = useScopedResultPreviewStorage<ComboMode>(props.storageScopeKey, 'combo-mode', 'chart')
 const normalizedResult = computed(() => normalizeWorkflowResult(props.data))
@@ -32,8 +33,15 @@ const hasTable = computed(() => {
   if (normalized?.kind === 'tableCollection') return true
   return rows.value.length > 0
 })
+const hasProfile = computed(() => {
+  const normalized = normalizedResult.value
+  if (rows.value.length > 0 || groups.value.some((group) => group.data.length > 0)) return true
+  if (Array.isArray(normalized?.meta?.sourceData)) return normalized.meta.sourceData.length > 0
+  return Array.isArray(normalized?.meta?.profile) && normalized.meta.profile.length > 0
+})
 const showChartPane = computed(() => hasChart.value && (mode.value === 'chart' || mode.value === 'split'))
 const showTablePane = computed(() => hasTable.value && (mode.value === 'table' || mode.value === 'split'))
+const showProfilePane = computed(() => hasProfile.value && mode.value === 'profile')
 const isSplitMode = computed(() => mode.value === 'split' && hasChart.value && hasTable.value)
 const contentClass = computed(() =>
   isSplitMode.value
@@ -43,20 +51,26 @@ const contentClass = computed(() =>
 const paneClass = computed(() => (isSplitMode.value ? 'min-h-0 bg-slate-50' : 'h-full min-h-0 bg-slate-50'))
 
 watch(
-  [hasChart, hasTable],
-  ([nextHasChart, nextHasTable]) => {
+  [hasChart, hasTable, hasProfile],
+  ([nextHasChart, nextHasTable, nextHasProfile]) => {
     if (nextHasChart && nextHasTable) {
-      if (!['chart', 'table', 'split'].includes(mode.value)) mode.value = 'chart'
+      if (!['chart', 'table', 'split', 'profile'].includes(mode.value)) mode.value = 'chart'
+      if (mode.value === 'profile' && !nextHasProfile) mode.value = 'chart'
       return
     }
 
     if (nextHasTable) {
-      mode.value = 'table'
+      if (mode.value !== 'profile' || !nextHasProfile) mode.value = 'table'
       return
     }
 
     if (nextHasChart) {
       mode.value = 'chart'
+      return
+    }
+
+    if (nextHasProfile) {
+      mode.value = 'profile'
     }
   },
   { immediate: true },
@@ -102,10 +116,24 @@ watch(
             <LayoutPanelTop :size="14" />
             分屏
           </button>
+          <button
+            data-test="combo-mode-profile"
+            class="combo-mode-button"
+            :class="{ 'combo-mode-button--active': mode === 'profile' }"
+            :disabled="!hasProfile"
+            @click="mode = 'profile'"
+          >
+            <Database :size="14" />
+            数据透视
+          </button>
         </div>
       </div>
 
-      <div v-if="showChartPane || showTablePane" data-test="table-chart-combo-content" :class="contentClass">
+      <div
+        v-if="showChartPane || showTablePane || showProfilePane"
+        data-test="table-chart-combo-content"
+        :class="contentClass"
+      >
         <div v-if="showChartPane" data-test="combo-chart-pane" :class="paneClass">
           <DataChart v-if="isTableCollection" :data="props.data" :storage-scope-key="props.storageScopeKey" />
           <ChartViewer v-else-if="explicitChartOption" :data="props.data" :storage-scope-key="props.storageScopeKey" />
@@ -115,6 +143,10 @@ watch(
         <div v-if="showTablePane" data-test="combo-table-pane" :class="paneClass">
           <TableCollectionViewer v-if="isTableCollection" :data="props.data" :storage-scope-key="props.storageScopeKey" />
           <TableViewer v-else :data="props.data" :storage-scope-key="props.storageScopeKey" />
+        </div>
+
+        <div v-if="showProfilePane" data-test="combo-profile-pane" :class="paneClass">
+          <DataQualityPivotViewer :data="props.data" />
         </div>
       </div>
 
