@@ -250,6 +250,11 @@ export const neighborSystemNode: NodeDefinition = {
       required: true,
       isRuntimeInput: true,
       placeholder: '请输入 SN，支持换行、英文逗号或中文逗号分隔',
+      textareaImport: {
+        kind: 'file-column',
+        valueLabel: 'SN',
+        defaultDeduplicate: true,
+      },
       displayIf: (config) => config.fetchMode === 'sn',
     },
     {

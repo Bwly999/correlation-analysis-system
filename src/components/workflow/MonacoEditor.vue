@@ -112,7 +112,7 @@ onBeforeUnmount(() => {
           class="flex items-center justify-center h-full text-slate-400 gap-3 text-xs bg-slate-50"
         >
           <div
-            class="w-4 h-4 border-2 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin"
+            class="w-4 h-4 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin"
           ></div>
           正在加载本地分析算子编辑器...
         </div>

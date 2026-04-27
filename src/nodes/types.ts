@@ -71,6 +71,13 @@ export interface NodeProperty {
   treeViewport?: 'sm' | 'md' | 'lg'
   allowRegexSearch?: boolean
   autoSelectAllOnOptionsChange?: boolean
+  textareaImport?: {
+    kind: 'file-column'
+    valueLabel?: string
+    defaultDeduplicate?: boolean
+    largeTextLineThreshold?: number
+    largeTextLengthThreshold?: number
+  }
   filterPlaceholder?: string
   dateOnly?: boolean
   emptyMessage?: string

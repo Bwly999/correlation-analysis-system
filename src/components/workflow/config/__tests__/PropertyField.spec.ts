@@ -4,6 +4,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import PropertyField from '../PropertyField.vue'
 
 vi.mock('../../MonacoEditor.vue', () => ({
+  __esModule: true,
   default: {
     name: 'MonacoEditor',
     props: ['language', 'declarations'],
@@ -421,6 +422,90 @@ describe('PropertyField', () => {
     expect(wrapper.find('.date-picker-model').text()).toBe(
       '2026-04-01T00:00:00.000Z|2026-04-07T00:00:00.000Z',
     )
+  })
+
+  it('为开启文件列导入的 textarea 默认渲染 Monaco 编辑器', async () => {
+    setActivePinia(createPinia())
+
+    const wrapper = mount(PropertyField, {
+      props: {
+        prop: {
+          name: 'snList',
+          displayName: 'SN 列表',
+          type: 'textarea',
+          default: '',
+          textareaImport: {
+            kind: 'file-column',
+            valueLabel: 'SN',
+            defaultDeduplicate: true,
+          },
+        },
+        modelValue: 'SN001',
+        upstreamFactors: [],
+      },
+      global: {
+        directives: {
+          tooltip: () => undefined,
+        },
+        stubs: {
+          FileColumnTextImportDialog: true,
+          Dialog: { template: '<div><slot /></div>' },
+          Button: { template: '<button><slot />{{ label }}</button>', props: ['label'] },
+          Textarea: {
+            props: ['modelValue'],
+            template: '<textarea class="textarea-stub" :value="modelValue" />',
+          },
+        },
+      },
+    })
+
+    expect(wrapper.text()).toContain('从文件导入')
+    expect(wrapper.text()).not.toContain('Monaco 编辑')
+    expect(wrapper.find('[data-testid="file-column-textarea-import"]').exists()).toBe(true)
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="file-column-textarea-monaco"]').exists()).toBe(true)
+    expect(wrapper.find('.textarea-stub').exists()).toBe(false)
+  })
+
+  it('大文本 SN 输入同样保持 Monaco 编辑，不再折叠为摘要或回退 Textarea', async () => {
+    setActivePinia(createPinia())
+    const largeText = Array.from({ length: 5 }, (_, index) => `SN${index}`).join('\n')
+
+    const wrapper = mount(PropertyField, {
+      props: {
+        prop: {
+          name: 'snList',
+          displayName: 'SN 列表',
+          type: 'textarea',
+          default: '',
+          textareaImport: {
+            kind: 'file-column',
+            valueLabel: 'SN',
+            largeTextLineThreshold: 3,
+          },
+        },
+        modelValue: largeText,
+        upstreamFactors: [],
+      },
+      global: {
+        directives: {
+          tooltip: () => undefined,
+        },
+        stubs: {
+          FileColumnTextImportDialog: true,
+          Dialog: { template: '<div><slot /></div>' },
+          Button: { template: '<button @click="$emit(\'click\')"><slot />{{ label }}</button>', props: ['label'] },
+          Textarea: { template: '<textarea class="textarea-stub" />' },
+        },
+      },
+    })
+
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('已加载 5 行 SN')
+    expect(wrapper.find('.textarea-stub').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="file-column-textarea-monaco"]').exists()).toBe(true)
   })
 
   it('为 multi-options 允许在过滤框回车确认自定义字段', async () => {

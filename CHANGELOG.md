@@ -4,6 +4,11 @@
 
 ### 新增 (Added)
 
+- **升级看板 SN 列表导入体验**:
+  - `SN 列表`输入改为默认使用大文本编辑器，并增加 CSV / Excel 文件导入入口。
+  - 导入弹窗支持选择 SN 列、默认跳过空值并去重，右侧自动展示虚拟化 SN 预览。
+  - 保持看板节点执行协议不变，确认导入后仍回填为一行一个 SN 的文本配置。
+
 - **新增 Node API JWT 鉴权接入**:
   - 新增独立 `jwtAuth` 鉴权模块，并基于 `jose` 标准库校验 HS256 Bearer JWT；配置 `WORKFLOW_JWT_SECRET` 后会保护所有非 `OPTIONS` Node API。
   - JWT payload 默认通过 `w3Account` / `cnName` 解析当前用户，并覆盖客户端用户头，服务端存储继续按解析用户隔离数据。

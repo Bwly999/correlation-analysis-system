@@ -167,6 +167,14 @@ describe('Node Definitions Execution Logic', () => {
       neighborSystemNode.properties.find((property) => property.name === 'selectedProcesses')
         ?.autoSelectAllOnOptionsChange,
     ).toBe(true)
+    expect(
+      neighborSystemNode.properties.find((property) => property.name === 'snList')
+        ?.textareaImport,
+    ).toMatchObject({
+      kind: 'file-column',
+      valueLabel: 'SN',
+      defaultDeduplicate: true,
+    })
 
     const runtimePropertyNames = neighborSystemNode.properties
       .filter((property) => property.isRuntimeInput)

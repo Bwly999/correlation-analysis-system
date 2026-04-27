@@ -8,6 +8,7 @@ import ToggleSwitch from 'primevue/toggleswitch'
 import type { NodeProperty } from '@/nodes/types'
 import { type NonCollectionPropertyType } from './constants'
 import PropertyFieldFileInput from './inputs/PropertyFieldFileInput.vue'
+import PropertyFieldFileColumnTextarea from './inputs/PropertyFieldFileColumnTextarea.vue'
 import PropertyFieldMultiOptionsInput from './inputs/PropertyFieldMultiOptionsInput.vue'
 import PropertyFieldOptionsInput from './inputs/PropertyFieldOptionsInput.vue'
 import PropertyFieldSelectButton from './inputs/PropertyFieldSelectButton.vue'
@@ -105,14 +106,21 @@ const rendererDefinitions = computed<Record<NonCollectionPropertyType, PropertyF
         placeholder: props.prop.placeholder,
       }),
     },
-    textarea: {
-      component: Textarea,
-      buildProps: () => ({
-        rows: 8,
-        class: 'w-full ndv-input max-h-[240px] overflow-y-auto custom-textarea',
-        placeholder: props.prop.placeholder,
-      }),
-    },
+    textarea: props.prop.textareaImport?.kind === 'file-column'
+      ? {
+          component: PropertyFieldFileColumnTextarea,
+          buildProps: () => ({
+            prop: props.prop,
+          }),
+        }
+      : {
+          component: Textarea,
+          buildProps: () => ({
+            rows: 8,
+            class: 'w-full ndv-input max-h-[240px] overflow-y-auto custom-textarea',
+            placeholder: props.prop.placeholder,
+          }),
+        },
     tags: {
       component: PropertyFieldTagsInput,
       buildProps: () => ({
