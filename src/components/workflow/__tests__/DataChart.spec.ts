@@ -1,4 +1,4 @@
-import { defineComponent, h } from 'vue'
+import { defineComponent, h, nextTick } from 'vue'
 import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import * as resultModule from '@/nodes/result'
@@ -59,7 +59,7 @@ vi.mock('primevue/multiselect', () => ({
   default: defineComponent({
     name: 'PrimeMultiSelectStub',
     props: ['modelValue', 'options', 'appendTo'],
-    emits: ['update:modelValue'],
+    emits: ['update:modelValue', 'filter'],
     setup(props, { emit }) {
       return () =>
         h(
@@ -516,6 +516,49 @@ describe('DataChart', () => {
     expect(option.xAxis.data).toEqual([1, 2])
     expect(option.series[0].data).toEqual([15, 12])
     expect(option.series[1].data).toEqual([18, 19])
+  })
+
+  it('appends filtered select-all results instead of overriding previous selected factors', async () => {
+    const wrapper = mount(DataChart, {
+      props: {
+        data: [
+          { score: 15, other: 18, temp: 100 },
+          { score: 12, other: 19, temp: 90 },
+        ],
+      },
+    })
+
+    await wrapper.get('[data-test="chart-key-select"]').setValue(['score', 'other'])
+
+    const multiSelect = wrapper.getComponent({ name: 'PrimeMultiSelectStub' })
+    multiSelect.vm.$emit('filter', { value: 'temp' })
+    multiSelect.vm.$emit('update:modelValue', ['temp'])
+    await nextTick()
+
+    const option = getChartOption(wrapper)
+    const seriesNames = (option.series ?? []).map((item: { name?: string }) => item.name)
+    expect(seriesNames).toEqual(['score', 'other', 'temp'])
+  })
+
+  it('supports clearing all selected factors by the clear icon button', async () => {
+    const wrapper = mount(DataChart, {
+      props: {
+        data: [
+          { score: 15, other: 18 },
+          { score: 12, other: 19 },
+        ],
+      },
+    })
+
+    await wrapper.get('[data-test="chart-key-select"]').setValue(['score', 'other'])
+    await wrapper.get('[data-test="chart-key-clear-all"]').trigger('click')
+
+    const multiSelect = wrapper.get('[data-test="chart-key-select"]')
+    expect(multiSelect.element).toBeTruthy()
+    const selectedValues = Array.from((multiSelect.element as HTMLSelectElement).selectedOptions).map(
+      (item) => item.value,
+    )
+    expect(selectedValues).toEqual([])
   })
 
   it('uses lighter interactive settings for large line charts', () => {

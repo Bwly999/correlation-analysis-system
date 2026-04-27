@@ -14,7 +14,6 @@ import {
   TransformComponent,
 } from 'echarts/components'
 import InputNumber from 'primevue/inputnumber'
-import MultiSelect from 'primevue/multiselect'
 import Select from 'primevue/select'
 import {
   Check,
@@ -32,6 +31,7 @@ import {
 import { calculateBoxValues } from '@/utils/stats'
 import { useScopedResultPreviewStorage } from './useScopedResultPreviewStorage'
 import { useWorkflowOverlayHost } from './workflowOverlayHost'
+import SearchAppendMultiSelect from './common/SearchAppendMultiSelect.vue'
 import {
   buildNormalizationStats,
   isFiniteNumber,
@@ -767,14 +767,14 @@ applyDefaultPreset()
         <div class="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-100 rounded-lg shadow-sm">
           <ListChecks :size="14" class="text-indigo-500" />
           <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">分析因子</span>
-          <MultiSelect
+          <SearchAppendMultiSelect
             v-model="selectedKeys"
             :options="availableKeys"
             :append-to="overlayAppendTo"
             placeholder="选择对比因子"
-            class="property-select"
-            :filter="true"
-            :max-selected-labels="3"
+            select-class="property-select"
+            select-test-id="chart-key-select"
+            clear-button-test-id="chart-key-clear-all"
           />
         </div>
 

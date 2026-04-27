@@ -32,6 +32,11 @@
 
 ### 修复 (Fix)
 
+- **修复图表分析因子搜索后全选会覆盖已选项的问题，并新增一键清空能力**:
+  - 新增通用组件 `SearchAppendMultiSelect`，在搜索态触发全选时改为与当前选中项合并，避免覆盖既有选择。
+  - `DataChart` 的“分析因子”选择器切换为通用组件，并提供清空图标按钮用于一键取消全部选中项。
+  - 补充 `DataChart` 相关单测，覆盖“搜索全选追加”与“清空全部选中”行为。
+
 - **将 MySQL 工作流存储重构为 Drizzle 管理并隔离集成测试库**:
   - 将 MySQL storage 从集中式手写 SQL 重构为 `schema`、`client`、`serialization`、`repositories`、`migrator` 分层结构，引入 Drizzle schema 与迁移文件管理表结构，服务启动时仅校验 schema 是否已就绪。
   - 新增 `pnpm db:mysql:generate` 与 `pnpm db:mysql:migrate`，部署文档与工作流系统文档同步改为“先建库、再执行迁移”的使用方式。
