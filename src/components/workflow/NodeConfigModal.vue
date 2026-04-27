@@ -273,29 +273,37 @@ const debugWorkspaceRef = ref<HTMLElement | null>(null)
 const debugWorkspaceRect = ref<DOMRect | null>(null)
 let debugWorkspaceResizeObserver: ResizeObserver | null = null
 
-const updateDebugWorkspaceRect = () => {
+const getDebugLayoutAnchor = () => {
   const element = debugWorkspaceRef.value
-  if (!props.visible || !element) {
+  if (!element) return null
+
+  const dialogElement = element.closest('.p-dialog')
+  return dialogElement instanceof HTMLElement ? dialogElement : element
+}
+
+const updateDebugWorkspaceRect = () => {
+  const anchor = getDebugLayoutAnchor()
+  if (!props.visible || !anchor) {
     debugWorkspaceRect.value = null
     return
   }
 
-  const dialogElement = element.closest('.p-dialog')
-  debugWorkspaceRect.value = (dialogElement instanceof HTMLElement
-    ? dialogElement
-    : element).getBoundingClientRect()
+  debugWorkspaceRect.value = anchor.getBoundingClientRect()
 }
 
 const reconnectDebugWorkspaceObserver = () => {
   debugWorkspaceResizeObserver?.disconnect()
   debugWorkspaceResizeObserver = null
 
-  if (typeof ResizeObserver === 'undefined' || !debugWorkspaceRef.value) return
+  if (typeof ResizeObserver === 'undefined') return
+
+  const anchor = getDebugLayoutAnchor()
+  if (!anchor) return
 
   debugWorkspaceResizeObserver = new ResizeObserver(() => {
     updateDebugWorkspaceRect()
   })
-  debugWorkspaceResizeObserver.observe(debugWorkspaceRef.value)
+  debugWorkspaceResizeObserver.observe(anchor)
 }
 
 const handleViewportUpdate = () => {
@@ -335,6 +343,7 @@ const createNeighborRailStyle = (side: 'left' | 'right') => {
 const leftNeighborRailStyle = computed(() => createNeighborRailStyle('left'))
 const rightNeighborRailStyle = computed(() => createNeighborRailStyle('right'))
 let debugWorkspaceRafId: number | null = null
+let debugWorkspaceTrackingRafId: number | null = null
 let debugWorkspaceSyncTimers: Array<ReturnType<typeof setTimeout>> = []
 
 const clearDebugWorkspaceSyncQueue = () => {
@@ -343,8 +352,25 @@ const clearDebugWorkspaceSyncQueue = () => {
     debugWorkspaceRafId = null
   }
 
+  if (debugWorkspaceTrackingRafId !== null) {
+    cancelAnimationFrame(debugWorkspaceTrackingRafId)
+    debugWorkspaceTrackingRafId = null
+  }
+
   debugWorkspaceSyncTimers.forEach((timer) => clearTimeout(timer))
   debugWorkspaceSyncTimers = []
+}
+
+const scheduleDebugWorkspaceTracking = (remainingFrames: number) => {
+  if (remainingFrames <= 0) {
+    debugWorkspaceTrackingRafId = null
+    return
+  }
+
+  debugWorkspaceTrackingRafId = requestAnimationFrame(() => {
+    updateDebugWorkspaceRect()
+    scheduleDebugWorkspaceTracking(remainingFrames - 1)
+  })
 }
 
 const scheduleDebugWorkspaceRectSync = () => {
@@ -356,13 +382,16 @@ const scheduleDebugWorkspaceRectSync = () => {
     debugWorkspaceRafId = null
   })
 
-  ;[80, 180].forEach((delay) => {
+  ;[80, 180, 320, 480].forEach((delay) => {
     const timer = setTimeout(() => {
       updateDebugWorkspaceRect()
       debugWorkspaceSyncTimers = debugWorkspaceSyncTimers.filter((item) => item !== timer)
     }, delay)
     debugWorkspaceSyncTimers.push(timer)
   })
+
+  // The dialog is positioned with overlay lifecycle + transitions; keep sampling on first open.
+  scheduleDebugWorkspaceTracking(45)
 }
 
 const upstreamFactors = computed(() => {
