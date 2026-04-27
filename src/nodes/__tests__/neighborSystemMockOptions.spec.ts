@@ -52,17 +52,35 @@ describe('neighbor-system mock options', () => {
       config: { productName: '试制产品 A1' },
       property: propertyMap.get('selectedProcesses')!,
     })
+    const processOptionsWithoutProduct = await propertyMap.get('selectedProcesses')!.resolveOptions?.({
+      config: {},
+      property: propertyMap.get('selectedProcesses')!,
+    })
 
     expect(productOptions).toHaveLength(2)
     expect(sceneTree).toHaveLength(1)
-    expect(factorTree).toHaveLength(2)
-    expect(factorTree?.[0]).toMatchObject({
-      key: 'process:涂布',
-      label: '涂布',
-    })
+    expect(factorTree?.length).toBeGreaterThanOrEqual(8)
+    expect(factorTree?.flatMap((process) => process.children || [])).toHaveLength(40)
+    expect(factorTree).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: 'process:涂布',
+          label: '涂布',
+        }),
+        expect.objectContaining({
+          key: 'process:化成',
+          label: '化成',
+        }),
+        expect.objectContaining({
+          key: 'process:PACK',
+          label: 'PACK',
+        }),
+      ]),
+    )
     expect(materialTypeOptions).toHaveLength(3)
     expect(schemeTree).toHaveLength(2)
     expect(taskOrderTypeOptions).toHaveLength(2)
-    expect(processOptions).toHaveLength(2)
+    expect(processOptions?.length).toBeGreaterThanOrEqual(8)
+    expect(processOptionsWithoutProduct?.length).toBeGreaterThanOrEqual(8)
   })
 })

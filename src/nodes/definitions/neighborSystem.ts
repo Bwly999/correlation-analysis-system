@@ -279,8 +279,7 @@ export const neighborSystemNode: NodeDefinition = {
       dependencies: ['productName'],
       description: '四种启动方式都会按这里选择的工序范围查询 SN 与因子数据。',
       resolveOptions: async ({ config }) => {
-        if (!config.productName) return []
-        return listProcessOptions(ensureToken(), config.productName)
+        return listProcessOptions(ensureToken(), config.productName || '')
       },
     },
   ],

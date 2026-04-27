@@ -115,32 +115,65 @@ const defaultTaskOrderTypes: KanbanProductOption[] = [
   { name: '量产任务令', value: '量产任务令' },
 ]
 
-const defaultFactorCatalog: KanbanFactorCatalogItem[] = [
-  {
-    sceneName: '全场景/全场景',
-    processName: '涂布',
-    factorName: '温度',
-    factorKey: 'F_TEMP',
-    materialType: '正极',
-    r2Name: 'R2-TEMP',
-  },
-  {
-    sceneName: '全场景/全场景',
-    processName: '涂布',
-    factorName: '压力',
-    factorKey: 'F_PRESS',
-    materialType: '正极',
-    r2Name: 'R2-PRESS',
-  },
-  {
-    sceneName: '全场景/全场景',
-    processName: '装配',
-    factorName: '扭矩',
-    factorKey: 'F_TORQUE',
-    materialType: '壳体',
-    r2Name: 'R2-TORQUE',
-  },
-]
+const createMockFactor = (
+  processName: string,
+  factorName: string,
+  factorKey: string,
+  materialType = '正极',
+): KanbanFactorCatalogItem => ({
+  sceneName: '全场景/全场景',
+  processName,
+  factorName,
+  factorKey,
+  materialType,
+  r2Name: `R2-${factorKey}`,
+})
+
+const defaultFactorCatalog: KanbanFactorCatalogItem[] = ([
+  ['涂布', '涂布速度', 'COATING_SPEED', '正极'],
+  ['涂布', '涂布温度', 'COATING_TEMP', '正极'],
+  ['涂布', '涂布面密度', 'COATING_AREAL_DENSITY', '正极'],
+  ['涂布', '涂布张力', 'COATING_TENSION', '正极'],
+  ['涂布', '烘箱风速', 'OVEN_AIR_SPEED', '正极'],
+  ['辊压', '辊压压力', 'CALENDER_PRESSURE', '正极'],
+  ['辊压', '辊缝', 'CALENDER_GAP', '正极'],
+  ['辊压', '辊压速度', 'CALENDER_SPEED', '正极'],
+  ['辊压', '压实密度', 'COMPACTION_DENSITY', '正极'],
+  ['辊压', '极片厚度', 'ELECTRODE_THICKNESS', '正极'],
+  ['分切', '分切宽度', 'SLITTING_WIDTH', '正极'],
+  ['分切', '分切速度', 'SLITTING_SPEED', '正极'],
+  ['分切', '毛刺高度', 'BURR_HEIGHT', '正极'],
+  ['分切', '边缘缺陷数', 'EDGE_DEFECT_COUNT', '正极'],
+  ['卷绕', '卷绕张力', 'WINDING_TENSION', '正极'],
+  ['卷绕', '卷绕速度', 'WINDING_SPEED', '正极'],
+  ['卷绕', '对齐偏差', 'ALIGNMENT_OFFSET', '正极'],
+  ['卷绕', '卷芯直径', 'JELLY_ROLL_DIAMETER', '正极'],
+  ['装配', '入壳压力', 'ASSEMBLY_INSERT_PRESSURE', '壳体'],
+  ['装配', '焊接能量', 'WELDING_ENERGY', '壳体'],
+  ['装配', '焊接时间', 'WELDING_TIME', '壳体'],
+  ['装配', '封口压力', 'SEALING_PRESSURE', '壳体'],
+  ['装配', '装配扭矩', 'ASSEMBLY_TORQUE', '壳体'],
+  ['注液', '注液量', 'INJECTION_VOLUME', '电解液'],
+  ['注液', '注液时间', 'INJECTION_TIME', '电解液'],
+  ['注液', '真空保持时间', 'VACUUM_HOLD_TIME', '电解液'],
+  ['注液', '静置时长', 'SOAKING_DURATION', '电解液'],
+  ['化成', '化成电流', 'FORMATION_CURRENT', '电芯'],
+  ['化成', '化成电压', 'FORMATION_VOLTAGE', '电芯'],
+  ['化成', '化成温度', 'FORMATION_TEMP', '电芯'],
+  ['化成', '化成容量', 'FORMATION_CAPACITY', '电芯'],
+  ['化成', '压降', 'VOLTAGE_DROP', '电芯'],
+  ['分容', '分容容量', 'GRADING_CAPACITY', '电芯'],
+  ['分容', '分容内阻', 'GRADING_RESISTANCE', '电芯'],
+  ['分容', '分容能量', 'GRADING_ENERGY', '电芯'],
+  ['分容', 'OCV', 'GRADING_OCV', '电芯'],
+  ['PACK', '模组电压', 'PACK_MODULE_VOLTAGE', 'PACK'],
+  ['PACK', '模组内阻', 'PACK_MODULE_RESISTANCE', 'PACK'],
+  ['PACK', '均衡压差', 'PACK_BALANCE_DELTA', 'PACK'],
+  ['PACK', 'EOL 容量', 'PACK_EOL_CAPACITY', 'PACK'],
+] satisfies Array<[string, string, string, string]>).map(
+  ([processName, factorName, factorKey, materialType]) =>
+    createMockFactor(processName, factorName, factorKey, materialType),
+)
 
 const defaultSceneCatalog: KanbanSceneCatalogItem[] = [
   {
@@ -466,6 +499,8 @@ export const listProcessOptions = async (
   productName: string,
   scene?: KanbanSceneValue,
 ) => {
+  if (!productName && resolveBridge() !== defaultBridge) return []
+
   const catalog = await listFactorCatalog(token, productName, scene)
   return sortByLocale(
     Array.from(new Set(catalog.map((item) => item.processName).filter(Boolean))),

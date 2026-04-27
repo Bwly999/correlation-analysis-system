@@ -307,3 +307,34 @@ describe('kanban integration bridge', () => {
     ).rejects.toThrow('未接收到宿主系统传入的访问凭证')
   })
 })
+
+describe('kanban integration default mock catalog', () => {
+  beforeEach(() => {
+    setKanbanAuthToken('')
+    registerKanbanDataBridge(null)
+  })
+
+  it('provides rich mock factors for local testing', async () => {
+    const tree = await getFactorTree('', '试制产品 A1')
+    const factors = tree.flatMap((process) => process.children || [])
+
+    expect(tree.length).toBeGreaterThanOrEqual(8)
+    expect(factors).toHaveLength(40)
+    expect(tree.map((process) => process.label)).toEqual(
+      expect.arrayContaining(['涂布', '辊压', '分切', '卷绕', '装配', '注液', '化成', '分容', 'PACK']),
+    )
+  })
+
+  it('falls back to mock process options when product is not selected yet', async () => {
+    const processOptions = await listProcessOptions('', '')
+
+    expect(processOptions.length).toBeGreaterThanOrEqual(8)
+    expect(processOptions).toEqual(
+      expect.arrayContaining([
+        { name: '涂布', value: '涂布' },
+        { name: '化成', value: '化成' },
+        { name: 'PACK', value: 'PACK' },
+      ]),
+    )
+  })
+})
