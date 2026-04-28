@@ -28,6 +28,7 @@ const emit = defineEmits<{
 const PRIMARY_PROPERTY_NAMES = new Set([
   'xFields',
   'yFields',
+  'method',
   'targetField',
   'factorNames',
   'topN',
@@ -36,14 +37,17 @@ const PRIMARY_PROPERTY_NAMES = new Set([
   'deduplicationMode',
   'deduplicationKeep',
 ])
+const TOP_PROPERTY_NAMES = new Set(['method'])
 
 const sortedProperties = computed(() => {
   return [...props.properties].sort((left, right) => {
     const leftPriority =
+      (TOP_PROPERTY_NAMES.has(left.name) ? 100 : 0) +
       (left.required ? 4 : 0) +
       (PRIMARY_PROPERTY_NAMES.has(left.name) ? 3 : 0) +
       (left.useUpstreamFactors ? 2 : 0)
     const rightPriority =
+      (TOP_PROPERTY_NAMES.has(right.name) ? 100 : 0) +
       (right.required ? 4 : 0) +
       (PRIMARY_PROPERTY_NAMES.has(right.name) ? 3 : 0) +
       (right.useUpstreamFactors ? 2 : 0)

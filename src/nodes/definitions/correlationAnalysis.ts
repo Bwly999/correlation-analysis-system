@@ -32,7 +32,7 @@ const normalizeMethod = (config: CorrelationAnalysisConfig): CorrelationMethod =
 }
 
 const methodOptions = ALL_METHODS.map((method) => ({
-  label: correlationMethodMeta[method].displayName,
+  name: correlationMethodMeta[method].displayName,
   value: method,
 }))
 

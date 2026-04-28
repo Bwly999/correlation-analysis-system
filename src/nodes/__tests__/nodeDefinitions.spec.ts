@@ -1373,6 +1373,10 @@ describe('Node Definitions Execution Logic', () => {
       expect(correlationAnalysisNode.properties[0]?.name).toBe('method')
       expect(correlationAnalysisNode.properties[0]?.type).toBe('options')
       expect(correlationAnalysisNode.properties[0]?.default).toBe('pearson')
+      expect(correlationAnalysisNode.properties[0]?.options?.[0]).toEqual({
+        name: 'Pearson 相关系数',
+        value: 'pearson',
+      })
       expect(legacy.report.title).toBe('单调性分析')
       expect(legacy.report.metadata.method).toBe('pearson')
       expect(legacy.report.sections[0].type).toBe('summary')
