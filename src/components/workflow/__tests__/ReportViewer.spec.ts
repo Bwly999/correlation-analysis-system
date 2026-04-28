@@ -1,5 +1,5 @@
 ﻿import { describe, it, expect, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { config, mount } from '@vue/test-utils'
 import { defineComponent } from 'vue'
 import ReportViewer from '../viewers/ReportViewer.vue'
 import { provideWorkflowOverlayHost } from '../workflowOverlayHost'
@@ -40,6 +40,11 @@ vi.mock('primevue/dialog', () => ({
 vi.mock('../reportHtmlExport', () => ({
   exportReportToHtmlFile: mockExportReportToHtmlFile,
 }))
+
+config.global.directives = {
+  ...config.global.directives,
+  tooltip: () => undefined,
+}
 
 const createShapReport = () => ({
   report: {
@@ -237,6 +242,57 @@ const createRegressionReport = () => ({
 })
 
 describe('ReportViewer', () => {
+  it('renders report section help icon when section help is provided', () => {
+    const tooltipValues: string[] = []
+    const wrapper = mount(ReportViewer, {
+      props: {
+        data: {
+          report: {
+            title: '带说明的报告',
+            sections: [
+              {
+                key: 'summary',
+                type: 'summary',
+                title: '分析摘要',
+                cards: [{ label: '样本量', value: 12 }],
+                help: {
+                  summary: '说明这个摘要怎么看。',
+                  howToRead: ['先看样本量，再看风险提示。'],
+                  cautions: ['样本过少时不要过度解读。'],
+                },
+              },
+              {
+                key: 'details',
+                type: 'text',
+                title: '明细',
+                content: '无说明内容',
+              },
+            ],
+          },
+        },
+      },
+      global: {
+        directives: {
+          tooltip: {
+            mounted(el, binding) {
+              tooltipValues.push(String(binding.value))
+              el.setAttribute('data-tooltip-value', String(binding.value))
+            },
+          },
+        },
+      },
+    })
+
+    const helpButton = wrapper.get('[data-test="report-section-help-summary"]')
+
+    expect(helpButton.attributes('aria-label')).toBe('查看分析摘要说明')
+    expect(helpButton.attributes('data-tooltip-value')).toContain('说明这个摘要怎么看。')
+    expect(helpButton.attributes('data-tooltip-value')).toContain('怎么看：先看样本量，再看风险提示。')
+    expect(helpButton.attributes('data-tooltip-value')).toContain('注意：样本过少时不要过度解读。')
+    expect(tooltipValues).toHaveLength(1)
+    expect(wrapper.find('[data-test="report-section-help-details"]').exists()).toBe(false)
+  })
+
   it('renders shap main report sections and supplement panel', () => {
     const wrapper = mount(ReportViewer, {
       props: { data: createShapReport() },

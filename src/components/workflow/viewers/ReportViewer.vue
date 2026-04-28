@@ -12,6 +12,7 @@ import {
   VisualMapComponent,
 } from 'echarts/components'
 import ReportPreviewDialog from './reportViewer/ReportPreviewDialog.vue'
+import ReportSectionHelpButton from './reportViewer/ReportSectionHelpButton.vue'
 import ReportSupplementSection from './reportViewer/ReportSupplementSection.vue'
 import ReportChartSection from './reportViewer/sections/ReportChartSection.vue'
 import ReportDependenceSection from './reportViewer/sections/ReportDependenceSection.vue'
@@ -38,6 +39,7 @@ interface RenderedSection {
   key: string | number
   sectionKey: string
   title?: string
+  help?: ReportSection['help']
   isCollapsible: boolean
   component: Component
   props: Record<string, unknown>
@@ -223,6 +225,7 @@ const renderedSections = computed<RenderedSection[]>(() =>
         key: sectionKey,
         sectionKey,
         title: section.title,
+        help: section.help,
         isCollapsible: isCollapsibleSection(section),
         component,
         props: resolveSectionProps(section, index),
@@ -288,8 +291,13 @@ const renderedSections = computed<RenderedSection[]>(() =>
               type="button"
               @click="toggleSectionCollapsed(renderedSection.sectionKey)"
             >
-              <div>
+              <div class="flex items-center gap-2">
                 <h2 class="text-lg font-bold text-slate-800">{{ renderedSection.title }}</h2>
+                <ReportSectionHelpButton
+                  :help="renderedSection.help"
+                  :section-key="renderedSection.sectionKey"
+                  :title="renderedSection.title"
+                />
               </div>
               <span
                 class="inline-flex shrink-0 items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-bold text-slate-600"

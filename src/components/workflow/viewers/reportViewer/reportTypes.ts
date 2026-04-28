@@ -12,6 +12,13 @@ export interface ReportSectionBase {
   key?: string
   type?: ReportSectionType | string
   title?: string
+  help?: ReportSectionHelp
+}
+
+export interface ReportSectionHelp {
+  summary?: string
+  howToRead?: string[]
+  cautions?: string[]
 }
 
 export interface ReportSummaryCard {

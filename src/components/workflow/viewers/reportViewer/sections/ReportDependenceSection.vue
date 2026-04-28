@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Search } from 'lucide-vue-next'
 import VChart from 'vue-echarts'
+import ReportSectionHelpButton from '../ReportSectionHelpButton.vue'
 import type { ReportDependenceItem, ReportDependenceSection } from '../reportTypes'
 
 defineProps<{
@@ -24,7 +25,14 @@ const handleFeatureSearchInput = (event: Event) => {
   <section class="space-y-4">
     <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
       <div>
-        <h2 class="text-lg font-bold text-slate-800">{{ section.title }}</h2>
+        <div v-if="section.title" class="flex items-center gap-2">
+          <h2 class="text-lg font-bold text-slate-800">{{ section.title }}</h2>
+          <ReportSectionHelpButton
+            :help="section.help"
+            :section-key="String(section.key || 'dependence')"
+            :title="section.title"
+          />
+        </div>
         <p class="mt-1 text-sm text-slate-500">
           默认展示高重要性因子，支持搜索和展开全部，保证所有因子都可访问。
         </p>

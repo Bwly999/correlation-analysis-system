@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import VChart from 'vue-echarts'
+import ReportSectionHelpButton from '../ReportSectionHelpButton.vue'
 import type { ReportChartOption, ReportChartSection } from '../reportTypes'
 
 defineProps<{
@@ -33,7 +34,14 @@ const handleToggleChange = (event: Event) => {
   <section class="space-y-4">
     <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
       <div>
-        <h2 class="text-lg font-bold text-slate-800">{{ section.title }}</h2>
+        <div v-if="section.title" class="flex items-center gap-2">
+          <h2 class="text-lg font-bold text-slate-800">{{ section.title }}</h2>
+          <ReportSectionHelpButton
+            :help="section.help"
+            :section-key="String(section.key || 'chart')"
+            :title="section.title"
+          />
+        </div>
         <p v-if="section.key === 'importance'" class="mt-1 text-sm text-slate-500">
           默认按 SHAP 重要性从高到低排序，可作为浏览全量因子的导航入口。
         </p>

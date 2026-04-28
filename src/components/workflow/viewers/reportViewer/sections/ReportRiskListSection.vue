@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ReportSectionHelpButton from '../ReportSectionHelpButton.vue'
 import type { ReportRiskListSection } from '../reportTypes'
 
 defineProps<{
@@ -27,7 +28,14 @@ const getRiskLevelText = (level: string | undefined) => {
 <template>
   <section class="space-y-4">
     <div>
-      <h2 v-if="section.title" class="text-lg font-bold text-slate-800">{{ section.title }}</h2>
+      <div v-if="section.title" class="flex items-center gap-2">
+        <h2 class="text-lg font-bold text-slate-800">{{ section.title }}</h2>
+        <ReportSectionHelpButton
+          :help="section.help"
+          :section-key="String(section.key || 'risks')"
+          :title="section.title"
+        />
+      </div>
       <p class="mt-1 text-sm text-slate-500">
         这些提示用于帮助判断结果是否足够稳定，不替代业务结论。
       </p>
