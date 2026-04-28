@@ -156,6 +156,16 @@ describe("PropertyFieldMultiOptionsInput 字段质量筛选", () => {
     ).toBe(false);
   });
 
+  it("字段质量筛选按钮展示在正则按钮右侧，且不依赖外部图标字体", () => {
+    const wrapper = mountWithOptions();
+    const html = wrapper.html();
+
+    expect(
+      html.indexOf('data-testid="multi-options-regex-toggle"'),
+    ).toBeLessThan(html.indexOf('data-testid="multi-options-quality-toggle"'));
+    expect(wrapper.find(".pi.pi-filter").exists()).toBe(false);
+  });
+
   it("按完整率阈值筛选候选字段，并在该基础上继续叠加原有文本筛选", async () => {
     const wrapper = mountWithOptions();
 

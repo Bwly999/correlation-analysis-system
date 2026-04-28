@@ -261,6 +261,16 @@ const clearQualityFilter = () => {
     >
       <div class="relative flex items-center gap-1">
         <button
+          v-if="prop.allowRegexSearch !== false"
+          type="button"
+          data-testid="multi-options-regex-toggle"
+          :class="getToggleClass(enabled)"
+          @mousedown.prevent
+          @click="toggleRegexMode"
+        >
+          .*
+        </button>
+        <button
           v-if="canUseQualityFilter"
           type="button"
           data-testid="multi-options-quality-toggle"
@@ -274,7 +284,20 @@ const clearQualityFilter = () => {
           @mousedown.prevent
           @click.stop="toggleQualityPanel"
         >
-          <i class="pi pi-filter text-[10px]" />
+          <svg
+            class="h-3 w-3"
+            viewBox="0 0 16 16"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <path
+              d="M2.25 3.5h11.5L9.4 8.35v3.25l-2.8 1.35v-4.6L2.25 3.5Z"
+              fill="none"
+              stroke="currentColor"
+              stroke-linejoin="round"
+              stroke-width="1.5"
+            />
+          </svg>
         </button>
         <div
           v-if="canUseQualityFilter && isQualityPanelOpen"
@@ -355,16 +378,6 @@ const clearQualityFilter = () => {
           </button>
         </div>
       </div>
-      <button
-        v-if="prop.allowRegexSearch !== false"
-        type="button"
-        data-testid="multi-options-regex-toggle"
-        :class="getToggleClass(enabled)"
-        @mousedown.prevent
-        @click="toggleRegexMode"
-      >
-        .*
-      </button>
     </template>
   </MultiSelect>
 </template>
