@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>多因子相关性分析系统 - 技术方案</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;background:#0f172a;color:#e2e8f0;overflow:hidden;height:100vh}
+
+  /* ---- Slide Container ---- */
+  .slides{position:relative;width:100%;height:100vh}
+  .slide{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;padding:60px 80px;opacity:0;transform:translateX(40px);transition:opacity .5s ease,transform .5s ease;pointer-events:none}
+  .slide.active{opacity:1;transform:translateX(0);pointer-events:auto}
+  .slide.prev{opacity:0;transform:translateX(-40px)}
+
+  /* ---- Typography ---- */
+  .tag{display:inline-block;font-size:13px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:#2563eb;border:1px solid #2563eb;border-radius:4px;padding:4px 12px;margin-bottom:20px}
+  h1{font-size:52px;font-weight:700;line-height:1.2;color:#fff;margin-bottom:16px}
+  h2{font-size:36px;font-weight:700;color:#fff;margin-bottom:32px}
+  h3{font-size:20px;font-weight:600;color:#94a3b8;margin-bottom:12px}
+  p{font-size:18px;line-height:1.7;color:#cbd5e1}
+  .subtitle{font-size:22px;color:#94a3b8;margin-top:8px}
+  .meta{font-size:14px;color:#475569;margin-top:40px}
+
+  /* ---- Layout Helpers ---- */
+  .cols{display:flex;gap:40px;margin-top:24px;flex-wrap:wrap}
+  .col{flex:1;min-width:260px}
+  .center{text-align:center}
+
+  /* ---- Cards ---- */
+  .card{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:24px 28px}
+  .card-title{font-size:16px;font-weight:600;color:#2563eb;margin-bottom:8px}
+  .card-body{font-size:15px;color:#94a3b8;line-height:1.6}
+  .card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;margin-top:24px}
+
+  /* ---- Architecture Diagram ---- */
+  .arch-box{border-radius:10px;padding:20px 24px;text-align:center;font-size:15px;font-weight:600;position:relative}
+  .arch-label{font-size:12px;font-weight:400;color:#94a3b8;margin-top:4px}
+  .arch-blue{background:#1e3a5f;border:1px solid #2563eb;color:#93c5fd}
+  .arch-slate{background:#1e293b;border:1px solid #475569;color:#e2e8f0}
+  .arch-green{background:#14332a;border:1px solid #22c55e;color:#86efac}
+  .arch-row{display:flex;gap:12px;justify-content:center;margin-bottom:12px;align-items:stretch}
+  .arch-row .arch-box{flex:1;max-width:240px}
+  .arch-arrow{text-align:center;color:#475569;font-size:22px;line-height:1;margin:6px 0}
+
+  /* ---- Flow ---- */
+  .flow{display:flex;align-items:center;justify-content:center;gap:12px;margin-top:28px;flex-wrap:wrap}
+  .flow-step{background:#1e293b;border:1px solid #334155;border-radius:8px;padding:14px 20px;text-align:center;min-width:120px}
+  .flow-step strong{display:block;font-size:15px;color:#fff;margin-bottom:2px}
+  .flow-step span{font-size:13px;color:#64748b}
+  .flow-arrow{color:#2563eb;font-size:20px}
+
+  /* ---- Badge ---- */
+  .badge{display:inline-block;background:#1e293b;border:1px solid #334155;border-radius:6px;padding:6px 14px;font-size:14px;color:#cbd5e1;margin:4px}
+  .badge.blue{border-color:#2563eb;color:#93c5fd}
+
+  /* ---- Nav ---- */
+  .nav{position:fixed;bottom:24px;right:32px;display:flex;gap:8px;z-index:10}
+  .nav button{width:40px;height:40px;border-radius:8px;border:1px solid #334155;background:#1e293b;color:#94a3b8;font-size:18px;cursor:pointer;transition:all .2s}
+  .nav button:hover{background:#334155;color:#fff}
+  .page-indicator{position:fixed;bottom:32px;left:50%;transform:translateX(-50%);font-size:13px;color:#475569;z-index:10}
+
+  /* ---- Highlight list ---- */
+  .hl-list{list-style:none;margin-top:20px}
+  .hl-list li{font-size:17px;color:#cbd5e1;padding:8px 0;border-bottom:1px solid #1e293b;display:flex;align-items:center;gap:12px}
+  .hl-list li::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:#2563eb;flex-shrink:0}
+
+  /* ---- Responsive ---- */
+  @media(max-width:768px){
+    .slide{padding:40px 28px}
+    h1{font-size:32px}h2{font-size:24px}
+    .arch-row{flex-direction:column;align-items:center}
+    .flow{flex-direction:column}
+  }
+</style>
+</head>
+<body>
+
+<div class="slides">
+
+  <!-- ==================== Slide 1: 封面 ==================== -->
+  <div class="slide active" id="s1">
+    <div class="center" style="height:100%;display:flex;flex-direction:column;justify-content:center;align-items:center">
+      <div class="tag">技术方案汇报</div>
+      <h1 style="font-size:56px">多因子相关性分析系统</h1>
+      <p class="subtitle">基于可视化工作流编排的智能数据分析平台</p>
+      <div style="display:flex;gap:24px;margin-top:48px;flex-wrap:wrap;justify-content:center">
+        <span class="badge blue">Vue 3 + TypeScript</span>
+        <span class="badge blue">可视化工作流引擎</span>
+        <span class="badge blue">机器学习分析</span>
+        <span class="badge blue">AI 智能编排</span>
+      </div>
+      <p class="meta">2026 年 4 月</p>
+    </div>
+  </div>
+
+  <!-- ==================== Slide 2: 系统用途 ==================== -->
+  <div class="slide" id="s2">
+    <div class="tag">系统定位</div>
+    <h2>干什么用的</h2>
+    <p>面向制造业、科研等领域，提供<strong style="color:#fff">从数据导入到分析出报告的全链路能力</strong>，帮助用户快速发现多因子之间的相关性规律。</p>
+
+    <div class="flow">
+      <div class="flow-step"><strong>数据导入</strong><span>CSV / Excel / JSON</span></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step"><strong>数据清洗</strong><span>去重 / 缺失值 / 异常值</span></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step"><strong>特征工程</strong><span>编码 / 标准化 / 筛选</span></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step"><strong>分析建模</strong><span>统计 / 回归 / ML</span></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step"><strong>结果可视化</strong><span>图表 / 报告 / 导出</span></div>
+    </div>
+
+    <div class="cols" style="margin-top:36px">
+      <div class="card">
+        <div class="card-title">可视化工作流编排</div>
+        <div class="card-body">类 n8n 拖拽式画布，数据分析流程所见即所得，降低使用门槛</div>
+      </div>
+      <div class="card">
+        <div class="card-title">AI 智能编排</div>
+        <div class="card-body">基于 MCP 协议的 Agent 集成，支持自然语言生成分析工作流</div>
+      </div>
+      <div class="card">
+        <div class="card-title">标准化结果协议</div>
+        <div class="card-body">所有节点输出统一 NodeResult 结构，支持表格、图表、报告等多种视图</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== Slide 3: 技术架构 ==================== -->
+  <div class="slide" id="s3">
+    <div class="tag">技术架构</div>
+    <h2>用了什么技术</h2>
+
+    <!-- Architecture Diagram -->
+    <div style="margin-top:12px">
+      <div class="arch-row">
+        <div class="arch-box arch-blue" style="max-width:100%;flex:3">
+          前端应用层
+          <div class="arch-label">Vue 3 Composition API &nbsp;·&nbsp; Pinia 状态管理 &nbsp;·&nbsp; PrimeVue v4 组件库 &nbsp;·&nbsp; Tailwind CSS v4</div>
+        </div>
+      </div>
+      <div class="arch-arrow">▼</div>
+      <div class="arch-row">
+        <div class="arch-box arch-blue">
+          工作流引擎
+          <div class="arch-label">Vue Flow 画布 &nbsp;·&nbsp; 声明式节点系统 &nbsp;·&nbsp; 执行调度器</div>
+        </div>
+        <div class="arch-box arch-blue">
+          可视化层
+          <div class="arch-label">ECharts 图表 &nbsp;·&nbsp; AG Grid 数据表 &nbsp;·&nbsp; Monaco 编辑器</div>
+        </div>
+      </div>
+      <div class="arch-arrow">▼</div>
+      <div class="arch-row">
+        <div class="arch-box arch-slate">
+          Node.js 后端
+          <div class="arch-label">TypeScript &nbsp;·&nbsp; Drizzle ORM &nbsp;·&nbsp; JWT 认证</div>
+        </div>
+        <div class="arch-box arch-green">
+          Python 算法服务
+          <div class="arch-label">scikit-learn &nbsp;·&nbsp; XGBoost &nbsp;·&nbsp; SHAP</div>
+        </div>
+      </div>
+      <div class="arch-arrow">▼</div>
+      <div class="arch-row">
+        <div class="arch-box arch-slate" style="max-width:100%;flex:3">
+          持久化层
+          <div class="arch-label">MySQL / 本地存储 &nbsp;·&nbsp; 工作流快照 &nbsp;·&nbsp; 执行历史 &nbsp;·&nbsp; 用户隔离</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== Slide 4: 分析能力与效果 ==================== -->
+  <div class="slide" id="s4">
+    <div class="tag">核心能力</div>
+    <h2>达成什么效果</h2>
+
+    <div class="card-grid">
+      <div class="card">
+        <div class="card-title">相关性分析</div>
+        <div class="card-body">Pearson / Spearman / Kendall 三大相关系数，热力图矩阵与因子排名</div>
+      </div>
+      <div class="card">
+        <div class="card-title">回归分析</div>
+        <div class="card-body">多元线性回归、Lasso 正则化、逻辑回归，含模型评估与残差诊断</div>
+      </div>
+      <div class="card">
+        <div class="card-title">机器学习</div>
+        <div class="card-body">XGBoost + SHAP 可解释性分析、随机森林特征重要性排序</div>
+      </div>
+      <div class="card">
+        <div class="card-title">统计检验</div>
+        <div class="card-body">VIF 共线性检测、PCA 降维、方差分析（ANOVA）、分类因子筛选</div>
+      </div>
+    </div>
+
+    <div class="cols" style="margin-top:28px">
+      <div class="col">
+        <h3>输入侧</h3>
+        <ul class="hl-list">
+          <li>支持 CSV / Excel / JSON 多格式数据导入</li>
+          <li>10+ 数据预处理节点自由组合</li>
+          <li>AI 自然语言生成分析工作流</li>
+        </ul>
+      </div>
+      <div class="col">
+        <h3>输出侧</h3>
+        <ul class="hl-list">
+          <li>交互式 ECharts 图表（热力图/散点图/蜂群图）</li>
+          <li>结构化分析报告（含风险提示与解读指南）</li>
+          <li>多格式导出（HTML / PDF / CSV / Excel / JSON）</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== Slide 5: 总结 ==================== -->
+  <div class="slide" id="s5">
+    <div class="center" style="height:100%;display:flex;flex-direction:column;justify-content:center;align-items:center">
+      <div class="tag">总结</div>
+      <h2 style="font-size:40px">平台核心价值</h2>
+      <div style="max-width:720px;margin-top:32px">
+        <ul class="hl-list" style="text-align:left">
+          <li style="font-size:19px;border:none;padding:14px 0"><strong style="color:#fff">低门槛</strong>　— 可视化拖拽编排，无需编程基础即可完成专业分析</li>
+          <li style="font-size:19px;border:none;padding:14px 0"><strong style="color:#fff">全链路</strong>　— 数据导入、清洗、分析、可视化一站式闭环</li>
+          <li style="font-size:19px;border:none;padding:14px 0"><strong style="color:#fff">可解释</strong>　— SHAP / 特征重要性等多维度解读分析结果</li>
+          <li style="font-size:19px;border:none;padding:14px 0"><strong style="color:#fff">AI 增强</strong>　— MCP 协议接入大模型，自然语言驱动分析流程</li>
+          <li style="font-size:19px;border:none;padding:14px 0"><strong style="color:#fff">可扩展</strong>　— 声明式节点体系，新分析算法可快速接入</li>
+        </ul>
+      </div>
+      <p style="margin-top:48px;color:#475569;font-size:16px">谢谢</p>
+    </div>
+  </div>
+
+</div>
+
+<!-- Navigation -->
+<div class="page-indicator" id="pageIndicator">1 / 5</div>
+<div class="nav">
+  <button onclick="go(-1)" title="上一页">←</button>
+  <button onclick="go(1)" title="下一页">→</button>
+</div>
+
+<script>
+const slides=document.querySelectorAll('.slide');
+let cur=0;
+function show(n){
+  if(n<0||n>=slides.length)return;
+  slides[cur].classList.remove('active');
+  slides[cur].classList.add(n>cur?'prev':'');
+  cur=n;
+  slides.forEach((s,i)=>{
+    if(i!==cur){s.classList.remove('active');s.classList.add(i<cur?'prev':'')}
+    else{s.classList.remove('prev');s.classList.add('active')}
+  });
+  document.getElementById('pageIndicator').textContent=(cur+1)+' / '+slides.length;
+}
+function go(d){show(cur+d)}
+document.addEventListener('keydown',e=>{if(e.key==='ArrowRight'||e.key==='ArrowDown')go(1);if(e.key==='ArrowLeft'||e.key==='ArrowUp')go(-1)});
+</script>
+</body>
+</html>
