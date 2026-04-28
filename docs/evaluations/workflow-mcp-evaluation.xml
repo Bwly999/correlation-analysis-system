@@ -20,8 +20,8 @@
     <answer>workflow_debug_node</answer>
   </qa_pair>
   <qa_pair>
-    <question>你需要查询已保存工作流的历史版本，并在确认后回滚到指定版本。当前统一处理这个需求的 MCP 工具是什么？只返回 tool name。</question>
-    <answer>workflow_workflow_versions</answer>
+    <question>你需要在确认后把已保存工作流回滚到指定历史版本。当前专门处理回滚动作的 MCP 工具是什么？只返回 tool name。</question>
+    <answer>workflow_rollback_workflow_version</answer>
   </qa_pair>
   <qa_pair>
     <question>对“数据清洗”节点做运行时要求检查时，你要找的是“缺失值处理”这个属性的字段名。请通过节点详情能力确认，该属性的 property name 是什么？只返回 property name。</question>

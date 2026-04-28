@@ -128,6 +128,9 @@ describe('runAnalysisAgentSessionLoop', () => {
         'invalid',
         'question',
         'bash',
+        'list_workflow_tools',
+        'workflow_list_workflow_versions',
+        'workflow_rollback_workflow_version',
       ],
     })
     sessionCreateMock.mockResolvedValue({
@@ -332,6 +335,18 @@ describe('runAnalysisAgentSessionLoop', () => {
             permission: 'workflow_validate_plan',
             action: 'allow',
           }),
+          expect.objectContaining({
+            permission: 'list_workflow_tools',
+            action: 'allow',
+          }),
+          expect.objectContaining({
+            permission: 'workflow_list_workflow_versions',
+            action: 'allow',
+          }),
+          expect.objectContaining({
+            permission: 'workflow_rollback_workflow_version',
+            action: 'allow',
+          }),
         ]),
       }),
     )
@@ -341,6 +356,9 @@ describe('runAnalysisAgentSessionLoop', () => {
         tools: expect.objectContaining({
           bash: false,
           invalid: false,
+          list_workflow_tools: true,
+          workflow_list_workflow_versions: true,
+          workflow_rollback_workflow_version: true,
           question: false,
         }),
       }),

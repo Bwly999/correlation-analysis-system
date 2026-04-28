@@ -1,13 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
-const { currentTools } = vi.hoisted(() => ({
+const { currentTools, currentToolMetas } = vi.hoisted(() => ({
   currentTools: new Map<string, (input: any) => any>(),
+  currentToolMetas: new Map<string, any>(),
 }))
 
 vi.mock('@modelcontextprotocol/sdk/server/mcp.js', () => ({
   McpServer: class MockMcpServer {
-    registerTool(name: string, _meta: unknown, handler: (input: any) => any) {
+    registerTool(name: string, meta: unknown, handler: (input: any) => any) {
+      currentToolMetas.set(name, meta)
       currentTools.set(name, handler)
     }
 
@@ -39,7 +41,7 @@ vi.mock('@modelcontextprotocol/sdk/server/streamableHttp.js', () => ({
 import { createAgentSession } from '../gateway.js'
 import { handleWorkflowMcpRequest } from '../workflowMcpServer.js'
 import { createServerDependencies } from '../../bootstrap/serverDependencies.js'
-import { saveUserWorkflow } from '../../storage.js'
+import { saveUserHistory, saveUserWorkflow } from '../../storage.js'
 
 type MockResponse = ServerResponse & {
   body: string
@@ -178,6 +180,7 @@ const createWorkflowMcpDependencies = () => {
 describe('workflow MCP server', () => {
   beforeEach(() => {
     currentTools.clear()
+    currentToolMetas.clear()
     delete process.env.WORKFLOW_MCP_AUTH_TOKEN
   })
 
@@ -234,6 +237,40 @@ describe('workflow MCP server', () => {
           }),
         ]),
       },
+    })
+  })
+
+  it('registers structured schemas for high-risk workflow mutation tools', async () => {
+    const created = await createAgentSession({
+      request: buildAgentRequest(),
+      userId: 'user_1',
+    })
+
+    const request = createRequest(created.session.id)
+    const response = createResponse()
+    await handleWorkflowMcpRequest(request, response, createWorkflowMcpDependencies())
+
+    expect(currentToolMetas.get('workflow_update_partial_workflow')).toMatchObject({
+      inputSchema: expect.objectContaining({
+        operations: expect.anything(),
+      }),
+      outputSchema: expect.objectContaining({
+        ok: expect.anything(),
+        workflowId: expect.anything(),
+      }),
+      annotations: expect.objectContaining({
+        destructiveHint: false,
+      }),
+    })
+    expect(currentToolMetas.get('workflow_execute_plan')).toMatchObject({
+      inputSchema: expect.objectContaining({
+        plan: expect.anything(),
+        bindings: expect.anything(),
+      }),
+      outputSchema: expect.objectContaining({
+        ok: expect.anything(),
+        executionId: expect.anything(),
+      }),
     })
   })
 
@@ -300,6 +337,58 @@ describe('workflow MCP server', () => {
           candidateFeatureColumns: ['price', 'discount'],
         }),
       }),
+    })
+  })
+
+  it('paginates list-style MCP responses to keep agent context focused', async () => {
+    const requestPayload = {
+      ...buildAgentRequest(),
+      dataSources: Array.from({ length: 5 }, (_, index) => ({
+        id: `ds_${index + 1}`,
+        kind: 'file' as const,
+        entryNodeType: 'file-import' as const,
+        label: `数据源 ${index + 1}`,
+        sourceMeta: {
+          filename: `sales-${index + 1}.csv`,
+          format: 'csv',
+        },
+        schemaSummary: {
+          nodeId: `ds_${index + 1}`,
+          nodeLabel: `数据源 ${index + 1}`,
+          resultKind: 'table' as const,
+          numericColumns: ['price', 'sales'],
+          candidateTargetColumns: ['sales'],
+          candidateFeatureColumns: ['price'],
+          blockedReasons: [],
+        },
+        bindingPayload: {
+          format: 'csv',
+          rows: [{ price: index + 1, sales: (index + 1) * 10 }],
+        },
+      })),
+    }
+    const created = await createAgentSession({
+      request: requestPayload,
+      userId: 'user_1',
+    })
+
+    const request = createRequest(created.session.id)
+    const response = createResponse()
+    await handleWorkflowMcpRequest(request, response, createWorkflowMcpDependencies())
+
+    const listDataSources = currentTools.get('workflow_list_data_sources')
+    const result = await listDataSources?.({ limit: 2, offset: 1 })
+
+    expect(result?.structuredContent).toMatchObject({
+      total: 5,
+      count: 2,
+      offset: 1,
+      hasMore: true,
+      nextOffset: 3,
+      items: [
+        expect.objectContaining({ id: 'ds_2' }),
+        expect.objectContaining({ id: 'ds_3' }),
+      ],
     })
   })
 
@@ -614,6 +703,96 @@ describe('workflow MCP server', () => {
       outputPreview: expect.objectContaining({
         kind: 'report',
       }),
+    })
+  })
+
+  it('separates read-only workflow version listing from rollback and paginates history', async () => {
+    const created = await createAgentSession({
+      request: buildAgentRequest(),
+      userId: 'user_1',
+    })
+
+    await saveUserWorkflow('user_1', {
+      id: 'workflow_versions_split',
+      name: '版本测试流程 v1',
+      updatedAt: 1,
+      nodes: [],
+      edges: [],
+    })
+    await saveUserWorkflow('user_1', {
+      id: 'workflow_versions_split',
+      name: '版本测试流程 v2',
+      updatedAt: 2,
+      nodes: [],
+      edges: [],
+    })
+
+    await saveUserHistory('user_1', {
+      id: 'exec_a',
+      workflowId: 'workflow_versions_split',
+      workflowName: '版本测试流程',
+      startTime: 100,
+      duration: 0,
+      status: 'success',
+      nodes: [],
+      edges: [],
+    })
+    await saveUserHistory('user_1', {
+      id: 'exec_b',
+      workflowId: 'workflow_versions_split',
+      workflowName: '版本测试流程',
+      startTime: 200,
+      duration: 0,
+      status: 'success',
+      nodes: [],
+      edges: [],
+    })
+
+    const request = createRequest(created.session.id)
+    const response = createResponse()
+    await handleWorkflowMcpRequest(request, response, createWorkflowMcpDependencies())
+
+    const listVersions = currentTools.get('workflow_list_workflow_versions')
+    const rollbackVersion = currentTools.get('workflow_rollback_workflow_version')
+    const executions = currentTools.get('workflow_executions')
+
+    expect(listVersions).toBeTypeOf('function')
+    expect(rollbackVersion).toBeTypeOf('function')
+    expect(currentToolMetas.get('workflow_list_workflow_versions')).toMatchObject({
+      annotations: expect.objectContaining({
+        readOnlyHint: true,
+        destructiveHint: false,
+      }),
+    })
+    expect(currentToolMetas.get('workflow_rollback_workflow_version')).toMatchObject({
+      annotations: expect.objectContaining({
+        readOnlyHint: false,
+        destructiveHint: true,
+      }),
+    })
+
+    const versionResult = await listVersions?.({
+      workflowId: 'workflow_versions_split',
+      limit: 1,
+      offset: 0,
+    })
+    expect(versionResult?.structuredContent).toMatchObject({
+      workflowId: 'workflow_versions_split',
+      total: expect.any(Number),
+      count: 1,
+      hasMore: true,
+      nextOffset: 1,
+      items: [expect.objectContaining({ workflowId: 'workflow_versions_split' })],
+    })
+
+    const executionResult = await executions?.({ mode: 'list', limit: 1, offset: 0 })
+    expect(executionResult?.structuredContent).toMatchObject({
+      total: expect.any(Number),
+      count: 1,
+      offset: 0,
+      hasMore: true,
+      nextOffset: 1,
+      items: [expect.objectContaining({ id: 'exec_b' })],
     })
   })
 })

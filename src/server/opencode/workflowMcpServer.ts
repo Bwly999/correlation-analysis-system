@@ -55,13 +55,108 @@ const WORKFLOW_MCP_PATH = '/api/opencode/workflow-mcp'
 const WORKFLOW_MCP_HEALTH_PATH = '/api/opencode/workflow-mcp/health'
 const WORKFLOW_MCP_AUTH_HEADER = 'x-workflow-mcp-auth-token'
 
+const paginationSchema = {
+  limit: z.number().int().min(1).max(100).optional().describe('单页返回数量，默认 20，最大 100'),
+  offset: z.number().int().min(0).optional().describe('从第几条开始返回，默认 0'),
+}
+
+const resolvePagination = (input: { limit?: number, offset?: number } = {}) => ({
+  limit: Math.min(Math.max(Math.floor(input.limit ?? 20), 1), 100),
+  offset: Math.max(Math.floor(input.offset ?? 0), 0),
+})
+
+const paginateItems = <T>(items: T[], input: { limit?: number, offset?: number } = {}) => {
+  const { limit, offset } = resolvePagination(input)
+  const pageItems = items.slice(offset, offset + limit)
+  const nextOffset = offset + pageItems.length
+  const hasMore = nextOffset < items.length
+
+  return {
+    total: items.length,
+    count: pageItems.length,
+    offset,
+    limit,
+    hasMore,
+    nextOffset: hasMore ? nextOffset : null,
+    items: pageItems,
+  }
+}
+
+const positionSchema = z.object({
+  x: z.number(),
+  y: z.number(),
+})
+
+const workflowOperationSchema = z.discriminatedUnion('type', [
+  z.object({
+    id: z.string(),
+    type: z.literal('createNode'),
+    nodeType: z.string(),
+    nodeLabel: z.string().optional(),
+    position: positionSchema.optional(),
+    config: z.record(z.string(), z.unknown()).optional(),
+  }),
+  z.object({
+    id: z.string(),
+    type: z.literal('updateNodeConfig'),
+    nodeRef: z.string(),
+    config: z.record(z.string(), z.unknown()),
+  }),
+  z.object({
+    id: z.string(),
+    type: z.literal('renameNode'),
+    nodeRef: z.string(),
+    label: z.string(),
+  }),
+  z.object({
+    id: z.string(),
+    type: z.literal('removeNode'),
+    nodeRef: z.string(),
+  }),
+  z.object({
+    id: z.string(),
+    type: z.literal('connectNodes'),
+    sourceRef: z.string(),
+    targetRef: z.string(),
+    sourceHandle: z.string().optional(),
+    targetHandle: z.string().optional(),
+  }),
+  z.object({
+    id: z.string(),
+    type: z.literal('disconnectEdge'),
+    edgeRef: z.string(),
+  }),
+  z.object({
+    id: z.string(),
+    type: z.literal('moveNode'),
+    nodeRef: z.string(),
+    position: positionSchema,
+  }),
+])
+
 const planSchema = z.object({
   summary: z.string(),
   assumptions: z.array(z.string()),
   warnings: z.array(z.string()),
   questions: z.array(z.string()).optional(),
-  operations: z.array(z.unknown()),
+  operations: z.array(workflowOperationSchema),
 })
+
+const workflowSummaryOutputSchema = {
+  ok: z.boolean(),
+  workflowId: z.string(),
+  appliedOperations: z.number().optional(),
+  workflowSnapshot: z.record(z.string(), z.unknown()).optional(),
+  validation: z.record(z.string(), z.unknown()).optional(),
+}
+
+const executionOutputSchema = {
+  ok: z.boolean(),
+  executionId: z.string(),
+  status: z.string(),
+  finalResults: z.array(z.unknown()).optional(),
+  error: z.unknown().nullable().optional(),
+}
 
 const buildToolResult = <T extends Record<string, unknown>>(structuredContent: T) => ({
   content: [
@@ -77,6 +172,7 @@ type WorkflowMcpToolDefinition = {
   name: string
   description: string
   inputSchema?: Record<string, z.ZodTypeAny>
+  outputSchema?: Record<string, z.ZodTypeAny>
   annotations?: ToolAnnotations
   handler: (input: any) => ReturnType<typeof buildToolResult> | Promise<ReturnType<typeof buildToolResult>>
 }
@@ -144,21 +240,17 @@ const getWorkflowToolDefinitions = (
     name: 'workflow_get_node_catalog',
     description: '返回当前系统可用的工作流节点目录、连接约束和配置描述。',
     annotations: { readOnlyHint: true, openWorldHint: false },
-    handler: () =>
-      buildToolResult({
-        total: sessionRecord.request.nodeCatalog.length,
-        items: sessionRecord.request.nodeCatalog,
-      }),
+    inputSchema: paginationSchema,
+    handler: ({ limit, offset }) =>
+      buildToolResult(paginateItems(sessionRecord.request.nodeCatalog, { limit, offset })),
   },
   {
     name: 'workflow_list_data_sources',
     description: '列出当前分析会话可用的数据源及绑定入口。',
     annotations: { readOnlyHint: true, openWorldHint: false },
-    handler: () =>
-      buildToolResult({
-        total: sessionRecord.request.dataSources?.length ?? 0,
-        items: sessionRecord.request.dataSources ?? [],
-      }),
+    inputSchema: paginationSchema,
+    handler: ({ limit, offset }) =>
+      buildToolResult(paginateItems(sessionRecord.request.dataSources ?? [], { limit, offset })),
   },
   {
     name: 'workflow_get_data_source_schema',
@@ -210,8 +302,12 @@ const getWorkflowToolDefinitions = (
     annotations: { readOnlyHint: true, openWorldHint: false },
     inputSchema: {
       query: z.string().optional().describe('节点搜索关键词，可为空'),
+      ...paginationSchema,
     },
-    handler: ({ query }) => buildToolResult(runtime.searchNodes(query ?? '')),
+    handler: ({ query, limit, offset }) => {
+      const result = runtime.searchNodes(query ?? '')
+      return buildToolResult(paginateItems(result.items, { limit, offset }))
+    },
   },
   {
     name: 'workflow_get_node',
@@ -289,10 +385,11 @@ const getWorkflowToolDefinitions = (
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     inputSchema: {
       workflowId: z.string().describe('工作流 ID'),
-      operations: z.array(z.unknown()).describe('增量操作列表'),
+      operations: z.array(workflowOperationSchema).describe('增量操作列表'),
       summary: z.string().optional().describe('本次操作摘要'),
       validateAfterApply: z.boolean().optional().describe('应用后是否自动校验'),
     },
+    outputSchema: workflowSummaryOutputSchema,
     handler: async ({ workflowId, operations, summary, validateAfterApply }) =>
       buildToolResult(
         await runtime.updatePartialWorkflow(
@@ -378,21 +475,56 @@ const getWorkflowToolDefinitions = (
       mode: z.enum(['list', 'get', 'node_result', 'artifacts']).optional(),
       executionId: z.string().optional().describe('执行记录 ID'),
       nodeId: z.string().optional().describe('节点 ID'),
+      ...paginationSchema,
     },
-    handler: async ({ mode, executionId, nodeId }) =>
-      buildToolResult(await runtime.executions(context.userId, { mode, executionId, nodeId })),
+    handler: async ({ mode, executionId, nodeId, limit, offset }) =>
+      buildToolResult(await runtime.executions(context.userId, { mode, executionId, nodeId, limit, offset })),
+  },
+  {
+    name: 'workflow_list_workflow_versions',
+    description: '只读分页查询指定工作流的版本历史。',
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    inputSchema: {
+      workflowId: z.string().describe('工作流 ID'),
+      ...paginationSchema,
+    },
+    handler: async ({ workflowId, limit, offset }) =>
+      buildToolResult(await runtime.listWorkflowVersions(context.userId, { workflowId, limit, offset })),
+  },
+  {
+    name: 'workflow_get_workflow_version',
+    description: '只读读取指定工作流版本内容。',
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    inputSchema: {
+      workflowId: z.string().describe('工作流 ID'),
+      versionId: z.string().describe('版本 ID'),
+    },
+    handler: async ({ workflowId, versionId }) =>
+      buildToolResult(await runtime.getWorkflowVersion(context.userId, { workflowId, versionId })),
+  },
+  {
+    name: 'workflow_rollback_workflow_version',
+    description: '将工作流回滚到指定历史版本，会修改当前工作流。',
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+    inputSchema: {
+      workflowId: z.string().describe('工作流 ID'),
+      versionId: z.string().describe('版本 ID'),
+    },
+    handler: async ({ workflowId, versionId }) =>
+      buildToolResult(await runtime.rollbackWorkflowVersion(context.userId, { workflowId, versionId })),
   },
   {
     name: 'workflow_workflow_versions',
-    description: '查询、读取或回滚工作流版本历史。',
+    description: '兼容旧版：查询、读取或回滚工作流版本历史。新实现优先使用 workflow_list_workflow_versions、workflow_get_workflow_version、workflow_rollback_workflow_version。',
     annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
     inputSchema: {
       mode: z.enum(['list', 'get', 'rollback']).optional(),
       workflowId: z.string().describe('工作流 ID'),
       versionId: z.string().optional().describe('版本 ID'),
+      ...paginationSchema,
     },
-    handler: async ({ mode, workflowId, versionId }) =>
-      buildToolResult(await runtime.workflowVersions(context.userId, { mode, workflowId, versionId })),
+    handler: async ({ mode, workflowId, versionId, limit, offset }) =>
+      buildToolResult(await runtime.workflowVersions(context.userId, { mode, workflowId, versionId, limit, offset })),
   },
   {
     name: 'workflow_get_execution_result',
@@ -417,6 +549,7 @@ const getWorkflowToolDefinitions = (
       plan: planSchema.describe('待执行的工作流计划 JSON'),
       bindings: z.record(z.string(), z.string()).describe('节点 ID 到数据源 ID 的绑定表'),
     },
+    outputSchema: executionOutputSchema,
     handler: async ({ plan, bindings }) => {
       const execution = await executeWorkflowPlanForSession({
         sessionId: context.sessionId,
@@ -561,6 +694,7 @@ const createWorkflowMcpServer = (
       {
         description: tool.description,
         ...(tool.inputSchema ? { inputSchema: tool.inputSchema } : {}),
+        ...(tool.outputSchema ? { outputSchema: tool.outputSchema } : {}),
         ...(tool.annotations ? { annotations: tool.annotations } : {}),
       },
       async (input) => {

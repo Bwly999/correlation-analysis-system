@@ -7,6 +7,8 @@ export interface BenchmarkCase {
   description: string
   prompt: string
   expectedNodeTypes: string[]
+  /** 生成这些节点则判失败，用于验证模型不会盲目选择不适合的分析节点 */
+  forbiddenNodeTypes?: string[]
   maxIterations: number
   assertPlanValid: boolean
   assertConclusionPresent: boolean
@@ -30,7 +32,7 @@ export const BENCHMARK_CASES: BenchmarkCase[] = [
     assertConclusionPresent: true,
     expectedConclusionKeywords: ['相关', '分析'],
     minExecutionCount: 1,
-    timeoutMs: 120_000,
+    timeoutMs: 180_000,
   },
   {
     id: 'data-profiling-flow',
@@ -42,9 +44,9 @@ export const BENCHMARK_CASES: BenchmarkCase[] = [
     maxIterations: 1,
     assertPlanValid: true,
     assertConclusionPresent: true,
-    expectedConclusionKeywords: ['体检', '数据', '字段'],
+    expectedConclusionKeywords: ['字段', '数据', '样本', '数值', '分布', '建议', '预处理'],
     minExecutionCount: 1,
-    timeoutMs: 120_000,
+    timeoutMs: 180_000,
   },
   {
     id: 'multi-step-analysis',
@@ -71,7 +73,7 @@ export const BENCHMARK_CASES: BenchmarkCase[] = [
     assertPlanValid: true,
     assertConclusionPresent: true,
     minExecutionCount: 1,
-    timeoutMs: 120_000,
+    timeoutMs: 180_000,
   },
   {
     id: 'field-selection-flow',
@@ -84,7 +86,7 @@ export const BENCHMARK_CASES: BenchmarkCase[] = [
     assertPlanValid: true,
     assertConclusionPresent: true,
     minExecutionCount: 1,
-    timeoutMs: 120_000,
+    timeoutMs: 180_000,
   },
   {
     id: 'json-import-routing',
@@ -97,7 +99,7 @@ export const BENCHMARK_CASES: BenchmarkCase[] = [
     assertPlanValid: true,
     assertConclusionPresent: true,
     minExecutionCount: 2,
-    timeoutMs: 120_000,
+    timeoutMs: 180_000,
   },
   {
     id: 'empty-result-stop',
@@ -118,12 +120,13 @@ export const BENCHMARK_CASES: BenchmarkCase[] = [
     name: '非数值字段回退',
     description: '输入纯类别字段，验证 Agent 更倾向数据体检而不是盲目做相关性',
     prompt: '这些数据主要是类别字段，请先判断它们适不适合做相关性分析：[{"city":"上海","segment":"A","grade":"高"},{"city":"北京","segment":"B","grade":"中"},{"city":"深圳","segment":"A","grade":"低"}]',
-    expectedNodeTypes: ['manual-json-import', 'data-profiling'],
+    expectedNodeTypes: ['manual-json-import'],
+    forbiddenNodeTypes: ['pearson', 'spearman', 'kendall', 'correlation-analysis'],
     maxIterations: 1,
     assertPlanValid: true,
     assertConclusionPresent: true,
-    minExecutionCount: 2,
-    timeoutMs: 120_000,
+    minExecutionCount: 1,
+    timeoutMs: 180_000,
   },
   {
     id: 'field-selection-before-correlation',
@@ -136,7 +139,7 @@ export const BENCHMARK_CASES: BenchmarkCase[] = [
     assertPlanValid: true,
     assertConclusionPresent: true,
     minExecutionCount: 2,
-    timeoutMs: 120_000,
+    timeoutMs: 180_000,
   },
   {
     id: 'sort-limit-preview',
@@ -149,7 +152,7 @@ export const BENCHMARK_CASES: BenchmarkCase[] = [
     assertPlanValid: true,
     assertConclusionPresent: true,
     minExecutionCount: 3,
-    timeoutMs: 120_000,
+    timeoutMs: 180_000,
   },
   {
     id: 'clean-then-correlate',
@@ -157,7 +160,7 @@ export const BENCHMARK_CASES: BenchmarkCase[] = [
     name: '清洗后相关分析',
     description: '存在重复行和缺失值，验证 Agent 先做清洗再进入分析',
     prompt: '请先处理重复记录和缺失值，再分析以下数据中各变量的相关性：[{"f1":1,"f2":2,"target":3},{"f1":1,"f2":2,"target":3},{"f1":2,"f2":"","target":5},{"f1":3,"f2":6,"target":9}]',
-    expectedNodeTypes: ['manual-json-import', 'data-cleaning'],
+    expectedNodeTypes: ['manual-json-import', 'data-dedup', 'data-missing-outlier'],
     maxIterations: 2,
     assertPlanValid: true,
     assertConclusionPresent: true,

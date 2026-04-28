@@ -21,7 +21,8 @@
     "lint": "eslint src/ --max-warnings 0",
     "lint:fix": "eslint src/ --fix",
     "pack:release": "node scripts/pack-release.mjs",
-    "benchmark:agent": "npx tsx scripts/agent-benchmark/run.ts"
+    "benchmark:agent": "npx tsx scripts/agent-benchmark/run.ts",
+    "eval:workflow-mcp": "npx tsx scripts/workflow-mcp-evaluation/run.ts"
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^2.0.37",

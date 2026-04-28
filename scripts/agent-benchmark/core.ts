@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import type { WorkflowAiModelProfile } from '../../src/ai/types.js'
+import type { AgentLoopOutput } from '../../src/server/agentLoop/types.js'
 import type { BenchmarkCase, BenchmarkSuite } from './cases.js'
 
 const DEFAULT_BENCHMARK_BASE_URL = 'https://open.bigmodel.cn/api/coding/paas/v4'
@@ -24,8 +25,11 @@ export type BenchmarkRunResult = {
   planValid: boolean
   conclusionGenerated: boolean
   expectedNodesMatched: boolean
+  forbiddenNodesAbsent: boolean
   keywordMatched: boolean
   nodeTypesGenerated: string[]
+  planSummary: string
+  conclusionSummary: string
   failureReasons: string[]
   error?: string
 }
@@ -55,6 +59,12 @@ export type BenchmarkReport = {
   }
   options: BenchmarkCliOptions
   summaries: BenchmarkCaseSummary[]
+  runDetails: Array<{
+    caseId: string
+    caseName: string
+    suite: BenchmarkSuite
+    runs: BenchmarkRunResult[]
+  }>
   totals: {
     caseCount: number
     runCount: number
@@ -108,6 +118,7 @@ const buildFailureReasons = (result: {
   error?: string
   planValid: boolean
   expectedNodesMatched: boolean
+  forbiddenNodesAbsent: boolean
   totalSuccessfulExecutions: number
   conclusionGenerated: boolean
   keywordMatched: boolean
@@ -123,6 +134,9 @@ const buildFailureReasons = (result: {
   }
   if (!result.expectedNodesMatched) {
     reasons.push('expected_nodes_missing')
+  }
+  if (!result.forbiddenNodesAbsent) {
+    reasons.push('forbidden_nodes_present')
   }
   if (result.totalSuccessfulExecutions < result.benchmarkCase.minExecutionCount) {
     reasons.push('execution_count_below_threshold')
@@ -178,6 +192,64 @@ export const selectBenchmarkCases = (
   return suiteMatches && caseMatches
 })
 
+export const evaluateBenchmarkOutput = (
+  benchmarkCase: BenchmarkCase,
+  output: AgentLoopOutput,
+): Omit<BenchmarkRunResult, 'caseId' | 'caseName' | 'suite' | 'durationMs'> => {
+  const lastIteration = output.iterations[output.iterations.length - 1]
+  const nodeTypes = output.iterations.flatMap((iteration) =>
+    iteration.plan.operations
+      .filter((operation) => operation.type === 'createNode')
+      .map((operation) => operation.nodeType),
+  )
+  const uniqueNodeTypes = [...new Set(nodeTypes)]
+  const planValid = lastIteration ? lastIteration.plan.operations.length > 0 : false
+  const conclusionGenerated = output.conclusion !== null
+  const expectedNodesMatched = benchmarkCase.expectedNodeTypes.every((expected) =>
+    nodeTypes.some((nodeType) => nodeType === expected),
+  )
+  const forbiddenNodesAbsent = !(benchmarkCase.forbiddenNodeTypes ?? []).some((forbidden) =>
+    nodeTypes.some((nodeType) => nodeType === forbidden),
+  )
+  const totalSuccessfulExecutions = output.iterations.reduce(
+    (sum, iteration) => sum + iteration.executionResults.filter((result) => result.success).length,
+    0,
+  )
+  const conclusionSummary = output.conclusion?.summary ?? ''
+  const keywordMatched = !benchmarkCase.expectedConclusionKeywords?.length
+    || (conclusionSummary
+      ? benchmarkCase.expectedConclusionKeywords.some((keyword) =>
+          conclusionSummary.includes(keyword),
+        )
+      : false)
+  const planSummary = lastIteration?.plan.summary ?? ''
+
+  const failureReasons = buildFailureReasons({
+    benchmarkCase,
+    planValid,
+    expectedNodesMatched,
+    forbiddenNodesAbsent,
+    totalSuccessfulExecutions,
+    conclusionGenerated,
+    keywordMatched,
+  })
+
+  return {
+    passed: failureReasons.length === 0,
+    totalIterations: output.totalIterations,
+    totalSuccessfulExecutions,
+    planValid,
+    conclusionGenerated,
+    expectedNodesMatched,
+    forbiddenNodesAbsent,
+    keywordMatched,
+    nodeTypesGenerated: uniqueNodeTypes,
+    planSummary,
+    conclusionSummary,
+    failureReasons,
+  }
+}
+
 export const runSingleBenchmarkCase = async (
   benchmarkCase: BenchmarkCase,
   env: NodeJS.ProcessEnv = process.env,
@@ -197,8 +269,11 @@ export const runSingleBenchmarkCase = async (
       planValid: false,
       conclusionGenerated: false,
       expectedNodesMatched: false,
+      forbiddenNodesAbsent: true,
       keywordMatched: false,
       nodeTypesGenerated: [],
+      planSummary: '',
+      conclusionSummary: '',
       failureReasons: ['missing_api_key'],
       error: 'OPENAI_API_KEY 环境变量未设置',
     }
@@ -230,52 +305,14 @@ export const runSingleBenchmarkCase = async (
       benchmarkCase.timeoutMs,
     )
 
-    const lastIteration = output.iterations[output.iterations.length - 1]
-    const nodeTypes = output.iterations.flatMap((iteration) =>
-      iteration.plan.operations
-        .filter((operation) => operation.type === 'createNode')
-        .map((operation) => operation.nodeType),
-    )
-
-    const planValid = lastIteration ? lastIteration.plan.operations.length > 0 : false
-    const conclusionGenerated = output.conclusion !== null
-    const expectedNodesMatched = benchmarkCase.expectedNodeTypes.every((expected) =>
-      nodeTypes.some((nodeType) => nodeType === expected),
-    )
-    const totalSuccessfulExecutions = output.iterations.reduce(
-      (sum, iteration) => sum + iteration.executionResults.filter((result) => result.success).length,
-      0,
-    )
-    const keywordMatched = !benchmarkCase.expectedConclusionKeywords?.length
-      || (output.conclusion
-        ? benchmarkCase.expectedConclusionKeywords.some((keyword) =>
-            output.conclusion!.summary.includes(keyword),
-          )
-        : false)
-
-    const failureReasons = buildFailureReasons({
-      benchmarkCase,
-      planValid,
-      expectedNodesMatched,
-      totalSuccessfulExecutions,
-      conclusionGenerated,
-      keywordMatched,
-    })
+    const evaluated = evaluateBenchmarkOutput(benchmarkCase, output)
 
     return {
       caseId: benchmarkCase.id,
       caseName: benchmarkCase.name,
       suite: benchmarkCase.suite,
-      passed: failureReasons.length === 0,
       durationMs: Date.now() - startedAt,
-      totalIterations: output.totalIterations,
-      totalSuccessfulExecutions,
-      planValid,
-      conclusionGenerated,
-      expectedNodesMatched,
-      keywordMatched,
-      nodeTypesGenerated: [...new Set(nodeTypes)],
-      failureReasons,
+      ...evaluated,
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
@@ -291,8 +328,11 @@ export const runSingleBenchmarkCase = async (
       planValid: false,
       conclusionGenerated: false,
       expectedNodesMatched: false,
+      forbiddenNodesAbsent: true,
       keywordMatched: false,
       nodeTypesGenerated: [],
+      planSummary: '',
+      conclusionSummary: '',
       failureReasons: [normalizeFailureReason(message)],
       error: message,
     }
@@ -356,6 +396,12 @@ export const runBenchmarkSuite = async (
   const summaries = selectedCases.map((benchmarkCase) =>
     summarizeCaseRuns(benchmarkCase, perCaseRuns.get(benchmarkCase.id) ?? []),
   )
+  const runDetails = selectedCases.map((benchmarkCase) => ({
+    caseId: benchmarkCase.id,
+    caseName: benchmarkCase.name,
+    suite: benchmarkCase.suite,
+    runs: perCaseRuns.get(benchmarkCase.id) ?? [],
+  }))
   const allRuns = summaries.reduce((sum, summary) => sum + summary.runs, 0)
   const allPasses = summaries.reduce((sum, summary) => sum + summary.passCount, 0)
   const profile = buildBenchmarkProfile(env)
@@ -368,6 +414,7 @@ export const runBenchmarkSuite = async (
     },
     options,
     summaries,
+    runDetails,
     totals: {
       caseCount: summaries.length,
       runCount: allRuns,

@@ -78,6 +78,28 @@ export interface CreateWorkflowMcpRuntimeOptions {
 
 const cloneValue = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
 
+const resolvePagination = (input: { limit?: number, offset?: number } = {}) => ({
+  limit: Math.min(Math.max(Math.floor(input.limit ?? 20), 1), 100),
+  offset: Math.max(Math.floor(input.offset ?? 0), 0),
+})
+
+const paginateItems = <T>(items: T[], input: { limit?: number, offset?: number } = {}) => {
+  const { limit, offset } = resolvePagination(input)
+  const pageItems = items.slice(offset, offset + limit)
+  const nextOffset = offset + pageItems.length
+  const hasMore = nextOffset < items.length
+
+  return {
+    total: items.length,
+    count: pageItems.length,
+    offset,
+    limit,
+    hasMore,
+    nextOffset: hasMore ? nextOffset : null,
+    items: pageItems,
+  }
+}
+
 const normalizeString = (value: unknown) => (typeof value === 'string' ? value.trim().toLowerCase() : '')
 
 const getServerNodeCatalog = () => buildServerWorkflowAiNodeCatalog()
@@ -602,16 +624,19 @@ export const createWorkflowMcpRuntime = (options: CreateWorkflowMcpRuntimeOption
 
     async executions(
       userId: string,
-      input: { mode?: 'list' | 'get' | 'node_result' | 'artifacts'; executionId?: string; nodeId?: string },
+      input: {
+        mode?: 'list' | 'get' | 'node_result' | 'artifacts'
+        executionId?: string
+        nodeId?: string
+        limit?: number
+        offset?: number
+      },
     ) {
       const mode = input.mode ?? 'list'
       const history = await storage.getUserHistory(userId)
 
       if (mode === 'list') {
-        return {
-          total: history.length,
-          items: history,
-        }
+        return paginateItems(history, input)
       }
 
       const execution = history.find((item) => item.id === input.executionId)
@@ -654,32 +679,66 @@ export const createWorkflowMcpRuntime = (options: CreateWorkflowMcpRuntimeOption
       }
     },
 
+    async listWorkflowVersions(
+      userId: string,
+      input: { workflowId: string; limit?: number; offset?: number },
+    ) {
+      const versions = await storage.getUserWorkflowVersions(userId, input.workflowId)
+      return {
+        workflowId: input.workflowId,
+        ...paginateItems(versions, input),
+      }
+    },
+
+    async getWorkflowVersion(
+      userId: string,
+      input: { workflowId: string; versionId: string },
+    ) {
+      return {
+        workflowId: input.workflowId,
+        versionId: input.versionId,
+        version: await storage.getUserWorkflowVersion(userId, input.workflowId, input.versionId),
+      }
+    },
+
+    async rollbackWorkflowVersion(
+      userId: string,
+      input: { workflowId: string; versionId: string },
+    ) {
+      return {
+        workflowId: input.workflowId,
+        versionId: input.versionId,
+        result: await storage.rollbackUserWorkflowVersion(userId, input.workflowId, input.versionId),
+      }
+    },
+
     async workflowVersions(
       userId: string,
-      input: { mode?: 'list' | 'get' | 'rollback'; workflowId: string; versionId?: string },
+      input: {
+        mode?: 'list' | 'get' | 'rollback'
+        workflowId: string
+        versionId?: string
+        limit?: number
+        offset?: number
+      },
     ) {
       const mode = input.mode ?? 'list'
 
       if (mode === 'list') {
-        return {
-          workflowId: input.workflowId,
-          items: await storage.getUserWorkflowVersions(userId, input.workflowId),
-        }
+        return this.listWorkflowVersions(userId, input)
       }
 
       if (mode === 'get') {
-        return {
+        return this.getWorkflowVersion(userId, {
           workflowId: input.workflowId,
           versionId: input.versionId ?? '',
-          version: await storage.getUserWorkflowVersion(userId, input.workflowId, input.versionId ?? ''),
-        }
+        })
       }
 
-      return {
+      return this.rollbackWorkflowVersion(userId, {
         workflowId: input.workflowId,
         versionId: input.versionId ?? '',
-        result: await storage.rollbackUserWorkflowVersion(userId, input.workflowId, input.versionId ?? ''),
-      }
+      })
     },
   }
 }

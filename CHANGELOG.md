@@ -19,6 +19,12 @@
 
 ### 新增 (Added)
 
+- **增强 workflow MCP 可发现性、分页与评测闭环**:
+  - `list_workflow_tools` 纳入 opencode 允许工具集，版本历史拆分为只读查询、读取版本和回滚版本三个专用 MCP 工具，旧版 `workflow_workflow_versions` 保留兼容。
+  - 节点目录、会话数据源、节点搜索、执行历史与版本历史支持 `limit` / `offset` 分页，并为关键写入/执行工具补充更严格的输入与输出 schema。
+  - 新增 `pnpm eval:workflow-mcp` 基线评测脚本，可连接已启动的 workflow MCP 会话并对 `docs/evaluations/workflow-mcp-evaluation.xml` 做直接字符串比对报告。
+  - 同步更新 Agent benchmark 的失败判定，支持禁止节点校验、计划/结论摘要留档，并将旧 `data-cleaning` / `data-profiling` 预期调整为当前节点拆分策略。
+
 - **调整单调性分析节点入口展示**:
   - `correlation-analysis` 新建入口显示名称改为“单调性分析”，简介改为“分析因子与目标值的单调性关系”。
   - 为 `correlation-analysis` 补齐节点图标映射，避免侧边栏和节点卡片显示默认占位图标。

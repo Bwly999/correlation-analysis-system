@@ -76,6 +76,7 @@ const OPENCODE_AGENT_REQUEST_TIMEOUT_MS = 45_000
 const OPENCODE_SERVER_START_TIMEOUT_MS = Number(process.env.OPENCODE_SERVER_START_TIMEOUT_MS || '20000')
 const ENABLE_AGENT_SESSION_DEBUG_STDOUT = process.env.AGENT_SESSION_DEBUG_STDOUT === '1'
 const WORKFLOW_MCP_TOOL_NAMES = [
+  'list_workflow_tools',
   'workflow_get_session_context',
   'workflow_get_node_catalog',
   'workflow_get_node_definition',
@@ -95,6 +96,9 @@ const WORKFLOW_MCP_TOOL_NAMES = [
   'workflow_debug_node',
   'workflow_test_workflow',
   'workflow_executions',
+  'workflow_list_workflow_versions',
+  'workflow_get_workflow_version',
+  'workflow_rollback_workflow_version',
   'workflow_workflow_versions',
 ] as const
 
