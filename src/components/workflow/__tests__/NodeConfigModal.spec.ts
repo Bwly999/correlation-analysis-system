@@ -19,6 +19,7 @@ describe("NodeConfigModal", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     mockToastAdd.mockReset();
+    document.body.innerHTML = "";
     document.queryCommandSupported = vi.fn(() => true) as any;
     config.global.directives = {
       ...(config.global.directives || {}),
@@ -1520,6 +1521,138 @@ describe("NodeConfigModal", () => {
     expect(rightRail).not.toBeNull();
     expect(document.body.textContent).toContain("上游节点");
     expect(document.body.textContent).toContain("下游节点");
+
+    wrapper.unmount();
+  });
+
+  it("hides neighbor navigators while node result preview is open", async () => {
+    const store = useWorkflowStore();
+    store.nodes = [
+      {
+        id: "upstream-node",
+        type: "custom",
+        position: { x: 0, y: 0 },
+        label: "上游节点",
+        data: {
+          label: "上游节点",
+          type: "manual-json-import",
+          category: "trigger",
+          status: "success",
+          config: {},
+          logs: [],
+          useManualInput: false,
+          manualInput: "",
+          isPinned: false,
+          output: { data: [{ id: 1 }] },
+        },
+      } as any,
+      {
+        id: "current-node",
+        type: "custom",
+        position: { x: 320, y: 60 },
+        label: "当前节点",
+        data: {
+          label: "当前节点",
+          type: "data-cleaning",
+          category: "action",
+          status: "success",
+          config: {},
+          logs: [],
+          useManualInput: false,
+          manualInput: "",
+          isPinned: false,
+          output: { data: [{ id: 2 }] },
+        },
+      } as any,
+      {
+        id: "downstream-node",
+        type: "custom",
+        position: { x: 640, y: 120 },
+        label: "下游节点",
+        data: {
+          label: "下游节点",
+          type: "pearson",
+          category: "terminal",
+          status: "idle",
+          config: {},
+          logs: [],
+          useManualInput: false,
+          manualInput: "",
+          isPinned: false,
+        },
+      } as any,
+    ];
+    store.edges = [
+      {
+        id: "e1",
+        source: "upstream-node",
+        target: "current-node",
+        type: "n8n",
+        animated: true,
+      },
+      {
+        id: "e2",
+        source: "current-node",
+        target: "downstream-node",
+        type: "n8n",
+        animated: true,
+      },
+    ] as any;
+
+    const wrapper = mount(NodeConfigModal, {
+      props: { visible: true, nodeId: "current-node" },
+      attachTo: document.body,
+      global: {
+        stubs: {
+          Dialog: dialogStub,
+          DataDisplayPanel: {
+            emits: ["open-detail"],
+            template:
+              '<button class="open-detail-btn" @click="$emit(\'open-detail\')">打开预览</button>',
+          },
+          DataAnalysisModal: {
+            props: ["visible"],
+            template:
+              '<div v-if="visible" data-testid="analysis-modal-stub">结果预览</div>',
+          },
+          ConfigHeader: {
+            template: "<div />",
+            props: ["nodeLabel", "isPinned", "nodeType"],
+          },
+          ConfigFooter: { template: "<div />" },
+          ConfigForm: {
+            template: "<div />",
+            props: ["config", "properties", "upstreamFactors"],
+          },
+          RuntimeInputs: {
+            template: "<div />",
+            props: ["config", "properties", "upstreamFactors"],
+          },
+        },
+      },
+    });
+
+    await nextTick();
+
+    expect(
+      document.body.querySelector('[data-testid="debug-neighbor-left-rail"]'),
+    ).not.toBeNull();
+    expect(
+      document.body.querySelector('[data-testid="debug-neighbor-right-rail"]'),
+    ).not.toBeNull();
+
+    await wrapper.findAll(".open-detail-btn")[1]!.trigger("click");
+    await nextTick();
+
+    expect(wrapper.find('[data-testid="analysis-modal-stub"]').exists()).toBe(
+      true,
+    );
+    expect(
+      document.body.querySelector('[data-testid="debug-neighbor-left-rail"]'),
+    ).toBeNull();
+    expect(
+      document.body.querySelector('[data-testid="debug-neighbor-right-rail"]'),
+    ).toBeNull();
 
     wrapper.unmount();
   });

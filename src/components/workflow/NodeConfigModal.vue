@@ -292,6 +292,13 @@ const hasNeighborNavigator = computed(
     neighborNodes.value.upstream.length > 0 ||
     neighborNodes.value.downstream.length > 0,
 );
+const shouldShowNeighborNavigator = computed(
+  () =>
+    props.visible &&
+    Boolean(node.value) &&
+    hasNeighborNavigator.value &&
+    !analysisModal.value.visible,
+);
 
 const openNeighborNodeConfig = (targetNodeId: string) => {
   if (!node.value || targetNodeId === node.value.id) return;
@@ -1056,9 +1063,7 @@ onBeforeUnmount(() => {
     <Teleport to="body">
       <div
         v-if="
-          visible &&
-          node &&
-          hasNeighborNavigator &&
+          shouldShowNeighborNavigator &&
           neighborNodes.upstream.length > 0
         "
         data-testid="debug-neighbor-left-rail"
@@ -1084,9 +1089,7 @@ onBeforeUnmount(() => {
 
       <div
         v-if="
-          visible &&
-          node &&
-          hasNeighborNavigator &&
+          shouldShowNeighborNavigator &&
           neighborNodes.downstream.length > 0
         "
         data-testid="debug-neighbor-right-rail"
