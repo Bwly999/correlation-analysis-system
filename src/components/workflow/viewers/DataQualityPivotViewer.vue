@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, shallowRef, watch } from 'vue'
+import Column from 'primevue/column'
+import DataTable from 'primevue/datatable'
 import InputNumber from 'primevue/inputnumber'
 import { Activity, BarChart3, Database, ListFilter, Sigma } from 'lucide-vue-next'
 import { useDataQualityProfile, type DataQualityFieldProfile } from './useDataQualityProfile'
@@ -66,6 +68,15 @@ const summaryCards = computed(() => [
     icon: Sigma,
   },
 ])
+
+const numericColumnPt = {
+  columnHeaderContent: {
+    class: 'data-quality-table__numeric-header-content',
+  },
+  columnTitle: {
+    class: 'data-quality-table__numeric-title',
+  },
+}
 </script>
 
 <template>
@@ -189,42 +200,100 @@ const summaryCards = computed(() => [
         <div class="border-b border-slate-100 px-5 py-4">
           <h3 class="text-sm font-black text-slate-800">字段统计明细</h3>
         </div>
-        <div class="max-h-[360px] overflow-auto">
-          <table class="min-w-full text-left text-sm">
-            <thead class="sticky top-0 bg-slate-50 text-[10px] font-black uppercase tracking-widest text-slate-400">
-              <tr>
-                <th class="px-4 py-3">字段</th>
-                <th class="px-4 py-3">类型</th>
-                <th class="px-4 py-3 text-right">缺少数</th>
-                <th class="px-4 py-3 text-right">缺少率</th>
-                <th class="px-4 py-3 text-right">非缺少数</th>
-                <th class="px-4 py-3 text-right">最小值</th>
-                <th class="px-4 py-3 text-right">最大值</th>
-                <th class="px-4 py-3 text-right">均值</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100">
-              <tr
-                v-for="field in fieldProfiles"
-                :key="field.field"
-                class="bg-white hover:bg-slate-50"
-              >
-                <td class="px-4 py-3 font-bold text-slate-800">{{ field.field }}</td>
-                <td class="px-4 py-3 text-slate-500">{{ fieldTypeLabel(field.type) }}</td>
-                <td class="px-4 py-3 text-right font-semibold text-slate-700">
-                  {{ field.missingCount }}
-                </td>
-                <td class="px-4 py-3 text-right font-semibold text-slate-700">
-                  {{ formatPercent(field.missingRate) }}
-                </td>
-                <td class="px-4 py-3 text-right text-slate-500">{{ field.nonMissingCount }}</td>
-                <td class="px-4 py-3 text-right text-slate-500">{{ formatNumber(field.min) }}</td>
-                <td class="px-4 py-3 text-right text-slate-500">{{ formatNumber(field.max) }}</td>
-                <td class="px-4 py-3 text-right text-slate-500">{{ formatNumber(field.mean) }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          :value="fieldProfiles"
+          data-key="field"
+          sort-field="missingRate"
+          :sort-order="-1"
+          removable-sort
+          scrollable
+          scroll-height="360px"
+          class="data-quality-table"
+          table-style="min-width: 58rem"
+        >
+          <Column field="field" header="字段" sortable>
+            <template #body="{ data }: { data: DataQualityFieldProfile }">
+              <span class="font-bold text-slate-800">{{ data.field }}</span>
+            </template>
+          </Column>
+          <Column field="type" header="类型" sortable>
+            <template #body="{ data }: { data: DataQualityFieldProfile }">
+              <span class="text-slate-500">{{ fieldTypeLabel(data.type) }}</span>
+            </template>
+          </Column>
+          <Column
+            field="missingCount"
+            header="缺少数"
+            sortable
+            header-class="data-quality-table__numeric-header"
+            body-class="data-quality-table__numeric-cell"
+            :pt="numericColumnPt"
+          >
+            <template #body="{ data }: { data: DataQualityFieldProfile }">
+              <span class="font-semibold text-slate-700">{{ data.missingCount }}</span>
+            </template>
+          </Column>
+          <Column
+            field="missingRate"
+            header="缺少率"
+            sortable
+            header-class="data-quality-table__numeric-header"
+            body-class="data-quality-table__numeric-cell"
+            :pt="numericColumnPt"
+          >
+            <template #body="{ data }: { data: DataQualityFieldProfile }">
+              <span class="font-semibold text-slate-700">{{ formatPercent(data.missingRate) }}</span>
+            </template>
+          </Column>
+          <Column
+            field="nonMissingCount"
+            header="非缺少数"
+            sortable
+            header-class="data-quality-table__numeric-header"
+            body-class="data-quality-table__numeric-cell"
+            :pt="numericColumnPt"
+          >
+            <template #body="{ data }: { data: DataQualityFieldProfile }">
+              <span class="text-slate-500">{{ data.nonMissingCount }}</span>
+            </template>
+          </Column>
+          <Column
+            field="min"
+            header="最小值"
+            sortable
+            header-class="data-quality-table__numeric-header"
+            body-class="data-quality-table__numeric-cell"
+            :pt="numericColumnPt"
+          >
+            <template #body="{ data }: { data: DataQualityFieldProfile }">
+              <span class="text-slate-500">{{ formatNumber(data.min) }}</span>
+            </template>
+          </Column>
+          <Column
+            field="max"
+            header="最大值"
+            sortable
+            header-class="data-quality-table__numeric-header"
+            body-class="data-quality-table__numeric-cell"
+            :pt="numericColumnPt"
+          >
+            <template #body="{ data }: { data: DataQualityFieldProfile }">
+              <span class="text-slate-500">{{ formatNumber(data.max) }}</span>
+            </template>
+          </Column>
+          <Column
+            field="mean"
+            header="均值"
+            sortable
+            header-class="data-quality-table__numeric-header"
+            body-class="data-quality-table__numeric-cell"
+            :pt="numericColumnPt"
+          >
+            <template #body="{ data }: { data: DataQualityFieldProfile }">
+              <span class="text-slate-500">{{ formatNumber(data.mean) }}</span>
+            </template>
+          </Column>
+        </DataTable>
       </section>
     </div>
 
@@ -246,5 +315,59 @@ const summaryCards = computed(() => [
   font-size: 12px;
   font-weight: 700;
   color: #0f172a;
+}
+
+.data-quality-table:deep(.p-datatable-table) {
+  font-size: 0.875rem;
+}
+
+.data-quality-table:deep(.p-datatable-thead > tr > th) {
+  background: #f8fafc;
+  color: #94a3b8;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  padding: 0.75rem 1rem;
+}
+
+.data-quality-table:deep(.p-datatable-tbody > tr > td) {
+  border-color: #f1f5f9;
+  padding: 0.75rem 1rem;
+}
+
+.data-quality-table:deep(.p-datatable-tbody > tr:hover) {
+  background: #f8fafc;
+}
+
+.data-quality-table:deep(.data-quality-table__numeric-header),
+.data-quality-table:deep(.data-quality-table__numeric-cell) {
+  text-align: right;
+}
+
+.data-quality-table:deep(.data-quality-table__numeric-header .p-column-header-content) {
+  justify-content: flex-end;
+}
+
+.data-quality-table:deep(.data-quality-table__numeric-header .p-sortable-column-icon) {
+  margin-left: 0.35rem;
+}
+
+.data-quality-table:deep(.data-quality-table__numeric-header-content) {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.35rem;
+}
+
+.data-quality-table:deep(.data-quality-table__numeric-header-content .p-sortable-column-icon) {
+  order: -1;
+  margin-right: 0;
+  margin-left: 0;
+}
+
+.data-quality-table:deep(.data-quality-table__numeric-title) {
+  flex: 0 0 auto;
+  text-align: right;
 }
 </style>
