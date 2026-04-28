@@ -53,6 +53,7 @@ const iconMap: Record<string, any> = {
   anova: { icon: ChartColumn, color: 'text-cyan-600', bg: 'bg-cyan-50' },
   pca: { icon: BarChart3, color: 'text-indigo-600', bg: 'bg-indigo-50' },
   vif: { icon: ScanSearch, color: 'text-amber-600', bg: 'bg-amber-50' },
+  'correlation-analysis': { icon: ChartLine, color: 'text-blue-600', bg: 'bg-blue-50' },
   pearson: { icon: ChartScatter, color: 'text-blue-600', bg: 'bg-blue-50' },
   spearman: { icon: ChartLine, color: 'text-cyan-600', bg: 'bg-cyan-50' },
   kendall: { icon: ChartColumn, color: 'text-teal-600', bg: 'bg-teal-50' },

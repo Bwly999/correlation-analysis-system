@@ -7,22 +7,28 @@ import {
 } from './correlation/shared'
 
 type CorrelationAnalysisConfig = {
+  method?: CorrelationMethod
+  // 兼容旧草稿中的多选配置，执行时只取第一个有效方法。
+  methods?: CorrelationMethod[]
   xFields?: string[]
   yFields?: string[]
-  methods?: CorrelationMethod[]
   heatmapTopN?: number
   rankingTopN?: number
 }
 
-const DEFAULT_METHODS: CorrelationMethod[] = ['pearson', 'spearman']
+const DEFAULT_METHOD: CorrelationMethod = 'pearson'
 const ALL_METHODS: CorrelationMethod[] = ['pearson', 'spearman', 'kendall']
 
-const normalizeMethods = (value: unknown): CorrelationMethod[] => {
-  const methods = Array.isArray(value)
-    ? value.filter((item): item is CorrelationMethod => ALL_METHODS.includes(item))
-    : []
+const normalizeMethod = (config: CorrelationAnalysisConfig): CorrelationMethod => {
+  if (config.method && ALL_METHODS.includes(config.method)) {
+    return config.method
+  }
 
-  return methods.length > 0 ? [...new Set(methods)] : DEFAULT_METHODS
+  const legacyMethod = Array.isArray(config.methods)
+    ? config.methods.find((item): item is CorrelationMethod => ALL_METHODS.includes(item))
+    : undefined
+
+  return legacyMethod ?? DEFAULT_METHOD
 }
 
 const methodOptions = ALL_METHODS.map((method) => ({
@@ -42,11 +48,19 @@ const prefixMethodSections = (
 
 export const correlationAnalysisNode: NodeDefinition<unknown, CorrelationAnalysisConfig> = {
   name: 'correlation-analysis',
-  displayName: '相关性分析',
-  icon: 'grid',
+  displayName: '单调性分析',
+  icon: 'chart-line',
   category: 'terminal',
-  description: '统一执行 Pearson、Spearman 和 Kendall 相关性分析，用于排查 X 与 Y 的线性、单调或排序关系。',
+  description: '分析因子与目标值的单调性关系。',
   properties: [
+    {
+      name: 'method',
+      displayName: '分析方法',
+      type: 'options',
+      default: DEFAULT_METHOD,
+      options: methodOptions,
+      description: '默认使用 Pearson；Spearman 适合单调关系，Kendall 更适合小样本或排序一致性验证。',
+    },
     {
       name: 'xFields',
       displayName: 'X 字段',
@@ -70,14 +84,6 @@ export const correlationAnalysisNode: NodeDefinition<unknown, CorrelationAnalysi
       description: '选择需要分析关联关系的目标字段，可同时选择多个 Y。',
     },
     {
-      name: 'methods',
-      displayName: '分析方法',
-      type: 'multi-options',
-      default: DEFAULT_METHODS,
-      options: methodOptions,
-      description: '默认同时运行 Pearson 和 Spearman；Kendall 更适合小样本或排序一致性验证。',
-    },
-    {
       name: 'heatmapTopN',
       displayName: '热力图显示因子数',
       type: 'number',
@@ -93,88 +99,24 @@ export const correlationAnalysisNode: NodeDefinition<unknown, CorrelationAnalysi
     },
   ],
   execute: async (input, config) => {
-    const methods = normalizeMethods(config.methods)
-    const methodResults = await Promise.all(
-      methods.map(async (method) => ({
-        method,
-        result: (await executeCorrelationAnalysis(method, input, config)) as NodeResult<Record<string, any>>,
-      })),
-    )
-
-    if (methodResults.length === 1) {
-      const only = methodResults[0]!
-      return createReportResult(
-        {
-          ...(only.result.payload ?? {}),
-          title: '相关性分析',
-          metadata: {
-            ...((only.result.payload?.metadata as Record<string, unknown> | undefined) ?? {}),
-            methods,
-          },
-        },
-        {
-          meta: {
-            ...(only.result.meta ?? {}),
-            metrics: {
-              ...((only.result.meta?.metrics as Record<string, unknown> | undefined) ?? {}),
-              methods,
-            },
-          },
-        },
-      )
-    }
-
-    const firstMetrics = (methodResults[0]?.result.meta?.metrics ?? {}) as Record<string, unknown>
-    const sections = methodResults.flatMap(({ method, result }) =>
-      prefixMethodSections(
-        method,
-        Array.isArray(result.payload.sections) ? result.payload.sections : [],
-      ),
-    )
-    const methodLabels = methods
-      .map((method) => correlationMethodMeta[method].displayName)
-      .join('、')
-
+    const method = normalizeMethod(config)
+    const result = (await executeCorrelationAnalysis(method, input, config)) as NodeResult<Record<string, any>>
     return createReportResult(
       {
-        title: '相关性分析',
+        ...(result.payload ?? {}),
+        title: '单调性分析',
         metadata: {
-          methods,
-          xFields: firstMetrics.xFields,
-          yFields: firstMetrics.yFields,
+          ...((result.payload?.metadata as Record<string, unknown> | undefined) ?? {}),
+          method,
         },
-        sections: [
-          {
-            key: 'summary',
-            type: 'summary',
-            title: '分析摘要',
-            cards: [
-              { label: '分析方法', value: methodLabels },
-              { label: '样本行数', value: firstMetrics.rowCount ?? '-' },
-              { label: 'X 字段数', value: firstMetrics.xFieldCount ?? '-' },
-              { label: 'Y 字段数', value: firstMetrics.yFieldCount ?? '-' },
-              { label: '数值字段数', value: firstMetrics.numericFieldCount ?? '-' },
-            ],
-            content:
-              '本报告把多个相关性方法整合到同一个结果中。Pearson 关注线性关系，Spearman 关注单调关系，Kendall 更适合小样本或排序一致性判断。',
-            help: {
-              summary: '整体对比多个相关性方法的分析范围和样本基础，帮助判断结果是否需要交叉验证。',
-              howToRead: ['优先确认实际运行的方法、样本行数、X 字段数和 Y 字段数，再比较不同方法的排行是否一致。'],
-              cautions: ['不同方法关注的关系类型不同，结论不一致时应回到散点图、回归或业务机理继续验证。'],
-            },
-          },
-          ...sections,
-        ],
       },
       {
         meta: {
+          ...(result.meta ?? {}),
           metrics: {
-            ...firstMetrics,
-            methods,
+            ...((result.meta?.metrics as Record<string, unknown> | undefined) ?? {}),
+            method,
           },
-          methodResults: Object.fromEntries(
-            methodResults.map(({ method, result }) => [method, result.meta]),
-          ),
         },
       },
     )

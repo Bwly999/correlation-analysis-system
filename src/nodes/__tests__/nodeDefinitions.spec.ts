@@ -355,6 +355,11 @@ describe('Node Definitions Execution Logic', () => {
     })
   })
 
+  it('should expose the unified correlation node as monotonicity analysis', () => {
+    expect(correlationAnalysisNode.displayName).toBe('单调性分析')
+    expect(correlationAnalysisNode.description).toBe('分析因子与目标值的单调性关系。')
+  })
+
   describe('split cleaning nodes', () => {
     it('should configure multi-options field selectors for split cleaning nodes', () => {
       expect(
@@ -1346,7 +1351,7 @@ describe('Node Definitions Execution Logic', () => {
       expect(legacy.report.sections[4].content).toContain('f1')
     })
 
-    it('should combine selected correlation methods in one correlation-analysis report', async () => {
+    it('should run one selected method in correlation-analysis and default to pearson', async () => {
       const input = createTableResult([
         { target: 1, f1: 1, f2: 10 },
         { target: 2, f1: 2, f2: 8 },
@@ -1358,7 +1363,6 @@ describe('Node Definitions Execution Logic', () => {
       const result = await correlationAnalysisNode.execute(input, {
         xFields: ['f1', 'f2'],
         yFields: ['target'],
-        methods: ['pearson', 'spearman'],
         heatmapTopN: 2,
         rankingTopN: 2,
       })
@@ -1366,14 +1370,15 @@ describe('Node Definitions Execution Logic', () => {
       const legacy = asLegacy(result)
 
       expect(legacy.viewType).toBe('report')
-      expect(legacy.report.title).toBe('相关性分析')
-      expect(legacy.report.metadata.methods).toEqual(['pearson', 'spearman'])
+      expect(correlationAnalysisNode.properties[0]?.name).toBe('method')
+      expect(correlationAnalysisNode.properties[0]?.type).toBe('options')
+      expect(correlationAnalysisNode.properties[0]?.default).toBe('pearson')
+      expect(legacy.report.title).toBe('单调性分析')
+      expect(legacy.report.metadata.method).toBe('pearson')
       expect(legacy.report.sections[0].type).toBe('summary')
-      expect(legacy.report.sections[0].help?.summary).toContain('整体')
-      expect(legacy.report.sections.find((section: any) => section.key === 'pearson-matrix')?.help?.howToRead[0]).toContain('颜色')
-      expect(legacy.report.sections.some((section: any) => section.key === 'pearson-matrix')).toBe(true)
-      expect(legacy.report.sections.some((section: any) => section.key === 'spearman-ranking')).toBe(true)
-      expect(legacy.metrics.methods).toEqual(['pearson', 'spearman'])
+      expect(legacy.report.sections[1].key).toBe('matrix')
+      expect(legacy.report.sections[1].help?.howToRead[0]).toContain('颜色')
+      expect(legacy.metrics.method).toBe('pearson')
       expect(result.preview?.viewer).toBe('report-viewer')
     })
 

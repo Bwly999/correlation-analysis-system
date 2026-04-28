@@ -35,7 +35,7 @@ describe('NodeSidebar', () => {
     expect(filterLabels).toEqual(['全部', '数据接入', '数据准备', '分析输出'])
     expect(groupTitles).toContain('导入数据')
     expect(groupTitles).toContain('统计分析')
-    expect(wrapper.text()).toContain('Pearson 相关系数')
+    expect(wrapper.text()).toContain('单调性分析')
 
     await wrapper.findAll('[data-testid="category-filter"]')[2]?.trigger('click')
 
@@ -45,7 +45,7 @@ describe('NodeSidebar', () => {
 
     expect(actionGroupTitles).toContain('清洗与筛选')
     expect(actionGroupTitles).not.toContain('统计分析')
-    expect(wrapper.text()).not.toContain('Pearson 相关系数')
+    expect(wrapper.text()).not.toContain('单调性分析')
   })
 
   it('searches by aliases and help usage text, and explains the match reason', async () => {

@@ -557,14 +557,14 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
   ),
   'correlation-analysis': createEntry(
     {
-      summary: '统一执行 Pearson、Spearman 和 Kendall 相关性分析，排查 X 与 Y 的关联强度、方向和稳定性。',
-      whenToUse: ['你想先判断候选因子和连续目标字段之间是否存在明显线性、单调或排序关系。'],
+      summary: '分析因子与目标值的单调性关系，判断因子升高或降低时目标值是否呈稳定变化趋势。',
+      whenToUse: ['你想先判断候选因子和连续目标字段之间是否存在明显单调关系。'],
       inputGuide: ['需要上游提供表格数据。', 'X 字段和 Y 字段都应尽量选择可转成数值的字段。'],
       parameterGuide: [
         {
-          property: 'methods',
+          property: 'method',
           title: '分析方法',
-          content: '默认同时运行 Pearson 和 Spearman；Kendall 更适合小样本或排序一致性验证。',
+          content: '默认使用 Pearson；如果更关注单调趋势而非线性关系，可切换为 Spearman，Kendall 更适合小样本或排序一致性验证。',
         },
         {
           property: 'xFields',
@@ -577,7 +577,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
           content: '选择目标变量，可同时选择多个 Y 并在结果中分别查看排行。',
         },
       ],
-      outputGuide: ['输出结果是相关性分析报告，包含不同方法的热力图、排行、明细和可信提示。'],
+      outputGuide: ['输出结果是单调性分析报告，包含不同方法的热力图、排行、明细和可信提示。'],
       nextSteps: ['若要继续筛选关键因子，可接随机森林特征重要性。', '若要判断线性方向和系数，可继续用多元线性回归。'],
       commonIssues: [
         {
@@ -587,13 +587,13 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       ],
     },
     {
-      useCases: ['连续变量相关性分析', '目标因子排序', '线性和单调关系排查'],
-      keywords: ['相关性分析', 'Pearson', 'Spearman', 'Kendall', '线性相关', '单调关系'],
+      useCases: ['单调性分析', '目标因子排序', '连续变量趋势排查'],
+      keywords: ['单调性分析', '相关性分析', 'Pearson', 'Spearman', 'Kendall', '单调关系'],
       workflowRoles: ['分析终点'],
       inputKinds: ['table'],
       outputKinds: ['report'],
       requiredConfig: ['xFields', 'yFields'],
-      recommendedConfigPatterns: ['默认使用 Pearson + Spearman 起步，只有小样本或排序场景再开启 Kendall。'],
+      recommendedConfigPatterns: ['默认使用 Pearson 起步；关注单调趋势时切换 Spearman，小样本或排序场景可切换 Kendall。'],
       commonMistakes: ['把文本 ID 字段直接作为 X 或 Y', '只看相关性强度而忽略样本量和缺失风险'],
       recommendedPrevNodes: ['data-missing-outlier', 'field-selection', 'data-filter'],
       recommendedNextNodes: ['random-forest-feature-importance', 'multiple-linear-regression', 'data-export'],
