@@ -1,6 +1,6 @@
 ﻿import { describe, it, expect, vi } from 'vitest'
 import { config, mount } from '@vue/test-utils'
-import { defineComponent } from 'vue'
+import { defineComponent, h } from 'vue'
 import ReportViewer from '../viewers/ReportViewer.vue'
 import { provideWorkflowOverlayHost } from '../workflowOverlayHost'
 const { mockExportReportToHtmlFile } = vi.hoisted(() => ({
@@ -34,6 +34,66 @@ vi.mock('primevue/dialog', () => ({
     emits: ['update:visible'],
     template:
       '<div v-if="visible" data-test="dialog-stub" :data-append-to-type="appendTo && typeof appendTo === \'object\' ? \'element\' : String(appendTo ?? \'\')"><slot /><slot name="header" /></div>',
+  }),
+}))
+
+vi.mock('primevue/datatable', () => ({
+  default: defineComponent({
+    name: 'DataTableStub',
+    props: [
+      'value',
+      'scrollable',
+      'scrollHeight',
+      'removableSort',
+      'showGridlines',
+      'stripedRows',
+      'tableStyle',
+    ],
+    setup(props, { slots }) {
+      return () =>
+        h(
+          'div',
+          {
+            'data-test': 'report-json-table',
+            'data-row-count': String((props.value ?? []).length),
+            'data-scrollable': String(props.scrollable),
+            'data-scroll-height': String(props.scrollHeight),
+            'data-removable-sort': String(props.removableSort),
+            'data-show-gridlines': String(props.showGridlines),
+            'data-striped-rows': String(props.stripedRows),
+            'data-table-style': String(props.tableStyle ?? ''),
+          },
+          [
+            slots.default?.(),
+            h(
+              'div',
+              { 'data-test': 'report-json-table-values' },
+              JSON.stringify(props.value ?? []),
+            ),
+          ],
+        )
+    },
+  }),
+}))
+
+vi.mock('primevue/column', () => ({
+  default: defineComponent({
+    name: 'ColumnStub',
+    props: ['field', 'header', 'sortable', 'frozen'],
+    setup(props) {
+      return () =>
+        h(
+          'div',
+          {
+            'data-test': `report-json-column-${props.field ?? props.header}`,
+            'data-field': props.field,
+            'data-header': props.header,
+            'data-sortable': String(props.sortable),
+            'data-frozen': String(props.frozen),
+          },
+          props.header,
+        )
+    },
   }),
 }))
 
@@ -475,12 +535,90 @@ describe('ReportViewer', () => {
     await wrapper.get('[data-test="report-section-toggle-details"]').trigger('click')
 
     expect(wrapper.get('[data-test="report-section-details"]').attributes('data-collapsed')).toBe('false')
-    expect(wrapper.text()).toContain('"correlation": 0.91')
+    expect(wrapper.get('[data-test="report-json-table"]').attributes('data-row-count')).toBe('1')
+    expect(wrapper.get('[data-test="report-json-column-xField"]').attributes('data-sortable')).not.toBe(
+      'false',
+    )
+    expect(wrapper.find('[data-test="report-json-column-yField"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="report-json-column-correlation"]').exists()).toBe(true)
+    expect(wrapper.text()).not.toContain('"correlation": 0.91')
 
     await wrapper.get('[data-test="report-section-toggle-details"]').trigger('click')
 
     expect(wrapper.get('[data-test="report-section-details"]').attributes('data-collapsed')).toBe('true')
     expect(wrapper.text()).not.toContain('"correlation": 0.91')
+  })
+
+  it('renders Chinese JSON detail blocks as a reusable PrimeVue table', async () => {
+    const wrapper = mount(ReportViewer, {
+      props: {
+        data: {
+          report: {
+            title: '方差分析报告',
+            sections: [
+              {
+                key: 'details',
+                type: 'text',
+                title: '分组明细',
+                content: JSON.stringify([
+                  {
+                    分组: 'A',
+                    样本量: 12,
+                    均值: 3.24,
+                    备注: { level: 'warning', values: [1, 2, 3] },
+                  },
+                  {
+                    分组: 'B',
+                    样本量: 9,
+                    均值: 4.8,
+                    备注: null,
+                  },
+                ]),
+              },
+            ],
+          },
+        },
+      },
+    })
+
+    const table = wrapper.get('[data-test="report-json-table"]')
+    expect(table.attributes('data-row-count')).toBe('2')
+    expect(table.attributes('data-scrollable')).not.toBe('false')
+    expect(table.attributes('data-scroll-height')).toBe('360px')
+    expect(wrapper.find('[data-test="report-json-column-分组"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="report-json-column-样本量"]').exists()).toBe(true)
+    expect(wrapper.get('[data-test="report-json-table-values"]').text()).toContain('对象')
+    expect(wrapper.get('[data-test="report-json-table-values"]').text()).not.toContain('warning')
+  })
+
+  it('keeps plain and invalid JSON text sections as readable text', () => {
+    const wrapper = mount(ReportViewer, {
+      props: {
+        data: {
+          report: {
+            title: '普通文本报告',
+            sections: [
+              {
+                key: 'plain',
+                type: 'text',
+                title: '文本说明',
+                content: '这是普通文本，不应该进入表格。',
+              },
+              {
+                key: 'invalid',
+                type: 'text',
+                title: '异常文本',
+                content: '[{ invalid json]',
+              },
+            ],
+          },
+        },
+      },
+    })
+
+    expect(wrapper.find('[data-test="report-json-table"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('这是普通文本，不应该进入表格。')
+    expect(wrapper.text()).toContain('[{ invalid json]')
   })
 
   it('renders regression summary and chart sections with the generic report viewer', () => {
