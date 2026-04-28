@@ -835,6 +835,7 @@ const tryBuildHeuristicPlanResponse = (
   const mentionsCorrelation = /pearson|spearman|kendall|相关|关系/u.test(instructionText)
   const mentionsProfiling = /体检|画像|字段风险|适不适合|适合做相关|头部样本|特征/u.test(instructionText)
   const asksOnlyForFollowup = /还能做什么分析|还能做哪些分析/u.test(instructionText)
+  const canUseProfiling = availableNodeTypes.has('data-profiling')
 
   const operations: WorkflowAiOperation[] = []
   let previousNodeId: string | null = null
@@ -896,9 +897,12 @@ const tryBuildHeuristicPlanResponse = (
   }
 
   const shouldPreferProfiling =
-    mentionsProfiling
-    || (!mentionsCorrelation && (selectedFields.length > 0 || Boolean(sortConfig) || Boolean(limitConfig)))
-    || effectiveNumericFields.length < 2
+    canUseProfiling
+    && (
+      mentionsProfiling
+      || (!mentionsCorrelation && (selectedFields.length > 0 || Boolean(sortConfig) || Boolean(limitConfig)))
+      || effectiveNumericFields.length < 2
+    )
 
   if (!asksOnlyForFollowup) {
     if (mentionsCorrelation && !shouldPreferProfiling) {
@@ -917,7 +921,7 @@ const tryBuildHeuristicPlanResponse = (
               : 'Pearson 相关系数'
         appendNode('node_terminal_1', terminalType, terminalLabel, correlationConfig)
       }
-    } else if (availableNodeTypes.has('data-profiling')) {
+    } else if (canUseProfiling) {
       appendNode('node_terminal_1', 'data-profiling', '数据体检', {
         topFields: Math.min(8, Math.max(3, fields.length)),
       })
@@ -926,7 +930,11 @@ const tryBuildHeuristicPlanResponse = (
 
   const warnings: string[] = []
   if (mentionsCorrelation && effectiveNumericFields.length < 2) {
-    warnings.push('样例数据中的可用数值字段不足，已优先回退到数据体检流程。')
+    warnings.push(
+      canUseProfiling
+        ? '样例数据中的可用数值字段不足，已优先回退到数据体检流程。'
+        : '样例数据中的可用数值字段不足，已仅生成最小预处理流程。',
+    )
   }
   if (asksOnlyForFollowup && filterConfig) {
     warnings.push('筛选条件可能导致结果为空，先保留最小筛选链路以便后续谨慎收敛。')

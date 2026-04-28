@@ -371,6 +371,10 @@ describe('Node Definitions Execution Logic', () => {
       expect(dataCleaningNode.isLegacy).toBe(true)
     })
 
+    it('should mark data-profiling as hidden from new creation', () => {
+      expect(dataProfilingNode.isLegacy).toBe(true)
+    })
+
     it('should support manual range filtering with multiple AND rules', async () => {
       const input = createTableResult([
         { abc: 1.5, ef: 10 },

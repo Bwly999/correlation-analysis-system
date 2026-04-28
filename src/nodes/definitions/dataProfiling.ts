@@ -204,6 +204,7 @@ const stableSerializeRow = (row: Record<string, unknown>) => {
 export const dataProfilingNode: NodeDefinition = {
   name: 'data-profiling',
   displayName: '数据体检',
+  isLegacy: true,
   icon: 'scan-search',
   category: 'action',
   description: '在分析前自动识别字段类型、缺失风险、常量列和疑似 ID 字段，生成数据画像报告。',

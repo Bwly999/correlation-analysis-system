@@ -52,7 +52,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       requiredConfig: ['fileData'],
       recommendedConfigPatterns: ['默认自动识别格式并开启自动转换数字。'],
       commonMistakes: ['忘记重新选择文件导致运行时文件对象失效。'],
-      recommendedNextNodes: ['data-dedup', 'data-filter', 'data-profiling'],
+      recommendedNextNodes: ['data-dedup', 'data-filter', 'data-missing-outlier'],
     },
   ),
   'manual-json-import': createEntry(
@@ -105,7 +105,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
         },
       ],
       outputGuide: ['输出结果是表格数据，适合继续做清洗、合并和分析。'],
-      nextSteps: ['如果因子很多，建议先用数据体检或去重/缺失处理确认字段质量。'],
+      nextSteps: ['如果因子很多，建议先用去重/缺失处理确认字段质量。'],
       commonIssues: [
         {
           title: '无法获取数据',
@@ -121,7 +121,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       requiredConfig: ['productName', 'selectedFactors', 'fetchMode', 'selectedProcesses'],
       recommendedConfigPatterns: ['先选产品和因子，再补运行时查询条件。'],
       commonMistakes: ['未收到宿主系统 token。', '未选择任何因子。'],
-      recommendedNextNodes: ['data-dedup', 'data-merge', 'data-profiling'],
+      recommendedNextNodes: ['data-dedup', 'data-merge', 'data-missing-outlier'],
     },
   ),
   'data-cleaning': createEntry(
@@ -435,7 +435,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       inputKinds: ['table'],
       outputKinds: ['table', 'tableCollection'],
       recommendedPrevNodes: ['file-import', 'neighbor-system', 'data-cleaning'],
-      recommendedNextNodes: ['chart-display', 'pearson', 'data-profiling'],
+      recommendedNextNodes: ['chart-display', 'pearson', 'data-missing-outlier'],
     },
   ),
   'field-selection': createEntry(
@@ -894,7 +894,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       requiredConfig: ['targetField'],
       recommendedConfigPatterns: ['先明确分类标签，再选择多个候选因子做一轮单因子筛查。'],
       commonMistakes: ['目标标签只有一个类别仍尝试筛查', '把 ID 类字段直接当成高价值因子解释'],
-      recommendedPrevNodes: ['data-cleaning', 'field-selection', 'data-profiling'],
+      recommendedPrevNodes: ['data-cleaning', 'field-selection', 'data-missing-outlier'],
       recommendedNextNodes: ['logistic-regression-classification', 'chart-display', 'data-export'],
     },
   ),

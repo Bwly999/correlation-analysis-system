@@ -264,26 +264,6 @@ const SERVER_SAFE_NODE_CATALOG: WorkflowAiNodeCatalogItem[] = [
     },
   }),
   createCatalogItem({
-    name: 'data-profiling',
-    displayName: '数据体检',
-    category: 'action',
-    description: '识别字段类型、缺失风险和疑似异常字段，输出数据画像报告。',
-    properties: [
-      createProperty('targetField', '目标变量', 'options', {
-        defaultValue: '',
-        description: '可选；填写后会重点提示目标字段的可用性和风险。',
-      }),
-      createProperty('topFields', '重点展示字段数', 'number', {
-        defaultValue: 8,
-        description: '按风险优先级展示前 N 个字段。',
-      }),
-    ],
-    assistantHints: {
-      keywords: ['数据体检', '字段画像', '风险', '缺失率'],
-      useCases: ['做数据体检', '检查字段风险', '判断目标字段是否适合分析'],
-    },
-  }),
-  createCatalogItem({
     name: 'data-aggregation',
     displayName: '数据聚合',
     category: 'action',

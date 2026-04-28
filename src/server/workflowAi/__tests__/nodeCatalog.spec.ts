@@ -36,6 +36,7 @@ describe('buildServerWorkflowAiNodeCatalog', () => {
       ]),
     )
     expect(catalog.some((item) => item.name === 'data-cleaning')).toBe(false)
+    expect(catalog.some((item) => item.name === 'data-profiling')).toBe(false)
   })
 
   it('exposes static property options for server-safe MCP introspection', async () => {
