@@ -96,4 +96,12 @@ describe('buildServerWorkflowAiNodeCatalog', () => {
       ]),
     })
   })
+
+  it('exposes manual range properties for data-missing-outlier', () => {
+    const item = getServerNodeCatalogItem('data-missing-outlier')
+    expect(item).toBeTruthy()
+    expect(item?.properties.some((property) => property.name === 'manualRangeRules')).toBe(true)
+    const outlierMethod = item?.properties.find((property) => property.name === 'outlierMethod')
+    expect(outlierMethod?.description).toContain('manual_range')
+  })
 })

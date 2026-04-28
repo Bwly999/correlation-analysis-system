@@ -219,7 +219,12 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
         {
           property: 'outlierMethod',
           title: '异常值检测',
-          content: '默认 IQR 四分位距；如果不需要异常处理可切换为无。',
+          content: '默认 IQR 四分位距；也支持手动区间模式配置多组字段上下限过滤。',
+        },
+        {
+          property: 'manualRangeRules',
+          title: '手动区间规则',
+          content: '可配置多组规则；每组支持多字段+上下限（> 下限且 < 上限），规则间与同组字段均按 AND 生效。',
         },
       ],
       outputGuide: ['输出结果仍是表格数据，并附带缺失与异常处理统计。'],
@@ -232,8 +237,8 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       ],
     },
     {
-      useCases: ['删除缺失样本', '缺失值填充', '异常值剔除'],
-      keywords: ['缺失值', '空值', '异常值', 'IQR', '百分位剔除'],
+      useCases: ['删除缺失样本', '缺失值填充', '异常值剔除', '按字段区间过滤'],
+      keywords: ['缺失值', '空值', '异常值', 'IQR', '百分位剔除', '上下限', '区间过滤'],
       workflowRoles: ['数据准备'],
       inputKinds: ['table'],
       outputKinds: ['table'],

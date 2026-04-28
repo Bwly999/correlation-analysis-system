@@ -41,6 +41,7 @@ export const dataMissingOutlierNode: NodeDefinition = {
       options: [
         { name: 'IQR 四分位距', value: 'iqr' },
         { name: '百分比剔除', value: 'percentile' },
+        { name: '手动区间', value: 'manual_range' },
         { name: '无', value: 'none' },
       ],
       description: '默认启用 IQR 四分位距检测。',
@@ -58,6 +59,40 @@ export const dataMissingOutlierNode: NodeDefinition = {
       type: 'number',
       default: 1,
       displayIf: (config) => config.outlierMethod === 'percentile',
+    },
+    {
+      name: 'manualRangeRules',
+      displayName: '手动区间规则',
+      type: 'collection',
+      default: [],
+      displayIf: (config) => config.outlierMethod === 'manual_range',
+      description: '可配置多组字段区间规则；组与组、同组字段之间均为 AND。',
+      properties: [
+        {
+          name: 'fields',
+          displayName: '规则字段',
+          type: 'multi-options',
+          default: [],
+          useUpstreamFactors: true,
+          editable: true,
+          forceInput: true,
+          description: '可多选字段；同组字段均需满足区间。',
+        },
+        {
+          name: 'lowerBound',
+          displayName: '下限(>)',
+          type: 'number',
+          default: null,
+          description: '留空表示不设下限。',
+        },
+        {
+          name: 'upperBound',
+          displayName: '上限(<)',
+          type: 'number',
+          default: null,
+          description: '留空表示不设上限。',
+        },
+      ],
     },
   ],
   execute: async (input, config) => {
@@ -84,8 +119,11 @@ export const dataMissingOutlierNode: NodeDefinition = {
       missingFilled: 0,
       rowsRemovedByMissing: 0,
       outliersRemoved: 0,
+      rowsRemovedByManualRange: 0,
       missingValueStrategy: config.missingValueStrategy || 'drop',
       outlierMethod: config.outlierMethod || 'iqr',
+      manualRangeRuleCount: 0,
+      manualRangeRulesApplied: 0,
     }
 
     if (config.missingValueStrategy !== 'none') {
@@ -127,7 +165,54 @@ export const dataMissingOutlierNode: NodeDefinition = {
       }
     }
 
-    if (config.outlierMethod !== 'none' && data.length > 0) {
+    if (config.outlierMethod === 'manual_range' && data.length > 0) {
+      const rawRules = Array.isArray(config.manualRangeRules)
+        ? config.manualRangeRules.filter(
+            (rule: unknown): rule is Record<string, unknown> =>
+              Boolean(rule) && typeof rule === 'object' && !Array.isArray(rule),
+          )
+        : []
+      stats.manualRangeRuleCount = rawRules.length
+
+      const normalizedRules = rawRules
+        .map((rule) => {
+          const fields = Array.isArray(rule.fields)
+            ? rule.fields.filter((field: unknown): field is string => typeof field === 'string' && field.trim().length > 0)
+            : []
+          const lower =
+            typeof rule.lowerBound === 'number' && Number.isFinite(rule.lowerBound)
+              ? rule.lowerBound
+              : null
+          const upper =
+            typeof rule.upperBound === 'number' && Number.isFinite(rule.upperBound)
+              ? rule.upperBound
+              : null
+
+          return { fields, lower, upper }
+        })
+        .filter((rule) => rule.fields.length > 0 && (rule.lower !== null || rule.upper !== null))
+
+      stats.manualRangeRulesApplied = normalizedRules.length
+
+      if (normalizedRules.length > 0) {
+        const prevCount = data.length
+        data = data.filter((row: Record<string, unknown>) =>
+          normalizedRules.every((rule) =>
+            rule.fields.every((field) => {
+              const value =
+                typeof row[field] === 'number'
+                  ? row[field]
+                  : Number.parseFloat(String(row[field]))
+              if (!Number.isFinite(value)) return false
+              if (rule.lower !== null && value <= rule.lower) return false
+              if (rule.upper !== null && value >= rule.upper) return false
+              return true
+            }),
+          ),
+        )
+        stats.rowsRemovedByManualRange = prevCount - data.length
+      }
+    } else if (config.outlierMethod !== 'none' && data.length > 0) {
       const prevCount = data.length
 
       targetFields.forEach((field: string) => {

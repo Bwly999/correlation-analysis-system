@@ -370,6 +370,49 @@ describe('Node Definitions Execution Logic', () => {
     it('should mark legacy data-cleaning as hidden from new creation', () => {
       expect(dataCleaningNode.isLegacy).toBe(true)
     })
+
+    it('should support manual range filtering with multiple AND rules', async () => {
+      const input = createTableResult([
+        { abc: 1.5, ef: 10 },
+        { abc: 1.8, ef: 8 },
+        { abc: 2.2, ef: 11 },
+        { abc: 1.2, ef: 12 },
+      ])
+
+      const result = await dataMissingOutlierNode.execute(input, {
+        missingValueStrategy: 'none',
+        outlierMethod: 'manual_range',
+        manualRangeRules: [
+          { fields: ['abc'], lowerBound: 1, upperBound: 2 },
+          { fields: ['ef'], lowerBound: 9 },
+        ],
+      })
+
+      const legacy = asLegacy(result)
+      expect(legacy.data).toEqual([
+        { abc: 1.5, ef: 10 },
+        { abc: 1.2, ef: 12 },
+      ])
+      expect(legacy.stats.rowsRemovedByManualRange).toBe(2)
+      expect(legacy.stats.manualRangeRulesApplied).toBe(2)
+    })
+
+    it('should use strict bounds in manual range mode', async () => {
+      const input = createTableResult([
+        { abc: 1, ef: 9 },
+        { abc: 2, ef: 9 },
+        { abc: 1.5, ef: 9 },
+      ])
+
+      const result = await dataMissingOutlierNode.execute(input, {
+        missingValueStrategy: 'none',
+        outlierMethod: 'manual_range',
+        manualRangeRules: [{ fields: ['abc'], lowerBound: 1, upperBound: 2 }],
+      })
+
+      const legacy = asLegacy(result)
+      expect(legacy.data).toEqual([{ abc: 1.5, ef: 9 }])
+    })
   })
 
   describe('data-profiling', () => {

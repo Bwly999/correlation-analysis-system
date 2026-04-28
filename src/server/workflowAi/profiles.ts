@@ -747,11 +747,12 @@ const inferDedupConfig = (instructionText: string) => {
 const inferMissingOutlierConfig = (instructionText: string) => {
   const handleMissing = /缺失值|空值|缺失字段|空白值|空白数据/u.test(instructionText)
   const handleOutlier = /异常值|离群点|极端值|iqr|百分位/u.test(instructionText)
+  const manualRange = /上限|下限|区间|阈值|范围/u.test(instructionText)
   if (!handleMissing && !handleOutlier) return null
 
   return {
     missingValueStrategy: handleMissing ? 'drop' : 'none',
-    outlierMethod: handleOutlier ? 'iqr' : 'none',
+    outlierMethod: handleOutlier ? (manualRange ? 'manual_range' : 'iqr') : 'none',
   }
 }
 

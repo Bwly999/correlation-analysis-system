@@ -219,7 +219,7 @@ const SERVER_SAFE_NODE_CATALOG: WorkflowAiNodeCatalogItem[] = [
       }),
       createProperty('outlierMethod', '异常值检测', 'options', {
         defaultValue: 'iqr',
-        description: '可选 iqr、percentile、none。',
+        description: '可选 iqr、percentile、manual_range、none。',
       }),
       createProperty('iqrK', 'IQR 系数', 'number', {
         defaultValue: 1.5,
@@ -228,6 +228,10 @@ const SERVER_SAFE_NODE_CATALOG: WorkflowAiNodeCatalogItem[] = [
       createProperty('percentile', '剔除比例(%)', 'number', {
         defaultValue: 1,
         description: 'outlierMethod=percentile 时生效。',
+      }),
+      createProperty('manualRangeRules', '手动区间规则', 'collection', {
+        defaultValue: [],
+        description: 'outlierMethod=manual_range 时生效；可配置多组字段上下限过滤规则（> 下限且 < 上限）。',
       }),
     ],
     assistantHints: {
