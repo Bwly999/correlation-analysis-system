@@ -8,6 +8,106 @@ import pandas as pd
 
 
 class XgboostShapAnalysisTests(unittest.TestCase):
+    def test_insight_engine_uses_xgboost_native_contributions_before_shap_fallbacks(self):
+        from backend.algorithm import robust_insight_tool as tool
+
+        X = pd.DataFrame(
+            {
+                'f1': [1.0, 2.0, 3.0],
+                'f2': [4.0, 5.0, 6.0],
+            }
+        )
+        y = pd.Series([10.0, 20.0, 30.0], name='target')
+        contribution_values = np.array(
+            [
+                [0.1, 0.2, 1.0],
+                [0.3, 0.4, 1.0],
+                [0.5, 0.6, 1.0],
+            ]
+        )
+        calls = {'dmatrix_feature_names': None, 'explainer': 0}
+
+        class FakeDMatrix:
+            def __init__(self, data, feature_names=None):
+                calls['dmatrix_feature_names'] = feature_names
+                self.data = data
+
+        class FakeBooster:
+            def predict(self, dmatrix, pred_contribs=False):
+                self.pred_contribs = pred_contribs
+                return contribution_values
+
+        class FakeModel:
+            def __init__(self):
+                self.booster = FakeBooster()
+
+            def get_booster(self):
+                return self.booster
+
+        class FakeExplanation:
+            def __init__(self, values, base_values, data, feature_names):
+                self.values = values
+                self.base_values = base_values
+                self.data = data
+                self.feature_names = feature_names
+
+        def fail_if_shap_explainer_is_used(*args, **kwargs):
+            calls['explainer'] += 1
+            raise AssertionError('SHAP fallback should not run when native XGBoost contributions are available')
+
+        with patch.object(tool.xgb, 'DMatrix', FakeDMatrix), \
+             patch.object(tool.shap, 'Explanation', FakeExplanation), \
+             patch.object(tool.shap, 'Explainer', side_effect=fail_if_shap_explainer_is_used), \
+             patch.object(tool.shap, 'TreeExplainer', side_effect=fail_if_shap_explainer_is_used):
+            X_sample, y_sample, shap_values = tool.InsightEngine(FakeModel(), X).compute(y)
+
+        np.testing.assert_array_equal(X_sample.values, X.values)
+        np.testing.assert_array_equal(y_sample.values, y.values)
+        np.testing.assert_array_equal(shap_values.values, contribution_values[:, :-1])
+        np.testing.assert_array_equal(shap_values.base_values, contribution_values[:, -1])
+        self.assertEqual(shap_values.feature_names, ['f1', 'f2'])
+        self.assertEqual(calls['dmatrix_feature_names'], ['f1', 'f2'])
+        self.assertEqual(calls['explainer'], 0)
+
+    def test_model_core_sets_hist_tree_method_for_default_and_tuning_models(self):
+        from backend.algorithm import robust_insight_tool as tool
+
+        captured_regressor_kwargs = []
+        captured_search_base_kwargs = []
+
+        class FakeRegressor:
+            def __init__(self, **kwargs):
+                captured_regressor_kwargs.append(kwargs)
+                self.kwargs = kwargs
+
+            def fit(self, X, y, eval_set=None, verbose=False):
+                return self
+
+            def predict(self, X):
+                return np.zeros(len(X))
+
+        class FakeSearch:
+            def __init__(self, estimator, **kwargs):
+                captured_search_base_kwargs.append(estimator.kwargs)
+                self.best_estimator_ = estimator
+                self.best_params_ = {}
+
+            def fit(self, X, y):
+                return self
+
+        X = pd.DataFrame({'f1': [1.0, 2.0, 3.0, 4.0], 'f2': [2.0, 3.0, 4.0, 5.0]})
+        y = pd.Series([1.0, 2.0, 3.0, 4.0])
+
+        with patch.object(tool.xgb, 'XGBRegressor', FakeRegressor), \
+             patch.object(tool, 'RandomizedSearchCV', FakeSearch), \
+             patch.object(tool, 'train_test_split', return_value=(X, X, y, y)), \
+             patch.object(tool, 'r2_score', return_value=0.1), \
+             patch.object(tool, 'mean_absolute_error', return_value=1.0):
+            tool.ModelCore().train(X, y)
+
+        self.assertEqual(captured_regressor_kwargs[0]['tree_method'], 'hist')
+        self.assertEqual(captured_search_base_kwargs[0]['tree_method'], 'hist')
+
     def test_analyze_xgboost_shap_falls_back_to_local_algorithm_package(self):
         from backend.algorithms.xgboost_shap_analysis import analyze_xgboost_shap
 

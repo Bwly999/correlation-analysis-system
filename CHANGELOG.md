@@ -4,6 +4,11 @@
 
 ### 修复 (Fixed)
 
+- **优化 XGBoost + SHAP 分析节点性能与依赖兼容性**:
+  - 后端优先使用 XGBoost 原生 `pred_contribs=True` 计算 TreeSHAP 贡献值，避免 SHAP 回退到慢速通用解释器。
+  - XGBoost 训练显式使用 `tree_method='hist'`，并补充后端回归测试覆盖原生贡献值路径。
+  - 新增项目根目录 `requirements.txt`，固定 `xgboost==3.0.5` 与 `shap==0.49.1` 等 Python 后端依赖，保证原生 `TreeExplainer` 兼容。
+
 - **优化分析报告 JSON 明细展示体验**:
   - 报告正文中的 JSON 数组 / 对象文本块会自动转换为 PrimeVue 表格展示，覆盖 Pearson、方差分析、PCA、VIF 等分析详情中的明细区块。
   - 普通文本与无法解析的 JSON 内容继续按原文本展示，并补充报告查看器回归测试防止明细再次退化为长 JSON 文本。

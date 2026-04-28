@@ -335,6 +335,7 @@ class ModelCore:
             n_estimators=AppConfig.MODEL_ESTIMATORS,
             learning_rate=AppConfig.MODEL_LEARNING_RATE,
             max_depth=AppConfig.MODEL_MAX_DEPTH,
+            tree_method='hist',
             n_jobs=-1,
             random_state=AppConfig.RANDOM_SEED,
             importance_type='total_gain',
@@ -371,7 +372,12 @@ class ModelCore:
             # 确定 CV 评分标准
             scoring_metric = 'r2' if metric == 'r2' else 'neg_mean_absolute_error'
             
-            xgb_base = xgb.XGBRegressor(n_jobs=-1, random_state=AppConfig.RANDOM_SEED, importance_type='total_gain')
+            xgb_base = xgb.XGBRegressor(
+                n_jobs=-1,
+                random_state=AppConfig.RANDOM_SEED,
+                importance_type='total_gain',
+                tree_method='hist',
+            )
             
             search = RandomizedSearchCV(
                 xgb_base, 
@@ -443,6 +449,28 @@ class InsightEngine:
                 X_sample = self.X.loc[sample_indices]
                 if y is not None:
                     y_sample = y.loc[sample_indices]
+
+            try:
+                booster = self.model.get_booster()
+                dmatrix = xgb.DMatrix(X_sample, feature_names=X_sample.columns.tolist())
+                contributions = booster.predict(dmatrix, pred_contribs=True)
+                if contributions.ndim != 2 or contributions.shape[1] != len(X_sample.columns) + 1:
+                    raise ValueError(
+                        f"XGBoost 原生 SHAP 返回形状异常: {contributions.shape}, "
+                        f"期望列数 {len(X_sample.columns) + 1}"
+                    )
+                return (
+                    X_sample,
+                    y_sample,
+                    shap.Explanation(
+                        values=contributions[:, :-1],
+                        base_values=contributions[:, -1],
+                        data=X_sample.to_numpy(),
+                        feature_names=X_sample.columns.tolist(),
+                    ),
+                )
+            except Exception as native_error:
+                logger.warning(f"XGBoost 原生 SHAP 贡献值计算失败，回退到 SHAP Explainer: {native_error}")
 
             try:
                 explainer = shap.Explainer(self.model, X_sample)
