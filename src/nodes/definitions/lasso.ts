@@ -202,6 +202,10 @@ export const lassoNode: NodeDefinition = {
               { label: 'R²', value: normalized.summary.r2 },
               { label: 'MAE', value: normalized.summary.mae },
             ],
+            help: {
+              summary: '展示 Lasso 模型拟合质量、正则强度和最终入选特征数量。',
+              howToRead: ['先看 R²、MAE 和入选特征数；入选过少或拟合过弱时不要直接作为筛因子结论。'],
+            },
           },
           {
             key: 'coefficients',
@@ -209,12 +213,21 @@ export const lassoNode: NodeDefinition = {
             type: 'chart',
             option: buildCoefficientChartOption(normalized.coefficients),
             items: normalized.coefficients,
+            help: {
+              summary: '展示 Lasso 保留下来的非零系数及其方向，用于筛选稀疏关键因子。',
+              howToRead: ['非零且绝对值大的因子更值得优先关注，正负号表示在线性模型中的方向。'],
+              cautions: ['Lasso 会在相关因子中选择代表项，未入选不代表业务上完全无影响。'],
+            },
           },
           {
             key: 'path',
             title: '正则路径',
             type: 'chart',
             option: buildPathChartOption(normalized.path),
+            help: {
+              summary: '展示正则强度变化时各因子系数如何收缩到 0。',
+              howToRead: ['越晚收缩到 0 的因子越稳定，路径剧烈交叉说明因子之间可能存在替代关系。'],
+            },
           },
           {
             key: 'selected-features',
@@ -224,6 +237,10 @@ export const lassoNode: NodeDefinition = {
               normalized.selectedFeatures.length > 0
                 ? `本次 Lasso 共筛出 ${normalized.selectedFeatures.length} 个重点因子：${normalized.selectedFeatures.join('、')}`
                 : '本次 Lasso 未筛出非零系数特征，建议检查目标字段、样本量或特征有效性。',
+            help: {
+              summary: '汇总本次 Lasso 最终保留的候选关键因子，便于进入后续建模或设计复核。',
+              howToRead: ['优先把这些因子与相关性、随机森林或 SHAP 的高贡献因子交叉对比。'],
+            },
           },
         ],
       },

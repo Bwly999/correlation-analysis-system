@@ -337,6 +337,10 @@ export const vifNode: NodeDefinition = {
               { label: '需关注字段数', value: warningCount },
             ],
             content: `本次基于 ${completeRows.length} 行完整样本检测 ${factorNames.length} 个字段的共线性风险，VIF 越高表示该字段越可能与其他字段存在冗余解释关系。`,
+            help: {
+              summary: '概览入模字段之间的多重共线性风险，避免后续回归系数被冗余变量扭曲。',
+              howToRead: ['先看最高 VIF 和需关注字段数；VIF 越高说明该字段越容易被其他字段解释。'],
+            },
           },
           {
             key: 'ranking',
@@ -344,12 +348,21 @@ export const vifNode: NodeDefinition = {
             title: 'VIF 排序',
             option: buildBarChartOption(items),
             items,
+            help: {
+              summary: '按 VIF 从高到低展示共线性最严重的字段。',
+              howToRead: ['优先处理 VIF 高的字段，可删除、合并或用 PCA/业务指标替代。'],
+              cautions: ['VIF 只诊断 X 之间的冗余，不评价 X 与 Y 的影响强弱。'],
+            },
           },
           {
             key: 'risks',
             type: 'risk-list',
             title: '共线性风险提示',
             items: risks,
+            help: {
+              summary: '提示哪些字段组合可能影响回归解释和参数稳定性。',
+              howToRead: ['先处理高风险字段，再进入多元线性回归或逻辑回归。'],
+            },
           },
           {
             key: 'details',
@@ -366,6 +379,10 @@ export const vifNode: NodeDefinition = {
               null,
               2,
             ),
+            help: {
+              summary: '列出每个字段的 VIF、容忍度和拟合 R²，便于做字段取舍记录。',
+              howToRead: ['容忍度越低、VIF 越高，共线性越严重。'],
+            },
           },
         ],
       },

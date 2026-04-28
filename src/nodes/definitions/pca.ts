@@ -375,18 +375,31 @@ export const pcaNode: NodeDefinition = {
               },
             ],
             content: `本次 PCA 使用 ${metrics.sampleCount} 行完整样本，对 ${metrics.featureCount} 个字段进行降维分析；前 ${metrics.componentCount} 个主成分用于展示主要方差结构。`,
+            help: {
+              summary: '概览 PCA 使用的字段、样本和主成分数量，判断降维结果是否有足够数据支撑。',
+              howToRead: ['优先看前几项累计解释方差，判断少数主成分能否覆盖主要信息。'],
+            },
           },
           {
             key: 'variance',
             type: 'chart',
             title: '解释方差占比',
             option: buildBarChartOption(metrics),
+            help: {
+              summary: '展示每个主成分解释原始字段总方差的比例。',
+              howToRead: ['柱越高代表该主成分保留的信息越多；累计占比可用于决定保留几个主成分。'],
+            },
           },
           {
             key: 'loadings',
             type: 'chart',
             title: '字段载荷热力图',
             option: buildLoadingHeatmapOption(loadings, factorNames, componentNames),
+            help: {
+              summary: '展示原始字段对各主成分的贡献方向和强度。',
+              howToRead: ['载荷绝对值越大，说明该字段越能代表该主成分；正负号表示方向相反。'],
+              cautions: ['主成分是组合变量，可解释性需要结合业务字段含义命名。'],
+            },
           },
           {
             key: 'details',
@@ -401,6 +414,10 @@ export const pcaNode: NodeDefinition = {
               null,
               2,
             ),
+            help: {
+              summary: '以明细形式列出每个字段在每个主成分上的载荷，方便复核和导出。',
+              howToRead: ['按主成分筛选绝对载荷最高的字段，用于给主成分做业务解释。'],
+            },
           },
         ],
       },

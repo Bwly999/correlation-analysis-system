@@ -564,6 +564,11 @@ export const classificationFactorScreeningNode: NodeDefinition<unknown, Screenin
               significantCount > 0
                 ? `共识别到 ${significantCount} 个显著因子，建议优先将这些因子带入逻辑回归分类分析。`
                 : '当前未识别到达到阈值的显著因子，建议检查样本量、类别分布或放宽筛查范围。',
+            help: {
+              summary: '概览分类目标下每个候选因子的单因素显著性筛查结果。',
+              howToRead: ['先看显著因子数和阈值，再进入排行查看哪些因子与类别差异最明显。'],
+              cautions: ['单因素显著只说明与类别有关联，不能替代多因素分类模型。'],
+            },
           },
           {
             key: 'ranking',
@@ -571,6 +576,10 @@ export const classificationFactorScreeningNode: NodeDefinition<unknown, Screenin
             title: '因子显著性排行',
             option: buildRankingChartOption(sortedResults, maxResultCount),
             items: sortedResults.slice(0, maxResultCount),
+            help: {
+              summary: '按统计显著性和效应量展示最值得进入分类模型的候选因子。',
+              howToRead: ['优先关注 P 值低且效应量高的因子，同时注意因子类型和检验方法。'],
+            },
           },
           {
             key: 'details',
@@ -590,12 +599,20 @@ export const classificationFactorScreeningNode: NodeDefinition<unknown, Screenin
               null,
               2,
             ),
+            help: {
+              summary: '列出每个因子的检验方法、统计量、P 值、效应量和显著性判断。',
+              howToRead: ['结合方法列区分数值因子和类别因子，不同检验的统计量不可简单横向比较。'],
+            },
           },
           {
             key: 'risks',
             type: 'risk-list',
             title: '结果可信提示',
             items: risks,
+            help: {
+              summary: '提示类别分布、样本量和检验适用性问题。',
+              howToRead: ['优先修正类别极不均衡或样本不足问题，再用排行筛选入模因子。'],
+            },
           },
         ],
       },

@@ -395,12 +395,21 @@ export const anovaNode: NodeDefinition = {
               pValue < 0.05
                 ? `当前结果显示不同 ${groupField} 分组在 ${targetField} 上存在显著均值差异（p < 0.05），建议继续结合组均值和箱线图判断差异方向与业务意义。`
                 : `当前结果未显示不同 ${groupField} 分组在 ${targetField} 上存在显著均值差异（p ≥ 0.05），建议结合样本量和分布形态继续判断是否需要分组重构。`,
+            help: {
+              summary: '判断不同分组在目标数值字段上的均值是否存在显著差异。',
+              howToRead: ['先看 P 值是否低于阈值，再结合 F 值、效应量和分组样本量判断差异是否有业务意义。'],
+              cautions: ['显著差异不说明哪个分组最佳，也不直接证明分组字段导致了目标变化。'],
+            },
           },
           {
             key: 'group-means',
             type: 'chart',
             title: '分组均值对比',
             option: buildMeanChartOption(groups),
+            help: {
+              summary: '对比各分组目标字段的平均水平，帮助判断差异方向。',
+              howToRead: ['均值高低展示分组中心差异，需结合箱线图确认分布重叠和离散程度。'],
+            },
           },
           {
             key: 'distribution',
@@ -415,12 +424,20 @@ export const anovaNode: NodeDefinition = {
               targetField,
               groups,
             ),
+            help: {
+              summary: '展示各分组目标字段的分布、中位数、离散程度和异常点。',
+              howToRead: ['看箱体位置、宽度和离群点；箱体重叠严重时，即使均值不同也需谨慎解读。'],
+            },
           },
           {
             key: 'risks',
             type: 'risk-list',
             title: '结果可信提示',
             items: risks,
+            help: {
+              summary: '提示样本量、分组不均衡或方差差异等可能影响方差分析可信度的问题。',
+              howToRead: ['优先处理样本过少或分组极不均衡的问题，再采纳显著性结论。'],
+            },
           },
           {
             key: 'details',
@@ -437,6 +454,10 @@ export const anovaNode: NodeDefinition = {
               null,
               2,
             ),
+            help: {
+              summary: '列出每个分组的样本量、均值和离散统计量，便于复核。',
+              howToRead: ['重点比较样本量、均值、标准差和方差，识别不稳定分组。'],
+            },
           },
         ],
       },

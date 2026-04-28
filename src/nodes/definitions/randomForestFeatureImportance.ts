@@ -257,6 +257,11 @@ export const randomForestFeatureImportanceNode: NodeDefinition = {
               { label: '树数量', value: normalized.summary.nEstimators },
               { label: '最大深度', value: normalized.summary.maxDepth },
             ],
+            help: {
+              summary: '展示随机森林模型的样本、特征和拟合质量，用来判断本次重要性排序是否具备参考基础。',
+              howToRead: ['先看 R² 和 MAE 判断模型是否能解释 Y，再看样本量和特征数是否足够支撑排序。'],
+              cautions: ['模型拟合较弱时，重要性排序只能作为探索线索，不适合作为拦截规则依据。'],
+            },
           },
           {
             key: 'importance',
@@ -264,6 +269,11 @@ export const randomForestFeatureImportanceNode: NodeDefinition = {
             type: 'chart',
             option: buildImportanceChartOption(normalized.importance),
             items: normalized.importance,
+            help: {
+              summary: '按随机森林对预测误差的贡献排序，帮助确定哪些因子值得优先关注。',
+              howToRead: ['条形越长表示该因子越能提升模型预测 Y 的能力，可用于缩小关键因子排查范围。'],
+              cautions: ['重要性高不等于正向影响，也不等于因果；若要判断调高或调低方向，请结合 SHAP、相关性或回归系数。'],
+            },
           },
           {
             key: 'cumulative-importance',
@@ -271,18 +281,31 @@ export const randomForestFeatureImportanceNode: NodeDefinition = {
             type: 'chart',
             option: buildCumulativeChartOption(normalized.cumulativeImportance),
             items: normalized.cumulativeImportance,
+            help: {
+              summary: '展示从高到低累计覆盖了多少模型重要性，用来判断少数因子是否已解释主要预测贡献。',
+              howToRead: ['观察曲线达到 80% 或 90% 时需要多少个因子，数量越少说明头部因子越集中。'],
+              cautions: ['累计覆盖率是模型内部贡献分布，不等于业务上只控制这些因子就一定能改变 Y。'],
+            },
           },
           {
             key: 'predictions',
             title: '预测值对比',
             type: 'chart',
             option: buildRegressionFitChartOption(normalized.predictions),
+            help: {
+              summary: '对比模型预测值和真实 Y，验证重要性排序背后的模型是否真的能预测目标。',
+              howToRead: ['点越贴近理想拟合线，说明模型预测越稳定；系统性偏离代表模型仍缺关键变量或关系未学到。'],
+            },
           },
           {
             key: 'risks',
             title: '结果解读提示',
             type: 'risk-list',
             items: normalized.risks,
+            help: {
+              summary: '提示随机森林重要性排序中可能导致误读的集中度、样本或模型风险。',
+              howToRead: ['先处理高风险提示，再把高重要性因子交给 SHAP、相关性或回归节点确认方向和稳定性。'],
+            },
           },
         ],
       },

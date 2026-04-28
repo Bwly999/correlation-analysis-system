@@ -157,6 +157,11 @@ export const correlationAnalysisNode: NodeDefinition<unknown, CorrelationAnalysi
             ],
             content:
               '本报告把多个相关性方法整合到同一个结果中。Pearson 关注线性关系，Spearman 关注单调关系，Kendall 更适合小样本或排序一致性判断。',
+            help: {
+              summary: '整体对比多个相关性方法的分析范围和样本基础，帮助判断结果是否需要交叉验证。',
+              howToRead: ['优先确认实际运行的方法、样本行数、X 字段数和 Y 字段数，再比较不同方法的排行是否一致。'],
+              cautions: ['不同方法关注的关系类型不同，结论不一致时应回到散点图、回归或业务机理继续验证。'],
+            },
           },
           ...sections,
         ],

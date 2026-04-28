@@ -294,6 +294,10 @@ export const logisticRegressionClassificationNode: NodeDefinition<
               { label: '特征数', value: normalized.summary.featureCount },
               { label: '类别数', value: normalized.summary.classCount },
             ],
+            help: {
+              summary: '展示逻辑回归分类模型的目标、样本、特征和类别规模。',
+              howToRead: ['先确认类别数和样本量是否足够，再阅读分类指标和混淆矩阵。'],
+            },
           },
           {
             key: 'metrics',
@@ -309,12 +313,20 @@ export const logisticRegressionClassificationNode: NodeDefinition<
               { label: 'Macro F1', value: normalized.metrics.macroF1 },
               { label: 'AUC', value: normalized.metrics.auc ?? '-' },
             ],
+            help: {
+              summary: '汇总分类模型的准确率、精确率、召回率、F1 和 AUC 等性能指标。',
+              howToRead: ['类别不均衡时优先看 Recall、F1、Macro F1 和混淆矩阵，不要只看 Accuracy。'],
+            },
           },
           {
             key: 'confusion-matrix',
             title: '混淆矩阵',
             type: 'chart',
             option: buildConfusionMatrixOption(normalized.confusionMatrix),
+            help: {
+              summary: '展示真实类别与预测类别的交叉计数，用于定位误判类型。',
+              howToRead: ['对角线越高越好；非对角线高说明这些类别容易被混淆。'],
+            },
           },
           {
             key: 'roc',
@@ -328,6 +340,11 @@ export const logisticRegressionClassificationNode: NodeDefinition<
                   yAxis: { type: 'value' },
                   series: [{ type: 'line', data: [] }],
                 },
+            help: {
+              summary: '二分类场景下展示不同阈值的真正率与假正率权衡。',
+              howToRead: ['曲线越靠左上越好，AUC 越高表示区分类别能力越强。'],
+              cautions: ['多分类任务当前不展示 ROC 曲线，应结合 Macro 指标和混淆矩阵判断。'],
+            },
           },
           {
             key: 'coefficients',
@@ -335,12 +352,21 @@ export const logisticRegressionClassificationNode: NodeDefinition<
             type: 'chart',
             option: buildCoefficientOption(normalized.coefficients),
             items: normalized.coefficients,
+            help: {
+              summary: '展示各特征对类别 log-odds 的方向和相对影响。',
+              howToRead: ['正系数表示更倾向于对应类别或正类，负系数表示相反方向；需结合编码方式解释。'],
+              cautions: ['系数受缩放、编码和共线性影响，不应直接等同为业务因果。'],
+            },
           },
           {
             key: 'risks',
             title: '结果可信提示',
             type: 'risk-list',
             items: normalized.risks,
+            help: {
+              summary: '提示分类建模中的类别不均衡、样本不足或指标解释风险。',
+              howToRead: ['先处理高风险提示，再将系数或分类结果用于拦截策略。'],
+            },
           },
         ],
       },

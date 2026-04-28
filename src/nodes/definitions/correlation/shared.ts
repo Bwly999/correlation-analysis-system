@@ -886,12 +886,22 @@ export const executeCorrelationAnalysis = async (
             { label: '风险提示数', value: risks.length },
           ],
           content: summaryLines.join('\n'),
+          help: {
+            summary: '整体说明本次相关性计算覆盖的样本、X/Y 字段数量和风险数量。',
+            howToRead: ['先确认样本量与字段数量是否符合预期，再结合风险提示判断结果是否稳定。'],
+            cautions: ['相关性只能说明变量共同变化方向和强弱，不能直接证明因果关系。'],
+          },
         },
         {
           key: 'matrix',
           title: '相关性热力图',
           type: 'chart',
           option: heatmapOption,
+          help: {
+            summary: '用颜色展示每个 X 字段与每个 Y 字段的相关系数，适合快速发现强关联候选因子。',
+            howToRead: ['颜色越接近红色表示正相关越强，越接近蓝色表示负相关越强，接近白色表示相关较弱。'],
+            cautions: ['热力图只展示相关强弱和方向，异常值、缺失和样本量都会影响系数可信度。'],
+          },
           controls: {
             toggle: {
               label: '显示数值',
@@ -911,6 +921,11 @@ export const executeCorrelationAnalysis = async (
           type: 'chart',
           option: rankingOptionMap[defaultYField],
           optionMap: rankingOptionMap,
+          help: {
+            summary: '按指定 Y 字段把候选 X 因子从强到弱排序，便于筛出优先排查对象。',
+            howToRead: ['先选择关注的 Y，再看条形长度和正负方向；绝对值越大表示相关强度越高。'],
+            cautions: ['排序靠前代表相关更强，不代表该因子一定可控、可调或具有因果影响。'],
+          },
           controls: {
             select: {
               label: '当前 Y',
@@ -935,11 +950,20 @@ export const executeCorrelationAnalysis = async (
             fields: risk.fields,
           })),
           content: riskLines.join('\n'),
+          help: {
+            summary: '列出会影响相关性结果可信度的样本、缺失、异常值或共线性风险。',
+            howToRead: ['优先处理高风险和需关注项，再决定是否进入回归、SHAP 或随机森林等后续分析。'],
+          },
         },
         {
+          key: 'details',
           title: 'X / Y 字段相关明细',
           type: 'text',
           content: JSON.stringify(detailRows, null, 2),
+          help: {
+            summary: '逐行列出每组 X/Y 的相关系数、样本量和显著性近似结果，适合复核和导出。',
+            howToRead: ['重点查看 correlation、sampleSize 和 pValue；样本量不足时不要只看系数大小。'],
+          },
         },
       ],
     },

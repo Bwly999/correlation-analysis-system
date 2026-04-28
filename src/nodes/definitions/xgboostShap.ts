@@ -198,6 +198,10 @@ export const xgboostShapNode: NodeDefinition = {
               { label: 'R²', value: summary.r2 },
               { label: 'MAE', value: summary.mae },
             ],
+            help: {
+              summary: '展示 SHAP 建模的目标、样本和拟合质量，用来判断贡献解释是否可信。',
+              howToRead: ['先看 R²、MAE 和样本量，再阅读特征贡献排行和趋势明细。'],
+            },
           },
           {
             key: 'importance',
@@ -205,6 +209,11 @@ export const xgboostShapNode: NodeDefinition = {
             title: '特征贡献排行',
             option: buildImportanceChartOption(importance),
             items: importance,
+            help: {
+              summary: '按平均 SHAP 绝对值展示每个因子对模型预测的总体贡献。',
+              howToRead: ['排行越靠前，代表该因子越常影响模型预测；再进入趋势明细判断高低取值如何影响 Y。'],
+              cautions: ['贡献度不等于因果，且平均绝对值本身不表示正向或负向。'],
+            },
           },
           {
             key: 'dependence',
@@ -216,6 +225,11 @@ export const xgboostShapNode: NodeDefinition = {
               title: `因子趋势: ${item.feature}`,
               option: buildScatterOption(item),
             })),
+            help: {
+              summary: '展示单个因子取值与 SHAP 贡献之间的关系，用来判断可能的影响方向和非线性区间。',
+              howToRead: ['横轴看因子取值，纵轴看对预测的正负贡献；明显拐点可作为设计阈值候选。'],
+              cautions: ['趋势来自模型解释，仍需结合实验、业务机理或回归结果确认。'],
+            },
           },
         ],
         supplements: {

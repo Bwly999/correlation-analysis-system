@@ -223,6 +223,11 @@ export const multipleLinearRegressionNode: NodeDefinition = {
               { label: 'MAE', value: normalized.summary.mae },
               { label: '截距', value: normalized.summary.intercept },
             ],
+            help: {
+              summary: '展示线性回归模型整体拟合质量和样本基础。',
+              howToRead: ['先看 R²、调整后 R² 和 MAE 判断模型可用性，再阅读系数排序判断方向和幅度。'],
+              cautions: ['线性回归系数受共线性和量纲影响，进入设计规则前建议先结合 VIF 与标准化策略。'],
+            },
           },
           {
             key: 'coefficients',
@@ -230,18 +235,31 @@ export const multipleLinearRegressionNode: NodeDefinition = {
             type: 'chart',
             option: buildCoefficientChartOption(normalized.coefficients),
             items: normalized.coefficients,
+            help: {
+              summary: '展示各因子在线性模型中的系数方向和相对影响幅度。',
+              howToRead: ['正系数表示因子升高时预测 Y 倾向升高，负系数表示倾向降低；绝对值越大影响越强。'],
+              cautions: ['系数表示控制其他入模变量后的线性关系，不等于单变量相关性或因果效应。'],
+            },
           },
           {
             key: 'predictions',
             title: '预测值对比',
             type: 'chart',
             option: buildRegressionFitChartOption(normalized.predictions),
+            help: {
+              summary: '对比真实 Y 与模型预测 Y，用来检查线性模型是否能复现目标变化。',
+              howToRead: ['点越贴近理想拟合线说明预测越好，成片偏离说明线性假设可能不足。'],
+            },
           },
           {
             key: 'residuals',
             title: '残差分布',
             type: 'chart',
             option: buildResidualChartOption(normalized.residuals),
+            help: {
+              summary: '展示预测误差的分布，帮助判断模型是否存在系统性偏差。',
+              howToRead: ['残差应尽量围绕 0 随机分布；偏斜、长尾或分层代表仍有未解释结构。'],
+            },
           },
         ],
       },
