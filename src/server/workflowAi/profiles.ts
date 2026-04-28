@@ -734,17 +734,35 @@ const inferLimitConfig = (instructionText: string) => {
   }
 }
 
-const inferCleaningConfig = (instructionText: string) => {
+const inferDedupConfig = (instructionText: string) => {
   const deduplicate = /重复记录|重复行|去重|重复数据|重复样本/u.test(instructionText)
-  const dropMissing = /缺失值|空值|缺失字段|空白值|空白数据/u.test(instructionText)
-
-  if (!deduplicate && !dropMissing) {
-    return null
-  }
+  if (!deduplicate) return null
 
   return {
-    deduplicationMode: deduplicate ? 'full_row' : 'none',
-    missingValueStrategy: dropMissing ? 'drop' : 'none',
+    deduplicationMode: 'full_row',
+    deduplicationKeep: 'first',
+  }
+}
+
+const inferMissingOutlierConfig = (instructionText: string) => {
+  const handleMissing = /缺失值|空值|缺失字段|空白值|空白数据/u.test(instructionText)
+  const handleOutlier = /异常值|离群点|极端值|iqr|百分位/u.test(instructionText)
+  if (!handleMissing && !handleOutlier) return null
+
+  return {
+    missingValueStrategy: handleMissing ? 'drop' : 'none',
+    outlierMethod: handleOutlier ? 'iqr' : 'none',
+  }
+}
+
+const inferEncodingScalingConfig = (instructionText: string) => {
+  const shouldScale = /标准化|归一化|缩放|z[-\s]?score|min[-\s]?max/u.test(instructionText)
+  const shouldEncode = /编码|label\s*encoding|类别变量/u.test(instructionText)
+  if (!shouldScale && !shouldEncode) return null
+
+  return {
+    scaling: shouldScale ? 'zscore' : 'none',
+    encoding: shouldEncode ? 'label' : 'none',
   }
 }
 
@@ -809,7 +827,9 @@ const tryBuildHeuristicPlanResponse = (
   const filterConfig = inferFilterConfig(instructionText)
   const sortConfig = inferSortConfig(instructionText, fields)
   const limitConfig = inferLimitConfig(instructionText)
-  const cleaningConfig = inferCleaningConfig(instructionText)
+  const dedupConfig = inferDedupConfig(instructionText)
+  const missingOutlierConfig = inferMissingOutlierConfig(instructionText)
+  const encodingScalingConfig = inferEncodingScalingConfig(instructionText)
 
   const mentionsCorrelation = /pearson|spearman|kendall|相关|关系/u.test(instructionText)
   const mentionsProfiling = /体检|画像|字段风险|适不适合|适合做相关|头部样本|特征/u.test(instructionText)
@@ -851,9 +871,9 @@ const tryBuildHeuristicPlanResponse = (
     autoClean: true,
   })
 
-  if (cleaningConfig) {
-    appendNode('node_cleaning_1', 'data-cleaning', '数据清洗', cleaningConfig)
-  }
+  if (dedupConfig) appendNode('node_dedup_1', 'data-dedup', '去重', dedupConfig)
+  if (missingOutlierConfig) appendNode('node_missing_outlier_1', 'data-missing-outlier', '缺失/异常值处理', missingOutlierConfig)
+  if (encodingScalingConfig) appendNode('node_encoding_scaling_1', 'data-encoding-scaling', '编码/缩放', encodingScalingConfig)
 
   if (filterConfig && /筛选|过滤/u.test(instructionText)) {
     appendNode('node_filter_1', 'data-filter', '数据筛选', filterConfig)

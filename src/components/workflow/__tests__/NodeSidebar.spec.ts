@@ -164,7 +164,7 @@ describe('NodeSidebar', () => {
 
     expect(contextSection.exists()).toBe(true)
     expect(contextSection.text()).toContain('上下文推荐')
-    expect(contextSection.text()).toContain('数据清洗')
+    expect(contextSection.text()).toContain('去重')
     expect(contextSection.text()).toContain('数据筛选')
     expect(contextSection.text()).toContain('数据体检')
     expect(contextSection.text()).not.toContain('图表展示')
@@ -200,7 +200,7 @@ describe('NodeSidebar', () => {
       .findAll('[data-shortcut-section="connectable"] [data-node-type]')
       .map((node) => node.attributes('data-node-type'))
 
-    expect(nodeTypes.slice(0, 3)).toEqual(['data-cleaning', 'data-filter', 'data-profiling'])
+    expect(nodeTypes.slice(0, 3)).toEqual(['data-dedup', 'data-filter', 'data-profiling'])
   })
 
   it('collapses and expands an individual browse group within the current sidebar session', async () => {

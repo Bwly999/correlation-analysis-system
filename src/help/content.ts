@@ -13,7 +13,7 @@ export const helpCenterContent: HelpCenterContent = {
       step: 2,
       title: '数据准备',
       goal: '完成清洗、筛选、聚合或多源合并，让输入更适合分析。',
-      recommendedNodes: ['data-cleaning', 'data-filter', 'data-aggregation', 'data-merge'],
+      recommendedNodes: ['data-dedup', 'data-missing-outlier', 'data-encoding-scaling', 'data-filter'],
       pitfalls: ['多源数据进入分析前，先确认字段对齐方式和关联键是否正确。'],
     },
     {
@@ -55,7 +55,7 @@ export const helpCenterContent: HelpCenterContent = {
     },
     {
       question: '什么时候需要先做数据清洗？',
-      answer: '存在缺失值、异常值、非数值字段或量纲差异明显时，建议先经过数据清洗。',
+      answer: '存在重复、缺失值、异常值或量纲差异明显时，建议先走去重、缺失/异常值处理、编码/缩放节点。',
     },
     {
       question: '什么时候需要数据合并？',

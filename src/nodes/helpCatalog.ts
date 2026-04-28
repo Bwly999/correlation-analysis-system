@@ -34,8 +34,8 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
           content: '建议开启，这样数字字符串会被转换为数值，便于后续统计分析。',
         },
       ],
-      outputGuide: ['输出结果是表格数据，通常接数据清洗、数据筛选或分析节点。'],
-      nextSteps: ['如果字段脏乱，先接数据清洗。', '如果只需部分记录，可先接数据筛选。'],
+      outputGuide: ['输出结果是表格数据，通常接去重、缺失/异常或分析节点。'],
+      nextSteps: ['如果字段脏乱，先接去重或缺失/异常。', '如果只需部分记录，可先接数据筛选。'],
       commonIssues: [
         {
           title: '文件选择后仍无法运行',
@@ -52,7 +52,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       requiredConfig: ['fileData'],
       recommendedConfigPatterns: ['默认自动识别格式并开启自动转换数字。'],
       commonMistakes: ['忘记重新选择文件导致运行时文件对象失效。'],
-      recommendedNextNodes: ['data-cleaning', 'data-filter', 'data-profiling'],
+      recommendedNextNodes: ['data-dedup', 'data-filter', 'data-profiling'],
     },
   ),
   'manual-json-import': createEntry(
@@ -68,7 +68,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
         },
       ],
       outputGuide: ['对象数组会输出为表格；其他合法 JSON 会作为结构化 JSON 输出。'],
-      nextSteps: ['如果要验证整条分析链路，通常下一步接数据清洗或相关性分析。'],
+      nextSteps: ['如果要验证整条分析链路，通常下一步接去重或相关性分析。'],
       commonIssues: [
         {
           title: 'JSON 解析失败',
@@ -84,7 +84,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       requiredConfig: ['jsonData'],
       recommendedConfigPatterns: ['优先使用对象数组，便于后续节点直接消费。'],
       commonMistakes: ['输入非 JSON 文本导致解析失败。'],
-      recommendedNextNodes: ['data-cleaning', 'data-filter', 'pearson'],
+      recommendedNextNodes: ['data-dedup', 'data-filter', 'pearson'],
     },
   ),
   'neighbor-system': createEntry(
@@ -105,7 +105,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
         },
       ],
       outputGuide: ['输出结果是表格数据，适合继续做清洗、合并和分析。'],
-      nextSteps: ['如果因子很多，建议先用数据体检或数据清洗确认字段质量。'],
+      nextSteps: ['如果因子很多，建议先用数据体检或去重/缺失处理确认字段质量。'],
       commonIssues: [
         {
           title: '无法获取数据',
@@ -121,7 +121,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       requiredConfig: ['productName', 'selectedFactors', 'fetchMode', 'selectedProcesses'],
       recommendedConfigPatterns: ['先选产品和因子，再补运行时查询条件。'],
       commonMistakes: ['未收到宿主系统 token。', '未选择任何因子。'],
-      recommendedNextNodes: ['data-cleaning', 'data-merge', 'data-profiling'],
+      recommendedNextNodes: ['data-dedup', 'data-merge', 'data-profiling'],
     },
   ),
   'data-cleaning': createEntry(
@@ -167,6 +167,114 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       outputKinds: ['table'],
       recommendedPrevNodes: ['file-import', 'manual-json-import', 'neighbor-system'],
       recommendedNextNodes: ['data-filter', 'data-aggregation', 'pearson', 'xgboost-shap'],
+    },
+  ),
+  'data-dedup': createEntry(
+    {
+      summary: '只处理重复记录，支持按整行或按字段组合去重。',
+      whenToUse: ['上游数据存在重复样本，且你想单独控制去重规则时。'],
+      inputGuide: ['需要上游提供表格数据。', '默认按字段去重，必须至少选择一个去重字段。'],
+      parameterGuide: [
+        {
+          property: 'deduplicationMode',
+          title: '去重方式',
+          content: '默认按字段去重；如果想整行去重可切换模式。',
+        },
+        {
+          property: 'deduplicationKeep',
+          title: '去重保留方式',
+          content: '保留首条或末条都基于当前表格顺序，请先用排序节点整理顺序。',
+        },
+      ],
+      outputGuide: ['输出结果仍是表格数据，并附带去重统计。'],
+      nextSteps: ['去重后可继续接缺失/异常、编码/缩放或筛选节点。'],
+      commonIssues: [
+        {
+          title: '节点执行报错：未选择去重字段',
+          resolution: '默认模式是按字段去重，请至少选择一个字段，或切换为整行去重。',
+        },
+      ],
+    },
+    {
+      useCases: ['去除重复记录', '按业务键保留首条记录', '按业务键保留末条记录'],
+      keywords: ['去重', '重复记录', '重复样本', '保留首条', '保留末条'],
+      workflowRoles: ['数据准备'],
+      inputKinds: ['table'],
+      outputKinds: ['table'],
+      recommendedPrevNodes: ['file-import', 'manual-json-import', 'neighbor-system'],
+      recommendedNextNodes: ['data-missing-outlier', 'data-encoding-scaling', 'data-filter'],
+    },
+  ),
+  'data-missing-outlier': createEntry(
+    {
+      summary: '缺失/异常值处理节点：集中处理缺失值与异常值，默认删除缺失并启用 IQR 异常剔除。',
+      whenToUse: ['数据存在空值、脏值或极端值，希望先修复样本质量时。'],
+      inputGuide: ['需要上游提供表格数据。', '目标字段留空时会尝试处理所有字段。'],
+      parameterGuide: [
+        {
+          property: 'missingValueStrategy',
+          title: '缺失值处理',
+          content: '默认直接删除缺失样本；也可切换为均值、中位数或零值填充。',
+        },
+        {
+          property: 'outlierMethod',
+          title: '异常值检测',
+          content: '默认 IQR 四分位距；如果不需要异常处理可切换为无。',
+        },
+      ],
+      outputGuide: ['输出结果仍是表格数据，并附带缺失与异常处理统计。'],
+      nextSteps: ['处理后通常接编码/缩放、筛选或聚合节点。'],
+      commonIssues: [
+        {
+          title: '样本数量明显下降',
+          resolution: '通常是默认删除缺失和 IQR 异常剔除生效，可按需要切换更温和策略。',
+        },
+      ],
+    },
+    {
+      useCases: ['删除缺失样本', '缺失值填充', '异常值剔除'],
+      keywords: ['缺失值', '空值', '异常值', 'IQR', '百分位剔除'],
+      workflowRoles: ['数据准备'],
+      inputKinds: ['table'],
+      outputKinds: ['table'],
+      recommendedPrevNodes: ['data-dedup', 'file-import', 'manual-json-import'],
+      recommendedNextNodes: ['data-encoding-scaling', 'data-filter', 'data-aggregation'],
+    },
+  ),
+  'data-encoding-scaling': createEntry(
+    {
+      summary: '处理类别编码和数值缩放，默认使用 Z-Score 标准化。',
+      whenToUse: ['要把类别字段转成数值或统一字段量纲时。'],
+      inputGuide: ['需要上游提供表格数据。', '目标字段留空时会处理所有可识别字段。'],
+      parameterGuide: [
+        {
+          property: 'encoding',
+          title: '分类变量处理',
+          content: '按需开启标签编码；未开启时类别字段保持原样。',
+        },
+        {
+          property: 'scaling',
+          title: '特征缩放',
+          content: '默认 Z-Score；若想压缩到 0-1 可切换为 Min-Max。',
+        },
+      ],
+      outputGuide: ['输出结果仍是表格数据，并附带编码/缩放处理统计。'],
+      nextSteps: ['预处理后可直接进入相关性分析、建模或导出。'],
+      commonIssues: [
+        {
+          title: '字段值变化超出预期',
+          resolution: '检查是否默认启用了 Z-Score 标准化，必要时将缩放改为“无”。',
+        },
+      ],
+    },
+    {
+      useCases: ['标签编码', '特征标准化', '归一化'],
+      keywords: ['编码', '缩放', '标准化', '归一化', 'Z-Score'],
+      workflowRoles: ['数据准备'],
+      inputKinds: ['table'],
+      outputKinds: ['table'],
+      recommendedPrevNodes: ['data-missing-outlier', 'data-dedup', 'data-filter'],
+      recommendedNextNodes: ['pearson', 'xgboost-shap', 'data-export'],
     },
   ),
   'data-filter': createEntry(
@@ -944,6 +1052,9 @@ const nodeLibraryGroups: Record<string, NodeLibraryGroupId> = {
   'manual-json-import': 'import-data',
   'neighbor-system': 'import-data',
   'data-cleaning': 'clean-filter',
+  'data-dedup': 'clean-filter',
+  'data-missing-outlier': 'clean-filter',
+  'data-encoding-scaling': 'clean-filter',
   'data-filter': 'clean-filter',
   'field-selection': 'field-shaping',
   sort: 'field-shaping',

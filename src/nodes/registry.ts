@@ -4,6 +4,9 @@ import { fileImportNode } from './definitions/fileImport.js'
 import { manualJsonImportNode } from './definitions/manualJsonImport.js'
 import { neighborSystemNode } from './definitions/neighborSystem.js'
 import { dataCleaningNode } from './definitions/dataCleaning.js'
+import { dataDedupNode } from './definitions/dataDedup.js'
+import { dataMissingOutlierNode } from './definitions/dataMissingOutlier.js'
+import { dataEncodingScalingNode } from './definitions/dataEncodingScaling.js'
 import { dataProfilingNode } from './definitions/dataProfiling.js'
 import { dataAggregationNode } from './definitions/dataAggregation.js'
 import { dataMergeNode } from './definitions/dataMerge.js'
@@ -32,6 +35,9 @@ const rawNodeDefinitions: NodeDefinition[] = [
   manualJsonImportNode,
   neighborSystemNode,
   dataCleaningNode,
+  dataDedupNode,
+  dataMissingOutlierNode,
+  dataEncodingScalingNode,
   dataProfilingNode,
   dataAggregationNode,
   dataMergeNode,
@@ -58,6 +64,10 @@ const rawNodeDefinitions: NodeDefinition[] = [
 
 export const nodeDefinitions: NodeDefinition[] = rawNodeDefinitions.map((definition) =>
   attachNodeHelp(definition),
+)
+
+export const creatableNodeDefinitions: NodeDefinition[] = nodeDefinitions.filter(
+  (definition) => !definition.isLegacy,
 )
 
 export const getNodeDefinition = (name: string) => {

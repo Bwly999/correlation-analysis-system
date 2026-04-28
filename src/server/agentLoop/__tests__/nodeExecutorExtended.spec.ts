@@ -128,6 +128,30 @@ describe('executeNodesForAgent — 扩展节点', () => {
     expect(results[1]!.resultSummary).toContain('图表')
   })
 
+  it('执行拆分后的去重节点', async () => {
+    const plan = {
+      summary: '去重测试',
+      assumptions: [],
+      warnings: [],
+      questions: [],
+      operations: [
+        { id: 'n1', type: 'createNode' as const, nodeType: 'manual-json-import', nodeLabel: '导入', config: { jsonData: '[{"k":"A","v":1},{"k":"A","v":2}]' } },
+        {
+          id: 'n2',
+          type: 'createNode' as const,
+          nodeType: 'data-dedup',
+          nodeLabel: '去重',
+          config: { deduplicationMode: 'by_fields', deduplicationFields: ['k'], deduplicationKeep: 'first' },
+        },
+        { id: 'e1', type: 'connectNodes' as const, sourceRef: 'n1', targetRef: 'n2' },
+      ],
+    }
+
+    const results = await executeNodesForAgent(plan, mockRequest, () => {})
+    expect(results[1]!.success).toBe(true)
+    expect(results[1]!.rowCount).toBe(1)
+  })
+
   it('上游失败时下游不执行', async () => {
     const plan = {
       summary: '失败传递测试',

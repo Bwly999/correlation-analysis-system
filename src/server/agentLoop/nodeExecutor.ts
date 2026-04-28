@@ -205,6 +205,33 @@ const executeDataCleaningNode = (
   return { kind: 'table', payload: result }
 }
 
+const executeDataDedupNode = (
+  input: unknown,
+  config: Record<string, unknown>,
+): { kind: 'table'; payload: Array<Record<string, unknown>> } =>
+  executeDataCleaningNode(input, {
+    ...config,
+    removeDuplicates: true,
+  })
+
+const executeDataMissingOutlierNode = (
+  input: unknown,
+  config: Record<string, unknown>,
+): { kind: 'table'; payload: Array<Record<string, unknown>> } =>
+  executeDataCleaningNode(input, {
+    ...config,
+    removeNullRows: config.missingValueStrategy === 'drop' || config.removeNullRows === true,
+  })
+
+const executeDataEncodingScalingNode = (
+  input: unknown,
+  _config: Record<string, unknown>,
+): { kind: 'table'; payload: Array<Record<string, unknown>> } => {
+  const rows = extractRowsFromResult(input)
+  if (!rows || rows.length === 0) throw new Error('编码/缩放需要输入数据')
+  return { kind: 'table', payload: [...rows] }
+}
+
 const executeDataAggregationNode = (
   input: unknown,
   config: Record<string, unknown>,
@@ -306,6 +333,9 @@ const AGENT_EXECUTABLE_NODES = new Map<string, { execute: NodeExecuteFn; label: 
   ['kendall', { execute: executeKendallNode, label: 'Kendall 等级相关分析' }],
   ['data-profiling', { execute: executeDataProfilingNode, label: '数据体检' }],
   ['data-cleaning', { execute: executeDataCleaningNode, label: '数据清洗' }],
+  ['data-dedup', { execute: executeDataDedupNode, label: '去重' }],
+  ['data-missing-outlier', { execute: executeDataMissingOutlierNode, label: '缺失/异常值处理' }],
+  ['data-encoding-scaling', { execute: executeDataEncodingScalingNode, label: '编码/缩放' }],
   ['data-aggregation', { execute: executeDataAggregationNode, label: '数据聚合' }],
   ['chart-display', { execute: executeChartDisplayNode, label: '图表展示' }],
 ])

@@ -7,6 +7,7 @@ export const dataCleaningNode: NodeDefinition = {
   displayName: '数据清洗',
   icon: 'settings-2',
   category: 'action',
+  isLegacy: true,
   description: '处理缺失值、去重、异常值，并执行数据标准化与分类变量编码，为相关性分析做好准备。',
   properties: [
     {

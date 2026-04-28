@@ -1,191 +1,215 @@
 ﻿<script setup lang="ts">
-import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
-import type { Edge } from '@vue-flow/core'
-import { Loader2, Bug, HelpCircle, Square } from 'lucide-vue-next'
-import { useWorkflowStore } from '@/stores/workflowStore'
-import { getNodeDefinition } from '@/nodes/registry'
+import {
+  ref,
+  computed,
+  watch,
+  nextTick,
+  onMounted,
+  onBeforeUnmount,
+} from "vue";
+import type { Edge } from "@vue-flow/core";
+import { Loader2, Bug, HelpCircle, Square } from "lucide-vue-next";
+import { useWorkflowStore } from "@/stores/workflowStore";
+import { getNodeDefinition } from "@/nodes/registry";
 import {
   createJsonResult,
   createTableCollectionResult,
   createTableResult,
   isPlainObject,
-} from '@/nodes/result'
-import type { WorkflowNode } from '@/utils/storage'
-import { stripRuntimeInputValuesFromConfig } from '@/utils/workflowConfig'
+} from "@/nodes/result";
+import type { WorkflowNode } from "@/utils/storage";
+import { stripRuntimeInputValuesFromConfig } from "@/utils/workflowConfig";
 
 // Sub Components
-import DataDisplayPanel from './DataDisplayPanel.vue'
-import DataAnalysisModal from './DataAnalysisModal.vue'
-import ConfigHeader from './config/ConfigHeader.vue'
-import ConfigFooter from './config/ConfigFooter.vue'
-import ConfigForm from './config/ConfigForm.vue'
-import RuntimeInputs from './config/RuntimeInputs.vue'
-import RuntimeSettingsPanel from './config/RuntimeSettingsPanel.vue'
-import NodeHelpPanel from './help/NodeHelpPanel.vue'
-import NodeDebugErrorCard from './NodeDebugErrorCard.vue'
-import NodeIcon from './nodes/NodeIcon.vue'
+import DataDisplayPanel from "./DataDisplayPanel.vue";
+import DataAnalysisModal from "./DataAnalysisModal.vue";
+import ConfigHeader from "./config/ConfigHeader.vue";
+import ConfigFooter from "./config/ConfigFooter.vue";
+import ConfigForm from "./config/ConfigForm.vue";
+import RuntimeInputs from "./config/RuntimeInputs.vue";
+import RuntimeSettingsPanel from "./config/RuntimeSettingsPanel.vue";
+import NodeHelpPanel from "./help/NodeHelpPanel.vue";
+import NodeDebugErrorCard from "./NodeDebugErrorCard.vue";
+import NodeIcon from "./nodes/NodeIcon.vue";
 import {
   getResultGroups,
   getResultRows,
   getResultSchemaFields,
   normalizeWorkflowResult,
-} from './resultView'
-import { useHorizontalResize } from './composables/useHorizontalResize'
-import { useVerticalResize } from './composables/useVerticalResize'
+} from "./resultView";
+import { useHorizontalResize } from "./composables/useHorizontalResize";
+import { useVerticalResize } from "./composables/useVerticalResize";
 
 // PrimeVue Components
-import Dialog from 'primevue/dialog'
-import { useToast } from 'primevue/usetoast'
+import Dialog from "primevue/dialog";
+import { useToast } from "primevue/usetoast";
 
 const props = defineProps<{
-  nodeId: string | null
-  visible: boolean
-}>()
+  nodeId: string | null;
+  visible: boolean;
+}>();
 
 const emit = defineEmits<{
-  close: []
-}>()
-const store = useWorkflowStore()
-const toast = useToast()
-const workflowNodes = computed<WorkflowNode[]>(() => store.nodes as WorkflowNode[])
-const workflowEdges = computed<Edge[]>(() => store.edges as Edge[])
+  close: [];
+}>();
+const store = useWorkflowStore();
+const toast = useToast();
+const workflowNodes = computed<WorkflowNode[]>(
+  () => store.nodes as WorkflowNode[],
+);
+const workflowEdges = computed<Edge[]>(() => store.edges as Edge[]);
 
-const findWorkflowNode = (nodeId: string | null | undefined): WorkflowNode | null => {
-  if (!nodeId) return null
-  return workflowNodes.value.find((currentNode) => currentNode.id === nodeId) ?? null
-}
+const findWorkflowNode = (
+  nodeId: string | null | undefined,
+): WorkflowNode | null => {
+  if (!nodeId) return null;
+  return (
+    workflowNodes.value.find((currentNode) => currentNode.id === nodeId) ?? null
+  );
+};
 
 // 直接从 Store 中获取响应式节点对象
-const node = computed<WorkflowNode | null>(() => findWorkflowNode(props.nodeId))
+const node = computed<WorkflowNode | null>(() =>
+  findWorkflowNode(props.nodeId),
+);
 
 // 状态管理
-const config = ref<any>({})
-const activeTab = ref('parameters')
-const editedName = ref('')
-const localIsPinned = ref(false)
-const localUseManualInput = ref(false)
-const localManualInput = ref('')
-const localReuseLastRuntimeInputs = ref(false)
-const isHelpDialogVisible = ref(false)
+const config = ref<any>({});
+const activeTab = ref("parameters");
+const editedName = ref("");
+const localIsPinned = ref(false);
+const localUseManualInput = ref(false);
+const localManualInput = ref("");
+const localReuseLastRuntimeInputs = ref(false);
+const isHelpDialogVisible = ref(false);
 
 // 深度分析弹窗状态
-const analysisModal = ref({ visible: false, title: '', data: null })
+const analysisModal = ref({ visible: false, title: "", data: null });
 
 // 左侧边栏比例调节逻辑
-const { paneHeight: topPaneHeight, isResizing: isResizingLeft, startResizing: startResizingLeft } =
-  useVerticalResize(400, { min: 150, max: 600 })
+const {
+  paneHeight: topPaneHeight,
+  isResizing: isResizingLeft,
+  startResizing: startResizingLeft,
+} = useVerticalResize(400, { min: 150, max: 600 });
 const {
   paneWidth: leftPaneWidth,
   isResizing: isResizingLeftPaneWidth,
   startResizing: startResizingLeftPaneWidth,
-} = useHorizontalResize(320, { min: 260, max: 460 })
+} = useHorizontalResize(320, { min: 260, max: 460 });
 const {
   paneWidth: rightPaneWidth,
   isResizing: isResizingRightPaneWidth,
   startResizing: startResizingRightPaneWidth,
-} = useHorizontalResize(320, { min: 260, max: 460 }, -1)
+} = useHorizontalResize(320, { min: 260, max: 460 }, -1);
 const isResizingHorizontally = computed(
   () => isResizingLeftPaneWidth.value || isResizingRightPaneWidth.value,
-)
+);
 
 // 获取当前节点的定义
-const nodeDefinition = computed(() => (node.value ? getNodeDefinition(node.value.data.type) ?? null : null))
+const nodeDefinition = computed(() =>
+  node.value ? (getNodeDefinition(node.value.data.type) ?? null) : null,
+);
 const currentFileImportTask = computed(() =>
   node.value ? (store.fileImportTasks[node.value.id] ?? null) : null,
-)
+);
 const fileImportPhaseTextMap = {
-  reading: '正在读取文件',
-  parsing: '正在解析文件内容',
-  cleaning: '正在清洗并识别字段',
-  finalizing: '正在整理结果',
-} as const
+  reading: "正在读取文件",
+  parsing: "正在解析文件内容",
+  cleaning: "正在清洗并识别字段",
+  finalizing: "正在整理结果",
+} as const;
 const currentFileImportPhaseText = computed(() => {
-  const phase = currentFileImportTask.value?.phase
-  return phase ? fileImportPhaseTextMap[phase] : ''
-})
+  const phase = currentFileImportTask.value?.phase;
+  return phase ? fileImportPhaseTextMap[phase] : "";
+});
 const nodeHelpSummary = computed(() => {
   if (!nodeDefinition.value) {
     return {
-      title: '未找到节点定义',
-      summary: '暂时无法展示帮助，请先检查节点类型是否有效。',
-      tone: 'warning',
-    } as const
+      title: "未找到节点定义",
+      summary: "暂时无法展示帮助，请先检查节点类型是否有效。",
+      tone: "warning",
+    } as const;
   }
 
   return {
-    title: '节点简介',
-    summary: nodeDefinition.value.help?.summary ?? nodeDefinition.value.description,
-    tone: 'default',
-  } as const
-})
+    title: "节点简介",
+    summary:
+      nodeDefinition.value.help?.summary ?? nodeDefinition.value.description,
+    tone: "default",
+  } as const;
+});
 
 const isCorrelationNode = computed(() =>
-  ['pearson', 'spearman', 'kendall'].includes(nodeDefinition.value?.name ?? ''),
-)
+  ["pearson", "spearman", "kendall"].includes(nodeDefinition.value?.name ?? ""),
+);
 
 const runtimeProperties = computed(
   () => nodeDefinition.value?.properties.filter((p) => p.isRuntimeInput) || [],
-)
+);
 const staticProperties = computed(
   () => nodeDefinition.value?.properties.filter((p) => !p.isRuntimeInput) || [],
-)
+);
 
 // 数据同步逻辑
 watch(
   () => props.nodeId,
   (newId) => {
     if (newId && node.value) {
-      editedName.value = node.value.data.label
-      localIsPinned.value = node.value.data.isPinned || false
-      localUseManualInput.value = node.value.data.useManualInput || false
-      localManualInput.value = node.value.data.manualInput || ''
-      localReuseLastRuntimeInputs.value = node.value.data.reuseLastRuntimeInputs || false
-      activeTab.value = 'parameters'
-      isHelpDialogVisible.value = false
+      editedName.value = node.value.data.label;
+      localIsPinned.value = node.value.data.isPinned || false;
+      localUseManualInput.value = node.value.data.useManualInput || false;
+      localManualInput.value = node.value.data.manualInput || "";
+      localReuseLastRuntimeInputs.value =
+        node.value.data.reuseLastRuntimeInputs || false;
+      activeTab.value = "parameters";
+      isHelpDialogVisible.value = false;
 
-      const baseConfig = { ...node.value.data.config }
+      const baseConfig = { ...node.value.data.config };
       nodeDefinition.value?.properties.forEach((p) => {
-        if (baseConfig[p.name] === undefined) baseConfig[p.name] = p.default
-      })
-      config.value = baseConfig
+        if (baseConfig[p.name] === undefined) baseConfig[p.name] = p.default;
+      });
+      config.value = baseConfig;
     } else {
-      config.value = {}
+      config.value = {};
     }
   },
   { immediate: true },
-)
+);
 
 // 同步回 Store
 watch(localIsPinned, (val) => {
   if (node.value) {
-    node.value.data.isPinned = val
-    store.refreshUnsavedChanges()
+    node.value.data.isPinned = val;
+    store.refreshUnsavedChanges();
   }
-})
+});
 watch(localUseManualInput, (val) => {
-  if (node.value) node.value.data.useManualInput = val
-})
+  if (node.value) node.value.data.useManualInput = val;
+});
 watch(localManualInput, (val) => {
-  if (node.value) node.value.data.manualInput = val
-})
+  if (node.value) node.value.data.manualInput = val;
+});
 
 const inputData = computed(() => {
-  const currentNode = node.value
-  if (!currentNode) return null
+  const currentNode = node.value;
+  if (!currentNode) return null;
 
-  const currentEdges = workflowEdges.value
-  const currentNodes = workflowNodes.value
-  const incomingEdges = currentEdges.filter((edge) => edge.target === currentNode.id)
-  if (incomingEdges.length === 0) return null
+  const currentEdges = workflowEdges.value;
+  const currentNodes = workflowNodes.value;
+  const incomingEdges = currentEdges.filter(
+    (edge) => edge.target === currentNode.id,
+  );
+  if (incomingEdges.length === 0) return null;
 
-  if (nodeDefinition.value?.inputMode === 'multiple') {
+  if (nodeDefinition.value?.inputMode === "multiple") {
     return {
       inputs: incomingEdges.map((edge, index) => {
-        const sourceNode = currentNodes.find((item) => item.id === edge.source)
-        const payload = sourceNode?.data.output ?? null
-        const normalized = normalizeWorkflowResult(payload)
-        const rows = getResultRows(payload)
-        const schemaFields = getResultSchemaFields(payload)
+        const sourceNode = currentNodes.find((item) => item.id === edge.source);
+        const payload = sourceNode?.data.output ?? null;
+        const normalized = normalizeWorkflowResult(payload);
+        const rows = getResultRows(payload);
+        const schemaFields = getResultSchemaFields(payload);
 
         return {
           sourceNodeId: edge.source,
@@ -197,51 +221,54 @@ const inputData = computed(() => {
           summary: {
             rowCount: normalized?.meta?.rowCount ?? rows.length,
             fields: schemaFields.map((field) => field.name),
-            kind: normalized?.kind ?? 'unknown',
+            kind: normalized?.kind ?? "unknown",
           },
-        }
+        };
       }),
-    }
+    };
   }
 
-  return currentNodes.find((item) => item.id === incomingEdges[0]?.source)?.data.output ?? null
-})
+  return (
+    currentNodes.find((item) => item.id === incomingEdges[0]?.source)?.data
+      .output ?? null
+  );
+});
 
 type NeighborNodeEntry = {
-  id: string
-  label: string
-  type: string
-}
+  id: string;
+  label: string;
+  type: string;
+};
 
 const sortNodesByPosition = (left: WorkflowNode, right: WorkflowNode) => {
   if (left.position.y !== right.position.y) {
-    return left.position.y - right.position.y
+    return left.position.y - right.position.y;
   }
 
-  return left.position.x - right.position.x
-}
+  return left.position.x - right.position.x;
+};
 
 const neighborNodes = computed(() => {
   if (!node.value) {
     return {
       upstream: [] as NeighborNodeEntry[],
       downstream: [] as NeighborNodeEntry[],
-    }
+    };
   }
 
-  const nodeMap = new Map(workflowNodes.value.map((item) => [item.id, item]))
-  const upstreamIdSet = new Set<string>()
-  const downstreamIdSet = new Set<string>()
+  const nodeMap = new Map(workflowNodes.value.map((item) => [item.id, item]));
+  const upstreamIdSet = new Set<string>();
+  const downstreamIdSet = new Set<string>();
 
   workflowEdges.value.forEach((edge) => {
     if (edge.target === node.value?.id) {
-      upstreamIdSet.add(edge.source)
+      upstreamIdSet.add(edge.source);
     }
 
     if (edge.source === node.value?.id) {
-      downstreamIdSet.add(edge.target)
+      downstreamIdSet.add(edge.target);
     }
-  })
+  });
 
   const toEntries = (idSet: Set<string>) =>
     [...idSet]
@@ -252,320 +279,401 @@ const neighborNodes = computed(() => {
         id: item.id,
         label: item.data.label,
         type: item.data.type,
-      }))
+      }));
 
   return {
     upstream: toEntries(upstreamIdSet),
     downstream: toEntries(downstreamIdSet),
-  }
-})
+  };
+});
 
 const hasNeighborNavigator = computed(
-  () => neighborNodes.value.upstream.length > 0 || neighborNodes.value.downstream.length > 0,
-)
+  () =>
+    neighborNodes.value.upstream.length > 0 ||
+    neighborNodes.value.downstream.length > 0,
+);
 
 const openNeighborNodeConfig = (targetNodeId: string) => {
-  if (!node.value || targetNodeId === node.value.id) return
-  store.setActiveConfigNodeId(targetNodeId)
-}
+  if (!node.value || targetNodeId === node.value.id) return;
+  store.setActiveConfigNodeId(targetNodeId);
+};
 
-const debugWorkspaceRef = ref<HTMLElement | null>(null)
-const debugWorkspaceRect = ref<DOMRect | null>(null)
-let debugWorkspaceResizeObserver: ResizeObserver | null = null
+const debugWorkspaceRef = ref<HTMLElement | null>(null);
+const debugWorkspaceRect = ref<DOMRect | null>(null);
+let debugWorkspaceResizeObserver: ResizeObserver | null = null;
 
 const getDebugLayoutAnchor = () => {
-  const element = debugWorkspaceRef.value
-  if (!element) return null
+  const element = debugWorkspaceRef.value;
+  if (!element) return null;
 
-  const dialogElement = element.closest('.p-dialog')
-  return dialogElement instanceof HTMLElement ? dialogElement : element
-}
+  const dialogElement = element.closest(".p-dialog");
+  return dialogElement instanceof HTMLElement ? dialogElement : element;
+};
 
 const updateDebugWorkspaceRect = () => {
-  const anchor = getDebugLayoutAnchor()
+  const anchor = getDebugLayoutAnchor();
   if (!props.visible || !anchor) {
-    debugWorkspaceRect.value = null
-    return
+    debugWorkspaceRect.value = null;
+    return;
   }
 
-  debugWorkspaceRect.value = anchor.getBoundingClientRect()
-}
+  debugWorkspaceRect.value = anchor.getBoundingClientRect();
+};
 
 const reconnectDebugWorkspaceObserver = () => {
-  debugWorkspaceResizeObserver?.disconnect()
-  debugWorkspaceResizeObserver = null
+  debugWorkspaceResizeObserver?.disconnect();
+  debugWorkspaceResizeObserver = null;
 
-  if (typeof ResizeObserver === 'undefined') return
+  if (typeof ResizeObserver === "undefined") return;
 
-  const anchor = getDebugLayoutAnchor()
-  if (!anchor) return
+  const anchor = getDebugLayoutAnchor();
+  if (!anchor) return;
 
   debugWorkspaceResizeObserver = new ResizeObserver(() => {
-    updateDebugWorkspaceRect()
-  })
-  debugWorkspaceResizeObserver.observe(anchor)
-}
+    updateDebugWorkspaceRect();
+  });
+  debugWorkspaceResizeObserver.observe(anchor);
+};
 
 const handleViewportUpdate = () => {
-  updateDebugWorkspaceRect()
-}
+  updateDebugWorkspaceRect();
+};
 
-const createNeighborRailStyle = (side: 'left' | 'right') => {
-  const railWidth = 128
-  const railSpacing = 24
+const createNeighborRailStyle = (side: "left" | "right") => {
+  const railWidth = 128;
+  const railSpacing = 24;
 
-  const rect = debugWorkspaceRect.value
+  const rect = debugWorkspaceRect.value;
   if (!rect) {
     return {
-      top: '50%',
-      left: '-9999px',
-      transform: 'translateY(-50%)',
-    }
+      top: "50%",
+      left: "-9999px",
+      transform: "translateY(-50%)",
+    };
   }
 
-  const top = Math.round(rect.top + rect.height / 2)
+  const top = Math.round(rect.top + rect.height / 2);
 
-  if (side === 'left') {
+  if (side === "left") {
     return {
       top: `${top}px`,
       left: `${Math.round(rect.left - railWidth - railSpacing)}px`,
-      transform: 'translateY(-50%)',
-    }
+      transform: "translateY(-50%)",
+    };
   }
 
   return {
     top: `${top}px`,
     left: `${Math.round(rect.right + railSpacing)}px`,
-    transform: 'translateY(-50%)',
-  }
-}
+    transform: "translateY(-50%)",
+  };
+};
 
-const leftNeighborRailStyle = computed(() => createNeighborRailStyle('left'))
-const rightNeighborRailStyle = computed(() => createNeighborRailStyle('right'))
-let debugWorkspaceRafId: number | null = null
-let debugWorkspaceTrackingRafId: number | null = null
-let debugWorkspaceSyncTimers: Array<ReturnType<typeof setTimeout>> = []
+const leftNeighborRailStyle = computed(() => createNeighborRailStyle("left"));
+const rightNeighborRailStyle = computed(() => createNeighborRailStyle("right"));
+let debugWorkspaceRafId: number | null = null;
+let debugWorkspaceTrackingRafId: number | null = null;
+let debugWorkspaceSyncTimers: Array<ReturnType<typeof setTimeout>> = [];
 
 const clearDebugWorkspaceSyncQueue = () => {
   if (debugWorkspaceRafId !== null) {
-    cancelAnimationFrame(debugWorkspaceRafId)
-    debugWorkspaceRafId = null
+    cancelAnimationFrame(debugWorkspaceRafId);
+    debugWorkspaceRafId = null;
   }
 
   if (debugWorkspaceTrackingRafId !== null) {
-    cancelAnimationFrame(debugWorkspaceTrackingRafId)
-    debugWorkspaceTrackingRafId = null
+    cancelAnimationFrame(debugWorkspaceTrackingRafId);
+    debugWorkspaceTrackingRafId = null;
   }
 
-  debugWorkspaceSyncTimers.forEach((timer) => clearTimeout(timer))
-  debugWorkspaceSyncTimers = []
-}
+  debugWorkspaceSyncTimers.forEach((timer) => clearTimeout(timer));
+  debugWorkspaceSyncTimers = [];
+};
 
 const scheduleDebugWorkspaceTracking = (remainingFrames: number) => {
   if (remainingFrames <= 0) {
-    debugWorkspaceTrackingRafId = null
-    return
+    debugWorkspaceTrackingRafId = null;
+    return;
   }
 
   debugWorkspaceTrackingRafId = requestAnimationFrame(() => {
-    updateDebugWorkspaceRect()
-    scheduleDebugWorkspaceTracking(remainingFrames - 1)
-  })
-}
+    updateDebugWorkspaceRect();
+    scheduleDebugWorkspaceTracking(remainingFrames - 1);
+  });
+};
 
 const scheduleDebugWorkspaceRectSync = () => {
-  clearDebugWorkspaceSyncQueue()
-  updateDebugWorkspaceRect()
+  clearDebugWorkspaceSyncQueue();
+  updateDebugWorkspaceRect();
 
   debugWorkspaceRafId = requestAnimationFrame(() => {
-    updateDebugWorkspaceRect()
-    debugWorkspaceRafId = null
-  })
-
-  ;[80, 180, 320, 480].forEach((delay) => {
+    updateDebugWorkspaceRect();
+    debugWorkspaceRafId = null;
+  });
+  [80, 180, 320, 480].forEach((delay) => {
     const timer = setTimeout(() => {
-      updateDebugWorkspaceRect()
-      debugWorkspaceSyncTimers = debugWorkspaceSyncTimers.filter((item) => item !== timer)
-    }, delay)
-    debugWorkspaceSyncTimers.push(timer)
-  })
+      updateDebugWorkspaceRect();
+      debugWorkspaceSyncTimers = debugWorkspaceSyncTimers.filter(
+        (item) => item !== timer,
+      );
+    }, delay);
+    debugWorkspaceSyncTimers.push(timer);
+  });
 
   // The dialog is positioned with overlay lifecycle + transitions; keep sampling on first open.
-  scheduleDebugWorkspaceTracking(45)
-}
+  scheduleDebugWorkspaceTracking(45);
+};
+
+const isMissingQualityValue = (value: unknown) =>
+  value === null ||
+  value === undefined ||
+  value === "" ||
+  (typeof value === "number" && Number.isNaN(value));
+
+const buildQualityMetricsByField = (rows: unknown[]) => {
+  const tableRows = rows.filter((row): row is Record<string, unknown> =>
+    isPlainObject(row),
+  );
+  if (tableRows.length === 0)
+    return new Map<string, { missingRate: number; completenessRate: number }>();
+
+  const fieldSet = new Set<string>();
+  tableRows.forEach((row) =>
+    Object.keys(row).forEach((field) => fieldSet.add(field)),
+  );
+
+  const metrics = new Map<
+    string,
+    { missingRate: number; completenessRate: number }
+  >();
+  fieldSet.forEach((field) => {
+    const missingCount = tableRows.filter((row) =>
+      isMissingQualityValue(row[field]),
+    ).length;
+    const missingRate = missingCount / tableRows.length;
+    metrics.set(field, {
+      missingRate,
+      completenessRate: 1 - missingRate,
+    });
+  });
+
+  return metrics;
+};
+
+const withQualityMetrics = <T extends { name: string }>(
+  factors: T[],
+  metrics: Map<string, { missingRate: number; completenessRate: number }>,
+) =>
+  factors.map((factor) => {
+    const quality = metrics.get(factor.name);
+    return quality ? { ...factor, ...quality } : factor;
+  });
 
 const upstreamFactors = computed(() => {
-  let data = localUseManualInput.value ? localManualInput.value : inputData.value
-  if (!data && node.value?.data.output) data = node.value.data.output
-  if (!data) return []
-  if (typeof data === 'string') {
+  let data = localUseManualInput.value
+    ? localManualInput.value
+    : inputData.value;
+  if (!data && node.value?.data.output) data = node.value.data.output;
+  if (!data) return [];
+  if (typeof data === "string") {
     try {
-      data = JSON.parse(data)
+      data = JSON.parse(data);
     } catch {
-      return []
+      return [];
     }
   }
-  const schemaFields = getResultSchemaFields(data)
+  const schemaFields = getResultSchemaFields(data);
+  const qualityMetrics = buildQualityMetricsByField(getResultRows(data));
   if (schemaFields.length > 0) {
-    return schemaFields.map((field) => ({
-      name: field.name,
-      value: field.name,
-      dataType: field.type,
-      nullable: field.nullable,
-    }))
+    return withQualityMetrics(
+      schemaFields.map((field) => ({
+        name: field.name,
+        value: field.name,
+        dataType: field.type,
+        nullable: field.nullable,
+      })),
+      qualityMetrics,
+    );
   }
 
-  const rows = getResultRows(data)
-  const sample = rows[0]
-  if (sample && typeof sample === 'object') {
-    return Object.keys(sample).map((key) => ({ name: key, value: key, dataType: 'unknown' }))
+  const rows = getResultRows(data);
+  const sample = rows[0];
+  if (sample && typeof sample === "object") {
+    return withQualityMetrics(
+      Object.keys(sample).map((key) => ({
+        name: key,
+        value: key,
+        dataType: "unknown",
+      })),
+      qualityMetrics,
+    );
   }
 
-  if (Array.isArray(data) && data[0] && typeof data[0] === 'object') {
-    return Object.keys(data[0]).map((key) => ({ name: key, value: key, dataType: 'unknown' }))
+  if (Array.isArray(data) && data[0] && typeof data[0] === "object") {
+    const arrayQualityMetrics = buildQualityMetricsByField(data);
+    return withQualityMetrics(
+      Object.keys(data[0]).map((key) => ({
+        name: key,
+        value: key,
+        dataType: "unknown",
+      })),
+      arrayQualityMetrics,
+    );
   }
 
-  return []
-})
+  return [];
+});
 
-const availableNumericFactorCount = computed(() =>
-  upstreamFactors.value.filter((factor) => factor.dataType === 'number' || factor.dataType === 'unknown')
-    .length,
-)
+const availableNumericFactorCount = computed(
+  () =>
+    upstreamFactors.value.filter(
+      (factor) => factor.dataType === "number" || factor.dataType === "unknown",
+    ).length,
+);
 
 const debugActionGuideText = computed(
   () =>
-    '调试节点只重新执行当前节点，默认复用上游缓存；重跑上游后调试会沿当前链路重新执行上游节点，更适合校验最新输入。',
-)
+    "调试节点只重新执行当前节点，默认复用上游缓存；重跑上游后调试会沿当前链路重新执行上游节点，更适合校验最新输入。",
+);
 const currentNodeError = computed(() =>
-  node.value?.data.status === 'error' && node.value.data.error ? node.value.data.error : '',
-)
+  node.value?.data.status === "error" && node.value.data.error
+    ? node.value.data.error
+    : "",
+);
 const isCurrentNodeDebugRunning = computed(
   () =>
-    !!node.value
-    && store.isRunning
-    && store.activeExecutionScope === 'single'
-    && store.activeExecutionNodeId === node.value.id,
-)
+    !!node.value &&
+    store.isRunning &&
+    store.activeExecutionScope === "single" &&
+    store.activeExecutionNodeId === node.value.id,
+);
 
 const correlationSetupGuide = computed(() => {
-  if (!isCorrelationNode.value) return null
+  if (!isCorrelationNode.value) return null;
 
   return {
-    title: '相关性分析配置建议',
+    title: "相关性分析配置建议",
     items: [
-      '先选择 1-3 个 Y 字段作为观察指标，再补充 3-10 个 X 字段作为候选因子。',
-      '优先选择数值字段；类别字段进入相关性分析前，建议先做编码或清洗。',
+      "先选择 1-3 个 Y 字段作为观察指标，再补充 3-10 个 X 字段作为候选因子。",
+      "优先选择数值字段；类别字段进入相关性分析前，建议先做编码或清洗。",
       `当前可用数值字段 ${availableNumericFactorCount.value} 个，可先从最关键的指标开始。`,
     ],
-  }
-})
+  };
+});
 
 const runCurrentNode = async (rerunUpstream = false) => {
   if (node.value) {
-    node.value.data.config = { ...config.value }
-    node.value.data.label = editedName.value
-    node.value.data.useManualInput = localUseManualInput.value
-    node.value.data.manualInput = localManualInput.value
-    node.value.data.reuseLastRuntimeInputs = localReuseLastRuntimeInputs.value
-    store.refreshUnsavedChanges()
-    await store.executeNode(node.value.id, true, 'single', { rerunUpstream })
+    node.value.data.config = { ...config.value };
+    node.value.data.label = editedName.value;
+    node.value.data.useManualInput = localUseManualInput.value;
+    node.value.data.manualInput = localManualInput.value;
+    node.value.data.reuseLastRuntimeInputs = localReuseLastRuntimeInputs.value;
+    store.refreshUnsavedChanges();
+    await store.executeNode(node.value.id, true, "single", { rerunUpstream });
   }
-}
+};
 
 const saveConfig = () => {
   if (node.value) {
-    node.value.data.label = editedName.value
-    node.value.data.config = stripRuntimeInputValuesFromConfig(node.value.data.type, config.value)
-    node.value.data.useManualInput = localUseManualInput.value
-    node.value.data.manualInput = localManualInput.value
-    store.refreshUnsavedChanges()
+    node.value.data.label = editedName.value;
+    node.value.data.config = stripRuntimeInputValuesFromConfig(
+      node.value.data.type,
+      config.value,
+    );
+    node.value.data.useManualInput = localUseManualInput.value;
+    node.value.data.manualInput = localManualInput.value;
+    store.refreshUnsavedChanges();
     toast.add({
-      group: 'node-config',
-      severity: 'success',
-      summary: '保存成功',
-      detail: '节点配置已应用',
+      group: "node-config",
+      severity: "success",
+      summary: "保存成功",
+      detail: "节点配置已应用",
       life: 2200,
-    })
+    });
   }
-}
+};
 
 const resetSavedRuntimeInputs = () => {
-  if (!node.value) return
-  store.resetNodeRuntimeInputs(node.value.id)
-  localReuseLastRuntimeInputs.value = node.value.data.reuseLastRuntimeInputs ?? false
-  config.value = { ...node.value.data.config }
-}
+  if (!node.value) return;
+  store.resetNodeRuntimeInputs(node.value.id);
+  localReuseLastRuntimeInputs.value =
+    node.value.data.reuseLastRuntimeInputs ?? false;
+  config.value = { ...node.value.data.config };
+};
 
 const saveAndClose = () => {
-  saveConfig()
-  emit('close')
-}
+  saveConfig();
+  emit("close");
+};
 
 const openAnalysis = (title: string, data: any) => {
-  analysisModal.value = { visible: true, title, data }
-}
+  analysisModal.value = { visible: true, title, data };
+};
 
 const openExecutionLogs = () => {
   window.dispatchEvent(
-    new CustomEvent('workflow:open-log-panel', {
+    new CustomEvent("workflow:open-log-panel", {
       detail: {
         nodeId: node.value?.id ?? null,
       },
     }),
-  )
-  emit('close')
-}
+  );
+  emit("close");
+};
 
-const defaultMockRows = () => [{ f1: 10, f2: 20, target: 1 }]
+const defaultMockRows = () => [{ f1: 10, f2: 20, target: 1 }];
 
 type StructuredManualInputItem = {
-  sourceNodeId?: string
-  sourceNodeLabel?: string
-  edgeId?: string
-  order?: number
-  result?: unknown
-  payload?: unknown
-}
+  sourceNodeId?: string;
+  sourceNodeLabel?: string;
+  edgeId?: string;
+  order?: number;
+  result?: unknown;
+  payload?: unknown;
+};
 
 const hasStructuredInputs = (
   value: unknown,
 ): value is {
-  inputs: StructuredManualInputItem[]
-} => isPlainObject(value) && Array.isArray(value.inputs)
+  inputs: StructuredManualInputItem[];
+} => isPlainObject(value) && Array.isArray(value.inputs);
 
 const resolveStandardMockResult = (value: unknown) => {
-  const normalized = normalizeWorkflowResult(value)
-  if (normalized) return normalized
+  const normalized = normalizeWorkflowResult(value);
+  if (normalized) return normalized;
 
-  const rows = getResultRows(value)
+  const rows = getResultRows(value);
   if (rows.length > 0) {
-    return createTableResult(rows)
+    return createTableResult(rows);
   }
 
-  const groups = getResultGroups(value)
+  const groups = getResultGroups(value);
   if (groups.length > 0) {
-    return createTableCollectionResult(groups)
+    return createTableCollectionResult(groups);
   }
 
   if (isPlainObject(value) && Array.isArray(value.data)) {
-    const legacyRows = value.data.filter((row): row is Record<string, unknown> => isPlainObject(row))
+    const legacyRows = value.data.filter(
+      (row): row is Record<string, unknown> => isPlainObject(row),
+    );
     if (legacyRows.length > 0) {
-      return createTableResult(legacyRows)
+      return createTableResult(legacyRows);
     }
   }
 
   if (value !== null && value !== undefined) {
-    return createJsonResult(value)
+    return createJsonResult(value);
   }
 
-  return createTableResult(defaultMockRows())
-}
+  return createTableResult(defaultMockRows());
+};
 
 const buildManualInputTemplate = () => {
-  if (nodeDefinition.value?.inputMode === 'multiple') {
-    const structuredInput = inputData.value
-    const items = hasStructuredInputs(structuredInput) ? structuredInput.inputs : []
+  if (nodeDefinition.value?.inputMode === "multiple") {
+    const structuredInput = inputData.value;
+    const items = hasStructuredInputs(structuredInput)
+      ? structuredInput.inputs
+      : [];
     const normalizedItems =
       items.length > 0
         ? items.map((item: StructuredManualInputItem, index: number) => ({
@@ -573,60 +681,62 @@ const buildManualInputTemplate = () => {
             sourceNodeLabel: item.sourceNodeLabel ?? `来源 ${index + 1}`,
             edgeId: item.edgeId,
             order: item.order ?? index,
-            result: resolveStandardMockResult(item.result ?? item.payload ?? null),
+            result: resolveStandardMockResult(
+              item.result ?? item.payload ?? null,
+            ),
           }))
         : [
             {
-              sourceNodeId: 'source-1',
-              sourceNodeLabel: '来源 1',
+              sourceNodeId: "source-1",
+              sourceNodeLabel: "来源 1",
               order: 0,
               result: createTableResult(defaultMockRows()),
             },
             {
-              sourceNodeId: 'source-2',
-              sourceNodeLabel: '来源 2',
+              sourceNodeId: "source-2",
+              sourceNodeLabel: "来源 2",
               order: 1,
               result: createTableResult(defaultMockRows()),
             },
-          ]
+          ];
 
-    return JSON.stringify({ inputs: normalizedItems }, null, 2)
+    return JSON.stringify({ inputs: normalizedItems }, null, 2);
   }
 
-  return JSON.stringify(resolveStandardMockResult(inputData.value), null, 2)
-}
+  return JSON.stringify(resolveStandardMockResult(inputData.value), null, 2);
+};
 
 watch(
   [() => props.visible, () => props.nodeId],
   async () => {
-    await nextTick()
-    reconnectDebugWorkspaceObserver()
-    scheduleDebugWorkspaceRectSync()
+    await nextTick();
+    reconnectDebugWorkspaceObserver();
+    scheduleDebugWorkspaceRectSync();
   },
-  { immediate: true, flush: 'post' },
-)
+  { immediate: true, flush: "post" },
+);
 
 watch(
   () => debugWorkspaceRef.value,
   async () => {
-    await nextTick()
-    reconnectDebugWorkspaceObserver()
-    scheduleDebugWorkspaceRectSync()
+    await nextTick();
+    reconnectDebugWorkspaceObserver();
+    scheduleDebugWorkspaceRectSync();
   },
-)
+);
 
 onMounted(() => {
-  window.addEventListener('resize', handleViewportUpdate)
-  window.addEventListener('scroll', handleViewportUpdate, true)
-})
+  window.addEventListener("resize", handleViewportUpdate);
+  window.addEventListener("scroll", handleViewportUpdate, true);
+});
 
 onBeforeUnmount(() => {
-  clearDebugWorkspaceSyncQueue()
-  debugWorkspaceResizeObserver?.disconnect()
-  debugWorkspaceResizeObserver = null
-  window.removeEventListener('resize', handleViewportUpdate)
-  window.removeEventListener('scroll', handleViewportUpdate, true)
-})
+  clearDebugWorkspaceSyncQueue();
+  debugWorkspaceResizeObserver?.disconnect();
+  debugWorkspaceResizeObserver = null;
+  window.removeEventListener("resize", handleViewportUpdate);
+  window.removeEventListener("scroll", handleViewportUpdate, true);
+});
 </script>
 
 <template>
@@ -666,7 +776,10 @@ onBeforeUnmount(() => {
         :style="{ width: `${leftPaneWidth}px` }"
       >
         <!-- 上部分：输入数据 -->
-        <div class="shrink-0 min-h-0 p-4 pb-2 flex flex-col" :style="{ height: topPaneHeight + 'px' }">
+        <div
+          class="shrink-0 min-h-0 p-4 pb-2 flex flex-col"
+          :style="{ height: topPaneHeight + 'px' }"
+        >
           <DataDisplayPanel
             v-model:use-manual-input="localUseManualInput"
             v-model:manual-input-str="localManualInput"
@@ -675,7 +788,10 @@ onBeforeUnmount(() => {
             type="input"
             allow-mock
             @open-detail="
-              openAnalysis('输入数据', localUseManualInput ? localManualInput : inputData)
+              openAnalysis(
+                '输入数据',
+                localUseManualInput ? localManualInput : inputData,
+              )
             "
             @generate-mock="localManualInput = buildManualInputTemplate()"
           />
@@ -687,7 +803,9 @@ onBeforeUnmount(() => {
           class="group flex items-center justify-center h-4 cursor-row-resize select-none shrink-0"
           @mousedown="startResizingLeft"
         >
-          <div class="w-12 h-1 bg-slate-200 rounded-full group-hover:bg-blue-400 transition-colors" />
+          <div
+            class="w-12 h-1 bg-slate-200 rounded-full group-hover:bg-blue-400 transition-colors"
+          />
         </div>
 
         <!-- 下部分：运行时输入 -->
@@ -766,8 +884,10 @@ onBeforeUnmount(() => {
                 class="text-white animate-spin"
               />
               <Bug v-else :size="16" class="text-white" />
-              <span class="text-[12px] font-bold text-white uppercase tracking-wider">
-                {{ isCurrentNodeDebugRunning ? '正在调试...' : '调试节点' }}
+              <span
+                class="text-[12px] font-bold text-white uppercase tracking-wider"
+              >
+                {{ isCurrentNodeDebugRunning ? "正在调试..." : "调试节点" }}
               </span>
             </button>
             <button
@@ -781,20 +901,28 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <div class="flex-1 p-8 overflow-y-auto custom-scrollbar bg-white min-h-0">
-          <div v-if="activeTab === 'parameters'" class="mx-auto max-w-3xl space-y-6">
+        <div
+          class="flex-1 p-8 overflow-y-auto custom-scrollbar bg-white min-h-0"
+        >
+          <div
+            v-if="activeTab === 'parameters'"
+            class="mx-auto max-w-3xl space-y-6"
+          >
             <div
               v-if="currentFileImportTask"
               class="rounded-2xl border border-blue-200 bg-blue-50/80 px-4 py-3"
             >
               <div class="flex items-center justify-between gap-3">
-                <div class="text-sm font-semibold text-blue-900">后台解析中</div>
+                <div class="text-sm font-semibold text-blue-900">
+                  后台解析中
+                </div>
                 <div class="text-[12px] font-semibold text-blue-700">
                   {{ currentFileImportTask.progress }}%
                 </div>
               </div>
               <div class="mt-1 text-[12px] text-blue-700">
-                {{ currentFileImportTask.fileName }} · {{ currentFileImportPhaseText }}
+                {{ currentFileImportTask.fileName }} ·
+                {{ currentFileImportPhaseText }}
               </div>
             </div>
             <div
@@ -818,7 +946,9 @@ onBeforeUnmount(() => {
 
               <div class="min-w-0 flex-1">
                 <p class="truncate text-sm font-medium text-slate-700">
-                  <span class="text-slate-900">{{ nodeDefinition?.displayName ?? node?.data.label }}</span>
+                  <span class="text-slate-900">{{
+                    nodeDefinition?.displayName ?? node?.data.label
+                  }}</span>
                   <span class="mx-2 text-slate-300">·</span>
                   <span>{{ nodeHelpSummary.summary }}</span>
                 </p>
@@ -840,12 +970,16 @@ onBeforeUnmount(() => {
               class="flex items-center justify-between gap-3 rounded-2xl border border-blue-200 bg-blue-50/70 px-4 py-3"
             >
               <div class="min-w-0">
-                <div class="text-sm font-semibold text-slate-900">{{ correlationSetupGuide.title }}</div>
+                <div class="text-sm font-semibold text-slate-900">
+                  {{ correlationSetupGuide.title }}
+                </div>
                 <div class="mt-1 text-[12px] text-slate-500">
                   可用数值字段 {{ availableNumericFactorCount }} 个
                 </div>
               </div>
-              <div class="inline-flex items-center gap-2 text-[12px] font-medium text-blue-700">
+              <div
+                class="inline-flex items-center gap-2 text-[12px] font-medium text-blue-700"
+              >
                 <span
                   class="rounded-full border border-blue-200 bg-white px-3 py-1 text-[11px] font-bold"
                 >
@@ -864,20 +998,23 @@ onBeforeUnmount(() => {
               @save="saveConfig"
             />
           </div>
-          <div
-            v-else
-            class="mx-auto h-full w-full max-w-3xl"
-          >
+          <div v-else class="mx-auto h-full w-full max-w-3xl">
             <RuntimeSettingsPanel
               :is-trigger="node.data.category === 'trigger'"
               :reuse-last-runtime-inputs="localReuseLastRuntimeInputs"
-              @update:reuse-last-runtime-inputs="localReuseLastRuntimeInputs = $event"
+              @update:reuse-last-runtime-inputs="
+                localReuseLastRuntimeInputs = $event
+              "
               @reset-runtime-inputs="resetSavedRuntimeInputs"
             />
           </div>
         </div>
 
-        <ConfigFooter class="shrink-0" @close="emit('close')" @save="saveConfig" />
+        <ConfigFooter
+          class="shrink-0"
+          @close="emit('close')"
+          @save="saveConfig"
+        />
       </div>
 
       <div
@@ -918,7 +1055,12 @@ onBeforeUnmount(() => {
 
     <Teleport to="body">
       <div
-        v-if="visible && node && hasNeighborNavigator && neighborNodes.upstream.length > 0"
+        v-if="
+          visible &&
+          node &&
+          hasNeighborNavigator &&
+          neighborNodes.upstream.length > 0
+        "
         data-testid="debug-neighbor-left-rail"
         class="fixed z-[1300] flex max-h-[68vh] w-32 flex-col gap-2 overflow-y-auto rounded-2xl border border-slate-200 bg-white/95 p-2 shadow-xl backdrop-blur-sm"
         :style="leftNeighborRailStyle"
@@ -932,14 +1074,21 @@ onBeforeUnmount(() => {
           @click="openNeighborNodeConfig(item.id)"
         >
           <NodeIcon :type="item.type" :size="32" />
-          <span class="line-clamp-2 text-[11px] font-semibold leading-4 text-slate-700">
+          <span
+            class="line-clamp-2 text-[11px] font-semibold leading-4 text-slate-700"
+          >
             {{ item.label }}
           </span>
         </button>
       </div>
 
       <div
-        v-if="visible && node && hasNeighborNavigator && neighborNodes.downstream.length > 0"
+        v-if="
+          visible &&
+          node &&
+          hasNeighborNavigator &&
+          neighborNodes.downstream.length > 0
+        "
         data-testid="debug-neighbor-right-rail"
         class="fixed z-[1300] flex max-h-[68vh] w-32 flex-col gap-2 overflow-y-auto rounded-2xl border border-slate-200 bg-white/95 p-2 shadow-xl backdrop-blur-sm"
         :style="rightNeighborRailStyle"
@@ -953,7 +1102,9 @@ onBeforeUnmount(() => {
           @click="openNeighborNodeConfig(item.id)"
         >
           <NodeIcon :type="item.type" :size="32" />
-          <span class="line-clamp-2 text-[11px] font-semibold leading-4 text-slate-700">
+          <span
+            class="line-clamp-2 text-[11px] font-semibold leading-4 text-slate-700"
+          >
             {{ item.label }}
           </span>
         </button>
@@ -978,11 +1129,15 @@ onBeforeUnmount(() => {
     >
       <template #header>
         <div class="flex items-center gap-3">
-          <div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+          <div
+            class="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-50 text-blue-600"
+          >
             <HelpCircle :size="18" />
           </div>
           <div>
-            <div class="text-base font-semibold text-slate-900">节点使用帮助</div>
+            <div class="text-base font-semibold text-slate-900">
+              节点使用帮助
+            </div>
             <p class="mt-1 text-sm text-slate-500">
               {{ nodeDefinition?.displayName ?? node?.data.label }}
             </p>
@@ -1026,7 +1181,7 @@ onBeforeUnmount(() => {
 }
 
 .debug-column-resizer::before {
-  content: '';
+  content: "";
   position: absolute;
   top: 0;
   bottom: 0;
@@ -1086,4 +1241,3 @@ onBeforeUnmount(() => {
   );
 }
 </style>
-

@@ -1,11 +1,11 @@
 ﻿import type { Edge } from '@vue-flow/core'
-import { nodeDefinitions } from '@/nodes/registry'
+import { creatableNodeDefinitions } from '@/nodes/registry'
 import { CONNECTION_RULES } from '@/workflow/connectionRules'
 import type { WorkflowNode } from '@/utils/storage'
 import type { WorkflowAiNodeCatalogItem, WorkflowAiPlanMode } from './types'
 
 export const buildWorkflowAiNodeCatalog = (): WorkflowAiNodeCatalogItem[] =>
-  nodeDefinitions.map((definition) => ({
+  creatableNodeDefinitions.map((definition) => ({
     name: definition.name,
     displayName: definition.displayName,
     category: definition.category,

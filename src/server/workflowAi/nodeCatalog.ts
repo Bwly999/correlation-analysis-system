@@ -180,39 +180,83 @@ const SERVER_SAFE_NODE_CATALOG: WorkflowAiNodeCatalogItem[] = [
     },
   }),
   createCatalogItem({
-    name: 'data-cleaning',
-    displayName: '数据清洗',
+    name: 'data-dedup',
+    displayName: '去重',
     category: 'action',
-    description: '处理缺失值、重复记录、异常值和缩放编码，为后续分析做好准备。',
+    description: '仅处理重复记录，支持按整行或按字段组合去重。',
     properties: [
       createProperty('deduplicationMode', '去重方式', 'options', {
-        defaultValue: 'none',
-        description: '可选 none、full_row、by_fields；处理重复记录时优先配置。',
+        defaultValue: 'by_fields',
+        description: '可选 none、full_row、by_fields；默认按字段去重。',
       }),
-      createProperty('deduplicationFields', '去重字段', 'tags', {
+      createProperty('deduplicationFields', '去重字段', 'multi-options', {
         defaultValue: [],
-        description: '仅在按指定字段去重时生效。',
+        description: '仅在按字段去重时生效，未配置会阻止执行。',
       }),
-      createProperty('missingValueStrategy', '缺失值处理', 'options', {
-        defaultValue: 'none',
-        description: '可选 mean、median、zero、drop、none；处理空值时优先配置。',
-      }),
-      createProperty('targetColumns', '目标字段', 'tags', {
-        defaultValue: [],
-        description: '留空时自动选择可识别的数值字段。',
-      }),
-      createProperty('scaling', '特征缩放', 'options', {
-        defaultValue: 'none',
-        description: '可选 none、minmax、zscore；建模前可视情况启用。',
-      }),
-      createProperty('encoding', '分类变量处理', 'options', {
-        defaultValue: 'none',
-        description: '可选 none、label；需要把类别字段编码为数值时使用。',
+      createProperty('deduplicationKeep', '去重保留方式', 'options', {
+        defaultValue: 'first',
+        description: '可选 first、last。',
       }),
     ],
     assistantHints: {
-      keywords: ['数据清洗', '去重', '缺失值', '异常值', '标准化'],
-      useCases: ['处理重复记录', '处理缺失值', '做异常值清理'],
+      keywords: ['去重', '重复记录', '重复样本'],
+      useCases: ['按字段去重', '按整行去重'],
+    },
+  }),
+  createCatalogItem({
+    name: 'data-missing-outlier',
+    displayName: '缺失/异常值处理',
+    category: 'action',
+    description: '集中处理缺失值和异常值，默认删除缺失并启用 IQR 异常剔除。',
+    properties: [
+      createProperty('targetColumns', '目标字段', 'multi-options', {
+        defaultValue: [],
+        description: '留空时默认处理所有字段。',
+      }),
+      createProperty('missingValueStrategy', '缺失值处理', 'options', {
+        defaultValue: 'drop',
+        description: '可选 mean、median、zero、drop、none。',
+      }),
+      createProperty('outlierMethod', '异常值检测', 'options', {
+        defaultValue: 'iqr',
+        description: '可选 iqr、percentile、none。',
+      }),
+      createProperty('iqrK', 'IQR 系数', 'number', {
+        defaultValue: 1.5,
+        description: 'outlierMethod=iqr 时生效。',
+      }),
+      createProperty('percentile', '剔除比例(%)', 'number', {
+        defaultValue: 1,
+        description: 'outlierMethod=percentile 时生效。',
+      }),
+    ],
+    assistantHints: {
+      keywords: ['缺失值', '异常值', 'IQR', '百分位'],
+      useCases: ['缺失值处理', '异常值清理'],
+    },
+  }),
+  createCatalogItem({
+    name: 'data-encoding-scaling',
+    displayName: '编码/缩放',
+    category: 'action',
+    description: '处理类别编码和数值缩放，默认使用 Z-Score 标准化。',
+    properties: [
+      createProperty('targetColumns', '目标字段', 'multi-options', {
+        defaultValue: [],
+        description: '留空时默认处理所有字段。',
+      }),
+      createProperty('encoding', '分类变量处理', 'options', {
+        defaultValue: 'none',
+        description: '可选 none、label。',
+      }),
+      createProperty('scaling', '特征缩放', 'options', {
+        defaultValue: 'zscore',
+        description: '可选 none、minmax、zscore。',
+      }),
+    ],
+    assistantHints: {
+      keywords: ['编码', '标准化', '归一化', '缩放'],
+      useCases: ['标签编码', '特征标准化'],
     },
   }),
   createCatalogItem({

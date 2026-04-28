@@ -102,6 +102,7 @@ export interface NodeDefinition<
   libraryGroup?: NodeLibraryGroupId
   libraryAliases?: string[]
   libraryKeywords?: string[]
+  isLegacy?: boolean
   properties: NodeProperty[]
   inputMode?: NodeInputMode
   minInputs?: number

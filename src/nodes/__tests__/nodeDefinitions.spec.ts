@@ -41,6 +41,9 @@ vi.mock('@/services/kanbanIntegration', () => ({
 
 import { fileImportNode } from '../definitions/fileImport'
 import { dataCleaningNode } from '../definitions/dataCleaning'
+import { dataDedupNode } from '../definitions/dataDedup'
+import { dataMissingOutlierNode } from '../definitions/dataMissingOutlier'
+import { dataEncodingScalingNode } from '../definitions/dataEncodingScaling'
 import { dataProfilingNode } from '../definitions/dataProfiling'
 import { dataAggregationNode } from '../definitions/dataAggregation'
 import { dataFilterNode } from '../definitions/dataFilter'
@@ -348,6 +351,24 @@ describe('Node Definitions Execution Logic', () => {
       expect(legacy.stats.duplicatesRemoved).toBe(1)
       expect(legacy.stats.deduplicationMode).toBe('by_fields')
       expect(legacy.stats.deduplicationKeep).toBe('last')
+    })
+  })
+
+  describe('split cleaning nodes', () => {
+    it('should configure multi-options field selectors for split cleaning nodes', () => {
+      expect(
+        dataDedupNode.properties.find((property) => property.name === 'deduplicationFields')?.type,
+      ).toBe('multi-options')
+      expect(
+        dataMissingOutlierNode.properties.find((property) => property.name === 'targetColumns')?.type,
+      ).toBe('multi-options')
+      expect(
+        dataEncodingScalingNode.properties.find((property) => property.name === 'targetColumns')?.type,
+      ).toBe('multi-options')
+    })
+
+    it('should mark legacy data-cleaning as hidden from new creation', () => {
+      expect(dataCleaningNode.isLegacy).toBe(true)
     })
   })
 

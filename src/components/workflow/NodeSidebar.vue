@@ -18,7 +18,7 @@ import {
   CONNECTION_RULES,
   type PendingConnectionState,
 } from '@/stores/workflowStore'
-import { getNodeDefinition, nodeDefinitions } from '@/nodes/registry'
+import { creatableNodeDefinitions, getNodeDefinition } from '@/nodes/registry'
 import { NODE_LIBRARY_GROUPS, type NodeLibraryGroupId } from '@/nodes/libraryGroups'
 import type { NodeCategory } from '@/nodes/types'
 import type { WorkflowNode } from '@/utils/storage'
@@ -134,7 +134,7 @@ const allowedCategories = computed<NodeCategory[]>(() => {
 })
 
 const allSidebarNodes = computed<SidebarNode[]>(() =>
-  nodeDefinitions.map((definition) => ({
+  creatableNodeDefinitions.map((definition) => ({
     type: definition.name,
     label: definition.displayName,
     desc: definition.description,

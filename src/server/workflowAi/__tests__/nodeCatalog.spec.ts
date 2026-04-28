@@ -23,8 +23,8 @@ describe('buildServerWorkflowAiNodeCatalog', () => {
           category: 'terminal',
         }),
         expect.objectContaining({
-          name: 'field-selection',
-          displayName: '字段选择',
+          name: 'data-dedup',
+          displayName: '去重',
           category: 'action',
         }),
         expect.objectContaining({
@@ -35,6 +35,7 @@ describe('buildServerWorkflowAiNodeCatalog', () => {
         }),
       ]),
     )
+    expect(catalog.some((item) => item.name === 'data-cleaning')).toBe(false)
   })
 
   it('exposes static property options for server-safe MCP introspection', async () => {
