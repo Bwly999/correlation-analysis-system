@@ -64,7 +64,7 @@ import { sortNode } from '../definitions/sort'
 import { spearmanNode } from '../definitions/spearman'
 import { kendallNode } from '../definitions/kendall'
 import { vifNode } from '../definitions/vif'
-import { nodeDefinitions } from '../registry'
+import { creatableNodeDefinitions, nodeDefinitions } from '../registry'
 import {
   createTableCollectionResult,
   createReportResult,
@@ -374,6 +374,16 @@ describe('Node Definitions Execution Logic', () => {
 
     it('should mark data-profiling as hidden from new creation', () => {
       expect(dataProfilingNode.isLegacy).toBe(true)
+    })
+
+    it('should hide split correlation legacy nodes from new creation', () => {
+      expect(pearsonNode.isLegacy).toBe(true)
+      expect(spearmanNode.isLegacy).toBe(true)
+      expect(kendallNode.isLegacy).toBe(true)
+      expect(creatableNodeDefinitions.map((definition) => definition.name)).toContain('correlation-analysis')
+      expect(creatableNodeDefinitions.map((definition) => definition.name)).not.toContain('pearson')
+      expect(creatableNodeDefinitions.map((definition) => definition.name)).not.toContain('spearman')
+      expect(creatableNodeDefinitions.map((definition) => definition.name)).not.toContain('kendall')
     })
 
     it('should support manual range filtering with multiple AND rules', async () => {

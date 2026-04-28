@@ -963,6 +963,7 @@ export const createCorrelationNode = (method: CorrelationMethod): NodeDefinition
     displayName: meta.displayName,
     icon: 'grid',
     category: 'terminal',
+    isLegacy: true,
     description: meta.description,
     properties: commonProperties,
     execute: async (input, config) => executeCorrelationAnalysis(method, input, config),

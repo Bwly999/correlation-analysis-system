@@ -84,7 +84,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       requiredConfig: ['jsonData'],
       recommendedConfigPatterns: ['优先使用对象数组，便于后续节点直接消费。'],
       commonMistakes: ['输入非 JSON 文本导致解析失败。'],
-      recommendedNextNodes: ['data-dedup', 'data-filter', 'pearson'],
+      recommendedNextNodes: ['data-dedup', 'data-filter', 'correlation-analysis'],
     },
   ),
   'neighbor-system': createEntry(
@@ -166,7 +166,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       inputKinds: ['table'],
       outputKinds: ['table'],
       recommendedPrevNodes: ['file-import', 'manual-json-import', 'neighbor-system'],
-      recommendedNextNodes: ['data-filter', 'data-aggregation', 'pearson', 'xgboost-shap'],
+      recommendedNextNodes: ['data-filter', 'data-aggregation', 'correlation-analysis', 'xgboost-shap'],
     },
   ),
   'data-dedup': createEntry(
@@ -279,7 +279,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       inputKinds: ['table'],
       outputKinds: ['table'],
       recommendedPrevNodes: ['data-missing-outlier', 'data-dedup', 'data-filter'],
-      recommendedNextNodes: ['pearson', 'xgboost-shap', 'data-export'],
+      recommendedNextNodes: ['correlation-analysis', 'xgboost-shap', 'data-export'],
     },
   ),
   'data-filter': createEntry(
@@ -310,7 +310,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       inputKinds: ['table'],
       outputKinds: ['table'],
       recommendedPrevNodes: ['data-cleaning', 'file-import'],
-      recommendedNextNodes: ['data-aggregation', 'pearson', 'data-export'],
+      recommendedNextNodes: ['data-aggregation', 'correlation-analysis', 'data-export'],
     },
   ),
   'js-transform': createEntry(
@@ -354,7 +354,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       recommendedConfigPatterns: ['优先用 rows.map 或 rows.filter + rows.map，保持输出为数组对象列表。'],
       commonMistakes: ['返回普通对象而不是数组', '在代码里使用 async/await', '尝试访问 rows 之外的变量'],
       recommendedPrevNodes: ['file-import', 'manual-json-import', 'data-cleaning', 'data-filter'],
-      recommendedNextNodes: ['field-selection', 'sort', 'chart-display', 'pearson', 'data-export'],
+      recommendedNextNodes: ['field-selection', 'sort', 'chart-display', 'correlation-analysis', 'data-export'],
     },
   ),
   'data-aggregation': createEntry(
@@ -394,7 +394,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       inputKinds: ['table'],
       outputKinds: ['table'],
       recommendedPrevNodes: ['data-cleaning', 'data-filter'],
-      recommendedNextNodes: ['pearson', 'chart-display', 'data-export'],
+      recommendedNextNodes: ['correlation-analysis', 'chart-display', 'data-export'],
     },
   ),
   'data-merge': createEntry(
@@ -435,7 +435,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       inputKinds: ['table'],
       outputKinds: ['table', 'tableCollection'],
       recommendedPrevNodes: ['file-import', 'neighbor-system', 'data-cleaning'],
-      recommendedNextNodes: ['chart-display', 'pearson', 'data-missing-outlier'],
+      recommendedNextNodes: ['chart-display', 'correlation-analysis', 'data-missing-outlier'],
     },
   ),
   'field-selection': createEntry(
@@ -466,7 +466,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       inputKinds: ['table'],
       outputKinds: ['table'],
       recommendedPrevNodes: ['file-import', 'data-cleaning', 'data-filter'],
-      recommendedNextNodes: ['pearson', 'chart-display', 'data-export'],
+      recommendedNextNodes: ['correlation-analysis', 'chart-display', 'data-export'],
     },
   ),
   sort: createEntry(
@@ -552,7 +552,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       inputKinds: ['table'],
       outputKinds: ['report'],
       recommendedPrevNodes: ['file-import', 'neighbor-system', 'data-merge'],
-      recommendedNextNodes: ['data-cleaning', 'pearson', 'xgboost-shap'],
+      recommendedNextNodes: ['data-cleaning', 'correlation-analysis', 'xgboost-shap'],
     },
   ),
   'correlation-analysis': createEntry(
@@ -1082,7 +1082,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       workflowRoles: ['分析终点'],
       inputKinds: ['table', 'report'],
       outputKinds: ['file'],
-      recommendedPrevNodes: ['pearson', 'chart-display', 'data-filter'],
+      recommendedPrevNodes: ['correlation-analysis', 'chart-display', 'data-filter'],
     },
   ),
 }
