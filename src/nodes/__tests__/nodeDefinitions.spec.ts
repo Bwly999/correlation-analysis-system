@@ -58,6 +58,7 @@ import { lassoNode } from '../definitions/lasso'
 import { multipleLinearRegressionNode } from '../definitions/multipleLinearRegression'
 import { pcaNode } from '../definitions/pca'
 import { randomForestFeatureImportanceNode } from '../definitions/randomForestFeatureImportance'
+import { correlationAnalysisNode } from '../definitions/correlationAnalysis'
 import { pearsonNode } from '../definitions/pearson'
 import { sortNode } from '../definitions/sort'
 import { spearmanNode } from '../definitions/spearman'
@@ -1331,6 +1332,35 @@ describe('Node Definitions Execution Logic', () => {
       expect(legacy.report.sections[2].option.series[0].data[1].itemStyle.color).toBe('#60a5fa')
       expect(legacy.report.sections[2].option.yAxis.data).toEqual(['f2', 'f1'])
       expect(legacy.report.sections[4].content).toContain('f1')
+    })
+
+    it('should combine selected correlation methods in one correlation-analysis report', async () => {
+      const input = createTableResult([
+        { target: 1, f1: 1, f2: 10 },
+        { target: 2, f1: 2, f2: 8 },
+        { target: 3, f1: 3, f2: 6 },
+        { target: 4, f1: 4, f2: 4 },
+        { target: 5, f1: 5, f2: 2 },
+      ])
+
+      const result = await correlationAnalysisNode.execute(input, {
+        xFields: ['f1', 'f2'],
+        yFields: ['target'],
+        methods: ['pearson', 'spearman'],
+        heatmapTopN: 2,
+        rankingTopN: 2,
+      })
+
+      const legacy = asLegacy(result)
+
+      expect(legacy.viewType).toBe('report')
+      expect(legacy.report.title).toBe('相关性分析')
+      expect(legacy.report.metadata.methods).toEqual(['pearson', 'spearman'])
+      expect(legacy.report.sections[0].type).toBe('summary')
+      expect(legacy.report.sections.some((section: any) => section.key === 'pearson-matrix')).toBe(true)
+      expect(legacy.report.sections.some((section: any) => section.key === 'spearman-ranking')).toBe(true)
+      expect(legacy.metrics.methods).toEqual(['pearson', 'spearman'])
+      expect(result.preview?.viewer).toBe('report-viewer')
     })
 
     it('should respect separate heatmap and ranking factor limits and keep topN backward compatibility', async () => {

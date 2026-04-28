@@ -555,6 +555,50 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       recommendedNextNodes: ['data-cleaning', 'pearson', 'xgboost-shap'],
     },
   ),
+  'correlation-analysis': createEntry(
+    {
+      summary: '统一执行 Pearson、Spearman 和 Kendall 相关性分析，排查 X 与 Y 的关联强度、方向和稳定性。',
+      whenToUse: ['你想先判断候选因子和连续目标字段之间是否存在明显线性、单调或排序关系。'],
+      inputGuide: ['需要上游提供表格数据。', 'X 字段和 Y 字段都应尽量选择可转成数值的字段。'],
+      parameterGuide: [
+        {
+          property: 'methods',
+          title: '分析方法',
+          content: '默认同时运行 Pearson 和 Spearman；Kendall 更适合小样本或排序一致性验证。',
+        },
+        {
+          property: 'xFields',
+          title: 'X 字段',
+          content: '选择候选影响因子，系统只计算这些 X 与所选 Y 的交叉相关。',
+        },
+        {
+          property: 'yFields',
+          title: 'Y 字段',
+          content: '选择目标变量，可同时选择多个 Y 并在结果中分别查看排行。',
+        },
+      ],
+      outputGuide: ['输出结果是相关性分析报告，包含不同方法的热力图、排行、明细和可信提示。'],
+      nextSteps: ['若要继续筛选关键因子，可接随机森林特征重要性。', '若要判断线性方向和系数，可继续用多元线性回归。'],
+      commonIssues: [
+        {
+          title: '字段不支持相关性分析',
+          resolution: '请确认 X 和 Y 字段为数值字段，或先用编码/缩放节点处理类别字段。',
+        },
+      ],
+    },
+    {
+      useCases: ['连续变量相关性分析', '目标因子排序', '线性和单调关系排查'],
+      keywords: ['相关性分析', 'Pearson', 'Spearman', 'Kendall', '线性相关', '单调关系'],
+      workflowRoles: ['分析终点'],
+      inputKinds: ['table'],
+      outputKinds: ['report'],
+      requiredConfig: ['xFields', 'yFields'],
+      recommendedConfigPatterns: ['默认使用 Pearson + Spearman 起步，只有小样本或排序场景再开启 Kendall。'],
+      commonMistakes: ['把文本 ID 字段直接作为 X 或 Y', '只看相关性强度而忽略样本量和缺失风险'],
+      recommendedPrevNodes: ['data-missing-outlier', 'field-selection', 'data-filter'],
+      recommendedNextNodes: ['random-forest-feature-importance', 'multiple-linear-regression', 'data-export'],
+    },
+  ),
   pearson: createEntry(
     {
       summary: '计算指定 X / Y 数值字段之间的 Pearson 线性相关性，并支持按 Y 字段切换排行。',
@@ -1068,6 +1112,7 @@ const nodeLibraryGroups: Record<string, NodeLibraryGroupId> = {
   'data-aggregation': 'merge-aggregate',
   'data-merge': 'merge-aggregate',
   'data-profiling': 'merge-aggregate',
+  'correlation-analysis': 'stat-analysis',
   pearson: 'stat-analysis',
   spearman: 'stat-analysis',
   kendall: 'stat-analysis',

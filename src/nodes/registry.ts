@@ -22,6 +22,7 @@ import { randomForestFeatureImportanceNode } from './definitions/randomForestFea
 import { anovaNode } from './definitions/anova.js'
 import { classificationFactorScreeningNode } from './definitions/classificationFactorScreening.js'
 import { pcaNode } from './definitions/pca.js'
+import { correlationAnalysisNode } from './definitions/correlationAnalysis.js'
 import { pearsonNode } from './definitions/pearson.js'
 import { spearmanNode } from './definitions/spearman.js'
 import { kendallNode } from './definitions/kendall.js'
@@ -53,6 +54,7 @@ const rawNodeDefinitions: NodeDefinition[] = [
   anovaNode,
   classificationFactorScreeningNode,
   pcaNode,
+  correlationAnalysisNode,
   vifNode,
   pearsonNode,
   spearmanNode,

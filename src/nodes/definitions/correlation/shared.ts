@@ -61,7 +61,7 @@ const CORRELATION_HEATMAP_COLOR_SCALE = [
   CORRELATION_POSITIVE_COLOR,
 ]
 
-const methodMeta: Record<CorrelationMethod, CorrelationMethodMeta> = {
+export const correlationMethodMeta: Record<CorrelationMethod, CorrelationMethodMeta> = {
   pearson: {
     name: 'pearson',
     displayName: 'Pearson 相关系数',
@@ -651,7 +651,7 @@ export const executeCorrelationAnalysis = async (
     throw new Error('至少需要 2 个数值字段才能进行相关性分析')
   }
 
-  const meta = methodMeta[method]
+  const meta = correlationMethodMeta[method]
   const xSelection = normalizeSelectedFields(config.xFields, allKeys, numericKeys)
   const ySelection = normalizeSelectedFields(config.yFields, allKeys, numericKeys)
   createSelectedFieldError('X', xSelection.missingFields, xSelection.nonNumericFields)
@@ -956,7 +956,7 @@ export const executeCorrelationAnalysis = async (
 }
 
 export const createCorrelationNode = (method: CorrelationMethod): NodeDefinition => {
-  const meta = methodMeta[method]
+  const meta = correlationMethodMeta[method]
 
   return {
     name: meta.name,
