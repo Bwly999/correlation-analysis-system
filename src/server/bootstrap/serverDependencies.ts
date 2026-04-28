@@ -12,6 +12,7 @@ import {
   createWorkflowMcpRuntime,
   type WorkflowMcpRuntime,
 } from '../opencode/workflowMcpRuntime.js'
+import { decodeWorkflowHeaderValue } from '../../shared/workflowHeaderEncoding.js'
 
 export type ServerStorageUserResolver = (
   headers: IncomingMessage['headers'],
@@ -39,8 +40,8 @@ export interface CreateServerDependenciesOptions {
 export const createServerStorageUserResolver = (
   defaultStorageUser?: ServerStorageUser,
 ): ServerStorageUserResolver => (headers) => {
-  const headerUserId = resolveSingleHeaderValue(headers[WORKFLOW_USER_ID_HEADER])
-  const headerUserName = resolveSingleHeaderValue(headers[WORKFLOW_USER_NAME_HEADER])
+  const headerUserId = decodeWorkflowHeaderValue(resolveSingleHeaderValue(headers[WORKFLOW_USER_ID_HEADER]))
+  const headerUserName = decodeWorkflowHeaderValue(resolveSingleHeaderValue(headers[WORKFLOW_USER_NAME_HEADER]))
   const id = headerUserId || defaultStorageUser?.id
 
   if (!id) {

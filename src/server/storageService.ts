@@ -11,6 +11,7 @@ import {
   WORKFLOW_USER_NAME_HEADER,
   resolveSingleHeaderValue,
 } from './http/workflowHeaders.js'
+import { decodeWorkflowHeaderValue } from '../shared/workflowHeaderEncoding.js'
 import type { WorkflowStorageRepository } from './storageRepository.js'
 
 export type ServerSavedWorkflow = StorageWorkflowDto
@@ -105,7 +106,9 @@ export const createServerStorageService = (
 
   return {
     resolveStorageUser(headers) {
-      const id = resolveSingleHeaderValue(headers[WORKFLOW_USER_ID_HEADER]) || defaultUser?.id
+      const id =
+        decodeWorkflowHeaderValue(resolveSingleHeaderValue(headers[WORKFLOW_USER_ID_HEADER]))
+        || defaultUser?.id
       if (!id) {
         const error = new Error(
           `缺少用户标识，请通过 ${WORKFLOW_USER_ID_HEADER} 请求头或 defaultUser 依赖注入提供用户`,
@@ -113,7 +116,10 @@ export const createServerStorageService = (
         ;(error as Error & { statusCode: number }).statusCode = 400
         throw error
       }
-      const name = resolveSingleHeaderValue(headers[WORKFLOW_USER_NAME_HEADER]) || defaultUser?.name || '默认用户'
+      const name =
+        decodeWorkflowHeaderValue(resolveSingleHeaderValue(headers[WORKFLOW_USER_NAME_HEADER]))
+        || defaultUser?.name
+        || '默认用户'
 
       return { id, name }
     },

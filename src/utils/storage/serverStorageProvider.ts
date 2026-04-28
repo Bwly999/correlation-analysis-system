@@ -8,6 +8,7 @@ import type {
   WorkflowVersionMetadata,
 } from './types'
 import { createWorkflowApiAuthHeaders } from '@/services/apiAuth'
+import { encodeWorkflowHeaderValue } from '@/shared/workflowHeaderEncoding'
 
 const WORKFLOW_USER_ID_STORAGE_KEY = 'workflow-storage-user-id'
 const WORKFLOW_USER_NAME_STORAGE_KEY = 'workflow-storage-user-name'
@@ -57,7 +58,7 @@ const getOrCreateFallbackWorkflowUser = () => {
 export class ServerStorageProvider implements IStorageProvider {
   private baseUrl = import.meta.env.VITE_API_BASE_URL || '/api'
 
-  private resolveWorkflowHeaders() {
+  private resolveWorkflowHeaders(): Record<string, string> {
     const envUserId = import.meta.env.VITE_WORKFLOW_USER_ID?.trim()
     const envUserName = import.meta.env.VITE_WORKFLOW_USER_NAME?.trim()
     const fallbackUser = getOrCreateFallbackWorkflowUser()
@@ -66,8 +67,8 @@ export class ServerStorageProvider implements IStorageProvider {
     if (!userId) return {}
 
     return {
-      'x-workflow-user-id': userId,
-      ...(userName ? { 'x-workflow-user-name': userName } : { 'x-workflow-user-name': FALLBACK_WORKFLOW_USER_NAME }),
+      'x-workflow-user-id': encodeWorkflowHeaderValue(userId),
+      'x-workflow-user-name': encodeWorkflowHeaderValue(userName || FALLBACK_WORKFLOW_USER_NAME),
     }
   }
 

@@ -11,6 +11,7 @@ import type {
   UserWorkflowDocument,
   WorkflowStorageRepository,
 } from '../storageRepository.js'
+import { encodeWorkflowHeaderValue } from '../../shared/workflowHeaderEncoding.js'
 
 const cloneJson = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
 
@@ -118,6 +119,27 @@ describe('server storage service composition', () => {
     })
 
     expect(() => service.resolveStorageUser({})).toThrow(/用户/i)
+  })
+
+  it('decodes browser-safe workflow user headers before resolving storage scope', () => {
+    const repository = createInMemoryRepository<
+      StorageWorkflowDto,
+      StorageWorkflowVersionDto<StorageWorkflowDto>,
+      StorageExecutionRecordDto
+    >()
+    const service = createServerStorageService({
+      repository,
+    })
+
+    expect(
+      service.resolveStorageUser({
+        'x-workflow-user-id': encodeWorkflowHeaderValue('用户-1'),
+        'x-workflow-user-name': encodeWorkflowHeaderValue('服务端用户'),
+      }),
+    ).toEqual({
+      id: '用户-1',
+      name: '服务端用户',
+    })
   })
 
   it('wires repository dependency through storage composition root', async () => {
