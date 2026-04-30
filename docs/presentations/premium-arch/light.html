@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>相关性分析系统架构全景 | Integrated Master Blueprint</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #1e293b;
+            --accent: #2563eb;
+            --accent-soft: #eff6ff;
+            --border: #e2e8f0;
+            --text-main: #0f172a;
+            --text-dim: #64748b;
+            --bg-page: #f8fafc;
+            --bg-card: #ffffff;
+            --radius: 16px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+
+        body {
+            background-color: var(--bg-page);
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 40px;
+        }
+
+        /* 截图画布容器：优化 16:9 比例 */
+        .blueprint-canvas {
+            width: 1200px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            box-shadow: 0 40px 100px -20px rgba(0,0,0,0.06);
+            padding: 48px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* 背景纹理：精密工程格点 */
+        .blueprint-canvas::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background-image: radial-gradient(var(--border) 1px, transparent 1px);
+            background-size: 24px 24px;
+            opacity: 0.4;
+            pointer-events: none;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            border-bottom: 2px solid var(--primary);
+            padding-bottom: 20px;
+            margin-bottom: 12px;
+            position: relative;
+            z-index: 10;
+        }
+
+        .title-zone h1 {
+            font-size: 32px;
+            font-weight: 800;
+            letter-spacing: -0.04em;
+            color: var(--primary);
+        }
+
+        .title-zone p {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            color: var(--accent);
+            text-transform: uppercase;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+            margin-top: 4px;
+        }
+
+        .meta-zone {
+            text-align: right;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            color: var(--text-dim);
+            line-height: 1.4;
+        }
+
+        /* 垂直堆栈架构 */
+        .arch-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            position: relative;
+            z-index: 10;
+        }
+
+        .layer {
+            display: grid;
+            grid-template-columns: 200px 1fr;
+            background: rgba(255, 255, 255, 0.7);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .layer:hover {
+            border-color: var(--accent);
+            box-shadow: 0 10px 30px -10px rgba(37, 99, 235, 0.1);
+            transform: translateX(4px);
+        }
+
+        .layer-label {
+            background: var(--accent-soft);
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            border-right: 1px solid var(--border);
+        }
+
+        .layer-label .num {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--accent);
+            margin-bottom: 4px;
+        }
+
+        .layer-label .cn { font-size: 18px; font-weight: 800; color: var(--primary); }
+        .layer-label .en { font-size: 10px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; }
+
+        .layer-content {
+            padding: 20px;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+        }
+
+        .module {
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .module-head {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+
+        .module-head svg { width: 18px; height: 18px; color: var(--accent); }
+        .module-head h4 { font-size: 14px; font-weight: 700; color: var(--primary); }
+
+        .module p {
+            font-size: 11px;
+            color: var(--text-dim);
+            line-height: 1.5;
+        }
+
+        .tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-top: auto;
+            padding-top: 8px;
+        }
+
+        .tag {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 9px;
+            background: var(--bg-page);
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: var(--text-dim);
+            border: 1px solid var(--border);
+        }
+
+        /* 重点层高亮 */
+        .layer-analysis {
+            background: linear-gradient(to right, var(--accent-soft), #fff);
+            border-left: 4px solid var(--accent);
+        }
+
+        /* Footer */
+        .footer {
+            margin-top: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px;
+            color: var(--text-dim);
+            opacity: 0.6;
+        }
+
+        .btn-export {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 30px;
+            font-weight: 700;
+            font-size: 12px;
+            cursor: pointer;
+            z-index: 100;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        svg { fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+    </style>
+</head>
+<body>
+
+    <button class="btn-export" onclick="window.print()">Export Architecture</button>
+
+    <div class="blueprint-canvas">
+        
+        <!-- Header -->
+        <div class="header">
+            <div class="title-zone">
+                <h1>相关性分析系统 · 架构方案</h1>
+                <p>Advanced Correlation Analysis System Architecture v2.4</p>
+            </div>
+            <div class="meta-zone">
+                DATE: 2026.04.30<br>
+                REF: CAS-PRO-SPEC-001<br>
+                CONFIDENTIAL · ARCH TEAM
+            </div>
+        </div>
+
+        <div class="arch-stack">
+            
+            <!-- Layer 01: Analysis (Top Priority) -->
+            <div class="layer layer-analysis">
+                <div class="layer-label">
+                    <span class="num">LAYER 01</span>
+                    <span class="cn">分析架构层</span>
+                    <span class="en">Correlation Engine</span>
+                </div>
+                <div class="layer-content">
+                    <div class="module">
+                        <div class="module-head">
+                            <svg viewBox="0 0 24 24"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>
+                            <h4>标准化结果协议</h4>
+                        </div>
+                        <p>统一消费 NodeResult 协议。通过 kind 标识表格、图表与报告，实现异构算法与 UI 的原子化解耦。</p>
+                        <div class="tags">
+                            <span class="tag">NodeResult</span>
+                            <span class="tag">Schema</span>
+                        </div>
+                    </div>
+                    <div class="module">
+                        <div class="module-head">
+                            <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                            <h4>分析算法矩阵</h4>
+                        </div>
+                        <p>集成皮尔逊、斯皮尔曼、逻辑回归等全矩阵算法。支持 TreeSHAP 因子归因与 VIF 共线性诊断。</p>
+                        <div class="tags">
+                            <span class="tag">Pearson</span>
+                            <span class="tag">SHAP</span>
+                            <span class="tag">VIF</span>
+                        </div>
+                    </div>
+                    <div class="module">
+                        <div class="module-head">
+                            <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                            <h4>结构化见解引擎</h4>
+                        </div>
+                        <p>自动提取显著因子、风险预警与阅读建议。基于多维指标构建一站式、可读性强的分析报告。</p>
+                        <div class="tags">
+                            <span class="tag">Insights</span>
+                            <span class="tag">Auto-Report</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Layer 02: UI -->
+            <div class="layer">
+                <div class="layer-label">
+                    <span class="num">LAYER 02</span>
+                    <span class="cn">UI 交互层</span>
+                    <span class="en">Interaction Layer</span>
+                </div>
+                <div class="layer-content">
+                    <div class="module">
+                        <div class="module-head">
+                            <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+                            <h4>响应式分析看板</h4>
+                        </div>
+                        <p>支持多面板聚合、全屏专注模式。结果 Viewer 根据 Kind 动态匹配（AG-Grid / ECharts / Report）。</p>
+                    </div>
+                    <div class="module">
+                        <div class="module-head">
+                            <svg viewBox="0 0 24 24"><path d="M12 20v-6M6 20V10M18 20V4"/></svg>
+                            <h4>异构可视化体系</h4>
+                        </div>
+                        <p>针对相关性热力图、SHAP 贡献图、分类趋势图等定制化展示。支持采样、归一化与动态交互。</p>
+                    </div>
+                    <div class="module">
+                        <div class="module-head">
+                            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+                            <h4>历史回溯预览</h4>
+                        </div>
+                        <p>完整保留执行快照。支持从运行记录秒级恢复画布状态与结果展示，确保分析链路可回溯。</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Layer 03: Workflow -->
+            <div class="layer">
+                <div class="layer-label">
+                    <span class="num">LAYER 03</span>
+                    <span class="cn">工作流引擎</span>
+                    <span class="en">Workflow Logic</span>
+                </div>
+                <div class="layer-content">
+                    <div class="module">
+                        <div class="module-head">
+                            <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                            <h4>拓扑执行器</h4>
+                        </div>
+                        <p>基于 Vue Flow 的编排。支持运行时补录、单节点调试、冻结输出与多 Trigger 协同调度。</p>
+                    </div>
+                    <div class="module">
+                        <div class="module-head">
+                            <svg viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                            <h4>AI 编排主链</h4>
+                        </div>
+                        <p>结合 MCP 协议。实现从语义需求到工作流计划的自动化生成、校验与画布落图闭环。</p>
+                    </div>
+                    <div class="module">
+                        <div class="module-head">
+                            <svg viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
+                            <h4>声明式节点定义</h4>
+                        </div>
+                        <p>NodeDefinition 一次声明，自动映射 UI 属性、帮助文档与 AI 模型所需的语义元数据。</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Layer 04: Backend -->
+            <div class="layer">
+                <div class="layer-label">
+                    <span class="num">LAYER 04</span>
+                    <span class="cn">后端服务层</span>
+                    <span class="en">Infrastructure</span>
+                </div>
+                <div class="layer-content">
+                    <div class="module">
+                        <div class="module-head">
+                            <svg viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>
+                            <h4>算法计算集群</h4>
+                        </div>
+                        <p>Python (FastAPI) 为核心。深度集成 Scikit-learn、XGBoost、SHAP，承接高性能重计算任务。</p>
+                    </div>
+                    <div class="module">
+                        <div class="module-head">
+                            <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                            <h4>Node.js 网关</h4>
+                        </div>
+                        <p>负责 JWT 鉴权、存储隔离、AI 代理转发与 MCP 服务暴露。保障企业级部署安全。</p>
+                    </div>
+                    <div class="module">
+                        <div class="module-head">
+                            <svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+                            <h4>多模态持久化</h4>
+                        </div>
+                        <p>MySQL + LowDB 双适配。配合 Drizzle ORM，实现版本历史与执行快照的原子化存储。</p>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <span>DESIGNED BY SYSTEM ARCH TEAM · © 2026 CAS PROJECT</span>
+            <span>PROPRIETARY & CONFIDENTIAL</span>
+        </div>
+
+    </div>
+
+</body>
+</html>

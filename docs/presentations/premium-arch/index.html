@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>系统架构全景 | 相关性分析系统</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Plus+Jakarta+Sans:wght@300;500;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --slate-900: #0f172a;
+            --blue-600: #2563eb;
+            --blue-400: #60a5fa;
+            --glass: rgba(255, 255, 255, 0.03);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --text-main: #f8fafc;
+            --text-dim: #94a3b8;
+            --accent-gradient: linear-gradient(135deg, #2563eb 0%, #60a5fa 100%);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background-color: var(--slate-900);
+            color: var(--text-main);
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 20% 20%, rgba(37, 99, 235, 0.05) 0%, transparent 40%),
+                radial-gradient(circle at 80% 80%, rgba(96, 165, 250, 0.05) 0%, transparent 40%);
+        }
+
+        /* --- Header Section --- */
+        header {
+            height: 40vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 0 20px;
+        }
+
+        .kicker {
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--blue-400);
+            text-transform: uppercase;
+            letter-spacing: 4px;
+            font-size: 14px;
+            margin-bottom: 16px;
+            opacity: 0;
+            animation: fadeInDown 0.8s forwards;
+        }
+
+        h1 {
+            font-size: clamp(2.5rem, 8vw, 5rem);
+            font-weight: 800;
+            line-height: 1.1;
+            margin-bottom: 24px;
+            background: linear-gradient(to bottom, #fff 40%, #94a3b8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            opacity: 0;
+            animation: fadeInUp 1s 0.2s forwards;
+        }
+
+        /* --- Stack Visualization --- */
+        .stack-container {
+            position: relative;
+            max-width: 1200px;
+            margin: 0 auto 200px;
+            perspective: 2000px;
+            padding: 0 40px;
+        }
+
+        .layer {
+            position: relative;
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: 40px;
+            margin-bottom: -60px; /* Overlap effect */
+            transform: rotateX(25deg) rotateY(-5deg) rotateZ(-1deg);
+            transition: all 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+            backdrop-filter: blur(12px);
+            box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+            opacity: 0;
+        }
+
+        .layer:hover {
+            transform: rotateX(10deg) rotateY(0deg) rotateZ(0deg) translateY(-20px);
+            border-color: var(--blue-600);
+            background: rgba(37, 99, 235, 0.05);
+            z-index: 100 !important;
+        }
+
+        .layer-title {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+
+        .layer-num {
+            font-family: 'JetBrains Mono', monospace;
+            background: var(--accent-gradient);
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 18px;
+        }
+
+        .layer-name {
+            font-size: 28px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 20px;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            padding: 24px;
+            transition: 0.3s;
+        }
+
+        .card:hover {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .card h4 {
+            font-size: 16px;
+            margin-bottom: 8px;
+            color: var(--blue-400);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .card p {
+            font-size: 14px;
+            color: var(--text-dim);
+            line-height: 1.6;
+        }
+
+        /* --- Individual Layer Styles --- */
+        #layer-analysis { z-index: 4; animation: slideIn 1s 0.4s forwards; }
+        #layer-ui { z-index: 3; animation: slideIn 1s 0.6s forwards; }
+        #layer-workflow { z-index: 2; animation: slideIn 1s 0.8s forwards; }
+        #layer-backend { z-index: 1; animation: slideIn 1s 1.0s forwards; }
+
+        /* --- Animations --- */
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(40px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeInDown {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes slideIn {
+            from { opacity: 0; transform: rotateX(45deg) translateY(100px) translateZ(-200px); }
+            to { opacity: 1; transform: rotateX(25deg) translateY(0) translateZ(0); }
+        }
+
+        /* --- Floating Elements --- */
+        .decor {
+            position: fixed;
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        /* --- Footer --- */
+        footer {
+            text-align: center;
+            padding: 100px 20px;
+            color: var(--text-dim);
+            font-size: 14px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Mobile Adjustments */
+        @media (max-width: 768px) {
+            .layer { transform: none !important; margin-bottom: 24px; }
+            .stack-container { perspective: none; }
+            h1 { font-size: 3rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <p class="kicker">System Architecture Blueprint</p>
+        <h1>多因子相关性分析系统<br>架构全景方案</h1>
+    </header>
+
+    <main class="stack-container">
+        
+        <!-- Level 1: Analysis Architecture -->
+        <section class="layer" id="layer-analysis">
+            <div class="layer-title">
+                <div class="layer-num">01</div>
+                <h2 class="layer-name">分析架构层 (Analysis Layer)</h2>
+            </div>
+            <div class="grid">
+                <div class="card">
+                    <h4><span>📈</span> 结果协议标准化</h4>
+                    <p>统一消费 NodeResult 协议，将表格、图表、指标、报告映射为标准 payload，实现视图与逻辑解耦。</p>
+                </div>
+                <div class="card">
+                    <h4><span>📑</span> 智能报告系统</h4>
+                    <p>基于多维数据自动生成包含“结论摘要、阅读指南、适用边界”的结构化报告，赋能业务深度洞察。</p>
+                </div>
+                <div class="card">
+                    <h4><span>🔍</span> 多视角洞察</h4>
+                    <p>集成 Pearson/Spearman 单调性分析、SHAP 特征解释、VIF 共线性诊断等全方位分析矩阵。</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Level 2: UI Architecture -->
+        <section class="layer" id="layer-ui">
+            <div class="layer-title">
+                <div class="layer-num">02</div>
+                <h2 class="layer-name">UI 交互层 (UI Layer)</h2>
+            </div>
+            <div class="grid">
+                <div class="card">
+                    <h4><span>🧱</span> PrimeVue v4 + Tailwind</h4>
+                    <p>采用极简现代 SaaS 风格，Slate-900 专业底色配合 Blue-600 功能强调，提供金融级视觉质感。</p>
+                </div>
+                <div class="card">
+                    <h4><span>🔄</span> 异步视图注册</h4>
+                    <p>Viewer 体系动态注册机制，根据结果 Kind 自动匹配渲染组件（AG-Grid / ECharts / Monaco）。</p>
+                </div>
+                <div class="card">
+                    <h4><span>📱</span> 响应式看板</h4>
+                    <p>DashboardModal 支持多面板聚合展示、全屏专注模式与浏览器级全屏容器适配。</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Level 3: Workflow Architecture -->
+        <section class="layer" id="layer-workflow">
+            <div class="layer-title">
+                <div class="layer-num">03</div>
+                <h2 class="layer-name">工作流引擎层 (Workflow Layer)</h2>
+            </div>
+            <div class="grid">
+                <div class="card">
+                    <h4><span>🔗</span> 拓扑执行引擎</h4>
+                    <p>基于 Vue Flow 的声明式编排，支持运行时输入补录、单节点调试、冻结输出与历史回溯。</p>
+                </div>
+                <div class="card">
+                    <h4><span>🤖</span> AI 编排主链</h4>
+                    <p>Session 化会话编排，结合 MCP 协议实现“理解需求-召回模板-生成计划-自动落图”的闭环。</p>
+                </div>
+                <div class="card">
+                    <h4><span>📦</span> 声明式节点注册</h4>
+                    <p>NodeDefinition 一次声明，自动生成属性弹窗、帮助文档与 AI 提示词元数据。</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Level 4: Backend Architecture -->
+        <section class="layer" id="layer-backend">
+            <div class="layer-title">
+                <div class="layer-num">04</div>
+                <h2 class="layer-name">后端服务层 (Backend Layer)</h2>
+            </div>
+            <div class="grid">
+                <div class="card">
+                    <h4><span>🧠</span> 算法中枢 (Python)</h4>
+                    <p>XGBoost, Random Forest, Lasso 等重计算算法由 FastAPI 高性能承接，支持 TreeSHAP 毫秒级解释。</p>
+                </div>
+                <div class="card">
+                    <h4><span>🛡️</span> 服务网关 (Node.js)</h4>
+                    <p>TypeScript 编写的高级适配层，负责 JWT 鉴权、存储隔离、AI 代理转发与 MCP 服务暴露。</p>
+                </div>
+                <div class="card">
+                    <h4><span>💾</span> 持久化矩阵</h4>
+                    <p>MySQL + LowDB 双引擎适配，配合 Drizzle ORM 实现高效版本控制与运行历史快照持久化。</p>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <footer>
+        <p>© 2026 相关性分析系统 · 极简现代分析基础设施</p>
+        <p style="margin-top: 8px; opacity: 0.5;">ARCH_VERSION: 2.0.4-PRO_SPEC</p>
+    </footer>
+
+    <script>
+        // Simple parallax effect on mouse move
+        document.addEventListener('mousemove', (e) => {
+            const layers = document.querySelectorAll('.layer');
+            const x = (window.innerWidth / 2 - e.pageX) / 50;
+            const y = (window.innerHeight / 2 - e.pageY) / 50;
+
+            layers.forEach((layer, index) => {
+                const depth = (index + 1) * 0.5;
+                const baseTransform = `rotateX(25deg) rotateY(-5deg) rotateZ(-1deg)`;
+                layer.style.transform = `${baseTransform} translate3d(${x * depth}px, ${y * depth}px, 0)`;
+            });
+        });
+    </script>
+</body>
+</html>

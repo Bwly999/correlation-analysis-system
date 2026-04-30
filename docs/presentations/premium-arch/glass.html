@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>架构全景 - 未来玻璃版 | Glassmorphism</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+    <style>
+        :root { --c-1: #2563eb; --c-2: #0d9488; --c-3: #d97706; --c-4: #6366f1; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #f8fafc; font-family: 'Plus Jakarta Sans', sans-serif; padding: 60px 20px; display: flex; justify-content: center; background-image: radial-gradient(circle at 10% 20%, rgba(37, 99, 235, 0.05) 0%, transparent 20%), radial-gradient(circle at 90% 80%, rgba(13, 148, 136, 0.05) 0%, transparent 20%); }
+        .wrapper { width: 1200px; display: flex; flex-direction: column; gap: 32px; }
+        header { text-align: center; margin-bottom: 20px; }
+        h1 { font-size: 48px; font-weight: 800; background: linear-gradient(135deg, #0f172a, #334155); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        
+        .layer { background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.8); border-radius: 24px; padding: 40px; display: grid; grid-template-columns: 240px 1fr; gap: 40px; box-shadow: 0 10px 40px -10px rgba(0,0,0,0.03); position: relative; }
+        .layer::before { content: ""; position: absolute; top: 0; left: 0; width: 6px; height: 100%; border-radius: 24px 0 0 24px; }
+        
+        .l1::before { background: var(--c-1); }
+        .l2::before { background: var(--c-2); }
+        .l3::before { background: var(--c-3); }
+        .l4::before { background: var(--c-4); }
+
+        .side h3 { font-size: 28px; font-weight: 800; color: #0f172a; line-height: 1.1; }
+        .side p { font-family: 'JetBrains Mono'; font-size: 11px; color: #64748b; margin-top: 12px; font-weight: 700; text-transform: uppercase; }
+        
+        .main-content { display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; }
+        .card { background: white; border: 1px solid #f1f5f9; border-radius: 16px; padding: 24px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02); }
+        .card h4 { font-size: 16px; margin-bottom: 10px; color: #1e293b; }
+        .card p { font-size: 12px; color: #64748b; line-height: 1.6; }
+        
+        .mini-ui { grid-column: span 2; display: flex; gap: 20px; align-items: stretch; margin-top: 10px; }
+        .ui-box { background: #f8fafc; border-radius: 12px; padding: 16px; flex: 1; border: 1px solid #edf2f7; }
+        .mini-table { width: 100%; border-collapse: collapse; font-size: 10px; }
+        .mini-table th { text-align: left; padding: 4px; color: var(--c-2); }
+        .mini-table td { padding: 4px; border-top: 1px solid #e2e8f0; }
+        .chart-glow { height: 60px; display: flex; align-items: flex-end; gap: 6px; }
+        .bar { flex: 1; background: var(--c-2); border-radius: 4px 4px 0 0; box-shadow: 0 0 10px rgba(13, 148, 136, 0.2); }
+
+        .tech-logos { display: flex; flex-direction: column; gap: 20px; justify-content: center; padding-left: 30px; border-left: 1px solid #f1f5f9; }
+        .tech-item { display: flex; align-items: center; gap: 12px; font-size: 11px; font-weight: 700; color: #334155; }
+        svg { width: 28px; height: 28px; }
+    </style>
+</head>
+<body>
+    <div class="wrapper">
+        <header><h1>相关性分析系统</h1><p style="font-family: 'JetBrains Mono'; font-size: 12px; color: var(--c-1); letter-spacing: 4px; margin-top: 8px;">FUTURISTIC_ARCH_VISION</p></header>
+        
+        <div class="layer l1">
+            <div class="side"><h3>分析架构</h3><p>Insight Algorithm</p></div>
+            <div class="main-content">
+                <div class="card"><h4>NodeResult 协议</h4><p>统一 DSL 协议载体。通过 Schema 承载元数据与血缘追踪，解耦算法与视图层。</p></div>
+                <div class="card"><h4>核心算法矩阵</h4><p>集成 XGBoost+SHAP、Lasso 与 Pearson。提供机器学习模型的深度解释路径。</p></div>
+            </div>
+        </div>
+
+        <div class="layer l2">
+            <div class="side"><h3>UI 交互层</h3><p>Human Experience</p></div>
+            <div class="main-content" style="grid-template-columns: 1fr auto;">
+                <div class="mini-ui">
+                    <div class="ui-box">
+                        <p style="font-size: 10px; font-weight: 800; margin-bottom: 8px;">AG-GRID ENGINE</p>
+                        <table class="mini-table"><tr><th>Factor</th><th>Val</th></tr><tr><td>X_Data</td><td>0.9</td></tr><tr><td>Y_Data</td><td>0.4</td></tr></table>
+                    </div>
+                    <div class="ui-box">
+                        <p style="font-size: 10px; font-weight: 800; margin-bottom: 8px;">ECHARTS CORE</p>
+                        <div class="chart-glow"><div class="bar" style="height:40%"></div><div class="bar" style="height:90%"></div><div class="bar" style="height:60%"></div></div>
+                    </div>
+                </div>
+                <div class="tech-logos">
+                    <div class="tech-item"><svg viewBox="0 0 256 221"><path fill="#41b883" d="M204.8 0H256L128 220.8L0 0h97.92L128 51.2L157.44 0z"/><path fill="#41b883" d="m0 0l128 220.8L256 0h-51.2L128 132.48L50.56 0z"/><path fill="#35495e" d="M50.56 0L128 133.12L204.8 0h-47.36L128 51.2L97.92 0z"/></svg> Vue 3</div>
+                    <div class="tech-item"><svg viewBox="0 0 24 24" style="fill:#10b981;"><path d="M12 2L1 21h22L12 2zm0 3.5L19.5 19h-15L12 5.5z"/><circle cx="12" cy="14" r="3"/></svg> PrimeVue</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="layer l3">
+            <div class="side"><h3>工作流引擎</h3><p>Topology Logic</p></div>
+            <div class="main-content">
+                <div class="card"><h4>拓扑调度核心</h4><p>基于 Vue Flow 的编排闭环，支持运行时参数补录、输出冻结与版本历史回溯。</p></div>
+                <div class="card"><h4>AI 编排会话</h4><p>基于 MCP 协议，实现从语义需求到执行计划的自动化闭环生成与校验。</p></div>
+            </div>
+        </div>
+
+        <div class="layer l4">
+            <div class="side"><h3>后端服务</h3><p>Infra Matrix</p></div>
+            <div class="main-content" style="grid-template-columns: 1fr auto;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <div class="card"><h4>Python 算法网关</h4><p>FastAPI 驱动。内置 XGBoost+SHAP 等高性能重计算模型。</p></div>
+                    <div class="card"><h4>持久化矩阵</h4><p>MySQL + LowDB 双适配器。通过 Drizzle ORM 实现历史原子化存储。</p></div>
+                </div>
+                <div class="tech-logos">
+                    <div class="tech-item"><svg viewBox="0 0 256 255"><defs><linearGradient id="P1" x1="12.959%" x2="79.639%" y1="12.039%" y2="78.201%"><stop offset="0%" stop-color="#387eb8"/><stop offset="100%" stop-color="#366994"/></linearGradient><linearGradient id="P2" x1="19.128%" x2="90.742%" y1="20.579%" y2="88.429%"><stop offset="0%" stop-color="#ffe052"/><stop offset="100%" stop-color="#ffc331"/></linearGradient></defs><path fill="url(#P1)" d="M126.916.072c-64.832 0-60.784 28.115-60.784 28.115l.072 29.128h61.868v8.745H41.631S.145 61.355.145 126.77c0 65.417 36.21 63.097 36.21 63.097h21.61v-30.356s-1.165-36.21 35.632-36.21h61.362s34.475.557 34.475-33.319V33.97S194.67.072 126.916.072M92.802 19.66a11.12 11.12 0 0 1 11.13 11.13a11.12 11.12 0 0 1-11.13 11.13a11.12 11.12 0 0 1-11.13-11.13a11.12 11.12 0 0 1 11.13-11.13"/><path fill="url(#P2)" d="M128.757 254.126c64.832 0 60.784-28.115 60.784-28.115l-.072-29.127H127.6v-8.745h86.441s41.486 4.705 41.486-60.712c0-65.416-36.21-63.096-36.21-63.096h-21.61v30.355s1.165 36.21-35.632 36.21h-61.362s-34.475-.557-34.475 33.32v56.013s-5.235 33.897 62.518 33.897m34.114-19.586a11.12 11.12 0 0 1-11.13-11.13a11.12 11.12 0 0 1 11.13-11.131a11.12 11.12 0 0 1 11.13 11.13a11.12 11.12 0 0 1-11.13 11.13"/></svg> Python</div>
+                    <div class="tech-item"><svg viewBox="0 0 512 314"><path fill="#539e43" d="M253.11 313.094c-1.733 0-3.351-.462-4.854-1.271l-15.371-9.13c-2.312-1.272-1.156-1.734-.462-1.965c3.12-1.04 3.698-1.272 6.934-3.12c.347-.232.81-.116 1.156.115l11.789 7.05c.462.231 1.04.231 1.386 0l46.115-26.698c.462-.231.694-.694.694-1.271v-53.28c0-.579-.232-1.04-.694-1.272l-46.115-26.582c-.462-.232-1.04-.232-1.386 0l-46.115 26.582c-.462.231-.694.809-.694 1.271v53.28c0 .463.232 1.04.694 1.272l12.598 7.281c6.819 3.467 11.095-.578 11.095-4.623v-52.587c0-.693.578-1.387 1.387-1.387h5.894c.694 0 1.387.578 1.387 1.387v52.587c0 9.13-4.97 14.447-13.638 14.447c-2.658 0-4.738 0-10.633-2.89l-12.135-6.934c-3.005-1.733-4.854-4.97-4.854-8.437v-53.28c0-3.467 1.849-6.704 4.854-8.437l46.114-26.698c2.89-1.618 6.82-1.618 9.709 0l46.114 26.698c3.005 1.733 4.855 4.97 4.855 8.437v53.28c0 3.467-1.85 6.704-4.855 8.437l-46.114-26.698c-1.503.694-3.236 1.04-4.854 1.04m14.216-36.637c-20.225 0-24.386-9.246-24.386-17.105c0-.694.578-1.387 1.387-1.387h6.01c.693 0 1.271.462 1.271 1.156c.925 6.125 3.583 9.13 15.834 9.13c9.708 0 13.87-2.196 13.87-7.397c0-3.005-1.157-5.2-16.297-6.703c-12.598-1.272-20.457-4.045-20.457-14.1c0-9.362 7.86-14.91 21.035-14.91c14.793 0 22.075 5.086 23 16.18q0 .521-.347 1.041c-.232.231-.578.462-.925.462h-6.01c-.578 0-1.156-.462-1.271-1.04c-1.387-6.356-4.97-8.437-14.447-8.437c-10.633 0-11.905 3.699-11.905 6.472c0 3.352 1.503 4.392 15.834 6.241c14.216 1.85 20.92 4.508 20.92 14.447c-.116 10.171-8.437 15.95-23.116 15.95"/><path fill="#333" d="M110.028 104.712c0-2.08-1.156-4.046-3.005-5.086l-49.004-28.2c-.81-.463-1.734-.694-2.658-.81h-.463c-.924 0-1.849.347-2.658.81l-49.004 28.2c-1.85 1.04-3.005 3.005-3.005 5.086l.116 75.817c0 1.04.578 2.08 1.502 2.543c.925.578 2.08.578 2.89 0l29.125-16.643c1.849-1.04 3.005-3.005 3.005-5.085v-35.482c0-2.08 1.155-4.045 3.005-5.085l12.366-7.166c.925-.578 1.965-.81 3.005-.81s2.08.232 2.89.81l12.366 7.166c1.85 1.04 3.005 3.004 3.005 5.085v35.482c0 2.08 1.156 4.045 3.005 5.085l29.125 16.643a2.82 2.82 0 0 0 3.005 0c.925-.463 1.503-1.503 1.503-2.543zM345.571.347c-.924-.463-2.08-.463-2.89 0c-.924.578-1.502 1.502-1.502 2.542v75.125c0 .693-.346 1.386-1.04 1.849q-1.04.519-2.08 0l-12.251-7.05a5.96 5.96 0 0 0-5.895 0l-49.004 28.316c-1.849 1.04-3.005 3.005-3.005 5.085v56.516c0 2.08 1.156 4.046 3.005 5.086l49.004 28.316a5.96 5.96 0 0 0 5.895 0l49.004-28.316c1.849-1.04 3.005-3.005 3.005-5.086V21.844c0-2.196-1.156-4.16-3.005-5.201zm-4.507 143.776c0 .578-.231 1.04-.694 1.271l-16.758 9.708a1.71 1.71 0 0 1-1.503 0l-16.758-9.708c-.463-.231-.694-.809-.694-1.271v-19.417c0-.578.231-1.04.694-1.271l16.758-9.709a1.71 1.71 0 0 1 1.503 0l16.758 9.709c.463.23.694.809.694 1.271zm167.584-19.879c1.85-1.04 2.89-3.005 2.89-5.086v-13.753c0-2.08-1.156-4.045-2.89-5.085l-48.657-28.2a5.96 5.96 0 0 0-5.895 0l-49.004 28.315c-1.85 1.04-3.005 3.005-3.005 5.085v56.517c0 2.08 1.156 4.045 3.005 5.085l48.657 27.738c1.85 1.04 4.046 1.04 5.78 0L489 178.45c.925-.463 1.503-1.503 1.503-2.543s-.578-2.08-1.503-2.543l-49.235-28.316c-.925-.578-1.503-1.502-1.503-2.542v-17.683c0-1.04.578-2.08 1.503-2.543l15.371-8.784a2.82 2.82 0 0 1 3.005 0l15.372 8.784c.925.578 1.502 1.502 1.502 2.543v13.869c0 1.04.578 2.08 1.503 2.542a2.82 2.82 0 0 0 3.005 0z"/></svg> Node.js</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

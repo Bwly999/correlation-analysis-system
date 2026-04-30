@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="corporate-clean">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>多因子相关性分析系统 - 架构汇报</title>
+<link rel="stylesheet" href="assets/fonts.css">
+<link rel="stylesheet" href="assets/base.css">
+<link rel="stylesheet" id="theme-link" href="assets/themes/corporate-clean.css">
+<link rel="stylesheet" href="assets/animations/animations.css">
+<style>
+  /* 自定义架构图样式 */
+  .arch { margin-top: 30px; display: grid; grid-template-rows: auto auto auto; gap: 24px; }
+  .arch .tier { display: grid; grid-template-columns: 140px 1fr; align-items: stretch; gap: 24px; }
+  .arch .tname { 
+    display: flex; align-items: center; justify-content: center; 
+    background: var(--surface-2); border-radius: var(--radius); 
+    padding: 20px; font-weight: 700; font-size: 14px; 
+    color: var(--text-2); text-transform: uppercase; letter-spacing: .05em; text-align: center;
+    border: 1px solid var(--border);
+  }
+  .arch .cells { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .arch .cell { 
+    background: var(--surface); border: 1px solid var(--border); 
+    border-radius: var(--radius); padding: 20px; text-align: left; 
+    box-shadow: var(--shadow-sm); transition: transform 0.3s ease;
+  }
+  .arch .cell:hover { transform: translateY(-4px); border-color: var(--accent); }
+  .arch .cell .ic { font-size: 28px; margin-bottom: 8px; }
+  .arch .cell h4 { font-size: 16px; margin: 8px 0 4px; color: var(--text-1); }
+  .arch .cell p { font-size: 13px; color: var(--text-3); margin: 0; line-height: 1.4; }
+  .arch .tier.hl .cell { border-top: 4px solid var(--accent); }
+  
+  /* 渐变文字 */
+  .gradient-text {
+    background: linear-gradient(135deg, var(--accent), #3b82f6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-weight: 800;
+  }
+</style>
+</head>
+<body data-themes="corporate-clean,minimal-white,tokyo-night,blueprint" data-theme-base="assets/themes/">
+<div class="deck">
+
+  <!-- 1. 封面 -->
+  <section class="slide" data-title="封面">
+    <div class="deck-header">
+      <span class="eyebrow">Internal Proposal · 2026</span>
+      <span class="eyebrow">Correlation Analysis System</span>
+    </div>
+    <div class="anim-stagger-list">
+      <p class="kicker">架构设计与整体方案汇报</p>
+      <h1 class="h1 anim-fade-up" data-anim="fade-up" style="font-size: 72px;">
+        多因子相关性<span class="gradient-text">分析系统</span>
+      </h1>
+      <p class="lede">基于可视化编排的极简现代相关性分析引擎，赋能业务快速洞察因子关联。</p>
+      <div class="row wrap mt-l">
+        <span class="pill pill-accent">Vue 3 + TS</span>
+        <span class="pill">n8n Style Workflow</span>
+        <span class="pill">Standardized Protocol</span>
+      </div>
+    </div>
+    <div class="deck-footer">
+      <span class="dim2">系统架构组 · 2026-04-30</span>
+      <span class="slide-number" data-current="1" data-total="6"></span>
+    </div>
+    <div class="notes">
+      开场白：各位领导、同事大家好，今天由我来汇报“多因子相关性分析系统”的架构设计方案。
+      本系统旨在通过可视化的方式，降低复杂因子分析的门槛。
+    </div>
+  </section>
+
+  <!-- 2. 系统定位 -->
+  <section class="slide" data-title="系统定位">
+    <p class="kicker">Vision & Position</p>
+    <h2 class="h2">系统定位：让数据洞察“触手可及”</h2>
+    <div class="grid g2 mt-l anim-stagger-list">
+      <div class="card p-l">
+        <div class="ic" style="font-size:40px">🔗</div>
+        <h3 class="mt-m">可视化编排</h3>
+        <p class="dim mt-s">借鉴 n8n 的节点流交互，通过拖拽 Trigger、Action 和 Terminal 节点，用户可以像搭积木一样构建分析链路，无需编写复杂代码。</p>
+      </div>
+      <div class="card p-l">
+        <div class="ic" style="font-size:40px">⚡</div>
+        <h3 class="mt-m">极简现代 SaaS</h3>
+        <p class="dim mt-s">采用 Slate-900 与 Blue-600 的专业配色，UI 极简且功能专注，为用户提供沉浸式的特征工程与相关性分析体验。</p>
+      </div>
+    </div>
+    <div class="notes">
+      系统的核心定位有两个：一是可视化编排，降低门槛；二是极致的专业工具体验。
+    </div>
+  </section>
+
+  <!-- 3. 核心架构图 -->
+  <section class="slide" data-title="架构总览">
+    <p class="kicker">Architecture · 系统架构</p>
+    <h2 class="h2">三层驱动架构</h2>
+    <div class="arch anim-stagger-list" data-anim-target>
+      <!-- 表现层 -->
+      <div class="tier">
+        <div class="tname">表现层<br>(UI Layer)</div>
+        <div class="cells">
+          <div class="cell"><h4>Vue Flow 画布</h4><p>高性能节点编辑器</p></div>
+          <div class="cell"><h4>PrimeVue 组件</h4><p>标准化 UI 组件库</p></div>
+          <div class="cell"><h4>ECharts 可视化</h4><p>交互式分析图表</p></div>
+        </div>
+      </div>
+      <!-- 编排层 -->
+      <div class="tier hl">
+        <div class="tname">编排层<br>(Logic)</div>
+        <div class="cells">
+          <div class="cell"><h4>Workflow Store</h4><p>状态管理与连线校验</p></div>
+          <div class="cell"><h4>Node Registry</h4><p>声明式节点注册中心</p></div>
+          <div class="cell"><h4>Execution Engine</h4><p>拓扑排序与并行执行</p></div>
+        </div>
+      </div>
+      <!-- 数据层 -->
+      <div class="tier">
+        <div class="tname">数据/引擎层<br>(Storage)</div>
+        <div class="cells">
+          <div class="cell"><h4>Standard Protocol</h4><p>NodeResult 统一结果</p></div>
+          <div class="cell"><h4>MySQL/Adapter</h4><p>灵活的持久化适配</p></div>
+          <div class="cell"><h4>External APIs</h4><p>邻居系统数据对接</p></div>
+        </div>
+      </div>
+    </div>
+    <div class="notes">
+      这是我们的技术底座：表现层保障体验，编排层是系统大脑，数据层通过标准协议保障了极强的扩展性。
+    </div>
+  </section>
+
+  <!-- 4. 节点体系构成 -->
+  <section class="slide" data-title="节点体系">
+    <p class="kicker">Core Components · 节点体系</p>
+    <h2 class="h2">三大节点类型</h2>
+    <div class="grid g3 mt-l anim-stagger-list">
+      <div class="card">
+        <div class="pill pill-accent mb-s">Trigger</div>
+        <h4>数据源接入</h4>
+        <p class="dim small">文件导入、邻居系统对接、JSON 模拟。作为分析流的起点。</p>
+      </div>
+      <div class="card">
+        <div class="pill mb-s" style="background:var(--surface-3)">Action</div>
+        <h4>特征工程</h4>
+        <p class="dim small">去重、异常值处理、字段选择、横向合并、代码转换等。负责数据加工。</p>
+      </div>
+      <div class="card">
+        <div class="pill mb-s" style="background:var(--surface-3)">Terminal</div>
+        <h4>算法分析</h4>
+        <p class="dim small">逻辑回归、随机森林、SHAP、Lasso 等。作为分析流的终点，输出可视化报告。</p>
+      </div>
+    </div>
+    <div class="mt-l p-m" style="background:var(--surface-2); border-radius:var(--radius); border-left:4px solid var(--accent)">
+      <p style="font-size:14px; margin:0"><strong>连接规则：</strong>Trigger &rarr; Action &rarr; Terminal。Terminal 不再输出，确保流程有终点，结果可预期。</p>
+    </div>
+    <div class="notes">
+      我们把复杂的分析过程拆解为这三类节点。这种设计让我们未来接入新的算法（Terminal）或新的清洗逻辑（Action）变得非常简单。
+    </div>
+  </section>
+
+  <!-- 5. 协议与扩展性 -->
+  <section class="slide" data-title="设计规范">
+    <p class="kicker">Standardization · 标准化设计</p>
+    <h2 class="h2">声明式设计：更强的扩展性</h2>
+    <div class="grid g2 mt-l">
+      <div class="anim-fade-right" data-anim="fade-right">
+        <h4 class="mb-s">1. 节点定义标准化</h4>
+        <p class="dim small">开发者只需编写一份 <code>NodeDefinition</code> 配置，即可自动生成 UI 配置弹窗、帮助文档和执行逻辑。极大地降低了二次开发成本。</p>
+        <h4 class="mt-m mb-s">2. 结果协议统一化</h4>
+        <p class="dim small">所有节点输出强制遵循 <code>NodeResult</code> 协议（表格、图表、指标、报告）。Viewer 组件根据协议自动匹配最佳渲染方式。</p>
+      </div>
+      <div class="card center tc" style="background:var(--surface-2)">
+        <code style="font-size:11px; text-align:left; display:block; padding:10px;">
+// 伪代码示例<br>
+interface NodeDefinition {<br>
+&nbsp;&nbsp;name: string;<br>
+&nbsp;&nbsp;properties: Property[];<br>
+&nbsp;&nbsp;execute: (input) => Promise&lt;NodeResult&gt;;<br>
+}
+        </code>
+      </div>
+    </div>
+    <div class="notes">
+      “约定大于配置”是本系统的核心思想。通过标准化的定义和协议，我们实现了真正意义上的“插拔式”算法能力。
+    </div>
+  </section>
+
+  <!-- 6. 总结与展望 -->
+  <section class="slide center tc" data-title="总结">
+    <div class="anim-stagger-list">
+      <h1 class="h1"><span class="gradient-text">总结与展望</span></h1>
+      <p class="lede mt-m">打造最专业、最易用的多因子相关性分析基础设施。</p>
+      <div class="grid g3 mt-xl">
+        <div><h2 class="h2 mb-s">高效</h2><p class="dim">分钟级构建分析流</p></div>
+        <div><h2 class="h2 mb-s">专业</h2><p class="dim">深度集成前沿算法</p></div>
+        <div><h2 class="h2 mb-s">开放</h2><p class="dim">标准协议轻松扩展</p></div>
+      </div>
+    </div>
+    <div class="deck-footer">
+      <span class="dim2">谢谢观看</span>
+      <span class="slide-number" data-current="6" data-total="6"></span>
+    </div>
+    <div class="notes">
+      最后总结一下：高效、专业、开放。这就是我们的系统架构优势。感谢各位的倾听。
+    </div>
+  </section>
+
+</div>
+
+<script src="assets/runtime.js"></script>
+</body>
+</html>
