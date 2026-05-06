@@ -262,6 +262,45 @@ describe('TableChartComboViewer', () => {
     expectPaneUnmounted(wrapper, '[data-test="combo-profile-pane"]')
   })
 
+  it('keeps data pivot available when source profile metadata exists without local rows', async () => {
+    const wrapper = mount(TableChartComboViewer, {
+      props: {
+        data: {
+          kind: 'table',
+          payload: [],
+          meta: {
+            profile: [
+              {
+                field: 'score',
+                type: 'number',
+                missingCount: 2,
+                nonMissingCount: 3,
+                missingRate: 0.4,
+                min: 1,
+                max: 3,
+                mean: 2,
+              },
+            ],
+            metrics: {
+              rowCount: 5,
+              fieldCount: 1,
+              numericFieldCount: 1,
+            },
+          },
+        },
+      },
+    })
+
+    const pivotButton = wrapper.get('[data-test="combo-mode-profile"]')
+    expect(pivotButton.attributes('disabled')).toBeUndefined()
+
+    await pivotButton.trigger('click')
+
+    expectPaneMounted(wrapper, '[data-test="combo-profile-pane"]')
+    expect(wrapper.get('[data-test="data-quality-summary"]').text()).toContain('总行数')
+    expect(wrapper.get('[data-test="data-quality-threshold-list"]').text()).toContain('score')
+  })
+
   it('uses interactive grouped charts and grouped tables for tableCollection results', async () => {
     const wrapper = mount(TableChartComboViewer, {
       props: {

@@ -98,4 +98,128 @@ describe('useDataQualityProfile', () => {
       'onlyB',
     ])
   })
+
+  it('prefers source profile and metrics when available', () => {
+    const { rows, fieldProfiles, summary, missingBuckets, fieldsAtOrAboveMissingRate } =
+      useDataQualityProfile(
+        computed(() =>
+          createTableResult(
+            [
+              { score: 1, note: 'x' },
+              { score: 2, note: 'y' },
+            ],
+            {
+              meta: {
+                profile: [
+                  {
+                    field: 'score',
+                    type: 'string',
+                    missingCount: 3,
+                    nonMissingCount: 9,
+                    missingRate: 0.25,
+                  },
+                  {
+                    field: 'note',
+                    type: 'number',
+                    missingCount: 0,
+                    nonMissingCount: 12,
+                    missingRate: 0,
+                    min: 10,
+                    max: 30,
+                    mean: 20,
+                  },
+                ],
+                metrics: {
+                  rowCount: 12,
+                  fieldCount: 2,
+                  numericFieldCount: 1,
+                },
+              },
+            },
+          ),
+        ),
+      )
+
+    expect(rows.value).toHaveLength(2)
+    expect(fieldProfiles.value).toEqual([
+      {
+        field: 'note',
+        type: 'number',
+        totalCount: 12,
+        missingCount: 0,
+        nonMissingCount: 12,
+        missingRate: 0,
+        min: 10,
+        max: 30,
+        mean: 20,
+      },
+      {
+        field: 'score',
+        type: 'string',
+        totalCount: 12,
+        missingCount: 3,
+        nonMissingCount: 9,
+        missingRate: 0.25,
+        min: undefined,
+        max: undefined,
+        mean: undefined,
+      },
+    ])
+    expect(summary.value).toMatchObject({
+      rowCount: 12,
+      fieldCount: 2,
+      missingFieldCount: 1,
+      numericFieldCount: 1,
+      highestMissingRate: 0.25,
+    })
+    expect(missingBuckets.value.map((bucket) => [bucket.label, bucket.count])).toEqual([
+      ['0%', 1],
+      ['0-10%', 0],
+      ['10-30%', 1],
+      ['30-60%', 0],
+      ['60%+', 0],
+    ])
+    expect(fieldsAtOrAboveMissingRate.value(20).map((field) => field.field)).toEqual(['score'])
+  })
+
+  it('can build summary from source profile without requiring original rows', () => {
+    const { rows, fieldProfiles, summary, hasProfileData, fieldsAtOrAboveMissingRate } =
+      useDataQualityProfile(
+        computed(() =>
+          createTableResult([], {
+            meta: {
+              profile: [
+                {
+                  field: 'score',
+                  type: 'number',
+                  missingCount: 4,
+                  nonMissingCount: 6,
+                  missingRate: 0.4,
+                  min: 1,
+                  max: 6,
+                  mean: 3.5,
+                },
+              ],
+              metrics: {
+                rowCount: 10,
+                fieldCount: 1,
+                numericFieldCount: 1,
+              },
+            },
+          }),
+        ),
+      )
+
+    expect(rows.value).toEqual([])
+    expect(fieldProfiles.value).toHaveLength(1)
+    expect(summary.value).toMatchObject({
+      rowCount: 10,
+      fieldCount: 1,
+      missingFieldCount: 1,
+      numericFieldCount: 1,
+      highestMissingRate: 0.4,
+    })
+    expect(hasProfileData.value).toBe(true)
+    expect(fieldsAtOrAboveMissingRate.value(30).map((field) => field.field)).toEqual(['score'])
+  })
 })

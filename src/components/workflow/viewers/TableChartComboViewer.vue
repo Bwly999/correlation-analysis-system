@@ -27,18 +27,40 @@ const explicitChartOption = computed(() => getResultChartOption(props.data))
 const groups = computed(() => getResultGroups(props.data))
 const rows = computed(() => getResultRows(props.data))
 const isTableCollection = computed(() => normalizedResult.value?.kind === 'tableCollection')
+const hasProfileSource = computed(() => {
+  const normalized = normalizedResult.value
+  if (!normalized) return false
+
+  if (Array.isArray(normalized.meta?.profile) && normalized.meta.profile.length > 0) return true
+  if (Array.isArray(normalized.meta?.sourceData) && normalized.meta.sourceData.length > 0) return true
+
+  if (normalized.kind === 'table') {
+    return Array.isArray(normalized.payload) && normalized.payload.length > 0
+  }
+
+  if (normalized.kind === 'tableCollection') {
+    return (
+      Array.isArray(normalized.payload) &&
+      normalized.payload.some(
+        (group) =>
+          typeof group === 'object' &&
+          group !== null &&
+          'data' in group &&
+          Array.isArray(group.data) &&
+          group.data.length > 0,
+      )
+    )
+  }
+
+  return false
+})
 const hasChart = computed(() => Boolean(explicitChartOption.value) || groups.value.length > 0 || rows.value.length > 0)
 const hasTable = computed(() => {
   const normalized = normalizedResult.value
   if (normalized?.kind === 'tableCollection') return true
   return rows.value.length > 0
 })
-const hasProfile = computed(() => {
-  const normalized = normalizedResult.value
-  if (rows.value.length > 0 || groups.value.some((group) => group.data.length > 0)) return true
-  if (Array.isArray(normalized?.meta?.sourceData)) return normalized.meta.sourceData.length > 0
-  return Array.isArray(normalized?.meta?.profile) && normalized.meta.profile.length > 0
-})
+const hasProfile = computed(() => hasProfileSource.value)
 const showChartPane = computed(() => hasChart.value && (mode.value === 'chart' || mode.value === 'split'))
 const showTablePane = computed(() => hasTable.value && (mode.value === 'table' || mode.value === 'split'))
 const showProfilePane = computed(() => hasProfile.value && mode.value === 'profile')

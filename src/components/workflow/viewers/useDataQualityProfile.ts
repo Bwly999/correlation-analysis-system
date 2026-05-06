@@ -43,6 +43,26 @@ type SourceProfile = {
   mean?: unknown
 }
 
+type SourceMetrics = {
+  rowCount?: unknown
+  fieldCount?: unknown
+  numericFieldCount?: unknown
+}
+
+type FieldAccumulator = {
+  field: string
+  presentCount: number
+  numericCount: number
+  booleanCount: number
+  dateCount: number
+  stringCount: number
+  jsonCount: number
+  numericPresentCount: number
+  numericSum: number
+  numericMin?: number
+  numericMax?: number
+}
+
 const isMissingValue = (value: unknown) =>
   value === null ||
   value === undefined ||
@@ -60,17 +80,6 @@ const toFiniteNumber = (value: unknown) => {
 
 const isDateLike = (value: unknown) =>
   typeof value === 'string' && value.trim() !== '' && Number.isFinite(Date.parse(value))
-
-const classifyValues = (values: unknown[]): DataQualityFieldType => {
-  const presentValues = values.filter((value) => !isMissingValue(value))
-  if (presentValues.length === 0) return 'unknown'
-  if (presentValues.every((value) => toFiniteNumber(value) !== null)) return 'number'
-  if (presentValues.every((value) => typeof value === 'boolean')) return 'boolean'
-  if (presentValues.every((value) => isDateLike(value))) return 'date'
-  if (presentValues.every((value) => typeof value === 'string')) return 'string'
-  if (presentValues.every((value) => isPlainObject(value) || Array.isArray(value))) return 'json'
-  return 'unknown'
-}
 
 const normalizeProfileType = (type: unknown): DataQualityFieldType => {
   if (type === 'numeric' || type === 'number') return 'number'
@@ -108,6 +117,11 @@ const getSourceProfiles = (input: unknown): SourceProfile[] => {
   return Array.isArray(profile) ? profile.filter(isPlainObject) : []
 }
 
+const getSourceMetrics = (input: unknown): SourceMetrics | null => {
+  const normalized = normalizeWorkflowResult(input)
+  return isPlainObject(normalized?.meta?.metrics) ? normalized.meta.metrics : null
+}
+
 const buildProfileFromSource = (
   profile: SourceProfile,
   totalCount: number,
@@ -139,31 +153,81 @@ const buildProfileFromSource = (
 }
 
 const buildProfilesFromRows = (rows: Array<Record<string, unknown>>) => {
-  const fieldSet = new Set<string>()
-  rows.forEach((row) => Object.keys(row).forEach((field) => fieldSet.add(field)))
+  const fieldMap = new Map<string, FieldAccumulator>()
 
-  return [...fieldSet].sort((left, right) => left.localeCompare(right)).map((field) => {
-    const values = rows.map((row) => row[field])
-    const presentValues = values.filter((value) => !isMissingValue(value))
-    const type = classifyValues(values)
-    const numericValues =
-      type === 'number'
-        ? presentValues.map(toFiniteNumber).filter((value): value is number => value !== null)
-        : []
-    const sum = numericValues.reduce((total, value) => total + value, 0)
+  rows.forEach((row) => {
+    Object.keys(row).forEach((field) => {
+      const current =
+        fieldMap.get(field) ??
+        ({
+          field,
+          presentCount: 0,
+          numericCount: 0,
+          booleanCount: 0,
+          dateCount: 0,
+          stringCount: 0,
+          jsonCount: 0,
+          numericPresentCount: 0,
+          numericSum: 0,
+        } satisfies FieldAccumulator)
 
-    return {
-      field,
-      type,
-      totalCount: rows.length,
-      missingCount: rows.length - presentValues.length,
-      nonMissingCount: presentValues.length,
-      missingRate: rows.length === 0 ? 0 : (rows.length - presentValues.length) / rows.length,
-      min: numericValues.length > 0 ? Math.min(...numericValues) : undefined,
-      max: numericValues.length > 0 ? Math.max(...numericValues) : undefined,
-      mean: numericValues.length > 0 ? sum / numericValues.length : undefined,
-    } satisfies DataQualityFieldProfile
+      fieldMap.set(field, current)
+
+      const value = row[field]
+      if (isMissingValue(value)) return
+
+      current.presentCount += 1
+
+      const numericValue = toFiniteNumber(value)
+      if (numericValue !== null) {
+        current.numericCount += 1
+        current.numericPresentCount += 1
+        current.numericSum += numericValue
+        current.numericMin = current.numericMin === undefined
+          ? numericValue
+          : Math.min(current.numericMin, numericValue)
+        current.numericMax = current.numericMax === undefined
+          ? numericValue
+          : Math.max(current.numericMax, numericValue)
+      }
+
+      if (typeof value === 'boolean') current.booleanCount += 1
+      if (isDateLike(value)) current.dateCount += 1
+      if (typeof value === 'string') current.stringCount += 1
+      if (isPlainObject(value) || Array.isArray(value)) current.jsonCount += 1
+    })
   })
+
+  const totalRowCount = rows.length
+
+  return [...fieldMap.values()]
+    .sort((left, right) => left.field.localeCompare(right.field))
+    .map((field) => {
+      const missingCount = totalRowCount - field.presentCount
+      const values = [
+        field.numericCount === field.presentCount && field.presentCount > 0 ? 'number' : null,
+        field.booleanCount === field.presentCount && field.presentCount > 0 ? 'boolean' : null,
+        field.dateCount === field.presentCount && field.presentCount > 0 ? 'date' : null,
+        field.stringCount === field.presentCount && field.presentCount > 0 ? 'string' : null,
+        field.jsonCount === field.presentCount && field.presentCount > 0 ? 'json' : null,
+      ]
+      const type = (values.find(Boolean) as DataQualityFieldType | undefined) ?? 'unknown'
+
+      return {
+        field: field.field,
+        type,
+        totalCount: totalRowCount,
+        missingCount,
+        nonMissingCount: field.presentCount,
+        missingRate: totalRowCount === 0 ? 0 : missingCount / totalRowCount,
+        min: type === 'number' ? field.numericMin : undefined,
+        max: type === 'number' ? field.numericMax : undefined,
+        mean:
+          type === 'number' && field.numericPresentCount > 0
+            ? field.numericSum / field.numericPresentCount
+            : undefined,
+      } satisfies DataQualityFieldProfile
+    })
 }
 
 const buildBuckets = (profiles: DataQualityFieldProfile[]): MissingRateBucket[] => {
@@ -199,13 +263,32 @@ const sortByMissingRate = (profiles: DataQualityFieldProfile[]) =>
   )
 
 export function useDataQualityProfile(data: MaybeRefOrGetter<unknown>) {
-  const rows = computed(() => getRowsFromInput(toValue(data)))
+  const resolvedInput = computed(() => toValue(data))
+  const rows = computed(() => getRowsFromInput(resolvedInput.value))
+  const sourceProfiles = computed(() => getSourceProfiles(resolvedInput.value))
+  const sourceMetrics = computed(() => getSourceMetrics(resolvedInput.value))
+  const profileRowCount = computed(() => {
+    const metricRowCount = toOptionalNumber(sourceMetrics.value?.rowCount)
+    if (metricRowCount !== undefined) return Math.max(0, Math.round(metricRowCount))
+
+    if (rows.value.length > 0) return rows.value.length
+
+    return sourceProfiles.value.reduce((max, profile) => {
+      const missingCount = Math.round(toOptionalNumber(profile.missingCount) ?? 0)
+      const nonMissingCount = Math.round(
+        toOptionalNumber(profile.nonMissingCount) ?? toOptionalNumber(profile.nonNullCount) ?? 0,
+      )
+      const totalCount = Math.max(
+        0,
+        missingCount + nonMissingCount,
+      )
+      return Math.max(max, totalCount)
+    }, 0)
+  })
   const fieldProfiles = computed(() => {
-    const input = toValue(data)
-    const sourceProfiles = getSourceProfiles(input)
-    if (sourceProfiles.length > 0) {
-      const totalCount = rows.value.length
-      return sourceProfiles
+    if (sourceProfiles.value.length > 0) {
+      const totalCount = profileRowCount.value
+      return sourceProfiles.value
         .map((profile) => buildProfileFromSource(profile, totalCount))
         .filter((profile): profile is DataQualityFieldProfile => Boolean(profile))
         .sort((left, right) => left.field.localeCompare(right.field))
@@ -216,20 +299,29 @@ export function useDataQualityProfile(data: MaybeRefOrGetter<unknown>) {
 
   const summary = computed<DataQualitySummary>(() => {
     const profiles = fieldProfiles.value
+    const metricFieldCount = toOptionalNumber(sourceMetrics.value?.fieldCount)
+    const metricNumericFieldCount = toOptionalNumber(sourceMetrics.value?.numericFieldCount)
+
     return {
-      rowCount: rows.value.length,
-      fieldCount: profiles.length,
+      rowCount: profileRowCount.value,
+      fieldCount:
+        metricFieldCount !== undefined && sourceProfiles.value.length > 0
+          ? Math.max(profiles.length, Math.round(metricFieldCount))
+          : profiles.length,
       missingFieldCount: profiles.filter((profile) => profile.missingCount > 0).length,
       highestMissingRate: profiles.reduce(
         (highest, profile) => Math.max(highest, profile.missingRate),
         0,
       ),
-      numericFieldCount: profiles.filter((profile) => profile.type === 'number').length,
+      numericFieldCount:
+        metricNumericFieldCount !== undefined && sourceProfiles.value.length > 0
+          ? Math.max(0, Math.round(metricNumericFieldCount))
+          : profiles.filter((profile) => profile.type === 'number').length,
     }
   })
 
   const missingBuckets = computed(() => buildBuckets(fieldProfiles.value))
-  const hasProfileData = computed(() => rows.value.length > 0 && fieldProfiles.value.length > 0)
+  const hasProfileData = computed(() => profileRowCount.value > 0 && fieldProfiles.value.length > 0)
   const fieldsAtOrAboveMissingRate = computed(
     () => (thresholdPercent: number) => {
       const thresholdRate = Math.max(0, Math.min(100, thresholdPercent)) / 100
