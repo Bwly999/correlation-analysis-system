@@ -13,12 +13,17 @@ vi.mock('vue-echarts', () => ({
         type: Object,
         required: true,
       },
+      updateOptions: {
+        type: Object,
+        default: undefined,
+      },
     },
     setup(props) {
       return () =>
         h('div', {
           'data-test': 'chart-option',
           'data-option': JSON.stringify(props.option),
+          'data-update-options': JSON.stringify(props.updateOptions),
         })
     },
   }),
@@ -109,6 +114,9 @@ vi.mock('primevue/inputnumber', () => ({
 
 const getChartOption = (wrapper: ReturnType<typeof mount>) =>
   JSON.parse(wrapper.get('[data-test="chart-option"]').attributes('data-option') || '{}')
+
+const getChartUpdateOptions = (wrapper: ReturnType<typeof mount>) =>
+  JSON.parse(wrapper.get('[data-test="chart-option"]').attributes('data-update-options') || '{}')
 
 const mountWithOverlayHost = (component: any, host: HTMLElement) =>
   mount(
@@ -261,6 +269,186 @@ describe('DataChart', () => {
     expect(option.yAxis.max).toBe(1)
     expect(option.series[0].data).toEqual([[0, 0, 0.2, 0.4, 0.4]])
     expect(option.series[1].data).toEqual([[0.6, 0.6, 0.8, 1, 1]])
+  })
+
+  it('offers normal distribution charts for table data only', () => {
+    const tableWrapper = mount(DataChart, {
+      props: {
+        data: [
+          { score: 1, cost: 10 },
+          { score: 2, cost: 12 },
+        ],
+      },
+    })
+
+    const tableChartTypes = tableWrapper
+      .get('[data-test="chart-type-select"]')
+      .findAll('option')
+      .map((option) => option.text())
+
+    expect(tableChartTypes).toContain('正态分布')
+
+    const groupedWrapper = mount(DataChart, {
+      props: {
+        data: [
+          { name: 'A', data: [{ score: 1 }, { score: 2 }] },
+          { name: 'B', data: [{ score: 3 }, { score: 4 }] },
+        ],
+      },
+    })
+
+    const groupedChartTypes = groupedWrapper
+      .get('[data-test="chart-type-select"]')
+      .findAll('option')
+      .map((option) => option.text())
+
+    expect(groupedChartTypes).toEqual(['多组因子对比'])
+  })
+
+  it('renders selected factors as independent normal distribution panels in two columns', async () => {
+    const wrapper = mount(DataChart, {
+      props: {
+        data: [
+          { score: 1, cost: 10, temp: 100 },
+          { score: 2, cost: 12, temp: 104 },
+          { score: 3, cost: 13, temp: 108 },
+          { score: 4, cost: 15, temp: 112 },
+          { score: 5, cost: 18, temp: 116 },
+        ],
+      },
+    })
+
+    await wrapper.get('[data-test="chart-type-select"]').setValue('normal')
+    await wrapper.get('[data-test="chart-key-select"]').setValue(['score', 'cost', 'temp'])
+
+    const option = getChartOption(wrapper)
+
+    expect(option.grid).toHaveLength(3)
+    expect(option.grid[0].left).toBe('6%')
+    expect(option.grid[1].left).toBe('56%')
+    expect(option.grid[2].left).toBe('6%')
+    expect(option.xAxis.map((axis: { gridIndex: number }) => axis.gridIndex)).toEqual([0, 1, 2])
+    expect(option.yAxis.map((axis: { gridIndex: number }) => axis.gridIndex)).toEqual([0, 1, 2])
+    expect(option.series).toHaveLength(6)
+    expect(option.series.map((series: { type: string }) => series.type)).toEqual([
+      'bar',
+      'line',
+      'bar',
+      'line',
+      'bar',
+      'line',
+    ])
+    expect(option.series.map((series: { xAxisIndex: number; yAxisIndex: number }) => [
+      series.xAxisIndex,
+      series.yAxisIndex,
+    ])).toEqual([
+      [0, 0],
+      [0, 0],
+      [1, 1],
+      [1, 1],
+      [2, 2],
+      [2, 2],
+    ])
+  })
+
+  it('keeps normal distribution data finite for invalid values and constant series', async () => {
+    const wrapper = mount(DataChart, {
+      props: {
+        data: {
+          kind: 'table',
+          schema: {
+            fields: [
+              { name: 'score', type: 'number' },
+              { name: 'constant', type: 'number' },
+            ],
+          },
+          payload: [
+            { score: 1, constant: 5 },
+            { score: null, constant: 5 },
+            { score: 'bad', constant: 5 },
+          ],
+        },
+      },
+    })
+
+    await wrapper.get('[data-test="chart-type-select"]').setValue('normal')
+    await wrapper.get('[data-test="chart-key-select"]').setValue(['score', 'constant'])
+
+    const option = getChartOption(wrapper)
+    const allPoints = option.series.flatMap((series: { data: Array<[number, number]> }) => series.data)
+
+    expect(option.grid).toHaveLength(2)
+    expect(allPoints.length).toBeGreaterThan(0)
+    expect(allPoints.every(([x, y]: [number, number]) => Number.isFinite(x) && Number.isFinite(y))).toBe(true)
+  })
+
+  it('uses full option replacement to avoid vue-echarts smart replaceMerge errors when switching chart shapes', async () => {
+    const wrapper = mount(DataChart, {
+      props: {
+        data: [
+          { score: 1, cost: 10 },
+          { score: 2, cost: 12 },
+        ],
+      },
+    })
+
+    await wrapper.get('[data-test="chart-type-select"]').setValue('normal')
+
+    expect(getChartUpdateOptions(wrapper)).toEqual({
+      notMerge: true,
+      lazyUpdate: true,
+    })
+  })
+
+  it('wraps tall normal distribution charts in a scrollable viewport', async () => {
+    const wrapper = mount(DataChart, {
+      props: {
+        data: Array.from({ length: 5 }, (_, rowIndex) => ({
+          factorA: rowIndex + 1,
+          factorB: rowIndex + 2,
+          factorC: rowIndex + 3,
+          factorD: rowIndex + 4,
+          factorE: rowIndex + 5,
+        })),
+      },
+    })
+
+    await wrapper.get('[data-test="chart-type-select"]').setValue('normal')
+    await wrapper
+      .get('[data-test="chart-key-select"]')
+      .setValue(['factorA', 'factorB', 'factorC', 'factorD', 'factorE'])
+
+    const viewport = wrapper.get('[data-test="chart-scroll-viewport"]')
+    const host = wrapper.get('[data-test="chart-host"]')
+
+    expect(viewport.classes()).toContain('chart-scroll-viewport')
+    expect(host.attributes('style')).toContain('min-height: 840px')
+  })
+
+  it('keeps fitted normal lines from stealing frequency bar tooltips', async () => {
+    const wrapper = mount(DataChart, {
+      props: {
+        data: [
+          { score: 1 },
+          { score: 2 },
+          { score: 3 },
+          { score: 4 },
+          { score: 5 },
+        ],
+      },
+    })
+
+    await wrapper.get('[data-test="chart-type-select"]').setValue('normal')
+    await wrapper.get('[data-test="chart-key-select"]').setValue(['score'])
+
+    const option = getChartOption(wrapper)
+    const barSeries = option.series.find((series: { type: string }) => series.type === 'bar')
+    const lineSeries = option.series.find((series: { type: string }) => series.type === 'line')
+
+    expect(option.tooltip.trigger).toBe('item')
+    expect(barSeries.tooltip.show).toBe(true)
+    expect(lineSeries.silent).toBe(true)
+    expect(lineSeries.tooltip.show).toBe(false)
   })
 
   it('uses the richer grouped boxplot presentation style', async () => {

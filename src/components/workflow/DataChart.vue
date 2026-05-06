@@ -3,7 +3,7 @@ import { computed, markRaw, ref, shallowRef, watch } from 'vue'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
-import { BoxplotChart, LineChart } from 'echarts/charts'
+import { BarChart, BoxplotChart, LineChart } from 'echarts/charts'
 import {
   DataZoomComponent,
   DatasetComponent,
@@ -47,6 +47,7 @@ import { getResultGroups, getResultRows, getResultSchemaFields } from './resultV
 use([
   CanvasRenderer,
   LineChart,
+  BarChart,
   BoxplotChart,
   GridComponent,
   TooltipComponent,
@@ -71,6 +72,9 @@ type ChartFilterPreset = {
 }
 
 const LINE_CHART_RENDER_LIMIT = 1200
+const NORMAL_DISTRIBUTION_BIN_COUNT = 20
+const NORMAL_DISTRIBUTION_CURVE_POINTS = 80
+const NORMAL_DISTRIBUTION_COLUMNS = 2
 const BOX_PLOT_COLORS = ['#2563eb', '#10b981', '#f59e0b', '#f43f5e', '#06b6d4', '#475569']
 
 const props = defineProps<{
@@ -104,6 +108,10 @@ const defaultPresetId = useScopedResultPreviewStorage<string | 'none' | null>(
   null,
 )
 const chartRef = shallowRef<any>(null)
+const chartUpdateOptions = markRaw({
+  notMerge: true,
+  lazyUpdate: true,
+})
 
 const createDefaultPresetName = () => {
   const now = new Date()
@@ -210,6 +218,7 @@ const chartTypes = computed(() => {
   return [
     { label: '折线云图', value: 'line', icon: markRaw(LineChartIcon) },
     { label: '箱线分布', value: 'boxplot', icon: markRaw(BoxSelect) },
+    { label: '正态分布', value: 'normal', icon: markRaw(LineChartIcon) },
   ]
 })
 
@@ -418,6 +427,186 @@ const formatBoxValue = (value: unknown) => {
   if (typeof value !== 'number' || !Number.isFinite(value)) return '--'
   if (Number.isInteger(value)) return String(value)
   return value.toFixed(2).replace(/\.?0+$/, '')
+}
+
+const getNormalDistributionValues = (rows: ChartRow[], key: string) =>
+  rows.map((row) => row[key]).filter(isFiniteNumber)
+
+const calculateMean = (values: number[]) =>
+  values.reduce((sum, value) => sum + value, 0) / Math.max(values.length, 1)
+
+const calculateStandardDeviation = (values: number[], mean: number) => {
+  if (values.length === 0) return 0
+  const variance = values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / values.length
+  return Math.sqrt(variance)
+}
+
+const createNormalDistributionSeriesData = (values: number[]) => {
+  const safeValues = values.length > 0 ? values : [0]
+  const rawMin = Math.min(...safeValues)
+  const rawMax = Math.max(...safeValues)
+  const rawMean = calculateMean(safeValues)
+  const rawStd = calculateStandardDeviation(safeValues, rawMean)
+  const rangePadding = rawMin === rawMax ? Math.max(Math.abs(rawMean) * 0.2, 1) : (rawMax - rawMin) * 0.08
+  const min = rawMin - rangePadding
+  const max = rawMax + rangePadding
+  const range = Math.max(max - min, 1)
+  const binWidth = range / NORMAL_DISTRIBUTION_BIN_COUNT
+  const std = rawStd > 0 ? rawStd : Math.max(binWidth, 1)
+  const histogram = Array.from({ length: NORMAL_DISTRIBUTION_BIN_COUNT }, (_, index) => {
+    const center = min + binWidth * (index + 0.5)
+    return [center, 0] as [number, number]
+  })
+
+  safeValues.forEach((value) => {
+    const rawIndex = Math.floor((value - min) / binWidth)
+    const binIndex = Math.min(NORMAL_DISTRIBUTION_BIN_COUNT - 1, Math.max(0, rawIndex))
+    histogram[binIndex]![1] += 1
+  })
+
+  const normalScale = safeValues.length * binWidth
+  const curve = Array.from({ length: NORMAL_DISTRIBUTION_CURVE_POINTS }, (_, index) => {
+    const ratio = index / (NORMAL_DISTRIBUTION_CURVE_POINTS - 1)
+    const x = min + range * ratio
+    const density =
+      (1 / (std * Math.sqrt(2 * Math.PI))) * Math.exp(-0.5 * ((x - rawMean) / std) ** 2)
+    return [x, density * normalScale] as [number, number]
+  })
+
+  return { histogram, curve, min, max }
+}
+
+const createNormalDistributionOption = (rows: ChartRow[], keys: string[], xAxisName: string) => {
+  const rowCount = Math.max(1, Math.ceil(keys.length / NORMAL_DISTRIBUTION_COLUMNS))
+  const rowHeight = 82 / rowCount
+
+  return {
+    animation: false,
+    useDirtyRect: true,
+    backgroundColor: 'transparent',
+    hoverLayer: true,
+    color: ['#2563eb', '#0f172a', '#10b981', '#475569'],
+    tooltip: {
+      trigger: 'item',
+      confine: true,
+      transitionDuration: 0,
+      extraCssText: 'box-shadow: 0 10px 15px -3px rgba(15, 23, 42, 0.12); border-radius: 12px;',
+      formatter: (params: Record<string, any>) => {
+        const marker = String(params.marker ?? '')
+        const seriesName = String(params.seriesName ?? '')
+        const value = Array.isArray(params.data) ? params.data : []
+        const binCenter = typeof value[0] === 'number' ? formatBoxValue(value[0]) : '--'
+        const frequency = typeof value[1] === 'number' ? formatBoxValue(value[1]) : '--'
+
+        return [
+          `<div style="padding: 4px 2px;">`,
+          `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;color:#0f172a;font-size:13px;font-weight:700;">${marker}<span>${seriesName}</span></div>`,
+          `<div style="display:grid;grid-template-columns:auto auto;gap:4px 16px;font-size:11px;color:#475569;">`,
+          `<span>区间中心</span><span style="color:#0f172a;text-align:right;font-weight:600;">${binCenter}</span>`,
+          `<span>频数</span><span style="color:#0f172a;text-align:right;font-weight:600;">${frequency}</span>`,
+          `</div>`,
+          `</div>`,
+        ].join('')
+      },
+    },
+    legend: {
+      show: true,
+      top: 0,
+      left: 'center',
+      icon: 'roundRect',
+      textStyle: { color: '#64748b', fontSize: 11, fontWeight: '600' },
+    },
+    title: keys.map((key, index) => {
+      const columnIndex = index % NORMAL_DISTRIBUTION_COLUMNS
+      const rowIndex = Math.floor(index / NORMAL_DISTRIBUTION_COLUMNS)
+
+      return {
+        text: key,
+        left: columnIndex === 0 ? '6%' : '56%',
+        top: `${8 + rowHeight * rowIndex}%`,
+        textStyle: {
+          color: '#0f172a',
+          fontSize: 12,
+          fontWeight: 700,
+        },
+      }
+    }),
+    grid: keys.map((_, index) => {
+      const columnIndex = index % NORMAL_DISTRIBUTION_COLUMNS
+      const rowIndex = Math.floor(index / NORMAL_DISTRIBUTION_COLUMNS)
+
+      return {
+        left: columnIndex === 0 ? '6%' : '56%',
+        width: '38%',
+        top: `${14 + rowHeight * rowIndex}%`,
+        height: `${Math.max(10, rowHeight - 12)}%`,
+        containLabel: true,
+      }
+    }),
+    xAxis: keys.map((key, index) => {
+      const { min, max } = createNormalDistributionSeriesData(getNormalDistributionValues(rows, key))
+
+      return {
+        type: 'value',
+        gridIndex: index,
+        min,
+        max,
+        name: xAxisName,
+        nameTextStyle: { color: '#64748b', fontSize: 10, fontWeight: 600 },
+        axisLabel: { color: '#64748b', fontSize: 10 },
+        axisLine: { lineStyle: { color: '#e2e8f0' } },
+        splitLine: { lineStyle: { color: '#f1f5f9', type: 'dashed' } },
+      }
+    }),
+    yAxis: keys.map((_, index) => ({
+      type: 'value',
+      name: '频数',
+      gridIndex: index,
+      min: 0,
+      axisLabel: { color: '#64748b', fontSize: 10 },
+      axisLine: { show: false },
+      splitLine: { lineStyle: { color: '#e2e8f0', type: 'dashed' } },
+    })),
+    series: keys.flatMap((key, index) => {
+      const { histogram, curve } = createNormalDistributionSeriesData(getNormalDistributionValues(rows, key))
+
+      return [
+        {
+          name: `${key} 频数`,
+          type: 'bar',
+          xAxisIndex: index,
+          yAxisIndex: index,
+          data: histogram,
+          barWidth: '72%',
+          tooltip: {
+            show: true,
+          },
+          itemStyle: {
+            color: toRgba(BOX_PLOT_COLORS[index % BOX_PLOT_COLORS.length]!, 0.35),
+            borderColor: BOX_PLOT_COLORS[index % BOX_PLOT_COLORS.length],
+            borderWidth: 1,
+          },
+        },
+        {
+          name: `${key} 正态拟合`,
+          type: 'line',
+          xAxisIndex: index,
+          yAxisIndex: index,
+          data: curve,
+          silent: true,
+          tooltip: {
+            show: false,
+          },
+          showSymbol: false,
+          smooth: true,
+          lineStyle: {
+            width: 2.4,
+            color: '#0f172a',
+          },
+        },
+      ]
+    }),
+  }
 }
 
 const createBoxplotTooltipFormatter = () => (params: Record<string, unknown>) => {
@@ -632,6 +821,17 @@ const chartOption = computed(() => {
         },
       },
     ]
+  } else if (chartType.value === 'normal') {
+    const normalRows = isNormalizedView.value
+      ? normalizeChartRows(sourceData as ChartRow[], keys, normalizationStats.value, normalizationMethod.value)
+      : (sourceData as ChartRow[])
+    const xAxisName = isNormalizedView.value
+      ? normalizationMethod.value === 'min-max'
+        ? '归一化值'
+        : '标准分值'
+      : '原始值'
+
+    return markRaw(createNormalDistributionOption(normalRows, keys, xAxisName))
   } else {
     const rows = (sourceData as ChartRow[]).slice(0, maxPoints.value)
     const renderLimit = Math.min(maxPoints.value, LINE_CHART_RENDER_LIMIT)
@@ -702,6 +902,15 @@ const chartOption = computed(() => {
   }
 
   return markRaw(option)
+})
+
+const chartHostStyle = computed(() => {
+  if (isGroupedData.value || chartType.value !== 'normal') return undefined
+
+  const rowCount = Math.max(1, Math.ceil(normalizedKeys.value.length / NORMAL_DISTRIBUTION_COLUMNS))
+  return {
+    minHeight: `${Math.max(360, rowCount * 280)}px`,
+  }
 })
 
 watch(
@@ -1024,11 +1233,14 @@ applyDefaultPreset()
       </Select>
     </div>
 
-    <div class="flex-1 p-4 relative min-h-0">
+    <div class="flex-1 p-4 relative min-h-0 overflow-hidden">
       <div class="h-full flex gap-4 min-h-0">
-        <div class="flex-1 min-w-0">
-          <div v-if="hasRenderableData" class="h-full w-full">
-            <VChart ref="chartRef" :option="chartOption" autoresize />
+        <div
+          data-test="chart-scroll-viewport"
+          class="chart-scroll-viewport flex-1 min-w-0 min-h-0 overflow-y-auto overflow-x-hidden pr-2"
+        >
+          <div v-if="hasRenderableData" data-test="chart-host" class="h-full w-full" :style="chartHostStyle">
+            <VChart ref="chartRef" :option="chartOption" :update-options="chartUpdateOptions" autoresize />
           </div>
         </div>
       </div>
@@ -1039,6 +1251,28 @@ applyDefaultPreset()
 <style scoped>
 .chart-preset-popover {
   margin-top: 2px;
+}
+
+.chart-scroll-viewport {
+  scrollbar-gutter: stable;
+}
+
+.chart-scroll-viewport::-webkit-scrollbar {
+  width: 8px;
+}
+
+.chart-scroll-viewport::-webkit-scrollbar-track {
+  background: #f8fafc;
+  border-radius: 999px;
+}
+
+.chart-scroll-viewport::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
+}
+
+.chart-scroll-viewport::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
 :deep(.filter-input) {
