@@ -795,4 +795,67 @@ describe('PropertyFieldTreeInput', () => {
     wrapper.unmount()
   })
 
+  it('tree 滚动到边界后，需要鼠标移动一次才释放父级滚动链路', async () => {
+    const { wrapper } = mountTreeInputInScrollContainer()
+
+    const treeViewport = wrapper.get('[data-testid="tree-scroll-window"]').element
+    setElementScrollMetrics(treeViewport, {
+      clientHeight: 180,
+      scrollHeight: 540,
+      scrollTop: 360,
+    })
+
+    const wheelEvent = new WheelEvent('wheel', {
+      deltaY: 60,
+      bubbles: true,
+      cancelable: true,
+    })
+
+    const wasCanceled = treeViewport.dispatchEvent(wheelEvent)
+
+    expect(wasCanceled).toBe(false)
+    expect(wheelEvent.defaultPrevented).toBe(true)
+
+    treeViewport.dispatchEvent(new MouseEvent('mousemove', {
+      bubbles: true,
+    }))
+
+    const releasedWheelEvent = new WheelEvent('wheel', {
+      deltaY: 60,
+      bubbles: true,
+      cancelable: true,
+    })
+
+    const wasReleased = treeViewport.dispatchEvent(releasedWheelEvent)
+
+    expect(wasReleased).toBe(true)
+    expect(releasedWheelEvent.defaultPrevented).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  it('tree 没有可滚动内容时直接释放父级滚动链路', async () => {
+    const { wrapper } = mountTreeInputInScrollContainer()
+
+    const treeViewport = wrapper.get('[data-testid="tree-scroll-window"]').element
+    setElementScrollMetrics(treeViewport, {
+      clientHeight: 180,
+      scrollHeight: 180,
+      scrollTop: 0,
+    })
+
+    const wheelEvent = new WheelEvent('wheel', {
+      deltaY: 60,
+      bubbles: true,
+      cancelable: true,
+    })
+
+    const wasReleased = treeViewport.dispatchEvent(wheelEvent)
+
+    expect(wasReleased).toBe(true)
+    expect(wheelEvent.defaultPrevented).toBe(false)
+
+    wrapper.unmount()
+  })
+
 })

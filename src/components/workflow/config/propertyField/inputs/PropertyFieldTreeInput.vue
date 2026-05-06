@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { ChevronDown, ChevronUp, LoaderCircle, Search } from 'lucide-vue-next'
 import { ElTreeV2 } from 'element-plus'
 import InputText from 'primevue/inputtext'
@@ -220,7 +220,6 @@ const {
 })
 
 const treeRef = ref<TreeV2Expose | null>(null)
-const treeHostRef = useTemplateRef<HTMLElement>('treeHost')
 
 const TREE_VIEWPORT_HEIGHT_CLASS_MAP = {
   sm: 'max-h-[220px]',
@@ -378,110 +377,84 @@ const treeSelectionValue = computed<TreeSelectionKeys | undefined>({
 const treeSearchMessage = computed(() => searchErrorMessage.value || regexErrorMessage.value)
 const regexToggleTitle = computed(() => (regexEnabled.value ? '已开启正则搜索' : '开启正则搜索'))
 
-const isScrollable = (element: HTMLElement) => element.scrollHeight > element.clientHeight
 const TREE_V2_SCROLL_VIEWPORT_SELECTOR = '.el-vl__window'
-const wheelSnapshotMap = new WeakMap<WheelEvent, { scrollTop: number }>()
-let activeTreeWheelViewport: HTMLElement | null = null
 
-const clampScrollTop = (element: HTMLElement, nextScrollTop: number) => {
-  const maxScrollTop = Math.max(0, element.scrollHeight - element.clientHeight)
-  return Math.min(Math.max(nextScrollTop, 0), maxScrollTop)
+type WheelDirection = 'up' | 'down'
+
+type BoundaryWheelRelease = {
+  direction: WheelDirection
+  viewport: HTMLElement
+  releasedAfterMouseMove: boolean
 }
 
-const scrollElementBy = (element: HTMLElement, deltaY: number) => {
-  const nextScrollTop = clampScrollTop(element, element.scrollTop + deltaY)
-  const consumedDelta = nextScrollTop - element.scrollTop
-  element.scrollTop = nextScrollTop
-  return consumedDelta
+let boundaryWheelRelease: BoundaryWheelRelease | null = null
+
+const getWheelDirection = (deltaY: number): WheelDirection | null => {
+  if (deltaY < 0) return 'up'
+  if (deltaY > 0) return 'down'
+  return null
 }
 
-const resolveTreeViewport = (event: WheelEvent) => {
+const resolveTreeScrollViewport = (event: Event) => {
   const target = event.target
-  if (!(target instanceof HTMLElement)) return activeTreeWheelViewport
+  if (!(target instanceof HTMLElement)) return null
 
-  const matchedViewport = target.closest(TREE_V2_SCROLL_VIEWPORT_SELECTOR) as HTMLElement | null
-  if (matchedViewport) return matchedViewport
-
-  if (activeTreeWheelViewport && activeTreeWheelViewport.contains(target)) {
-    return activeTreeWheelViewport
-  }
-
-  return activeTreeWheelViewport
+  const viewport = target.closest(TREE_V2_SCROLL_VIEWPORT_SELECTOR)
+  return viewport instanceof HTMLElement ? viewport : null
 }
 
-const handleTreeWheelCapture = (event: WheelEvent) => {
-  const treeViewport = resolveTreeViewport(event)
-  if (!treeViewport) return
+const canScrollVertically = (element: HTMLElement) => element.scrollHeight > element.clientHeight
 
-  wheelSnapshotMap.set(event, {
-    scrollTop: treeViewport.scrollTop,
-  })
+const isAtScrollBoundary = (element: HTMLElement, direction: WheelDirection) => {
+  const maxScrollTop = Math.max(0, element.scrollHeight - element.clientHeight)
+  if (direction === 'up') return element.scrollTop <= 0
+  return element.scrollTop >= maxScrollTop
 }
 
-const handleTreeWheel = (event: WheelEvent) => {
-  const treeViewport = resolveTreeViewport(event)
-  if (!treeViewport) return
+const isSameBoundaryRelease = (
+  release: BoundaryWheelRelease | null,
+  viewport: HTMLElement,
+  direction: WheelDirection,
+) => release?.viewport === viewport && release.direction === direction
 
-  const isVirtualListViewport = treeViewport.matches(TREE_V2_SCROLL_VIEWPORT_SELECTOR)
+const handleTreeBoundaryWheel = (event: WheelEvent) => {
+  const viewport = resolveTreeScrollViewport(event)
+  const direction = getWheelDirection(event.deltaY)
+  if (!viewport || !direction) return
 
-  if (!isVirtualListViewport) {
-    if (!isScrollable(treeViewport)) {
-      event.preventDefault()
-      return
-    }
-
-    scrollElementBy(treeViewport, event.deltaY)
-    event.preventDefault()
+  if (!canScrollVertically(viewport)) {
+    boundaryWheelRelease = null
     return
   }
 
-  const snapshot = wheelSnapshotMap.get(event)
-  const consumedDelta = snapshot ? treeViewport.scrollTop - snapshot.scrollTop : 0
-  const remainingDelta = event.deltaY - consumedDelta
-
-  if (consumedDelta !== 0 || remainingDelta !== 0) {
-    event.preventDefault()
+  if (!isAtScrollBoundary(viewport, direction)) {
+    boundaryWheelRelease = null
+    return
   }
+
+  if (isSameBoundaryRelease(boundaryWheelRelease, viewport, direction)
+    && boundaryWheelRelease?.releasedAfterMouseMove) {
+    return
+  }
+
+  boundaryWheelRelease = {
+    viewport,
+    direction,
+    releasedAfterMouseMove: false,
+  }
+  event.preventDefault()
+  event.stopPropagation()
 }
 
-let removeTreeWheelListeners: (() => void) | null = null
+const handleTreeBoundaryMouseMove = (event: MouseEvent) => {
+  const viewport = resolveTreeScrollViewport(event)
+  if (!viewport || boundaryWheelRelease?.viewport !== viewport) return
 
-const syncTreeWheelListeners = async () => {
-  await nextTick()
-
-  removeTreeWheelListeners?.()
-  removeTreeWheelListeners = null
-  activeTreeWheelViewport = null
-
-  const treeHost = treeHostRef.value
-  if (!treeHost) return
-
-  const treeViewport = treeHost.querySelector(TREE_V2_SCROLL_VIEWPORT_SELECTOR) ?? treeHost.firstElementChild
-  if (!(treeViewport instanceof HTMLElement)) return
-  activeTreeWheelViewport = treeViewport
-  treeViewport.style.overscrollBehavior = 'contain'
-
-  treeHost.addEventListener('wheel', handleTreeWheelCapture, { capture: true, passive: false })
-  treeHost.addEventListener('wheel', handleTreeWheel, { passive: false })
-
-  removeTreeWheelListeners = () => {
-    treeHost.removeEventListener('wheel', handleTreeWheelCapture, { capture: true })
-    treeHost.removeEventListener('wheel', handleTreeWheel)
+  boundaryWheelRelease = {
+    ...boundaryWheelRelease,
+    releasedAfterMouseMove: true,
   }
 }
-
-watch(
-  [treeViewData, () => props.isOptionsLoading, () => props.optionsError],
-  () => {
-    void syncTreeWheelListeners()
-  },
-  { immediate: true, flush: 'post' },
-)
-
-onBeforeUnmount(() => {
-  removeTreeWheelListeners?.()
-  activeTreeWheelViewport = null
-})
 
 </script>
 
@@ -566,7 +539,12 @@ onBeforeUnmount(() => {
       >
         {{ prop.emptyMessage || '暂无数据' }}
       </div>
-      <div v-else ref="treeHost">
+      <div
+        v-else
+        class="tree-host"
+        @wheel.capture="handleTreeBoundaryWheel"
+        @mousemove="handleTreeBoundaryMouseMove"
+      >
         <ElTreeV2
           ref="treeRef"
           :data="treeViewData"
@@ -608,5 +586,10 @@ onBeforeUnmount(() => {
   background: transparent !important;
   border: none !important;
   font-size: 12px;
+  overscroll-behavior-y: auto;
+}
+
+.ndv-tree :deep(.el-vl__window) {
+  overscroll-behavior-y: auto;
 }
 </style>
