@@ -1765,7 +1765,7 @@ describe('Workflow Store', () => {
     expect(store.logs.some((log) => log.message.includes('新的工作流名称'))).toBe(true)
   })
 
-  it('should export workflow json without cached node outputs', async () => {
+  it('should export workflow json without output fields', async () => {
     const store = useWorkflowStore()
     const trigger = store.addAndConnectNode('manual-json-import', '数据输入', { x: 0, y: 0 })!
     const action = store.addAndConnectNode('data-cleaning', '数据清洗', { x: 320, y: 0 })!
@@ -1804,7 +1804,7 @@ describe('Workflow Store', () => {
       const exported = JSON.parse(await exportedBlob!.text())
       expect(exported.name).toBe('未命名工作流')
       expect(exported.nodes).toHaveLength(2)
-      expect(exported.nodes.every((node: any) => node.data.output === null)).toBe(true)
+      expect(exported.nodes.every((node: any) => !Object.prototype.hasOwnProperty.call(node.data, 'output'))).toBe(true)
       expect(exported.nodes[0]!.data.config.jsonData).toBe(JSON.stringify([{ feature: 1, target: 2 }]))
       expect(exported.edges).toEqual(store.edges)
     } finally {

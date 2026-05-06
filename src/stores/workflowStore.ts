@@ -658,7 +658,13 @@ export const useWorkflowStore = defineStore('workflow', () => {
   const exportWorkflow = () => {
     const currentNodes = getCurrentNodes()
     const currentEdges = getCurrentEdges()
-    const cleanNodes: WorkflowNodeSnapshot[] = serializeWorkflowNodes(currentNodes)
+    const cleanNodes: WorkflowNodeSnapshot[] = serializeWorkflowNodes(currentNodes).map((node) => {
+      const { output: _output, ...dataWithoutOutput } = node.data
+      return {
+        ...node,
+        data: dataWithoutOutput,
+      }
+    })
     const workflow = { name: workflowName.value, nodes: cleanNodes, edges: currentEdges }
     const blob = new Blob([JSON.stringify(workflow, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
