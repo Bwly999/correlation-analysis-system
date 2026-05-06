@@ -400,6 +400,20 @@ const toRgba = (hexColor: string, alpha: number) => {
   return `rgba(${red}, ${green}, ${blue}, ${alpha})`
 }
 
+const createBoxplotDataItem = (values: number[], color: string) => ({
+  value: values,
+  itemStyle: {
+    color: toRgba(color, 0.18),
+    borderColor: color,
+    borderWidth: 1.5,
+  },
+  emphasis: {
+    itemStyle: {
+      borderWidth: 2.5,
+    },
+  },
+})
+
 const formatBoxValue = (value: unknown) => {
   if (typeof value !== 'number' || !Number.isFinite(value)) return '--'
   if (Number.isInteger(value)) return String(value)
@@ -599,7 +613,12 @@ const chartOption = computed(() => {
       {
         name: '数据分布',
         type: 'boxplot',
-        data: keys.map((key) => calculateBoxValues(boxplotRows, key)),
+        data: keys.map((key, index) =>
+          createBoxplotDataItem(
+            calculateBoxValues(boxplotRows, key),
+            BOX_PLOT_COLORS[index % BOX_PLOT_COLORS.length]!,
+          ),
+        ),
         itemStyle: {
           color: toRgba(BOX_PLOT_COLORS[0]!, 0.18),
           borderColor: BOX_PLOT_COLORS[0],

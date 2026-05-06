@@ -236,7 +236,7 @@ describe('DataChart', () => {
     expect(option.yAxis.name).toBe('归一化值')
     expect(option.yAxis.min).toBe(0)
     expect(option.yAxis.max).toBe(1)
-    expect(option.series[0].data).toEqual([[0, 0, 0.5, 1, 1]])
+    expect(option.series[0].data[0].value).toEqual([0, 0, 0.5, 1, 1])
   })
 
   it('normalizes grouped boxplot data with min-max scaling', async () => {
@@ -312,6 +312,8 @@ describe('DataChart', () => {
     expect(option.series[0].itemStyle.borderColor).toBeTruthy()
     expect(option.series[0].itemStyle.borderWidth).toBeGreaterThanOrEqual(1.5)
     expect(option.series[0].emphasis.itemStyle.borderWidth).toBeGreaterThan(2)
+    expect(option.series[0].data[0].itemStyle.borderColor).not.toBe(option.series[0].data[1].itemStyle.borderColor)
+    expect(option.series[0].data[0].itemStyle.color).not.toBe(option.series[0].data[1].itemStyle.color)
   })
 
   it('discovers grouped numeric factors from all rows and keeps only common fields across groups', () => {
