@@ -45,6 +45,8 @@ ref/
 .worktrees/
 .superpowers/
 .codex/
+.local-tools/
+tools/7zip/
 
 # Python cache
 __pycache__/
@@ -53,6 +55,7 @@ __pycache__/
 
 # Local archive exports
 correlation-analysis-system*.zip
+*.zip.tmp
 
 # Local binaries
 cloc-2.06.exe

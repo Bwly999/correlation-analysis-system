@@ -3,12 +3,17 @@
  * 将当前项目（含 .git 目录）打包为 zip，用于 GitHub Release 发布。
  * 用法：pnpm pack:release
  */
-import { createWriteStream } from 'node:fs'
+import { createWriteStream, existsSync, rmSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { dirname, basename, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { execSync } from 'node:child_process'
+import { execFileSync, execSync, spawnSync } from 'node:child_process'
 import archiver from 'archiver'
+import {
+  getArchiveGlobIgnore,
+  getSevenZipCommandCandidates,
+  getSevenZipExcludeArgs,
+} from './pack-release.shared.mjs'
 
 // 脚本在 scripts/ 下，向上一级拿到项目根目录
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url))
@@ -29,114 +34,111 @@ try {
 
 const OUTPUT_NAME = `${PROJECT_NAME}-v${VERSION}${SHORT_HASH}.zip`
 const OUTPUT_PATH = join(PROJECT_DIR, OUTPUT_NAME)
+const ARCHIVE_GLOB_IGNORE = getArchiveGlobIgnore(PROJECT_NAME)
+const SEVEN_ZIP_EXCLUDE_ARGS = getSevenZipExcludeArgs(PROJECT_NAME)
 
-// ── 排除规则 ────────────────────────────────────────────
-const EXCLUDE_DIRS = new Set([
-  'node_modules',
-  'dist',
-  'dist-ssr',
-  'dist-server',
-  'coverage',
-  '__screenshots__',
-  '__pycache__',
-  '.vscode',
-  '.idea',
-  '.worktrees',
-  '.superpowers',
-  '.venv310'
-])
-
-const EXCLUDE_FILES = new Set([
-  '.DS_Store',
-  '.eslintcache',
-  '.env.local',
-])
-
-// 排除匹配模式（文件名前缀或后缀）
-const EXCLUDE_PATTERNS = [
-  /^cloc-/,              // cloc 工具
-  /\.tsbuildinfo$/,       // TS 增量编译
-  /\.local$/,             // 本地配置
-  /\.sw?$/,               // Vim swap
-  /\.suo$/,               // VS solution user
-  /\.ntvs.*$/,            // Node.js Tools
-  /\.njsproj$/,           // NJ project
-  /\.sln$/,               // VS solution
-  /\.py[cod]$/,           // Python bytecode
-  /\.timestamp-.*-.*\.mjs$/, // Vite timestamp
-  new RegExp(`^${PROJECT_NAME}.*\\.zip$`), // 之前的打包产物
-]
-
-function shouldExclude(filePath) {
-  const parts = filePath.split(/[/\\]/)
-  // 检查目录排除
-  for (const part of parts) {
-    if (EXCLUDE_DIRS.has(part)) return true
+function resolveSevenZipCommand() {
+  for (const candidate of getSevenZipCommandCandidates(PROJECT_DIR)) {
+    if (candidate.includes('\\') && !existsSync(candidate)) {
+      continue
+    }
+    const probe = spawnSync(candidate, ['-h'], { stdio: 'ignore' })
+    if (!probe.error && probe.status === 0) {
+      return candidate
+    }
   }
-  const fileName = parts[parts.length - 1]
-  if (EXCLUDE_FILES.has(fileName)) return true
-  for (const pattern of EXCLUDE_PATTERNS) {
-    if (pattern.test(fileName)) return true
+  return null
+}
+
+function resetOutputArchive() {
+  rmSync(OUTPUT_PATH, { force: true })
+}
+
+function packWithSevenZip(command) {
+  resetOutputArchive()
+  console.log(`🚀 使用 7z 加速打包: ${command}`)
+  const result = spawnSync(
+    command,
+    [
+      'a',
+      '-tzip',
+      '-mx=5',
+      OUTPUT_PATH,
+      '.',
+      ...SEVEN_ZIP_EXCLUDE_ARGS,
+    ],
+    {
+      cwd: PROJECT_DIR,
+      stdio: 'inherit',
+    },
+  )
+
+  if (result.error) {
+    throw result.error
   }
-  return false
+  if (result.status !== 0) {
+    throw new Error(`7z 退出码异常: ${result.status}`)
+  }
+}
+
+function logArchiveResult(engine, sizeBytes) {
+  const sizeMB = (sizeBytes / 1024 / 1024).toFixed(1)
+  console.log(`✅ 已生成: ${OUTPUT_NAME} (${sizeMB} MB)`)
+  console.log(`   路径: ${OUTPUT_PATH}`)
+  console.log(`   引擎: ${engine}`)
+}
+
+async function packWithArchiverFallback(reason) {
+  resetOutputArchive()
+  console.log(`↩️  回退到 archiver: ${reason}`)
+  console.log('📦 使用 archiver 打包')
+
+  const output = createWriteStream(OUTPUT_PATH)
+  const archive = archiver('zip', { zlib: { level: 6 } })
+
+  archive.on('warning', (err) => {
+    if (err.code !== 'ENOENT') console.warn('⚠️', err.message)
+  })
+
+  archive.on('error', (err) => {
+    console.error('❌ 打包失败:', err.message)
+    process.exit(1)
+  })
+
+  output.on('close', () => {
+    logArchiveResult('archiver', archive.pointer())
+  })
+
+  archive.pipe(output)
+  archive.glob('**/*', {
+    cwd: PROJECT_DIR,
+    ignore: ARCHIVE_GLOB_IGNORE,
+    dot: true,
+  })
+
+  await archive.finalize()
 }
 
 // ── 执行打包 ────────────────────────────────────────────
 console.log(`📦 打包 ${PROJECT_NAME} v${VERSION}${SHORT_HASH}`)
+const sevenZipCommand = resolveSevenZipCommand()
 
-const output = createWriteStream(OUTPUT_PATH)
-const archive = archiver('zip', { zlib: { level: 9 } })
-
-archive.on('warning', (err) => {
-  if (err.code !== 'ENOENT') console.warn('⚠️', err.message)
-})
-
-archive.on('error', (err) => {
-  console.error('❌ 打包失败:', err.message)
-  process.exit(1)
-})
-
-output.on('close', () => {
-  const sizeMB = (archive.pointer() / 1024 / 1024).toFixed(1)
-  console.log(`✅ 已生成: ${OUTPUT_NAME} (${sizeMB} MB)`)
-  console.log(`   路径: ${OUTPUT_PATH}`)
-})
-
-archive.pipe(output)
-
-// 使用 glob 添加整个项目目录
-archive.glob('**/*', {
-  cwd: PROJECT_DIR,
-  ignore: [
-    'node_modules/**',
-    '.venv310/**',
-    'dist/**',
-    'dist-ssr/**',
-    'dist-server/**',
-    'coverage/**',
-    '__screenshots__/**',
-    '__pycache__/**',
-    '.vscode/**',
-    '.idea/**',
-    '.worktrees/**',
-    '.superpowers/**',
-    'cloc-*',
-    '*.tsbuildinfo',
-    '*.local',
-    '*.sw?',
-    '*.suo',
-    '*.ntvs*',
-    '*.njsproj',
-    '*.sln',
-    '*.py[cod]',
-    '.DS_Store',
-    '.eslintcache',
-    '.env.local',
-    '*.timestamp-*-*.mjs',
-    '.workflow-storage/**',
-    `${PROJECT_NAME}*.zip`,
-  ],
-  dot: true, // 包含 .git 等点开头的文件/目录
-})
-
-archive.finalize()
+if (sevenZipCommand) {
+  try {
+    packWithSevenZip(sevenZipCommand)
+    const sizeBytes = Number(
+      execFileSync('powershell', [
+        '-NoProfile',
+        '-Command',
+        `(Get-Item -LiteralPath '${OUTPUT_PATH.replace(/'/g, "''")}').Length`,
+      ])
+        .toString()
+        .trim(),
+    )
+    logArchiveResult(sevenZipCommand, sizeBytes)
+  } catch (error) {
+    await packWithArchiverFallback(error.message)
+  }
+} else {
+  await packWithArchiverFallback('未找到可用的 7z/7za')
+}
