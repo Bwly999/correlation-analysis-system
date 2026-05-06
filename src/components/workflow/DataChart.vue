@@ -473,7 +473,7 @@ const createNormalDistributionSeriesData = (values: number[]) => {
     return [x, density * normalScale] as [number, number]
   })
 
-  return { histogram, curve, min, max }
+  return { histogram, curve, min, max, binWidth, rawMin, rawMax, rawMean, rawStd }
 }
 
 const createNormalDistributionOption = (rows: ChartRow[], keys: string[], xAxisName: string) => {
@@ -494,6 +494,7 @@ const createNormalDistributionOption = (rows: ChartRow[], keys: string[], xAxisN
       formatter: (params: Record<string, any>) => {
         const marker = String(params.marker ?? '')
         const seriesName = String(params.seriesName ?? '')
+        if (!seriesName.includes('频数')) return ''
         const value = Array.isArray(params.data) ? params.data : []
         const binCenter = typeof value[0] === 'number' ? formatBoxValue(value[0]) : '--'
         const frequency = typeof value[1] === 'number' ? formatBoxValue(value[1]) : '--'
@@ -517,17 +518,31 @@ const createNormalDistributionOption = (rows: ChartRow[], keys: string[], xAxisN
       textStyle: { color: '#64748b', fontSize: 11, fontWeight: '600' },
     },
     title: keys.map((key, index) => {
+      const values = getNormalDistributionValues(rows, key)
+      const { rawMin, rawMax, rawMean, rawStd } = createNormalDistributionSeriesData(values)
       const columnIndex = index % NORMAL_DISTRIBUTION_COLUMNS
       const rowIndex = Math.floor(index / NORMAL_DISTRIBUTION_COLUMNS)
 
+      const statsParts = [
+        `均值: ${formatBoxValue(rawMean)}`,
+        `最大值: ${formatBoxValue(rawMax)}`,
+        `最小值: ${formatBoxValue(rawMin)}`,
+        `标准差: ${formatBoxValue(rawStd)}`,
+      ]
+
       return {
         text: key,
+        subtext: statsParts.join('  '),
         left: columnIndex === 0 ? '6%' : '56%',
         top: `${8 + rowHeight * rowIndex}%`,
         textStyle: {
           color: '#0f172a',
           fontSize: 12,
           fontWeight: 700,
+        },
+        subtextStyle: {
+          color: '#64748b',
+          fontSize: 10,
         },
       }
     }),
@@ -538,8 +553,8 @@ const createNormalDistributionOption = (rows: ChartRow[], keys: string[], xAxisN
       return {
         left: columnIndex === 0 ? '6%' : '56%',
         width: '38%',
-        top: `${14 + rowHeight * rowIndex}%`,
-        height: `${Math.max(10, rowHeight - 12)}%`,
+        top: `${17 + rowHeight * rowIndex}%`,
+        height: `${Math.max(10, rowHeight - 15)}%`,
         containLabel: true,
       }
     }),
@@ -577,9 +592,16 @@ const createNormalDistributionOption = (rows: ChartRow[], keys: string[], xAxisN
           xAxisIndex: index,
           yAxisIndex: index,
           data: histogram,
-          barWidth: '72%',
-          tooltip: {
-            show: true,
+          barWidth: '100%',
+          barGap: '0%',
+          barCategoryGap: '0%',
+          emphasis: {
+            itemStyle: {
+              color: toRgba(BOX_PLOT_COLORS[index % BOX_PLOT_COLORS.length]!, 0.65),
+              borderColor: BOX_PLOT_COLORS[index % BOX_PLOT_COLORS.length],
+              borderWidth: 2,
+            },
+            scale: 1.04,
           },
           itemStyle: {
             color: toRgba(BOX_PLOT_COLORS[index % BOX_PLOT_COLORS.length]!, 0.35),
@@ -593,12 +615,21 @@ const createNormalDistributionOption = (rows: ChartRow[], keys: string[], xAxisN
           xAxisIndex: index,
           yAxisIndex: index,
           data: curve,
-          silent: true,
-          tooltip: {
-            show: false,
-          },
           showSymbol: false,
           smooth: true,
+          emphasis: {
+            showSymbol: true,
+            symbol: 'circle',
+            symbolSize: 6,
+            itemStyle: {
+              color: '#0f172a',
+              borderColor: '#ffffff',
+              borderWidth: 2,
+            },
+            lineStyle: {
+              width: 3,
+            },
+          },
           lineStyle: {
             width: 2.4,
             color: '#0f172a',
@@ -909,7 +940,7 @@ const chartHostStyle = computed(() => {
 
   const rowCount = Math.max(1, Math.ceil(normalizedKeys.value.length / NORMAL_DISTRIBUTION_COLUMNS))
   return {
-    minHeight: `${Math.max(360, rowCount * 280)}px`,
+    minHeight: `${Math.max(360, rowCount * 300)}px`,
   }
 })
 
@@ -986,6 +1017,61 @@ watch(
 )
 
 applyDefaultPreset()
+
+// 正态分布图 hover 联动强调：鼠标悬停柱子时同步高亮对应的拟合线
+watch(
+  [chartRef, () => chartType.value],
+  ([ref, type]) => {
+    const instance = ref?.chart || ref?.getEchartsInstance?.()
+    if (!instance) return
+
+    if (type !== 'normal') {
+      instance.off('mouseover')
+      instance.off('globalout')
+      return
+    }
+
+    instance.off('mouseover')
+    instance.off('globalout')
+
+    instance.on('mouseover', (params: Record<string, any>) => {
+      const si = Number(params.seriesIndex)
+      const di = Number(params.dataIndex)
+      if (!Number.isFinite(si)) return
+
+      // 正态分布图: 每个 key 对应 bar(偶数索引) + line(奇数索引) 一对
+      // 同时高亮当前数据点 + 对应 pair series 中最邻近的数据点
+      instance.dispatchAction({ type: 'downplay' })
+      const pairSi = si % 2 === 0 ? si + 1 : si - 1
+
+      // 高亮当前 hover 的数据点
+      instance.dispatchAction({ type: 'highlight', seriesIndex: si, dataIndex: di })
+
+      // 查找 pair series 中最邻近的数据点
+      const hoverX = Array.isArray(params.data) ? (params.data[0] as number) : 0
+      const option = instance.getOption()
+      const pairSeries = (option as any).series?.[pairSi] as { data?: Array<[number, number]> } | undefined
+      const pairData = pairSeries?.data
+      if (pairData && pairData.length > 0) {
+        let nearestIdx = 0
+        let minDist = Math.abs((pairData[0]?.[0] ?? 0) - hoverX)
+        for (let i = 1; i < pairData.length; i++) {
+          const dist = Math.abs((pairData[i]?.[0] ?? 0) - hoverX)
+          if (dist < minDist) {
+            minDist = dist
+            nearestIdx = i
+          }
+        }
+        instance.dispatchAction({ type: 'highlight', seriesIndex: pairSi, dataIndex: nearestIdx })
+      }
+    })
+
+    instance.on('globalout', () => {
+      instance.dispatchAction({ type: 'downplay' })
+    })
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
