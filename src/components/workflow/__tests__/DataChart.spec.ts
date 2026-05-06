@@ -85,7 +85,7 @@ vi.mock('primevue/multiselect', () => ({
 vi.mock('primevue/inputnumber', () => ({
   default: defineComponent({
     name: 'PrimeInputNumberStub',
-    props: ['modelValue', 'inputId', 'min', 'max'],
+    props: ['modelValue', 'inputId', 'min', 'max', 'step', 'minFractionDigits', 'maxFractionDigits'],
     emits: ['update:modelValue'],
     setup(props, { emit }) {
       return () =>
@@ -94,6 +94,9 @@ vi.mock('primevue/inputnumber', () => ({
           type: 'number',
           min: props.min,
           max: props.max,
+          step: props.step,
+          'data-min-fraction-digits': props.minFractionDigits,
+          'data-max-fraction-digits': props.maxFractionDigits,
           value: props.modelValue ?? '',
           onInput: (event: Event) => {
             const rawValue = (event.target as HTMLInputElement).value
@@ -493,6 +496,34 @@ describe('DataChart', () => {
 
     expect(option.xAxis.data).toEqual([1])
     expect(option.series[0].data).toEqual([15])
+  })
+
+  it('configures filter bounds to accept decimal values', async () => {
+    const wrapper = mount(DataChart, {
+      props: {
+        data: [
+          { score: 1.1 },
+          { score: 1.5 },
+          { score: 2.2 },
+        ],
+      },
+    })
+
+    const lowerInput = wrapper.get('[data-test="chart-lower-bound"]')
+    const upperInput = wrapper.get('[data-test="chart-upper-bound"]')
+
+    expect(lowerInput.attributes('step')).toBe('0.01')
+    expect(upperInput.attributes('step')).toBe('0.01')
+    expect(lowerInput.attributes('data-max-fraction-digits')).toBe('10')
+    expect(upperInput.attributes('data-max-fraction-digits')).toBe('10')
+
+    await lowerInput.setValue('1.2')
+    await upperInput.setValue('2.1')
+
+    const option = getChartOption(wrapper)
+
+    expect(option.xAxis.data).toEqual([1])
+    expect(option.series[0].data).toEqual([1.5])
   })
 
   it('requires all selected factors to satisfy bounds when multiple fields are selected', async () => {

@@ -799,6 +799,8 @@ applyDefaultPreset()
             v-model="lowerBound"
             input-id="chart-lower-bound"
             class="filter-input w-24"
+            :step="0.01"
+            :max-fraction-digits="10"
             :use-grouping="false"
             placeholder="下限"
           />
@@ -807,6 +809,8 @@ applyDefaultPreset()
             v-model="upperBound"
             input-id="chart-upper-bound"
             class="filter-input w-24"
+            :step="0.01"
+            :max-fraction-digits="10"
             :use-grouping="false"
             placeholder="上限"
           />
