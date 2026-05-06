@@ -22,6 +22,7 @@ import Button from 'primevue/button'
 import Menu from 'primevue/menu'
 import Popover from 'primevue/popover'
 import { useToast } from 'primevue/usetoast'
+import { getErrorMessage } from '@/utils/requestError'
 
 const emit = defineEmits<{
   openProjects: []
@@ -50,6 +51,24 @@ const filteredHistory = computed<ExecutionRecord[]>(() => {
 
 const menu = ref()
 const historyPopover = ref()
+const showErrorToast = (summary: string, error: unknown, fallbackDetail: string) => {
+  toast.add({
+    severity: 'error',
+    summary,
+    detail: getErrorMessage(error, fallbackDetail),
+    life: 4000,
+  })
+}
+
+const handleClearHistory = async () => {
+  try {
+    await store.clearHistory()
+  } catch (error) {
+    console.error('清空运行历史失败:', error)
+    showErrorToast('清空失败', error, '清空运行历史时发生错误，请稍后重试。')
+  }
+}
+
 const menuItems = ref([
   {
     label: '文件操作',
@@ -60,7 +79,7 @@ const menuItems = ref([
         label: '清空运行历史',
         icon: 'pi pi-trash',
         class: 'text-red-500',
-        command: async () => await store.clearHistory(),
+        command: handleClearHistory,
       },
     ],
   },
@@ -95,12 +114,7 @@ const handleSave = async () => {
     })
   } catch (error) {
     console.error('保存工作流失败:', error)
-    toast.add({
-      severity: 'error',
-      summary: '保存失败',
-      detail: '保存当前工作流时发生错误，请稍后重试。',
-      life: 4000,
-    })
+    showErrorToast('保存失败', error, '保存当前工作流时发生错误，请稍后重试。')
   }
 }
 

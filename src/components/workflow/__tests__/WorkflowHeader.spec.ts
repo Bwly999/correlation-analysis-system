@@ -99,6 +99,43 @@ describe('WorkflowHeader', () => {
     )
   })
 
+  it('shows an error toast when clearing history fails from the file menu', async () => {
+    const store = useWorkflowStore()
+    vi.spyOn(store, 'clearHistory').mockRejectedValue(new Error('清空失败'))
+
+    let capturedMenuItems: any[] = []
+    const menuStub = {
+      props: ['model'],
+      template: '<div class="menu-stub"></div>',
+      mounted(this: { model: any[] }) {
+        capturedMenuItems = this.model
+      },
+      methods: {
+        toggle() {},
+      },
+    }
+
+    mount(WorkflowHeader, {
+      global: {
+        stubs: {
+          Button: { template: '<button @click="$emit(\'click\')"><slot /></button>' },
+          Menu: menuStub,
+          Popover: { template: '<div><slot /></div>' },
+        },
+      },
+    })
+
+    await capturedMenuItems[0].items[2].command()
+
+    expect(toastAdd).toHaveBeenCalledWith(
+      expect.objectContaining({
+        severity: 'error',
+        summary: '清空失败',
+        detail: '清空失败',
+      }),
+    )
+  })
+
   it('renders the help button and emits open-help when clicked', async () => {
     const wrapper = mount(WorkflowHeader, {
       global: {

@@ -1853,15 +1853,15 @@ describe('Workflow Store', () => {
         {
           id: 'create-cleaning',
           type: 'createNode',
-          nodeType: 'data-cleaning',
-          nodeLabel: '数据清洗',
+          nodeType: 'data-missing-outlier',
+          nodeLabel: '缺失值处理',
           position: { x: 320, y: 40 },
         },
         {
           id: 'create-terminal',
           type: 'createNode',
-          nodeType: 'pearson',
-          nodeLabel: 'Pearson 分析',
+          nodeType: 'correlation-analysis',
+          nodeLabel: '单调性分析',
           position: { x: 640, y: 40 },
         },
         {
@@ -1880,7 +1880,7 @@ describe('Workflow Store', () => {
           id: 'rename-terminal',
           type: 'renameNode',
           nodeRef: 'create-terminal',
-          label: '线性相关分析',
+          label: '相关性结果',
         },
         {
           id: 'update-terminal-config',
@@ -1898,16 +1898,16 @@ describe('Workflow Store', () => {
     expect(store.nodes).toHaveLength(3)
     expect(store.edges).toHaveLength(2)
     expect(store.nodes.map((node) => node.data.label)).toEqual(
-      expect.arrayContaining(['手动输入', '数据清洗', '线性相关分析']),
+      expect.arrayContaining(['手动输入', '缺失值处理', '相关性结果']),
     )
-    const terminalNode = store.nodes.find((node) => node.data.label === '线性相关分析')!
+    const terminalNode = store.nodes.find((node) => node.data.label === '相关性结果')!
     expect(terminalNode.data.config.xFields).toEqual(['x'])
     expect(terminalNode.data.config.yFields).toEqual(['y'])
     expect(
       store.edges.some(
         (edge) =>
           edge.source === store.nodes.find((node) => node.data.label === '手动输入')!.id &&
-          edge.target === store.nodes.find((node) => node.data.label === '数据清洗')!.id,
+          edge.target === store.nodes.find((node) => node.data.label === '缺失值处理')!.id,
       ),
     ).toBe(true)
   })

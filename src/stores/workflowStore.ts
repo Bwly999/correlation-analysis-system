@@ -1998,26 +1998,32 @@ export const useWorkflowStore = defineStore('workflow', () => {
     }
   }
 
-  const loadHistory = async () => {
+  const loadHistory = async (options: { suppressErrors?: boolean } = {}) => {
     try {
       const loadedHistory = (await storageProvider.getAllHistory()) as ExecutionRecord[]
       executionHistory.value = loadedHistory
     } catch (e) {
       console.error('Failed to load history:', e)
+      if (!options.suppressErrors) {
+        throw e
+      }
     }
   }
 
-  const clearHistory = async () => {
+  const clearHistory = async (options: { suppressErrors?: boolean } = {}) => {
     try {
       await storageProvider.clearAllHistory()
       executionHistory.value = []
       addLog('运行历史记录已清空', 'info')
     } catch (e) {
       addLog(`清空历史记录失败: ${e}`, 'error')
+      if (!options.suppressErrors) {
+        throw e
+      }
     }
   }
 
-  loadHistory()
+  void loadHistory({ suppressErrors: true })
   void loadCurrentStorageUser()
   syncSavedWorkflowSignature()
   watch(

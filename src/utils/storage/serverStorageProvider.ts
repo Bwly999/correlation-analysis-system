@@ -9,6 +9,10 @@ import type {
 } from './types'
 import { createWorkflowApiAuthHeaders } from '@/services/apiAuth'
 import { encodeWorkflowHeaderValue } from '@/shared/workflowHeaderEncoding'
+import {
+  buildRequestErrorFromResponse,
+  buildRequestErrorFromUnknown,
+} from '@/utils/requestError'
 
 const WORKFLOW_USER_ID_STORAGE_KEY = 'workflow-storage-user-id'
 const WORKFLOW_USER_NAME_STORAGE_KEY = 'workflow-storage-user-name'
@@ -73,17 +77,29 @@ export class ServerStorageProvider implements IStorageProvider {
   }
 
   private async request(path: string, options?: RequestInit, allowNotFound = false) {
-    const response = await fetch(`${this.baseUrl}${path}`, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...createWorkflowApiAuthHeaders(),
-        ...this.resolveWorkflowHeaders(),
-        ...options?.headers,
-      },
-    })
+    let response: Response
+    try {
+      response = await fetch(`${this.baseUrl}${path}`, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          ...createWorkflowApiAuthHeaders(),
+          ...this.resolveWorkflowHeaders(),
+          ...options?.headers,
+        },
+      })
+    } catch (error) {
+      throw buildRequestErrorFromUnknown(error, {
+        fallbackMessage: '工作流存储请求失败，请稍后重试',
+        networkErrorMessage: '工作流存储请求失败，请检查网络连接后重试',
+      })
+    }
     if (allowNotFound && response.status === 404) return null
-    if (!response.ok) throw new Error(`Server Storage Error: ${response.statusText}`)
+    if (!response.ok) {
+      throw await buildRequestErrorFromResponse(response, {
+        fallbackMessage: '工作流存储请求失败，请稍后重试',
+      })
+    }
     const text = await response.text()
     return text ? JSON.parse(text) : null
   }

@@ -4,9 +4,18 @@ import { createPinia, setActivePinia } from 'pinia'
 import WorkflowManagerModal from '../WorkflowManagerModal.vue'
 import { useWorkflowStore } from '@/stores/workflowStore'
 
+const toastAdd = vi.fn()
+const confirmRequire = vi.fn()
+
 vi.mock('primevue/useconfirm', () => ({
   useConfirm: () => ({
-    require: vi.fn(),
+    require: confirmRequire,
+  }),
+}))
+
+vi.mock('primevue/usetoast', () => ({
+  useToast: () => ({
+    add: toastAdd,
   }),
 }))
 
@@ -137,6 +146,157 @@ describe('WorkflowManagerModal', () => {
     await confirmButton.trigger('click')
 
     expect(duplicateWorkflow).toHaveBeenCalledWith('wf_1', '自定义副本名称')
+  })
+
+  it('shows an error toast when duplicating a workflow fails', async () => {
+    const store = useWorkflowStore()
+    store.savedWorkflows = [
+      {
+        id: 'wf_1',
+        name: '原始工作流',
+        nodes: [],
+        edges: [],
+        updatedAt: Date.now(),
+      },
+    ] as any
+    vi.spyOn(store, 'duplicateWorkflow').mockRejectedValue(new Error('复制失败'))
+
+    const wrapper = mount(WorkflowManagerModal, {
+      props: {
+        visible: true,
+      },
+      global: {
+        stubs: {
+          Dialog: dialogStub,
+          Button: {
+            props: ['label', 'disabled'],
+            emits: ['click'],
+            template:
+              '<button :disabled="disabled" @click="$emit(\'click\')">{{ label }}<slot /></button>',
+          },
+          Tabs: { template: '<div><slot /></div>' },
+          TabList: { template: '<div><slot /></div>' },
+          Tab: { template: '<button><slot /></button>' },
+          TabPanels: { template: '<div><slot /></div>' },
+          TabPanel: { template: '<div><slot /></div>' },
+          InputText: inputTextStub,
+        },
+        directives: {
+          tooltip: {},
+        },
+      },
+    })
+
+    await wrapper.find('[data-testid="duplicate-workflow-button"]').trigger('click')
+    await wrapper.find('input').setValue('自定义副本名称')
+    await wrapper.find('[data-testid="confirm-duplicate-workflow-button"]').trigger('click')
+    await Promise.resolve()
+
+    expect(toastAdd).toHaveBeenCalledWith(
+      expect.objectContaining({
+        severity: 'error',
+        summary: '复制失败',
+        detail: '复制失败',
+      }),
+    )
+  })
+
+  it('shows an error toast when deleting a workflow fails', async () => {
+    const store = useWorkflowStore()
+    store.savedWorkflows = [
+      {
+        id: 'wf_1',
+        name: '原始工作流',
+        nodes: [],
+        edges: [],
+        updatedAt: Date.now(),
+      },
+    ] as any
+    vi.spyOn(store, 'deleteWorkflow').mockRejectedValue(new Error('删除失败'))
+
+    const wrapper = mount(WorkflowManagerModal, {
+      props: {
+        visible: true,
+      },
+      global: {
+        stubs: {
+          Dialog: dialogStub,
+          Button: {
+            props: ['label', 'disabled'],
+            emits: ['click'],
+            template:
+              '<button :disabled="disabled" @click="$emit(\'click\')">{{ label }}<slot /></button>',
+          },
+          Tabs: { template: '<div><slot /></div>' },
+          TabList: { template: '<div><slot /></div>' },
+          Tab: { template: '<button><slot /></button>' },
+          TabPanels: { template: '<div><slot /></div>' },
+          TabPanel: { template: '<div><slot /></div>' },
+          InputText: inputTextStub,
+        },
+        directives: {
+          tooltip: {},
+        },
+      },
+    })
+
+    await wrapper.find('[data-testid="delete-workflow-button"]').trigger('click')
+    await Promise.resolve()
+
+    const accept = confirmRequire.mock.calls[0]?.[0]?.accept
+    expect(typeof accept).toBe('function')
+
+    await accept()
+
+    expect(toastAdd).toHaveBeenCalledWith(
+      expect.objectContaining({
+        severity: 'error',
+        summary: '删除失败',
+        detail: '删除失败',
+      }),
+    )
+  })
+
+  it('shows a load error toast when workflows or history fail to load', async () => {
+    const store = useWorkflowStore()
+    vi.spyOn(store, 'getSavedWorkflows').mockRejectedValue(new Error('加载工作流失败'))
+    vi.spyOn(store, 'loadHistory').mockResolvedValue(undefined)
+
+    mount(WorkflowManagerModal, {
+      props: {
+        visible: true,
+      },
+      global: {
+        stubs: {
+          Dialog: dialogStub,
+          Button: {
+            props: ['label', 'disabled'],
+            emits: ['click'],
+            template:
+              '<button :disabled="disabled" @click="$emit(\'click\')">{{ label }}<slot /></button>',
+          },
+          Tabs: { template: '<div><slot /></div>' },
+          TabList: { template: '<div><slot /></div>' },
+          Tab: { template: '<button><slot /></button>' },
+          TabPanels: { template: '<div><slot /></div>' },
+          TabPanel: { template: '<div><slot /></div>' },
+          InputText: inputTextStub,
+        },
+        directives: {
+          tooltip: {},
+        },
+      },
+    })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(toastAdd).toHaveBeenCalledWith(
+      expect.objectContaining({
+        severity: 'error',
+        summary: '加载失败',
+        detail: '加载工作流失败',
+      }),
+    )
   })
 
   it('shows template entries and emits create-workflow-from-template when selected', async () => {

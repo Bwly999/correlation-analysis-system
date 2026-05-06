@@ -41,6 +41,44 @@ describe('analysis service', () => {
     ).rejects.toThrow('算法执行失败: 输入数据缺少目标字段')
   })
 
+  it('prefers json detail error responses from the backend', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response(JSON.stringify({
+        detail: '算法服务返回了结构化错误',
+      }), {
+        status: 422,
+        headers: { 'Content-Type': 'application/json' },
+      })),
+    )
+
+    await expect(
+      requestLassoAnalysis({
+        data: [{ target: 1, f1: 2 }],
+        target: 'target',
+        config: {},
+      }),
+    ).rejects.toThrow('算法服务返回了结构化错误')
+  })
+
+  it('falls back to a readable default message when the backend returns an empty error body', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response('', {
+        status: 500,
+        statusText: 'Internal Server Error',
+      })),
+    )
+
+    await expect(
+      requestLassoAnalysis({
+        data: [{ target: 1, f1: 2 }],
+        target: 'target',
+        config: {},
+      }),
+    ).rejects.toThrow('后端服务响应异常')
+  })
+
   it('calls the logistic regression classification endpoint with the common analysis request shape', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,

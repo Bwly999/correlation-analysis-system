@@ -12,6 +12,8 @@ import Tab from 'primevue/tab'
 import TabPanels from 'primevue/tabpanels'
 import TabPanel from 'primevue/tabpanel'
 import { useConfirm } from 'primevue/useconfirm'
+import { useToast } from 'primevue/usetoast'
+import { getErrorMessage } from '@/utils/requestError'
 import {
   X,
   Plus,
@@ -47,15 +49,32 @@ const emit = defineEmits([
 
 const store = useWorkflowStore()
 const confirm = useConfirm()
+const toast = useToast()
 
 const activeTab = ref(props.initialTab ?? '0')
 const duplicateDialogVisible = ref(false)
 const duplicateSourceWorkflowId = ref<string | null>(null)
 const duplicateWorkflowName = ref('')
 
+const showErrorToast = (summary: string, error: unknown, fallbackDetail: string) => {
+  toast.add({
+    severity: 'error',
+    summary,
+    detail: getErrorMessage(error, fallbackDetail),
+    life: 4000,
+  })
+}
+
 const loadData = async () => {
-  await store.getSavedWorkflows()
-  await store.loadHistory()
+  try {
+    await Promise.all([
+      store.getSavedWorkflows(),
+      store.loadHistory(),
+    ])
+  } catch (error) {
+    console.error('加载工作流管理数据失败:', error)
+    showErrorToast('加载失败', error, '加载工作流列表或历史记录失败，请稍后重试。')
+  }
 }
 
 onMounted(loadData)
@@ -100,8 +119,13 @@ const duplicateWorkflowNameTrimmed = computed(() => duplicateWorkflowName.value.
 
 const handleDuplicateWorkflow = async () => {
   if (!duplicateSourceWorkflowId.value || !duplicateWorkflowNameTrimmed.value) return
-  await store.duplicateWorkflow(duplicateSourceWorkflowId.value, duplicateWorkflowNameTrimmed.value)
-  closeDuplicateWorkflowDialog()
+  try {
+    await store.duplicateWorkflow(duplicateSourceWorkflowId.value, duplicateWorkflowNameTrimmed.value)
+    closeDuplicateWorkflowDialog()
+  } catch (error) {
+    console.error('复制工作流失败:', error)
+    showErrorToast('复制失败', error, '复制工作流时发生错误，请稍后重试。')
+  }
 }
 
 const handleDeleteWorkflow = (id: string) => {
@@ -119,7 +143,12 @@ const handleDeleteWorkflow = (id: string) => {
       severity: 'danger',
     },
     accept: async () => {
-      await store.deleteWorkflow(id)
+      try {
+        await store.deleteWorkflow(id)
+      } catch (error) {
+        console.error('删除工作流失败:', error)
+        showErrorToast('删除失败', error, '删除工作流时发生错误，请稍后重试。')
+      }
     },
   })
 }
@@ -142,7 +171,12 @@ const handleCreateFromTemplate = (templateId: string) => {
 }
 
 const handleClearHistory = async () => {
-  await store.clearHistory()
+  try {
+    await store.clearHistory()
+  } catch (error) {
+    console.error('清空历史记录失败:', error)
+    showErrorToast('清空失败', error, '清空历史记录时发生错误，请稍后重试。')
+  }
 }
 
 const templateVisualMap = {
@@ -308,6 +342,7 @@ const getTemplateVisual = (theme: keyof typeof templateVisualMap) => templateVis
                       severity="danger"
                       text
                       size="small"
+                      data-testid="delete-workflow-button"
                       class="text-slate-400 hover:text-rose-600 hover:bg-rose-50"
                       @click="handleDeleteWorkflow(wf.id)"
                       ><Trash2 :size="16"

@@ -135,6 +135,32 @@ describe('ServerStorageProvider', () => {
     )
   })
 
+  it('should surface server-provided json error messages for storage requests', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      detail: '服务端存储校验失败',
+    }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    })))
+
+    await expect(provider.saveWorkflow({
+      id: 'wf_1',
+      name: '测试工作流',
+      updatedAt: 1,
+      nodes: [],
+      edges: [],
+    })).rejects.toThrow('服务端存储校验失败')
+  })
+
+  it('should fall back to a readable chinese message when the storage response is empty', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('', {
+      status: 502,
+      statusText: 'Bad Gateway',
+    })))
+
+    await expect(provider.getWorkflows()).rejects.toThrow('工作流存储请求失败，请稍后重试')
+  })
+
   it('should load workflow versions, version detail and rollback through dedicated endpoints', async () => {
     const fetchMock = vi
       .fn()

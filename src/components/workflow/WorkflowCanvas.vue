@@ -33,6 +33,7 @@ import ConfirmDialog from 'primevue/confirmdialog'
 import Toast from 'primevue/toast'
 import { useToast } from 'primevue/usetoast'
 import UnsavedWorkflowDialog from './UnsavedWorkflowDialog.vue'
+import { getErrorMessage } from '@/utils/requestError'
 
 const { onConnect, addEdges, project, findNode, fitView, getViewport, setViewport } = useVueFlow()
 const store = useWorkflowStore()
@@ -155,7 +156,7 @@ const saveWorkflowWithToast = async () => {
     toast.add({
       severity: 'error',
       summary: '保存失败',
-      detail: '保存当前工作流时发生错误，请稍后重试。',
+      detail: getErrorMessage(error, '保存当前工作流时发生错误，请稍后重试。'),
       life: 4000,
     })
     return false
