@@ -1,7 +1,7 @@
 import type { NodeDefinition } from '../types'
 import { createFileResult, extractReportPayload, extractTableRows } from '../result'
-import * as XLSX from 'xlsx'
 import { resolveExportFilename } from '@/utils/exportNaming'
+import { buildTableExportFile, type TableExportFormat } from '@/utils/tableExport'
 
 const createPortableReportExportPayload = (report: Record<string, unknown>) => {
   const portableReport = {
@@ -20,6 +20,7 @@ export const dataExportNode: NodeDefinition = {
   displayName: '数据导出',
   icon: 'download',
   category: 'terminal',
+  isLegacy: true,
   description: '将当前节点的数据导出为 CSV、Excel、JSON，或把分析报告导出为离线 HTML。',
   properties: [
     {
@@ -88,27 +89,12 @@ export const dataExportNode: NodeDefinition = {
       throw new Error('无输入数据')
     }
 
-    const filename = resolveExportFilename(config.filename, 'export_data', format)
-    let blob: Blob
-
-    if (format === 'json') {
-      blob = new Blob([JSON.stringify(rows, null, 2)], { type: 'application/json' })
-    } else if (format === 'xlsx') {
-      const worksheet = XLSX.utils.json_to_sheet(rows)
-      const workbook = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(workbook, worksheet, '数据导出')
-      const workbookBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })
-      blob = new Blob([workbookBuffer], {
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      })
-    } else {
-      const headers = Object.keys(rows[0] ?? {})
-      const csvContent = [
-        headers.join(','),
-        ...rows.map((row) => headers.map((key) => JSON.stringify(row[key] ?? '')).join(',')),
-      ].join('\n')
-      blob = new Blob([csvContent], { type: 'text/csv' })
-    }
+    const { filename, blob } = buildTableExportFile({
+      rows,
+      format: format as TableExportFormat,
+      filename: config.filename,
+      fallbackBaseName: 'export_data',
+    })
 
     return createFileResult(
       {

@@ -770,7 +770,7 @@ describe('DataChart', () => {
     expect(wrapper.get('[data-test="chart-skip-invalid-checkbox"]').attributes('type')).toBe('checkbox')
     expect(wrapper.get('[data-test="chart-skip-invalid-checkbox"]').element).not.toBeNull()
     expect(wrapper.get('[data-test="chart-skip-invalid-label"]').text()).toBe('异常值过滤')
-    expect(wrapper.get('[data-test="chart-skip-invalid-help"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="chart-skip-invalid-help"]').exists()).toBe(true)
     expect((wrapper.get('[data-test="chart-skip-invalid-checkbox"]').element as HTMLInputElement).checked).toBe(false)
     expect(option.xAxis.data).toEqual([1, 2, 3])
     expect(option.series[0].data).toEqual([10, 0, 20])

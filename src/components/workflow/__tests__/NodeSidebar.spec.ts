@@ -36,6 +36,7 @@ describe('NodeSidebar', () => {
     expect(groupTitles).toContain('导入数据')
     expect(groupTitles).toContain('统计分析')
     expect(wrapper.text()).toContain('单调性分析')
+    expect(wrapper.text()).not.toContain('数据导出')
 
     await wrapper.findAll('[data-testid="category-filter"]')[2]?.trigger('click')
 

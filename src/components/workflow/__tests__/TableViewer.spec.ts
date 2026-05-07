@@ -9,6 +9,11 @@ const gridApiCalls = vi.hoisted(() => ({
   applyColumnState: vi.fn(),
 }))
 
+const exportCalls = vi.hoisted(() => ({
+  addToast: vi.fn(),
+  exportTableResult: vi.fn(),
+}))
+
 vi.mock('primevue/button', () => ({
   default: defineComponent({
     name: 'PrimeButtonStub',
@@ -31,6 +36,24 @@ vi.mock('primevue/button', () => ({
   }),
 }))
 
+vi.mock('primevue/dialog', () => ({
+  default: defineComponent({
+    name: 'PrimeDialogStub',
+    props: ['visible', 'header', 'modal', 'appendTo'],
+    emits: ['update:visible', 'hide'],
+    setup(props, { slots }) {
+      return () =>
+        props.visible
+          ? h('div', { 'data-test': 'table-export-dialog' }, [
+              h('div', { 'data-test': 'table-export-dialog-title' }, props.header ?? ''),
+              slots.default?.(),
+              slots.footer?.(),
+            ])
+          : null
+    },
+  }),
+}))
+
 vi.mock('primevue/inputtext', () => ({
   default: defineComponent({
     name: 'PrimeInputTextStub',
@@ -46,6 +69,35 @@ vi.mock('primevue/inputtext', () => ({
           onInput: (event: Event) =>
             emit('update:modelValue', (event.target as HTMLInputElement).value),
         })
+    },
+  }),
+}))
+
+vi.mock('primevue/select', () => ({
+  default: defineComponent({
+    name: 'PrimeSelectStub',
+    props: ['modelValue', 'options', 'optionLabel', 'optionValue', 'placeholder'],
+    emits: ['update:modelValue'],
+    inheritAttrs: false,
+    setup(props, { attrs, emit }) {
+      const resolveValue = (option: any) =>
+        props.optionValue ? option?.[props.optionValue] : option?.value ?? option
+      const resolveLabel = (option: any) =>
+        props.optionLabel ? option?.[props.optionLabel] : option?.label ?? option
+
+      return () =>
+        h(
+          'select',
+          {
+            ...attrs,
+            value: props.modelValue ?? '',
+            onChange: (event: Event) =>
+              emit('update:modelValue', (event.target as HTMLSelectElement).value),
+          },
+          (props.options ?? []).map((option: any) =>
+            h('option', { value: resolveValue(option) }, resolveLabel(option)),
+          ),
+        )
     },
   }),
 }))
@@ -107,6 +159,16 @@ vi.mock('primevue/multiselect', () => ({
         )
     },
   }),
+}))
+
+vi.mock('primevue/usetoast', () => ({
+  useToast: () => ({
+    add: exportCalls.addToast,
+  }),
+}))
+
+vi.mock('@/utils/tableExport', () => ({
+  exportTableResult: exportCalls.exportTableResult,
 }))
 
 vi.mock('ag-grid-vue3', () => ({
@@ -238,6 +300,7 @@ describe('TableViewer', () => {
 
     expect(wrapper.text()).toContain('暂无表格结果')
     expect(wrapper.find('[data-test="ag-grid-stub"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="table-export-trigger"]').exists()).toBe(false)
   })
 
   it('渲染完整工具栏、状态栏和整表 rowData', () => {
@@ -253,6 +316,62 @@ describe('TableViewer', () => {
 
     const grid = wrapper.get('[data-test="ag-grid-stub"]')
     expect(grid.attributes('data-row-count')).toBe('120')
+    expect(wrapper.find('[data-test="table-export-trigger"]').exists()).toBe(true)
+  })
+
+  it('点击导出按钮后可在弹窗中设置参数并直接触发下载', async () => {
+    exportCalls.exportTableResult.mockReset()
+    exportCalls.exportTableResult.mockResolvedValue(undefined)
+
+    const wrapper = mount(TableViewer, {
+      props: {
+        data: createResult(createRows(5)),
+      },
+    })
+
+    await wrapper.get('[data-test="table-export-trigger"]').trigger('click')
+    expect(document.body.querySelector('[data-test="table-export-dialog"]')).not.toBeNull()
+
+    ;(document.body.querySelector('[data-test="table-export-format"]') as HTMLSelectElement).value = 'json'
+    ;(document.body.querySelector('[data-test="table-export-format"]') as HTMLSelectElement).dispatchEvent(new Event('change'))
+    ;(document.body.querySelector('[data-test="table-export-filename"]') as HTMLInputElement).value = '分析结果'
+    ;(document.body.querySelector('[data-test="table-export-filename"]') as HTMLInputElement).dispatchEvent(new Event('input'))
+    ;(document.body.querySelector('[data-test="table-export-submit"]') as HTMLButtonElement).click()
+    await nextTick()
+
+    expect(exportCalls.exportTableResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        rows: createRows(5),
+        format: 'json',
+        filename: '分析结果',
+      }),
+    )
+  })
+
+  it('导出失败时展示中文错误提示', async () => {
+    exportCalls.exportTableResult.mockReset()
+    exportCalls.addToast.mockReset()
+    exportCalls.exportTableResult.mockImplementation(() => {
+      throw new Error('导出失败测试')
+    })
+
+    const wrapper = mount(TableViewer, {
+      props: {
+        data: createResult(createRows(5)),
+      },
+    })
+
+    await wrapper.get('[data-test="table-export-trigger"]').trigger('click')
+    ;(document.body.querySelector('[data-test="table-export-submit"]') as HTMLButtonElement).click()
+    await nextTick()
+
+    expect(exportCalls.addToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        severity: 'error',
+        summary: '导出失败',
+        detail: '导出失败测试',
+      }),
+    )
   })
 
   it('快速搜索会更新 grid quick filter 并同步状态栏可见行数', async () => {

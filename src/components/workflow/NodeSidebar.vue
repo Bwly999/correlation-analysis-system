@@ -714,7 +714,7 @@ const categoryBadge = (category: NodeCategory) => {
 
         <div v-else class="empty-search-state">
           <p class="text-[12px] font-semibold text-slate-800">没有找到匹配节点</p>
-          <p class="text-[11px] text-slate-500 mt-1">可以尝试节点名称、分析方法或用途关键词，例如“相关”“导出”“清洗”。</p>
+          <p class="text-[11px] text-slate-500 mt-1">可以尝试节点名称、分析方法或用途关键词，例如“相关”“图表”“清洗”。</p>
         </div>
       </div>
 

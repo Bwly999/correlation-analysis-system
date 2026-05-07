@@ -160,7 +160,7 @@ export const dataMissingOutlierNode: NodeDefinition = {
         targetFields.forEach((field: string) => {
           const values = data
             .map((row: Record<string, unknown>) => toFiniteNumber(row[field]))
-            .filter((value): value is number => value !== null)
+            .filter((value: number | null): value is number => value !== null)
 
           if (values.length === 0) return
 
@@ -210,7 +210,10 @@ export const dataMissingOutlierNode: NodeDefinition = {
 
           return { fields, lower, upper }
         })
-        .filter((rule) => rule.fields.length > 0 && (rule.lower !== null || rule.upper !== null))
+        .filter(
+          (rule: { fields: string[]; lower: number | null; upper: number | null }) =>
+            rule.fields.length > 0 && (rule.lower !== null || rule.upper !== null),
+        )
 
       stats.manualRangeRulesApplied = normalizedRules.length
 
@@ -218,7 +221,7 @@ export const dataMissingOutlierNode: NodeDefinition = {
         const prevCount = data.length
         data = data.filter((row: Record<string, unknown>) =>
           normalizedRules.every((rule) =>
-            rule.fields.every((field) => {
+            rule.fields.every((field: string) => {
               const value = toFiniteNumber(row[field])
               if (value === null) return false
               if (rule.lower !== null && value <= rule.lower) return false
@@ -235,7 +238,7 @@ export const dataMissingOutlierNode: NodeDefinition = {
       targetFields.forEach((field: string) => {
         const values = data
           .map((row: Record<string, unknown>) => toFiniteNumber(row[field]))
-          .filter((value): value is number => value !== null)
+          .filter((value: number | null): value is number => value !== null)
           .sort((left: number, right: number) => left - right)
 
         if (values.length < 10) return

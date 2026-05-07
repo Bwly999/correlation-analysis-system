@@ -535,6 +535,12 @@ describe('Node Definitions Execution Logic', () => {
       expect(creatableNodeDefinitions.map((definition) => definition.name)).not.toContain('kendall')
     })
 
+    it('should keep data-export as a hidden legacy compatibility node', () => {
+      expect(dataExportNode.isLegacy).toBe(true)
+      expect(nodeDefinitions.map((definition) => definition.name)).toContain('data-export')
+      expect(creatableNodeDefinitions.map((definition) => definition.name)).not.toContain('data-export')
+    })
+
     it('should support manual range filtering with multiple AND rules', async () => {
       const input = createTableResult([
         { abc: 1.5, ef: 10 },

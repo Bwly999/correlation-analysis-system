@@ -2,14 +2,18 @@
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import type { ColDef, GridApi, GridReadyEvent } from 'ag-grid-community'
 import Button from 'primevue/button'
+import Dialog from 'primevue/dialog'
 import InputNumber from 'primevue/inputnumber'
 import InputText from 'primevue/inputtext'
 import MultiSelect from 'primevue/multiselect'
-import { Columns3, RotateCcw, Search, SlidersHorizontal, StretchHorizontal } from 'lucide-vue-next'
+import Select from 'primevue/select'
+import { useToast } from 'primevue/usetoast'
+import { Columns3, Download, RotateCcw, Search, SlidersHorizontal, StretchHorizontal } from 'lucide-vue-next'
 import AgGridTablePreview from './AgGridTablePreview.vue'
 import TableColumnMenuPopover from './TableColumnMenuPopover.vue'
 import { useTablePreviewGridModel } from './useTablePreviewGridModel'
 import { useWorkflowOverlayHost } from '../workflowOverlayHost'
+import { exportTableResult, type TableExportFormat } from '@/utils/tableExport'
 
 type TableRow = Record<string, unknown>
 
@@ -47,6 +51,7 @@ const props = defineProps<{
   storageScopeKey?: string
 }>()
 const { overlayAppendTo, teleportTarget } = useWorkflowOverlayHost()
+const toast = useToast()
 
 defineModel<number>('pageSize', { default: 50 })
 defineModel<number>('page', { default: 1 })
@@ -84,12 +89,21 @@ const {
 
 const isColumnPanelOpen = ref(false)
 const isWidthPanelOpen = ref(false)
+const isExportDialogOpen = ref(false)
 const columnSearch = ref('')
 const selectedWidthFields = ref<string[]>([])
 const pendingWidth = ref<number | null>(null)
 const gridApi = shallowRef<GridApi<TableRow> | null>(null)
 const activeColumnMenu = ref<{ field: string; left: number; top: number } | null>(null)
 const activeColumnMenuAnchor = shallowRef<HTMLElement | null>(null)
+const exportFormatOptions: Array<{ label: string; value: TableExportFormat }> = [
+  { label: 'CSV', value: 'csv' },
+  { label: 'Excel (.xlsx)', value: 'xlsx' },
+  { label: 'JSON', value: 'json' },
+]
+const exportFormat = ref<TableExportFormat>('csv')
+const exportFilename = ref('export_data')
+const isExporting = ref(false)
 
 const toolbarSummary = computed(() => `共 ${rowData.value.length} 条，${fieldCount.value} 个字段`)
 const filteredColumnOptions = computed(() => {
@@ -117,6 +131,49 @@ const gridColumnDefs = computed<ColDef<TableRow>[]>(() =>
     }
   }),
 )
+
+const canExport = computed(() => rowData.value.length > 0)
+
+const openExportDialog = () => {
+  if (!canExport.value) return
+  isExportDialogOpen.value = true
+}
+
+const closeExportDialog = () => {
+  if (isExporting.value) return
+  isExportDialogOpen.value = false
+}
+
+const submitExport = async () => {
+  if (!canExport.value || isExporting.value) return
+
+  isExporting.value = true
+  try {
+    const file = exportTableResult({
+      rows: rowData.value,
+      format: exportFormat.value,
+      filename: exportFilename.value,
+      fallbackBaseName: 'export_data',
+    })
+    toast.add({
+      severity: 'success',
+      summary: '导出成功',
+      detail: `${file.filename} 已开始下载`,
+      life: 2500,
+    })
+    isExportDialogOpen.value = false
+  } catch (error) {
+    console.error('导出表格失败:', error)
+    toast.add({
+      severity: 'error',
+      summary: '导出失败',
+      detail: error instanceof Error ? error.message : '导出表格时发生错误。',
+      life: 4000,
+    })
+  } finally {
+    isExporting.value = false
+  }
+}
 
 const applySelectedWidths = () => {
   applyWidthToFields(selectedWidthFields.value, pendingWidth.value)
@@ -308,6 +365,18 @@ onBeforeUnmount(() => {
             </Button>
 
             <Button
+              v-if="canExport"
+              data-test="table-export-trigger"
+              class="table-toolbar-button"
+              severity="secondary"
+              outlined
+              @click="openExportDialog"
+            >
+              <Download :size="14" />
+              导出
+            </Button>
+
+            <Button
               data-test="table-reset-view"
               class="table-toolbar-button"
               severity="secondary"
@@ -464,6 +533,61 @@ onBeforeUnmount(() => {
   </div>
 
   <Teleport :to="teleportTarget">
+    <Dialog
+      v-model:visible="isExportDialogOpen"
+      :append-to="overlayAppendTo"
+      modal
+      header="导出表格"
+      @hide="closeExportDialog"
+    >
+      <div class="table-export-dialog-body">
+        <div class="table-export-field">
+          <label class="table-export-label" for="table-export-format">导出格式</label>
+          <Select
+            id="table-export-format"
+            v-model="exportFormat"
+            data-test="table-export-format"
+            :options="exportFormatOptions"
+            option-label="label"
+            option-value="value"
+            placeholder="选择导出格式"
+          />
+        </div>
+
+        <div class="table-export-field">
+          <label class="table-export-label" for="table-export-filename">文件名称</label>
+          <InputText
+            id="table-export-filename"
+            v-model="exportFilename"
+            data-test="table-export-filename"
+            placeholder="输入导出文件名前缀"
+          />
+        </div>
+      </div>
+
+      <template #footer>
+        <div class="table-export-footer">
+          <Button
+            class="table-toolbar-button"
+            severity="secondary"
+            text
+            :disabled="isExporting"
+            @click="closeExportDialog"
+          >
+            取消
+          </Button>
+          <Button
+            data-test="table-export-submit"
+            class="table-apply-width-button"
+            :disabled="isExporting"
+            @click="submitExport"
+          >
+            {{ isExporting ? '导出中...' : '导出' }}
+          </Button>
+        </div>
+      </template>
+    </Dialog>
+
     <TableColumnMenuPopover
       v-if="activeColumnMenu"
       :field="activeColumnMenu.field"
@@ -610,5 +734,39 @@ onBeforeUnmount(() => {
   color: #60758a;
   font-size: 12px;
   font-weight: 600;
+}
+
+.table-export-dialog-body {
+  display: grid;
+  gap: 16px;
+  min-width: 320px;
+  padding-top: 4px;
+}
+
+.table-export-field {
+  display: grid;
+  gap: 8px;
+}
+
+.table-export-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #475569;
+}
+
+.table-export-field :deep(.p-select),
+.table-export-field :deep(.p-inputtext) {
+  width: 100%;
+  border-radius: 8px;
+  border-color: #d6dbe5;
+  box-shadow: none;
+  min-height: 36px;
+}
+
+.table-export-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  width: 100%;
 }
 </style>
