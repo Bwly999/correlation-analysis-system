@@ -1,5 +1,6 @@
 ﻿import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { enableAutoUnmount, mount } from '@vue/test-utils'
+import { afterEach } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { defineComponent } from 'vue'
 import WorkflowCanvas from '../WorkflowCanvas.vue'
@@ -102,6 +103,8 @@ vi.mock('primevue/usetoast', () => ({
     add: vi.fn(),
   }),
 }))
+
+enableAutoUnmount(afterEach)
 
 vi.mock('@vue-flow/core', () => ({
   VueFlow: {
@@ -238,6 +241,115 @@ describe('WorkflowCanvas', () => {
     expect(vueFlow.props('multiSelectionKeyCode')).toBe(null)
     expect(vueFlow.props('zoomActivationKeyCode')).toBe(null)
     expect(vueFlow.props('panActivationKeyCode')).toBe(null)
+  })
+
+  it('saves the workflow when pressing Ctrl+S on the canvas', async () => {
+    const store = useWorkflowStore()
+    const saveSpy = vi.spyOn(store, 'saveWorkflow').mockResolvedValue(undefined as any)
+
+    mount(WorkflowCanvas, {
+      global: {
+        stubs: {
+          Background: { template: '<div />' },
+          Controls: { template: '<div />' },
+          NodeSidebar: { template: '<div />' },
+          WorkflowHeader: { template: '<div />' },
+          BaseNode: { template: '<div />' },
+          LogPanel: { template: '<div />' },
+          NodeConfigModal: { template: '<div />' },
+          RuntimeInputModal: runtimeInputModalStub,
+          WorkflowResultDashboardModal: { template: '<div />' },
+          WorkflowManagerModal: workflowManagerModalStub,
+          UnsavedWorkflowDialog: { template: '<div />' },
+          HelpCenterModal: { template: '<div />' },
+          ConfirmDialog: { template: '<div />' },
+          Toast: { template: '<div />' },
+          Button: { template: '<button><slot /></button>' },
+          N8nEdge: { template: '<div />' },
+        },
+        directives: {
+          tooltip: () => undefined,
+        },
+      },
+    })
+
+    const event = new KeyboardEvent('keydown', {
+      key: 's',
+      ctrlKey: true,
+      cancelable: true,
+    })
+
+    window.dispatchEvent(event)
+    await flushAsyncWork()
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(saveSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not save the workflow from the canvas when node config is open', async () => {
+    const store = useWorkflowStore()
+    const saveSpy = vi.spyOn(store, 'saveWorkflow').mockResolvedValue(undefined as any)
+    findNode.mockReturnValue({ id: 'node_1' })
+    store.nodes = [
+      {
+        id: 'node_1',
+        type: 'custom',
+        position: { x: 0, y: 0 },
+        label: '数据清洗',
+        data: {
+          label: '数据清洗',
+          type: 'data-cleaning',
+          category: 'action',
+          status: 'idle',
+          config: {},
+          logs: [],
+          useManualInput: false,
+          manualInput: '',
+          isPinned: false,
+        },
+      } as any,
+    ]
+
+    mount(WorkflowCanvas, {
+      global: {
+        stubs: {
+          Background: { template: '<div />' },
+          Controls: { template: '<div />' },
+          NodeSidebar: { template: '<div />' },
+          WorkflowHeader: { template: '<div />' },
+          BaseNode: { template: '<div />' },
+          LogPanel: { template: '<div />' },
+          NodeConfigModal: { template: '<div />' },
+          RuntimeInputModal: runtimeInputModalStub,
+          WorkflowResultDashboardModal: { template: '<div />' },
+          WorkflowManagerModal: workflowManagerModalStub,
+          UnsavedWorkflowDialog: { template: '<div />' },
+          HelpCenterModal: { template: '<div />' },
+          ConfirmDialog: { template: '<div />' },
+          Toast: { template: '<div />' },
+          Button: { template: '<button><slot /></button>' },
+          N8nEdge: { template: '<div />' },
+        },
+        directives: {
+          tooltip: () => undefined,
+        },
+      },
+    })
+
+    store.activeConfigNodeId = 'node_1'
+    await flushAsyncWork()
+
+    const event = new KeyboardEvent('keydown', {
+      key: 's',
+      ctrlKey: true,
+      cancelable: true,
+    })
+
+    window.dispatchEvent(event)
+    await flushAsyncWork()
+
+    expect(event.defaultPrevented).toBe(false)
+    expect(saveSpy).not.toHaveBeenCalled()
   })
 
   it('renders readable chinese copy in history mode', () => {

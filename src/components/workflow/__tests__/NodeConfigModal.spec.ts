@@ -1,7 +1,7 @@
 ﻿vi.mock("../MonacoEditor.vue", () => ({ default: { template: "<div />" } }));
 
-import { describe, it, expect, beforeEach, vi } from "vitest";
-import { config, mount } from "@vue/test-utils";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { config, mount, enableAutoUnmount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { nextTick } from "vue";
 import NodeConfigModal from "../NodeConfigModal.vue";
@@ -14,6 +14,8 @@ vi.mock("primevue/usetoast", () => ({
     add: mockToastAdd,
   }),
 }));
+
+enableAutoUnmount(afterEach);
 
 describe("NodeConfigModal", () => {
   beforeEach(() => {
@@ -1349,6 +1351,131 @@ describe("NodeConfigModal", () => {
         detail: "节点配置已应用",
       }),
     );
+  });
+
+  it("applies node config when pressing Ctrl+S while the modal is visible", async () => {
+    const store = useWorkflowStore();
+    store.nodes = [
+      {
+        id: "data-cleaning-node",
+        type: "custom",
+        position: { x: 300, y: 0 },
+        label: "数据清洗",
+        data: {
+          label: "数据清洗",
+          type: "data-cleaning",
+          category: "action",
+          status: "idle",
+          config: { scaling: "none" },
+          logs: [],
+          useManualInput: false,
+          manualInput: "",
+          isPinned: false,
+        },
+      } as any,
+    ];
+
+    const wrapper = mount(NodeConfigModal, {
+      props: { visible: true, nodeId: "data-cleaning-node" },
+      global: {
+        stubs: {
+          Dialog: dialogStub,
+          DataDisplayPanel: true,
+          DataAnalysisModal: true,
+          ConfigHeader: {
+            template: "<div />",
+            props: ["nodeLabel", "isPinned", "nodeType"],
+          },
+          ConfigFooter: { template: "<div />" },
+          ConfigForm: {
+            template: "<div />",
+            props: ["config", "properties", "upstreamFactors"],
+          },
+          RuntimeInputs: {
+            template: "<div />",
+            props: ["config", "properties", "upstreamFactors"],
+          },
+        },
+      },
+    });
+
+    const event = new KeyboardEvent("keydown", {
+      key: "s",
+      ctrlKey: true,
+      cancelable: true,
+    });
+
+    window.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(mockToastAdd).toHaveBeenCalledWith(
+      expect.objectContaining({
+        summary: "保存成功",
+        detail: "节点配置已应用",
+      }),
+    );
+
+    wrapper.unmount();
+  });
+
+  it("ignores Ctrl+S when the modal is not visible", async () => {
+    const store = useWorkflowStore();
+    store.nodes = [
+      {
+        id: "data-cleaning-node",
+        type: "custom",
+        position: { x: 300, y: 0 },
+        label: "数据清洗",
+        data: {
+          label: "数据清洗",
+          type: "data-cleaning",
+          category: "action",
+          status: "idle",
+          config: { scaling: "none" },
+          logs: [],
+          useManualInput: false,
+          manualInput: "",
+          isPinned: false,
+        },
+      } as any,
+    ];
+
+    const wrapper = mount(NodeConfigModal, {
+      props: { visible: false, nodeId: "data-cleaning-node" },
+      global: {
+        stubs: {
+          Dialog: dialogStub,
+          DataDisplayPanel: true,
+          DataAnalysisModal: true,
+          ConfigHeader: {
+            template: "<div />",
+            props: ["nodeLabel", "isPinned", "nodeType"],
+          },
+          ConfigFooter: { template: "<div />" },
+          ConfigForm: {
+            template: "<div />",
+            props: ["config", "properties", "upstreamFactors"],
+          },
+          RuntimeInputs: {
+            template: "<div />",
+            props: ["config", "properties", "upstreamFactors"],
+          },
+        },
+      },
+    });
+
+    const event = new KeyboardEvent("keydown", {
+      key: "s",
+      ctrlKey: true,
+      cancelable: true,
+    });
+
+    window.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(mockToastAdd).not.toHaveBeenCalled();
+
+    wrapper.unmount();
   });
 
   it("disables dragging for the node config dialog and help dialog", async () => {

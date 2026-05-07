@@ -613,6 +613,21 @@ const saveAndClose = () => {
   emit("close");
 };
 
+const handleWindowKeydown = (event: KeyboardEvent) => {
+  if (!props.visible || !node.value) return;
+
+  const isSaveShortcut =
+    (event.ctrlKey || event.metaKey) &&
+    !event.altKey &&
+    !event.shiftKey &&
+    event.key.toLowerCase() === "s";
+
+  if (!isSaveShortcut) return;
+
+  event.preventDefault();
+  saveConfig();
+};
+
 const openAnalysis = (title: string, data: any) => {
   analysisModal.value = { visible: true, title, data };
 };
@@ -733,6 +748,7 @@ watch(
 );
 
 onMounted(() => {
+  window.addEventListener("keydown", handleWindowKeydown);
   window.addEventListener("resize", handleViewportUpdate);
   window.addEventListener("scroll", handleViewportUpdate, true);
 });
@@ -741,6 +757,7 @@ onBeforeUnmount(() => {
   clearDebugWorkspaceSyncQueue();
   debugWorkspaceResizeObserver?.disconnect();
   debugWorkspaceResizeObserver = null;
+  window.removeEventListener("keydown", handleWindowKeydown);
   window.removeEventListener("resize", handleViewportUpdate);
   window.removeEventListener("scroll", handleViewportUpdate, true);
 });

@@ -234,7 +234,23 @@ const handleBeforeUnload = (event: BeforeUnloadEvent) => {
   event.returnValue = ''
 }
 
+const handleWindowKeydown = (event: KeyboardEvent) => {
+  if (store.isHistoryMode || isCanvasShortcutBlocked.value) return
+
+  const isSaveShortcut =
+    (event.ctrlKey || event.metaKey) &&
+    !event.altKey &&
+    !event.shiftKey &&
+    event.key.toLowerCase() === 's'
+
+  if (!isSaveShortcut) return
+
+  event.preventDefault()
+  void saveWorkflowWithToast()
+}
+
 onMounted(async () => {
+  window.addEventListener('keydown', handleWindowKeydown)
   window.addEventListener('resize', onWindowResize)
   window.addEventListener('beforeunload', handleBeforeUnload)
   window.addEventListener('workflow:open-log-panel', handleOpenLogPanel)
@@ -421,6 +437,7 @@ const onDropLocal = (event: DragEvent) => {
 }
 
 onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleWindowKeydown)
   window.removeEventListener('resize', onWindowResize)
   window.removeEventListener('beforeunload', handleBeforeUnload)
   window.removeEventListener('workflow:open-log-panel', handleOpenLogPanel)
