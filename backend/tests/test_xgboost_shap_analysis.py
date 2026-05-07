@@ -774,6 +774,166 @@ class XgboostShapAnalysisTests(unittest.TestCase):
         self.assertEqual(recorded['full_report_limit'], 8)
         self.assertEqual(recorded['full_report_features'], expected_features)
 
+    def test_analyze_xgboost_shap_limits_dependence_outputs_to_custom_top_4(self):
+        from backend.algorithms.xgboost_shap_analysis import analyze_xgboost_shap
+
+        recorded = {
+            'dependence_features': [],
+            'full_report_limit': None,
+            'full_report_features': None,
+        }
+
+        class FakeDataEngine:
+            def __init__(self, target_col, include_cols=None, use_regex=False):
+                self.target_col = target_col
+                self.include_cols = include_cols or []
+
+            def load_data(self, df):
+                return df
+
+            def get_X_y(self, df):
+                return df[self.include_cols], df[self.target_col]
+
+        class FakeModelCore:
+            def __init__(self, **kwargs):
+                self.model = object()
+                self.r2_score = 0.9234
+                self.mae = 0.1234
+
+            def train(self, X, y, metric='r2'):
+                return None
+
+        class FakeShapValues:
+            def __init__(self, values):
+                self.values = values
+
+        class FakeInsightEngine:
+            def __init__(self, model, X, **kwargs):
+                self.X = X
+
+            def compute(self, y):
+                feature_count = len(self.X.columns)
+                rows = 12
+                values = np.arange(rows * feature_count, dtype=float).reshape(rows, feature_count)
+                return self.X.iloc[:rows], y.iloc[:rows], FakeShapValues(values)
+
+        class FakeSystemContext:
+            @staticmethod
+            def _fix_matplotlib_chinese():
+                return None
+
+        class FakeVisualStudio:
+            @staticmethod
+            def get_dependence_plot_base64(shap_values, X_sample, feature_name):
+                recorded['dependence_features'].append(feature_name)
+                return f'dependence-image-{feature_name}'
+
+            @staticmethod
+            def get_beeswarm_base64(shap_values, X_sample):
+                return 'beeswarm-image'
+
+            @staticmethod
+            def get_full_report_base64(
+                shap_values,
+                X_sample,
+                y_sample,
+                model_r2,
+                model_mae,
+                target_col,
+                max_dependence_plots=8,
+                detail_feature_names=None,
+            ):
+                recorded['full_report_limit'] = max_dependence_plots
+                recorded['full_report_features'] = detail_feature_names
+                return 'full-report-image'
+
+        fake_tool_module = types.ModuleType('algorithm.robust_insight_tool')
+        fake_tool_module.DataEngine = FakeDataEngine
+        fake_tool_module.InsightEngine = FakeInsightEngine
+        fake_tool_module.ModelCore = FakeModelCore
+        fake_tool_module.SystemContext = FakeSystemContext
+        fake_tool_module.VisualStudio = FakeVisualStudio
+
+        real_import = builtins.__import__
+
+        def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+            if name == 'backend.algorithm.robust_insight_tool':
+                raise ModuleNotFoundError("No module named 'backend'")
+            if name == 'algorithm.robust_insight_tool':
+                return fake_tool_module
+            return real_import(name, globals, locals, fromlist, level)
+
+        factor_names = [f'f{index}' for index in range(1, 11)]
+        rows = []
+        for row_index in range(1, 15):
+            row = {'target': float(row_index)}
+            for feature_index, feature_name in enumerate(factor_names, start=1):
+                row[feature_name] = float(row_index * feature_index)
+            rows.append(row)
+
+        with patch('builtins.__import__', side_effect=fake_import):
+            results = analyze_xgboost_shap(
+                rows,
+                'target',
+                {'factorNames': factor_names, 'maxDependencePlots': 4},
+            )
+
+        expected_features = ['f10', 'f9', 'f8', 'f7']
+        self.assertEqual(results['summary']['featureCount'], 10)
+        self.assertEqual(len(results['dependence']), 4)
+        self.assertEqual(len(results['assets']['dependenceImages']), 4)
+        self.assertEqual(len(recorded['dependence_features']), 4)
+        self.assertEqual(recorded['dependence_features'], expected_features)
+        self.assertEqual(recorded['full_report_limit'], 4)
+        self.assertEqual(recorded['full_report_features'], expected_features)
+
+    def test_full_report_generation_limits_dependence_subplots_without_explicit_feature_list(self):
+        from backend.algorithm.robust_insight_tool import VisualStudio
+
+        class FakeShapValues:
+            def __init__(self, values, feature_names):
+                self.values = values
+                self.feature_names = feature_names
+
+            def __getitem__(self, key):
+                return self
+
+        feature_names = [f'f{index}' for index in range(1, 11)]
+        X_sample = pd.DataFrame(
+            {
+                feature_name: [float(row_index * feature_index) for row_index in range(1, 13)]
+                for feature_index, feature_name in enumerate(feature_names, start=1)
+            }
+        )
+        y_sample = pd.Series([float(index) for index in range(1, 13)], name='target')
+        shap_values = FakeShapValues(
+            np.arange(len(X_sample) * len(feature_names), dtype=float).reshape(len(X_sample), len(feature_names)),
+            feature_names,
+        )
+
+        recorded = {'subplot_count': None}
+        original_draw_report = VisualStudio._draw_report
+
+        def capture_and_draw(*args, **kwargs):
+            figure = original_draw_report(*args, **kwargs)
+            recorded['subplot_count'] = len(figure.axes) - 2
+            return figure
+
+        with patch.object(VisualStudio, '_resolve_plot_style', return_value='default'), \
+             patch.object(VisualStudio, '_call_shap_plot', return_value=None), \
+             patch.object(VisualStudio, '_draw_report', side_effect=capture_and_draw):
+            VisualStudio.get_full_report_base64(
+                shap_values,
+                X_sample,
+                y_sample,
+                model_r2=0.9,
+                model_mae=0.2,
+                target_col='target',
+                max_dependence_plots=4,
+            )
+
+        self.assertEqual(recorded['subplot_count'], 4)
+
 
 if __name__ == '__main__':
     unittest.main()

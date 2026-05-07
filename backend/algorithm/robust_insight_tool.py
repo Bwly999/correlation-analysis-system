@@ -623,12 +623,33 @@ class VisualStudio:
                      show_actual_y: bool, full_report_mode: bool,
                      model_r2: float, model_mae: float,
                      target_name: str = "Target",
-                     detail_feature_names: Optional[List[str]] = None):
+                     detail_feature_names: Optional[List[str]] = None,
+                     max_dependence_plots: Optional[int] = None):
         """内部绘图核心逻辑 (共享于文件保存与 Base64 生成)"""
         summary_feature_names = list(feature_names)
-        detail_feature_names = list(detail_feature_names) if detail_feature_names else list(feature_names)
+        requested_detail_feature_names = (
+            list(detail_feature_names) if detail_feature_names is not None else list(feature_names)
+        )
         n_features = len(summary_feature_names)
-        detail_feature_count = len(detail_feature_names)
+
+        mean_shap = np.abs(shap_values.values).mean(axis=0)
+        feature_importance_map = {
+            column_name: float(mean_shap[column_index])
+            for column_index, column_name in enumerate(X_sample.columns.tolist())
+        }
+        ordered_feature_names = sorted(
+            [
+                feature_name
+                for feature_name in requested_detail_feature_names
+                if feature_name in feature_importance_map
+            ],
+            key=lambda feature_name: feature_importance_map.get(feature_name, float('-inf')),
+            reverse=True,
+        )
+        if max_dependence_plots is not None:
+            detail_limit = max(1, int(max_dependence_plots))
+            ordered_feature_names = ordered_feature_names[:detail_limit]
+        detail_feature_count = len(ordered_feature_names)
         
         # 1. 动态计算画布尺寸，避免完整报告在高特征数下出现极端放大
         if full_report_mode:
@@ -708,16 +729,6 @@ class VisualStudio:
             ax_bar.set_xlabel("Mean |SHAP Value| (平均影响幅度)", fontsize=18)
 
             # --- 绘制 Details ---
-            mean_shap = np.abs(shap_values.values).mean(axis=0)
-            feature_importance_map = {
-                column_name: float(mean_shap[column_index])
-                for column_index, column_name in enumerate(X_sample.columns.tolist())
-            }
-            ordered_feature_names = sorted(
-                [feature_name for feature_name in detail_feature_names if feature_name in feature_importance_map],
-                key=lambda feature_name: feature_importance_map.get(feature_name, float('-inf')),
-                reverse=True,
-            )
             features_to_plot_names = ordered_feature_names if full_report_mode else ordered_feature_names[:4]
 
             def plot_dependence(ax, rank, feat_name):
@@ -843,14 +854,13 @@ class VisualStudio:
     ):
         """生成整合好的完整报表并返回 base64 字符串"""
         feature_names = X.columns.tolist()
-        if detail_feature_names is not None:
-            detail_feature_names = detail_feature_names[: max(1, int(max_dependence_plots or len(detail_feature_names)))]
         with plt.style.context(VisualStudio._resolve_plot_style()):
             fig = VisualStudio._draw_report(
                 shap_values, X, y, feature_names,
                 show_actual_y=False, full_report_mode=True,
                 model_r2=model_r2, model_mae=model_mae, target_name=target_col,
                 detail_feature_names=detail_feature_names,
+                max_dependence_plots=max_dependence_plots,
             )
             buf = io.BytesIO()
             fig.savefig(buf, format='png', dpi=AppConfig.DPI)
