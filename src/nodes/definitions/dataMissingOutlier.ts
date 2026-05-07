@@ -2,6 +2,28 @@ import { markRaw } from 'vue'
 import type { NodeDefinition } from '../types'
 import { createTableResult, extractTableRows } from '../result'
 
+const isBroadMissingValue = (value: unknown): boolean => {
+  if (value === null || value === undefined) return true
+  if (typeof value !== 'string') return false
+
+  const normalized = value.trim().toLowerCase()
+  return normalized === '' || normalized === 'undefined' || normalized === 'null'
+}
+
+const toFiniteNumber = (value: unknown): number | null => {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null
+  }
+
+  if (typeof value === 'string') {
+    if (isBroadMissingValue(value)) return null
+    const parsed = Number.parseFloat(value.trim())
+    return Number.isFinite(parsed) ? parsed : null
+  }
+
+  return null
+}
+
 export const dataMissingOutlierNode: NodeDefinition = {
   name: 'data-missing-outlier',
   displayName: '缺失/异常值处理',
@@ -130,17 +152,15 @@ export const dataMissingOutlierNode: NodeDefinition = {
       if (config.missingValueStrategy === 'drop') {
         const prevCount = data.length
         data = data.filter((row: Record<string, unknown>) =>
-          targetFields.every((field: string) => row[field] !== null && row[field] !== undefined && row[field] !== ''),
+          targetFields.every((field: string) => !isBroadMissingValue(row[field])),
         )
         stats.rowsRemovedByMissing = prevCount - data.length
       } else {
         const fillValues: Record<string, number> = {}
         targetFields.forEach((field: string) => {
           const values = data
-            .map((row: Record<string, unknown>) =>
-              typeof row[field] === 'number' ? row[field] : parseFloat(String(row[field])),
-            )
-            .filter((value: number) => !Number.isNaN(value))
+            .map((row: Record<string, unknown>) => toFiniteNumber(row[field]))
+            .filter((value): value is number => value !== null)
 
           if (values.length === 0) return
 
@@ -156,7 +176,7 @@ export const dataMissingOutlierNode: NodeDefinition = {
 
         data.forEach((row: Record<string, unknown>) => {
           targetFields.forEach((field: string) => {
-            if (row[field] === null || row[field] === undefined || row[field] === '') {
+            if (isBroadMissingValue(row[field])) {
               row[field] = fillValues[field] ?? 0
               stats.missingFilled = Number(stats.missingFilled) + 1
             }
@@ -199,11 +219,8 @@ export const dataMissingOutlierNode: NodeDefinition = {
         data = data.filter((row: Record<string, unknown>) =>
           normalizedRules.every((rule) =>
             rule.fields.every((field) => {
-              const value =
-                typeof row[field] === 'number'
-                  ? row[field]
-                  : Number.parseFloat(String(row[field]))
-              if (!Number.isFinite(value)) return false
+              const value = toFiniteNumber(row[field])
+              if (value === null) return false
               if (rule.lower !== null && value <= rule.lower) return false
               if (rule.upper !== null && value >= rule.upper) return false
               return true
@@ -217,8 +234,8 @@ export const dataMissingOutlierNode: NodeDefinition = {
 
       targetFields.forEach((field: string) => {
         const values = data
-          .map((row: Record<string, unknown>) => parseFloat(String(row[field])))
-          .filter((value: number) => !Number.isNaN(value))
+          .map((row: Record<string, unknown>) => toFiniteNumber(row[field]))
+          .filter((value): value is number => value !== null)
           .sort((left: number, right: number) => left - right)
 
         if (values.length < 10) return
@@ -240,8 +257,8 @@ export const dataMissingOutlierNode: NodeDefinition = {
         }
 
         data = data.filter((row: Record<string, unknown>) => {
-          const value = parseFloat(String(row[field]))
-          return Number.isNaN(value) || (value >= lower && value <= upper)
+          const value = toFiniteNumber(row[field])
+          return value === null || (value >= lower && value <= upper)
         })
       })
 

@@ -577,6 +577,63 @@ describe('Node Definitions Execution Logic', () => {
       const legacy = asLegacy(result)
       expect(legacy.data).toEqual([{ abc: 1.5, ef: 9 }])
     })
+
+    it('should drop rows containing broad missing values in target columns', async () => {
+      const input = createTableResult([
+        { factor: 10, target: 1 },
+        { factor: undefined, target: 2 },
+        { factor: null, target: 3 },
+        { factor: '', target: 4 },
+        { factor: 'undefined', target: 5 },
+        { factor: 'null', target: 6 },
+        { factor: 20, target: 7 },
+      ])
+
+      const result = await dataMissingOutlierNode.execute(input, {
+        targetColumns: ['factor'],
+        missingValueStrategy: 'drop',
+        outlierMethod: 'none',
+      })
+
+      const legacy = asLegacy(result)
+      expect(legacy.data).toEqual([
+        { factor: 10, target: 1 },
+        { factor: 20, target: 7 },
+      ])
+      expect(legacy.stats.rowsRemovedByMissing).toBe(5)
+    })
+
+    it('should fill broad missing values in target columns', async () => {
+      const input = createTableResult([
+        { factor: 10, target: 1 },
+        { factor: 'undefined', target: 2 },
+        { factor: null, target: 3 },
+        { factor: '', target: 4 },
+        { factor: 'null', target: 5 },
+        { factor: undefined, target: 6 },
+        { factor: 20, target: 7 },
+        { factor: 30, target: 8 },
+      ])
+
+      const result = await dataMissingOutlierNode.execute(input, {
+        targetColumns: ['factor'],
+        missingValueStrategy: 'mean',
+        outlierMethod: 'none',
+      })
+
+      const legacy = asLegacy(result)
+      expect(legacy.data).toEqual([
+        { factor: 10, target: 1 },
+        { factor: 20, target: 2 },
+        { factor: 20, target: 3 },
+        { factor: 20, target: 4 },
+        { factor: 20, target: 5 },
+        { factor: 20, target: 6 },
+        { factor: 20, target: 7 },
+        { factor: 30, target: 8 },
+      ])
+      expect(legacy.stats.missingFilled).toBe(5)
+    })
   })
 
   describe('data-profiling', () => {
