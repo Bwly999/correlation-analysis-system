@@ -46,5 +46,10 @@ export interface HelpCenterContent {
     question: string
     answer: string
   }>
+  advancedTips: Array<{
+    title: string
+    content: string
+    tag?: string
+  }>
   categories: HelpCenterCategory[]
 }

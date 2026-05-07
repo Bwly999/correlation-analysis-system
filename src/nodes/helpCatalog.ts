@@ -279,7 +279,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       inputKinds: ['table'],
       outputKinds: ['table'],
       recommendedPrevNodes: ['data-missing-outlier', 'data-dedup', 'data-filter'],
-      recommendedNextNodes: ['correlation-analysis', 'xgboost-shap', 'data-export'],
+      recommendedNextNodes: ['correlation-analysis', 'xgboost-shap'],
     },
   ),
   'data-filter': createEntry(
@@ -310,7 +310,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       inputKinds: ['table'],
       outputKinds: ['table'],
       recommendedPrevNodes: ['data-cleaning', 'file-import'],
-      recommendedNextNodes: ['data-aggregation', 'correlation-analysis', 'data-export'],
+      recommendedNextNodes: ['data-aggregation', 'correlation-analysis'],
     },
   ),
   'js-transform': createEntry(
@@ -354,7 +354,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       recommendedConfigPatterns: ['优先用 rows.map 或 rows.filter + rows.map，保持输出为数组对象列表。'],
       commonMistakes: ['返回普通对象而不是数组', '在代码里使用 async/await', '尝试访问 rows 之外的变量'],
       recommendedPrevNodes: ['file-import', 'manual-json-import', 'data-cleaning', 'data-filter'],
-      recommendedNextNodes: ['field-selection', 'sort', 'chart-display', 'correlation-analysis', 'data-export'],
+      recommendedNextNodes: ['field-selection', 'sort', 'chart-display', 'correlation-analysis'],
     },
   ),
   'data-aggregation': createEntry(
@@ -394,7 +394,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       inputKinds: ['table'],
       outputKinds: ['table'],
       recommendedPrevNodes: ['data-cleaning', 'data-filter'],
-      recommendedNextNodes: ['correlation-analysis', 'chart-display', 'data-export'],
+      recommendedNextNodes: ['correlation-analysis', 'chart-display'],
     },
   ),
   'data-merge': createEntry(
@@ -466,7 +466,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       inputKinds: ['table'],
       outputKinds: ['table'],
       recommendedPrevNodes: ['file-import', 'data-cleaning', 'data-filter'],
-      recommendedNextNodes: ['correlation-analysis', 'chart-display', 'data-export'],
+      recommendedNextNodes: ['correlation-analysis', 'chart-display'],
     },
   ),
   sort: createEntry(
@@ -497,7 +497,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       inputKinds: ['table'],
       outputKinds: ['table'],
       recommendedPrevNodes: ['data-filter', 'field-selection'],
-      recommendedNextNodes: ['data-limit', 'chart-display', 'data-export'],
+      recommendedNextNodes: ['data-limit', 'chart-display'],
     },
   ),
   'data-limit': createEntry(
@@ -528,7 +528,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       inputKinds: ['table'],
       outputKinds: ['table'],
       recommendedPrevNodes: ['sort', 'data-filter'],
-      recommendedNextNodes: ['chart-display', 'data-export'],
+      recommendedNextNodes: ['chart-display'],
     },
   ),
   'data-profiling': createEntry(
@@ -596,7 +596,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       recommendedConfigPatterns: ['默认使用 Pearson 起步；关注单调趋势时切换 Spearman，小样本或排序场景可切换 Kendall。'],
       commonMistakes: ['把文本 ID 字段直接作为 X 或 Y', '只看相关性强度而忽略样本量和缺失风险'],
       recommendedPrevNodes: ['data-missing-outlier', 'field-selection', 'data-filter'],
-      recommendedNextNodes: ['random-forest-feature-importance', 'multiple-linear-regression', 'data-export'],
+      recommendedNextNodes: ['random-forest-feature-importance', 'multiple-linear-regression'],
     },
   ),
   pearson: createEntry(
@@ -632,7 +632,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       inputKinds: ['table'],
       outputKinds: ['report'],
       recommendedPrevNodes: ['data-cleaning', 'data-filter', 'data-aggregation'],
-      recommendedNextNodes: ['chart-display', 'data-export'],
+      recommendedNextNodes: ['chart-display'],
     },
   ),
   spearman: createEntry(
@@ -656,7 +656,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       inputKinds: ['table'],
       outputKinds: ['report'],
       recommendedPrevNodes: ['data-cleaning', 'data-filter'],
-      recommendedNextNodes: ['data-export'],
+      recommendedNextNodes: [],
     },
   ),
   kendall: createEntry(
@@ -680,7 +680,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       inputKinds: ['table'],
       outputKinds: ['report'],
       recommendedPrevNodes: ['data-cleaning', 'data-filter'],
-      recommendedNextNodes: ['data-export'],
+      recommendedNextNodes: [],
     },
   ),
   lasso: createEntry(
@@ -707,7 +707,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       recommendedConfigPatterns: ['先选目标变量，再尽量只保留数值型候选因子进入分析。'],
       commonMistakes: ['把非数值字段直接送入回归', '目标字段没有有效波动仍尝试建模'],
       recommendedPrevNodes: ['data-cleaning', 'data-aggregation'],
-      recommendedNextNodes: ['data-export'],
+      recommendedNextNodes: [],
     },
   ),
   'multiple-linear-regression': createEntry(
@@ -746,7 +746,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       recommendedConfigPatterns: ['优先选择 2 个以上已清洗的数值因子，并明确单一目标字段。'],
       commonMistakes: ['把明显无关字段一起送入回归', '未先处理缺失值就直接建模'],
       recommendedPrevNodes: ['data-cleaning', 'field-selection', 'data-aggregation'],
-      recommendedNextNodes: ['data-export'],
+      recommendedNextNodes: [],
     },
   ),
   'random-forest-feature-importance': createEntry(
@@ -790,7 +790,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       recommendedConfigPatterns: ['先选目标变量，再控制候选因子范围；默认树数量和最大深度通常足够起步。'],
       commonMistakes: ['一次放入过多弱相关字段导致排序分散', '把类别文本字段直接当成数值特征使用'],
       recommendedPrevNodes: ['data-cleaning', 'field-selection', 'vif'],
-      recommendedNextNodes: ['multiple-linear-regression', 'data-export'],
+      recommendedNextNodes: ['multiple-linear-regression'],
     },
   ),
   anova: createEntry(
@@ -829,7 +829,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       recommendedConfigPatterns: ['目标字段选连续数值，分组字段选类别字段，并保证至少两个有效分组。'],
       commonMistakes: ['把目标字段和分组字段选成同一个字段', '分组样本量过少仍直接解释显著性'],
       recommendedPrevNodes: ['data-cleaning', 'field-selection', 'data-filter'],
-      recommendedNextNodes: ['chart-display', 'data-export'],
+      recommendedNextNodes: ['chart-display'],
     },
   ),
   vif: createEntry(
@@ -862,7 +862,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       recommendedConfigPatterns: ['只放准备一起进入模型的数值候选因子，字段数量先控制在可解释范围内。'],
       commonMistakes: ['把无关字段和目标字段一起混进 VIF 检测', '缺失较多的字段未处理就直接诊断'],
       recommendedPrevNodes: ['data-cleaning', 'field-selection', 'multiple-linear-regression'],
-      recommendedNextNodes: ['multiple-linear-regression', 'data-export'],
+      recommendedNextNodes: ['multiple-linear-regression'],
     },
   ),
   pca: createEntry(
@@ -900,7 +900,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       recommendedConfigPatterns: ['优先选择数值型候选因子，并先看前 2-3 个主成分的解释方差是否集中。'],
       commonMistakes: ['把不相关字段一起纳入降维', '解释方差不集中时仍强行压成极少主成分'],
       recommendedPrevNodes: ['data-cleaning', 'field-selection', 'vif'],
-      recommendedNextNodes: ['multiple-linear-regression', 'data-export'],
+      recommendedNextNodes: ['multiple-linear-regression'],
     },
   ),
   'classification-factor-screening': createEntry(
@@ -939,7 +939,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       recommendedConfigPatterns: ['先明确分类标签，再选择多个候选因子做一轮单因子筛查。'],
       commonMistakes: ['目标标签只有一个类别仍尝试筛查', '把 ID 类字段直接当成高价值因子解释'],
       recommendedPrevNodes: ['data-cleaning', 'field-selection', 'data-missing-outlier'],
-      recommendedNextNodes: ['logistic-regression-classification', 'chart-display', 'data-export'],
+      recommendedNextNodes: ['logistic-regression-classification', 'chart-display'],
     },
   ),
   'logistic-regression-classification': createEntry(
@@ -978,7 +978,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       recommendedConfigPatterns: ['先通过单因子筛查缩小范围，再用多因子逻辑回归做联合解释。'],
       commonMistakes: ['未先处理明显脏字段就直接建模', '类别极度不均衡时只看 Accuracy'],
       recommendedPrevNodes: ['classification-factor-screening', 'data-cleaning', 'field-selection'],
-      recommendedNextNodes: ['data-export'],
+      recommendedNextNodes: [],
     },
   ),
   'xgboost-shap': createEntry(
@@ -1022,7 +1022,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       recommendedConfigPatterns: ['优先给目标字段和较干净的数值因子，先完成基础清洗再做 SHAP 解释。'],
       commonMistakes: ['后端服务未启动就直接运行', '把大量脏字段直接送入解释模型'],
       recommendedPrevNodes: ['data-cleaning', 'data-aggregation'],
-      recommendedNextNodes: ['data-export'],
+      recommendedNextNodes: [],
     },
   ),
   'chart-display': createEntry(
@@ -1053,14 +1053,14 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       inputKinds: ['table', 'tableCollection'],
       outputKinds: ['chart'],
       recommendedPrevNodes: ['data-merge', 'data-aggregation', 'data-filter'],
-      recommendedNextNodes: ['data-export'],
+      recommendedNextNodes: [],
     },
   ),
   'data-export': createEntry(
     {
-      summary: '把当前表格结果导出成 CSV、Excel、JSON，或把分析报告导出成离线 HTML。',
-      whenToUse: ['你需要把工作流结果交给其他人，或保存到本地继续处理。'],
-      inputGuide: ['可接表格数据，也可接分析报告。', '当前节点通常放在流程末尾作为导出终点。'],
+      summary: '兼容旧工作流中的数据导出节点：可把表格导出成 CSV、Excel、JSON，或把分析报告导出成离线 HTML。',
+      whenToUse: ['仅当你在历史工作流或旧快照中回放到该节点时使用。'],
+      inputGuide: ['可接表格数据，也可接分析报告。', '新工作流不再推荐使用该节点；表格导出已内置到 TableViewer。'],
       parameterGuide: [
         {
           property: 'format',
@@ -1069,7 +1069,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
         },
       ],
       outputGuide: ['输出结果是可下载文件信息，而不是继续流转的数据表。'],
-      nextSteps: ['这是终端节点，通常作为流程最后一步。'],
+      nextSteps: ['若是表格结果，优先直接在 TableViewer 中导出。', '若是分析报告，优先使用 ReportViewer 中的导出入口。'],
       commonIssues: [
         {
           title: '没有可导出的内容',

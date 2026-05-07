@@ -16,7 +16,7 @@ describe('HelpCenterModal', () => {
 
     expect(wrapper.text()).toContain('3 分钟上手')
     expect(wrapper.text()).toContain('导入数据')
-    expect(wrapper.text()).toContain('第一次做相关性分析时，建议先选 1-3 个 Y 字段')
+    expect(wrapper.text()).toContain('初次尝试建议先使用“相关性分析”查看全局趋势，再用“XGBoost”探查深度影响。')
 
     const categoryButton = wrapper.findAll('button').find((node) => node.text().includes('数据接入'))
     expect(categoryButton).toBeTruthy()
