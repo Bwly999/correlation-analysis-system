@@ -11,6 +11,18 @@ import matplotlib.pyplot as plt
 
 
 def install_stub_modules():
+    try:
+        import shap  # noqa: F401
+        import xgboost  # noqa: F401
+        from sklearn.ensemble import IsolationForest  # noqa: F401
+        from sklearn.metrics import mean_absolute_error, r2_score  # noqa: F401
+        from sklearn.model_selection import RandomizedSearchCV, train_test_split  # noqa: F401
+        from sklearn.preprocessing import LabelEncoder  # noqa: F401
+
+        return
+    except ImportError:
+        pass
+
     fake_xgboost = types.ModuleType('xgboost')
     fake_xgboost.XGBRegressor = object
     sys.modules.setdefault('xgboost', fake_xgboost)

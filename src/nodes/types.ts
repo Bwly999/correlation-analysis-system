@@ -55,6 +55,7 @@ export interface NodeProperty {
     | 'select-button'
   default?: any
   description?: string
+  group?: string
   placeholder?: string
   editorLanguage?: 'json' | 'javascript' | 'typescript'
   editorDeclarations?: string

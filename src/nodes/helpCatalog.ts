@@ -997,6 +997,11 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
           title: '依赖图数量上限',
           content: '默认只生成 SHAP 重要性最高的前 8 个因子趋势图，用于控制报告图片数量、运行耗时和存储体积。',
         },
+        {
+          property: 'nEstimators',
+          title: '高级参数',
+          content: '需要控制训练规模、复现实验或缩短解释耗时时，可调整树数量、学习率、树深、测试集比例、随机种子、SHAP 采样上限和自动调参策略。',
+        },
       ],
       outputGuide: ['输出结果是带图表和补充图片的分析报告。'],
       nextSteps: ['若结果需要归档或分享，可直接接数据导出。'],

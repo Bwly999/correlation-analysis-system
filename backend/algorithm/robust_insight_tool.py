@@ -131,7 +131,12 @@ class DataEngine:
                  include_cols: Optional[List[str]] = None, 
                  exclude_cols: Optional[List[str]] = None, 
                  use_regex: bool = True,
-                 clean_outliers_method: Optional[str] = None):
+                 clean_outliers_method: Optional[str] = None,
+                 iqr_threshold: Optional[float] = None,
+                 outlier_contamination: Optional[float] = None,
+                 outlier_n_estimators: Optional[int] = None,
+                 outlier_max_samples: Optional[Union[str, int]] = None,
+                 random_seed: Optional[int] = None):
         """
         :param clean_outliers_method: 'iqr', 'isolation_forest' or None
         """
@@ -144,6 +149,44 @@ class DataEngine:
         self.exclude_cols = exclude_cols
         self.use_regex = use_regex
         self.clean_outliers_method = clean_outliers_method
+        self.iqr_threshold = self._clamp_float(
+            iqr_threshold, AppConfig.IQR_THRESHOLD, 0.5, 5.0
+        )
+        self.outlier_contamination = self._clamp_float(
+            outlier_contamination, AppConfig.OUTLIER_CONTAMINATION, 0.001, 0.5
+        )
+        self.outlier_n_estimators = self._clamp_int(outlier_n_estimators, 100, 50, 1000)
+        self.outlier_max_samples = outlier_max_samples or 'auto'
+        self.random_seed = self._clamp_int(
+            random_seed, AppConfig.RANDOM_SEED, 0, 2**32 - 1
+        )
+
+    @staticmethod
+    def _clamp_float(value: Optional[float], default: float, lower: float, upper: float) -> float:
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            number = default
+        return min(max(number, lower), upper)
+
+    @staticmethod
+    def _clamp_int(value: Optional[int], default: int, lower: int, upper: int) -> int:
+        try:
+            number = int(value)
+        except (TypeError, ValueError):
+            number = default
+        return min(max(number, lower), upper)
+
+    def _resolve_outlier_max_samples(self, row_count: int) -> Union[str, int]:
+        if self.outlier_max_samples == 'all':
+            return row_count
+        if self.outlier_max_samples == 'auto':
+            return 'auto'
+        try:
+            value = int(self.outlier_max_samples)
+        except (TypeError, ValueError):
+            return 'auto'
+        return min(max(value, 1), row_count)
 
     def load_data(self, source: Union[str, pd.DataFrame]) -> pd.DataFrame:
         """加载数据，支持 CSV(自动分隔符), Excel 或 DataFrame 对象"""
@@ -282,14 +325,20 @@ class DataEngine:
                 Q1 = df[col].quantile(0.25)
                 Q3 = df[col].quantile(0.75)
                 IQR = Q3 - Q1
-                lower_bound = Q1 - AppConfig.IQR_THRESHOLD * IQR
-                upper_bound = Q3 + AppConfig.IQR_THRESHOLD * IQR
+                lower_bound = Q1 - self.iqr_threshold * IQR
+                upper_bound = Q3 + self.iqr_threshold * IQR
                 col_mask = (df[col] >= lower_bound) & (df[col] <= upper_bound)
                 mask = mask & col_mask 
 
         elif self.clean_outliers_method.lower() == 'isolation_forest':
             logger.info("正在使用 Isolation Forest 算法清洗异常值...")
-            iso = IsolationForest(contamination=AppConfig.OUTLIER_CONTAMINATION, random_state=AppConfig.RANDOM_SEED, n_jobs=-1)
+            iso = IsolationForest(
+                contamination=self.outlier_contamination,
+                n_estimators=self.outlier_n_estimators,
+                max_samples=self._resolve_outlier_max_samples(len(df)),
+                random_state=self.random_seed,
+                n_jobs=-1,
+            )
             preds = iso.fit_predict(df[num_cols])
             mask = preds == 1
             
@@ -314,10 +363,34 @@ class DataEngine:
 # ==========================================
 class ModelCore:
     """封装 XGBoost 逻辑，包含自动超参数调优。"""
-    def __init__(self):
+    def __init__(
+        self,
+        n_estimators: Optional[int] = None,
+        learning_rate: Optional[float] = None,
+        max_depth: Optional[int] = None,
+        test_size: Optional[float] = None,
+        random_seed: Optional[int] = None,
+        auto_tune_enabled: Optional[bool] = None,
+        auto_tune_threshold: Optional[float] = None,
+        tuning_iterations: Optional[int] = None,
+        tuning_cv: Optional[int] = None,
+    ):
         self.model = None
         self.r2_score = 0.0
         self.mae = 0.0
+        self.n_estimators = DataEngine._clamp_int(n_estimators, AppConfig.MODEL_ESTIMATORS, 50, 5000)
+        self.learning_rate = DataEngine._clamp_float(
+            learning_rate, AppConfig.MODEL_LEARNING_RATE, 0.001, 0.5
+        )
+        self.max_depth = DataEngine._clamp_int(max_depth, AppConfig.MODEL_MAX_DEPTH, 2, 12)
+        self.test_size = DataEngine._clamp_float(test_size, AppConfig.TEST_SIZE, 0.05, 0.4)
+        self.random_seed = DataEngine._clamp_int(random_seed, AppConfig.RANDOM_SEED, 0, 2**32 - 1)
+        self.auto_tune_enabled = True if auto_tune_enabled is None else bool(auto_tune_enabled)
+        self.auto_tune_threshold = DataEngine._clamp_float(
+            auto_tune_threshold, AppConfig.AUTO_TUNE_THRESHOLD, 0.0, 1.0
+        )
+        self.tuning_iterations = DataEngine._clamp_int(tuning_iterations, 20, 1, 100)
+        self.tuning_cv = DataEngine._clamp_int(tuning_cv, 5, 2, 10)
 
     def train(self, X: pd.DataFrame, y: pd.Series, metric: str = 'r2'):
         """
@@ -326,18 +399,18 @@ class ModelCore:
         """
         logger.info(f"开始切分数据集... (优化目标: {metric.upper()})")
         X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=AppConfig.TEST_SIZE, random_state=AppConfig.RANDOM_SEED
+            X, y, test_size=self.test_size, random_state=self.random_seed
         )
 
-        logger.info(f">>> 阶段1: 快速训练 (LR={AppConfig.MODEL_LEARNING_RATE})...")
+        logger.info(f">>> 阶段1: 快速训练 (LR={self.learning_rate})...")
         # 1. 训练默认模型
         default_model = xgb.XGBRegressor(
-            n_estimators=AppConfig.MODEL_ESTIMATORS,
-            learning_rate=AppConfig.MODEL_LEARNING_RATE,
-            max_depth=AppConfig.MODEL_MAX_DEPTH,
+            n_estimators=self.n_estimators,
+            learning_rate=self.learning_rate,
+            max_depth=self.max_depth,
             tree_method='hist',
             n_jobs=-1,
-            random_state=AppConfig.RANDOM_SEED,
+            random_state=self.random_seed,
             importance_type='total_gain',
             early_stopping_rounds=50
         )
@@ -352,11 +425,11 @@ class ModelCore:
         self.mae = initial_mae
         
         # 判断是否触发调优 (默认用 R2 阈值判断，即使优化目标是 MAE，R2 太低也说明模型差)
-        needs_tuning = initial_r2 < AppConfig.AUTO_TUNE_THRESHOLD
+        needs_tuning = self.auto_tune_enabled and initial_r2 < self.auto_tune_threshold
         
         if needs_tuning:
-            logger.warning(f"初次训练 R² ({initial_r2:.4f}) 低于阈值 ({AppConfig.AUTO_TUNE_THRESHOLD})")
-            logger.info(">>> 阶段2: 触发智能调优 (5-Fold CV Grid Search)...")
+            logger.warning(f"初次训练 R² ({initial_r2:.4f}) 低于阈值 ({self.auto_tune_threshold})")
+            logger.info(f">>> 阶段2: 触发智能调优 ({self.tuning_cv}-Fold CV Grid Search)...")
             
             param_dist = {
                 'max_depth': [3, 4, 5, 6, 7, 8, 9],
@@ -374,7 +447,7 @@ class ModelCore:
             
             xgb_base = xgb.XGBRegressor(
                 n_jobs=-1,
-                random_state=AppConfig.RANDOM_SEED,
+                random_state=self.random_seed,
                 importance_type='total_gain',
                 tree_method='hist',
             )
@@ -382,11 +455,11 @@ class ModelCore:
             search = RandomizedSearchCV(
                 xgb_base, 
                 param_distributions=param_dist, 
-                n_iter=20, 
+                n_iter=self.tuning_iterations,
                 scoring=scoring_metric, 
-                cv=5, 
+                cv=self.tuning_cv,
                 verbose=1, 
-                random_state=AppConfig.RANDOM_SEED,
+                random_state=self.random_seed,
                 n_jobs=-1
             )
             
@@ -434,18 +507,28 @@ class ModelCore:
 # ==========================================
 class InsightEngine:
     """负责计算 SHAP 值。"""
-    def __init__(self, model, X: pd.DataFrame):
+    def __init__(
+        self,
+        model,
+        X: pd.DataFrame,
+        shap_sample_limit: Optional[int] = None,
+        random_seed: Optional[int] = None,
+    ):
         self.model = model
         self.X = X
+        self.shap_sample_limit = DataEngine._clamp_int(
+            shap_sample_limit, AppConfig.SHAP_SAMPLE_LIMIT, 100, 1000000
+        )
+        self.random_seed = DataEngine._clamp_int(random_seed, AppConfig.RANDOM_SEED, 0, 2**32 - 1)
 
     def compute(self, y: Optional[pd.Series] = None):
         logger.info("正在初始化 SHAP Explainer...")
         try:
             X_sample = self.X
             y_sample = y
-            if len(self.X) > AppConfig.SHAP_SAMPLE_LIMIT:
-                logger.info(f"样本量较大，进行抽样 ({AppConfig.SHAP_SAMPLE_LIMIT})...")
-                sample_indices = self.X.sample(n=AppConfig.SHAP_SAMPLE_LIMIT, random_state=AppConfig.RANDOM_SEED).index
+            if len(self.X) > self.shap_sample_limit:
+                logger.info(f"样本量较大，进行抽样 ({self.shap_sample_limit})...")
+                sample_indices = self.X.sample(n=self.shap_sample_limit, random_state=self.random_seed).index
                 X_sample = self.X.loc[sample_indices]
                 if y is not None:
                     y_sample = y.loc[sample_indices]

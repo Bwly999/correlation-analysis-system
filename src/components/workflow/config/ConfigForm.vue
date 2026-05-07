@@ -74,6 +74,22 @@ const secondaryProperties = computed(() =>
   ),
 )
 
+const secondaryPropertyGroups = computed(() => {
+  const groups: Array<{ name: string | null; properties: NodeProperty[] }> = []
+
+  secondaryProperties.value.forEach((property) => {
+    const groupName = property.group ?? null
+    let group = groups.find((item) => item.name === groupName)
+    if (!group) {
+      group = { name: groupName, properties: [] }
+      groups.push(group)
+    }
+    group.properties.push(property)
+  })
+
+  return groups
+})
+
 const updateConfig = (propName: string, value: any) => {
   emit(
     'update:config',
@@ -108,22 +124,30 @@ const updateConfig = (propName: string, value: any) => {
       </div>
     </section>
 
-    <section v-if="secondaryProperties.length > 0" class="space-y-6">
-      <div
-        v-for="prop in secondaryProperties"
-        v-show="!prop.displayIf || prop.displayIf(config)"
-        :key="prop.name"
-      >
-        <PropertyField
-          :prop="prop"
-          :model-value="config[prop.name]"
-          :upstream-factors="upstreamFactors"
-          :config-context="config"
-          :node-id="nodeId"
-          :input-data="inputData"
-          @update:model-value="(val) => updateConfig(prop.name, val)"
-          @save="emit('save')"
-        />
+    <section v-if="secondaryProperties.length > 0" class="space-y-8">
+      <div v-for="group in secondaryPropertyGroups" :key="group.name ?? '__default__'" class="space-y-6">
+        <div
+          v-if="group.name"
+          class="border-b border-slate-100 pb-2 text-xs font-bold text-slate-500"
+        >
+          {{ group.name }}
+        </div>
+        <div
+          v-for="prop in group.properties"
+          v-show="!prop.displayIf || prop.displayIf(config)"
+          :key="prop.name"
+        >
+          <PropertyField
+            :prop="prop"
+            :model-value="config[prop.name]"
+            :upstream-factors="upstreamFactors"
+            :config-context="config"
+            :node-id="nodeId"
+            :input-data="inputData"
+            @update:model-value="(val) => updateConfig(prop.name, val)"
+            @save="emit('save')"
+          />
+        </div>
       </div>
     </section>
   </div>

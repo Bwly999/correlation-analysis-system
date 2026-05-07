@@ -220,6 +220,150 @@ describe('Node Definitions Execution Logic', () => {
     })
   })
 
+  it('should expose outlier cleaning controls for xgboost-shap', () => {
+    const outlierMethodProperty = xgboostShapNode.properties.find(
+      (property) => property.name === 'outlierMethod',
+    )
+    const iqrThresholdProperty = xgboostShapNode.properties.find(
+      (property) => property.name === 'iqrThreshold',
+    )
+    const outlierContaminationProperty = xgboostShapNode.properties.find(
+      (property) => property.name === 'outlierContamination',
+    )
+    const outlierNEstimatorsProperty = xgboostShapNode.properties.find(
+      (property) => property.name === 'outlierNEstimators',
+    )
+    const outlierMaxSamplesProperty = xgboostShapNode.properties.find(
+      (property) => property.name === 'outlierMaxSamples',
+    )
+
+    expect(outlierMethodProperty).toMatchObject({
+      type: 'options',
+      displayName: '异常值处理方式',
+      default: 'none',
+    })
+    expect(outlierMethodProperty?.options).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ value: 'none' }),
+        expect.objectContaining({ value: 'iqr' }),
+        expect.objectContaining({ value: 'isolation_forest' }),
+      ]),
+    )
+    expect(iqrThresholdProperty).toMatchObject({
+      type: 'number',
+      displayName: 'IQR 倍数',
+      default: 1.5,
+    })
+    expect(iqrThresholdProperty?.displayIf?.({ outlierMethod: 'iqr' })).toBe(true)
+    expect(iqrThresholdProperty?.displayIf?.({ outlierMethod: 'none' })).toBe(false)
+    expect(outlierContaminationProperty).toMatchObject({
+      type: 'number',
+      displayName: '预估异常比例',
+      default: 0.05,
+    })
+    expect(outlierContaminationProperty?.displayIf?.({ outlierMethod: 'isolation_forest' })).toBe(
+      true,
+    )
+    expect(outlierNEstimatorsProperty).toMatchObject({
+      type: 'number',
+      displayName: '孤立森林树数量',
+      default: 100,
+    })
+    expect(outlierNEstimatorsProperty?.displayIf?.({ outlierMethod: 'isolation_forest' })).toBe(
+      true,
+    )
+    expect(outlierMaxSamplesProperty).toMatchObject({
+      type: 'options',
+      displayName: '每棵树采样量',
+      default: 'auto',
+    })
+    expect(outlierMaxSamplesProperty?.displayIf?.({ outlierMethod: 'isolation_forest' })).toBe(
+      true,
+    )
+  })
+
+  it('should expose advanced model controls for xgboost-shap', () => {
+    const advancedPropertyNames = [
+      'nEstimators',
+      'learningRate',
+      'maxDepth',
+      'testSize',
+      'randomSeed',
+      'shapSampleLimit',
+      'autoTuneEnabled',
+      'autoTuneThreshold',
+      'tuningIterations',
+      'tuningCv',
+    ]
+    const properties = Object.fromEntries(
+      xgboostShapNode.properties
+        .filter((property) => advancedPropertyNames.includes(property.name))
+        .map((property) => [property.name, property]),
+    )
+
+    expect(Object.keys(properties).sort()).toEqual([...advancedPropertyNames].sort())
+    expect(properties.nEstimators).toMatchObject({
+      type: 'number',
+      displayName: '树数量',
+      default: 500,
+      group: '高级参数',
+    })
+    expect(properties.learningRate).toMatchObject({
+      type: 'number',
+      displayName: '学习率',
+      default: 0.05,
+      group: '高级参数',
+    })
+    expect(properties.maxDepth).toMatchObject({
+      type: 'number',
+      displayName: '最大树深',
+      default: 6,
+      group: '高级参数',
+    })
+    expect(properties.testSize).toMatchObject({
+      type: 'number',
+      displayName: '测试集比例',
+      default: 0.2,
+      group: '高级参数',
+    })
+    expect(properties.randomSeed).toMatchObject({
+      type: 'number',
+      displayName: '随机种子',
+      default: 42,
+      group: '高级参数',
+    })
+    expect(properties.shapSampleLimit).toMatchObject({
+      type: 'number',
+      displayName: 'SHAP 采样上限',
+      default: 2000,
+      group: '高级参数',
+    })
+    expect(properties.autoTuneEnabled).toMatchObject({
+      type: 'boolean',
+      displayName: '启用自动调参',
+      default: true,
+      group: '高级参数',
+    })
+    expect(properties.autoTuneThreshold).toMatchObject({
+      type: 'number',
+      displayName: '自动调参阈值',
+      default: 0.6,
+      group: '高级参数',
+    })
+    expect(properties.tuningIterations).toMatchObject({
+      type: 'number',
+      displayName: '调参迭代次数',
+      default: 20,
+      group: '高级参数',
+    })
+    expect(properties.tuningCv).toMatchObject({
+      type: 'number',
+      displayName: '交叉验证折数',
+      default: 5,
+      group: '高级参数',
+    })
+  })
+
   describe('file-import', () => {
     it('should parse a CSV file correctly', async () => {
       const csvPath = path.resolve(__dirname, '../../../test/resource/test_data.csv')
@@ -1023,6 +1167,95 @@ describe('Node Definitions Execution Logic', () => {
       expect(legacy.report.supplements.fullReportImage).toBe('data:image/png;base64,base64_full')
       expect(legacy.report.supplements.beeswarmImage).toBe('data:image/png;base64,base64_beeswarm')
       expect(global.fetch).toHaveBeenCalledWith('/api/analysis/xgboost-shap', expect.any(Object))
+    })
+
+    it('should pass xgboost-shap outlier cleaning config to backend', async () => {
+      const input = createTableResult([
+        { target: 1, f1: 2 },
+        { target: 2, f1: 3 },
+      ])
+      const config = {
+        targetField: 'target',
+        factorNames: ['f1'],
+        maxDependencePlots: 4,
+        outlierMethod: 'isolation_forest',
+        iqrThreshold: 2,
+        outlierContamination: 0.1,
+        outlierNEstimators: 150,
+        outlierMaxSamples: 'all',
+      }
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          results: {
+            summary: {
+              targetField: 'target',
+              sampleCount: 2,
+              featureCount: 1,
+              r2: 0.85,
+              mae: 0.1,
+            },
+            importance: [{ name: 'f1', value: 0.5, rank: 1 }],
+            dependence: [{ feature: 'f1', x: [1, 2], shap: [0.1, 0.2] }],
+            assets: {},
+          },
+        }),
+      }) as any
+
+      await xgboostShapNode.execute(input, config)
+
+      const firstCall = vi.mocked(global.fetch).mock.calls[0]
+      expect(firstCall).toBeDefined()
+      const [, requestInit] = firstCall!
+      const body = JSON.parse(String(requestInit?.body))
+      expect(body.config).toMatchObject(config)
+    })
+
+    it('should pass xgboost-shap advanced model config to backend', async () => {
+      const input = createTableResult([
+        { target: 1, f1: 2 },
+        { target: 2, f1: 3 },
+      ])
+      const config = {
+        targetField: 'target',
+        factorNames: ['f1'],
+        maxDependencePlots: 4,
+        nEstimators: 800,
+        learningRate: 0.03,
+        maxDepth: 7,
+        testSize: 0.25,
+        randomSeed: 99,
+        shapSampleLimit: 1200,
+        autoTuneEnabled: false,
+        autoTuneThreshold: 0.55,
+        tuningIterations: 12,
+        tuningCv: 4,
+      }
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          results: {
+            summary: {
+              targetField: 'target',
+              sampleCount: 2,
+              featureCount: 1,
+              r2: 0.85,
+              mae: 0.1,
+            },
+            importance: [{ name: 'f1', value: 0.5, rank: 1 }],
+            dependence: [{ feature: 'f1', x: [1, 2], shap: [0.1, 0.2] }],
+            assets: {},
+          },
+        }),
+      }) as any
+
+      await xgboostShapNode.execute(input, config)
+
+      const [, requestInit] = vi.mocked(global.fetch).mock.calls[0]!
+      const body = JSON.parse(String(requestInit?.body))
+      expect(body.config).toMatchObject(config)
     })
 
     it('should normalize real lasso backend results', async () => {
