@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<style>
+  :root {
+    --primary: #0f172a;
+    --accent: #2563eb;
+    --bg: #ffffff;
+    --ink: #000000;
+    --subtle: #f8fafc;
+    --border: #e2e8f0;
+    --terminal: #ef4444;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    width: 1920px; height: 1080px;
+    background: var(--bg); color: var(--ink);
+    font-family: "Inter", -apple-system, "PingFang SC", sans-serif;
+    overflow: hidden; display: flex; flex-direction: column; padding: 80px;
+  }
+  .header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 40px; }
+  .slide-num { font-size: 24px; font-weight: 800; opacity: 0.3; }
+  h2 { font-size: 80px; font-weight: 900; letter-spacing: -0.03em; text-transform: uppercase; }
+  
+  .node-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+    flex: 1;
+  }
+  
+  .node-row {
+    display: grid;
+    grid-template-columns: 350px 1fr 400px;
+    align-items: center;
+    border: 1px solid var(--border);
+    padding: 24px;
+    background: var(--subtle);
+  }
+  .node-name {
+    font-size: 32px;
+    font-weight: 800;
+    color: var(--terminal);
+  }
+  .node-usage {
+    font-size: 22px;
+    line-height: 1.4;
+    padding: 0 40px;
+    border-left: 2px solid var(--border);
+  }
+  .node-method {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--primary);
+    opacity: 0.6;
+    text-transform: uppercase;
+    text-align: right;
+  }
+  
+  .sub-label {
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-bottom: 24px;
+    opacity: 0.5;
+  }
+</style>
+</head>
+<body>
+
+  <div class="header">
+    <h2>05 节点全景：统计检验 <span style="color:var(--terminal)">Statistics</span></h2>
+    <div class="slide-num">06 / 08</div>
+  </div>
+
+  <div class="sub-label">核心统计分析节点 / STATISTICAL TERMINALS</div>
+
+  <div class="node-stack">
+    <!-- Row 1 -->
+    <div class="node-row">
+      <div class="node-name">单调性相关分析</div>
+      <div class="node-usage">分析因子与目标值的线性或单调关系。最基础的因子筛选手段。</div>
+      <div class="node-method">Pearson / Spearman / Kendall</div>
+    </div>
+
+    <!-- Row 2 -->
+    <div class="node-row">
+      <div class="node-name">VIF 共线性检测</div>
+      <div class="node-usage">在建模前检测解释变量之间是否存在高度相关，防止模型失真。</div>
+      <div class="node-method">Variance Inflation Factor</div>
+    </div>
+
+    <!-- Row 3 -->
+    <div class="node-row">
+      <div class="node-name">PCA 主成分分析</div>
+      <div class="node-usage">对高维因子进行降维，识别能够解释大部分方差的核心主成分。</div>
+      <div class="node-method">Principal Component Analysis</div>
+    </div>
+
+    <!-- Row 4 -->
+    <div class="node-row">
+      <div class="node-name">ANOVA 方差分析</div>
+      <div class="node-usage">比较不同分组（如不同班次、不同供应商）之间的均值是否存在显著差异。</div>
+      <div class="node-method">Analysis of Variance</div>
+    </div>
+
+    <!-- Row 5 -->
+    <div class="node-row">
+      <div class="node-name">分类因子筛查</div>
+      <div class="node-usage">当目标 Y 是分类变量时，筛选哪些因子对分类结果有显著影响。</div>
+      <div class="node-method">Chi-Square / T-Test / Kruskal</div>
+    </div>
+  </div>
+
+  <div style="margin-top: 40px; font-size: 20px; font-weight: 600; color: var(--accent);">
+    💡 建议：在进入机器学习建模前，优先使用 VIF 检测共线性，并使用 PCA 或 相关分析精简变量。
+  </div>
+
+</body>
+</html>

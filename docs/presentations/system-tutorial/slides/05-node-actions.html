@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<style>
+  :root {
+    --primary: #0f172a;
+    --accent: #2563eb;
+    --bg: #ffffff;
+    --ink: #000000;
+    --subtle: #f8fafc;
+    --border: #e2e8f0;
+    --action: #f59e0b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    width: 1920px; height: 1080px;
+    background: var(--bg); color: var(--ink);
+    font-family: "Inter", -apple-system, "PingFang SC", sans-serif;
+    overflow: hidden; display: flex; flex-direction: column; padding: 80px;
+  }
+  .header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 60px; }
+  .slide-num { font-size: 24px; font-weight: 800; opacity: 0.3; }
+  h2 { font-size: 80px; font-weight: 900; letter-spacing: -0.03em; text-transform: uppercase; }
+  
+  .group-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: 40px;
+    flex: 1;
+  }
+  
+  .group-card {
+    border: 1px solid var(--border);
+    padding: 32px;
+    display: flex;
+    flex-direction: column;
+  }
+  .group-title {
+    font-size: 24px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--action);
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .group-title::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+  
+  .node-list {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  .node-item {
+    padding: 16px;
+    background: var(--subtle);
+    border-left: 4px solid var(--action);
+  }
+  .node-item strong { display: block; font-size: 22px; margin-bottom: 8px; }
+  .node-item p { font-size: 16px; line-height: 1.4; opacity: 0.7; }
+  
+  .merge-focus {
+    grid-row: span 2;
+    background: var(--primary);
+    color: #fff;
+    padding: 48px;
+    display: flex;
+    flex-direction: column;
+  }
+  .merge-focus h3 { font-size: 40px; margin-bottom: 24px; color: var(--action); }
+  .merge-focus ul { list-style: none; margin-top: 32px; }
+  .merge-focus li { margin-bottom: 24px; font-size: 22px; }
+  .merge-focus li b { color: var(--action); }
+</style>
+</head>
+<body>
+
+  <div class="header">
+    <h2>04 节点全景：处理节点 <span style="color:var(--action)">Actions</span></h2>
+    <div class="slide-num">05 / 08</div>
+  </div>
+
+  <div class="group-grid">
+    <!-- Group 1: Cleaning -->
+    <div class="group-card">
+      <div class="group-title">数据清洗 / Data Cleaning</div>
+      <div class="node-list">
+        <div class="node-item">
+          <strong>去重 (Dedup)</strong>
+          <p>按全行或指定字段剔除重复记录。</p>
+        </div>
+        <div class="node-item">
+          <strong>缺失/异常值处理</strong>
+          <p>支持 IQR、百分位或手动规则剔除异常。</p>
+        </div>
+        <div class="node-item">
+          <strong>编码/缩放</strong>
+          <p>分类变量 One-hot、数值 Min-Max 缩放。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Group 2: Transform -->
+    <div class="group-card">
+      <div class="group-title">变换与聚合 / Transformation</div>
+      <div class="node-list">
+        <div class="node-item">
+          <strong>数据筛选 (Filter)</strong>
+          <p>多条件组合逻辑过滤行。</p>
+        </div>
+        <div class="node-item">
+          <strong>字段选择 (Selection)</strong>
+          <p>精简分析变量，支持正则匹配。</p>
+        </div>
+        <div class="node-item">
+          <strong>数据聚合 (Aggregation)</strong>
+          <p>分组统计、窗口函数、时间分桶。</p>
+        </div>
+        <div class="node-item">
+          <strong>排序与截断</strong>
+          <p>多级排序规则，限制分析样本量。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Focus: Data Merge -->
+    <div class="merge-focus">
+      <div class="label" style="color:#fff; opacity:0.5; margin-bottom: 12px;">CORE MULTI-INPUT NODE</div>
+      <h3>数据合并 (Data Merge)</h3>
+      <p style="font-size: 20px; opacity: 0.8;">系统中最强大的多输入节点，负责整合碎片化数据。</p>
+      
+      <ul>
+        <li><b>横向关联 (Join)</b>：按主键（如 SN）将多个来源合并为一张宽表。</li>
+        <li><b>纵向追加 (Union)</b>：将结构相同的多个来源按行上下堆叠。</li>
+        <li><b>分组集合 (Collection)</b>：不合并表，仅打包为集合供下游批量处理。</li>
+      </ul>
+
+      <div style="margin-top: auto; padding: 24px; border: 1px dashed rgba(255,255,255,0.3); font-size: 18px;">
+        💡 进阶：对于复杂的定制化逻辑，可使用 <b>[JS 代码执行]</b> 节点直接编写脚本处理 rows。
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<style>
+  :root {
+    --primary: #0f172a;
+    --accent: #2563eb;
+    --bg: #ffffff;
+    --ink: #000000;
+    --subtle: #f1f5f9;
+    --border: #e2e8f0;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    width: 1920px;
+    height: 1080px;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Inter", -apple-system, "PingFang SC", sans-serif;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    padding: 80px;
+  }
+  
+  /* Grid & Layout */
+  .grid-12 {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 40px;
+    flex: 1;
+  }
+  
+  /* Typography */
+  h1 {
+    font-size: 120px;
+    font-weight: 900;
+    line-height: 0.9;
+    text-transform: uppercase;
+    letter-spacing: -0.04em;
+    grid-column: span 12;
+    margin-bottom: 40px;
+  }
+  h2 {
+    font-size: 48px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--accent);
+    grid-column: span 8;
+  }
+  .label {
+    font-size: 16px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    color: var(--primary);
+    opacity: 0.6;
+    margin-bottom: 12px;
+  }
+  
+  /* Decoration */
+  .line {
+    height: 2px;
+    background: var(--primary);
+    grid-column: span 12;
+    margin: 40px 0;
+  }
+  .box {
+    border: 1px solid var(--border);
+    padding: 32px;
+  }
+  
+  /* Slide Specific */
+  .cover-footer {
+    grid-column: span 12;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-top: auto;
+  }
+  .logo-area {
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+  }
+  .tagline {
+    font-size: 20px;
+    font-weight: 500;
+    opacity: 0.5;
+  }
+</style>
+</head>
+<body>
+
+  <div class="grid-12">
+    <div style="grid-column: span 12;">
+      <div class="label">User Guide / Documentation</div>
+      <h1>多因子相关性分析系统<br><span style="color:var(--accent)">使用教程</span></h1>
+    </div>
+    
+    <div class="line"></div>
+    
+    <div style="grid-column: span 6;">
+      <p style="font-size: 32px; line-height: 1.4; font-weight: 400;">
+        由浅入深，循序渐进。<br>
+        掌握可视化工作流的分析艺术，<br>
+        从海量因子中识别核心影响。
+      </p>
+    </div>
+    
+    <div style="grid-column: span 6; display: flex; flex-direction: column; gap: 24px;">
+      <div class="box">
+        <div class="label" style="margin-bottom: 8px;">Version</div>
+        <div style="font-size: 24px; font-weight: 700;">v1.5.0 Production</div>
+      </div>
+      <div class="box">
+        <div class="label" style="margin-bottom: 8px;">Target Audience</div>
+        <div style="font-size: 24px; font-weight: 700;">数据分析师 / 工艺工程师 / 算法开发</div>
+      </div>
+    </div>
+
+    <div class="cover-footer">
+      <div class="logo-area">CORRELATION ANALYSIS SYSTEM</div>
+      <div class="tagline">© 2026 INTERNAL TRAINING ONLY</div>
+    </div>
+  </div>
+
+</body>
+</html>

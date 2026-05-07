@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<style>
+  :root {
+    --primary: #0f172a;
+    --accent: #2563eb;
+    --bg: #ffffff;
+    --ink: #000000;
+    --subtle: #f8fafc;
+    --border: #e2e8f0;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    width: 1920px; height: 1080px;
+    background: var(--bg); color: var(--ink);
+    font-family: "Inter", -apple-system, "PingFang SC", sans-serif;
+    overflow: hidden; display: flex; flex-direction: column; padding: 80px;
+  }
+  .header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 60px; }
+  .slide-num { font-size: 24px; font-weight: 800; opacity: 0.3; }
+  h2 { font-size: 80px; font-weight: 900; letter-spacing: -0.03em; text-transform: uppercase; }
+  
+  .feature-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 60px;
+    flex: 1;
+  }
+  
+  .feature-card {
+    border-top: 1px solid var(--ink);
+    padding-top: 40px;
+    display: flex;
+    flex-direction: column;
+  }
+  .feature-card h3 { font-size: 40px; font-weight: 800; margin-bottom: 32px; color: var(--accent); }
+  .feature-card p { font-size: 26px; line-height: 1.6; opacity: 0.8; margin-bottom: 40px; }
+  
+  .feature-img-placeholder {
+    margin-top: auto;
+    background: var(--subtle);
+    border: 1px dashed var(--border);
+    height: 350px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--primary);
+    opacity: 0.4;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  .footer-hint {
+    margin-top: 60px;
+    background: var(--accent);
+    color: #fff;
+    padding: 32px;
+    font-size: 28px;
+    font-weight: 700;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+  <div class="header">
+    <h2>07 调试与完工 <span style="color:var(--accent)">Debug & Review</span></h2>
+    <div class="slide-num">08 / 08</div>
+  </div>
+
+  <div class="feature-grid">
+    <!-- Feature 1 -->
+    <div class="feature-card">
+      <h3>中间结果预览</h3>
+      <p>不必等到全流程运行结束。只要节点已有输出，悬停节点即可通过「预览」图标实时查看表格、报告或图表摘要。</p>
+      <div class="feature-img-placeholder">UI: Node Hover Tooltip</div>
+    </div>
+
+    <!-- Feature 2 -->
+    <div class="feature-card">
+      <h3>单节点快速调试</h3>
+      <p>修改参数后，右键节点选择「调试当前节点」。系统会自动复用上游缓存，秒级呈现调整后的分析结果。</p>
+      <div class="feature-img-placeholder">UI: Context Menu -> Debug</div>
+    </div>
+
+    <!-- Feature 3 -->
+    <div class="feature-card">
+      <h3>版本历史与回滚</h3>
+      <p>每一次保存或运行都会自动生成版本快照。你可以随时在左侧「版本历史」舱中查阅并一键恢复到任意历史时刻。</p>
+      <div class="feature-img-placeholder">UI: History Sidebar</div>
+    </div>
+  </div>
+
+  <div class="footer-hint">
+    🚀 现在，开始您的第一场多因子分析之旅吧！如有疑问，请点击顶部工具栏的「帮助中心」。
+  </div>
+
+</body>
+</html>

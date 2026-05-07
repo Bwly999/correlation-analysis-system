@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<style>
+  :root {
+    --primary: #0f172a;
+    --accent: #2563eb;
+    --bg: #ffffff;
+    --ink: #000000;
+    --subtle: #f1f5f9;
+    --border: #e2e8f0;
+    --trigger: #3b82f6;
+    --action: #f59e0b;
+    --terminal: #ef4444;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    width: 1920px; height: 1080px;
+    background: var(--bg); color: var(--ink);
+    font-family: "Inter", -apple-system, "PingFang SC", sans-serif;
+    overflow: hidden; display: flex; flex-direction: column; padding: 80px;
+  }
+  .header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 60px; }
+  .slide-num { font-size: 24px; font-weight: 800; opacity: 0.3; }
+  h2 { font-size: 80px; font-weight: 900; letter-spacing: -0.03em; text-transform: uppercase; }
+  
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 60px; flex: 1; }
+  
+  .node-type {
+    display: flex; flex-direction: column;
+    border-top: 8px solid var(--primary);
+    padding-top: 32px;
+  }
+  .node-type.trigger { border-color: var(--trigger); }
+  .node-type.action { border-color: var(--action); }
+  .node-type.terminal { border-color: var(--terminal); }
+  
+  .type-label { font-size: 20px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 16px; }
+  .type-title { font-size: 48px; font-weight: 800; margin-bottom: 32px; }
+  .type-desc { font-size: 24px; line-height: 1.6; opacity: 0.8; margin-bottom: 40px; }
+  
+  .rule-box {
+    background: var(--subtle);
+    padding: 32px;
+    margin-top: auto;
+    border: 1px solid var(--border);
+  }
+  .rule-box ul { list-style: none; }
+  .rule-box li { font-size: 20px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; }
+  .rule-box li::before { content: "→"; margin-right: 12px; color: var(--accent); }
+
+  .flow-viz {
+    grid-column: span 3;
+    height: 120px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--primary);
+    color: #fff;
+    font-size: 28px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5em;
+    margin-top: 40px;
+  }
+</style>
+</head>
+<body>
+
+  <div class="header">
+    <h2>01 核心概念 <span style="color:var(--accent)">Core Concepts</span></h2>
+    <div class="slide-num">02 / 08</div>
+  </div>
+
+  <div class="grid">
+    <!-- Trigger -->
+    <div class="node-type trigger">
+      <div class="type-label" style="color:var(--trigger)">01 起点</div>
+      <div class="type-title">TRIGGER<br>触发节点</div>
+      <p class="type-desc">
+        流程的入口，没有输入只有输出。<br>
+        负责将原始数据或运行时参数引入工作流。
+      </p>
+      <div class="rule-box">
+        <ul>
+          <li>本地文件导入 (CSV/Excel)</li>
+          <li>手动 JSON 录入</li>
+          <li>外部系统数据对接 (Neighbor)</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Action -->
+    <div class="node-type action">
+      <div class="type-label" style="color:var(--action)">02 中转</div>
+      <div class="type-title">ACTION<br>处理节点</div>
+      <p class="type-desc">
+        流程的中段，有输入也有输出。<br>
+        负责数据清洗、字段映射、多表关联、聚合等。
+      </p>
+      <div class="rule-box">
+        <ul>
+          <li>异常值/缺失值处理</li>
+          <li>数据筛选与排序</li>
+          <li>多源数据合并 (横向/纵向)</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Terminal -->
+    <div class="node-type terminal">
+      <div class="type-label" style="color:var(--terminal)">03 终点</div>
+      <div class="type-title">TERMINAL<br>终点节点</div>
+      <p class="type-desc">
+        流程的归宿，只有输入没有输出。<br>
+        执行核心算法、生成报告、绘图或导出结果。
+      </p>
+      <div class="rule-box">
+        <ul>
+          <li>相关性分析/回归建模</li>
+          <li>SHAP 重要性解释</li>
+          <li>图表展示与文件导出</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="flow-viz">
+      Data Flow: Trigger ➔ Action ➔ Terminal
+    </div>
+  </div>
+
+</body>
+</html>

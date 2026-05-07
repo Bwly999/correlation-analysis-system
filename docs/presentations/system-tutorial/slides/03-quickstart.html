@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<style>
+  :root {
+    --primary: #0f172a;
+    --accent: #2563eb;
+    --bg: #ffffff;
+    --ink: #000000;
+    --subtle: #f1f5f9;
+    --border: #cbd5e1;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    width: 1920px; height: 1080px;
+    background: var(--bg); color: var(--ink);
+    font-family: "Inter", -apple-system, "PingFang SC", sans-serif;
+    overflow: hidden; display: flex; flex-direction: column; padding: 80px;
+  }
+  .header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 60px; }
+  .slide-num { font-size: 24px; font-weight: 800; opacity: 0.3; }
+  h2 { font-size: 80px; font-weight: 900; letter-spacing: -0.03em; text-transform: uppercase; }
+  
+  .step-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    flex: 1;
+    position: relative;
+    padding-top: 40px;
+  }
+  
+  .step-line {
+    position: absolute;
+    top: 100px; left: 0; right: 0;
+    height: 4px;
+    background: var(--border);
+    z-index: 1;
+  }
+  
+  .step {
+    width: 22%;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .step-circle {
+    width: 120px; height: 120px;
+    background: var(--primary);
+    color: #fff;
+    border-radius: 999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 48px;
+    font-weight: 900;
+    margin-bottom: 40px;
+    border: 12px solid var(--bg);
+  }
+  
+  .step-title {
+    font-size: 40px;
+    font-weight: 800;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .step-title .icon { color: var(--accent); }
+  
+  .step-desc {
+    font-size: 24px;
+    line-height: 1.5;
+    color: #475569;
+    background: var(--subtle);
+    padding: 24px;
+    border-radius: 8px;
+  }
+  
+  .highlight-box {
+    margin-top: auto;
+    background: var(--primary);
+    color: #fff;
+    padding: 40px;
+    font-size: 32px;
+    font-weight: 600;
+  }
+</style>
+</head>
+<body>
+
+  <div class="header">
+    <h2>02 快速上手 <span style="color:var(--accent)">Quick Start</span></h2>
+    <div class="slide-num">03 / 08</div>
+  </div>
+
+  <div class="step-container">
+    <div class="step-line"></div>
+    
+    <!-- Step 1 -->
+    <div class="step">
+      <div class="step-circle">01</div>
+      <div class="step-title">导入数据</div>
+      <div class="step-desc">
+        拖拽 <b>[本地文件导入]</b> 节点。<br>
+        上传 CSV 或 Excel，系统会自动解析并对字段进行初步清洗。
+      </div>
+    </div>
+
+    <!-- Step 2 -->
+    <div class="step">
+      <div class="step-circle">02</div>
+      <div class="step-title">数据清洗</div>
+      <div class="step-desc">
+        连线 <b>[异常值处理]</b> 节点。<br>
+        通过可视化界面配置 IQR 或 手动区间规则，剔除脏数据。
+      </div>
+    </div>
+
+    <!-- Step 3 -->
+    <div class="step">
+      <div class="step-circle">03</div>
+      <div class="step-title">算法建模</div>
+      <div class="step-desc">
+        连线 <b>[XGBoost]</b> 节点。<br>
+        选定目标 Y（如良率）和特征 X（工序因子），点击运行按钮。
+      </div>
+    </div>
+
+    <!-- Step 4 -->
+    <div class="step">
+      <div class="step-circle">04</div>
+      <div class="step-title">查看结果</div>
+      <div class="step-desc">
+        分析结束后，自动弹出结果看板。<br>
+        阅读 SHAP 依赖图与特征排行，直接定位核心影响因素。
+      </div>
+    </div>
+  </div>
+
+  <div class="highlight-box">
+    💡 提示：运行结束后，悬停任意节点点击「预览」图标，可查看该步骤产出的中间表数据。
+  </div>
+
+</body>
+</html>

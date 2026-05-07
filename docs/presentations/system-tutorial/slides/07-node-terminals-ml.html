@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<style>
+  :root {
+    --primary: #0f172a;
+    --accent: #2563eb;
+    --bg: #ffffff;
+    --ink: #000000;
+    --subtle: #f8fafc;
+    --border: #e2e8f0;
+    --terminal: #ef4444;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    width: 1920px; height: 1080px;
+    background: var(--bg); color: var(--ink);
+    font-family: "Inter", -apple-system, "PingFang SC", sans-serif;
+    overflow: hidden; display: flex; flex-direction: column; padding: 80px;
+  }
+  .header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 40px; }
+  .slide-num { font-size: 24px; font-weight: 800; opacity: 0.3; }
+  h2 { font-size: 80px; font-weight: 900; letter-spacing: -0.03em; text-transform: uppercase; }
+  
+  .ml-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    gap: 40px;
+    flex: 1;
+  }
+  
+  .ml-card {
+    border: 1px solid var(--border);
+    padding: 32px;
+    display: flex;
+    flex-direction: column;
+    background: var(--subtle);
+  }
+  .ml-card.featured {
+    grid-row: span 2;
+    background: var(--primary);
+    color: #fff;
+    border: none;
+  }
+  .ml-card h3 { font-size: 36px; margin-bottom: 16px; font-weight: 800; }
+  .ml-card.featured h3 { color: var(--terminal); font-size: 48px; }
+  
+  .ml-card p { font-size: 20px; line-height: 1.5; opacity: 0.8; }
+  .ml-card.featured p { font-size: 24px; opacity: 1; }
+  
+  .pros-list {
+    margin-top: auto;
+    list-style: none;
+    font-weight: 700;
+    font-size: 18px;
+  }
+  .pros-list li { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+  .pros-list li::before { content: "✔"; color: #10b981; }
+  .featured .pros-list li::before { color: var(--terminal); }
+
+  .sub-label {
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-bottom: 24px;
+    opacity: 0.5;
+  }
+</style>
+</head>
+<body>
+
+  <div class="header">
+    <h2>06 节点全景：机器学习 <span style="color:var(--terminal)">Machine Learning</span></h2>
+    <div class="slide-num">07 / 08</div>
+  </div>
+
+  <div class="sub-label">高级算法与回归建模 / MACHINE LEARNING TERMINALS</div>
+
+  <div class="ml-grid">
+    <!-- Featured: XGBoost -->
+    <div class="ml-card featured">
+      <h3>XGBoost + SHAP</h3>
+      <p>系统最核心的白盒化分析工具。不仅能捕捉非线性关系，还能通过 SHAP 解释每一个因子的贡献度。</p>
+      <ul class="pros-list">
+        <li>自动识别非线性影响趋势</li>
+        <li>输出直观的因子依赖图 (Dependence Plot)</li>
+        <li>适用于大部分工业连续数值场景</li>
+      </ul>
+    </div>
+
+    <!-- Random Forest -->
+    <div class="ml-card">
+      <h3>随机森林特征重要性</h3>
+      <p>适合面对成百上千个变量时，快速筛选出对结果影响最大的 Top 特征组合。</p>
+      <ul class="pros-list">
+        <li>对异常值不敏感</li>
+        <li>自动处理特征间的高阶交互</li>
+      </ul>
+    </div>
+
+    <!-- Linear Regression -->
+    <div class="ml-card">
+      <h3>多元线性回归</h3>
+      <p>经典的回归模型，输出明确的数学公式，量化解释各因子的影响权重。</p>
+      <ul class="pros-list">
+        <li>极高的可解释性与公式化输出</li>
+        <li>适合符合线性分布的基础工艺场景</li>
+      </ul>
+    </div>
+
+    <!-- Lasso -->
+    <div class="ml-card">
+      <h3>Lasso 回归</h3>
+      <p>带正则化的回归，会自动将不重要的因子权重压缩为 0，实现特征自动精简。</p>
+      <ul class="pros-list">
+        <li>自动变量选择功能</li>
+        <li>防止模型过拟合，提高泛化能力</li>
+      </ul>
+    </div>
+
+    <!-- Logistic -->
+    <div class="ml-card">
+      <h3>逻辑回归分类分析</h3>
+      <p>当目标 Y 是离散标签（如 良品/不良品）时，使用此节点分析因子的分类贡献。</p>
+      <ul class="pros-list">
+        <li>输出混淆矩阵与 ROC 曲线</li>
+        <li>支持二分类与多分类场景</li>
+      </ul>
+    </div>
+  </div>
+
+</body>
+</html>
