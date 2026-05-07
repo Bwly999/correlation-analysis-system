@@ -118,6 +118,12 @@ const getChartOption = (wrapper: ReturnType<typeof mount>) =>
 const getChartUpdateOptions = (wrapper: ReturnType<typeof mount>) =>
   JSON.parse(wrapper.get('[data-test="chart-option"]').attributes('data-update-options') || '{}')
 
+const getKeyOptions = (wrapper: ReturnType<typeof mount>) =>
+  wrapper
+    .get('[data-test="chart-key-select"]')
+    .findAll('option')
+    .map((option) => option.text())
+
 const mountWithOverlayHost = (component: any, host: HTMLElement) =>
   mount(
     defineComponent({
@@ -526,12 +532,7 @@ describe('DataChart', () => {
       },
     })
 
-    const options = wrapper
-      .get('[data-test="chart-key-select"]')
-      .findAll('option')
-      .map((option) => option.text())
-
-    expect(options).toEqual(['score', 'temperature'])
+    expect(getKeyOptions(wrapper)).toEqual(['score', 'temperature'])
   })
 
   it('discovers numeric factors from all table rows when the first row is null', () => {
@@ -544,12 +545,49 @@ describe('DataChart', () => {
       },
     })
 
-    const options = wrapper
-      .get('[data-test="chart-key-select"]')
-      .findAll('option')
-      .map((option) => option.text())
+    expect(getKeyOptions(wrapper)).toEqual(['score', 'temperature'])
+  })
 
-    expect(options).toEqual(['score', 'temperature'])
+  it('keeps mixed table columns selectable when they still contain renderable numeric values', () => {
+    const wrapper = mount(DataChart, {
+      props: {
+        data: {
+          kind: 'table',
+          payload: [
+            { score: 1, ratio: null, label: 'A' },
+            { score: 'bad', ratio: 0.8, label: 'B' },
+            { score: 3, ratio: undefined, label: 'C' },
+          ],
+        },
+      },
+    })
+
+    expect(getKeyOptions(wrapper)).toEqual(['score', 'ratio'])
+  })
+
+  it('keeps grouped mixed columns selectable when each group still has renderable numeric values', () => {
+    const wrapper = mount(DataChart, {
+      props: {
+        data: [
+          {
+            name: 'A',
+            data: [
+              { score: 1, ratio: 'bad', onlyA: 10 },
+              { score: null, ratio: 0.2 },
+            ],
+          },
+          {
+            name: 'B',
+            data: [
+              { score: 'oops', ratio: 0.4, onlyB: 20 },
+              { score: 5, ratio: null },
+            ],
+          },
+        ],
+      },
+    })
+
+    expect(getKeyOptions(wrapper)).toEqual(['score', 'ratio'])
   })
 
   it('reuses provided table schema instead of inferring fields from all rows again', () => {
@@ -716,6 +754,48 @@ describe('DataChart', () => {
     expect(option.series[0].data).toEqual([1.5])
   })
 
+  it('keeps the invalid-row toggle off by default for line charts', () => {
+    const wrapper = mount(DataChart, {
+      props: {
+        data: [
+          { score: 10 },
+          { score: 'bad' },
+          { score: 20 },
+        ],
+      },
+    })
+
+    const option = getChartOption(wrapper)
+
+    expect(wrapper.get('[data-test="chart-skip-invalid-checkbox"]').attributes('type')).toBe('checkbox')
+    expect(wrapper.get('[data-test="chart-skip-invalid-checkbox"]').element).not.toBeNull()
+    expect(wrapper.get('[data-test="chart-skip-invalid-label"]').text()).toBe('异常值过滤')
+    expect(wrapper.get('[data-test="chart-skip-invalid-help"]').exists()).toBe(true)
+    expect((wrapper.get('[data-test="chart-skip-invalid-checkbox"]').element as HTMLInputElement).checked).toBe(false)
+    expect(option.xAxis.data).toEqual([1, 2, 3])
+    expect(option.series[0].data).toEqual([10, 0, 20])
+  })
+
+  it('drops invalid line rows when the invalid-row toggle is enabled', async () => {
+    const wrapper = mount(DataChart, {
+      props: {
+        data: [
+          { score: 10 },
+          { score: 'bad' },
+          { score: 20 },
+        ],
+      },
+    })
+
+    await wrapper.get('[data-test="chart-skip-invalid-checkbox"]').setValue(true)
+
+    const option = getChartOption(wrapper)
+
+    expect((wrapper.get('[data-test="chart-skip-invalid-checkbox"]').element as HTMLInputElement).checked).toBe(true)
+    expect(option.xAxis.data).toEqual([1, 2])
+    expect(option.series[0].data).toEqual([10, 20])
+  })
+
   it('requires all selected factors to satisfy bounds when multiple fields are selected', async () => {
     const wrapper = mount(DataChart, {
       props: {
@@ -737,6 +817,109 @@ describe('DataChart', () => {
     expect(option.xAxis.data).toEqual([1, 2])
     expect(option.series[0].data).toEqual([15, 12])
     expect(option.series[1].data).toEqual([18, 19])
+  })
+
+  it('drops line rows when any selected factor is invalid after enabling the invalid-row toggle', async () => {
+    const wrapper = mount(DataChart, {
+      props: {
+        data: [
+          { score: 10, other: 100 },
+          { score: 20, other: 'bad' },
+          { score: null, other: 300 },
+          { score: 40, other: 400 },
+        ],
+      },
+    })
+
+    await wrapper.get('[data-test="chart-key-select"]').setValue(['score', 'other'])
+    await wrapper.get('[data-test="chart-skip-invalid-checkbox"]').setValue(true)
+
+    const option = getChartOption(wrapper)
+
+    expect(option.xAxis.data).toEqual([1, 2])
+    expect(option.series[0].data).toEqual([10, 40])
+    expect(option.series[1].data).toEqual([100, 400])
+  })
+
+  it('keeps normal distribution filtering independent per factor when the invalid-row toggle is enabled', async () => {
+    const wrapper = mount(DataChart, {
+      props: {
+        data: [
+          { score: 1, cost: 10 },
+          { score: 2, cost: 'bad' },
+          { score: 'oops', cost: 30 },
+          { score: 4, cost: 40 },
+        ],
+      },
+    })
+
+    await wrapper.get('[data-test="chart-type-select"]').setValue('normal')
+    await wrapper.get('[data-test="chart-key-select"]').setValue(['score', 'cost'])
+    await wrapper.get('[data-test="chart-skip-invalid-checkbox"]').setValue(true)
+
+    const option = getChartOption(wrapper)
+    const [scoreHistogram, , costHistogram] = option.series
+    const scoreCount = scoreHistogram.data.reduce((sum: number, [, y]: [number, number]) => sum + y, 0)
+    const costCount = costHistogram.data.reduce((sum: number, [, y]: [number, number]) => sum + y, 0)
+
+    expect(scoreCount).toBe(3)
+    expect(costCount).toBe(3)
+  })
+
+  it('keeps boxplot filtering independent per factor when the invalid-row toggle is enabled', async () => {
+    const wrapper = mount(DataChart, {
+      props: {
+        data: [
+          { score: 1, cost: 10 },
+          { score: 2, cost: 'bad' },
+          { score: 'oops', cost: 30 },
+          { score: 4, cost: 40 },
+        ],
+      },
+    })
+
+    await wrapper.get('[data-test="chart-type-select"]').setValue('boxplot')
+    await wrapper.get('[data-test="chart-key-select"]').setValue(['score', 'cost'])
+    await wrapper.get('[data-test="chart-skip-invalid-checkbox"]').setValue(true)
+
+    const option = getChartOption(wrapper)
+
+    expect(option.series[0].data[0].value).toEqual([1, 1, 2, 4, 4])
+    expect(option.series[0].data[1].value).toEqual([10, 10, 30, 40, 40])
+  })
+
+  it('restores the invalid-row toggle from local storage', async () => {
+    localStorage.clear()
+
+    const wrapper = mount(DataChart, {
+      props: {
+        storageScopeKey: 'node-invalid-toggle',
+        data: [
+          { score: 10 },
+          { score: 'bad' },
+          { score: 20 },
+        ],
+      },
+    })
+
+    await wrapper.get('[data-test="chart-skip-invalid-checkbox"]').setValue(true)
+    expect(localStorage.getItem('workflow-result-preview:node-invalid-toggle:chart-skip-invalid-rows')).toBe('true')
+
+    await wrapper.unmount()
+
+    const remounted = mount(DataChart, {
+      props: {
+        storageScopeKey: 'node-invalid-toggle',
+        data: [
+          { score: 10 },
+          { score: 'bad' },
+          { score: 20 },
+        ],
+      },
+    })
+
+    expect((remounted.get('[data-test="chart-skip-invalid-checkbox"]').element as HTMLInputElement).checked).toBe(true)
+    expect(getChartOption(remounted).series[0].data).toEqual([10, 20])
   })
 
   it('appends filtered select-all results instead of overriding previous selected factors', async () => {

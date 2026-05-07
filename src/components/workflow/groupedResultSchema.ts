@@ -1,4 +1,5 @@
 import { inferSchemaFromRows, type FieldSchema } from '@/nodes/result'
+import { getCommonRenderableNumericFieldsFromGroups } from './dataChartSeriesFiltering'
 
 type GroupedRows = Array<{
   name: string
@@ -41,6 +42,4 @@ export const inferCommonSchemaFromGroups = (groups: GroupedRows): FieldSchema[] 
 }
 
 export const getCommonNumericFieldsFromGroups = (groups: GroupedRows) =>
-  inferCommonSchemaFromGroups(groups)
-    .filter((field) => field.type === 'number')
-    .map((field) => field.name)
+  getCommonRenderableNumericFieldsFromGroups(groups)

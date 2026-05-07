@@ -19,6 +19,7 @@ import {
   Check,
   Bookmark,
   BoxSelect,
+  HelpCircle,
   Layers,
   LineChart as LineChartIcon,
   ListChecks,
@@ -40,8 +41,11 @@ import {
   type ChartRow,
   type NormalizationMethod,
 } from './dataChartNormalization'
+import {
+  filterRowsByRenderableKeys,
+  getRenderableNumericFieldsFromRows,
+} from './dataChartSeriesFiltering'
 import { getCommonNumericFieldsFromGroups } from './groupedResultSchema'
-import { inferSchemaFromRows } from '@/nodes/result'
 import { getResultGroups, getResultRows, getResultSchemaFields } from './resultView'
 
 use([
@@ -93,6 +97,11 @@ const normalizationMethod = useScopedResultPreviewStorage<NormalizationMethod>(
   props.storageScopeKey,
   'chart-normalization-method',
   'min-max',
+)
+const skipInvalidRows = useScopedResultPreviewStorage(
+  props.storageScopeKey,
+  'chart-skip-invalid-rows',
+  false,
 )
 const isPresetPanelOpen = ref(false)
 const presetNameInput = ref('')
@@ -238,11 +247,7 @@ const availableKeys = computed(() => {
   }
 
   const schemaFields = getResultSchemaFields(props.data)
-  const fields = schemaFields.length > 0 ? schemaFields : (inferSchemaFromRows(tableRows.value).fields ?? [])
-
-  return fields
-    .filter((field) => field.type === 'number')
-    .map((field) => field.name)
+  return getRenderableNumericFieldsFromRows(tableRows.value, schemaFields)
 })
 
 watch(
@@ -283,9 +288,21 @@ const normalizedKeys = computed(() =>
   selectedKeys.value.length > 0 ? selectedKeys.value : availableKeys.value.slice(0, 1),
 )
 
+const lineRenderableRows = computed(() => {
+  if (isGroupedData.value || chartType.value !== 'line' || !skipInvalidRows.value) {
+    return filteredData.value as ChartRow[]
+  }
+
+  return filterRowsByRenderableKeys(filteredData.value as ChartRow[], normalizedKeys.value)
+})
+
 const normalizationSourceRows = computed(() => {
   if (isGroupedData.value) {
     return (filteredData.value as ChartGroup[]).flatMap((group) => group.data ?? [])
+  }
+
+  if (chartType.value === 'line' && skipInvalidRows.value) {
+    return lineRenderableRows.value
   }
 
   return filteredData.value as ChartRow[]
@@ -871,7 +888,8 @@ const chartOption = computed(() => {
 
     return markRaw(createNormalDistributionOption(normalRows, keys, xAxisName))
   } else {
-    const rows = (sourceData as ChartRow[]).slice(0, maxPoints.value)
+    const lineRows = lineRenderableRows.value
+    const rows = lineRows.slice(0, maxPoints.value)
     const renderLimit = Math.min(maxPoints.value, LINE_CHART_RENDER_LIMIT)
     const sampledRows = downsampleLineRows(rows, keys, renderLimit)
     const sampledIndex = Array.from({ length: sampledRows.length }, (_, index) => index + 1)
@@ -972,6 +990,14 @@ watch(
   normalizationMethod,
   (value) => {
     if (value !== 'min-max' && value !== 'z-score') normalizationMethod.value = 'min-max'
+  },
+  { immediate: true },
+)
+
+watch(
+  skipInvalidRows,
+  (value) => {
+    if (typeof value !== 'boolean') skipInvalidRows.value = false
   },
   { immediate: true },
 )
@@ -1269,6 +1295,28 @@ watch(
               {{ modeOption.label }}
             </button>
           </div>
+        </div>
+
+        <div class="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-100 rounded-lg shadow-sm">
+          <label
+            data-test="chart-skip-invalid-label"
+            class="chart-checkbox-label"
+            :class="{ 'chart-checkbox-label--active': skipInvalidRows }"
+          >
+            <input
+              data-test="chart-skip-invalid-checkbox"
+              v-model="skipInvalidRows"
+              type="checkbox"
+              class="chart-checkbox-input"
+            />
+            <span class="text-[11px] font-bold text-slate-600 whitespace-nowrap">异常值过滤</span>
+          </label>
+          <HelpCircle
+            data-test="chart-skip-invalid-help"
+            v-tooltip.top="'开启后，折线图会按当前选中因子整行跳过异常样本；箱线图和正态分布仍按列单独忽略异常值。'"
+            :size="13"
+            class="chart-help-icon"
+          />
         </div>
 
         <div
@@ -1571,5 +1619,36 @@ watch(
   background: #2563eb;
   color: #ffffff;
   box-shadow: 0 6px 12px -10px rgba(37, 99, 235, 0.8);
+}
+
+.chart-checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.chart-checkbox-label--active span {
+  color: #0f172a;
+}
+
+.chart-checkbox-input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: #2563eb;
+  cursor: pointer;
+}
+
+.chart-help-icon {
+  color: #94a3b8;
+  cursor: help;
+  flex-shrink: 0;
+  transition: color 0.2s ease;
+}
+
+.chart-help-icon:hover {
+  color: #2563eb;
 }
 </style>
