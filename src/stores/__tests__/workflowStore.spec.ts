@@ -1424,7 +1424,7 @@ describe('Workflow Store', () => {
     })
   })
 
-  it('should truncate oversized table outputs in history snapshots while preserving result metadata', async () => {
+  it('should preserve full table outputs in history snapshots', async () => {
     const largeTriggerDefinition = {
       name: 'test-large-history-trigger',
       displayName: 'Large Trigger',
@@ -1480,9 +1480,16 @@ describe('Workflow Store', () => {
       )!.data.output as any
 
       expect(triggerSnapshot.kind).toBe('table')
-      expect(triggerSnapshot.payload).toHaveLength(10)
-      expect(triggerSnapshot.meta?.historyTruncated).toBe(true)
-      expect(triggerSnapshot.meta?.originalRowCount).toBe(120)
+      expect(triggerSnapshot.payload).toHaveLength(120)
+      expect(triggerSnapshot.meta?.historyTruncated).toBeUndefined()
+      expect(triggerSnapshot.meta?.originalRowCount).toBeUndefined()
+
+      const record = store.executionHistory[0]!
+      store.enterHistoryMode(record.id)
+
+      const historicalTriggerOutput = store.nodes.find((node) => node.id === triggerNode.id)?.data.output as any
+      expect(historicalTriggerOutput.kind).toBe('table')
+      expect(historicalTriggerOutput.payload).toHaveLength(120)
     } finally {
       const triggerIndex = nodeDefinitions.findIndex(
         (definition) => definition.name === 'test-large-history-trigger',
@@ -1496,7 +1503,7 @@ describe('Workflow Store', () => {
     }
   })
 
-  it('should truncate oversized report details in history snapshots', async () => {
+  it('should preserve full report details in history snapshots', async () => {
     const reportTriggerDefinition = {
       name: 'test-large-report-history-trigger',
       displayName: 'Large Report Trigger',
@@ -1577,11 +1584,21 @@ describe('Workflow Store', () => {
       )!.data.output as any
 
       expect(reportSnapshot.kind).toBe('report')
-      expect(reportSnapshot.meta?.historyTruncated).toBe(true)
-      expect(reportSnapshot.meta?.sourceData).toHaveLength(10)
-      expect(reportSnapshot.payload.sections[0].items).toHaveLength(20)
-      expect(reportSnapshot.payload.sections[0].allItems).toHaveLength(20)
-      expect(reportSnapshot.payload.sections[0].option.series[0].data).toHaveLength(200)
+      expect(reportSnapshot.meta?.historyTruncated).toBeUndefined()
+      expect(reportSnapshot.meta?.sourceData).toHaveLength(180)
+      expect(reportSnapshot.payload.sections[0].items).toHaveLength(120)
+      expect(reportSnapshot.payload.sections[0].allItems).toHaveLength(140)
+      expect(reportSnapshot.payload.sections[0].option.series[0].data).toHaveLength(480)
+
+      const record = store.executionHistory[0]!
+      store.enterHistoryMode(record.id)
+
+      const historicalReportOutput = store.nodes.find((node) => node.id === terminalNode.id)?.data.output as any
+      expect(historicalReportOutput.kind).toBe('report')
+      expect(historicalReportOutput.meta?.sourceData).toHaveLength(180)
+      expect(historicalReportOutput.payload.sections[0].items).toHaveLength(120)
+      expect(historicalReportOutput.payload.sections[0].allItems).toHaveLength(140)
+      expect(historicalReportOutput.payload.sections[0].option.series[0].data).toHaveLength(480)
     } finally {
       const triggerIndex = nodeDefinitions.findIndex(
         (definition) => definition.name === 'test-large-report-history-trigger',

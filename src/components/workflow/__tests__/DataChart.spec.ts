@@ -422,7 +422,7 @@ describe('DataChart', () => {
     const host = wrapper.get('[data-test="chart-host"]')
 
     expect(viewport.classes()).toContain('chart-scroll-viewport')
-    expect(host.attributes('style')).toContain('min-height: 840px')
+    expect(host.attributes('style')).toContain('min-height: 900px')
   })
 
   it('keeps fitted normal lines from stealing frequency bar tooltips', async () => {

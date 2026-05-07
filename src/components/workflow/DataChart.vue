@@ -592,6 +592,9 @@ const createNormalDistributionOption = (rows: ChartRow[], keys: string[], xAxisN
           xAxisIndex: index,
           yAxisIndex: index,
           data: histogram,
+          tooltip: {
+            show: true,
+          },
           barWidth: '100%',
           barGap: '0%',
           barCategoryGap: '0%',
@@ -615,6 +618,10 @@ const createNormalDistributionOption = (rows: ChartRow[], keys: string[], xAxisN
           xAxisIndex: index,
           yAxisIndex: index,
           data: curve,
+          silent: true,
+          tooltip: {
+            show: false,
+          },
           showSymbol: false,
           smooth: true,
           emphasis: {

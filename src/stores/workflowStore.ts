@@ -80,12 +80,6 @@ export type FileImportTaskState = {
 }
 
 const MAX_LOG_ENTRIES = 500
-const HISTORY_TABLE_ROW_LIMIT = 10
-const HISTORY_TABLE_COLLECTION_ROW_LIMIT = 5
-const HISTORY_REPORT_META_SOURCE_DATA_LIMIT = 10
-const HISTORY_REPORT_SECTION_ITEM_LIMIT = 20
-const HISTORY_CHART_SERIES_DATA_LIMIT = 200
-
 export const useWorkflowStore = defineStore('workflow', () => {
   const nodes = ref([]) as Ref<WorkflowNode[]>
   const edges = ref([]) as Ref<Edge[]>
@@ -1367,183 +1361,18 @@ export const useWorkflowStore = defineStore('workflow', () => {
     return normalizeNodeResult(value)
   }
 
-  const truncateChartSeriesDataForHistory = (series: unknown) => {
-    if (!Array.isArray(series)) return { series: cloneOptionalJsonValue(series), truncated: false }
-
-    let truncated = false
-    const nextSeries = series.map((item) => {
-      if (!item || typeof item !== 'object') return cloneJsonValue(item)
-
-      const nextItem = cloneJsonValue(item) as Record<string, unknown>
-      if (Array.isArray(nextItem.data) && nextItem.data.length > HISTORY_CHART_SERIES_DATA_LIMIT) {
-        nextItem.data = nextItem.data.slice(0, HISTORY_CHART_SERIES_DATA_LIMIT)
-        truncated = true
-      }
-      return nextItem
-    })
-
-    return { series: nextSeries, truncated }
-  }
-
-  const truncateChartOptionForHistory = (option: unknown) => {
-    if (!option || typeof option !== 'object') {
-      return { option: cloneOptionalJsonValue(option), truncated: false }
-    }
-
-    const nextOption = cloneJsonValue(option) as Record<string, unknown>
-    let truncated = false
-
-    if (Array.isArray(nextOption.dataset)) {
-      nextOption.dataset = nextOption.dataset.map((dataset) => {
-        if (!dataset || typeof dataset !== 'object') return dataset
-        const nextDataset = cloneJsonValue(dataset) as Record<string, unknown>
-        if (Array.isArray(nextDataset.source) && nextDataset.source.length > HISTORY_CHART_SERIES_DATA_LIMIT) {
-          nextDataset.source = nextDataset.source.slice(0, HISTORY_CHART_SERIES_DATA_LIMIT)
-          truncated = true
-        }
-        return nextDataset
-      })
-    } else if (
-      nextOption.dataset &&
-      typeof nextOption.dataset === 'object' &&
-      Array.isArray((nextOption.dataset as Record<string, unknown>).source)
-    ) {
-      const nextDataset = cloneJsonValue(nextOption.dataset) as Record<string, unknown>
-      if (Array.isArray(nextDataset.source) && nextDataset.source.length > HISTORY_CHART_SERIES_DATA_LIMIT) {
-        nextDataset.source = nextDataset.source.slice(0, HISTORY_CHART_SERIES_DATA_LIMIT)
-        truncated = true
-      }
-      nextOption.dataset = nextDataset
-    }
-
-    const seriesResult = truncateChartSeriesDataForHistory(nextOption.series)
-    nextOption.series = seriesResult.series
-    truncated = truncated || seriesResult.truncated
-
-    return { option: nextOption, truncated }
-  }
-
-  const truncateReportPayloadForHistory = (payload: unknown) => {
-    if (!payload || typeof payload !== 'object') {
-      return { payload: cloneOptionalJsonValue(payload), truncated: false }
-    }
-
-    const nextPayload = cloneJsonValue(payload) as Record<string, unknown>
-    let truncated = false
-
-    if (Array.isArray(nextPayload.sections)) {
-      nextPayload.sections = nextPayload.sections.map((section) => {
-        if (!section || typeof section !== 'object') return section
-        const nextSection = cloneJsonValue(section) as Record<string, unknown>
-
-        ;(['items', 'allItems', 'cards'] as const).forEach((key) => {
-          if (Array.isArray(nextSection[key]) && nextSection[key].length > HISTORY_REPORT_SECTION_ITEM_LIMIT) {
-            nextSection[key] = nextSection[key].slice(0, HISTORY_REPORT_SECTION_ITEM_LIMIT)
-            truncated = true
-          }
-        })
-
-        if ('option' in nextSection) {
-          const optionResult = truncateChartOptionForHistory(nextSection.option)
-          nextSection.option = optionResult.option
-          truncated = truncated || optionResult.truncated
-        }
-
-        if (nextSection.optionMap && typeof nextSection.optionMap === 'object') {
-          const nextOptionMap = cloneJsonValue(nextSection.optionMap) as Record<string, unknown>
-          Object.entries(nextOptionMap).forEach(([key, value]) => {
-            const optionResult = truncateChartOptionForHistory(value)
-            nextOptionMap[key] = optionResult.option
-            truncated = truncated || optionResult.truncated
-          })
-          nextSection.optionMap = nextOptionMap
-        }
-
-        return nextSection
-      })
-    }
-
-    return { payload: nextPayload, truncated }
-  }
-
-  const truncateOutputForHistory = (output: WorkflowNodeOutput): WorkflowNodeOutput => {
+  const cloneOutputForHistory = (output: WorkflowNodeOutput): WorkflowNodeOutput => {
     if (!output) return output
     if (!isNodeResult(output)) return cloneOptionalJsonValue(output)
 
-    const meta = cloneOptionalJsonValue(output.meta ?? {})
-    let truncated = false
-
-    const snapshot = {
+    return {
       kind: output.kind,
-      payload: undefined as unknown,
+      payload: cloneOptionalJsonValue(output.payload),
       schema: cloneOptionalJsonValue(output.schema),
-      meta,
+      meta: cloneOptionalJsonValue(output.meta),
       preview: cloneOptionalJsonValue(output.preview),
       lineage: cloneOptionalJsonValue(output.lineage),
     }
-
-    if (output.kind === 'table' && Array.isArray(output.payload)) {
-      const originalRowCount = output.payload.length
-      snapshot.payload =
-        originalRowCount > HISTORY_TABLE_ROW_LIMIT
-          ? cloneJsonValue(output.payload.slice(0, HISTORY_TABLE_ROW_LIMIT))
-          : cloneJsonValue(output.payload)
-      if (originalRowCount > HISTORY_TABLE_ROW_LIMIT) {
-        truncated = true
-        snapshot.meta.historyTruncated = true
-        snapshot.meta.originalRowCount = snapshot.meta.rowCount ?? originalRowCount
-      }
-      return snapshot
-    }
-
-    if (output.kind === 'tableCollection' && Array.isArray(output.payload)) {
-      snapshot.payload = output.payload.map((group: any) => {
-        const data = Array.isArray(group?.data) ? group.data : []
-        if (data.length > HISTORY_TABLE_COLLECTION_ROW_LIMIT) truncated = true
-        return {
-          ...cloneJsonValue({
-            ...group,
-            data: undefined,
-          }),
-          data:
-            data.length > HISTORY_TABLE_COLLECTION_ROW_LIMIT
-              ? cloneJsonValue(data.slice(0, HISTORY_TABLE_COLLECTION_ROW_LIMIT))
-              : cloneJsonValue(data),
-        }
-      })
-      if (truncated) {
-        snapshot.meta.historyTruncated = true
-      }
-      return snapshot
-    }
-
-    if (output.kind === 'report') {
-      const reportResult = truncateReportPayloadForHistory(output.payload)
-      snapshot.payload = reportResult.payload
-      truncated = reportResult.truncated
-
-      if (Array.isArray(snapshot.meta.sourceData) && snapshot.meta.sourceData.length > HISTORY_REPORT_META_SOURCE_DATA_LIMIT) {
-        snapshot.meta.sourceData = snapshot.meta.sourceData.slice(0, HISTORY_REPORT_META_SOURCE_DATA_LIMIT)
-        truncated = true
-      }
-
-      if (truncated) {
-        snapshot.meta.historyTruncated = true
-      }
-      return snapshot
-    }
-
-    if (output.kind === 'chart') {
-      const chartResult = truncateChartOptionForHistory(output.payload)
-      snapshot.payload = chartResult.option
-      if (chartResult.truncated) {
-        snapshot.meta.historyTruncated = true
-      }
-      return snapshot
-    }
-
-    snapshot.payload = cloneOptionalJsonValue(output.payload)
-    return snapshot
   }
 
   const createExecutionSnapshotNodes = (sourceNodes: WorkflowNode[]): WorkflowNodeSnapshot[] =>
@@ -1561,7 +1390,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
         config: cloneJsonValue(node.data.config ?? {}),
         reuseLastRuntimeInputs: node.data.reuseLastRuntimeInputs,
         status: node.data.status,
-        output: truncateOutputForHistory(node.data.output ?? null),
+        output: cloneOutputForHistory(node.data.output ?? null),
         manualInput: node.data.manualInput,
         useManualInput: node.data.useManualInput,
         isPinned: node.data.isPinned,
