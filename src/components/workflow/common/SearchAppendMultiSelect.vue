@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import MultiSelect from 'primevue/multiselect'
 import { CircleX } from 'lucide-vue-next'
+import { useRegexFilter } from '../config/propertyField/useRegexFilter'
 
 type SelectOption = string | { value?: string; name?: string; label?: string }
+type MultiSelectFilterEvent = { value?: string } | undefined
 
 const props = withDefaults(defineProps<{
   modelValue: string[]
@@ -14,19 +16,19 @@ const props = withDefaults(defineProps<{
   selectClass?: string
   selectTestId?: string
   clearButtonTestId?: string
+  allowRegexSearch?: boolean
 }>(), {
   placeholder: '',
   maxSelectedLabels: 3,
   selectClass: '',
   selectTestId: 'search-append-multi-select',
   clearButtonTestId: 'search-append-multi-select-clear',
+  allowRegexSearch: true,
 })
 
 const emit = defineEmits<{
   'update:modelValue': [value: string[]]
 }>()
-
-const filterQuery = ref('')
 
 const resolveOptionValue = (option: SelectOption) => {
   if (typeof option === 'string') return option
@@ -38,8 +40,23 @@ const resolveOptionLabel = (option: SelectOption) => {
   return option.name ?? option.label ?? option.value ?? ''
 }
 
+const {
+  query,
+  enabled,
+  errorMessage,
+  filterMatchMode,
+  filterInputProps,
+  passThrough,
+  setQuery,
+  toggleRegexMode,
+  getToggleClass,
+} = useRegexFilter({
+  inputTestId: 'search-append-multi-select-filter-input',
+  defaultEnabled: false,
+})
+
 const filteredOptionValues = computed(() => {
-  const keyword = filterQuery.value.trim().toLowerCase()
+  const keyword = query.value.trim()
   if (!keyword) {
     return props.options
       .map(resolveOptionValue)
@@ -47,13 +64,24 @@ const filteredOptionValues = computed(() => {
   }
 
   return props.options
-    .filter((option) => resolveOptionLabel(option).toLowerCase().includes(keyword))
+    .filter((option) => {
+      const label = resolveOptionLabel(option)
+      if (enabled.value) {
+        try {
+          return new RegExp(keyword, 'i').test(label)
+        } catch {
+          return false
+        }
+      }
+
+      return label.toLowerCase().includes(keyword.toLowerCase())
+    })
     .map(resolveOptionValue)
     .filter((value): value is string => Boolean(value))
 })
 
 const mergeSelectionOnFilteredSelectAll = (nextValues: string[]) => {
-  if (!filterQuery.value.trim()) return nextValues
+  if (!query.value.trim()) return nextValues
   if (nextValues.length === 0) return nextValues
 
   const filteredValues = filteredOptionValues.value
@@ -81,8 +109,8 @@ const clearAllSelection = () => {
   emit('update:modelValue', [])
 }
 
-const handleFilter = (event: { value?: string } | undefined) => {
-  filterQuery.value = (event?.value ?? '').trim()
+const handleFilter = (event: MultiSelectFilterEvent) => {
+  setQuery(event?.value ?? '')
 }
 </script>
 
@@ -95,11 +123,33 @@ const handleFilter = (event: { value?: string } | undefined) => {
       :placeholder="placeholder"
       :class="selectClass"
       :filter="true"
+      :filter-match-mode="filterMatchMode"
+      :filter-input-props="filterInputProps"
+      :empty-filter-message="errorMessage || undefined"
+      :empty-message="errorMessage || undefined"
+      :pt="passThrough"
       :max-selected-labels="maxSelectedLabels"
       :data-test="selectTestId"
       @update:model-value="handleSelectionChange"
       @filter="handleFilter"
-    />
+    >
+      <template
+        v-if="allowRegexSearch"
+        #filtericon
+      >
+        <button
+          type="button"
+          :data-testid="`${selectTestId}-regex-toggle`"
+          :class="getToggleClass(enabled)"
+          title="切换正则搜索"
+          aria-label="切换正则搜索"
+          @mousedown.prevent
+          @click="toggleRegexMode"
+        >
+          .*
+        </button>
+      </template>
+    </MultiSelect>
     <button
       v-if="modelValue.length > 0"
       type="button"
