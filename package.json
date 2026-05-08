@@ -21,7 +21,6 @@
     "lint": "eslint src/ --max-warnings 0",
     "lint:fix": "eslint src/ --fix",
     "pack:release": "node scripts/pack-release.mjs",
-    "benchmark:agent": "npx tsx scripts/agent-benchmark/run.ts",
     "eval:workflow-mcp": "npx tsx scripts/workflow-mcp-evaluation/run.ts",
     "eval:agentic-analysis": "npx tsx scripts/agentic-analysis-evaluation/run.ts",
     "smoke:deepseek-agentic": "npx tsx scripts/deepseek-agentic-smoke/run.ts"

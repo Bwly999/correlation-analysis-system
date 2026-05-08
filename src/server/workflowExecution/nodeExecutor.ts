@@ -1,8 +1,14 @@
-import type { WorkflowAiPlan, WorkflowAiPlanRequest, WorkflowAiStreamEvent } from '../../ai/types.js'
+import type {
+  AgentExecutionResult,
+  WorkflowAiPlan,
+  WorkflowAiPlanRequest,
+  WorkflowAiStreamEvent,
+} from '../../ai/types.js'
 import { normalizeNodeResult } from '../../nodes/result.js'
 import { materializeDraftGraphToWorkflowSnapshot } from '../../ai/draft/graph.js'
 import { INSPECTABLE_NODE_DEFINITIONS } from '../workflowAi/inspectionRuntimeShared.js'
-import type { AgentExecutionResult, AgentLoopStreamEmitter } from './types.js'
+
+type WorkflowExecutionEmitter = (event: WorkflowAiStreamEvent) => void
 
 type SnapshotNode = {
   id: string
@@ -398,7 +404,7 @@ const computeTopologicalOrder = (nodes: SnapshotNode[], edges: SnapshotEdge[]): 
 export const executeNodesForAgent = async (
   plan: WorkflowAiPlan,
   request: WorkflowAiPlanRequest,
-  emitEvent: AgentLoopStreamEmitter,
+  emitEvent: WorkflowExecutionEmitter,
 ): Promise<AgentExecutionResult[]> => {
   // 从 plan 中提取节点和边信息
   const createOps = plan.operations.filter((op) => op.type === 'createNode')
@@ -473,7 +479,7 @@ const executeSingleNode = async (
   const nodeLabel = node.label ?? nodeType
   const config = cloneValue(node.config ?? {})
 
-  // 查找执行函数：先查 inspectionRuntime 的共享定义，再查 agentLoop 自己的
+  // 查找执行函数：先查 inspectionRuntime 的共享定义，再查执行器自己的定义
   const inspectorDef = INSPECTABLE_NODE_DEFINITIONS.get(nodeType)
   const agentDef = AGENT_EXECUTABLE_NODES.get(nodeType)
 

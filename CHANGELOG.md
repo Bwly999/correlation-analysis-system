@@ -4,6 +4,11 @@
 
 ### 变更 (Changed)
 
+- **清理旧 Agent 编排入口，收敛到 Kernel 主链**:
+  - 删除历史 `agenticAnalysis` 状态机模块、`runAnalysisAgentSessionLoop` gateway 兼容出口和旧自研 `agentLoop` phase / conclusion / toolRegistry 编排层。
+  - 移除旧 `benchmark:agent` 脚本，后续评测以 `eval:agentic-analysis` 和 `smoke:deepseek-agentic` 为主。
+  - 将共享节点执行器迁到 `workflowExecution`，供 workflow MCP 执行计划复用，并移除前端 store 暴露的 `agentLoopRunning` / `agentLoopOutput` 兼容字段。
+
 - **接入 Agent Kernel，升级 agentic-run 为自主执行入口**:
   - `/api/agent/sessions/:id/agentic-run` 现在先经过 Agent Kernel 路由、skill 选择和 verifier 校验，再通过 opencode adapter 启动真实 workflow MCP 工具循环。
   - 新增 `agentKernel` 模块，封装 `general-chat`、`agentic-data-analysis`、`workflow-repair`、`reporting` 四类 skill，并将缺数据、缺证据、执行完成等闭环条件收敛到 Kernel verifier。

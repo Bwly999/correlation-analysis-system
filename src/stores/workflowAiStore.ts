@@ -151,8 +151,6 @@ export const useWorkflowAiStore = defineStore('workflow-ai', () => {
   const selectedProfile = computed(
     () => profiles.value.find((profile) => profile.id === selectedProfileId.value) ?? null,
   )
-  const agentLoopRunning = computed(() => streamStatus.value === 'streaming')
-  const agentLoopOutput = ref(null)
   const canStartAgentLoop = computed(() => false)
   const hasBlockingMissingInfo = computed(() => false)
   const latestLoopIteration = computed(() => 0)
@@ -870,8 +868,6 @@ export const useWorkflowAiStore = defineStore('workflow-ai', () => {
     autoApplyResult,
     settingsVisible,
     activeExecutionTab,
-    agentLoopRunning,
-    agentLoopOutput,
     lastAppliedSnapshotId,
     lastTestResult,
     activeSession,

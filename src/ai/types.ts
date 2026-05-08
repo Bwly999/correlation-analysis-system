@@ -615,33 +615,6 @@ export interface AgentExecutionRecord {
   error?: string
 }
 
-export interface AgentInterpretationResult {
-  text: string
-  shouldContinue: boolean
-  continueReason?: string
-}
-
-export interface AgentConclusion {
-  summary: string
-  findings: string[]
-  recommendations: string[]
-  caveats: string[]
-}
-
-export interface AgentLoopIteration {
-  iteration: number
-  plan: WorkflowAiPlan
-  executionResults: AgentExecutionResult[]
-  interpretation: AgentInterpretationResult | null
-}
-
-export interface AgentLoopOutput {
-  iterations: AgentLoopIteration[]
-  conclusion: AgentConclusion | null
-  totalDurationMs: number
-  totalIterations: number
-}
-
 export type WorkflowAiStreamEvent =
   | {
       type: 'started'
@@ -708,14 +681,6 @@ export type WorkflowAiStreamEvent =
       diagnostics?: WorkflowAiGenerationDiagnostics
     }
   | {
-      type: 'loop_started'
-      maxIterations: number
-    }
-  | {
-      type: 'loop_iteration_started'
-      iteration: number
-    }
-  | {
       type: 'node_execution_started'
       nodeId: string
       nodeLabel: string
@@ -731,45 +696,6 @@ export type WorkflowAiStreamEvent =
       nodeId: string
       nodeLabel: string
       summary: string
-    }
-  | {
-      type: 'interpretation_delta'
-      iteration: number
-      delta: string
-    }
-  | {
-      type: 'interpretation_completed'
-      iteration: number
-      shouldContinue: boolean
-    }
-  | {
-      type: 'loop_iteration_completed'
-      iteration: number
-      plan: WorkflowAiPlan
-      executionResults: AgentExecutionResult[]
-      interpretation: AgentInterpretationResult | null
-    }
-  | {
-      type: 'conclusion_started'
-    }
-  | {
-      type: 'conclusion_delta'
-      delta: string
-    }
-  | {
-      type: 'conclusion_completed'
-      conclusion: {
-        summary: string
-        findings: string[]
-        recommendations: string[]
-        caveats: string[]
-      }
-    }
-  | {
-      type: 'loop_completed'
-      totalIterations: number
-      totalDurationMs: number
-      output?: AgentLoopOutput
     }
 
 export interface WorkflowAiPlanRequest {

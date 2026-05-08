@@ -12,7 +12,7 @@ import type {
   WorkflowAiPlanRequest,
   AgentExecutionRecord,
 } from '../../ai/types.js'
-import { executeNodesForAgent } from '../agentLoop/nodeExecutor.js'
+import { executeNodesForAgent } from '../workflowExecution/nodeExecutor.js'
 import { buildDataProfile } from './analysisIntelligence/dataProfile.js'
 import { recommendAnalysisMethods } from './analysisIntelligence/methodAdvisor.js'
 import { extractResultEvidence } from './analysisIntelligence/resultEvidence.js'

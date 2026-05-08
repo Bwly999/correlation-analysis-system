@@ -10,8 +10,6 @@ const {
   runWorkflowAiSessionMock,
   getWorkflowAiSessionMock,
   getWorkflowAiSessionRecordMock,
-  runAnalysisAgentSessionLoopMock,
-  runAgentLoopMock,
   createAgentSessionMock,
   getAgentProjectionMock,
   getAgentSessionSnapshotMock,
@@ -31,8 +29,6 @@ const {
   runWorkflowAiSessionMock: vi.fn(),
   getWorkflowAiSessionMock: vi.fn(),
   getWorkflowAiSessionRecordMock: vi.fn(),
-  runAnalysisAgentSessionLoopMock: vi.fn(),
-  runAgentLoopMock: vi.fn(),
   createAgentSessionMock: vi.fn(),
   getAgentProjectionMock: vi.fn(),
   getAgentSessionSnapshotMock: vi.fn(),
@@ -67,7 +63,6 @@ vi.mock('../opencode/gateway.js', () => ({
   getAgentProjection: getAgentProjectionMock,
   getAgentSession: getAgentSessionSnapshotMock,
   runAgenticAnalysisSession: runAgenticAnalysisSessionMock,
-  runAnalysisAgentSessionLoop: runAnalysisAgentSessionLoopMock,
   sendAgentSessionMessage: sendAgentSessionMessageMock,
   subscribeToAgentSessionEvents: subscribeToAgentSessionEventsMock,
   syncAgentCanvas: syncAgentCanvasMock,
@@ -78,10 +73,6 @@ vi.mock('../opencode/workflowMcpServer.js', () => ({
   getWorkflowMcpHealthSnapshot: getWorkflowMcpHealthSnapshotMock,
   isWorkflowMcpHealthRequest: isWorkflowMcpHealthRequestMock,
   isWorkflowMcpRequest: isWorkflowMcpRequestMock,
-}))
-
-vi.mock('../agentLoop/engine.js', () => ({
-  runAgentLoop: runAgentLoopMock,
 }))
 
 import { createServerHandler } from '../app.js'
@@ -141,8 +132,6 @@ afterEach(() => {
   runWorkflowAiSessionMock.mockReset()
   getWorkflowAiSessionMock.mockReset()
   getWorkflowAiSessionRecordMock.mockReset()
-  runAnalysisAgentSessionLoopMock.mockReset()
-  runAgentLoopMock.mockReset()
   createAgentSessionMock.mockReset()
   getAgentProjectionMock.mockReset()
   getAgentSessionSnapshotMock.mockReset()

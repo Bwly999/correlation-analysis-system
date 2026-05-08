@@ -25,6 +25,8 @@ describe('workflowAiStore legacy loop removal', () => {
     const store = useWorkflowAiStore()
 
     expect('agentLoopPreset' in store).toBe(false)
+    expect('agentLoopRunning' in store).toBe(false)
+    expect('agentLoopOutput' in store).toBe(false)
     expect('startAgentLoop' in store).toBe(false)
     expect('runAnalysisAgentLoop' in agentWorkspace).toBe(false)
   })
