@@ -323,4 +323,56 @@ describe('BaseNode', () => {
     expect(wrapper.find('[data-testid="preview-node-button"]').attributes('disabled')).toBeUndefined()
     expect(wrapper.html()).toContain('amber-100')
   })
+
+  it('does not open node config on single click, but opens it on double click', async () => {
+    const store = useWorkflowStore()
+    const configSpy = vi.spyOn(store, 'setActiveConfigNodeId')
+
+    const wrapper = mount(BaseNode, {
+      props: {
+        id: 'click-node',
+        type: 'custom',
+        selected: false,
+        dragging: false,
+        connectable: true,
+        resizing: false,
+        position: { x: 0, y: 0 },
+        dimensions: { width: 110, height: 110 },
+        isValidTargetPos: () => true,
+        isValidSourcePos: () => true,
+        zIndex: 1,
+        targetPosition: Position.Left,
+        sourcePosition: Position.Right,
+        data: {
+          label: '点击节点',
+          type: 'data-cleaning',
+          category: 'action',
+          status: 'idle',
+          config: {},
+          logs: [],
+          useManualInput: false,
+          manualInput: '',
+          isPinned: false,
+        },
+        events: {} as any,
+      } as any,
+      global: {
+        plugins: [PrimeVue],
+        directives: { tooltip: () => undefined },
+        stubs: {
+          Handle: { template: '<div />' },
+          NodeToolbar: { template: '<div><slot /></div>' },
+          NodeIcon: { template: '<div>ICON</div>' },
+        },
+      },
+    })
+
+    const body = wrapper.get('.n8n-node-body')
+
+    await body.trigger('click')
+    expect(configSpy).not.toHaveBeenCalled()
+
+    await body.trigger('dblclick')
+    expect(configSpy).toHaveBeenCalledWith('click-node')
+  })
 })

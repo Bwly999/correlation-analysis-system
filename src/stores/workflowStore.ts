@@ -1,5 +1,5 @@
 ﻿import { defineStore } from 'pinia'
-import { ref, markRaw, toRaw, watch } from 'vue'
+import { ref, shallowRef, markRaw, toRaw, watch } from 'vue'
 import type { Ref } from 'vue'
 import { type Node, type Edge, type NodeChange, type EdgeChange } from '@vue-flow/core'
 import { getNodeDefinition } from '@/nodes/registry'
@@ -23,6 +23,8 @@ import {
   type WorkflowVersionMetadata,
   type WorkflowNodeOutput,
   type WorkflowNodeSnapshot,
+  type WorkflowSelectionSnapshot,
+  type WorkflowSelectionTextPayload,
   type StorageUser,
 } from '@/utils/storage'
 import { stripRuntimeInputValuesFromConfig } from '@/utils/workflowConfig'
@@ -127,6 +129,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
   const hasStructureUnsavedChanges = ref(false)
   const hasLayoutUnsavedChanges = ref(false)
   const hasUnsavedChanges = ref(false)
+  const selectionClipboard = shallowRef<WorkflowSelectionSnapshot | null>(null)
 
   // 历史模式相关状态
   const isHistoryMode = ref(false)
@@ -350,6 +353,198 @@ export const useWorkflowStore = defineStore('workflow', () => {
         },
       })
     })
+
+  const getSelectedNodes = (sourceNodes: WorkflowNode[] = getCurrentNodes()) =>
+    sourceNodes.filter((node) => node.selected)
+
+  const serializeNodeSelection = (nodeIds: string[]): WorkflowSelectionSnapshot => {
+    const selectedNodeIds = new Set(nodeIds)
+    const sourceNodes = getCurrentNodes().filter((node) => selectedNodeIds.has(node.id))
+    const sourceEdges = getCurrentEdges().filter(
+      (edge) => selectedNodeIds.has(edge.source) && selectedNodeIds.has(edge.target),
+    )
+
+    return {
+      nodes: serializeWorkflowNodes(sourceNodes).map((node) => ({
+        ...node,
+        data: {
+          ...node.data,
+          logs: [],
+          error: undefined,
+        },
+      })),
+      edges: serializeWorkflowEdges(sourceEdges),
+    }
+  }
+
+  const buildSelectionTextPayload = (
+    snapshot: WorkflowSelectionSnapshot,
+  ): WorkflowSelectionTextPayload => ({
+    kind: 'workflow-selection',
+    version: 1,
+    nodes: snapshot.nodes,
+    edges: snapshot.edges,
+  })
+
+  const deserializeSelectionText = (text: string): WorkflowSelectionTextPayload | null => {
+    if (!text.trim()) return null
+
+    try {
+      const parsed = JSON.parse(text) as Partial<WorkflowSelectionTextPayload>
+      if (
+        parsed.kind !== 'workflow-selection'
+        || parsed.version !== 1
+        || !Array.isArray(parsed.nodes)
+        || !Array.isArray(parsed.edges)
+      ) {
+        return null
+      }
+
+      return {
+        kind: 'workflow-selection',
+        version: 1,
+        nodes: parsed.nodes as WorkflowNodeSnapshot[],
+        edges: parsed.edges as Edge[],
+      }
+    } catch {
+      return null
+    }
+  }
+
+  const duplicateSelectionToClipboard = () => {
+    const selectedNodes = getSelectedNodes()
+    if (!selectedNodes.length) return null
+
+    const snapshot = serializeNodeSelection(selectedNodes.map((node) => node.id))
+    selectionClipboard.value = snapshot
+    addLog(`已复制 ${snapshot.nodes.length} 个节点到当前工作流剪贴板`, 'info')
+    refreshUnsavedChanges()
+    return snapshot
+  }
+
+  const getSelectionDuplicateAnchor = (
+    snapshot: WorkflowSelectionSnapshot,
+    offset = 40,
+  ) => ({
+    x: Math.min(...snapshot.nodes.map((node) => node.position.x)) + offset,
+    y: Math.min(...snapshot.nodes.map((node) => node.position.y)) + offset,
+  })
+
+  const copySelectionAsText = async () => {
+    const selectedNodes = getSelectedNodes()
+    if (!selectedNodes.length) return null
+
+    const snapshot = serializeNodeSelection(selectedNodes.map((node) => node.id))
+    const payload = buildSelectionTextPayload(snapshot)
+    const text = JSON.stringify(payload, null, 2)
+
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+    }
+
+    addLog(`已复制 ${snapshot.nodes.length} 个节点为文本`, 'info')
+    refreshUnsavedChanges()
+    return text
+  }
+
+  const pasteSelectionSnapshot = (
+    snapshot: WorkflowSelectionSnapshot,
+    anchor: { x: number; y: number },
+    options?: { labelSuffix?: string; logMessage?: string },
+  ) => {
+    if (!snapshot.nodes.length) return []
+
+    const currentNodes = getCurrentNodes()
+    const currentEdges = getCurrentEdges()
+    const minX = Math.min(...snapshot.nodes.map((node) => node.position.x))
+    const minY = Math.min(...snapshot.nodes.map((node) => node.position.y))
+    const offsetX = anchor.x - minX
+    const offsetY = anchor.y - minY
+    const nodeIdMap = new Map<string, string>()
+
+    currentNodes.forEach((node) => {
+      node.selected = false
+    })
+
+    const pastedNodes = snapshot.nodes.map((node) => {
+      const nextId = generateNodeId()
+      nodeIdMap.set(node.id, nextId)
+
+      const nextNode = normalizeNodeConfigWithDefaults({
+        id: nextId,
+        type: node.type ?? 'custom',
+        label: `${node.label ?? node.data.label}${options?.labelSuffix ?? ''}`,
+        position: {
+          x: node.position.x + offsetX,
+          y: node.position.y + offsetY,
+        },
+        selected: true,
+        dragging: false,
+        data: {
+          ...cloneJsonValue(node.data),
+          label: `${node.data.label}${options?.labelSuffix ?? ''}`,
+          status: 'idle',
+          output: null,
+          logs: [],
+          error: undefined,
+        },
+      })
+
+      return nextNode
+    })
+
+    const pastedEdges = snapshot.edges.flatMap((edge) => {
+      const sourceId = nodeIdMap.get(edge.source)
+      const targetId = nodeIdMap.get(edge.target)
+      if (!sourceId || !targetId) return []
+
+      return [{
+        ...cloneJsonValue(edge),
+        id: generateEdgeId(),
+        source: sourceId,
+        target: targetId,
+      }]
+    })
+
+    nodes.value = [...currentNodes, ...pastedNodes]
+    edges.value = [...currentEdges, ...pastedEdges]
+    refreshUnsavedChanges()
+    addLog(options?.logMessage ?? `已粘贴 ${pastedNodes.length} 个节点`, 'info')
+    return pastedNodes
+  }
+
+  const duplicateSelectedNodes = () => {
+    const selectedNodes = getSelectedNodes()
+    if (!selectedNodes.length) return []
+
+    const snapshot = serializeNodeSelection(selectedNodes.map((node) => node.id))
+    selectionClipboard.value = snapshot
+
+    return pasteSelectionSnapshot(snapshot, getSelectionDuplicateAnchor(snapshot), {
+      labelSuffix: ' (副本)',
+      logMessage: `已复制 ${snapshot.nodes.length} 个节点`,
+    })
+  }
+
+  const pasteClipboardSelection = async (anchor: { x: number; y: number }) => {
+    let snapshot: WorkflowSelectionSnapshot | null = null
+
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.readText) {
+      const clipboardText = await navigator.clipboard.readText()
+      const parsedPayload = deserializeSelectionText(clipboardText)
+      if (parsedPayload) {
+        snapshot = {
+          nodes: parsedPayload.nodes,
+          edges: parsedPayload.edges,
+        }
+      }
+    }
+
+    const resolvedSnapshot: WorkflowSelectionSnapshot | null = snapshot ?? selectionClipboard.value ?? null
+    if (!resolvedSnapshot) return []
+
+    return pasteSelectionSnapshot(resolvedSnapshot, anchor)
+  }
 
   const getWorkflowStructureSignature = () =>
     JSON.stringify({
@@ -1319,6 +1514,22 @@ export const useWorkflowStore = defineStore('workflow', () => {
     return removedNode
   }
 
+  const removeSelectedNodes = () => {
+    const currentNodes = getCurrentNodes()
+    const currentEdges = getCurrentEdges()
+    const selectedNodes = currentNodes.filter((node) => node.selected)
+    if (!selectedNodes.length) return []
+
+    const selectedIds = new Set(selectedNodes.map((node) => node.id))
+    nodes.value = currentNodes.filter((node) => !selectedIds.has(node.id))
+    edges.value = currentEdges.filter(
+      (edge) => !selectedIds.has(edge.source) && !selectedIds.has(edge.target),
+    )
+    addLog(`已批量删除 ${selectedNodes.length} 个节点`, 'warn')
+    refreshUnsavedChanges()
+    return selectedNodes
+  }
+
   const removeEdge = (edgeId: string) => {
     const currentEdges = getCurrentEdges()
     const nextEdges: Edge[] = currentEdges.filter((edge) => edge.id !== edgeId)
@@ -1910,12 +2121,19 @@ export const useWorkflowStore = defineStore('workflow', () => {
     duplicateWorkflow,
     rollbackWorkflowVersion,
     getDuplicatedWorkflowName,
+    serializeNodeSelection,
+    deserializeSelectionText,
     duplicateNode,
+    duplicateSelectionToClipboard,
+    duplicateSelectedNodes,
+    copySelectionAsText,
+    pasteClipboardSelection,
     updateNodeConfigById,
     renameNodeById,
     setNodePositionById,
     connectNodesById,
     removeNode,
+    removeSelectedNodes,
     removeEdge,
     exportWorkflow,
     importWorkflow,

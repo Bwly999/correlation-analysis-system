@@ -1769,6 +1769,154 @@ describe('Workflow Store', () => {
     expect(duplicated.data.output).toBeNull()
   })
 
+  it('should serialize selected nodes with only internal edges and stripped runtime state', () => {
+    const store = useWorkflowStore()
+    const trigger = store.addAndConnectNode('neighbor-system', '看板数据', { x: 80, y: 120 })!
+    const action = store.addAndConnectNode('data-cleaning', '数据清洗', { x: 320, y: 120 })!
+    const terminal = store.addAndConnectNode('pearson', 'Pearson', { x: 560, y: 120 })!
+
+    store.connectNodesById(trigger.id, action.id)
+    store.connectNodesById(action.id, terminal.id)
+
+    trigger.selected = true
+    action.selected = true
+    trigger.data.status = 'success'
+    trigger.data.output = createJsonResult({ rows: 3 })
+    trigger.data.logs = ['运行日志']
+    trigger.data.config.productName = '产品A'
+    trigger.data.config.fetchMode = 'time'
+    trigger.data.config.timeRange = [new Date('2026-04-01T00:00:00.000Z'), new Date('2026-04-02T00:00:00.000Z')]
+    trigger.data.config.materialType = '成品'
+    trigger.data.config.selectedProcesses = ['工序A']
+
+    const selection = store.serializeNodeSelection([trigger.id, action.id])
+
+    expect(selection.nodes).toHaveLength(2)
+    expect(selection.edges).toHaveLength(1)
+    expect(selection.edges[0]).toMatchObject({
+      source: trigger.id,
+      target: action.id,
+      type: 'n8n',
+    })
+    expect(selection.nodes[0]?.data.status).toBe('idle')
+    expect(selection.nodes[0]?.data.output).toBeNull()
+    expect(selection.nodes[0]?.data.logs).toEqual([])
+    expect(selection.nodes[0]?.data.config.productName).toBe('产品A')
+    expect(selection.nodes[0]?.data.config.timeRange).toBeNull()
+    expect(selection.nodes[0]?.data.config.materialType).toBe('')
+    expect(selection.nodes[0]?.data.config.selectedProcesses).toEqual([])
+  })
+
+  it('should duplicate selected nodes immediately with offset, suffix and preserved internal edges', () => {
+    const store = useWorkflowStore()
+    const trigger = store.addAndConnectNode('manual-json-import', '数据输入', { x: 80, y: 120 })!
+    const action = store.addAndConnectNode('data-cleaning', '数据清洗', { x: 320, y: 120 })!
+    store.connectNodesById(trigger.id, action.id)
+    trigger.selected = true
+    action.selected = true
+
+    const duplicated = store.duplicateSelectedNodes()
+
+    expect(duplicated).toHaveLength(2)
+    expect(store.nodes).toHaveLength(4)
+    expect(duplicated[0]?.position).toEqual({ x: 120, y: 160 })
+    expect(duplicated[0]?.data.label).toBe('数据输入 (副本)')
+    expect(duplicated[1]?.data.label).toBe('数据清洗 (副本)')
+
+    const duplicatedIds = new Set(duplicated.map((node) => node.id))
+    const duplicatedEdges = store.edges.filter(
+      (edge) => duplicatedIds.has(edge.source) && duplicatedIds.has(edge.target),
+    )
+    expect(duplicatedEdges).toHaveLength(1)
+    expect(duplicatedEdges[0]?.type).toBe('n8n')
+  })
+
+  it('should copy selection as text and allow deserializing it back into a workflow selection payload', async () => {
+    const store = useWorkflowStore()
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      clipboard: {
+        readText: vi.fn().mockResolvedValue(''),
+        writeText,
+      },
+    })
+
+    const trigger = store.addAndConnectNode('manual-json-import', '数据输入', { x: 100, y: 120 })!
+    const action = store.addAndConnectNode('data-cleaning', '数据清洗', { x: 320, y: 120 })!
+    store.connectNodesById(trigger.id, action.id)
+    trigger.selected = true
+    action.selected = true
+
+    const text = await store.copySelectionAsText()
+    expect(text).not.toBeNull()
+    if (!text) {
+      throw new Error('expected selection text to be created')
+    }
+    const parsed = store.deserializeSelectionText(text)
+
+    expect(writeText).toHaveBeenCalledWith(text)
+    expect(parsed).not.toBeNull()
+    expect(parsed?.kind).toBe('workflow-selection')
+    expect(parsed?.version).toBe(1)
+    expect(parsed?.nodes).toHaveLength(2)
+    expect(parsed?.edges).toHaveLength(1)
+  })
+
+  it('should paste a copied selection with recreated ids and preserved internal edges', async () => {
+    const store = useWorkflowStore()
+    const readText = vi.fn().mockResolvedValue('not-workflow-selection')
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      clipboard: {
+        readText,
+        writeText: vi.fn().mockResolvedValue(undefined),
+      },
+    })
+
+    const trigger = store.addAndConnectNode('manual-json-import', '数据输入', { x: 80, y: 120 })!
+    const action = store.addAndConnectNode('data-cleaning', '数据清洗', { x: 320, y: 120 })!
+    store.connectNodesById(trigger.id, action.id)
+    trigger.selected = true
+    action.selected = true
+
+    const copied = store.duplicateSelectionToClipboard()
+    const pasted = await store.pasteClipboardSelection({ x: 900, y: 420 })
+
+    expect(copied?.nodes).toHaveLength(2)
+    expect(pasted).toHaveLength(2)
+    expect(store.nodes).toHaveLength(4)
+
+    const pastedIds = new Set(pasted.map((node) => node.id))
+    expect(pastedIds.has(trigger.id)).toBe(false)
+    expect(pastedIds.has(action.id)).toBe(false)
+
+    const internalPastedEdges = store.edges.filter(
+      (edge) => pastedIds.has(edge.source) && pastedIds.has(edge.target),
+    )
+    expect(internalPastedEdges).toHaveLength(1)
+    expect(internalPastedEdges[0]?.type).toBe('n8n')
+  })
+
+  it('should batch remove selected nodes and their related edges', () => {
+    const store = useWorkflowStore()
+    const trigger = store.addAndConnectNode('manual-json-import', '数据输入', { x: 0, y: 0 })!
+    const action = store.addAndConnectNode('data-cleaning', '数据清洗', { x: 320, y: 0 })!
+    const terminal = store.addAndConnectNode('pearson', 'Pearson', { x: 640, y: 0 })!
+
+    store.connectNodesById(trigger.id, action.id)
+    store.connectNodesById(action.id, terminal.id)
+    trigger.selected = true
+    action.selected = true
+
+    const removed = store.removeSelectedNodes()
+
+    expect(removed.map((node) => node.id)).toEqual([trigger.id, action.id])
+    expect(store.nodes).toHaveLength(1)
+    expect(store.nodes[0]?.id).toBe(terminal.id)
+    expect(store.edges).toHaveLength(0)
+  })
+
   it('should duplicate a workflow with a custom name', async () => {
     const store = useWorkflowStore()
 

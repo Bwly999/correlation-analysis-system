@@ -48,7 +48,7 @@ describe('N8nEdge', () => {
     })
 
     const paths = wrapper.findAll('path')
-    expect(paths[0]?.classes()).toContain('stroke-indigo-500')
+    expect(paths[0]?.classes()).toContain('stroke-blue-600')
     expect(paths[0]?.classes()).toContain('is-running')
   })
 })

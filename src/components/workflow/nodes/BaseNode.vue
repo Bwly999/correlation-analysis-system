@@ -113,7 +113,7 @@ const startPendingConnection = () => {
 const statusColors = computed(() => {
   switch (props.data.status) {
     case 'running':
-      return 'border-indigo-500 ring-2 ring-indigo-500/20 shadow-sm'
+      return 'border-blue-600 ring-2 ring-blue-600/20 shadow-sm'
     case 'success':
       return 'border-emerald-500 ring-1 ring-emerald-500/20 shadow-sm'
     case 'error':
@@ -148,6 +148,9 @@ const isCurrentNodeDebugRunning = computed(
 )
 
 const hasPreviewResult = computed(() => props.data.output != null)
+const selectionRing = computed(() =>
+  props.selected ? 'ring-2 ring-blue-200/90 shadow-lg shadow-blue-100/70' : '',
+)
 </script>
 
 <template>
@@ -155,9 +158,8 @@ const hasPreviewResult = computed(() => props.data.output != null)
     <!-- 节点主体 (Clean Modern SaaS Style) -->
     <div
       class="n8n-node-body relative flex items-center justify-center bg-white border transition-all duration-300 cursor-pointer z-10 w-[110px] h-[110px]"
-      :class="[statusColors, nodeShape]"
+      :class="[statusColors, nodeShape, selectionRing]"
       @dblclick="openConfig"
-      @click="openConfig"
     >
       <NodeIcon
         :type="props.data.type"
@@ -189,7 +191,7 @@ const hasPreviewResult = computed(() => props.data.output != null)
           v-if="props.data.status === 'running'"
           v-tooltip.bottom="'正在执行...'"
           :size="18"
-          class="text-indigo-600 animate-spin"
+          class="text-blue-600 animate-spin"
         />
         <CheckCircle
           v-else-if="props.data.status === 'success'"
@@ -213,7 +215,7 @@ const hasPreviewResult = computed(() => props.data.output != null)
     >
       <div
         v-if="!isEditingName"
-        class="text-[13px] font-bold text-slate-800 leading-tight truncate w-full cursor-text hover:text-indigo-600 transition-colors"
+        class="text-[13px] font-bold text-slate-800 leading-tight truncate w-full cursor-text hover:text-blue-600 transition-colors"
         title="双击重命名"
         @dblclick.stop="startEditing"
       >
@@ -223,7 +225,7 @@ const hasPreviewResult = computed(() => props.data.output != null)
         v-else
         ref="nameInputRef"
         v-model="editedLabel"
-        class="text-[13px] font-bold text-slate-800 text-center bg-white border border-indigo-400 rounded px-2 py-0.5 outline-none shadow-sm w-full focus:ring-2 focus:ring-indigo-100"
+        class="text-[13px] font-bold text-slate-800 text-center bg-white border border-blue-400 rounded px-2 py-0.5 outline-none shadow-sm w-full focus:ring-2 focus:ring-blue-100"
         @blur="saveName"
         @keyup.enter="saveName"
       />
@@ -259,9 +261,9 @@ const hasPreviewResult = computed(() => props.data.output != null)
     >
       <div class="w-6 h-[1.5px] bg-slate-200"></div>
       <button
-        class="w-6 h-6 bg-white border border-slate-200 rounded-full flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:border-indigo-400 hover:bg-indigo-50 shadow-sm transition-all -ml-0.5 pointer-events-auto active:scale-90 cursor-pointer"
+        class="w-6 h-6 bg-white border border-slate-200 rounded-full flex items-center justify-center text-slate-400 hover:text-blue-600 hover:border-blue-400 hover:bg-blue-50 shadow-sm transition-all -ml-0.5 pointer-events-auto active:scale-90 cursor-pointer"
         :class="{
-          'ring-2 ring-indigo-100 border-indigo-500 text-indigo-600 opacity-100 bg-indigo-50':
+          'ring-2 ring-blue-100 border-blue-600 text-blue-600 opacity-100 bg-blue-50':
             isPendingConnectionSource,
         }"
         @click.stop="startPendingConnection"
@@ -282,7 +284,7 @@ const hasPreviewResult = computed(() => props.data.output != null)
         v-tooltip.top="isCurrentNodeDebugRunning ? '正在调试' : '调试运行'"
         data-testid="debug-node-button"
         :disabled="isCurrentNodeDebugRunning"
-        class="p-1.5 hover:bg-slate-50 rounded-lg text-indigo-600 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+        class="p-1.5 hover:bg-slate-50 rounded-lg text-blue-600 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
         @click.stop="runNode(true)"
       >
         <Loader2
@@ -378,25 +380,25 @@ const hasPreviewResult = computed(() => props.data.output != null)
 
 /* 鼠标悬浮反馈：增加边框色和外发光，但不改变大小或位移 */
 .n8n-handle:hover {
-  border-color: #6366f1 !important;
-  background-color: #f5f7ff !important;
-  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15); /* 使用外部阴影模拟“变大”感，不触发布局位移 */
+  border-color: #2563eb !important;
+  background-color: #eff6ff !important;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.15); /* 使用外部阴影模拟“变大”感，不触发布局位移 */
   cursor: crosshair;
 }
 
 /* 处于连接就绪状态时的样式 */
 .n8n-handle.vue-flow__handle-connecting {
-  border-color: #6366f1 !important;
-  background-color: #6366f1 !important;
+  border-color: #2563eb !important;
+  background-color: #2563eb !important;
   animation: n8n-pulse-handle 1.5s infinite;
 }
 
 @keyframes n8n-pulse-handle {
   0% {
-    box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4);
+    box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.4);
   }
   70% {
-    box-shadow: 0 0 0 6px rgba(99, 102, 241, 0);
+    box-shadow: 0 0 0 6px rgba(37, 99, 235, 0);
   }
   100% {
     box-shadow: 0 0 0 0 rgba(99, 102, 241, 0);

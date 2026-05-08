@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { EdgeLabelRenderer, getSmoothStepPath, type EdgeProps } from '@vue-flow/core'
+import { EdgeLabelRenderer, getBezierPath, type EdgeProps } from '@vue-flow/core'
 import { Plus, Trash2 } from 'lucide-vue-next'
 import { useWorkflowStore } from '@/stores/workflowStore'
 
@@ -8,7 +8,7 @@ const props = defineProps<EdgeProps>()
 const store = useWorkflowStore()
 
 const isHovered = ref(false)
-const path = computed(() => getSmoothStepPath(props))
+const path = computed(() => getBezierPath(props))
 const sourceNodeStatus = computed(() => props.sourceNode?.data?.status)
 
 const onAddNode = () => {
@@ -35,7 +35,7 @@ const onDeleteEdge = () => {
     class="n8n-edge-path transition-all duration-300"
     :class="{
       'stroke-slate-400': sourceNodeStatus === 'idle' || !sourceNodeStatus,
-      'stroke-indigo-500 is-running': sourceNodeStatus === 'running',
+      'stroke-blue-600 is-running': sourceNodeStatus === 'running',
       'stroke-emerald-500': sourceNodeStatus === 'success',
       'stroke-rose-500': sourceNodeStatus === 'error',
       'is-hovered': isHovered,
@@ -71,7 +71,7 @@ const onDeleteEdge = () => {
         :class="isHovered ? 'opacity-100 scale-100' : 'opacity-0 scale-90 pointer-events-none'"
       >
         <button
-          class="w-6 h-6 flex items-center justify-center rounded-full hover:bg-slate-50 text-slate-400 hover:text-indigo-600 transition-colors"
+          class="w-6 h-6 flex items-center justify-center rounded-full hover:bg-slate-50 text-slate-400 hover:text-blue-600 transition-colors"
           title="在中间插入节点"
           @click.stop="onAddNode"
         >
@@ -92,7 +92,7 @@ const onDeleteEdge = () => {
         v-if="!isHovered"
         class="absolute w-1.5 h-1.5 bg-white border-[1.5px] border-slate-300 rounded-full transition-all duration-200"
         :class="{
-          '!border-indigo-500 bg-indigo-50': sourceNodeStatus === 'running',
+          '!border-blue-600 bg-blue-50': sourceNodeStatus === 'running',
           '!border-emerald-500 bg-emerald-50': sourceNodeStatus === 'success',
           '!border-rose-500 bg-rose-50': sourceNodeStatus === 'error',
         }"
@@ -108,8 +108,8 @@ const onDeleteEdge = () => {
 }
 
 .n8n-edge-path.is-hovered {
-  stroke: #6366f1 !important; /* 悬浮时统一变为靛蓝色 */
-  filter: drop-shadow(0 0 3px rgba(99, 102, 241, 0.3));
+  stroke: #2563eb !important;
+  filter: drop-shadow(0 0 3px rgba(37, 99, 235, 0.28));
 }
 
 @keyframes n8n-flow {

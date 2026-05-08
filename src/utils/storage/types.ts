@@ -53,6 +53,16 @@ export interface WorkflowNodeSnapshot {
   data: WorkflowNodeData
 }
 
+export interface WorkflowSelectionSnapshot {
+  nodes: WorkflowNodeSnapshot[]
+  edges: Edge[]
+}
+
+export interface WorkflowSelectionTextPayload extends WorkflowSelectionSnapshot {
+  kind: 'workflow-selection'
+  version: 1
+}
+
 /**
  * 工作流元数据，用于列表展示
  */

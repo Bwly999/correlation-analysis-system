@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue'
 import { VueFlow, useVueFlow, type Connection } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
@@ -22,12 +22,20 @@ import { getWorkflowLayoutMetrics } from './layout'
 import { buildResultDashboardSummary, type WorkflowResultDashboardSummary } from './resultDashboard'
 import N8nEdge from './edges/N8nEdge.vue'
 import {
+  ClipboardCopy,
+  ClipboardPaste,
   ChevronUp,
   ChevronDown,
+  Copy,
+  Keyboard,
   Terminal,
   Focus,
   ChevronLeft,
   ChevronRight,
+  MousePointerClick,
+  ScanSearch,
+  Settings2,
+  Trash2,
 } from 'lucide-vue-next'
 import ConfirmDialog from 'primevue/confirmdialog'
 import Toast from 'primevue/toast'
@@ -51,6 +59,8 @@ const viewportWidth = ref(typeof window === 'undefined' ? 1920 : window.innerWid
 const isUnsavedDialogVisible = ref(false)
 const pendingWorkflowAction = ref<(() => Promise<void> | void) | null>(null)
 const isResettingView = ref(false)
+const isShortcutHintsCollapsed = ref(false)
+const canvasViewportRef = useTemplateRef<HTMLDivElement>('canvasViewport')
 
 const layoutMetrics = computed(() => getWorkflowLayoutMetrics(viewportWidth.value))
 const logHeight = computed(() =>
@@ -112,8 +122,10 @@ const runButtonSubtitle = computed(() => {
   if (runBarState.value === 'running') return '系统正在按顺序执行整条工作流'
   return '从触发节点启动整条工作流链路'
 })
-const isMacLikePlatform =
-  typeof navigator !== 'undefined' && /(Mac|iPhone|iPod|iPad)/i.test(navigator.platform)
+const isMacLikePlatform = computed(
+  () => typeof navigator !== 'undefined' && /(Mac|iPhone|iPod|iPad)/i.test(navigator.platform),
+)
+const canvasShortcutModifierLabel = computed(() => (isMacLikePlatform.value ? '⌘' : 'Ctrl'))
 const isCanvasShortcutBlocked = computed(
   () =>
     isConfigVisible.value ||
@@ -123,15 +135,64 @@ const isCanvasShortcutBlocked = computed(
     isUnsavedDialogVisible.value ||
     isHelpCenterVisible.value,
 )
-const deleteKeyCode = computed(() => (isCanvasShortcutBlocked.value ? null : 'Backspace'))
-const selectionKeyCode = computed(() => (isCanvasShortcutBlocked.value ? false : 'Shift'))
+const deleteKeyCode = computed(() => null)
+const selectionKeyCode = computed(() =>
+  isCanvasShortcutBlocked.value ? false : isMacLikePlatform.value ? 'Meta' : 'Control',
+)
 const multiSelectionKeyCode = computed(() =>
-  isCanvasShortcutBlocked.value ? null : isMacLikePlatform ? 'Meta' : 'Control',
+  isCanvasShortcutBlocked.value ? null : isMacLikePlatform.value ? 'Meta' : 'Control',
 )
 const zoomActivationKeyCode = computed(() =>
-  isCanvasShortcutBlocked.value ? null : isMacLikePlatform ? 'Meta' : 'Control',
+  isCanvasShortcutBlocked.value ? null : isMacLikePlatform.value ? 'Meta' : 'Control',
 )
 const panActivationKeyCode = computed(() => (isCanvasShortcutBlocked.value ? null : 'Space'))
+const shortcutCardRight = computed(() =>
+  `${(isSidebarVisible.value ? layoutMetrics.value.sidebarWidth : 0) + layoutMetrics.value.contentPadding}px`,
+)
+const canvasShortcutHints = computed(() => [
+  {
+    key: 'multi-select',
+    icon: MousePointerClick,
+    title: `${canvasShortcutModifierLabel.value}+单击`,
+    description: '多选节点',
+  },
+  {
+    key: 'box-select',
+    icon: ScanSearch,
+    title: `${canvasShortcutModifierLabel.value}+拖拽`,
+    description: '快速框选',
+  },
+  {
+    key: 'copy',
+    icon: Copy,
+    title: `${canvasShortcutModifierLabel.value}+C`,
+    description: '复制节点',
+  },
+  {
+    key: 'copy-text',
+    icon: ClipboardCopy,
+    title: `${canvasShortcutModifierLabel.value}+D`,
+    description: '复制文本',
+  },
+  {
+    key: 'paste',
+    icon: ClipboardPaste,
+    title: `${canvasShortcutModifierLabel.value}+V`,
+    description: '粘贴节点',
+  },
+  {
+    key: 'delete',
+    icon: Trash2,
+    title: `${canvasShortcutModifierLabel.value}+Del`,
+    description: '删除节点',
+  },
+  {
+    key: 'config',
+    icon: Settings2,
+    title: '双击节点',
+    description: '打开设置',
+  },
+])
 
 const onWindowResize = () => {
   viewportWidth.value = window.innerWidth
@@ -234,19 +295,70 @@ const handleBeforeUnload = (event: BeforeUnloadEvent) => {
   event.returnValue = ''
 }
 
-const handleWindowKeydown = (event: KeyboardEvent) => {
-  if (store.isHistoryMode || isCanvasShortcutBlocked.value) return
+const isEditableKeyboardTarget = (target: EventTarget | null) => {
+  if (!(target instanceof HTMLElement)) return false
 
-  const isSaveShortcut =
-    (event.ctrlKey || event.metaKey) &&
-    !event.altKey &&
-    !event.shiftKey &&
-    event.key.toLowerCase() === 's'
+  return (
+    target.isContentEditable
+    || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
+    || Boolean(target.closest('[contenteditable="true"]'))
+  )
+}
 
-  if (!isSaveShortcut) return
+const getCanvasPasteAnchor = () => {
+  const viewportElement = canvasViewportRef.value
+  if (!viewportElement) {
+    return project({ x: 320, y: 180 })
+  }
 
-  event.preventDefault()
-  void saveWorkflowWithToast()
+  const rect = viewportElement.getBoundingClientRect()
+  return project({
+    x: rect.width / 2,
+    y: rect.height / 2,
+  })
+}
+
+const handleWindowKeydown = async (event: KeyboardEvent) => {
+  if (store.isHistoryMode || isCanvasShortcutBlocked.value || isEditableKeyboardTarget(event.target)) {
+    return
+  }
+
+  const hasPrimaryModifier = event.ctrlKey || event.metaKey
+  if (!hasPrimaryModifier || event.altKey || event.shiftKey) return
+
+  const normalizedKey = event.key.toLowerCase()
+  const normalizedCode = event.code.toLowerCase()
+  const matchesKey = (expectedKey: string, expectedCode?: string) =>
+    normalizedKey === expectedKey || normalizedCode === (expectedCode ?? expectedKey).toLowerCase()
+
+  if (matchesKey('s', 'KeyS')) {
+    event.preventDefault()
+    await saveWorkflowWithToast()
+    return
+  }
+
+  if (matchesKey('c', 'KeyC')) {
+    event.preventDefault()
+    store.duplicateSelectedNodes()
+    return
+  }
+
+  if (matchesKey('d', 'KeyD')) {
+    event.preventDefault()
+    await store.copySelectionAsText()
+    return
+  }
+
+  if (matchesKey('v', 'KeyV')) {
+    event.preventDefault()
+    await store.pasteClipboardSelection(getCanvasPasteAnchor())
+    return
+  }
+
+  if (matchesKey('delete', 'Delete') || normalizedKey === 'del') {
+    event.preventDefault()
+    store.removeSelectedNodes()
+  }
 }
 
 onMounted(async () => {
@@ -482,7 +594,7 @@ onBeforeUnmount(() => {
               <span>{{ executionWorkspaceBanner.detail }}</span>
             </div>
 
-            <div class="execution-canvas-shell">
+            <div ref="canvasViewport" class="execution-canvas-shell">
               <VueFlow
                 v-model:nodes="store.nodes"
                 v-model:edges="store.edges"
@@ -536,6 +648,56 @@ onBeforeUnmount(() => {
                 >
                   <template #control-button-reset></template>
                 </Controls>
+
+                <div
+                  v-if="!store.isHistoryMode"
+                  data-testid="canvas-shortcuts-card"
+                  class="absolute top-5 z-[110] transition-all duration-300 ease-out"
+                  :style="{ right: shortcutCardRight }"
+                >
+                  <button
+                    v-if="isShortcutHintsCollapsed"
+                    data-testid="canvas-shortcuts-toggle"
+                    v-tooltip.left="'展开画布快捷键'"
+                    class="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200/90 bg-white/92 text-slate-500 shadow-[0_18px_38px_-28px_rgba(15,23,42,0.45)] backdrop-blur transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600"
+                    @click="isShortcutHintsCollapsed = false"
+                  >
+                    <Keyboard :size="18" />
+                  </button>
+
+                  <div
+                    v-else
+                    class="grid gap-2 rounded-2xl border border-slate-200/90 bg-white/88 px-4 py-3 shadow-[0_18px_38px_-28px_rgba(15,23,42,0.45)] backdrop-blur"
+                  >
+                    <div class="flex items-center justify-between gap-3">
+                      <div class="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
+                        <Keyboard :size="14" class="text-blue-600" />
+                        画布快捷键
+                      </div>
+                      <button
+                        data-testid="canvas-shortcuts-collapse"
+                        v-tooltip.left="'折叠快捷键说明'"
+                        class="flex h-7 w-7 items-center justify-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                        @click="isShortcutHintsCollapsed = true"
+                      >
+                        <ChevronRight :size="14" />
+                      </button>
+                    </div>
+                    <div class="grid gap-1.5">
+                      <div
+                        v-for="hint in canvasShortcutHints"
+                        :key="hint.key"
+                        class="flex items-center gap-2.5 text-[12px] text-slate-600"
+                      >
+                        <div class="flex h-7 w-7 items-center justify-center rounded-xl bg-slate-100 text-slate-500">
+                          <component :is="hint.icon" :size="14" />
+                        </div>
+                        <span class="font-semibold text-slate-800">{{ hint.title }}</span>
+                        <span class="text-slate-500">{{ hint.description }}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
 
                 <div
                   v-if="!store.isHistoryMode"

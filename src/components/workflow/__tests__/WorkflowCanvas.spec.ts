@@ -143,6 +143,14 @@ describe('WorkflowCanvas', () => {
     setActivePinia(createPinia())
     vi.clearAllMocks()
     document.queryCommandSupported = vi.fn(() => true) as any
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      clipboard: {
+        readText: vi.fn().mockResolvedValue(''),
+        writeText: vi.fn().mockResolvedValue(undefined),
+      },
+      platform: 'Win32',
+    })
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       callback(0)
       return 1
@@ -182,6 +190,39 @@ describe('WorkflowCanvas', () => {
     expect(vueFlow.props('nodesDraggable')).toBe(false)
     expect(vueFlow.props('nodesConnectable')).toBe(false)
     expect(vueFlow.props('elementsSelectable')).toBe(true)
+  })
+
+  it('uses Ctrl as the selection modifier on non-mac platforms and disables bare delete', () => {
+    const wrapper = mount(WorkflowCanvas, {
+      global: {
+        stubs: {
+          Background: { template: '<div />' },
+          Controls: { template: '<div />' },
+          NodeSidebar: { template: '<div />' },
+          WorkflowHeader: { template: '<div />' },
+          BaseNode: { template: '<div />' },
+          LogPanel: { template: '<div />' },
+          NodeConfigModal: { template: '<div />' },
+          RuntimeInputModal: runtimeInputModalStub,
+          WorkflowResultDashboardModal: { template: '<div />' },
+          WorkflowManagerModal: workflowManagerModalStub,
+          UnsavedWorkflowDialog: { template: '<div />' },
+          HelpCenterModal: { template: '<div />' },
+          ConfirmDialog: { template: '<div />' },
+          Toast: { template: '<div />' },
+          Button: { template: '<button><slot /></button>' },
+          N8nEdge: { template: '<div />' },
+        },
+        directives: {
+          tooltip: () => undefined,
+        },
+      },
+    })
+
+    const vueFlow = wrapper.findComponent({ name: 'VueFlow' })
+    expect(vueFlow.props('selectionKeyCode')).toBe('Control')
+    expect(vueFlow.props('multiSelectionKeyCode')).toBe('Control')
+    expect(vueFlow.props('deleteKeyCode')).toBe(null)
   })
 
   it('disables canvas keyboard shortcuts while the node config modal is open', async () => {
@@ -286,6 +327,94 @@ describe('WorkflowCanvas', () => {
     expect(saveSpy).toHaveBeenCalledTimes(1)
   })
 
+  it('routes Ctrl+Delete to batch node removal on the canvas', async () => {
+    const store = useWorkflowStore()
+    const removeSpy = vi.spyOn(store, 'removeSelectedNodes').mockImplementation(() => [])
+
+    mount(WorkflowCanvas, {
+      global: {
+        stubs: {
+          Background: { template: '<div />' },
+          Controls: { template: '<div />' },
+          NodeSidebar: { template: '<div />' },
+          WorkflowHeader: { template: '<div />' },
+          BaseNode: { template: '<div />' },
+          LogPanel: { template: '<div />' },
+          NodeConfigModal: { template: '<div />' },
+          RuntimeInputModal: runtimeInputModalStub,
+          WorkflowResultDashboardModal: { template: '<div />' },
+          WorkflowManagerModal: workflowManagerModalStub,
+          UnsavedWorkflowDialog: { template: '<div />' },
+          HelpCenterModal: { template: '<div />' },
+          ConfirmDialog: { template: '<div />' },
+          Toast: { template: '<div />' },
+          Button: { template: '<button><slot /></button>' },
+          N8nEdge: { template: '<div />' },
+        },
+        directives: {
+          tooltip: () => undefined,
+        },
+      },
+    })
+
+    const event = new KeyboardEvent('keydown', {
+      key: 'Del',
+      code: 'Delete',
+      ctrlKey: true,
+      cancelable: true,
+    })
+
+    window.dispatchEvent(event)
+    await flushAsyncWork()
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(removeSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('routes Ctrl+C to immediate selected-node duplication on the canvas', async () => {
+    const store = useWorkflowStore()
+    const duplicateSpy = vi.spyOn(store, 'duplicateSelectedNodes').mockImplementation(() => [])
+
+    mount(WorkflowCanvas, {
+      global: {
+        stubs: {
+          Background: { template: '<div />' },
+          Controls: { template: '<div />' },
+          NodeSidebar: { template: '<div />' },
+          WorkflowHeader: { template: '<div />' },
+          BaseNode: { template: '<div />' },
+          LogPanel: { template: '<div />' },
+          NodeConfigModal: { template: '<div />' },
+          RuntimeInputModal: runtimeInputModalStub,
+          WorkflowResultDashboardModal: { template: '<div />' },
+          WorkflowManagerModal: workflowManagerModalStub,
+          UnsavedWorkflowDialog: { template: '<div />' },
+          HelpCenterModal: { template: '<div />' },
+          ConfirmDialog: { template: '<div />' },
+          Toast: { template: '<div />' },
+          Button: { template: '<button><slot /></button>' },
+          N8nEdge: { template: '<div />' },
+        },
+        directives: {
+          tooltip: () => undefined,
+        },
+      },
+    })
+
+    const event = new KeyboardEvent('keydown', {
+      key: 'c',
+      code: 'KeyC',
+      ctrlKey: true,
+      cancelable: true,
+    })
+
+    window.dispatchEvent(event)
+    await flushAsyncWork()
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(duplicateSpy).toHaveBeenCalledTimes(1)
+  })
+
   it('does not save the workflow from the canvas when node config is open', async () => {
     const store = useWorkflowStore()
     const saveSpy = vi.spyOn(store, 'saveWorkflow').mockResolvedValue(undefined as any)
@@ -385,6 +514,77 @@ describe('WorkflowCanvas', () => {
     expect(text).toContain('返回编辑模式')
     expect(text).not.toContain('鍘')
     expect(text).not.toContain('杩')
+  })
+
+  it('renders compact shortcut help copy in the canvas corner', () => {
+    const wrapper = mount(WorkflowCanvas, {
+      global: {
+        stubs: {
+          Background: { template: '<div />' },
+          Controls: { template: '<div />' },
+          NodeSidebar: { template: '<div />' },
+          WorkflowHeader: { template: '<div />' },
+          BaseNode: { template: '<div />' },
+          LogPanel: { template: '<div />' },
+          NodeConfigModal: { template: '<div />' },
+          RuntimeInputModal: runtimeInputModalStub,
+          WorkflowResultDashboardModal: { template: '<div />' },
+          WorkflowManagerModal: workflowManagerModalStub,
+          UnsavedWorkflowDialog: { template: '<div />' },
+          HelpCenterModal: { template: '<div />' },
+          ConfirmDialog: { template: '<div />' },
+          Toast: { template: '<div />' },
+          Button: { template: '<button><slot /></button>' },
+          N8nEdge: { template: '<div />' },
+        },
+        directives: {
+          tooltip: () => undefined,
+        },
+      },
+    })
+
+    const text = wrapper.text()
+    expect(text).toContain('Ctrl+单击')
+    expect(text).toContain('Ctrl+拖拽')
+    expect(text).toContain('Ctrl+C')
+    expect(text).toContain('Ctrl+D')
+    expect(text).toContain('Ctrl+Del')
+    expect(text).toContain('双击节点')
+    expect(wrapper.get('[data-testid="canvas-shortcuts-card"]').attributes('style')).toContain('364px')
+  })
+
+  it('collapses the shortcut help card into a single icon button', async () => {
+    const wrapper = mount(WorkflowCanvas, {
+      global: {
+        stubs: {
+          Background: { template: '<div />' },
+          Controls: { template: '<div />' },
+          NodeSidebar: { template: '<div />' },
+          WorkflowHeader: { template: '<div />' },
+          BaseNode: { template: '<div />' },
+          LogPanel: { template: '<div />' },
+          NodeConfigModal: { template: '<div />' },
+          RuntimeInputModal: runtimeInputModalStub,
+          WorkflowResultDashboardModal: { template: '<div />' },
+          WorkflowManagerModal: workflowManagerModalStub,
+          UnsavedWorkflowDialog: { template: '<div />' },
+          HelpCenterModal: { template: '<div />' },
+          ConfirmDialog: { template: '<div />' },
+          Toast: { template: '<div />' },
+          Button: { template: '<button><slot /></button>' },
+          N8nEdge: { template: '<div />' },
+        },
+        directives: {
+          tooltip: () => undefined,
+        },
+      },
+    })
+
+    await wrapper.get('[data-testid="canvas-shortcuts-collapse"]').trigger('click')
+
+    expect(wrapper.find('[data-testid="canvas-shortcuts-collapse"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="canvas-shortcuts-toggle"]').exists()).toBe(true)
+    expect(wrapper.text()).not.toContain('Ctrl+单击')
   })
 
   it('resumes the pending node execution after runtime input confirmation', async () => {
