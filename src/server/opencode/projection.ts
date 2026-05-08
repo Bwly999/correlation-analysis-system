@@ -124,6 +124,33 @@ export const applyExecutionState = (
   updatedAt: Date.now(),
 })
 
+export const applyToolCallState = (
+  projection: AgentProjectionSnapshot,
+  toolCall: AnalysisAgentToolCall,
+): AgentProjectionSnapshot => {
+  const existingIndex = projection.execution.toolCalls.findIndex((item) => item.id === toolCall.id)
+  const toolCalls = [...projection.execution.toolCalls]
+
+  if (existingIndex >= 0) {
+    toolCalls.splice(existingIndex, 1, {
+      ...toolCalls[existingIndex],
+      ...toolCall,
+    })
+  } else {
+    toolCalls.push(toolCall)
+  }
+
+  return {
+    ...projection,
+    execution: {
+      ...projection.execution,
+      toolCalls,
+      latestToolSummary: toolCall.summary ?? toolCall.outputSummary ?? toolCall.inputSummary ?? '',
+    },
+    updatedAt: Date.now(),
+  }
+}
+
 export const applyProjectionError = (
   projection: AgentProjectionSnapshot,
   message: string,

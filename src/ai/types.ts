@@ -203,6 +203,23 @@ export interface AnalysisAgentApprovalRequest {
   blocking: boolean
 }
 
+export interface AnalysisAgentEvidence {
+  evidenceId: string
+  executionId: string
+  nodeId: string
+  nodeLabel: string
+  nodeType?: string
+  statement: string
+  metrics?: Record<string, unknown>
+}
+
+export interface AnalysisAgentReportArtifact {
+  title: string
+  summary: string
+  recommendations?: string[]
+  evidenceIds?: string[]
+}
+
 export interface AnalysisAgentToolCall {
   id: string
   toolName: string
@@ -275,6 +292,8 @@ export interface AgentProjectionAnalysisState {
   findings: string[]
   risks: string[]
   recommendations: string[]
+  evidence?: AnalysisAgentEvidence[]
+  report?: AnalysisAgentReportArtifact | null
 }
 
 export interface AgentProjectionExecutionState {
@@ -325,6 +344,10 @@ export interface AgentConversationEntry {
     | 'execution_projection'
     | 'canvas_sync'
     | 'debug'
+    | 'tool_call'
+    | 'evidence'
+    | 'report'
+    | 'approval'
   title: string
   content: string
   details?: string[]
@@ -420,6 +443,15 @@ export type AgentSessionEvent =
   | {
       type: 'projection.error.updated'
       projection: AgentProjectionErrorState
+    }
+  | {
+      type: 'agentic.stage.updated'
+      run: {
+        runId: string
+        stage: string
+        message: string
+        iteration: number
+      }
     }
   | {
       type: 'failed'

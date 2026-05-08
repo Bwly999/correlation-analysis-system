@@ -367,6 +367,147 @@ describe('workflow MCP server', () => {
     })
   })
 
+  it('profiles a session data source for agentic analysis planning', async () => {
+    const created = await createAgentSession({
+      request: buildAgentRequest(),
+      userId: 'user_1',
+    })
+
+    const request = createRequest(created.session.id)
+    const response = createResponse()
+
+    await handleWorkflowMcpRequest(request, response, createWorkflowMcpDependencies())
+
+    const profileDataSource = currentTools.get('workflow_profile_data_source')
+    expect(profileDataSource).toBeTypeOf('function')
+
+    const profileResult = await profileDataSource?.({ dataSourceId: 'ds_sales_csv' })
+
+    expect(profileResult?.structuredContent).toMatchObject({
+      found: true,
+      dataSourceId: 'ds_sales_csv',
+      profile: expect.objectContaining({
+        rowCount: 4,
+        fields: expect.arrayContaining([
+          expect.objectContaining({
+            name: 'sales',
+            type: 'numeric',
+          }),
+          expect.objectContaining({
+            name: 'price',
+            type: 'numeric',
+          }),
+        ]),
+        candidateTargetColumns: expect.arrayContaining(['sales']),
+        candidateFeatureColumns: expect.arrayContaining(['price']),
+      }),
+    })
+  })
+
+  it('recommends analysis methods from a profiled session data source', async () => {
+    const created = await createAgentSession({
+      request: buildAgentRequest(),
+      userId: 'user_1',
+    })
+
+    const request = createRequest(created.session.id)
+    const response = createResponse()
+
+    await handleWorkflowMcpRequest(request, response, createWorkflowMcpDependencies())
+
+    const recommendMethods = currentTools.get('workflow_recommend_methods')
+    expect(recommendMethods).toBeTypeOf('function')
+
+    const result = await recommendMethods?.({ dataSourceId: 'ds_sales_csv' })
+
+    expect(result?.structuredContent).toMatchObject({
+      found: true,
+      dataSourceId: 'ds_sales_csv',
+      advice: expect.objectContaining({
+        recommended: expect.arrayContaining([
+          expect.objectContaining({
+            method: 'Pearson 相关系数',
+            nodeTypes: ['pearson'],
+          }),
+          expect.objectContaining({
+            method: '多元线性回归',
+            nodeTypes: ['multiple-linear-regression'],
+          }),
+        ]),
+      }),
+    })
+  })
+
+  it('extracts result evidence from a stored workflow execution for report grounding', async () => {
+    const created = await createAgentSession({
+      request: buildAgentRequest(),
+      userId: 'user_1',
+    })
+
+    const request = createRequest(created.session.id)
+    const response = createResponse()
+
+    await handleWorkflowMcpRequest(request, response, createWorkflowMcpDependencies())
+
+    const executePlan = currentTools.get('workflow_execute_plan')
+    const extractEvidence = currentTools.get('workflow_extract_result_evidence')
+
+    expect(executePlan).toBeTypeOf('function')
+    expect(extractEvidence).toBeTypeOf('function')
+
+    const executionStart = await executePlan?.({
+      plan: {
+        summary: '从 CSV 导入并分析销量相关性',
+        assumptions: [],
+        warnings: [],
+        operations: [
+          {
+            id: 'node_import_1',
+            type: 'createNode',
+            nodeType: 'file-import',
+            nodeLabel: '本地文件导入',
+          },
+          {
+            id: 'node_pearson_1',
+            type: 'createNode',
+            nodeType: 'pearson',
+            nodeLabel: 'Pearson 相关系数',
+          },
+          {
+            id: 'edge_1',
+            type: 'connectNodes',
+            sourceRef: 'node_import_1',
+            targetRef: 'node_pearson_1',
+          },
+        ],
+      },
+      bindings: {
+        node_import_1: 'ds_sales_csv',
+      },
+    })
+
+    const executionId = executionStart?.structuredContent.executionId as string
+    const evidenceResult = await extractEvidence?.({ executionId })
+
+    expect(evidenceResult?.structuredContent).toMatchObject({
+      found: true,
+      executionId,
+      evidence: expect.arrayContaining([
+        expect.objectContaining({
+          evidenceId: `${executionId}:node_pearson_1`,
+          nodeId: 'node_pearson_1',
+          nodeLabel: 'Pearson 相关系数',
+          resultKind: 'report',
+          statement: expect.stringContaining('强相关变量'),
+          metrics: expect.objectContaining({
+            title: 'Pearson 相关系数矩阵',
+            matrix: expect.any(Object),
+          }),
+        }),
+      ]),
+    })
+  })
+
   it('paginates list-style MCP responses to keep agent context focused', async () => {
     const requestPayload = {
       ...buildAgentRequest(),

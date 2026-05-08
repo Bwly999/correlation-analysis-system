@@ -348,6 +348,188 @@ describe('workflowAiStore', () => {
     expect(store.agentMessages.some((item) => item.kind === 'execution_projection')).toBe(true)
   })
 
+  it('shows projected tool calls as visible agent messages', () => {
+    const store = useWorkflowAiStore()
+    store.activeSession = {
+      id: 'agent_1',
+      mode: 'edit',
+      prompt: '帮我分析价格和销量关系',
+      status: 'running',
+      profile: {
+        id: 'profile_1',
+        name: '默认模型',
+        model: 'glm-4.7',
+      },
+      workflowId: null,
+      createdAt: 1,
+      updatedAt: 1,
+    }
+    store.projectionSnapshot = buildProjection({
+      execution: {
+        status: 'running',
+        latestAction: '正在读取分析上下文',
+        toolCalls: [],
+        pendingApprovals: [],
+      },
+    }) as any
+
+    store.applyAgentEvent({
+      type: 'projection.execution.updated',
+      projection: {
+        status: 'running',
+        latestAction: '正在读取分析上下文',
+        toolCalls: [
+          {
+            id: 'tool_call_1',
+            toolName: 'workflow_get_session_context',
+            displayName: '读取分析上下文',
+            status: 'running',
+            summary: '正在读取分析上下文',
+          },
+        ],
+        pendingApprovals: [],
+      },
+    })
+
+    expect(store.agentMessages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'tool_tool_call_1',
+          kind: 'tool_call',
+          title: '读取分析上下文',
+          content: '正在读取分析上下文',
+          status: 'streaming',
+        }),
+      ]),
+    )
+  })
+
+  it('shows pending approvals as visible agent messages', () => {
+    const store = useWorkflowAiStore()
+    store.activeSession = {
+      id: 'agent_1',
+      mode: 'edit',
+      prompt: '帮我分析价格和销量关系',
+      status: 'running',
+      profile: {
+        id: 'profile_1',
+        name: '默认模型',
+        model: 'glm-4.7',
+      },
+      workflowId: null,
+      createdAt: 1,
+      updatedAt: 1,
+    }
+    store.projectionSnapshot = buildProjection({
+      execution: {
+        status: 'running',
+        latestAction: '等待确认修复计划',
+        toolCalls: [],
+        pendingApprovals: [],
+      },
+    }) as any
+
+    store.applyAgentEvent({
+      type: 'projection.execution.updated',
+      projection: {
+        status: 'running',
+        latestAction: '等待确认修复计划',
+        toolCalls: [],
+        pendingApprovals: [
+          {
+            key: 'repair_corr_1',
+            label: '确认修复相关性节点配置',
+            reason: '代理需要补齐目标字段后继续执行。',
+            blocking: true,
+          },
+        ],
+      },
+    })
+
+    expect(store.agentMessages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'approval_repair_corr_1',
+          kind: 'approval',
+          title: '确认修复相关性节点配置',
+          content: '代理需要补齐目标字段后继续执行。',
+          status: 'streaming',
+        }),
+      ]),
+    )
+  })
+
+  it('shows projected evidence and report artifacts as visible agent messages', () => {
+    const store = useWorkflowAiStore()
+    store.activeSession = {
+      id: 'agent_1',
+      mode: 'edit',
+      prompt: '帮我分析价格和销量关系',
+      status: 'completed',
+      profile: {
+        id: 'profile_1',
+        name: '默认模型',
+        model: 'glm-4.7',
+      },
+      workflowId: null,
+      createdAt: 1,
+      updatedAt: 1,
+    }
+    store.projectionSnapshot = buildProjection({
+      analysis: {
+        goal: '帮我分析价格和销量关系',
+        summary: '价格与销量存在较强正相关。',
+        candidateTargets: ['sales'],
+        candidateFactors: ['price', 'discount'],
+        methods: ['Pearson 相关系数'],
+        findings: ['价格与销量存在较强正相关'],
+        risks: [],
+        recommendations: ['扩大样本后复核'],
+        evidence: [
+          {
+            evidenceId: 'exec_1:node_pearson_1',
+            executionId: 'exec_1',
+            nodeId: 'node_pearson_1',
+            nodeLabel: 'Pearson 相关系数',
+            statement: '3 个数值字段，120 行数据。发现 2 对强相关变量。',
+          },
+        ],
+        report: {
+          title: '销量相关性分析报告',
+          summary: '价格与销量存在较强正相关，建议继续验证折扣影响。',
+          recommendations: ['扩大样本后复核'],
+          evidenceIds: ['exec_1:node_pearson_1'],
+        },
+      },
+    }) as any
+
+    expect(store.agentMessages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'evidence_exec_1_node_pearson_1',
+          kind: 'evidence',
+          title: '证据：Pearson 相关系数',
+          content: '3 个数值字段，120 行数据。发现 2 对强相关变量。',
+          details: expect.arrayContaining([
+            '证据 ID：exec_1:node_pearson_1',
+            '执行记录：exec_1',
+            '节点 ID：node_pearson_1',
+          ]),
+        }),
+        expect.objectContaining({
+          id: 'analysis_report',
+          kind: 'report',
+          title: '销量相关性分析报告',
+          content: '价格与销量存在较强正相关，建议继续验证折扣影响。',
+          details: expect.arrayContaining([
+            '建议：扩大样本后复核',
+            '证据：exec_1:node_pearson_1',
+          ]),
+        }),
+      ]),
+    )
+  })
+
   it('syncs the current projected plan to the workflow canvas and updates canvas status', async () => {
     syncAgentCanvasMock.mockResolvedValueOnce({
       projection: buildProjection({

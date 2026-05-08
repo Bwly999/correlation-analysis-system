@@ -44,6 +44,7 @@ vi.mock('../../agentLoop/nodeExecutor.js', () => ({
 import {
   createAgentSession,
   getAgentSession,
+  runAgenticAnalysisSession,
   runAnalysisAgentSessionLoop,
   sendAgentSessionMessage,
 } from '../gateway.js'
@@ -336,6 +337,18 @@ describe('runAnalysisAgentSessionLoop', () => {
             action: 'allow',
           }),
           expect.objectContaining({
+            permission: 'workflow_profile_data_source',
+            action: 'allow',
+          }),
+          expect.objectContaining({
+            permission: 'workflow_recommend_methods',
+            action: 'allow',
+          }),
+          expect.objectContaining({
+            permission: 'workflow_extract_result_evidence',
+            action: 'allow',
+          }),
+          expect.objectContaining({
             permission: 'list_workflow_tools',
             action: 'allow',
           }),
@@ -605,6 +618,61 @@ describe('agent session bridge', () => {
     )
   })
 
+  it('projects workflow MCP tool call events into the business execution state', async () => {
+    eventSubscribeMock.mockResolvedValueOnce({
+      stream: {
+        async *[Symbol.asyncIterator]() {
+          yield {
+            type: 'tool.call.started',
+            properties: {
+              sessionID: 'opencode_session_1',
+              toolCallID: 'tool_call_1',
+              toolID: 'workflow_get_session_context',
+              title: 'workflow_get_session_context',
+            },
+          }
+          yield {
+            type: 'tool.call.completed',
+            properties: {
+              sessionID: 'opencode_session_1',
+              toolCallID: 'tool_call_1',
+              toolID: 'workflow_get_session_context',
+              title: 'workflow_get_session_context',
+            },
+          }
+        },
+      },
+      stop: vi.fn(),
+    })
+
+    const created = await createAgentSession({
+      request: buildAgentRequest(),
+      userId: 'user_1',
+    })
+    const events: Array<{ type: string; [key: string]: unknown }> = []
+
+    await sendAgentSessionMessage(
+      {
+        sessionId: created.session.id,
+        message: '继续给出当前分析建议',
+      },
+      (event) => events.push(event as any),
+    )
+    await Promise.resolve()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    const snapshot = getAgentSession(created.session.id)
+    expect(snapshot?.projection.execution.toolCalls).toEqual([
+      expect.objectContaining({
+        id: 'tool_call_1',
+        toolName: 'workflow_get_session_context',
+        displayName: '读取分析上下文',
+        status: 'success',
+      }),
+    ])
+    expect(events.some((event) => event.type === 'projection.execution.updated')).toBe(true)
+  })
+
   it('marks the session as failed when promptAsync cannot be started', async () => {
     const created = await createAgentSession({
       request: buildAgentRequest(),
@@ -861,5 +929,205 @@ describe('agent session bridge', () => {
         }),
       }),
     )
+  })
+
+  it('runs agentic-run through the agent kernel and waits for data when context is missing', async () => {
+    const created = await createAgentSession({
+      request: {
+        ...buildAgentRequest(),
+        contextHints: undefined,
+        dataSources: [],
+      },
+      userId: 'user_1',
+    })
+    const events: Array<{ type: string; [key: string]: unknown }> = []
+
+    const result = await runAgenticAnalysisSession(
+      {
+        sessionId: created.session.id,
+        message: '请自动分析销量影响因素',
+      },
+      (event) => events.push(event as any),
+    )
+
+    expect(result.projection.execution.latestAction).toBe('等待补充数据源或字段摘要')
+    expect(result.projection.analysis.summary).toBe('需要先提供可分析的数据源或字段摘要。')
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'agentic.stage.updated',
+          run: expect.objectContaining({
+            runId: `kernel_${created.session.id}`,
+            stage: 'waiting_user',
+            message: '需要先提供可分析的数据源或字段摘要',
+          }),
+        }),
+      ]),
+    )
+  })
+
+  it('runs agentic-run through the agent kernel opencode adapter when data context exists', async () => {
+    const created = await createAgentSession({
+      request: buildAgentRequest(),
+      userId: 'user_1',
+    })
+
+    const result = await runAgenticAnalysisSession({
+      sessionId: created.session.id,
+      message: '请自动分析销量影响因素并生成报告',
+    })
+
+    expect(sessionPromptMock).toHaveBeenCalledTimes(3)
+    expect(sessionPromptMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionID: 'opencode_session_1',
+        system: expect.stringContaining('数据分析领域的 Agentic 分析代理'),
+        parts: [
+          {
+            type: 'text',
+            text: expect.stringContaining('请自动分析销量影响因素并生成报告'),
+          },
+        ],
+      }),
+    )
+    expect(result.session.status).toBe('failed')
+    expect(result.projection.execution).toMatchObject({
+      status: 'failed',
+      latestAction: 'Agent Kernel 执行失败',
+    })
+    expect(result.projection.analysis.summary).toBe('Agent Kernel 执行失败，请查看错误详情。')
+  })
+
+  it('completes agentic-run when opencode messages contain execution and evidence observations', async () => {
+    let releaseIdle: (() => void) | null = null
+    eventSubscribeMock.mockResolvedValueOnce({
+      stream: {
+        async *[Symbol.asyncIterator]() {
+          await new Promise<void>((resolve) => {
+            releaseIdle = resolve
+          })
+          yield {
+            type: 'session.idle',
+            properties: {
+              sessionID: 'opencode_session_1',
+            },
+          }
+        },
+      },
+    })
+    sessionPromptAsyncMock.mockImplementationOnce(async () => {
+      releaseIdle?.()
+      return { data: { id: 'run_1' } }
+    })
+    sessionPromptMock.mockResolvedValueOnce({
+      data: {
+        info: {
+          id: 'msg_assistant_agentic_1',
+          role: 'assistant',
+          parentID: 'msg_user_1',
+          time: {
+            completed: Date.now(),
+          },
+        },
+        parts: [
+          {
+            type: 'text',
+            text: '已完成销量影响因素分析，并抽取证据。',
+          },
+          {
+            type: 'tool',
+            tool: 'workflow_test_workflow',
+            state: {
+              status: 'completed',
+              output: {
+                ok: true,
+                executionId: 'exec_1',
+                status: 'success',
+              },
+            },
+          },
+          {
+            type: 'tool',
+            tool: 'workflow_extract_result_evidence',
+            state: {
+              status: 'completed',
+              output: {
+                evidence: [{ evidenceId: 'exec_1:node_pearson_1' }],
+              },
+            },
+          },
+        ],
+      },
+    })
+
+    const created = await createAgentSession({
+      request: buildAgentRequest(),
+      userId: 'user_1',
+    })
+
+    const result = await runAgenticAnalysisSession({
+      sessionId: created.session.id,
+      message: '请自动分析销量影响因素并生成报告',
+    })
+
+    expect(result.session.status).toBe('completed')
+    expect(result.projection.execution).toMatchObject({
+      status: 'completed',
+      latestAction: 'Agent Kernel 分析完成',
+    })
+    expect(result.projection.analysis.summary).toBe('Agent Kernel 已完成本轮分析闭环。')
+  })
+
+  it('parses JSON string tool outputs as agentic observations', async () => {
+    sessionPromptMock.mockResolvedValueOnce({
+      data: {
+        info: {
+          id: 'msg_assistant_agentic_json_tool',
+          role: 'assistant',
+          time: {
+            completed: Date.now(),
+          },
+        },
+        parts: [
+          {
+            type: 'tool',
+            tool: 'workflow_test_workflow',
+            state: {
+              status: 'completed',
+              output: JSON.stringify({
+                ok: true,
+                executionId: 'exec_1',
+                status: 'success',
+              }),
+            },
+          },
+          {
+            type: 'tool',
+            tool: 'workflow_extract_result_evidence',
+            state: {
+              status: 'completed',
+              output: JSON.stringify({
+                evidence: [{ evidenceId: 'exec_1:node_pearson_1' }],
+              }),
+            },
+          },
+        ],
+      },
+    })
+
+    const created = await createAgentSession({
+      request: buildAgentRequest(),
+      userId: 'user_1',
+    })
+
+    const result = await runAgenticAnalysisSession({
+      sessionId: created.session.id,
+      message: '请自动分析销量影响因素并生成报告',
+    })
+
+    expect(result.projection.execution).toMatchObject({
+      status: 'completed',
+      latestAction: 'Agent Kernel 分析完成',
+    })
   })
 })

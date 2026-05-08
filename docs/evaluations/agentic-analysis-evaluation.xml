@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<agenticAnalysisEvaluation version="1.0">
+  <description>Agentic 数据分析能力评测题集，覆盖目标理解、数据画像、方法规划、工作流执行、自修复和证据报告。</description>
+  <cases>
+    <case id="basic-correlation" category="基础相关性分析">
+      <goal>分析价格、折扣与销量之间的相关关系，并输出带证据的中文结论。</goal>
+      <requiredTools>
+        <tool>workflow_profile_data_source</tool>
+        <tool>workflow_recommend_methods</tool>
+        <tool>workflow_execute_plan</tool>
+        <tool>workflow_extract_result_evidence</tool>
+      </requiredTools>
+      <acceptance>报告必须包含 Pearson 或 Spearman 相关性结果，并引用至少一个 evidenceId。</acceptance>
+    </case>
+    <case id="multi-factor-regression" category="多因子回归分析">
+      <goal>评估价格、折扣、渠道费用对销量的综合影响。</goal>
+      <requiredTools>
+        <tool>workflow_recommend_methods</tool>
+        <tool>workflow_validate_workflow</tool>
+        <tool>workflow_test_workflow</tool>
+      </requiredTools>
+      <acceptance>应推荐多元线性回归或特征重要度方法，并说明样本与字段风险。</acceptance>
+    </case>
+    <case id="categorical-target" category="分类目标分析">
+      <goal>分析哪些因素影响客户是否转化。</goal>
+      <requiredTools>
+        <tool>workflow_profile_data_source</tool>
+        <tool>workflow_recommend_methods</tool>
+      </requiredTools>
+      <acceptance>应避免把 Pearson 作为主方法，并推荐逻辑回归分类或分组对比。</acceptance>
+    </case>
+    <case id="missing-outlier" category="缺失值和异常值场景">
+      <goal>先识别数据质量问题，再生成稳健的相关性分析流程。</goal>
+      <requiredTools>
+        <tool>workflow_profile_data_source</tool>
+        <tool>workflow_update_partial_workflow</tool>
+        <tool>workflow_validate_workflow</tool>
+      </requiredTools>
+      <acceptance>应在报告中说明缺失率或样本风险，并建议或加入清洗节点。</acceptance>
+    </case>
+    <case id="workflow-repair" category="现有工作流修复场景">
+      <goal>修复当前执行失败的相关性节点，并重新验证完整流程。</goal>
+      <requiredTools>
+        <tool>workflow_debug_node</tool>
+        <tool>workflow_update_partial_workflow</tool>
+        <tool>workflow_test_workflow</tool>
+      </requiredTools>
+      <acceptance>低风险配置修复可自动执行，高风险修复必须生成确认请求。</acceptance>
+    </case>
+  </cases>
+</agenticAnalysisEvaluation>

@@ -7,6 +7,7 @@ import {
   createAgentSession,
   getAgentProjection,
   getAgentSession,
+  runAgenticAnalysisSession,
   sendAgentSessionMessage,
   subscribeToAgentSessionEvents,
   syncAgentCanvas,
@@ -18,6 +19,7 @@ import type { HttpDomainHandler } from '../http/types.js'
 export const createAgentRoutes = (): HttpDomainHandler<ServerDependencies> => async (context) => {
   const { pathname, method } = context
   const agentSessionMessagesMatch = pathname.match(/^\/api\/agent\/sessions\/([^/]+)\/messages$/)
+  const agenticRunMatch = pathname.match(/^\/api\/agent\/sessions\/([^/]+)\/agentic-run$/)
   const agentSessionEventsMatch = pathname.match(/^\/api\/agent\/sessions\/([^/]+)\/events$/)
   const agentSessionProjectionMatch = pathname.match(/^\/api\/agent\/sessions\/([^/]+)\/projection$/)
   const agentSessionCanvasSyncMatch = pathname.match(/^\/api\/agent\/sessions\/([^/]+)\/canvas-sync$/)
@@ -49,6 +51,20 @@ export const createAgentRoutes = (): HttpDomainHandler<ServerDependencies> => as
     const sessionId = decodeURIComponent(agentSessionMessagesMatch[1] ?? '')
     const body = await context.readJsonBody<AgentSessionMessageRequest>()
     const result = await sendAgentSessionMessage(
+      {
+        sessionId,
+        message: body.content,
+      },
+      () => undefined,
+    )
+    context.sendJson(200, result)
+    return true
+  }
+
+  if (method === 'POST' && agenticRunMatch) {
+    const sessionId = decodeURIComponent(agenticRunMatch[1] ?? '')
+    const body = await context.readJsonBody<AgentSessionMessageRequest>()
+    const result = await runAgenticAnalysisSession(
       {
         sessionId,
         message: body.content,

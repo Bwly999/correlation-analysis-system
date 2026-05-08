@@ -10,8 +10,12 @@ import type {
   WorkflowAiOperation,
   WorkflowAiPlan,
   WorkflowAiPlanRequest,
+  AgentExecutionRecord,
 } from '../../ai/types.js'
 import { executeNodesForAgent } from '../agentLoop/nodeExecutor.js'
+import { buildDataProfile } from './analysisIntelligence/dataProfile.js'
+import { recommendAnalysisMethods } from './analysisIntelligence/methodAdvisor.js'
+import { extractResultEvidence } from './analysisIntelligence/resultEvidence.js'
 import {
   buildServerWorkflowAiNodeCatalog,
   getServerNodeCatalogItem,
@@ -317,6 +321,64 @@ export const createWorkflowMcpRuntime = (options: CreateWorkflowMcpRuntimeOption
       upstreamSample?: unknown,
     ) {
       return resolveServerNodePropertyOptions(nodeType, propertyName, config ?? {}, upstreamSample)
+    },
+
+    profileDataSource(sessionRequest: WorkflowAiPlanRequest, dataSourceId: string) {
+      const item = (sessionRequest.dataSources ?? []).find((source) => source.id === dataSourceId)
+      if (!item) {
+        return {
+          found: false,
+          message: `未找到数据源: ${dataSourceId}`,
+        }
+      }
+
+      const rows = Array.isArray(item.bindingPayload?.rows)
+        ? item.bindingPayload.rows as Array<Record<string, unknown>>
+        : []
+
+      if (!rows.length) {
+        return {
+          found: false,
+          dataSourceId,
+          message: '当前数据源没有可画像的行数据',
+        }
+      }
+
+      return {
+        found: true,
+        dataSourceId,
+        profile: buildDataProfile(rows),
+      }
+    },
+
+    recommendMethods(sessionRequest: WorkflowAiPlanRequest, dataSourceId: string) {
+      const profiled = this.profileDataSource(sessionRequest, dataSourceId)
+      const profile = 'profile' in profiled ? profiled.profile : null
+      if (!profiled.found || !profile) {
+        return profiled
+      }
+
+      return {
+        found: true,
+        dataSourceId,
+        advice: recommendAnalysisMethods(profile),
+      }
+    },
+
+    extractResultEvidence(execution: AgentExecutionRecord | null | undefined) {
+      if (!execution) {
+        return {
+          found: false,
+          message: '未找到执行记录',
+          evidence: [],
+        }
+      }
+
+      return {
+        found: true,
+        executionId: execution.executionId,
+        evidence: extractResultEvidence(execution),
+      }
     },
 
     async createWorkflow(userId: string, input?: { workflowId?: string; name?: string }) {

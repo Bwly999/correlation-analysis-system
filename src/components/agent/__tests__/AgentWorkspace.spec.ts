@@ -123,6 +123,93 @@ describe('AgentWorkspace', () => {
     expect(wrapper.find('.agent-workspace__rail').exists()).toBe(false)
   })
 
+  it('renders evidence and report cards inline in the conversation flow', () => {
+    const aiStore = useWorkflowAiStore()
+    aiStore.systemProfiles = [buildProfile()]
+    aiStore.selectedProfileId = 'profile_1'
+    aiStore.activeSession = {
+      id: 'agent_1',
+      mode: 'edit',
+      prompt: '帮我分析价格和销量关系',
+      status: 'completed',
+      profile: {
+        id: 'profile_1',
+        name: '默认模型',
+        model: 'glm-4.7',
+      },
+      workflowId: null,
+      createdAt: 1,
+      updatedAt: 2,
+    }
+    aiStore.projectionSnapshot = {
+      workflow: {
+        workflowId: null,
+        workflowName: '销量诊断流程',
+        draftNodeCount: 2,
+        draftEdgeCount: 1,
+        draftSummary: '已完成最小相关性分析流程。',
+        versionCount: 0,
+        latestVersionId: null,
+        proposedPlan: null,
+      },
+      analysis: {
+        goal: '帮我分析价格和销量关系',
+        summary: '价格与销量存在较强正相关。',
+        candidateTargets: ['sales'],
+        candidateFactors: ['price'],
+        methods: ['Pearson 相关系数'],
+        findings: ['价格与销量存在较强正相关'],
+        risks: [],
+        recommendations: ['扩大样本后复核'],
+        evidence: [
+          {
+            evidenceId: 'exec_1:node_pearson_1',
+            executionId: 'exec_1',
+            nodeId: 'node_pearson_1',
+            nodeLabel: 'Pearson 相关系数',
+            statement: '3 个数值字段，120 行数据。发现 2 对强相关变量。',
+          },
+        ],
+        report: {
+          title: '销量相关性分析报告',
+          summary: '价格与销量存在较强正相关，建议继续验证折扣影响。',
+          recommendations: ['扩大样本后复核'],
+          evidenceIds: ['exec_1:node_pearson_1'],
+        },
+      } as any,
+      execution: {
+        status: 'completed',
+        latestAction: '报告已生成',
+        toolCalls: [],
+        pendingApprovals: [],
+      },
+      canvasSync: {
+        status: 'idle',
+        message: '当前草案尚未同步到画布',
+      },
+      error: null,
+      updatedAt: 2,
+    }
+
+    const wrapper = mount(AgentWorkspace, {
+      props: {
+        visible: true,
+      },
+      global: {
+        stubs: {
+          Dialog: dialogStub,
+          Button: { template: '<button @click="$emit(\'click\')"><slot /></button>' },
+        },
+      },
+    })
+
+    const flowText = wrapper.get('[data-testid="agent-workspace-messages"]').text()
+    expect(flowText).toContain('证据：Pearson 相关系数')
+    expect(flowText).toContain('销量相关性分析报告')
+    expect(flowText).toContain('证据 ID：exec_1:node_pearson_1')
+    expect(flowText).toContain('建议：扩大样本后复核')
+  })
+
   it('submits user goals through the new session API flow', async () => {
     const aiStore = useWorkflowAiStore()
     const workflowStore = useWorkflowStore()

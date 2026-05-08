@@ -19,6 +19,7 @@ import {
   getAgentProjection as getAgentProjectionFromWorkflowAi,
   getAgentSession as getAgentSessionFromWorkflowAi,
   requestWorkflowAiPlan as requestWorkflowAiPlanFromWorkflowAi,
+  runAgenticAnalysisSession as runAgenticAnalysisSessionFromWorkflowAi,
   runWorkflowAiSession as runWorkflowAiSessionFromWorkflowAi,
   sendAgentSessionMessage as sendAgentSessionMessageFromWorkflowAi,
   streamAgentSessionEvents as streamAgentSessionEventsFromWorkflowAi,
@@ -62,6 +63,11 @@ export const sendAgentSessionMessage = (
   sessionId: string,
   request: AgentSessionMessageRequest,
 ): Promise<AgentSessionMessageResponse> => sendAgentSessionMessageFromWorkflowAi(sessionId, request)
+
+export const runAgenticAnalysisSession = (
+  sessionId: string,
+  request: AgentSessionMessageRequest,
+): Promise<AgentSessionMessageResponse> => runAgenticAnalysisSessionFromWorkflowAi(sessionId, request)
 
 export const streamAgentSessionEvents = (
   sessionId: string,

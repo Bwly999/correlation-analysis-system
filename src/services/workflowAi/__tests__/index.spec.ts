@@ -4,6 +4,7 @@ import {
   getAgentProjection,
   getWorkflowAiSession,
   requestWorkflowAiPlan,
+  runAgenticAnalysisSession,
   runWorkflowAiSession,
   sendAgentSessionMessage,
   startWorkflowAiSession,
@@ -672,6 +673,80 @@ describe('workflowAi service', () => {
       }),
       body: JSON.stringify({
         content: '继续分析',
+      }),
+    })
+  })
+
+  it('starts an agentic analysis run through the dedicated session endpoint', async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        session: {
+          id: 'agent_1',
+          mode: 'edit',
+          prompt: '帮我分析价格和销量关系',
+          status: 'running',
+          profile: {
+            id: 'profile_1',
+            name: '默认模型',
+            model: 'glm-4.7',
+          },
+          workflowId: null,
+          createdAt: 1,
+          updatedAt: 2,
+        },
+        projection: {
+          workflow: {
+            workflowId: null,
+            workflowName: '销量诊断流程',
+            draftNodeCount: 2,
+            draftEdgeCount: 1,
+            draftSummary: '已进入 agentic 分析流程。',
+            versionCount: 0,
+            latestVersionId: null,
+            proposedPlan: null,
+          },
+          analysis: {
+            goal: '帮我分析价格和销量关系',
+            summary: '系统已开始 agentic 分析。',
+            candidateTargets: ['sales'],
+            candidateFactors: ['price'],
+            methods: [],
+            findings: [],
+            risks: [],
+            recommendations: [],
+          },
+          execution: {
+            status: 'running',
+            latestAction: 'Agentic 分析已启动',
+            toolCalls: [],
+            pendingApprovals: [],
+          },
+          canvasSync: {
+            status: 'idle',
+            message: '当前草案尚未同步到画布',
+          },
+          error: null,
+          updatedAt: 2,
+        },
+      }),
+    } as Response)
+
+    const response = await runAgenticAnalysisSession('agent_1', {
+      content: '开始 agentic 分析',
+    })
+
+    expect(response.session.status).toBe('running')
+    expect(response.projection.execution.latestAction).toBe('Agentic 分析已启动')
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/agent/sessions/agent_1/agentic-run', {
+      method: 'POST',
+      headers: expect.objectContaining({
+        'Content-Type': 'application/json',
+        'x-workflow-user-id': expect.any(String),
+        'x-workflow-user-name': expect.any(String),
+      }),
+      body: JSON.stringify({
+        content: '开始 agentic 分析',
       }),
     })
   })

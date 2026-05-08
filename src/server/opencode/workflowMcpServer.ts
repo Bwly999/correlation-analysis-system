@@ -275,6 +275,26 @@ const getWorkflowToolDefinitions = (
     },
   },
   {
+    name: 'workflow_profile_data_source',
+    description: '基于会话数据源样本生成字段画像、缺失率、唯一值和候选目标/因子。',
+    annotations: { readOnlyHint: true, openWorldHint: false },
+    inputSchema: {
+      dataSourceId: z.string().describe('会话内数据源 ID'),
+    },
+    handler: ({ dataSourceId }) =>
+      buildToolResult(runtime.profileDataSource(sessionRecord.request, dataSourceId)),
+  },
+  {
+    name: 'workflow_recommend_methods',
+    description: '基于数据画像推荐相关性、回归、分类或特征重要性等可执行分析方法。',
+    annotations: { readOnlyHint: true, openWorldHint: false },
+    inputSchema: {
+      dataSourceId: z.string().describe('会话内数据源 ID'),
+    },
+    handler: ({ dataSourceId }) =>
+      buildToolResult(runtime.recommendMethods(sessionRecord.request, dataSourceId)),
+  },
+  {
     name: 'workflow_get_node_definition',
     description: '按节点类型读取单个节点定义。',
     annotations: { readOnlyHint: true, openWorldHint: false },
@@ -479,6 +499,16 @@ const getWorkflowToolDefinitions = (
     },
     handler: async ({ mode, executionId, nodeId, limit, offset }) =>
       buildToolResult(await runtime.executions(context.userId, { mode, executionId, nodeId, limit, offset })),
+  },
+  {
+    name: 'workflow_extract_result_evidence',
+    description: '从指定执行记录中抽取可引用证据，供最终报告绑定 evidenceIds。',
+    annotations: { readOnlyHint: true, openWorldHint: false },
+    inputSchema: {
+      executionId: z.string().describe('执行记录 ID'),
+    },
+    handler: ({ executionId }) =>
+      buildToolResult(runtime.extractResultEvidence(getAgentExecutionRecord(context.sessionId, executionId))),
   },
   {
     name: 'workflow_list_workflow_versions',

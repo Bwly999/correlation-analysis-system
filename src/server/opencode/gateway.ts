@@ -54,10 +54,14 @@ import {
   applyExecutionState,
   applyProjectionError,
   applyStructuredResponseToProjection,
+  applyToolCallState,
   buildInitialProjection,
   resolveAssistantMessageText,
   type AgentStructuredResponse,
 } from './projection.js'
+import { runAgentKernel } from './agentKernel/kernel.js'
+import type { AgentKernelRuntimeAdapter, AgentKernelRuntimePromptInput } from './agentKernel/opencodeAdapter.js'
+import type { AgentKernelObservation, AgentKernelVerificationStatus } from './agentKernel/types.js'
 
 type SessionRecord = NonNullable<ReturnType<typeof getWorkflowAiSessionRecord>>
 
@@ -82,8 +86,11 @@ const WORKFLOW_MCP_TOOL_NAMES = [
   'workflow_get_node_definition',
   'workflow_list_data_sources',
   'workflow_get_data_source_schema',
+  'workflow_profile_data_source',
+  'workflow_recommend_methods',
   'workflow_validate_plan',
   'workflow_get_execution_result',
+  'workflow_extract_result_evidence',
   'workflow_execute_plan',
   'workflow_search_nodes',
   'workflow_get_node',
@@ -101,6 +108,36 @@ const WORKFLOW_MCP_TOOL_NAMES = [
   'workflow_rollback_workflow_version',
   'workflow_workflow_versions',
 ] as const
+
+const WORKFLOW_TOOL_DISPLAY_NAMES: Record<string, string> = {
+  list_workflow_tools: '读取工具清单',
+  workflow_get_session_context: '读取分析上下文',
+  workflow_get_node_catalog: '读取节点目录',
+  workflow_get_node_definition: '读取节点定义',
+  workflow_list_data_sources: '列出数据源',
+  workflow_get_data_source_schema: '读取字段摘要',
+  workflow_profile_data_source: '生成数据画像',
+  workflow_recommend_methods: '推荐分析方法',
+  workflow_validate_plan: '校验工作流计划',
+  workflow_get_execution_result: '读取执行结果',
+  workflow_extract_result_evidence: '抽取结果证据',
+  workflow_execute_plan: '执行工作流计划',
+  workflow_search_nodes: '搜索节点',
+  workflow_get_node: '读取节点信息',
+  workflow_get_node_options: '解析节点选项',
+  workflow_create_workflow: '创建工作流',
+  workflow_get_workflow: '读取工作流',
+  workflow_update_partial_workflow: '增量修改工作流',
+  workflow_update_full_workflow: '整包替换工作流',
+  workflow_validate_workflow: '校验工作流结构',
+  workflow_debug_node: '调试节点',
+  workflow_test_workflow: '测试完整工作流',
+  workflow_executions: '查询执行历史',
+  workflow_list_workflow_versions: '查询版本历史',
+  workflow_get_workflow_version: '读取工作流版本',
+  workflow_rollback_workflow_version: '回滚工作流版本',
+  workflow_workflow_versions: '管理工作流版本',
+}
 
 const positionSchema = z.object({
   x: z.number(),
@@ -457,6 +494,49 @@ const appendDebugToolCall = (
   writeAgentSessionDebugLine(sessionId, 'tool_call', toolCall)
 }
 
+const normalizeWorkflowToolName = (toolName: string) =>
+  WORKFLOW_MCP_TOOL_NAMES.includes(toolName as typeof WORKFLOW_MCP_TOOL_NAMES[number])
+    ? toolName
+    : toolName.startsWith(`${WORKFLOW_MCP_NAME}_`)
+      && WORKFLOW_MCP_TOOL_NAMES.includes(
+        toolName.slice(`${WORKFLOW_MCP_NAME}_`.length) as typeof WORKFLOW_MCP_TOOL_NAMES[number],
+      )
+      ? toolName.slice(`${WORKFLOW_MCP_NAME}_`.length)
+      : toolName
+
+const resolveToolCallStatus = (status: 'started' | 'completed' | 'failed') =>
+  status === 'started' ? 'running' : status === 'failed' ? 'failed' : 'success'
+
+const buildToolSummary = (toolName: string, status: 'started' | 'completed' | 'failed') => {
+  const displayName = WORKFLOW_TOOL_DISPLAY_NAMES[normalizeWorkflowToolName(toolName)] ?? toolName
+  if (status === 'started') return `正在${displayName}`
+  if (status === 'failed') return `${displayName}失败`
+  return `${displayName}完成`
+}
+
+const projectToolCallEvent = (
+  sessionId: string,
+  input: {
+    toolCallId?: string
+    toolName: string
+    title?: string
+    status: 'started' | 'completed' | 'failed'
+  },
+) => {
+  const normalizedToolName = normalizeWorkflowToolName(input.toolName)
+  const id = input.toolCallId || `${normalizedToolName}_${Date.now()}`
+
+  updateSessionProjection(sessionId, (projection) =>
+    applyToolCallState(projection, {
+      id,
+      toolName: normalizedToolName,
+      displayName: WORKFLOW_TOOL_DISPLAY_NAMES[normalizedToolName] ?? input.title ?? normalizedToolName,
+      status: resolveToolCallStatus(input.status),
+      summary: buildToolSummary(normalizedToolName, input.status),
+      ...(input.status === 'started' ? { startedAt: Date.now() } : { finishedAt: Date.now() }),
+    }))
+}
+
 const buildDebugRawMessage = (entry: any): AgentSessionDebugRawMessage => ({
   messageId: entry?.info?.id || `assistant_${Date.now()}`,
   role: typeof entry?.info?.role === 'string' ? entry.info.role : 'unknown',
@@ -640,6 +720,51 @@ const buildAgentPromptRequest = (
     {
       type: 'text' as const,
       text: message,
+    },
+  ],
+})
+
+const buildAgentKernelPromptRequest = (
+  runtime: AgentSessionRuntime,
+  input: AgentKernelRuntimePromptInput,
+) => ({
+  sessionID: runtime.sessionID,
+  model: {
+    providerID: runtime.providerID,
+    modelID: runtime.modelID,
+  },
+  agent: 'general',
+  tools: runtime.toolSelection,
+  system: [
+    input.skill.systemPrompt,
+    '',
+    '当前 Kernel 路由：',
+    `- 意图：${input.intent.kind}`,
+    `- 自主等级：${input.intent.autonomy}`,
+    `- 路由原因：${input.intent.reason}`,
+    '',
+    '执行约束：',
+    ...input.skill.guardrails.map((item) => `- ${item}`),
+    '',
+    '完成标准：',
+    ...input.skill.exitCriteria.map((item) => `- ${item}`),
+  ].join('\n'),
+  parts: [
+    {
+      type: 'text' as const,
+      text: [
+        `用户目标：${input.request.prompt}`,
+        `当前消息：${input.message}`,
+        `Kernel 迭代：第 ${input.iteration ?? 1} 轮`,
+        input.verification
+          ? `上一轮校验：${input.verification.status} - ${input.verification.message}`
+          : '',
+        input.previousObservations?.length
+          ? `已获得观察结果 JSON：\n${JSON.stringify(input.previousObservations, null, 2)}`
+          : '',
+        '',
+        '请根据当前 skill 自主决定下一步。需要完整 agentic 分析时，按“读取上下文 -> 数据画像 -> 方法推荐 -> 构建或修复工作流 -> 校验 -> 执行 -> 抽取证据 -> 中文报告”的闭环推进；如果只是普通对话或阻塞说明，则直接给出中文回复。',
+      ].filter(Boolean).join('\n'),
     },
   ],
 })
@@ -1124,8 +1249,20 @@ const startAgentEventPump = async (sessionId: string, runtime: AgentSessionRunti
               ? 'started'
               : event.type === 'tool.call.completed'
                 ? 'completed'
-                : 'failed',
+              : 'failed',
           payload: event.properties,
+        })
+        projectToolCallEvent(sessionId, {
+          toolCallId:
+            typeof event.properties?.toolCallID === 'string' ? event.properties.toolCallID : undefined,
+          toolName,
+          title: typeof event.properties?.title === 'string' ? event.properties.title : undefined,
+          status:
+            event.type === 'tool.call.started'
+              ? 'started'
+              : event.type === 'tool.call.completed'
+                ? 'completed'
+                : 'failed',
         })
         continue
       }
@@ -1148,8 +1285,19 @@ const startAgentEventPump = async (sessionId: string, runtime: AgentSessionRunti
               ? 'completed'
               : part.state?.status === 'error'
                 ? 'failed'
-                : 'started',
+              : 'started',
           payload: part,
+        })
+        projectToolCallEvent(sessionId, {
+          toolCallId: typeof part.callID === 'string' ? part.callID : undefined,
+          toolName: typeof part.tool === 'string' ? part.tool : 'unknown_tool',
+          title: typeof part.state?.title === 'string' ? part.state.title : undefined,
+          status:
+            part.state?.status === 'completed'
+              ? 'completed'
+              : part.state?.status === 'error'
+                ? 'failed'
+                : 'started',
         })
       }
 
@@ -1269,6 +1417,152 @@ const normalizeStructuredResponse = (
 }
 
 const createAgentUserMessageId = () => `msg_${randomUUID().replace(/-/g, '')}`
+
+const extractToolOutputPayload = (part: any) => {
+  const candidates = [
+    part?.state?.output,
+    part?.state?.result,
+    part?.output,
+    part?.result,
+  ]
+  for (const candidate of candidates) {
+    if (candidate && typeof candidate === 'object') {
+      return candidate as Record<string, unknown>
+    }
+    if (typeof candidate === 'string' && candidate.trim()) {
+      try {
+        const parsed = JSON.parse(candidate)
+        if (parsed && typeof parsed === 'object') return parsed as Record<string, unknown>
+      } catch {
+        return { text: candidate }
+      }
+    }
+  }
+  return {}
+}
+
+const extractAgentKernelObservationsFromPromptResponse = (response: any): AgentKernelObservation[] => {
+  const entries = response?.data ? [response.data] : []
+  return entries.flatMap((entry) => {
+    const observations: AgentKernelObservation[] = []
+    const text = extractMessageEntryText(entry) || extractPromptText({ data: entry })
+    if (text) {
+      observations.push({
+        type: 'assistant_message',
+        content: text,
+      })
+    }
+
+    for (const part of Array.isArray(entry?.parts) ? entry.parts : []) {
+      if (part?.type !== 'tool') continue
+      const toolName =
+        typeof part.tool === 'string'
+          ? part.tool
+          : typeof part.toolID === 'string'
+            ? part.toolID
+            : typeof part.name === 'string'
+              ? part.name
+              : ''
+      if (!toolName) continue
+      observations.push({
+        type: 'tool_result',
+        toolName: normalizeWorkflowToolName(toolName),
+        structuredContent: extractToolOutputPayload(part),
+      })
+    }
+
+    return observations
+  })
+}
+
+const createAgentKernelAdapter = (
+  record: AgentSessionRecord,
+  emitEvent?: (event: AgentSessionEvent) => void,
+): AgentKernelRuntimeAdapter => ({
+  async runPrompt(input) {
+    const runtime = await ensureAgentRuntime(record)
+    try {
+      if (!runtime.eventPump) {
+        runtime.eventPump = await startAgentEventPump(input.sessionId, runtime)
+      }
+    } catch (error) {
+      updateSessionProjection(
+        input.sessionId,
+        (projection) => ({
+          ...applyExecutionState(projection, 'running', 'Agent Kernel 已启动'),
+          error: {
+            message: '监听 opencode 事件流失败',
+            detail: error instanceof Error ? error.message : undefined,
+            occurredAt: Date.now(),
+          },
+        }),
+        emitEvent,
+      )
+    }
+
+    const response = await runtime.client.session.prompt(
+      buildAgentKernelPromptRequest(runtime, input),
+    )
+
+    return {
+      observations: extractAgentKernelObservationsFromPromptResponse(response),
+    }
+  },
+})
+
+const resolveKernelProjectionText = (status: AgentKernelVerificationStatus) => {
+  if (status === 'waiting_user') {
+    return {
+      analysisSummary: '需要先提供可分析的数据源或字段摘要。',
+      executionStatus: 'completed' as const,
+      latestAction: '等待补充数据源或字段摘要',
+      workflowSummary: null,
+    }
+  }
+
+  if (status === 'needs_evidence') {
+    return {
+      analysisSummary: '核心结论缺少可追溯证据，Agent Kernel 将继续补齐 evidenceId。',
+      executionStatus: 'running' as const,
+      latestAction: '补齐结论证据',
+      workflowSummary: '已进入 Agent Kernel 证据闭环。',
+    }
+  }
+
+  if (status === 'requires_approval') {
+    return {
+      analysisSummary: '当前步骤需要用户确认后才能继续执行。',
+      executionStatus: 'running' as const,
+      latestAction: '等待用户确认',
+      workflowSummary: 'Agent Kernel 已暂停在确认节点。',
+    }
+  }
+
+  if (status === 'failed') {
+    return {
+      analysisSummary: 'Agent Kernel 执行失败，请查看错误详情。',
+      executionStatus: 'failed' as const,
+      latestAction: 'Agent Kernel 执行失败',
+      workflowSummary: 'Agent Kernel 执行失败。',
+    }
+  }
+
+  if (status === 'completed') {
+    return {
+      analysisSummary: 'Agent Kernel 已完成本轮分析闭环。',
+      executionStatus: 'completed' as const,
+      latestAction: 'Agent Kernel 分析完成',
+      workflowSummary: 'Agent Kernel 已完成分析流程。',
+    }
+  }
+
+  return {
+    analysisSummary: '系统已启动 Agent Kernel 分析。',
+    executionStatus: 'running' as const,
+    latestAction: 'Agent Kernel 已启动',
+    workflowSummary: '已进入 Agent Kernel 分析流程。',
+  }
+}
 
 export const createAgentSession = async (input: {
   request: WorkflowAiPlanRequest
@@ -1402,6 +1696,62 @@ export const sendAgentSessionMessage = async (
 
     throw error
   }
+}
+
+export const runAgenticAnalysisSession = async (
+  input: {
+    sessionId: string
+    message: string
+  },
+  emitEvent?: (event: AgentSessionEvent) => void,
+): Promise<AgentSessionMessageResponse> => {
+  const record = getAgentSessionRecord(input.sessionId)
+  if (!record) {
+    throw new Error('未找到 Agent 会话')
+  }
+
+  syncSessionStatus(input.sessionId, 'running', emitEvent)
+  const kernelResult = await runAgentKernel({
+    sessionId: input.sessionId,
+    message: input.message,
+    request: record.request,
+    autonomy: 'agentic',
+    adapter: createAgentKernelAdapter(record, emitEvent),
+    emitEvent,
+  })
+  const projectionText = resolveKernelProjectionText(kernelResult.verification.status)
+
+  updateSessionProjection(
+    input.sessionId,
+    (projection) =>
+      applyExecutionState(
+        {
+          ...projection,
+          analysis: {
+            ...projection.analysis,
+            summary: projectionText.analysisSummary,
+          },
+          workflow: {
+            ...projection.workflow,
+            draftSummary:
+              projectionText.workflowSummary === null
+                ? projection.workflow.draftSummary
+                : projectionText.workflowSummary,
+          },
+        },
+        projectionText.executionStatus,
+        projectionText.latestAction,
+      ),
+    emitEvent,
+  )
+  syncSessionStatus(input.sessionId, projectionText.executionStatus, emitEvent)
+
+  const nextRecord = getAgentSession(input.sessionId)
+  if (!nextRecord) {
+    throw new Error('更新 Agentic 分析会话失败')
+  }
+
+  return nextRecord
 }
 
 export const syncAgentCanvas = async (input: {

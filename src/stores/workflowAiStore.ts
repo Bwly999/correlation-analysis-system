@@ -751,6 +751,68 @@ export const useWorkflowAiStore = defineStore('workflow-ai', () => {
         })
       }
 
+      for (const toolCall of projectionSnapshot.value.execution.toolCalls) {
+        items.push({
+          id: `tool_${toolCall.id}`,
+          kind: 'tool_call',
+          title: toolCall.displayName || toolCall.toolName,
+          content: toolCall.summary || toolCall.outputSummary || toolCall.inputSummary || '工具调用已记录',
+          details: [
+            `状态：${toolCall.status === 'running' ? '执行中' : toolCall.status === 'failed' ? '失败' : '成功'}`,
+            toolCall.linkedExecutionRef ? `执行记录：${toolCall.linkedExecutionRef}` : '',
+          ].filter(Boolean),
+          status:
+            toolCall.status === 'running'
+              ? 'streaming'
+              : toolCall.status === 'failed'
+                ? 'failed'
+                : 'completed',
+        })
+      }
+
+      for (const approval of projectionSnapshot.value.execution.pendingApprovals) {
+        items.push({
+          id: `approval_${approval.key}`,
+          kind: 'approval',
+          title: approval.label,
+          content: approval.reason,
+          details: [
+            approval.blocking ? '需要确认后继续执行' : '建议补充信息',
+          ],
+          status: approval.blocking ? 'streaming' : 'completed',
+        })
+      }
+
+      for (const evidence of projectionSnapshot.value.analysis.evidence ?? []) {
+        items.push({
+          id: `evidence_${evidence.evidenceId.replace(/[^a-zA-Z0-9_-]/g, '_')}`,
+          kind: 'evidence',
+          title: `证据：${evidence.nodeLabel}`,
+          content: evidence.statement,
+          details: [
+            `证据 ID：${evidence.evidenceId}`,
+            `执行记录：${evidence.executionId}`,
+            `节点 ID：${evidence.nodeId}`,
+          ],
+          status: 'completed',
+        })
+      }
+
+      if (projectionSnapshot.value.analysis.report) {
+        const report = projectionSnapshot.value.analysis.report
+        items.push({
+          id: 'analysis_report',
+          kind: 'report',
+          title: report.title,
+          content: report.summary,
+          details: [
+            ...(report.recommendations ?? []).map((item) => `建议：${item}`),
+            ...(report.evidenceIds ?? []).map((item) => `证据：${item}`),
+          ],
+          status: 'completed',
+        })
+      }
+
       if (projectionSnapshot.value.error) {
         items.push({
           id: 'projection_error',

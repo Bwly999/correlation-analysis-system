@@ -2,6 +2,38 @@
 
 ## [Unreleased]
 
+### 变更 (Changed)
+
+- **接入 Agent Kernel，升级 agentic-run 为自主执行入口**:
+  - `/api/agent/sessions/:id/agentic-run` 现在先经过 Agent Kernel 路由、skill 选择和 verifier 校验，再通过 opencode adapter 启动真实 workflow MCP 工具循环。
+  - 新增 `agentKernel` 模块，封装 `general-chat`、`agentic-data-analysis`、`workflow-repair`、`reporting` 四类 skill，并将缺数据、缺证据、执行完成等闭环条件收敛到 Kernel verifier。
+  - 网关回归测试已覆盖缺少数据上下文时进入 `waiting_user`，以及具备数据上下文时通过 Kernel 启动 opencode session。
+
+- **增强 Agent 工具调用可观察性**:
+  - 后端将 opencode workflow MCP 工具调用事件同步投影到 `execution.toolCalls`，保留工具名称、中文展示名、运行状态和摘要。
+  - Agent 工作区消息流新增工具调用业务卡片，用户可直接看到分析代理正在读取上下文、校验计划、执行工作流或调试节点。
+  - 补充 Agent session bridge 与 `workflowAiStore` 回归测试，并为 Vitest 增加 opencode SDK v2 测试解析替身，确保本地未安装实体 SDK 包时仍可运行 mock 测试。
+
+- **新增 Agentic 分析状态机 MVP**:
+  - 新增 `agenticAnalysis` 服务端模块，定义 intent、data_profile、method_planning、workflow_build、workflow_validation、execution、interpretation、reporting 等分析阶段。
+  - `/api/agent/sessions/:id/agentic-run` 新增 Agentic 分析启动入口，前端 service 与 agent workspace facade 已同步封装。
+  - 补充状态机、服务端路由和前端 service 回归测试，为后续接入真实数据画像、执行验证和自修复闭环打底。
+
+- **补齐 Agentic 自修复与审批消息基础**:
+  - 新增 `repairPlanner`，当执行阶段返回失败节点时可生成低风险配置修复草案，并对低置信度或高风险操作要求用户确认。
+  - Agentic 编排器支持执行阶段失败后进入 `debugging` 阶段并返回修复计划，为后续自动调用 `workflow_debug_node` 和重跑验证预留接口。
+  - Agent 工作区消息流新增 pending approval 映射，可展示“需要确认后继续执行”的阻塞事项。
+
+- **增强 Agentic 分析智能层**:
+  - 新增数据画像能力，可基于会话数据源样本识别字段类型、缺失率、唯一值数量和候选目标 / 因子。
+  - 新增方法顾问能力，可根据目标字段类型、候选因子、样本规模和缺失率推荐相关性、回归、分类与特征重要度方法。
+  - 新增执行结果证据抽取能力，并通过 `workflow_extract_result_evidence` 暴露 evidenceId、节点来源、摘要、指标和表格预览，约束最终报告必须基于可追溯证据。
+
+- **补齐 Agentic 产物、记忆与评测 MVP**:
+  - Agent 工作区新增证据卡和报告卡，可在单列消息流中展示 evidenceId、执行记录、节点来源、报告摘要和建议。
+  - 新增 `agentMemoryStore` JSON 记忆 MVP，支持按用户 / 工作流保存字段语义、方法偏好和分析发现，并按用户隔离与裁剪。
+  - 新增 `docs/evaluations/agentic-analysis-evaluation.xml` 与 `pnpm eval:agentic-analysis`，提供 Agentic 数据分析评测题集和中文 help 入口。
+
 ### 修复 (Fixed)
 
 - **修复 Agent 工作区消息区无法滚动，并移除主画布中的 Agent 执行横幅干扰**:

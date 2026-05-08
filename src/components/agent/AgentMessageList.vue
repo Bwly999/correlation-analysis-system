@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import type { AgentConversationEntry } from '@/ai/types'
+import AgentEvidenceCard from './AgentEvidenceCard.vue'
+import AgentReportCard from './AgentReportCard.vue'
 import AgentThinkingBlock from './AgentThinkingBlock.vue'
 
 const props = defineProps<{
@@ -12,6 +14,10 @@ const isBusinessCard = (kind: AgentConversationEntry['kind']) =>
   || kind === 'execution_projection'
   || kind === 'canvas_sync'
   || kind === 'debug'
+  || kind === 'tool_call'
+  || kind === 'evidence'
+  || kind === 'report'
+  || kind === 'approval'
 </script>
 
 <template>
@@ -34,16 +40,26 @@ const isBusinessCard = (kind: AgentConversationEntry['kind']) =>
           'is-failed': message.status === 'failed',
         }"
       >
-        <p class="agent-message-list__title">{{ message.title }}</p>
-        <p class="agent-message-list__text">{{ message.content }}</p>
-
-        <AgentThinkingBlock
-          v-if="message.details?.length"
-          title="执行细节"
-          :summary="message.status === 'streaming' ? '正在处理...' : '处理完成'"
-          :details="message.details"
-          :collapsed="message.status !== 'streaming'"
+        <AgentEvidenceCard
+          v-if="message.kind === 'evidence'"
+          :message="message"
         />
+        <AgentReportCard
+          v-else-if="message.kind === 'report'"
+          :message="message"
+        />
+        <template v-else>
+          <p class="agent-message-list__title">{{ message.title }}</p>
+          <p class="agent-message-list__text">{{ message.content }}</p>
+
+          <AgentThinkingBlock
+            v-if="message.details?.length"
+            title="执行细节"
+            :summary="message.status === 'streaming' ? '正在处理...' : '处理完成'"
+            :details="message.details"
+            :collapsed="message.status !== 'streaming'"
+          />
+        </template>
       </div>
     </article>
   </div>
