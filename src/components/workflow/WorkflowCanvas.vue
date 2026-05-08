@@ -85,28 +85,6 @@ const executionRecordBodyStyle = computed(() => ({
   marginRight: `${executionRecordRightInset.value}px`,
 }))
 const isAgentMode = computed(() => isAiPanelVisible.value)
-const executionWorkspaceBanner = computed(() => {
-  const hasAppliedPlan = Boolean(aiStore.lastAppliedSnapshotId) || aiStore.autoApplyResult.status === 'applied'
-  const hasFailedApply = aiStore.autoApplyResult.status === 'failed'
-  const isAgentStreaming = aiStore.streamStatus === 'streaming'
-
-  if (!isAgentStreaming && !hasAppliedPlan && !hasFailedApply) {
-    return null
-  }
-
-  return {
-    tone: isAgentStreaming ? 'running' : hasFailedApply ? 'failed' : 'applied',
-    headline:
-      aiStore.streamHeadline
-      || aiStore.projectionSnapshot?.analysis.summary
-      || '自动分析已完成',
-    detail: hasFailedApply
-      ? (aiStore.autoApplyResult.message || '最终计划已生成，但同步到画布失败。')
-      : hasAppliedPlan
-        ? '已自动同步到画布'
-        : '系统正在自动执行并分析当前流程',
-  }
-})
 const runBarState = computed<'idle' | 'running' | 'pending'>(() => {
   if (store.pendingExecution) return 'pending'
   if (store.isRunning) return 'running'
@@ -584,16 +562,6 @@ onBeforeUnmount(() => {
 
         <section class="execution-workspace">
           <div class="execution-workspace__panel">
-            <div
-              v-if="executionWorkspaceBanner"
-              data-testid="execution-workspace-banner"
-              class="execution-workspace__banner"
-              :class="`is-${executionWorkspaceBanner.tone}`"
-            >
-              <strong>{{ executionWorkspaceBanner.headline }}</strong>
-              <span>{{ executionWorkspaceBanner.detail }}</span>
-            </div>
-
             <div ref="canvasViewport" class="execution-canvas-shell">
               <VueFlow
                 v-model:nodes="store.nodes"

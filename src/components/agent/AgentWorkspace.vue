@@ -178,9 +178,13 @@ onMounted(async () => {
 
 .agent-workspace__body {
   min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .agent-workspace__main {
+  flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
   overflow-y: auto;

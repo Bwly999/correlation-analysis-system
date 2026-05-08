@@ -1440,7 +1440,7 @@ describe('WorkflowCanvas', () => {
     expect(wrapper.find('.workflow-page-sidebar').exists()).toBe(true)
   })
 
-  it('shows an execution workspace banner while agent session is streaming and after canvas sync completes', async () => {
+  it('keeps the canvas free of agent runtime banners while the agent session is streaming', async () => {
     const aiStore = useWorkflowAiStore()
     aiStore.streamStatus = 'streaming'
     aiStore.streamHeadline = '正在执行节点：Pearson 相关系数'
@@ -1507,8 +1507,7 @@ describe('WorkflowCanvas', () => {
       },
     })
 
-    expect(wrapper.get('[data-testid="execution-workspace-banner"]').text()).toContain('正在执行节点：Pearson 相关系数')
-    expect(wrapper.get('[data-testid="execution-workspace-banner"]').text()).toContain('已自动同步到画布')
+    expect(wrapper.find('[data-testid="execution-workspace-banner"]').exists()).toBe(false)
   })
 
   it('mounts a dedicated bottom-left toast for node config feedback', () => {

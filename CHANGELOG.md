@@ -4,6 +4,11 @@
 
 ### 修复 (Fixed)
 
+- **修复 Agent 工作区消息区无法滚动，并移除主画布中的 Agent 执行横幅干扰**:
+  - 调整 `AgentWorkspace` 对话区的高度与滚动容器结构，确保消息列表在工作区内部形成稳定的纵向滚动。
+  - 移除 `WorkflowCanvas` 中绑定 Agent 流式状态的执行横幅，避免“正在调用 opencode 分析当前业务问题”等提示遮挡主画布。
+  - 同步更新 `WorkflowCanvas` 回归测试，覆盖画布不再渲染 Agent 运行横幅的预期。
+
 - **统一工作流用户上下文注入与解析链路，修复分析代理会话偶发缺少用户标识的问题**:
   - 前端新增统一的工作流请求上下文封装，`/api/storage/*`、`/api/agent/*`、`/api/workflow-ai/*` 请求现在会自动附加 `Authorization`、`x-workflow-user-id` 与 `x-workflow-user-name`。
   - 服务端新增统一的工作流用户解析能力，并让 storage、agent、workflow MCP 等工作流域入口复用同一套缺省与报错规则。
