@@ -8,12 +8,6 @@ export default defineConfig({
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
       '@opencode-ai/sdk/v2': fileURLToPath(new URL('./test/mocks/opencodeSdkV2.ts', import.meta.url)),
-      '@primevue/core': fileURLToPath(
-        new URL(
-          './node_modules/.pnpm/@primevue+core@4.5.4_vue@3.5.29_typescript@5.9.3_/node_modules/@primevue/core',
-          import.meta.url,
-        ),
-      ),
     },
   },
   test: {

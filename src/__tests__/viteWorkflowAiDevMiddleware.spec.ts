@@ -1,7 +1,11 @@
 // @vitest-environment node
 
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+
 import { describe, expect, it, vi } from 'vitest'
 import { loadEnv } from 'vite'
+import { parseConfigFileTextToJson } from 'typescript'
 
 vi.mock('vite-plugin-monaco-editor', () => ({
   default: {
@@ -16,6 +20,13 @@ type MiddlewareHandler = (
   response: Record<string, never>,
   next: (error?: unknown) => void,
 ) => void
+
+const parseTsConfigPaths = (relativePath: string) => {
+  const filePath = fileURLToPath(new URL(relativePath, import.meta.url))
+  const parsed = parseConfigFileTextToJson(filePath, readFileSync(filePath, 'utf8'))
+
+  return parsed.config?.compilerOptions?.paths ?? {}
+}
 
 describe('workflow ai dev middleware', () => {
   it('loads non-VITE env vars from .env into process.env for the dev server middleware', async () => {
@@ -124,5 +135,24 @@ describe('workflow ai dev middleware', () => {
       expect(secondHandler).toHaveBeenCalledTimes(1)
       expect(next).not.toHaveBeenCalled()
     })
+  })
+
+  it('does not pin primevue core resolution to a versioned pnpm store path', async () => {
+    vi.resetModules()
+
+    const { default: viteConfig } = await import('../../vite.config.ts')
+    const { default: vitestConfig } = await import('../../vitest.config.ts')
+
+    const viteAliases = viteConfig.resolve?.alias ?? {}
+    const vitestAliases = vitestConfig.resolve?.alias ?? {}
+    const tsconfigPaths = parseTsConfigPaths('../../tsconfig.json')
+    const tsconfigAppPaths = parseTsConfigPaths('../../tsconfig.app.json')
+
+    expect(viteAliases).not.toHaveProperty('@primevue/core')
+    expect(vitestAliases).not.toHaveProperty('@primevue/core')
+    expect(tsconfigPaths['@primevue/core']).toBeUndefined()
+    expect(tsconfigPaths['@primevue/core/*']).toBeUndefined()
+    expect(tsconfigAppPaths['@primevue/core']).toBeUndefined()
+    expect(tsconfigAppPaths['@primevue/core/*']).toBeUndefined()
   })
 })

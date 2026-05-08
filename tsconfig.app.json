@@ -8,13 +8,7 @@
 
     // Path mapping for cleaner imports.
     "paths": {
-      "@/*": ["./src/*"],
-      "@primevue/core": [
-        "./node_modules/.pnpm/@primevue+core@4.5.4_vue@3.5.29_typescript@5.9.3_/node_modules/@primevue/core"
-      ],
-      "@primevue/core/*": [
-        "./node_modules/.pnpm/@primevue+core@4.5.4_vue@3.5.29_typescript@5.9.3_/node_modules/@primevue/core/*"
-      ]
+      "@/*": ["./src/*"]
     },
 
     // `vue-tsc --build` produces a .tsbuildinfo file for incremental type-checking.
