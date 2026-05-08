@@ -4,6 +4,7 @@ import { evaluateDeepSeekAgenticSmoke, type DeepSeekSmokeResult } from './core.j
 
 type SmokeOptions = {
   help: boolean
+  debug: boolean
   baseUrl: string
   model: string
   userId: string
@@ -16,6 +17,7 @@ const DEFAULT_MODEL = 'deepseek-v4-flash'
 const parseArgs = (argv: string[]): SmokeOptions => {
   const options: SmokeOptions = {
     help: false,
+    debug: process.env.DEEPSEEK_AGENTIC_DEBUG === '1',
     baseUrl: process.env.DEEPSEEK_AGENTIC_BASE_URL?.trim() || DEFAULT_BASE_URL,
     model: process.env.DEEPSEEK_AGENTIC_MODEL?.trim() || DEFAULT_MODEL,
     userId: process.env.DEEPSEEK_AGENTIC_USER_ID?.trim() || 'deepseek_smoke_user',
@@ -24,6 +26,7 @@ const parseArgs = (argv: string[]): SmokeOptions => {
 
   for (const arg of argv) {
     if (arg === '--help' || arg === '-h') options.help = true
+    if (arg === '--debug') options.debug = true
     if (arg.startsWith('--base-url=')) options.baseUrl = arg.slice('--base-url='.length)
     if (arg.startsWith('--model=')) options.model = arg.slice('--model='.length)
     if (arg.startsWith('--user=')) options.userId = arg.slice('--user='.length)
@@ -48,12 +51,21 @@ const printHelp = () => {
     '  DEEPSEEK_AGENTIC_TIMEOUT_MS 可选，默认 180000',
     '',
     '参数覆盖：',
-    '  --base-url=<url> --model=<model> --user=<userId> --timeout-ms=<ms>',
+    '  --base-url=<url> --model=<model> --user=<userId> --timeout-ms=<ms> --debug',
   ].join('\n'))
 }
 
+const logDebug = (options: SmokeOptions, message: string, details?: unknown) => {
+  if (!options.debug) return
+  console.error(JSON.stringify({
+    scope: 'deepseek-agentic-smoke',
+    message,
+    ...(details === undefined ? {} : { details }),
+  }))
+}
+
 const startServer = async () => {
-  const { createServerHandler } = await import('../../server/app.js')
+  const { createServerHandler } = await import('../../src/server/app.js')
   return new Promise<{ server: Server, baseUrl: string, port: number }>((resolve, reject) => {
     const server = createServer(createServerHandler())
     server.once('error', reject)
@@ -74,8 +86,13 @@ const startServer = async () => {
 
 const closeServer = (server: Server) =>
   new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      server.closeAllConnections?.()
+      resolve()
+    }, 3000)
     server.closeAllConnections?.()
     server.close((error) => {
+      clearTimeout(timer)
       if (error) {
         reject(error)
         return
@@ -123,6 +140,10 @@ const run = async () => {
   process.env.WORKFLOW_AI_SERVER_PORT = String(started.port)
 
   try {
+    logDebug(options, 'started test server', {
+      baseUrl: started.baseUrl,
+      port: started.port,
+    })
     const created = await fetchJson<{ session: { id: string } }>(
       `${started.baseUrl}/api/agent/sessions`,
       {
@@ -166,6 +187,9 @@ const run = async () => {
       },
       options.timeoutMs,
     )
+    logDebug(options, 'created agent session', {
+      sessionId: created.session.id,
+    })
 
     const result = await fetchJson<{
       session: { id: string, status: string }
@@ -191,6 +215,11 @@ const run = async () => {
       },
       options.timeoutMs,
     )
+    logDebug(options, 'agentic run returned', {
+      sessionStatus: result.session.status,
+      executionStatus: result.projection.execution.status,
+      toolCallCount: result.projection.execution.toolCalls.length,
+    })
 
     const report = evaluateDeepSeekAgenticSmoke(result)
 

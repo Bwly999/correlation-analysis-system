@@ -698,6 +698,74 @@ describe('agent session bridge', () => {
     expect(result.projection.analysis.summary).toBe('Agent Kernel 执行失败，请查看错误详情。')
   })
 
+  it('fails agentic-run instead of leaving the session running when opencode prompt hangs', async () => {
+    vi.useFakeTimers()
+    sessionPromptMock.mockImplementationOnce(() => new Promise(() => undefined))
+
+    const created = await createAgentSession({
+      request: buildAgentRequest(),
+      userId: 'user_1',
+    })
+
+    const pendingRun = runAgenticAnalysisSession({
+      sessionId: created.session.id,
+      message: '请自动分析销量影响因素并生成报告',
+    })
+
+    await vi.advanceTimersByTimeAsync(45_001)
+
+    await expect(pendingRun).resolves.toMatchObject({
+      session: expect.objectContaining({
+        status: 'failed',
+      }),
+      projection: expect.objectContaining({
+        execution: expect.objectContaining({
+          status: 'failed',
+          latestAction: 'Agent Kernel 执行失败',
+        }),
+        error: expect.objectContaining({
+          message: 'Agent Kernel 执行超时',
+        }),
+      }),
+    })
+
+    vi.useRealTimers()
+  })
+
+  it('fails agentic-run instead of leaving the session running when opencode runtime setup hangs', async () => {
+    vi.useFakeTimers()
+    createOpencodeServerMock.mockImplementationOnce(() => new Promise(() => undefined))
+
+    const created = await createAgentSession({
+      request: buildAgentRequest(),
+      userId: 'user_1',
+    })
+
+    const pendingRun = runAgenticAnalysisSession({
+      sessionId: created.session.id,
+      message: '请自动分析销量影响因素并生成报告',
+    })
+
+    await vi.advanceTimersByTimeAsync(45_001)
+
+    await expect(pendingRun).resolves.toMatchObject({
+      session: expect.objectContaining({
+        status: 'failed',
+      }),
+      projection: expect.objectContaining({
+        execution: expect.objectContaining({
+          status: 'failed',
+          latestAction: 'Agent Kernel 执行失败',
+        }),
+        error: expect.objectContaining({
+          message: 'Agent Kernel 执行超时',
+        }),
+      }),
+    })
+
+    vi.useRealTimers()
+  })
+
   it('completes agentic-run when opencode messages contain execution and evidence observations', async () => {
     let releaseIdle: (() => void) | null = null
     eventSubscribeMock.mockResolvedValueOnce({

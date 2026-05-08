@@ -4,6 +4,11 @@
 
 ### 变更 (Changed)
 
+- **WIP：增强 Agent 真实链路测评与超时保护**:
+  - 将 Agent live E2E 升级为从 `AgentWorkspace` 发起的前后端真实链路探针，并通过 `AGENT_E2E_LIVE` 显式启用真实模型调用。
+  - 修复 DeepSeek agentic smoke 脚本的服务端入口，补充调试参数和关闭保护，便于后续继续定位真实链路卡点。
+  - 为 Agent Kernel opencode adapter 增加超时失败投影，避免 runtime 初始化或模型 prompt 卡住时会话长期停留在 running。
+
 - **Agent 工作区默认接入 Kernel 执行入口**:
   - 前端 Agent 发送按钮改为调用 `/api/agent/sessions/:id/agentic-run`，确保完整分析请求进入 Agent Kernel 自主执行闭环。
   - `agentic-run` 在缺少数据源或字段摘要时稳定返回等待补充信息状态，不再误显示旧 `/messages` 链路的 opencode 解析失败。

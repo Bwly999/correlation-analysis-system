@@ -409,6 +409,28 @@ const safeSerializeDebugPayload = (value: unknown) => {
   }
 }
 
+const withTimeout = async <T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  message: string,
+): Promise<T> =>
+  new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(message))
+    }, timeoutMs)
+
+    promise.then(
+      (value) => {
+        clearTimeout(timer)
+        resolve(value)
+      },
+      (error) => {
+        clearTimeout(timer)
+        reject(error)
+      },
+    )
+  })
+
 const writeAgentSessionDebugLine = (sessionId: string, category: string, payload: unknown) => {
   if (!ENABLE_AGENT_SESSION_DEBUG_STDOUT) return
   console.log(
@@ -1220,33 +1242,36 @@ const createAgentKernelAdapter = (
   emitEvent?: (event: AgentSessionEvent) => void,
 ): AgentKernelRuntimeAdapter => ({
   async runPrompt(input) {
-    const runtime = await ensureAgentRuntime(record)
-    try {
-      if (!runtime.eventPump) {
-        runtime.eventPump = await startAgentEventPump(input.sessionId, runtime)
+    return withTimeout((async () => {
+      const runtime = await ensureAgentRuntime(record)
+      try {
+        if (!runtime.eventPump) {
+          runtime.eventPump = await startAgentEventPump(input.sessionId, runtime)
+        }
+      } catch (error) {
+        updateSessionProjection(
+          input.sessionId,
+          (projection) => ({
+            ...applyExecutionState(projection, 'running', 'Agent Kernel 已启动'),
+            error: {
+              message: '监听 opencode 事件流失败',
+              detail: error instanceof Error ? error.message : undefined,
+              occurredAt: Date.now(),
+            },
+          }),
+          emitEvent,
+        )
       }
-    } catch (error) {
-      updateSessionProjection(
-        input.sessionId,
-        (projection) => ({
-          ...applyExecutionState(projection, 'running', 'Agent Kernel 已启动'),
-          error: {
-            message: '监听 opencode 事件流失败',
-            detail: error instanceof Error ? error.message : undefined,
-            occurredAt: Date.now(),
-          },
-        }),
-        emitEvent,
-      )
-    }
 
-    const response = await runtime.client.session.prompt(
-      buildAgentKernelPromptRequest(runtime, input),
+      const response = await runtime.client.session.prompt(buildAgentKernelPromptRequest(runtime, input))
+
+      return {
+        observations: extractAgentKernelObservationsFromPromptResponse(response),
+      }
+    })(),
+      OPENCODE_AGENT_REQUEST_TIMEOUT_MS,
+      'Agent Kernel 执行超时',
     )
-
-    return {
-      observations: extractAgentKernelObservationsFromPromptResponse(response),
-    }
   },
 })
 
@@ -1451,14 +1476,45 @@ export const runAgenticAnalysisSession = async (
   }
 
   syncSessionStatus(input.sessionId, 'running', emitEvent)
-  const kernelResult = await runAgentKernel({
-    sessionId: input.sessionId,
-    message: input.message,
-    request: record.request,
-    autonomy: 'agentic',
-    adapter: createAgentKernelAdapter(record, emitEvent),
-    emitEvent,
-  })
+  let kernelResult
+  try {
+    kernelResult = await runAgentKernel({
+      sessionId: input.sessionId,
+      message: input.message,
+      request: record.request,
+      autonomy: 'agentic',
+      adapter: createAgentKernelAdapter(record, emitEvent),
+      emitEvent,
+    })
+  } catch (error) {
+    const failedRecord = updateSessionProjection(
+      input.sessionId,
+      (projection) =>
+        applyProjectionError(
+          applyExecutionState(projection, 'failed', 'Agent Kernel 执行失败'),
+          error instanceof Error ? error.message : 'Agent Kernel 执行失败',
+        ),
+      emitEvent,
+    )
+    syncSessionStatus(input.sessionId, 'failed', emitEvent)
+    publishAgentEvent(
+      input.sessionId,
+      {
+        type: 'failed',
+        message: error instanceof Error ? error.message : 'Agent Kernel 执行失败',
+      },
+      emitEvent,
+    )
+
+    if (!failedRecord) {
+      throw error
+    }
+
+    return {
+      session: failedRecord.session,
+      projection: failedRecord.projection,
+    }
+  }
   const projectionText = resolveKernelProjectionText(kernelResult.verification.status)
 
   updateSessionProjection(
