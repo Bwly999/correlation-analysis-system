@@ -1463,8 +1463,8 @@ export const runAgenticAnalysisSession = async (
 
   updateSessionProjection(
     input.sessionId,
-    (projection) =>
-      applyExecutionState(
+    (projection) => {
+      const nextProjection = applyExecutionState(
         {
           ...projection,
           analysis: {
@@ -1481,7 +1481,17 @@ export const runAgenticAnalysisSession = async (
         },
         projectionText.executionStatus,
         projectionText.latestAction,
-      ),
+      )
+
+      if (projectionText.executionStatus === 'failed') return nextProjection
+
+      const { lastFailure: _lastFailure, ...execution } = nextProjection.execution
+      return {
+        ...nextProjection,
+        execution,
+        error: null,
+      }
+    },
     emitEvent,
   )
   syncSessionStatus(input.sessionId, projectionText.executionStatus, emitEvent)

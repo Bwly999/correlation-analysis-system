@@ -26,7 +26,7 @@ import {
   WorkflowAiRequestError,
   createAgentSession,
   fetchSystemModelProfiles,
-  sendAgentSessionMessage,
+  runAgenticAnalysisSession,
   streamAgentSessionEvents,
   syncAgentCanvas,
   testWorkflowAiModelProfile,
@@ -516,7 +516,7 @@ export const useWorkflowAiStore = defineStore('workflow-ai', () => {
       })
       ensureEventStream(session.id)
 
-      const response = await sendAgentSessionMessage(session.id, {
+      const response = await runAgenticAnalysisSession(session.id, {
         content: message,
       })
       if (!activeSession.value || activeSession.value.id !== response.session.id || activeSession.value.status === 'idle') {

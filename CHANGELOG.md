@@ -4,6 +4,11 @@
 
 ### 变更 (Changed)
 
+- **Agent 工作区默认接入 Kernel 执行入口**:
+  - 前端 Agent 发送按钮改为调用 `/api/agent/sessions/:id/agentic-run`，确保完整分析请求进入 Agent Kernel 自主执行闭环。
+  - `agentic-run` 在缺少数据源或字段摘要时稳定返回等待补充信息状态，不再误显示旧 `/messages` 链路的 opencode 解析失败。
+  - 补充前端 store 与 gateway 回归测试，覆盖 Kernel 入口调用和陈旧错误态清理。
+
 - **清理旧 Agent 编排入口，收敛到 Kernel 主链**:
   - 删除历史 `agenticAnalysis` 状态机模块、`runAnalysisAgentSessionLoop` gateway 兼容出口和旧自研 `agentLoop` phase / conclusion / toolRegistry 编排层。
   - 移除旧 `benchmark:agent` 脚本，后续评测以 `eval:agentic-analysis` 和 `smoke:deepseek-agentic` 为主。

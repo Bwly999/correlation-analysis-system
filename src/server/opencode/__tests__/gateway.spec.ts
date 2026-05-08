@@ -632,6 +632,40 @@ describe('agent session bridge', () => {
     )
   })
 
+  it('clears stale projection errors when agentic-run reaches a safe waiting state', async () => {
+    const created = await createAgentSession({
+      request: {
+        ...buildAgentRequest(),
+        contextHints: undefined,
+        dataSources: [],
+      },
+      userId: 'user_1',
+    })
+
+    sessionPromptAsyncMock.mockRejectedValueOnce(new Error('Opencode 未返回可解析的助手消息'))
+    await expect(
+      sendAgentSessionMessage({
+        sessionId: created.session.id,
+        message: '先走一次普通消息',
+      }),
+    ).rejects.toThrow('Opencode 未返回可解析的助手消息')
+
+    const failedSnapshot = getAgentSession(created.session.id)
+    expect(failedSnapshot?.projection.error?.message).toBe('Opencode 未返回可解析的助手消息')
+
+    const result = await runAgenticAnalysisSession({
+      sessionId: created.session.id,
+      message: '请自动分析销量影响因素',
+    })
+
+    expect(result.projection.execution).toMatchObject({
+      status: 'completed',
+      latestAction: '等待补充数据源或字段摘要',
+    })
+    expect(result.projection.execution.lastFailure).toBeUndefined()
+    expect(result.projection.error).toBeNull()
+  })
+
   it('runs agentic-run through the agent kernel opencode adapter when data context exists', async () => {
     const created = await createAgentSession({
       request: buildAgentRequest(),
