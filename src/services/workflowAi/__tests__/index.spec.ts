@@ -82,9 +82,11 @@ describe('workflowAi service', () => {
 
     expect(globalThis.fetch).toHaveBeenCalledWith('/api/workflow-ai/plan', {
       method: 'POST',
-      headers: {
+      headers: expect.objectContaining({
         'Content-Type': 'application/json',
-      },
+        'x-workflow-user-id': expect.any(String),
+        'x-workflow-user-name': expect.any(String),
+      }),
       body: JSON.stringify(request),
     })
   })
@@ -191,9 +193,11 @@ describe('workflowAi service', () => {
       '/api/workflow-ai/plan/stream',
       expect.objectContaining({
         method: 'POST',
-        headers: {
+        headers: expect.objectContaining({
           'Content-Type': 'application/json',
-        },
+          'x-workflow-user-id': expect.any(String),
+          'x-workflow-user-name': expect.any(String),
+        }),
       }),
     )
   })
@@ -245,9 +249,11 @@ describe('workflowAi service', () => {
       '/api/workflow-ai/session/start',
       expect.objectContaining({
         method: 'POST',
-        headers: {
+        headers: expect.objectContaining({
           'Content-Type': 'application/json',
-        },
+          'x-workflow-user-id': expect.any(String),
+          'x-workflow-user-name': expect.any(String),
+        }),
       }),
     )
   })
@@ -378,7 +384,15 @@ describe('workflowAi service', () => {
     const response = await getWorkflowAiSession('session_1')
 
     expect(response.session.status).toBe('running')
-    expect(globalThis.fetch).toHaveBeenCalledWith('/api/workflow-ai/session/session_1')
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      '/api/workflow-ai/session/session_1',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          'x-workflow-user-id': expect.any(String),
+          'x-workflow-user-name': expect.any(String),
+        }),
+      }),
+    )
   })
 
   it('submits user answers to the workflow ai session input endpoint', async () => {
@@ -422,17 +436,22 @@ describe('workflowAi service', () => {
     })
 
     expect(response.session.sessionId).toBe('session_1')
-    expect(globalThis.fetch).toHaveBeenCalledWith('/api/workflow-ai/session/session_1/input', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        answers: {
-          question_1: '目标字段就是 target',
-        },
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      '/api/workflow-ai/session/session_1/input',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          'Content-Type': 'application/json',
+          'x-workflow-user-id': expect.any(String),
+          'x-workflow-user-name': expect.any(String),
+        }),
+        body: JSON.stringify({
+          answers: {
+            question_1: '目标字段就是 target',
+          },
+        }),
       }),
-    })
+    )
   })
 
   it('does not expose removed legacy analysis-agent helpers', () => {
@@ -482,6 +501,8 @@ describe('workflowAi service', () => {
       expect.objectContaining({
         headers: expect.objectContaining({
           Authorization: 'Bearer jwt-from-host',
+          'x-workflow-user-id': expect.any(String),
+          'x-workflow-user-name': expect.any(String),
         }),
       }),
     )
@@ -570,9 +591,11 @@ describe('workflowAi service', () => {
       '/api/agent/sessions',
       expect.objectContaining({
         method: 'POST',
-        headers: {
+        headers: expect.objectContaining({
           'Content-Type': 'application/json',
-        },
+          'x-workflow-user-id': expect.any(String),
+          'x-workflow-user-name': expect.any(String),
+        }),
       }),
     )
   })
@@ -642,9 +665,11 @@ describe('workflowAi service', () => {
     expect(response.assistantMessage).toBeUndefined()
     expect(globalThis.fetch).toHaveBeenCalledWith('/api/agent/sessions/agent_1/messages', {
       method: 'POST',
-      headers: {
+      headers: expect.objectContaining({
         'Content-Type': 'application/json',
-      },
+        'x-workflow-user-id': expect.any(String),
+        'x-workflow-user-name': expect.any(String),
+      }),
       body: JSON.stringify({
         content: '继续分析',
       }),
@@ -685,7 +710,15 @@ describe('workflowAi service', () => {
       'message.delta',
       'message.completed',
     ])
-    expect(globalThis.fetch).toHaveBeenCalledWith('/api/agent/sessions/agent_1/events')
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      '/api/agent/sessions/agent_1/events',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          'x-workflow-user-id': expect.any(String),
+          'x-workflow-user-name': expect.any(String),
+        }),
+      }),
+    )
   })
 
   it('loads projection snapshots and canvas sync results through the new endpoints', async () => {
@@ -782,12 +815,25 @@ describe('workflowAi service', () => {
 
     expect(projection.workflow.workflowName).toBe('销量诊断流程')
     expect(syncResult.syncSummary).toBe('已同步当前画布，共 3 个节点、2 条连线')
-    expect(globalThis.fetch).toHaveBeenNthCalledWith(1, '/api/agent/sessions/agent_1/projection')
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(
+      1,
+      '/api/agent/sessions/agent_1/projection',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          'x-workflow-user-id': expect.any(String),
+          'x-workflow-user-name': expect.any(String),
+        }),
+      }),
+    )
     expect(globalThis.fetch).toHaveBeenNthCalledWith(
       2,
       '/api/agent/sessions/agent_1/canvas-sync',
       expect.objectContaining({
         method: 'POST',
+        headers: expect.objectContaining({
+          'x-workflow-user-id': expect.any(String),
+          'x-workflow-user-name': expect.any(String),
+        }),
       }),
     )
   })

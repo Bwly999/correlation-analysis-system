@@ -12,6 +12,7 @@ import {
   syncAgentCanvas,
 } from '../opencode/gateway.js'
 import type { ServerDependencies } from '../bootstrap/serverDependencies.js'
+import { requireWorkflowUser } from '../http/workflowUser.js'
 import type { HttpDomainHandler } from '../http/types.js'
 
 export const createAgentRoutes = (): HttpDomainHandler<ServerDependencies> => async (context) => {
@@ -23,7 +24,7 @@ export const createAgentRoutes = (): HttpDomainHandler<ServerDependencies> => as
   const agentSessionDetailMatch = pathname.match(/^\/api\/agent\/sessions\/([^/]+)$/)
 
   if (method === 'POST' && pathname === '/api/agent/sessions') {
-    const currentUser = context.dependencies.resolveStorageUser(context.request.headers)
+    const currentUser = requireWorkflowUser(context)
     const body = await context.readJsonBody<WorkflowAiPlanRequest>()
     const result = await createAgentSession({
       request: body,

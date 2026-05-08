@@ -1,5 +1,6 @@
 import type { ServerExecutionRecord, ServerSavedWorkflow } from '../storageService.js'
 import type { ServerDependencies } from '../bootstrap/serverDependencies.js'
+import { requireWorkflowUser } from '../http/workflowUser.js'
 import type { HttpDomainHandler } from '../http/types.js'
 
 export const createStorageRoutes = (): HttpDomainHandler<ServerDependencies> => async (context) => {
@@ -14,18 +15,18 @@ export const createStorageRoutes = (): HttpDomainHandler<ServerDependencies> => 
   const workflowDetailMatch = pathname.match(/^\/api\/storage\/workflows\/([^/]+)$/)
 
   if (method === 'GET' && pathname === '/api/storage/me') {
-    context.sendJson(200, dependencies.resolveStorageUser(context.request.headers))
+    context.sendJson(200, requireWorkflowUser(context))
     return true
   }
 
   if (method === 'GET' && pathname === '/api/storage/workflows') {
-    const currentUser = dependencies.resolveStorageUser(context.request.headers)
+    const currentUser = requireWorkflowUser(context)
     context.sendJson(200, await dependencies.storageService.getUserWorkflows(currentUser.id))
     return true
   }
 
   if (method === 'POST' && pathname === '/api/storage/workflows') {
-    const currentUser = dependencies.resolveStorageUser(context.request.headers)
+    const currentUser = requireWorkflowUser(context)
     const workflow = await context.readJsonBody<ServerSavedWorkflow>()
     await dependencies.storageService.saveUserWorkflow(currentUser.id, workflow)
     context.sendJson(200, { ok: true })
@@ -33,14 +34,14 @@ export const createStorageRoutes = (): HttpDomainHandler<ServerDependencies> => 
   }
 
   if (method === 'GET' && workflowVersionsMatch) {
-    const currentUser = dependencies.resolveStorageUser(context.request.headers)
+    const currentUser = requireWorkflowUser(context)
     const workflowId = decodeURIComponent(workflowVersionsMatch[1] ?? '')
     context.sendJson(200, await dependencies.storageService.getUserWorkflowVersions(currentUser.id, workflowId))
     return true
   }
 
   if (method === 'GET' && workflowVersionDetailMatch) {
-    const currentUser = dependencies.resolveStorageUser(context.request.headers)
+    const currentUser = requireWorkflowUser(context)
     const workflowId = decodeURIComponent(workflowVersionDetailMatch[1] ?? '')
     const versionId = decodeURIComponent(workflowVersionDetailMatch[2] ?? '')
     const version = await dependencies.storageService.getUserWorkflowVersion(currentUser.id, workflowId, versionId)
@@ -53,7 +54,7 @@ export const createStorageRoutes = (): HttpDomainHandler<ServerDependencies> => 
   }
 
   if (method === 'POST' && workflowVersionRollbackMatch) {
-    const currentUser = dependencies.resolveStorageUser(context.request.headers)
+    const currentUser = requireWorkflowUser(context)
     const workflowId = decodeURIComponent(workflowVersionRollbackMatch[1] ?? '')
     const versionId = decodeURIComponent(workflowVersionRollbackMatch[2] ?? '')
     const result = await dependencies.storageService.rollbackUserWorkflowVersion(currentUser.id, workflowId, versionId)
@@ -66,7 +67,7 @@ export const createStorageRoutes = (): HttpDomainHandler<ServerDependencies> => 
   }
 
   if (method === 'GET' && workflowDetailMatch) {
-    const currentUser = dependencies.resolveStorageUser(context.request.headers)
+    const currentUser = requireWorkflowUser(context)
     const workflowId = decodeURIComponent(workflowDetailMatch[1] ?? '')
     const workflow = await dependencies.storageService.getUserWorkflowById(currentUser.id, workflowId)
     if (!workflow) {
@@ -78,7 +79,7 @@ export const createStorageRoutes = (): HttpDomainHandler<ServerDependencies> => 
   }
 
   if (method === 'DELETE' && workflowDetailMatch) {
-    const currentUser = dependencies.resolveStorageUser(context.request.headers)
+    const currentUser = requireWorkflowUser(context)
     const workflowId = decodeURIComponent(workflowDetailMatch[1] ?? '')
     const deleted = await dependencies.storageService.deleteUserWorkflow(currentUser.id, workflowId)
     if (!deleted) {
@@ -90,13 +91,13 @@ export const createStorageRoutes = (): HttpDomainHandler<ServerDependencies> => 
   }
 
   if (method === 'GET' && pathname === '/api/storage/history') {
-    const currentUser = dependencies.resolveStorageUser(context.request.headers)
+    const currentUser = requireWorkflowUser(context)
     context.sendJson(200, await dependencies.storageService.getUserHistory(currentUser.id))
     return true
   }
 
   if (method === 'POST' && pathname === '/api/storage/history') {
-    const currentUser = dependencies.resolveStorageUser(context.request.headers)
+    const currentUser = requireWorkflowUser(context)
     const body = await context.readJsonBody<{ record?: ServerExecutionRecord; limit?: number }>()
     if (!body.record) {
       context.sendJson(400, { message: '缺少运行记录' })
@@ -108,7 +109,7 @@ export const createStorageRoutes = (): HttpDomainHandler<ServerDependencies> => 
   }
 
   if (method === 'DELETE' && pathname === '/api/storage/history') {
-    const currentUser = dependencies.resolveStorageUser(context.request.headers)
+    const currentUser = requireWorkflowUser(context)
     await dependencies.storageService.clearUserHistory(currentUser.id)
     context.sendJson(200, { ok: true })
     return true

@@ -4,15 +4,12 @@ import { createStorageCompositionRoot, type StorageCompositionRoot } from './sto
 import type { AnalysisRouteKey } from '../analysisProxy.js'
 import type { ServerStorageService, ServerStorageUser } from '../storageService.js'
 import {
-  WORKFLOW_USER_ID_HEADER,
-  WORKFLOW_USER_NAME_HEADER,
-  resolveSingleHeaderValue,
-} from '../http/workflowHeaders.js'
+  createWorkflowUserResolver,
+} from '../http/workflowUser.js'
 import {
   createWorkflowMcpRuntime,
   type WorkflowMcpRuntime,
 } from '../opencode/workflowMcpRuntime.js'
-import { decodeWorkflowHeaderValue } from '../../shared/workflowHeaderEncoding.js'
 
 export type ServerStorageUserResolver = (
   headers: IncomingMessage['headers'],
@@ -39,24 +36,7 @@ export interface CreateServerDependenciesOptions {
 
 export const createServerStorageUserResolver = (
   defaultStorageUser?: ServerStorageUser,
-): ServerStorageUserResolver => (headers) => {
-  const headerUserId = decodeWorkflowHeaderValue(resolveSingleHeaderValue(headers[WORKFLOW_USER_ID_HEADER]))
-  const headerUserName = decodeWorkflowHeaderValue(resolveSingleHeaderValue(headers[WORKFLOW_USER_NAME_HEADER]))
-  const id = headerUserId || defaultStorageUser?.id
-
-  if (!id) {
-    const error = new Error(
-      `缺少用户信息，请通过 ${WORKFLOW_USER_ID_HEADER} 请求头或默认依赖注入提供用户`,
-    )
-    ;(error as Error & { statusCode: number }).statusCode = 400
-    throw error
-  }
-
-  return {
-    id,
-    name: headerUserName || defaultStorageUser?.name || '默认用户',
-  }
-}
+): ServerStorageUserResolver => createWorkflowUserResolver(defaultStorageUser)
 
 export const createServerDependencies = (
   options: CreateServerDependenciesOptions = {},

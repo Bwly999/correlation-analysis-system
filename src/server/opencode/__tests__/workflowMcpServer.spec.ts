@@ -298,6 +298,33 @@ describe('workflow MCP server', () => {
     })
   })
 
+  it('rejects workflow MCP requests that omit the workflow user header', async () => {
+    const created = await createAgentSession({
+      request: buildAgentRequest(),
+      userId: 'user_1',
+    })
+
+    const request = {
+      ...createRequest(created.session.id),
+      headers: {
+        'x-workflow-session-id': created.session.id,
+      },
+    } as unknown as IncomingMessage
+    const response = createResponse()
+
+    await handleWorkflowMcpRequest(request, response, createWorkflowMcpDependencies())
+
+    expect(response.statusCode).toBe(400)
+    expect(JSON.parse(response.body)).toEqual({
+      jsonrpc: '2.0',
+      error: {
+        code: -32603,
+        message: '缺少用户标识，请通过 x-workflow-user-id 请求头或 defaultUser 依赖注入提供用户',
+      },
+      id: null,
+    })
+  })
+
   it('exposes session data sources and their schema summaries', async () => {
     const created = await createAgentSession({
       request: buildAgentRequest(),

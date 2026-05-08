@@ -1,5 +1,5 @@
 import { buildWorkflowAiNodeCatalog } from '@/ai/catalog'
-import { createWorkflowApiAuthHeaders } from '@/services/apiAuth'
+import { fetchWithWorkflowContext } from '@/services/workflowRequestContext'
 import type {
   AgentSessionCanvasSyncRequest,
   AgentSessionCanvasSyncResponse,
@@ -26,23 +26,8 @@ import type {
 
 const WORKFLOW_AI_API_BASE_URL = import.meta.env.VITE_WORKFLOW_AI_API_BASE_URL || '/api'
 
-const withWorkflowApiAuth = (init: RequestInit = {}): RequestInit => {
-  const authHeaders = createWorkflowApiAuthHeaders()
-  if (!Object.keys(authHeaders).length) return init
-
-  return {
-    ...init,
-    headers: {
-      ...(init.headers as Record<string, string> | undefined),
-      ...authHeaders,
-    },
-  }
-}
-
-const fetchWorkflowApi = (url: string, init?: RequestInit) => {
-  const nextInit = withWorkflowApiAuth(init ?? {})
-  return init || Object.keys(nextInit).length ? fetch(url, nextInit) : fetch(url)
-}
+const fetchWorkflowApi = (url: string, init?: RequestInit) =>
+  fetchWithWorkflowContext(url, init)
 
 type WorkflowAiErrorPayload = {
   message?: string

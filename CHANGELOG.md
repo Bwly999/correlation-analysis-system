@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### 修复 (Fixed)
+
+- **统一工作流用户上下文注入与解析链路，修复分析代理会话偶发缺少用户标识的问题**:
+  - 前端新增统一的工作流请求上下文封装，`/api/storage/*`、`/api/agent/*`、`/api/workflow-ai/*` 请求现在会自动附加 `Authorization`、`x-workflow-user-id` 与 `x-workflow-user-name`。
+  - 服务端新增统一的工作流用户解析能力，并让 storage、agent、workflow MCP 等工作流域入口复用同一套缺省与报错规则。
+  - 补充前端 header 注入测试、工作流域路由契约测试与 MCP/Agent 回归测试，防止后续新增接口再次绕过用户上下文。
+
 ### 变更 (Changed)
 
 - **工作流画布交互对齐 n8n 操作习惯**:

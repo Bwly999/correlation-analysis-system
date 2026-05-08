@@ -7,53 +7,11 @@ import type {
   WorkflowVersionDetail,
   WorkflowVersionMetadata,
 } from './types'
-import { createWorkflowApiAuthHeaders } from '@/services/apiAuth'
-import { encodeWorkflowHeaderValue } from '@/shared/workflowHeaderEncoding'
+import { fetchWithWorkflowContext } from '@/services/workflowRequestContext'
 import {
   buildRequestErrorFromResponse,
   buildRequestErrorFromUnknown,
 } from '@/utils/requestError'
-
-const WORKFLOW_USER_ID_STORAGE_KEY = 'workflow-storage-user-id'
-const WORKFLOW_USER_NAME_STORAGE_KEY = 'workflow-storage-user-name'
-const FALLBACK_WORKFLOW_USER_NAME = '默认用户'
-
-const resolveBrowserStorage = () => {
-  if (typeof window === 'undefined') return null
-
-  try {
-    return window.localStorage
-  } catch {
-    return null
-  }
-}
-
-const getOrCreateFallbackWorkflowUser = () => {
-  const storage = resolveBrowserStorage()
-  const generatedId = `local-workflow-user-${Math.random().toString(36).slice(2, 10)}`
-  if (!storage) {
-    return {
-      id: generatedId,
-      name: FALLBACK_WORKFLOW_USER_NAME,
-    }
-  }
-
-  const cachedId = storage.getItem(WORKFLOW_USER_ID_STORAGE_KEY)?.trim()
-  const cachedName = storage.getItem(WORKFLOW_USER_NAME_STORAGE_KEY)?.trim()
-  if (cachedId) {
-    return {
-      id: cachedId,
-      name: cachedName || FALLBACK_WORKFLOW_USER_NAME,
-    }
-  }
-
-  storage.setItem(WORKFLOW_USER_ID_STORAGE_KEY, generatedId)
-  storage.setItem(WORKFLOW_USER_NAME_STORAGE_KEY, FALLBACK_WORKFLOW_USER_NAME)
-  return {
-    id: generatedId,
-    name: FALLBACK_WORKFLOW_USER_NAME,
-  }
-}
 
 /**
  * 服务器存储驱动实现 (Stub)
@@ -62,29 +20,13 @@ const getOrCreateFallbackWorkflowUser = () => {
 export class ServerStorageProvider implements IStorageProvider {
   private baseUrl = import.meta.env.VITE_API_BASE_URL || '/api'
 
-  private resolveWorkflowHeaders(): Record<string, string> {
-    const envUserId = import.meta.env.VITE_WORKFLOW_USER_ID?.trim()
-    const envUserName = import.meta.env.VITE_WORKFLOW_USER_NAME?.trim()
-    const fallbackUser = getOrCreateFallbackWorkflowUser()
-    const userId = envUserId || fallbackUser.id
-    const userName = envUserName || fallbackUser.name
-    if (!userId) return {}
-
-    return {
-      'x-workflow-user-id': encodeWorkflowHeaderValue(userId),
-      'x-workflow-user-name': encodeWorkflowHeaderValue(userName || FALLBACK_WORKFLOW_USER_NAME),
-    }
-  }
-
   private async request(path: string, options?: RequestInit, allowNotFound = false) {
     let response: Response
     try {
-      response = await fetch(`${this.baseUrl}${path}`, {
+      response = await fetchWithWorkflowContext(`${this.baseUrl}${path}`, {
         ...options,
         headers: {
           'Content-Type': 'application/json',
-          ...createWorkflowApiAuthHeaders(),
-          ...this.resolveWorkflowHeaders(),
           ...options?.headers,
         },
       })
