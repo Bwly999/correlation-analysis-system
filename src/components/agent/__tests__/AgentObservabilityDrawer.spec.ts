@@ -101,8 +101,8 @@ describe('AgentObservabilityDrawer', () => {
       global: {
         stubs: {
           Drawer: {
-            props: ['visible'],
-            template: '<div data-testid="drawer-stub" :data-visible="String(visible)"><slot name="header" /><slot /></div>',
+            props: ['visible', 'modal'],
+            template: '<div data-testid="drawer-stub" :data-visible="String(visible)" :data-modal="String(modal)"><slot name="header" /><slot /></div>',
           },
           Tabs: { props: ['value'], template: '<div class="tabs-stub"><slot /></div>' },
           TabList: { template: '<div class="tab-list-stub"><slot /></div>' },
@@ -127,5 +127,6 @@ describe('AgentObservabilityDrawer', () => {
     expect(text).toContain('错误')
     expect(text).toContain('日志目录')
     expect(wrapper.get('[data-testid="agent-observability-drawer"]').attributes('data-visible')).toBe('true')
+    expect(wrapper.get('[data-testid="agent-observability-drawer"]').attributes('data-modal')).toBe('false')
   })
 })

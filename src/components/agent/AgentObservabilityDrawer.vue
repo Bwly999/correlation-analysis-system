@@ -98,6 +98,8 @@ onMounted(async () => {
   <Drawer
     data-testid="agent-observability-drawer"
     :visible="props.visible"
+    :modal="false"
+    :dismissable="false"
     position="right"
     class="!w-full md:!w-[34rem] lg:!w-[42rem]"
     @update:visible="emit('update:visible', $event)"
