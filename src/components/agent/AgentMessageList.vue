@@ -29,7 +29,7 @@ const isBusinessCard = (kind: AgentConversationEntry['kind']) =>
       :class="`is-${message.kind}`"
     >
       <div v-if="message.kind === 'user' || message.kind === 'assistant'" class="agent-message-list__role">
-        {{ message.kind === 'user' ? '你' : '分析代理' }}
+        {{ message.kind === 'user' ? '你' : '通用助手' }}
       </div>
 
       <div

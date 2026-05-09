@@ -274,6 +274,41 @@ describe('workflow MCP server', () => {
     })
   })
 
+  it('blocks high-risk workflow mutation tools for generic_read_write_lite agent sessions', async () => {
+    const created = await createAgentSession({
+      request: buildAgentRequest(),
+      userId: 'user_1',
+    })
+
+    const request = createRequest(created.session.id)
+    const response = createResponse()
+    await handleWorkflowMcpRequest(request, response, createWorkflowMcpDependencies())
+
+    const updateFullWorkflow = currentTools.get('workflow_update_full_workflow')
+    const rollbackVersion = currentTools.get('workflow_rollback_workflow_version')
+    const workflowVersionsCompat = currentTools.get('workflow_workflow_versions')
+
+    await expect(updateFullWorkflow?.({
+      workflow: {
+        id: 'wf_1',
+        name: '危险整包替换',
+        nodes: [],
+        edges: [],
+      },
+    })).rejects.toThrow('当前通用 Agent 会话不允许执行该工作流写操作')
+
+    await expect(rollbackVersion?.({
+      workflowId: 'wf_1',
+      versionId: 'version_1',
+    })).rejects.toThrow('当前通用 Agent 会话不允许执行该工作流写操作')
+
+    await expect(workflowVersionsCompat?.({
+      mode: 'rollback',
+      workflowId: 'wf_1',
+      versionId: 'version_1',
+    })).rejects.toThrow('当前通用 Agent 会话不允许执行该工作流写操作')
+  })
+
   it('rejects requests without the internal MCP auth token when auth is enabled', async () => {
     process.env.WORKFLOW_MCP_AUTH_TOKEN = 'test-mcp-token'
 
@@ -796,6 +831,50 @@ describe('workflow MCP server', () => {
         ],
       }),
     })
+  })
+
+  it('rejects remove and disconnect operations in workflow_update_partial_workflow for generic sessions', async () => {
+    const created = await createAgentSession({
+      request: buildAgentRequest(),
+      userId: 'user_1',
+    })
+
+    await saveUserWorkflow('user_1', {
+      id: 'workflow_partial_restricted',
+      name: '受限增量流程',
+      updatedAt: Date.now(),
+      nodes: [],
+      edges: [],
+    })
+
+    const request = createRequest(created.session.id)
+    const response = createResponse()
+    await handleWorkflowMcpRequest(request, response, createWorkflowMcpDependencies())
+
+    const updatePartialWorkflow = currentTools.get('workflow_update_partial_workflow')
+    expect(updatePartialWorkflow).toBeTypeOf('function')
+
+    await expect(updatePartialWorkflow?.({
+      workflowId: 'workflow_partial_restricted',
+      operations: [
+        {
+          id: 'remove_1',
+          type: 'removeNode',
+          nodeRef: 'node_1',
+        },
+      ],
+    })).rejects.toThrow('当前通用 Agent 会话不允许执行该增量操作')
+
+    await expect(updatePartialWorkflow?.({
+      workflowId: 'workflow_partial_restricted',
+      operations: [
+        {
+          id: 'disconnect_1',
+          type: 'disconnectEdge',
+          edgeRef: 'edge_1',
+        },
+      ],
+    })).rejects.toThrow('当前通用 Agent 会话不允许执行该增量操作')
   })
 
   it('debugs a single node and returns upstream trace with the raw node result summary', async () => {

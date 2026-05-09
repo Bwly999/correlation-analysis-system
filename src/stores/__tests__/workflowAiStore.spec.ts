@@ -239,7 +239,7 @@ describe('workflowAiStore', () => {
         },
       })
     })
-    runAgenticAnalysisSessionMock.mockResolvedValueOnce({
+    sendAgentSessionMessageMock.mockResolvedValueOnce({
       session: {
         id: 'agent_1',
         mode: 'edit',
@@ -267,7 +267,7 @@ describe('workflowAiStore', () => {
         },
         execution: {
           status: 'running',
-          latestAction: '正在调用 opencode 分析当前业务问题',
+          latestAction: '正在处理中',
           toolCalls: [],
           pendingApprovals: [],
         },
@@ -290,22 +290,17 @@ describe('workflowAiStore', () => {
 
     await store.submitAgentMessage(workflowStore as any)
 
-    expect(runAgenticAnalysisSessionMock).toHaveBeenCalledWith('agent_1', {
+    expect(sendAgentSessionMessageMock).toHaveBeenCalledWith('agent_1', {
       content: '帮我分析价格和销量关系',
+      skillId: 'generic',
     })
-    expect(sendAgentSessionMessageMock).not.toHaveBeenCalled()
+    expect(runAgenticAnalysisSessionMock).not.toHaveBeenCalled()
     expect(store.activeSession?.id).toBe('agent_1')
     expect(store.activeSession?.status).toBe('completed')
     expect(store.projectionSnapshot?.analysis.summary).toBe('价格是当前最值得优先验证的候选因子。')
     expect(store.projectionSnapshot?.execution.status).toBe('completed')
     expect(store.streamStatus).toBe('completed')
-    expect(store.agentMessages.map((item) => item.kind)).toEqual([
-      'user',
-      'workflow_projection',
-      'analysis_projection',
-      'execution_projection',
-      'assistant',
-    ])
+    expect(store.agentMessages.map((item) => item.kind)).toEqual(['user', 'assistant'])
     expect(store.streamingMessage).toBe('')
   })
 
@@ -352,7 +347,7 @@ describe('workflowAiStore', () => {
 
     expect(store.projectionSnapshot?.execution.latestAction).toBe('正在分析价格字段')
     expect(store.streamingMessage).toBe('正在分析价格字段…')
-    expect(store.agentMessages.some((item) => item.kind === 'execution_projection')).toBe(true)
+    expect(store.agentMessages.some((item) => item.kind === 'tool_call')).toBe(false)
   })
 
   it('shows projected tool calls as visible agent messages', () => {

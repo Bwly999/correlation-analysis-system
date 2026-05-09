@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   createOpencodeServerMock,
@@ -37,10 +37,12 @@ vi.mock('@opencode-ai/sdk/v2', () => ({
 
 import {
   createAgentSession,
+  disposeAllAgentRuntimes,
   getAgentSession,
   runAgenticAnalysisSession,
   sendAgentSessionMessage,
 } from '../gateway.js'
+import { getAgentSessionRecord } from '../agentSessionStore.js'
 
 const buildAgentRequest = () => ({
   mode: 'edit' as const,
@@ -177,6 +179,10 @@ describe('agent session bridge', () => {
     })
   })
 
+  afterEach(async () => {
+    await disposeAllAgentRuntimes()
+  })
+
   it('creates an agent session with an initial business projection', async () => {
     const result = await createAgentSession({
       request: buildAgentRequest(),
@@ -203,6 +209,12 @@ describe('agent session bridge', () => {
         status: 'idle',
       }),
     })
+    expect(result.session).toMatchObject({
+      status: 'idle',
+    })
+    const record = getAgentSessionRecord(result.session.id)
+    expect(record?.session.id).toBe(result.session.id)
+    expect(record?.request.agentCapability).toBe('generic_read_write_lite')
   })
 
   it('captures event pump failures as projection errors instead of throwing a network reset', async () => {
@@ -267,6 +279,8 @@ describe('agent session bridge', () => {
             text: '继续给出当前分析建议',
           },
         ],
+        system: expect.stringContaining('通用工作助手'),
+        format: undefined,
       }),
     )
     expect(sessionPromptMock).not.toHaveBeenCalled()
@@ -282,6 +296,136 @@ describe('agent session bridge', () => {
         'projection.execution.updated',
       ]),
     )
+  })
+
+  it('explicitly disables non-workflow tools in generic prompt requests', async () => {
+    toolIdsMock.mockResolvedValueOnce({
+      data: [
+        'workflow_get_session_context',
+        'workflow_create_workflow',
+        'chrome-devtools_list_pages',
+        'websearch',
+        'read',
+      ],
+    })
+
+    const created = await createAgentSession({
+      request: buildAgentRequest(),
+      userId: 'user_1',
+    })
+
+    await sendAgentSessionMessage({
+      sessionId: created.session.id,
+      message: '你好，帮我随便创建一个工作流',
+    })
+
+    expect(sessionPromptAsyncMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tools: {
+          workflow_get_session_context: true,
+          workflow_create_workflow: true,
+          'chrome-devtools_list_pages': false,
+          websearch: false,
+          read: false,
+        },
+      }),
+    )
+    expect(createOpencodeServerMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        config: expect.objectContaining({
+          mcp: {},
+          tools: expect.objectContaining({
+            '*': false,
+            workflow_get_session_context: true,
+            workflow_create_workflow: true,
+            'workflow_*': true,
+          }),
+        }),
+      }),
+    )
+  })
+
+  it('rejects permission requests for non-workflow tools', async () => {
+    let releaseIdle: (() => void) | null = null
+    const idleGate = new Promise<void>((resolve) => {
+      releaseIdle = resolve
+    })
+    eventSubscribeMock.mockResolvedValueOnce({
+      stream: {
+        async *[Symbol.asyncIterator]() {
+          yield {
+            type: 'permission.asked',
+            properties: {
+              id: 'perm_non_workflow_1',
+              sessionID: 'opencode_session_1',
+              permission: 'chrome-devtools_list_pages',
+              patterns: ['*'],
+              metadata: {},
+              always: [],
+              tool: {
+                messageID: 'msg_user_1',
+                callID: 'tool_call_chrome_1',
+              },
+            },
+          }
+          await idleGate
+          yield {
+            type: 'session.idle',
+            properties: {
+              sessionID: 'opencode_session_1',
+            },
+          }
+        },
+      },
+      stop: vi.fn(),
+    })
+    sessionPromptAsyncMock.mockImplementationOnce(async () => {
+      queueMicrotask(() => {
+        releaseIdle?.()
+      })
+      return { data: { id: 'run_1' } }
+    })
+    sessionMessagesMock.mockResolvedValueOnce({
+      data: [
+        {
+          info: {
+            id: 'msg_assistant_1',
+            role: 'assistant',
+            parentID: 'msg_user_1',
+            time: {
+              completed: Date.now(),
+            },
+          },
+          parts: [
+            {
+              type: 'text',
+              text: '我先读取了当前上下文，但没有执行其它无关工具。',
+            },
+          ],
+        },
+      ],
+    })
+
+    const created = await createAgentSession({
+      request: buildAgentRequest(),
+      userId: 'user_1',
+    })
+
+    const result = await sendAgentSessionMessage({
+      sessionId: created.session.id,
+      message: '你好，帮我随便创建一个工作流',
+    })
+
+    await Promise.resolve()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    const snapshot = getAgentSession(created.session.id)
+
+    expect(permissionReplyMock).toHaveBeenCalledWith({
+      requestID: 'perm_non_workflow_1',
+      reply: 'reject',
+    })
+    expect(result.session.status).toBe('completed')
+    expect(snapshot?.session.status).toBe('completed')
   })
 
   it('projects workflow MCP tool call events into the business execution state', async () => {
@@ -571,6 +715,155 @@ describe('agent session bridge', () => {
     expect(snapshot?.projection.analysis.methods).toEqual(['Pearson 相关系数'])
     expect(snapshot?.projection.analysis.recommendations).toEqual(['先确认销量字段口径'])
     expect(snapshot?.projection.error).toBeNull()
+  })
+
+  it('completes /messages with plain text assistant replies without requiring analysis JSON schema', async () => {
+    let releaseIdle: (() => void) | null = null
+    eventSubscribeMock.mockResolvedValueOnce({
+      stream: {
+        async *[Symbol.asyncIterator]() {
+          await new Promise<void>((resolve) => {
+            releaseIdle = resolve
+          })
+          yield {
+            type: 'session.idle',
+            properties: {
+              sessionID: 'opencode_session_1',
+            },
+          }
+        },
+      },
+    })
+    sessionPromptAsyncMock.mockImplementationOnce(async () => {
+      releaseIdle?.()
+      return { data: { id: 'run_1' } }
+    })
+    sessionMessagesMock.mockResolvedValueOnce({
+      data: [
+        {
+          info: {
+            id: 'msg_assistant_plain_1',
+            role: 'assistant',
+            parentID: 'msg_user_1',
+            time: {
+              completed: Date.now(),
+            },
+          },
+          parts: [
+            {
+              type: 'text',
+              text: '我先读取了当前工作流上下文，接下来可以帮你检查节点结构或继续调 MCP 工具。',
+            },
+          ],
+        },
+      ],
+    })
+
+    const created = await createAgentSession({
+      request: buildAgentRequest(),
+      userId: 'user_1',
+    })
+
+    const result = await sendAgentSessionMessage({
+      sessionId: created.session.id,
+      message: '先看看当前工作流情况',
+    })
+
+    await Promise.resolve()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    const snapshot = getAgentSession(created.session.id)
+    expect(result.session.status).toBe('completed')
+    expect(result.assistantMessage?.content).toContain('我先读取了当前工作流上下文')
+    expect(snapshot?.session.status).toBe('completed')
+    expect(snapshot?.projection.analysis.summary).toContain('我先读取了当前工作流上下文')
+    expect(snapshot?.projection.error).toBeNull()
+  })
+
+  it('completes /messages when opencode only emits session.status idle in live-like runtimes', async () => {
+    eventSubscribeMock.mockResolvedValueOnce({
+      stream: {
+        async *[Symbol.asyncIterator]() {
+          yield {
+            type: 'session.status',
+            properties: {
+              sessionID: 'opencode_session_1',
+              status: {
+                type: 'idle',
+              },
+            },
+          }
+        },
+      },
+      controller: {
+        abort: eventAbortMock,
+      },
+    })
+    sessionMessagesMock.mockResolvedValueOnce({
+      data: [
+        {
+          info: {
+            id: 'msg_assistant_plain_idle_1',
+            role: 'assistant',
+            parentID: 'msg_user_1',
+            time: {
+              completed: Date.now(),
+            },
+          },
+          parts: [
+            {
+              type: 'text',
+              text: '我已读取工具清单，现在可以继续帮你检查工作流结构。',
+            },
+          ],
+        },
+      ],
+    })
+
+    const created = await createAgentSession({
+      request: buildAgentRequest(),
+      userId: 'user_1',
+    })
+
+    const result = await sendAgentSessionMessage({
+      sessionId: created.session.id,
+      message: '先读取工具清单',
+    })
+
+    await Promise.resolve()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(result.session.status).toBe('completed')
+    expect(result.assistantMessage?.content).toContain('我已读取工具清单')
+    expect(getAgentSession(created.session.id)?.projection.execution.status).toBe('completed')
+    expect(eventAbortMock).toHaveBeenCalled()
+    expect(serverCloseMock).toHaveBeenCalled()
+  })
+
+  it('disposes opencode runtimes on explicit cleanup so smoke processes can exit cleanly', async () => {
+    eventSubscribeMock.mockResolvedValueOnce({
+      stream: {
+        async *[Symbol.asyncIterator]() {},
+      },
+      controller: {
+        abort: eventAbortMock,
+      },
+    })
+
+    const created = await createAgentSession({
+      request: buildAgentRequest(),
+      userId: 'user_1',
+    })
+
+    await sendAgentSessionMessage({
+      sessionId: created.session.id,
+      message: '先读取工具清单',
+    })
+
+    await disposeAllAgentRuntimes()
+
+    expect(eventAbortMock).toHaveBeenCalled()
+    expect(serverCloseMock).toHaveBeenCalled()
   })
 
   it('forwards the internal MCP auth token when workflow MCP auth is enabled', async () => {

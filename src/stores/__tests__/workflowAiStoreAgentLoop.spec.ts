@@ -83,7 +83,7 @@ describe('workflowAiStore legacy loop removal', () => {
         updatedAt: 1,
       },
     })
-    vi.mocked(agentWorkspace.runAgenticAnalysisSession).mockResolvedValueOnce({
+    vi.mocked(agentWorkspace.sendAgentSessionMessage).mockResolvedValueOnce({
       session: {
         id: 'agent_1',
         mode: 'create',
@@ -167,9 +167,10 @@ describe('workflowAiStore legacy loop removal', () => {
 
     await store.submitAgentMessage(workflowStore as any)
 
-    expect(agentWorkspace.runAgenticAnalysisSession).toHaveBeenCalledWith('agent_1', {
+    expect(agentWorkspace.sendAgentSessionMessage).toHaveBeenCalledWith('agent_1', {
       content: '帮我分析销量',
+      skillId: 'generic',
     })
-    expect(agentWorkspace.sendAgentSessionMessage).not.toHaveBeenCalled()
+    expect(agentWorkspace.runAgenticAnalysisSession).not.toHaveBeenCalled()
   })
 })

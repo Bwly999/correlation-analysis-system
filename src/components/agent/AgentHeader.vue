@@ -18,8 +18,8 @@ const statusLabel = computed(() => {
   if (props.session.phase === 'waiting_for_input') return '等待确认'
   if (props.session.phase === 'completed') return '已完成'
   if (props.session.phase === 'failed') return '失败'
-  if (props.session.phase === 'executing') return '分析中'
-  return '规划中'
+  if (props.session.phase === 'executing') return '处理中'
+  return '准备中'
 })
 </script>
 
@@ -30,8 +30,8 @@ const statusLabel = computed(() => {
         <Bot :size="16" />
       </span>
       <div>
-        <strong>分析代理</strong>
-        <p>{{ session?.userGoal || '聊天式提问，直接输出分析过程与结论' }}</p>
+        <strong>通用助手</strong>
+        <p>{{ session?.userGoal || '聊天提问、读取工作流上下文、按需调用 MCP 工具并直接回复' }}</p>
       </div>
     </div>
     <div class="agent-header__meta">

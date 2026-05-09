@@ -223,12 +223,54 @@ type AgentSessionRuntime = {
   toolSelection: Record<string, boolean>
   tempDirectory: string
   eventPump?: {
+    dispose: () => void
     stop: () => Promise<void>
   } | null
   pendingUserMessageIds: string[]
+  finalizingUserMessageIds: Set<string>
 }
 
 const agentSessionRuntimes = new Map<string, AgentSessionRuntime>()
+
+const disposeAgentRuntime = async (
+  sessionId: string,
+  options?: { skipEventPumpStop?: boolean },
+) => {
+  const runtime = agentSessionRuntimes.get(sessionId)
+  if (!runtime) return
+
+  agentSessionRuntimes.delete(sessionId)
+
+  if (!options?.skipEventPumpStop) {
+    try {
+      runtime.eventPump?.dispose?.()
+      await runtime.eventPump?.stop?.()
+    } catch {
+      // ignore cleanup failures so we can continue tearing down the subprocess
+    }
+  } else {
+    try {
+      runtime.eventPump?.dispose?.()
+    } catch {
+      // ignore cleanup failures during best-effort shutdown
+    }
+  }
+
+  try {
+    runtime.server.close()
+  } catch {
+    // ignore cleanup failures so temp directory cleanup still runs
+  }
+
+  cleanupTempDirectory(runtime.tempDirectory)
+}
+
+export const disposeAllAgentRuntimes = async () => {
+  const sessionIds = [...agentSessionRuntimes.keys()]
+  for (const sessionId of sessionIds) {
+    await disposeAgentRuntime(sessionId)
+  }
+}
 
 const stripCodeFence = (value: string) =>
   value
@@ -357,6 +399,14 @@ const buildOpencodeConfig = (profile: WorkflowAiModelProfile) => {
     experimental: {
       mcp_timeout: OPENCODE_AGENT_REQUEST_TIMEOUT_MS,
     },
+    mcp: {},
+    tools: {
+      '*': false,
+      [`${WORKFLOW_MCP_NAME}_*`]: true,
+      ...Object.fromEntries(
+        WORKFLOW_MCP_TOOL_NAMES.map((toolName) => [toolName, true]),
+      ),
+    },
     enabled_providers: [providerId],
     model: `${providerId}/${modelId}`,
     small_model: `${providerId}/${modelId}`,
@@ -396,6 +446,13 @@ const buildWorkflowToolSelectionMap = (toolIds: string[]) => {
 const isWorkflowMcpToolId = (toolId: string) =>
   toolId.startsWith(`${WORKFLOW_MCP_NAME}_`)
   || WORKFLOW_MCP_TOOL_NAMES.some((name) => name === toolId)
+
+const isWorkflowPermission = (permission: unknown) =>
+  typeof permission === 'string'
+  && (
+    permission === `${WORKFLOW_MCP_NAME}_*`
+    || isWorkflowMcpToolId(permission)
+  )
 
 const extractPromptText = (response: any) =>
   (response?.data?.parts ?? [])
@@ -442,6 +499,11 @@ const withTimeout = async <T>(
         reject(error)
       },
     )
+  })
+
+const delay = (ms: number) =>
+  new Promise<void>((resolve) => {
+    setTimeout(resolve, ms)
   })
 
 const writeAgentSessionDebugLine = (sessionId: string, category: string, payload: unknown) => {
@@ -695,10 +757,11 @@ const validateWorkflowPlan = (request: WorkflowAiPlanRequest, plan: WorkflowAiPl
 
 const buildAgentSystemPrompt = (options?: { plainJsonFallback?: boolean }) =>
   [
-    '你是多因子相关性分析系统的业务分析代理。',
-    '请优先结合 workflow MCP 工具理解当前工作流、字段摘要和版本信息。',
+    '你是基于 opencode 的通用工作助手。',
+    '请优先结合 workflow MCP 工具读取当前工作流、节点、数据源、执行结果和上下文，再回答用户问题。',
     '输出必须使用中文。',
-    '给出业务结论、候选方法、风险、建议，并在可能时返回一个最小可运行的工作流草案。',
+    '允许自然语言回复，不要求固定输出分析 JSON。',
+    '禁止编造未读取过的工作流状态、数据字段、执行结果或结论。',
     options?.plainJsonFallback
       ? '本次结构化输出工具不可用。请直接输出一个 JSON 对象，不要使用 Markdown 代码块，不要输出任何额外说明。缺失字段必须使用空数组、null 或可读字符串补齐。'
       : '',
@@ -709,7 +772,7 @@ const buildAgentSystemPrompt = (options?: { plainJsonFallback?: boolean }) =>
 const buildAgentPromptRequest = (
   runtime: AgentSessionRuntime,
   message: string,
-  options?: { plainJsonFallback?: boolean },
+  options?: { plainJsonFallback?: boolean, genericTextMode?: boolean },
 ) => ({
   sessionID: runtime.sessionID,
   model: {
@@ -719,7 +782,7 @@ const buildAgentPromptRequest = (
   agent: 'general',
   tools: runtime.toolSelection,
   system: buildAgentSystemPrompt(options),
-  format: options?.plainJsonFallback
+  format: options?.genericTextMode || options?.plainJsonFallback
     ? undefined
     : {
         type: 'json_schema' as const,
@@ -936,6 +999,7 @@ const ensureAgentRuntime = async (record: AgentSessionRecord) => {
     tempDirectory,
     eventPump: null,
     pendingUserMessageIds: [],
+    finalizingUserMessageIds: new Set(),
   }
   agentSessionRuntimes.set(record.session.id, runtime)
   return runtime
@@ -947,9 +1011,14 @@ const finalizeAgentRun = async (
 ) => {
   const userMessageId = runtime.pendingUserMessageIds.shift()
   if (!userMessageId) return
+  if (runtime.finalizingUserMessageIds.has(userMessageId)) return
+  runtime.finalizingUserMessageIds.add(userMessageId)
 
   const record = getAgentSessionRecord(sessionId)
-  if (!record) return
+  if (!record) {
+    runtime.finalizingUserMessageIds.delete(userMessageId)
+    return
+  }
 
   try {
     const response = await runtime.client.session.messages({
@@ -976,6 +1045,7 @@ const finalizeAgentRun = async (
         }),
       )
       syncSessionStatus(sessionId, 'completed')
+      await disposeAgentRuntime(sessionId, { skipEventPumpStop: true })
       return
     }
 
@@ -1017,6 +1087,7 @@ const finalizeAgentRun = async (
       sessionId,
       message: assistantMessage,
     })
+    await disposeAgentRuntime(sessionId, { skipEventPumpStop: true })
   } catch (error) {
     updateSessionProjection(
       sessionId,
@@ -1031,6 +1102,9 @@ const finalizeAgentRun = async (
       type: 'failed',
       message: error instanceof Error ? error.message : 'Agent 会话运行失败',
     })
+    await disposeAgentRuntime(sessionId, { skipEventPumpStop: true })
+  } finally {
+    runtime.finalizingUserMessageIds.delete(userMessageId)
   }
 }
 
@@ -1049,7 +1123,7 @@ const startAgentEventPump = async (sessionId: string, runtime: AgentSessionRunti
       if (event?.type === 'permission.asked' && event.properties?.sessionID === runtime.sessionID) {
         await runtime.client.permission.reply({
           requestID: event.properties.id,
-          reply: 'once',
+          reply: isWorkflowPermission(event.properties?.permission) ? 'once' : 'reject',
         })
         continue
       }
@@ -1139,6 +1213,15 @@ const startAgentEventPump = async (sessionId: string, runtime: AgentSessionRunti
         continue
       }
 
+      if (
+        event?.type === 'session.status'
+        && event.properties?.sessionID === runtime.sessionID
+        && event.properties?.status?.type === 'idle'
+      ) {
+        await finalizeAgentRun(sessionId, runtime)
+        continue
+      }
+
       if (event?.type === 'session.idle' && event.properties?.sessionID === runtime.sessionID) {
         await finalizeAgentRun(sessionId, runtime)
       }
@@ -1149,10 +1232,17 @@ const startAgentEventPump = async (sessionId: string, runtime: AgentSessionRunti
   })
 
   return {
+    dispose: () => {
+      aborted = true
+      subscription.stop()
+    },
     stop: async () => {
       aborted = true
       subscription.stop()
-      await task.catch(() => undefined)
+      await Promise.race([
+        task.catch(() => undefined),
+        delay(100),
+      ])
     },
   }
 }
@@ -1397,15 +1487,19 @@ export const createAgentSession = async (input: {
   request: WorkflowAiPlanRequest
   userId?: string
 }): Promise<AgentSessionStartResponse> => {
-  const projection = buildInitialProjection(input.request)
+  const normalizedRequest: WorkflowAiPlanRequest = {
+    ...input.request,
+    agentCapability: input.request.agentCapability ?? 'generic_read_write_lite',
+  }
+  const projection = buildInitialProjection(normalizedRequest)
   const record = createAgentSessionRecord({
-    request: input.request,
+    request: normalizedRequest,
     projection,
     userId: input.userId,
   })
   initializeAgentObservabilityTrace({
     sessionId: record.session.id,
-    request: input.request,
+    request: normalizedRequest,
     userId: input.userId,
     session: record.session,
     projection: record.projection,
@@ -1433,6 +1527,30 @@ export const getAgentSession = (sessionId: string) => {
     session: record.session,
     projection: record.projection,
   }
+}
+
+const getLatestAssistantMessage = (sessionId: string) => {
+  const record = getAgentSessionRecord(sessionId)
+  if (!record) return undefined
+  return [...record.messages].reverse().find((message) => message.role === 'assistant')
+}
+
+const waitForPromptTurnSettle = async (
+  sessionId: string,
+  attempts = 6,
+  intervalMs = 0,
+) => {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const session = getAgentSession(sessionId)
+    if (!session) return null
+    if (session.session.status !== 'running') {
+      return session
+    }
+    if (attempt < attempts - 1) {
+      await delay(intervalMs)
+    }
+  }
+  return getAgentSession(sessionId)
 }
 
 export const getAgentProjection = (sessionId: string) => getAgentSessionRecord(sessionId)?.projection ?? null
@@ -1517,18 +1635,25 @@ export const sendAgentSessionMessage = async (
 
     runtime.pendingUserMessageIds.push(userMessage.id)
     await runtime.client.session.promptAsync({
-      ...buildAgentPromptRequest(runtime, input.message),
+      ...buildAgentPromptRequest(runtime, input.message, {
+        genericTextMode: true,
+      }),
       messageID: userMessage.id,
     })
 
-    const nextRecord = getAgentSession(input.sessionId)
+    const nextRecord = await waitForPromptTurnSettle(input.sessionId)
     if (!nextRecord) {
       throw new Error('更新 Agent 会话失败')
     }
+    const assistantMessage =
+      nextRecord.session.status === 'completed'
+        ? getLatestAssistantMessage(input.sessionId)
+        : undefined
 
     return {
       session: nextRecord.session,
       projection: nextRecord.projection,
+      assistantMessage,
     }
   } catch (error) {
     const pendingIndex = runtime.pendingUserMessageIds.lastIndexOf(userMessage.id)
@@ -1559,6 +1684,7 @@ export const sendAgentSessionMessage = async (
       throw error
     }
 
+    await disposeAgentRuntime(input.sessionId)
     throw error
   }
 }

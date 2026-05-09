@@ -32,7 +32,7 @@ const currentStepId = computed(() => {
 
 const currentHeadline = computed(() => {
   const headline = props.headline.trim()
-  if (!headline || headline === '等待开始' || headline === '先描述你想解决的分析问题' || headline === '已记录本次分析目标') {
+  if (!headline || headline === '等待开始' || headline === '先描述你想处理的问题' || headline === '已记录当前消息') {
     return ''
   }
   return headline

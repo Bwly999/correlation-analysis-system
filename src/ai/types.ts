@@ -617,6 +617,7 @@ export interface AgentSessionGetResponse {
 
 export interface AgentSessionMessageRequest {
   content: string
+  skillId?: 'generic' | 'agentic-data-analysis' | 'workflow-repair' | 'reporting'
 }
 
 export interface AgentSessionMessageResponse {
@@ -855,6 +856,7 @@ export interface WorkflowAiPlanRequest {
   }
   contextHints?: WorkflowAiContextHints
   dataSources?: WorkflowAiDataSourceDescriptor[]
+  agentCapability?: 'generic_read_write_lite' | 'full_agentic_analysis'
   profile: WorkflowAiModelProfile
   nodeCatalog: WorkflowAiNodeCatalogItem[]
 }

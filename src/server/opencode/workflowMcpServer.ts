@@ -51,6 +51,45 @@ type WorkflowMcpSessionRecord = {
   }
 }
 
+const GENERIC_ALLOWED_MUTATION_TOOLS = new Set([
+  'workflow_create_workflow',
+  'workflow_update_partial_workflow',
+  'workflow_validate_workflow',
+  'workflow_debug_node',
+  'workflow_test_workflow',
+  'workflow_execute_plan',
+])
+
+const GENERIC_ALLOWED_PARTIAL_OPERATION_TYPES = new Set([
+  'createNode',
+  'updateNodeConfig',
+  'renameNode',
+  'connectNodes',
+  'moveNode',
+])
+
+const isGenericReadWriteLiteSession = (sessionRecord: WorkflowMcpSessionRecord) =>
+  (sessionRecord.request.agentCapability ?? 'generic_read_write_lite') === 'generic_read_write_lite'
+
+const assertGenericMutationToolAllowed = (
+  sessionRecord: WorkflowMcpSessionRecord,
+  toolName: string,
+) => {
+  if (!isGenericReadWriteLiteSession(sessionRecord)) return
+  if (GENERIC_ALLOWED_MUTATION_TOOLS.has(toolName)) return
+  throw new Error('当前通用 Agent 会话不允许执行该工作流写操作')
+}
+
+const assertGenericPartialOperationsAllowed = (
+  sessionRecord: WorkflowMcpSessionRecord,
+  operations: Array<{ type: string }>,
+) => {
+  if (!isGenericReadWriteLiteSession(sessionRecord)) return
+  const rejected = operations.find((operation) => !GENERIC_ALLOWED_PARTIAL_OPERATION_TYPES.has(operation.type))
+  if (!rejected) return
+  throw new Error('当前通用 Agent 会话不允许执行该增量操作')
+}
+
 const WORKFLOW_MCP_PATH = '/api/opencode/workflow-mcp'
 const WORKFLOW_MCP_HEALTH_PATH = '/api/opencode/workflow-mcp/health'
 const WORKFLOW_MCP_AUTH_HEADER = 'x-workflow-mcp-auth-token'
@@ -382,11 +421,13 @@ const getWorkflowToolDefinitions = (
       workflowId: z.string().optional().describe('工作流 ID，不传则自动生成'),
       name: z.string().optional().describe('工作流名称'),
     },
-    handler: async ({ workflowId, name }) =>
-      buildToolResult({
+    handler: async ({ workflowId, name }) => {
+      assertGenericMutationToolAllowed(sessionRecord, 'workflow_create_workflow')
+      return buildToolResult({
         ok: true,
         workflow: await runtime.createWorkflow(context.userId, { workflowId, name }),
-      }),
+      })
+    },
   },
   {
     name: 'workflow_get_workflow',
@@ -410,8 +451,10 @@ const getWorkflowToolDefinitions = (
       validateAfterApply: z.boolean().optional().describe('应用后是否自动校验'),
     },
     outputSchema: workflowSummaryOutputSchema,
-    handler: async ({ workflowId, operations, summary, validateAfterApply }) =>
-      buildToolResult(
+    handler: async ({ workflowId, operations, summary, validateAfterApply }) => {
+      assertGenericMutationToolAllowed(sessionRecord, 'workflow_update_partial_workflow')
+      assertGenericPartialOperationsAllowed(sessionRecord, operations as Array<{ type: string }>)
+      return buildToolResult(
         await runtime.updatePartialWorkflow(
           context.userId,
           workflowId,
@@ -419,7 +462,8 @@ const getWorkflowToolDefinitions = (
           summary,
           validateAfterApply,
         ),
-      ),
+      )
+    },
   },
   {
     name: 'workflow_update_full_workflow',
@@ -434,13 +478,15 @@ const getWorkflowToolDefinitions = (
         edges: z.array(z.record(z.string(), z.unknown())),
       }),
     },
-    handler: async ({ workflow }) =>
-      buildToolResult(
+    handler: async ({ workflow }) => {
+      assertGenericMutationToolAllowed(sessionRecord, 'workflow_update_full_workflow')
+      return buildToolResult(
         await runtime.updateFullWorkflow(context.userId, {
           ...workflow,
           updatedAt: workflow.updatedAt ?? Date.now(),
         }),
-      ),
+      )
+    },
   },
   {
     name: 'workflow_validate_workflow',
@@ -467,15 +513,17 @@ const getWorkflowToolDefinitions = (
       mode: z.enum(['reuse_cached_upstream', 'rerun_upstream']).optional(),
       includeUpstreamTrace: z.boolean().optional().describe('是否返回上游执行轨迹'),
     },
-    handler: async ({ workflowId, nodeId, mode, includeUpstreamTrace }) =>
-      buildToolResult(
+    handler: async ({ workflowId, nodeId, mode, includeUpstreamTrace }) => {
+      assertGenericMutationToolAllowed(sessionRecord, 'workflow_debug_node')
+      return buildToolResult(
         await runtime.debugNode(context.userId, sessionRecord.request, {
           workflowId,
           nodeId,
           mode,
           includeUpstreamTrace,
         }),
-      ),
+      )
+    },
   },
   {
     name: 'workflow_test_workflow',
@@ -484,8 +532,10 @@ const getWorkflowToolDefinitions = (
     inputSchema: {
       workflowId: z.string().describe('工作流 ID'),
     },
-    handler: async ({ workflowId }) =>
-      buildToolResult(await runtime.testWorkflow(context.userId, sessionRecord.request, { workflowId })),
+    handler: async ({ workflowId }) => {
+      assertGenericMutationToolAllowed(sessionRecord, 'workflow_test_workflow')
+      return buildToolResult(await runtime.testWorkflow(context.userId, sessionRecord.request, { workflowId }))
+    },
   },
   {
     name: 'workflow_executions',
@@ -540,8 +590,10 @@ const getWorkflowToolDefinitions = (
       workflowId: z.string().describe('工作流 ID'),
       versionId: z.string().describe('版本 ID'),
     },
-    handler: async ({ workflowId, versionId }) =>
-      buildToolResult(await runtime.rollbackWorkflowVersion(context.userId, { workflowId, versionId })),
+    handler: async ({ workflowId, versionId }) => {
+      assertGenericMutationToolAllowed(sessionRecord, 'workflow_rollback_workflow_version')
+      return buildToolResult(await runtime.rollbackWorkflowVersion(context.userId, { workflowId, versionId }))
+    },
   },
   {
     name: 'workflow_workflow_versions',
@@ -553,8 +605,12 @@ const getWorkflowToolDefinitions = (
       versionId: z.string().optional().describe('版本 ID'),
       ...paginationSchema,
     },
-    handler: async ({ mode, workflowId, versionId, limit, offset }) =>
-      buildToolResult(await runtime.workflowVersions(context.userId, { mode, workflowId, versionId, limit, offset })),
+    handler: async ({ mode, workflowId, versionId, limit, offset }) => {
+      if (mode === 'rollback') {
+        assertGenericMutationToolAllowed(sessionRecord, 'workflow_workflow_versions')
+      }
+      return buildToolResult(await runtime.workflowVersions(context.userId, { mode, workflowId, versionId, limit, offset }))
+    },
   },
   {
     name: 'workflow_get_execution_result',
@@ -581,6 +637,7 @@ const getWorkflowToolDefinitions = (
     },
     outputSchema: executionOutputSchema,
     handler: async ({ plan, bindings }) => {
+      assertGenericMutationToolAllowed(sessionRecord, 'workflow_execute_plan')
       const execution = await executeWorkflowPlanForSession({
         sessionId: context.sessionId,
         request: sessionRecord.request,

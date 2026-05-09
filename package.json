@@ -23,7 +23,8 @@
     "pack:release": "node scripts/pack-release.mjs",
     "eval:workflow-mcp": "npx tsx scripts/workflow-mcp-evaluation/run.ts",
     "eval:agentic-analysis": "npx tsx scripts/agentic-analysis-evaluation/run.ts",
-    "smoke:deepseek-agentic": "npx tsx scripts/deepseek-agentic-smoke/run.ts"
+    "smoke:deepseek-agentic": "npx tsx scripts/deepseek-agentic-smoke/run.ts",
+    "smoke:opencode-generic": "npx tsx scripts/opencode-generic-smoke/run.ts"
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^2.0.37",

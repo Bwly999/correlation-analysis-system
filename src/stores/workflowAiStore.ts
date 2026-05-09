@@ -26,13 +26,14 @@ import {
   WorkflowAiRequestError,
   createAgentSession,
   fetchSystemModelProfiles,
-  runAgenticAnalysisSession,
+  sendAgentSessionMessage,
   streamAgentSessionEvents,
   syncAgentCanvas,
   testWorkflowAiModelProfile,
 } from '@/services/agentWorkspace'
 
 const CUSTOM_PROFILE_STORAGE_KEY = 'workflow_ai_custom_profiles'
+const GENERIC_AGENT_CAPABILITY = 'generic_read_write_lite' as const
 
 type WorkflowStoreLike = {
   workflowName: string
@@ -162,14 +163,14 @@ export const useWorkflowAiStore = defineStore('workflow-ai', () => {
       return [
         {
           id: 'goal',
-          title: '输入目标',
-          description: prompt.value || '先描述你的分析目标',
+          title: '输入消息',
+          description: prompt.value || '先描述你想处理的问题或任务',
           status: prompt.value ? 'completed' : 'running',
         },
         {
           id: 'analysis',
-          title: '分析当前业务问题',
-          description: '等待开始分析',
+          title: '处理当前请求',
+          description: '等待开始处理',
           status: 'idle',
         },
         {
@@ -184,13 +185,13 @@ export const useWorkflowAiStore = defineStore('workflow-ai', () => {
     return [
       {
         id: 'goal',
-        title: '输入目标',
+        title: '输入消息',
         description: activeSession.value?.prompt,
         status: 'completed',
       },
       {
         id: 'analysis',
-        title: '分析当前业务问题',
+        title: '处理当前请求',
         description: projection.execution.latestAction,
         status:
           projection.execution.status === 'failed'
@@ -218,7 +219,7 @@ export const useWorkflowAiStore = defineStore('workflow-ai', () => {
       return {
         status: 'idle' as const,
         title: '先选择可用模型配置',
-        description: '需要先选择模型配置，才能开始分析。',
+        description: '需要先选择模型配置，才能开始对话。',
         badge: '待准备',
       }
     }
@@ -226,7 +227,7 @@ export const useWorkflowAiStore = defineStore('workflow-ai', () => {
     if (errorMessage.value) {
       return {
         status: 'failed' as const,
-        title: '当前分析失败',
+        title: '当前请求失败',
         description: errorMessage.value,
         badge: '失败',
       }
@@ -235,8 +236,8 @@ export const useWorkflowAiStore = defineStore('workflow-ai', () => {
     if (streamStatus.value === 'streaming') {
       return {
         status: 'running' as const,
-        title: '分析进行中',
-        description: streamHeadline.value || '正在读取当前业务上下文并生成分析结果。',
+        title: '处理中',
+        description: streamHeadline.value || '正在读取工作流上下文并处理当前请求。',
         badge: '执行中',
       }
     }
@@ -244,7 +245,7 @@ export const useWorkflowAiStore = defineStore('workflow-ai', () => {
     if (projectionSnapshot.value) {
       return {
         status: 'completed' as const,
-        title: '分析已就绪',
+        title: '回复已就绪',
         description: projectionSnapshot.value.analysis.summary,
         badge: projectionSnapshot.value.canvasSync.status === 'synced' ? '已同步画布' : '已完成',
       }
@@ -252,8 +253,8 @@ export const useWorkflowAiStore = defineStore('workflow-ai', () => {
 
     return {
       status: 'idle' as const,
-      title: '先描述你的分析目标',
-      description: '系统会结合当前工作流和数据上下文生成业务分析结果。',
+      title: '先描述你想处理的问题',
+      description: '系统会结合当前工作流和数据上下文进行对话、调工具和返回结果。',
       badge: '待开始',
     }
   })
@@ -453,6 +454,7 @@ export const useWorkflowAiStore = defineStore('workflow-ai', () => {
         mode: mode.value,
         prompt: prompt.value,
         profile,
+        agentCapability: GENERIC_AGENT_CAPABILITY,
         workflowSnapshot:
           mode.value === 'edit'
             ? {
@@ -475,7 +477,7 @@ export const useWorkflowAiStore = defineStore('workflow-ai', () => {
     activeSession.value = response.session
     applyProjectionSnapshot(response.projection)
     streamStatus.value = 'idle'
-    streamHeadline.value = '分析代理会话已准备完成'
+    streamHeadline.value = '通用助手会话已准备完成'
     return response.session
   }
 
@@ -496,13 +498,13 @@ export const useWorkflowAiStore = defineStore('workflow-ai', () => {
   ) => {
     const message = (content ?? prompt.value).trim()
     if (!message) {
-      throw new Error('请先输入分析问题')
+      throw new Error('请先输入要处理的内容')
     }
 
     prompt.value = message
     errorMessage.value = ''
     streamStatus.value = 'streaming'
-    streamHeadline.value = '正在发送分析请求'
+    streamHeadline.value = '正在发送当前消息'
     isGenerating.value = true
 
     try {
@@ -516,27 +518,28 @@ export const useWorkflowAiStore = defineStore('workflow-ai', () => {
       })
       ensureEventStream(session.id)
 
-      const response = await runAgenticAnalysisSession(session.id, {
+      const response = await sendAgentSessionMessage(session.id, {
         content: message,
+        skillId: 'generic',
       })
       if (!activeSession.value || activeSession.value.id !== response.session.id || activeSession.value.status === 'idle') {
         activeSession.value = response.session
       }
-      if (!projectionSnapshot.value || projectionSnapshot.value.execution.status === 'idle') {
+      if (!projectionSnapshot.value) {
         applyProjectionSnapshot(response.projection)
       }
       if (response.assistantMessage) {
         upsertSessionMessage(response.assistantMessage)
       }
-      if (!streamHeadline.value || streamHeadline.value === '正在发送分析请求') {
+      if (!streamHeadline.value || streamHeadline.value === '正在发送当前消息') {
         streamHeadline.value = response.projection.execution.latestAction
       }
-      workflowStore.addLog?.('分析代理消息发送成功', 'info')
+      workflowStore.addLog?.('通用助手消息发送成功', 'info')
       return response
     } catch (error: any) {
-      errorMessage.value = error.message ?? '发送分析消息失败'
+      errorMessage.value = error.message ?? '发送消息失败'
       streamStatus.value = 'failed'
-      workflowStore.addLog?.(`分析代理消息发送失败: ${errorMessage.value}`, 'error')
+      workflowStore.addLog?.(`通用助手消息发送失败: ${errorMessage.value}`, 'error')
       throw error
     } finally {
       isGenerating.value = false
@@ -700,45 +703,13 @@ export const useWorkflowAiStore = defineStore('workflow-ai', () => {
       items.push({
         id: message.id,
         kind: message.role === 'user' ? 'user' : 'assistant',
-        title: message.role === 'user' ? '你' : '分析代理',
+        title: message.role === 'user' ? '你' : '通用助手',
         content: message.content,
         status: message.status,
       })
     }
 
     if (projectionSnapshot.value) {
-      items.splice(1, 0,
-        {
-          id: 'workflow_projection',
-          kind: 'workflow_projection',
-          title: '当前工作流草案',
-          content: projectionSnapshot.value.workflow.draftSummary,
-          details: [
-            `节点 ${projectionSnapshot.value.workflow.draftNodeCount} 个`,
-            `连线 ${projectionSnapshot.value.workflow.draftEdgeCount} 条`,
-          ],
-        },
-        {
-          id: 'analysis_projection',
-          kind: 'analysis_projection',
-          title: '当前分析状态',
-          content: projectionSnapshot.value.analysis.summary,
-          details: [
-            ...projectionSnapshot.value.analysis.methods.slice(0, 2),
-            ...projectionSnapshot.value.analysis.recommendations.slice(0, 2),
-          ],
-        },
-        {
-          id: 'execution_projection',
-          kind: 'execution_projection',
-          title: '最近执行动作',
-          content: projectionSnapshot.value.execution.latestAction,
-          details: [
-            projectionSnapshot.value.execution.status === 'running' ? '执行中' : '已完成',
-          ],
-        },
-      )
-
       if (projectionSnapshot.value.canvasSync.status !== 'idle') {
         items.push({
           id: 'canvas_sync',
@@ -827,7 +798,7 @@ export const useWorkflowAiStore = defineStore('workflow-ai', () => {
       items.push({
         id: 'streaming_message',
         kind: 'assistant',
-        title: '分析代理',
+        title: '通用助手',
         content: streamingMessage.value,
         status: 'streaming',
       })

@@ -4,6 +4,23 @@
 
 ### 变更 (Changed)
 
+- **默认 Agent 工作台切换为通用对话主链**:
+  - 前端默认发送入口已从 `POST /api/agent/sessions/:id/agentic-run` 切换为 `POST /api/agent/sessions/:id/messages`，当前工作台以会话消息、工具过程和中文回复为主真相源。
+  - `src/server/opencode/gateway.ts` 的 `/messages` 通用链路已改为 opencode 风格的通用工作助手提示词，不再强制要求分析专用 JSON schema，纯文本 assistant 回复也可正常完成会话。
+  - `agentic-run` 后端入口继续保留，但定位降级为兼容 / 后续 skill 化专用路径，不再承载当前默认基础交互。
+
+- **新增通用 Agent 的 workflow MCP 安全边界**:
+  - 会话默认能力标识新增为 `generic_read_write_lite`，通用 Agent 仅允许低风险的创建、增量修改、校验、调试、测试和执行计划能力。
+  - 显式禁止整包替换工作流、版本回滚以及 `update_partial_workflow` 中的删除节点、断开连线等高风险操作。
+
+- **新增 opencode 通用链路 smoke 脚本**:
+  - 新增 `pnpm smoke:opencode-generic`，用于真实创建 session、挂载 workflow MCP、发送中文消息并校验至少发生一次 `workflow_*` 工具调用。
+  - 当前环境若未提供 live API 凭据，脚本仅完成实现与本地接线，不能作为已通过真实模型验收的证明。
+
+- **同步通用 Agent 工作台文案与系统文档**:
+  - 默认入口按钮、消息角色、发送态和工作台标题统一改为“通用助手”语义，减少与专用分析链路的混淆。
+  - `工作流系统.md` 已补充默认主入口、`agentic-run` 兼容定位、`generic_read_write_lite` 边界以及新的 smoke 验收约束。
+
 - **新增 dev 模式 Agent 全链路可观测系统**:
   - 后端新增 `Agent Observability` dev-only 聚合层，记录 session lifecycle、kernel intent/observation、opencode 原始事件、tool call、raw message、parse failure、projection diff/snapshot、approval、artifact 和错误链路，并提供 debug trace / replay / files / health 接口。
   - 本地开发环境会自动把 Agent 调试日志落盘到 `.workflow-debug/agent-observability/...`，生成 `manifest.json`、`events.ndjson`、`projection-snapshots.ndjson`、`raw-messages.ndjson`、`summary.json`、`session.json` 与失败态 `failure.json`。

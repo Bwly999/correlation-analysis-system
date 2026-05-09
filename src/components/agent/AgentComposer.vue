@@ -50,7 +50,7 @@ const submit = () => {
       <textarea
         :value="draft"
         class="agent-composer__input"
-        placeholder="直接描述你的分析问题，例如：帮我分析哪些变量和销量最相关。"
+        placeholder="直接描述你想处理的事情，例如：先读取当前工作流和工具清单，再告诉我下一步可以怎么改。"
         @input="handleInput"
       />
 

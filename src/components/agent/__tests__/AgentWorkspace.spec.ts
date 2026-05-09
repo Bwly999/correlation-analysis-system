@@ -38,12 +38,12 @@ describe('AgentWorkspace', () => {
       },
     })
 
-    expect(wrapper.get('[data-testid="agent-progress-track"]').text()).toContain('输入目标')
+    expect(wrapper.get('[data-testid="agent-progress-track"]').text()).toContain('输入消息')
     expect(wrapper.find('.agent-workspace__rail').exists()).toBe(false)
     expect(wrapper.find('[data-testid="agent-composer-preset-toggle"]').exists()).toBe(false)
   })
 
-  it('renders workflow, analysis and execution business cards inline in the conversation flow', () => {
+  it('renders generic chat messages without injecting analysis projection cards by default', () => {
     const aiStore = useWorkflowAiStore()
     aiStore.systemProfiles = [buildProfile()]
     aiStore.selectedProfileId = 'profile_1'
@@ -101,7 +101,22 @@ describe('AgentWorkspace', () => {
       error: null,
       updatedAt: 2,
     }
-    aiStore.streamHeadline = '本轮分析已完成'
+    aiStore.sessionMessages = [
+      {
+        id: 'user_1',
+        role: 'user',
+        content: '先帮我看看当前工作流里有哪些节点',
+        status: 'completed',
+        createdAt: 1,
+      },
+      {
+        id: 'assistant_1',
+        role: 'assistant',
+        content: '我先读取当前上下文和节点目录，再给你建议。',
+        status: 'completed',
+        createdAt: 2,
+      },
+    ] as any
 
     const wrapper = mount(AgentWorkspace, {
       props: {
@@ -116,10 +131,11 @@ describe('AgentWorkspace', () => {
     })
 
     const flowText = wrapper.get('[data-testid="agent-workspace-messages"]').text()
-    expect(flowText).toContain('当前工作流草案')
-    expect(flowText).toContain('当前分析状态')
-    expect(flowText).toContain('最近执行动作')
-    expect(flowText).toContain('价格是当前最值得优先验证的候选因子。')
+    expect(flowText).toContain('先帮我看看当前工作流里有哪些节点')
+    expect(flowText).toContain('我先读取当前上下文和节点目录，再给你建议。')
+    expect(flowText).not.toContain('当前工作流草案')
+    expect(flowText).not.toContain('当前分析状态')
+    expect(flowText).not.toContain('最近执行动作')
     expect(wrapper.find('.agent-workspace__rail').exists()).toBe(false)
   })
 
