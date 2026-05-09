@@ -55,7 +55,7 @@ describe('workflow ai dev middleware', () => {
     } else {
       process.env.WORKFLOW_STORAGE_DATA_DIR = previousStorageDir
     }
-  })
+  }, 15000)
 
   it('loads the server handler through vite ssrLoadModule for api requests', async () => {
     vi.resetModules()

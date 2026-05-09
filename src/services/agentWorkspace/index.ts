@@ -1,4 +1,8 @@
 import type {
+  AgentObservabilityDebugFilesResponse,
+  AgentObservabilityDebugHealth,
+  AgentObservabilityDebugReplayResponse,
+  AgentObservabilityDebugTraceResponse,
   AgentSessionCanvasSyncRequest,
   AgentSessionCanvasSyncResponse,
   AgentSessionEvent,
@@ -16,6 +20,10 @@ import {
   WorkflowAiRequestError,
   fetchSystemModelProfiles as fetchSystemModelProfilesFromWorkflowAi,
   createAgentSession as createAgentSessionFromWorkflowAi,
+  getAgentObservabilityDebugFiles as getAgentObservabilityDebugFilesFromWorkflowAi,
+  getAgentObservabilityDebugHealth as getAgentObservabilityDebugHealthFromWorkflowAi,
+  getAgentObservabilityDebugReplay as getAgentObservabilityDebugReplayFromWorkflowAi,
+  getAgentObservabilityDebugTrace as getAgentObservabilityDebugTraceFromWorkflowAi,
   getAgentProjection as getAgentProjectionFromWorkflowAi,
   getAgentSession as getAgentSessionFromWorkflowAi,
   requestWorkflowAiPlan as requestWorkflowAiPlanFromWorkflowAi,
@@ -32,6 +40,10 @@ import {
 
 export { WorkflowAiRequestError }
 export type {
+  AgentObservabilityDebugFilesResponse,
+  AgentObservabilityDebugHealth,
+  AgentObservabilityDebugReplayResponse,
+  AgentObservabilityDebugTraceResponse,
   AgentSessionCanvasSyncRequest,
   AgentSessionCanvasSyncResponse,
   AgentSessionEvent,
@@ -76,6 +88,26 @@ export const streamAgentSessionEvents = (
 
 export const getAgentProjection = (sessionId: string): Promise<AgentProjectionSnapshot> =>
   getAgentProjectionFromWorkflowAi(sessionId)
+
+export const getAgentObservabilityDebugTrace = (
+  sessionId: string,
+  options?: { limit?: number, offset?: number },
+): Promise<AgentObservabilityDebugTraceResponse> =>
+  getAgentObservabilityDebugTraceFromWorkflowAi(sessionId, options)
+
+export const getAgentObservabilityDebugReplay = (
+  sessionId: string,
+  seq?: number,
+): Promise<AgentObservabilityDebugReplayResponse> =>
+  getAgentObservabilityDebugReplayFromWorkflowAi(sessionId, seq)
+
+export const getAgentObservabilityDebugFiles = (
+  sessionId: string,
+): Promise<AgentObservabilityDebugFilesResponse> =>
+  getAgentObservabilityDebugFilesFromWorkflowAi(sessionId)
+
+export const getAgentObservabilityDebugHealth = (): Promise<AgentObservabilityDebugHealth> =>
+  getAgentObservabilityDebugHealthFromWorkflowAi()
 
 export const syncAgentCanvas = (
   sessionId: string,

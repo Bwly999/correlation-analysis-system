@@ -1,6 +1,10 @@
 import { buildWorkflowAiNodeCatalog } from '@/ai/catalog'
 import { fetchWithWorkflowContext } from '@/services/workflowRequestContext'
 import type {
+  AgentObservabilityDebugFilesResponse,
+  AgentObservabilityDebugHealth,
+  AgentObservabilityDebugReplayResponse,
+  AgentObservabilityDebugTraceResponse,
   AgentSessionCanvasSyncRequest,
   AgentSessionCanvasSyncResponse,
   AgentSessionEvent,
@@ -369,6 +373,79 @@ export const getAgentProjection = async (sessionId: string): Promise<AgentProjec
   }
 
   return payload.projection
+}
+
+export const getAgentObservabilityDebugTrace = async (
+  sessionId: string,
+  options: { limit?: number, offset?: number } = {},
+): Promise<AgentObservabilityDebugTraceResponse> => {
+  const search = new URLSearchParams()
+  if (options.limit !== undefined) search.set('limit', String(options.limit))
+  if (options.offset !== undefined) search.set('offset', String(options.offset))
+  const suffix = search.size ? `?${search.toString()}` : ''
+  const response = await fetchWorkflowApi(`${WORKFLOW_AI_API_BASE_URL}/agent/sessions/${sessionId}/debug-trace${suffix}`)
+  const payload = (await readResponsePayload(response)) as AgentObservabilityDebugTraceResponse & WorkflowAiErrorPayload
+
+  if (!response.ok) {
+    throw new WorkflowAiRequestError(
+      payload.message || '读取 Agent 调试 Trace 失败',
+      payload.diagnostics,
+      response.status,
+    )
+  }
+
+  return payload
+}
+
+export const getAgentObservabilityDebugReplay = async (
+  sessionId: string,
+  seq?: number,
+): Promise<AgentObservabilityDebugReplayResponse> => {
+  const suffix = seq !== undefined ? `?seq=${encodeURIComponent(String(seq))}` : ''
+  const response = await fetchWorkflowApi(`${WORKFLOW_AI_API_BASE_URL}/agent/sessions/${sessionId}/debug-trace/replay${suffix}`)
+  const payload = (await readResponsePayload(response)) as AgentObservabilityDebugReplayResponse & WorkflowAiErrorPayload
+
+  if (!response.ok) {
+    throw new WorkflowAiRequestError(
+      payload.message || '读取 Agent 调试回放失败',
+      payload.diagnostics,
+      response.status,
+    )
+  }
+
+  return payload
+}
+
+export const getAgentObservabilityDebugFiles = async (
+  sessionId: string,
+): Promise<AgentObservabilityDebugFilesResponse> => {
+  const response = await fetchWorkflowApi(`${WORKFLOW_AI_API_BASE_URL}/agent/sessions/${sessionId}/debug-trace/files`)
+  const payload = (await readResponsePayload(response)) as AgentObservabilityDebugFilesResponse & WorkflowAiErrorPayload
+
+  if (!response.ok) {
+    throw new WorkflowAiRequestError(
+      payload.message || '读取 Agent 调试日志文件失败',
+      payload.diagnostics,
+      response.status,
+    )
+  }
+
+  return payload
+}
+
+export const getAgentObservabilityDebugHealth = async (): Promise<AgentObservabilityDebugHealth> => {
+  const response = await fetchWorkflowApi(`${WORKFLOW_AI_API_BASE_URL}/agent/debug/health`)
+  const payload = (await readResponsePayload(response)) as AgentObservabilityDebugHealth & WorkflowAiErrorPayload
+
+  if (!response.ok) {
+    throw new WorkflowAiRequestError(
+      payload.message || '读取 Agent 调试健康状态失败',
+      payload.diagnostics,
+      response.status,
+    )
+  }
+
+  return payload
 }
 
 export const syncAgentCanvas = async (

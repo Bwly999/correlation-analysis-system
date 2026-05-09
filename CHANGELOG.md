@@ -4,6 +4,12 @@
 
 ### 变更 (Changed)
 
+- **新增 dev 模式 Agent 全链路可观测系统**:
+  - 后端新增 `Agent Observability` dev-only 聚合层，记录 session lifecycle、kernel intent/observation、opencode 原始事件、tool call、raw message、parse failure、projection diff/snapshot、approval、artifact 和错误链路，并提供 debug trace / replay / files / health 接口。
+  - 本地开发环境会自动把 Agent 调试日志落盘到 `.workflow-debug/agent-observability/...`，生成 `manifest.json`、`events.ndjson`、`projection-snapshots.ndjson`、`raw-messages.ndjson`、`summary.json`、`session.json` 与失败态 `failure.json`。
+  - 前端新增独立右侧 `Agent 调试台` 抽屉和专用 replay store，可查看概览、时间线、工具调用、原始消息、Projection 快照和错误链路，并支持锁定当前会话与按序列回放。
+  - 同步补充服务端 observability 单测、前端抽屉与画布入口测试，并更新 `工作流系统.md` 中的 Agent 架构、dev trace 接口和日志目录说明。
+
 - **WIP：增强 Agent 真实链路测评与超时保护**:
   - 将 Agent live E2E 升级为从 `AgentWorkspace` 发起的前后端真实链路探针，并通过 `AGENT_E2E_LIVE` 显式启用真实模型调用。
   - 修复 DeepSeek agentic smoke 脚本的服务端入口，补充调试参数和关闭保护，便于后续继续定位真实链路卡点。

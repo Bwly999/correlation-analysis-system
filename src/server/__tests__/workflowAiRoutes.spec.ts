@@ -17,6 +17,10 @@ const {
   sendAgentSessionMessageMock,
   subscribeToAgentSessionEventsMock,
   syncAgentCanvasMock,
+  getAgentObservabilityDebugFilesMock,
+  getAgentObservabilityDebugHealthMock,
+  getAgentObservabilityDebugReplayMock,
+  getAgentObservabilityDebugTraceMock,
   handleWorkflowMcpRequestMock,
   getWorkflowMcpHealthSnapshotMock,
   isWorkflowMcpHealthRequestMock,
@@ -36,6 +40,10 @@ const {
   sendAgentSessionMessageMock: vi.fn(),
   subscribeToAgentSessionEventsMock: vi.fn(),
   syncAgentCanvasMock: vi.fn(),
+  getAgentObservabilityDebugFilesMock: vi.fn(),
+  getAgentObservabilityDebugHealthMock: vi.fn(),
+  getAgentObservabilityDebugReplayMock: vi.fn(),
+  getAgentObservabilityDebugTraceMock: vi.fn(),
   handleWorkflowMcpRequestMock: vi.fn(),
   getWorkflowMcpHealthSnapshotMock: vi.fn(),
   isWorkflowMcpHealthRequestMock: vi.fn((pathname: string) => pathname === '/api/opencode/workflow-mcp/health'),
@@ -66,6 +74,10 @@ vi.mock('../opencode/gateway.js', () => ({
   sendAgentSessionMessage: sendAgentSessionMessageMock,
   subscribeToAgentSessionEvents: subscribeToAgentSessionEventsMock,
   syncAgentCanvas: syncAgentCanvasMock,
+  getAgentObservabilityDebugFiles: getAgentObservabilityDebugFilesMock,
+  getAgentObservabilityDebugHealth: getAgentObservabilityDebugHealthMock,
+  getAgentObservabilityDebugReplay: getAgentObservabilityDebugReplayMock,
+  getAgentObservabilityDebugTrace: getAgentObservabilityDebugTraceMock,
 }))
 
 vi.mock('../opencode/workflowMcpServer.js', () => ({
@@ -138,6 +150,10 @@ afterEach(() => {
   sendAgentSessionMessageMock.mockReset()
   subscribeToAgentSessionEventsMock.mockReset()
   syncAgentCanvasMock.mockReset()
+  getAgentObservabilityDebugFilesMock.mockReset()
+  getAgentObservabilityDebugHealthMock.mockReset()
+  getAgentObservabilityDebugReplayMock.mockReset()
+  getAgentObservabilityDebugTraceMock.mockReset()
   handleWorkflowMcpRequestMock.mockReset()
   getWorkflowMcpHealthSnapshotMock.mockReset()
   isWorkflowMcpHealthRequestMock.mockImplementation((pathname: string) => pathname === '/api/opencode/workflow-mcp/health')
@@ -1016,6 +1032,180 @@ describe('workflow ai routes', () => {
         totalCalls: 3,
       }),
     })
+  })
+
+  it('returns 404 for agent dev trace routes outside development mode', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    const handler = createServerHandler()
+    const response = createResponse()
+
+    await handler(createRequest('GET', '/api/agent/sessions/agent_1/debug-trace'), response)
+
+    expect(response.statusCode).toBe(404)
+    expect(JSON.parse(response.body)).toEqual({ message: '未找到接口' })
+    expect(getAgentObservabilityDebugTraceMock).not.toHaveBeenCalled()
+  })
+
+  it('returns the current agent debug trace in development mode', async () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    getAgentObservabilityDebugTraceMock.mockReturnValueOnce({
+      enabled: true,
+      sessionId: 'agent_1',
+      traceId: 'trace_agent_1',
+      eventCount: 3,
+      projectionSnapshotCount: 1,
+      latestStatus: 'running',
+      files: {
+        rootDir: 'C:\\trace\\agent_1',
+        manifestFile: 'C:\\trace\\agent_1\\manifest.json',
+        eventsFile: 'C:\\trace\\agent_1\\events.ndjson',
+        projectionSnapshotsFile: 'C:\\trace\\agent_1\\projection-snapshots.ndjson',
+        rawMessagesFile: 'C:\\trace\\agent_1\\raw-messages.ndjson',
+        sessionFile: 'C:\\trace\\agent_1\\session.json',
+        summaryFile: 'C:\\trace\\agent_1\\summary.json',
+        failureFile: null,
+      },
+      summary: {
+        sessionId: 'agent_1',
+        traceId: 'trace_agent_1',
+        startedAt: 1,
+        lastUpdatedAt: 2,
+        eventCount: 3,
+        projectionSnapshotCount: 1,
+        rawMessageCount: 0,
+        parseFailureCount: 0,
+        failed: false,
+        latestStatus: 'running',
+        latestError: null,
+      },
+      events: [
+        {
+          sessionId: 'agent_1',
+          traceId: 'trace_agent_1',
+          seq: 1,
+          timestamp: 1,
+          source: 'agent-route',
+          kind: 'session.lifecycle',
+          summary: '会话已创建',
+          payload: { status: 'idle' },
+        },
+      ],
+      projectionSnapshots: [],
+      rawMessages: [],
+      parseFailures: [],
+    })
+
+    const handler = createServerHandler()
+    const response = createResponse()
+
+    await handler(createRequest('GET', '/api/agent/sessions/agent_1/debug-trace?limit=50&offset=0'), response)
+
+    expect(response.statusCode).toBe(200)
+    expect(getAgentObservabilityDebugTraceMock).toHaveBeenCalledWith('agent_1', {
+      limit: 50,
+      offset: 0,
+    })
+    expect(JSON.parse(response.body)).toEqual(
+      expect.objectContaining({
+        enabled: true,
+        sessionId: 'agent_1',
+        eventCount: 3,
+      }),
+    )
+  })
+
+  it('returns the current agent debug replay in development mode', async () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    getAgentObservabilityDebugReplayMock.mockReturnValueOnce({
+      sessionId: 'agent_1',
+      traceId: 'trace_agent_1',
+      totalEvents: 3,
+      replayMarkers: [
+        {
+          label: '会话创建',
+          seq: 1,
+          timestamp: 1,
+          kind: 'session.lifecycle',
+        },
+      ],
+      state: {
+        cursorSeq: 1,
+        sessionStatus: 'idle',
+        latestKernelStage: null,
+        latestKernelMessage: null,
+        latestToolCalls: [],
+        latestProjection: null,
+        latestRawMessage: null,
+        latestError: null,
+      },
+    })
+
+    const handler = createServerHandler()
+    const response = createResponse()
+
+    await handler(createRequest('GET', '/api/agent/sessions/agent_1/debug-trace/replay?seq=1'), response)
+
+    expect(response.statusCode).toBe(200)
+    expect(getAgentObservabilityDebugReplayMock).toHaveBeenCalledWith('agent_1', 1)
+    expect(JSON.parse(response.body)).toEqual(
+      expect.objectContaining({
+        sessionId: 'agent_1',
+        traceId: 'trace_agent_1',
+        totalEvents: 3,
+      }),
+    )
+  })
+
+  it('returns the current agent debug files in development mode', async () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    getAgentObservabilityDebugFilesMock.mockReturnValueOnce({
+      rootDir: 'C:\\trace\\agent_1',
+      manifestFile: 'C:\\trace\\agent_1\\manifest.json',
+      eventsFile: 'C:\\trace\\agent_1\\events.ndjson',
+      projectionSnapshotsFile: 'C:\\trace\\agent_1\\projection-snapshots.ndjson',
+      rawMessagesFile: 'C:\\trace\\agent_1\\raw-messages.ndjson',
+      sessionFile: 'C:\\trace\\agent_1\\session.json',
+      summaryFile: 'C:\\trace\\agent_1\\summary.json',
+      failureFile: null,
+    })
+
+    const handler = createServerHandler()
+    const response = createResponse()
+
+    await handler(createRequest('GET', '/api/agent/sessions/agent_1/debug-trace/files'), response)
+
+    expect(response.statusCode).toBe(200)
+    expect(getAgentObservabilityDebugFilesMock).toHaveBeenCalledWith('agent_1')
+    expect(JSON.parse(response.body)).toEqual(
+      expect.objectContaining({
+        rootDir: 'C:\\trace\\agent_1',
+      }),
+    )
+  })
+
+  it('returns agent debug health in development mode', async () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    getAgentObservabilityDebugHealthMock.mockReturnValueOnce({
+      enabled: true,
+      logRootDir: 'C:\\repo\\.workflow-debug\\agent-observability',
+      activeTraceCount: 1,
+      lastWriteAt: 2,
+      writeFailures: 0,
+    })
+
+    const handler = createServerHandler()
+    const response = createResponse()
+
+    await handler(createRequest('GET', '/api/agent/debug/health'), response)
+
+    expect(response.statusCode).toBe(200)
+    expect(getAgentObservabilityDebugHealthMock).toHaveBeenCalledTimes(1)
+    expect(JSON.parse(response.body)).toEqual(
+      expect.objectContaining({
+        enabled: true,
+        activeTraceCount: 1,
+      }),
+    )
   })
 
   it('returns 404 for removed legacy run-agent-loop route', async () => {

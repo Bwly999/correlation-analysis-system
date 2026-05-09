@@ -6,6 +6,10 @@ import { createServer } from 'node:net'
 import { createOpencodeClient, createOpencodeServer } from '@opencode-ai/sdk/v2'
 import * as z from 'zod/v4'
 import type {
+  AgentObservabilityDebugHealth,
+  AgentObservabilityDebugReplayResponse,
+  AgentObservabilityDebugTraceResponse,
+  AgentObservabilityLogFiles,
   AgentProjectionSnapshot,
   AgentSessionEvent,
   AgentSessionDebugRawMessage,
@@ -47,6 +51,15 @@ import {
   resolveAssistantMessageText,
   type AgentStructuredResponse,
 } from './projection.js'
+import {
+  appendAgentObservabilityEvent,
+  getAgentObservabilityDebugFiles as getAgentObservabilityDebugFilesFromStore,
+  getAgentObservabilityDebugHealth as getAgentObservabilityDebugHealthFromStore,
+  getAgentObservabilityDebugReplay as getAgentObservabilityDebugReplayFromStore,
+  getAgentObservabilityDebugTrace as getAgentObservabilityDebugTraceFromStore,
+  initializeAgentObservabilityTrace,
+  recordAgentObservabilityProjection,
+} from './agentObservability/store.js'
 import { runAgentKernel } from './agentKernel/kernel.js'
 import type { AgentKernelRuntimeAdapter, AgentKernelRuntimePromptInput } from './agentKernel/opencodeAdapter.js'
 import type { AgentKernelObservation, AgentKernelVerificationStatus } from './agentKernel/types.js'
@@ -456,6 +469,12 @@ const appendDebugEvent = (
     ...(payload !== undefined ? { payload: safeSerializeDebugPayload(payload) } : {}),
   }
   appendAgentSessionDebugEvent(sessionId, nextEvent)
+  appendAgentObservabilityEvent(sessionId, {
+    source: 'opencode-event-pump',
+    kind: 'opencode.event',
+    summary,
+    payload: nextEvent,
+  })
   writeAgentSessionDebugLine(sessionId, 'event', nextEvent)
 }
 
@@ -475,6 +494,22 @@ const appendDebugToolCall = (
     ...(input.payload !== undefined ? { payload: safeSerializeDebugPayload(input.payload) } : {}),
   }
   appendAgentSessionDebugToolCall(sessionId, toolCall)
+  appendAgentObservabilityEvent(sessionId, {
+    source: 'opencode-event-pump',
+    kind: 'tool.call',
+    summary: `${input.toolName} ${input.status === 'started' ? '开始' : input.status === 'completed' ? '完成' : '失败'}`,
+    payload: {
+      rawToolCall: toolCall,
+      toolCall: {
+        id: input.toolCallId || `${input.toolName}_${toolCall.timestamp}`,
+        toolName: normalizeWorkflowToolName(input.toolName),
+        displayName: WORKFLOW_TOOL_DISPLAY_NAMES[normalizeWorkflowToolName(input.toolName)] ?? input.title ?? input.toolName,
+        status: resolveToolCallStatus(input.status),
+        summary: buildToolSummary(normalizeWorkflowToolName(input.toolName), input.status),
+        ...(input.status === 'started' ? { startedAt: toolCall.timestamp } : { finishedAt: toolCall.timestamp }),
+      },
+    },
+  })
   writeAgentSessionDebugLine(sessionId, 'tool_call', toolCall)
 }
 
@@ -543,6 +578,14 @@ const buildDebugRawMessage = (entry: any): AgentSessionDebugRawMessage => ({
 const appendDebugRawMessage = (sessionId: string, entry: any) => {
   const rawMessage = buildDebugRawMessage(entry)
   appendAgentSessionDebugRawMessage(sessionId, rawMessage)
+  appendAgentObservabilityEvent(sessionId, {
+    source: 'gateway',
+    kind: 'message.raw',
+    summary: `收到原始消息 ${rawMessage.messageId}`,
+    payload: {
+      rawMessage,
+    },
+  })
   writeAgentSessionDebugLine(sessionId, 'raw_message', rawMessage)
 }
 
@@ -561,6 +604,14 @@ const appendDebugParseFailure = (
     ...(input.payload !== undefined ? { payload: safeSerializeDebugPayload(input.payload) } : {}),
   }
   appendAgentSessionDebugParseFailure(sessionId, parseFailure)
+  appendAgentObservabilityEvent(sessionId, {
+    source: 'gateway',
+    kind: 'message.parse',
+    summary: input.reason,
+    payload: {
+      parseFailure,
+    },
+  })
   writeAgentSessionDebugLine(sessionId, 'parse_failure', parseFailure)
 }
 
@@ -779,6 +830,15 @@ const syncSessionStatus = (
     draft.session.status = status
   })
   if (!record) return null
+  appendAgentObservabilityEvent(sessionId, {
+    source: 'session-store',
+    kind: 'session.lifecycle',
+    summary: `会话状态已更新为 ${status}`,
+    payload: {
+      status,
+      session: record.session,
+    },
+  })
   publishAgentEvent(sessionId, { type: 'session.status.updated', session: record.session }, emitEvent)
   return record
 }
@@ -788,10 +848,14 @@ const updateSessionProjection = (
   updater: (projection: AgentProjectionSnapshot) => AgentProjectionSnapshot,
   emitEvent?: (event: AgentSessionEvent) => void,
 ) => {
+  const previousProjection = getAgentSessionRecord(sessionId)?.projection
   const record = updateAgentSessionRecord(sessionId, (draft) => {
     draft.projection = updater(draft.projection)
   })
   if (!record) return null
+  if (previousProjection) {
+    recordAgentObservabilityProjection(sessionId, previousProjection, record.projection, 'projection')
+  }
   publishProjectionEvents(sessionId, record.projection, emitEvent)
   return record
 }
@@ -1339,6 +1403,22 @@ export const createAgentSession = async (input: {
     projection,
     userId: input.userId,
   })
+  initializeAgentObservabilityTrace({
+    sessionId: record.session.id,
+    request: input.request,
+    userId: input.userId,
+    session: record.session,
+    projection: record.projection,
+  })
+  appendAgentObservabilityEvent(record.session.id, {
+    source: 'agent-route',
+    kind: 'session.lifecycle',
+    summary: '会话已创建',
+    payload: {
+      status: record.session.status,
+      session: record.session,
+    },
+  })
 
   return {
     session: record.session,
@@ -1359,6 +1439,26 @@ export const getAgentProjection = (sessionId: string) => getAgentSessionRecord(s
 
 export const getAgentSessionDebugTrace = (sessionId: string) =>
   getAgentSessionDebugTraceFromStore(sessionId)
+
+export const getAgentObservabilityDebugTrace = (
+  sessionId: string,
+  options: { limit?: number, offset?: number } = {},
+): AgentObservabilityDebugTraceResponse | null =>
+  getAgentObservabilityDebugTraceFromStore(sessionId, options)
+
+export const getAgentObservabilityDebugReplay = (
+  sessionId: string,
+  seq?: number,
+): AgentObservabilityDebugReplayResponse | null =>
+  getAgentObservabilityDebugReplayFromStore(sessionId, seq)
+
+export const getAgentObservabilityDebugFiles = (
+  sessionId: string,
+): AgentObservabilityLogFiles | null =>
+  getAgentObservabilityDebugFilesFromStore(sessionId)
+
+export const getAgentObservabilityDebugHealth = (): AgentObservabilityDebugHealth =>
+  getAgentObservabilityDebugHealthFromStore()
 
 export const subscribeToAgentSessionEvents = subscribeAgentSessionEvents
 
@@ -1476,6 +1576,15 @@ export const runAgenticAnalysisSession = async (
   }
 
   syncSessionStatus(input.sessionId, 'running', emitEvent)
+  appendAgentObservabilityEvent(input.sessionId, {
+    source: 'agent-kernel',
+    kind: 'kernel.intent',
+    summary: 'Agent Kernel 开始执行',
+    payload: {
+      stage: 'started',
+      message: input.message,
+    },
+  })
   let kernelResult
   try {
     kernelResult = await runAgentKernel({
@@ -1514,6 +1623,28 @@ export const runAgenticAnalysisSession = async (
       session: failedRecord.session,
       projection: failedRecord.projection,
     }
+  }
+  appendAgentObservabilityEvent(input.sessionId, {
+    source: 'agent-kernel',
+    kind: 'kernel.intent',
+    summary: `Agent Kernel verifier 结果：${kernelResult.verification.status}`,
+    payload: {
+      stage: kernelResult.verification.status,
+      verificationMessage: kernelResult.verification.message,
+      intent: kernelResult.intent,
+      skill: kernelResult.skill,
+    },
+  })
+  for (const observation of kernelResult.observations) {
+    appendAgentObservabilityEvent(input.sessionId, {
+      source: 'agent-kernel',
+      kind: 'kernel.observation',
+      summary:
+        observation.type === 'assistant_message'
+          ? 'Kernel 收到助手消息'
+          : `Kernel 收到工具结果：${observation.toolName}`,
+      payload: observation,
+    })
   }
   const projectionText = resolveKernelProjectionText(kernelResult.verification.status)
 
