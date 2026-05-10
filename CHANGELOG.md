@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### 新增 (Added)
+
+- **规范 Agentic Kernel smoke 产物输出与回放脚本**:
+  - `pnpm smoke:agentic-kernel` 现在会将 `last-run-debug.log` 与 `last-run-report.json` 统一写入 `.workflow-debug/agentic-kernel-smoke/`，避免与 `scripts/agentic-kernel-smoke/` 下的源码混放。
+  - 新增 `pnpm smoke:agentic-kernel:visualize`，可基于最新 smoke 产物生成 `last-run-visualization.html` 本地回放页面。
+  - 补充 smoke 产物路径与落盘行为单测，并移除脚本目录下历史遗留的 `last-run*` 产物文件。
+
 ### 变更 (Changed)
 
 - **默认 Agent 工作台切换为通用对话主链**:

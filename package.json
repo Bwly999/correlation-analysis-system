@@ -24,7 +24,9 @@
     "eval:workflow-mcp": "npx tsx scripts/workflow-mcp-evaluation/run.ts",
     "eval:agentic-analysis": "npx tsx scripts/agentic-analysis-evaluation/run.ts",
     "smoke:deepseek-agentic": "npx tsx scripts/deepseek-agentic-smoke/run.ts",
-    "smoke:opencode-generic": "npx tsx scripts/opencode-generic-smoke/run.ts"
+    "smoke:opencode-generic": "npx tsx scripts/opencode-generic-smoke/run.ts",
+    "smoke:agentic-kernel": "npx tsx scripts/agentic-kernel-smoke/run.ts",
+    "smoke:agentic-kernel:visualize": "npx tsx scripts/agentic-kernel-smoke/visualize-last-run.ts"
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^2.0.37",
