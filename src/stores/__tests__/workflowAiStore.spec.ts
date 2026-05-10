@@ -7,7 +7,6 @@ const {
   fetchSystemModelProfilesMock,
   getAgentProjectionMock,
   getAgentSessionMock,
-  runAgenticAnalysisSessionMock,
   sendAgentSessionMessageMock,
   streamAgentSessionEventsMock,
   syncAgentCanvasMock,
@@ -17,7 +16,6 @@ const {
   fetchSystemModelProfilesMock: vi.fn(),
   getAgentProjectionMock: vi.fn(),
   getAgentSessionMock: vi.fn(),
-  runAgenticAnalysisSessionMock: vi.fn(),
   sendAgentSessionMessageMock: vi.fn(),
   streamAgentSessionEventsMock: vi.fn(),
   syncAgentCanvasMock: vi.fn(),
@@ -30,7 +28,6 @@ vi.mock('@/services/agentWorkspace', () => ({
   fetchSystemModelProfiles: fetchSystemModelProfilesMock,
   getAgentProjection: getAgentProjectionMock,
   getAgentSession: getAgentSessionMock,
-  runAgenticAnalysisSession: runAgenticAnalysisSessionMock,
   sendAgentSessionMessage: sendAgentSessionMessageMock,
   streamAgentSessionEvents: streamAgentSessionEventsMock,
   syncAgentCanvas: syncAgentCanvasMock,
@@ -294,7 +291,6 @@ describe('workflowAiStore', () => {
       content: '帮我分析价格和销量关系',
       skillId: 'generic',
     })
-    expect(runAgenticAnalysisSessionMock).not.toHaveBeenCalled()
     expect(store.activeSession?.id).toBe('agent_1')
     expect(store.activeSession?.status).toBe('completed')
     expect(store.projectionSnapshot?.analysis.summary).toBe('价格是当前最值得优先验证的候选因子。')

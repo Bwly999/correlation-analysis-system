@@ -277,30 +277,6 @@ export const sendAgentSessionMessage = async (
   return payload
 }
 
-export const runAgenticAnalysisSession = async (
-  sessionId: string,
-  request: AgentSessionMessageRequest,
-): Promise<AgentSessionMessageResponse> => {
-  const response = await fetchWorkflowApi(`${WORKFLOW_AI_API_BASE_URL}/agent/sessions/${sessionId}/agentic-run`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(request),
-  })
-
-  const payload = (await readResponsePayload(response)) as AgentSessionMessageResponse & WorkflowAiErrorPayload
-  if (!response.ok) {
-    throw new WorkflowAiRequestError(
-      payload.message || '运行 Agentic 分析失败',
-      payload.diagnostics,
-      response.status,
-    )
-  }
-
-  return payload
-}
-
 export const streamAgentSessionEvents = async (
   sessionId: string,
   options: AgentSessionStreamOptions = {},

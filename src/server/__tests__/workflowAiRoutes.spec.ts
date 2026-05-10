@@ -13,7 +13,6 @@ const {
   createAgentSessionMock,
   getAgentProjectionMock,
   getAgentSessionSnapshotMock,
-  runAgenticAnalysisSessionMock,
   sendAgentSessionMessageMock,
   subscribeToAgentSessionEventsMock,
   syncAgentCanvasMock,
@@ -36,7 +35,6 @@ const {
   createAgentSessionMock: vi.fn(),
   getAgentProjectionMock: vi.fn(),
   getAgentSessionSnapshotMock: vi.fn(),
-  runAgenticAnalysisSessionMock: vi.fn(),
   sendAgentSessionMessageMock: vi.fn(),
   subscribeToAgentSessionEventsMock: vi.fn(),
   syncAgentCanvasMock: vi.fn(),
@@ -70,7 +68,6 @@ vi.mock('../opencode/gateway.js', () => ({
   createAgentSession: createAgentSessionMock,
   getAgentProjection: getAgentProjectionMock,
   getAgentSession: getAgentSessionSnapshotMock,
-  runAgenticAnalysisSession: runAgenticAnalysisSessionMock,
   sendAgentSessionMessage: sendAgentSessionMessageMock,
   subscribeToAgentSessionEvents: subscribeToAgentSessionEventsMock,
   syncAgentCanvas: syncAgentCanvasMock,
@@ -524,89 +521,6 @@ describe('workflow ai routes', () => {
       }),
       assistantMessage: expect.objectContaining({
         role: 'assistant',
-      }),
-    })
-  })
-
-  it('starts an agentic analysis run through the agent session route', async () => {
-    runAgenticAnalysisSessionMock.mockResolvedValueOnce({
-      session: {
-        id: 'agent_1',
-        mode: 'edit',
-        prompt: '帮我分析影响销量的关键因素',
-        status: 'running',
-        profile: {
-          id: 'custom',
-          name: '测试模型',
-          model: 'glm-4.7',
-        },
-        workflowId: null,
-        createdAt: 1,
-        updatedAt: 2,
-      },
-      projection: {
-        workflow: {
-          workflowId: null,
-          workflowName: '销量诊断流程',
-          draftNodeCount: 2,
-          draftEdgeCount: 1,
-          draftSummary: '已进入 agentic 分析流程。',
-          versionCount: 0,
-          latestVersionId: null,
-          proposedPlan: null,
-        },
-        analysis: {
-          goal: '帮我分析影响销量的关键因素',
-          summary: '系统已开始 agentic 分析。',
-          candidateTargets: ['sales'],
-          candidateFactors: ['price', 'discount'],
-          methods: [],
-          findings: [],
-          risks: [],
-          recommendations: [],
-        },
-        execution: {
-          status: 'running',
-          latestAction: 'Agentic 分析已启动',
-          toolCalls: [],
-          pendingApprovals: [],
-        },
-        canvasSync: {
-          status: 'idle',
-          message: '当前草案尚未同步到画布',
-        },
-        error: null,
-        updatedAt: 2,
-      },
-    })
-
-    const handler = createServerHandler()
-    const response = createResponse()
-
-    await handler(
-      createRequest('POST', '/api/agent/sessions/agent_1/agentic-run', {
-        content: '开始 agentic 分析',
-      }),
-      response,
-    )
-
-    expect(response.statusCode).toBe(200)
-    expect(runAgenticAnalysisSessionMock).toHaveBeenCalledWith(
-      {
-        sessionId: 'agent_1',
-        message: '开始 agentic 分析',
-      },
-      expect.any(Function),
-    )
-    expect(JSON.parse(response.body)).toEqual({
-      session: expect.objectContaining({
-        id: 'agent_1',
-        status: 'running',
-      }),
-      projection: expect.objectContaining({
-        execution: expect.objectContaining({
-          latestAction: 'Agentic 分析已启动',
-        }),
       }),
     })
   })

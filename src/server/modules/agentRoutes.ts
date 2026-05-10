@@ -11,7 +11,6 @@ import {
   getAgentObservabilityDebugTrace,
   getAgentProjection,
   getAgentSession,
-  runAgenticAnalysisSession,
   sendAgentSessionMessage,
   subscribeToAgentSessionEvents,
   syncAgentCanvas,
@@ -26,7 +25,6 @@ export const createAgentRoutes = (): HttpDomainHandler<ServerDependencies> => as
   const { pathname, method } = context
   const debugHealthMatch = pathname === '/api/agent/debug/health'
   const agentSessionMessagesMatch = pathname.match(/^\/api\/agent\/sessions\/([^/]+)\/messages$/)
-  const agenticRunMatch = pathname.match(/^\/api\/agent\/sessions\/([^/]+)\/agentic-run$/)
   const agentSessionEventsMatch = pathname.match(/^\/api\/agent\/sessions\/([^/]+)\/events$/)
   const agentSessionDebugTraceReplayMatch = pathname.match(/^\/api\/agent\/sessions\/([^/]+)\/debug-trace\/replay$/)
   const agentSessionDebugTraceFilesMatch = pathname.match(/^\/api\/agent\/sessions\/([^/]+)\/debug-trace\/files$/)
@@ -67,20 +65,6 @@ export const createAgentRoutes = (): HttpDomainHandler<ServerDependencies> => as
     const sessionId = decodeURIComponent(agentSessionMessagesMatch[1] ?? '')
     const body = await context.readJsonBody<AgentSessionMessageRequest>()
     const result = await sendAgentSessionMessage(
-      {
-        sessionId,
-        message: body.content,
-      },
-      () => undefined,
-    )
-    context.sendJson(200, result)
-    return true
-  }
-
-  if (method === 'POST' && agenticRunMatch) {
-    const sessionId = decodeURIComponent(agenticRunMatch[1] ?? '')
-    const body = await context.readJsonBody<AgentSessionMessageRequest>()
-    const result = await runAgenticAnalysisSession(
       {
         sessionId,
         message: body.content,

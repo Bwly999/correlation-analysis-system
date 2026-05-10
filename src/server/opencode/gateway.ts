@@ -60,14 +60,11 @@ import {
   initializeAgentObservabilityTrace,
   recordAgentObservabilityProjection,
 } from './agentObservability/store.js'
-import { runAgentKernel } from './agentKernel/kernel.js'
-import type { AgentKernelRuntimeAdapter, AgentKernelRuntimePromptInput } from './agentKernel/opencodeAdapter.js'
-import type { AgentKernelObservation, AgentKernelVerificationStatus } from './agentKernel/types.js'
 
 
 const WORKFLOW_MCP_NAME = 'workflow'
 const OPENCODE_TEMP_ROOT = join(tmpdir(), 'correlation-analysis-system', 'opencode-runtime')
-const OPENCODE_AGENT_REQUEST_TIMEOUT_MS = 45_000
+const OPENCODE_AGENT_REQUEST_TIMEOUT_MS = Number(process.env.OPENCODE_AGENT_REQUEST_TIMEOUT_MS || '180000')
 const OPENCODE_SERVER_START_TIMEOUT_MS = Number(process.env.OPENCODE_SERVER_START_TIMEOUT_MS || '20000')
 const ENABLE_AGENT_SESSION_DEBUG_STDOUT = process.env.AGENT_SESSION_DEBUG_STDOUT === '1'
 const WORKFLOW_MCP_TOOL_NAMES = [
@@ -757,13 +754,40 @@ const validateWorkflowPlan = (request: WorkflowAiPlanRequest, plan: WorkflowAiPl
 
 const buildAgentSystemPrompt = (options?: { plainJsonFallback?: boolean }) =>
   [
-    '你是基于 opencode 的通用工作助手。',
-    '请优先结合 workflow MCP 工具读取当前工作流、节点、数据源、执行结果和上下文，再回答用户问题。',
-    '输出必须使用中文。',
-    '允许自然语言回复，不要求固定输出分析 JSON。',
-    '禁止编造未读取过的工作流状态、数据字段、执行结果或结论。',
+    '你是多因子相关性分析系统中的 AI 工作助手。',
+    '',
+    '## 可用工具',
+    '你只能使用以下 workflow MCP 工具，禁止调用 bash、文件系统或任何其他工具：',
+    ...WORKFLOW_MCP_TOOL_NAMES.map((name) => `- ${name}：${WORKFLOW_TOOL_DISPLAY_NAMES[name] ?? name}`),
+    '',
+    '## 工作模式',
+    '根据用户意图自动选择合适的工作模式：',
+    '',
+    '### 普通对话',
+    '处理概念解释、轻量问答时直接用中文回答，不需要调用工具。',
+    '',
+    '### 数据分析（用户要求分析、相关性、影响因素等）',
+    '按以下流程自主推进：',
+    '1. 读取上下文（workflow_get_session_context）和数据源（workflow_list_data_sources）',
+    '2. 生成数据画像（workflow_profile_data_source）和推荐方法（workflow_recommend_methods）',
+    '3. 搜索并选择合适节点，构建最小可运行工作流',
+    '4. 校验（workflow_validate_workflow）并执行（workflow_test_workflow）',
+    '5. 抽取证据（workflow_extract_result_evidence）',
+    '6. 输出中文分析报告，核心结论必须引用执行结果',
+    '',
+    '### 工作流修复（用户提到失败、报错、调试）',
+    '优先读取失败节点和执行记录，定位原因后修复配置并重跑验证。',
+    '',
+    '### 报告生成（用户要求总结、报告、证据）',
+    '基于已有执行结果和证据生成中文报告，不编造未执行过的结论。',
+    '',
+    '## 约束',
+    '- 输出必须使用中文',
+    '- 禁止编造未读取过的工作流状态、数据字段、执行结果或结论',
+    '- 没有证据支撑的判断只能作为假设或建议',
+    '- 删除节点、回滚版本等高风险操作必须先说明再执行',
     options?.plainJsonFallback
-      ? '本次结构化输出工具不可用。请直接输出一个 JSON 对象，不要使用 Markdown 代码块，不要输出任何额外说明。缺失字段必须使用空数组、null 或可读字符串补齐。'
+      ? '- 本次结构化输出工具不可用。请直接输出一个 JSON 对象，不要使用 Markdown 代码块。缺失字段必须使用空数组、null 或可读字符串补齐。'
       : '',
   ]
     .filter(Boolean)
@@ -792,51 +816,6 @@ const buildAgentPromptRequest = (
     {
       type: 'text' as const,
       text: message,
-    },
-  ],
-})
-
-const buildAgentKernelPromptRequest = (
-  runtime: AgentSessionRuntime,
-  input: AgentKernelRuntimePromptInput,
-) => ({
-  sessionID: runtime.sessionID,
-  model: {
-    providerID: runtime.providerID,
-    modelID: runtime.modelID,
-  },
-  agent: 'general',
-  tools: runtime.toolSelection,
-  system: [
-    input.skill.systemPrompt,
-    '',
-    '当前 Kernel 路由：',
-    `- 意图：${input.intent.kind}`,
-    `- 自主等级：${input.intent.autonomy}`,
-    `- 路由原因：${input.intent.reason}`,
-    '',
-    '执行约束：',
-    ...input.skill.guardrails.map((item) => `- ${item}`),
-    '',
-    '完成标准：',
-    ...input.skill.exitCriteria.map((item) => `- ${item}`),
-  ].join('\n'),
-  parts: [
-    {
-      type: 'text' as const,
-      text: [
-        `用户目标：${input.request.prompt}`,
-        `当前消息：${input.message}`,
-        `Kernel 迭代：第 ${input.iteration ?? 1} 轮`,
-        input.verification
-          ? `上一轮校验：${input.verification.status} - ${input.verification.message}`
-          : '',
-        input.previousObservations?.length
-          ? `已获得观察结果 JSON：\n${JSON.stringify(input.previousObservations, null, 2)}`
-          : '',
-        '',
-        '请根据当前 skill 自主决定下一步。需要完整 agentic 分析时，按“读取上下文 -> 数据画像 -> 方法推荐 -> 构建或修复工作流 -> 校验 -> 执行 -> 抽取证据 -> 中文报告”的闭环推进；如果只是普通对话或阻塞说明，则直接给出中文回复。',
-      ].filter(Boolean).join('\n'),
     },
   ],
 })
@@ -1357,132 +1336,6 @@ const extractToolOutputPayload = (part: any) => {
   return {}
 }
 
-const extractAgentKernelObservationsFromPromptResponse = (response: any): AgentKernelObservation[] => {
-  const entries = response?.data ? [response.data] : []
-  return entries.flatMap((entry) => {
-    const observations: AgentKernelObservation[] = []
-    const text = extractMessageEntryText(entry) || extractPromptText({ data: entry })
-    if (text) {
-      observations.push({
-        type: 'assistant_message',
-        content: text,
-      })
-    }
-
-    for (const part of Array.isArray(entry?.parts) ? entry.parts : []) {
-      if (part?.type !== 'tool') continue
-      const toolName =
-        typeof part.tool === 'string'
-          ? part.tool
-          : typeof part.toolID === 'string'
-            ? part.toolID
-            : typeof part.name === 'string'
-              ? part.name
-              : ''
-      if (!toolName) continue
-      observations.push({
-        type: 'tool_result',
-        toolName: normalizeWorkflowToolName(toolName),
-        structuredContent: extractToolOutputPayload(part),
-      })
-    }
-
-    return observations
-  })
-}
-
-const createAgentKernelAdapter = (
-  record: AgentSessionRecord,
-  emitEvent?: (event: AgentSessionEvent) => void,
-): AgentKernelRuntimeAdapter => ({
-  async runPrompt(input) {
-    return withTimeout((async () => {
-      const runtime = await ensureAgentRuntime(record)
-      try {
-        if (!runtime.eventPump) {
-          runtime.eventPump = await startAgentEventPump(input.sessionId, runtime)
-        }
-      } catch (error) {
-        updateSessionProjection(
-          input.sessionId,
-          (projection) => ({
-            ...applyExecutionState(projection, 'running', 'Agent Kernel 已启动'),
-            error: {
-              message: '监听 opencode 事件流失败',
-              detail: error instanceof Error ? error.message : undefined,
-              occurredAt: Date.now(),
-            },
-          }),
-          emitEvent,
-        )
-      }
-
-      const response = await runtime.client.session.prompt(buildAgentKernelPromptRequest(runtime, input))
-
-      return {
-        observations: extractAgentKernelObservationsFromPromptResponse(response),
-      }
-    })(),
-      OPENCODE_AGENT_REQUEST_TIMEOUT_MS,
-      'Agent Kernel 执行超时',
-    )
-  },
-})
-
-const resolveKernelProjectionText = (status: AgentKernelVerificationStatus) => {
-  if (status === 'waiting_user') {
-    return {
-      analysisSummary: '需要先提供可分析的数据源或字段摘要。',
-      executionStatus: 'completed' as const,
-      latestAction: '等待补充数据源或字段摘要',
-      workflowSummary: null,
-    }
-  }
-
-  if (status === 'needs_evidence') {
-    return {
-      analysisSummary: '核心结论缺少可追溯证据，Agent Kernel 将继续补齐 evidenceId。',
-      executionStatus: 'running' as const,
-      latestAction: '补齐结论证据',
-      workflowSummary: '已进入 Agent Kernel 证据闭环。',
-    }
-  }
-
-  if (status === 'requires_approval') {
-    return {
-      analysisSummary: '当前步骤需要用户确认后才能继续执行。',
-      executionStatus: 'running' as const,
-      latestAction: '等待用户确认',
-      workflowSummary: 'Agent Kernel 已暂停在确认节点。',
-    }
-  }
-
-  if (status === 'failed') {
-    return {
-      analysisSummary: 'Agent Kernel 执行失败，请查看错误详情。',
-      executionStatus: 'failed' as const,
-      latestAction: 'Agent Kernel 执行失败',
-      workflowSummary: 'Agent Kernel 执行失败。',
-    }
-  }
-
-  if (status === 'completed') {
-    return {
-      analysisSummary: 'Agent Kernel 已完成本轮分析闭环。',
-      executionStatus: 'completed' as const,
-      latestAction: 'Agent Kernel 分析完成',
-      workflowSummary: 'Agent Kernel 已完成分析流程。',
-    }
-  }
-
-  return {
-    analysisSummary: '系统已启动 Agent Kernel 分析。',
-    executionStatus: 'running' as const,
-    latestAction: 'Agent Kernel 已启动',
-    workflowSummary: '已进入 Agent Kernel 分析流程。',
-  }
-}
-
 export const createAgentSession = async (input: {
   request: WorkflowAiPlanRequest
   userId?: string
@@ -1687,134 +1540,6 @@ export const sendAgentSessionMessage = async (
     await disposeAgentRuntime(input.sessionId)
     throw error
   }
-}
-
-export const runAgenticAnalysisSession = async (
-  input: {
-    sessionId: string
-    message: string
-  },
-  emitEvent?: (event: AgentSessionEvent) => void,
-): Promise<AgentSessionMessageResponse> => {
-  const record = getAgentSessionRecord(input.sessionId)
-  if (!record) {
-    throw new Error('未找到 Agent 会话')
-  }
-
-  syncSessionStatus(input.sessionId, 'running', emitEvent)
-  appendAgentObservabilityEvent(input.sessionId, {
-    source: 'agent-kernel',
-    kind: 'kernel.intent',
-    summary: 'Agent Kernel 开始执行',
-    payload: {
-      stage: 'started',
-      message: input.message,
-    },
-  })
-  let kernelResult
-  try {
-    kernelResult = await runAgentKernel({
-      sessionId: input.sessionId,
-      message: input.message,
-      request: record.request,
-      autonomy: 'agentic',
-      adapter: createAgentKernelAdapter(record, emitEvent),
-      emitEvent,
-    })
-  } catch (error) {
-    const failedRecord = updateSessionProjection(
-      input.sessionId,
-      (projection) =>
-        applyProjectionError(
-          applyExecutionState(projection, 'failed', 'Agent Kernel 执行失败'),
-          error instanceof Error ? error.message : 'Agent Kernel 执行失败',
-        ),
-      emitEvent,
-    )
-    syncSessionStatus(input.sessionId, 'failed', emitEvent)
-    publishAgentEvent(
-      input.sessionId,
-      {
-        type: 'failed',
-        message: error instanceof Error ? error.message : 'Agent Kernel 执行失败',
-      },
-      emitEvent,
-    )
-
-    if (!failedRecord) {
-      throw error
-    }
-
-    return {
-      session: failedRecord.session,
-      projection: failedRecord.projection,
-    }
-  }
-  appendAgentObservabilityEvent(input.sessionId, {
-    source: 'agent-kernel',
-    kind: 'kernel.intent',
-    summary: `Agent Kernel verifier 结果：${kernelResult.verification.status}`,
-    payload: {
-      stage: kernelResult.verification.status,
-      verificationMessage: kernelResult.verification.message,
-      intent: kernelResult.intent,
-      skill: kernelResult.skill,
-    },
-  })
-  for (const observation of kernelResult.observations) {
-    appendAgentObservabilityEvent(input.sessionId, {
-      source: 'agent-kernel',
-      kind: 'kernel.observation',
-      summary:
-        observation.type === 'assistant_message'
-          ? 'Kernel 收到助手消息'
-          : `Kernel 收到工具结果：${observation.toolName}`,
-      payload: observation,
-    })
-  }
-  const projectionText = resolveKernelProjectionText(kernelResult.verification.status)
-
-  updateSessionProjection(
-    input.sessionId,
-    (projection) => {
-      const nextProjection = applyExecutionState(
-        {
-          ...projection,
-          analysis: {
-            ...projection.analysis,
-            summary: projectionText.analysisSummary,
-          },
-          workflow: {
-            ...projection.workflow,
-            draftSummary:
-              projectionText.workflowSummary === null
-                ? projection.workflow.draftSummary
-                : projectionText.workflowSummary,
-          },
-        },
-        projectionText.executionStatus,
-        projectionText.latestAction,
-      )
-
-      if (projectionText.executionStatus === 'failed') return nextProjection
-
-      const { lastFailure: _lastFailure, ...execution } = nextProjection.execution
-      return {
-        ...nextProjection,
-        execution,
-        error: null,
-      }
-    },
-    emitEvent,
-  )
-  syncSessionStatus(input.sessionId, projectionText.executionStatus, emitEvent)
-
-  const nextRecord = getAgentSession(input.sessionId)
-  if (!nextRecord) {
-    throw new Error('更新 Agentic 分析会话失败')
-  }
-
-  return nextRecord
 }
 
 export const syncAgentCanvas = async (input: {

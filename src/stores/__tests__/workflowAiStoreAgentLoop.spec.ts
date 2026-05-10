@@ -9,7 +9,6 @@ vi.mock('@/services/agentWorkspace', () => ({
   fetchSystemModelProfiles: vi.fn(async () => []),
   getAgentProjection: vi.fn(),
   getAgentSession: vi.fn(),
-  runAgenticAnalysisSession: vi.fn(),
   sendAgentSessionMessage: vi.fn(),
   streamAgentSessionEvents: vi.fn(async () => {}),
   syncAgentCanvas: vi.fn(),
@@ -171,6 +170,5 @@ describe('workflowAiStore legacy loop removal', () => {
       content: '帮我分析销量',
       skillId: 'generic',
     })
-    expect(agentWorkspace.runAgenticAnalysisSession).not.toHaveBeenCalled()
   })
 })
