@@ -2,11 +2,13 @@
 import { computed, defineAsyncComponent } from 'vue'
 import { Maximize, Zap, FileJson, Pin } from 'lucide-vue-next'
 import ToggleSwitch from 'primevue/toggleswitch'
+import { isPlainObject } from '@/nodes/result'
 import StructuredDataPreview from './StructuredDataPreview.vue'
 import {
   DEFAULT_STRUCTURED_PREVIEW_OPTIONS,
   createStructuredPreview,
 } from './previewSerialization'
+import { getResultSchemaFields } from './resultView'
 
 const MonacoEditor = defineAsyncComponent(() => import('./MonacoEditor.vue'))
 
@@ -26,11 +28,44 @@ const emit = defineEmits<{
   generateMock: []
 }>()
 
+const previewColumnLimit = computed(() => {
+  const schemaCount = getResultSchemaFields(props.data).length
+  if (schemaCount > 0) {
+    return Math.max(DEFAULT_STRUCTURED_PREVIEW_OPTIONS.maxColumns, schemaCount)
+  }
+
+  if (Array.isArray(props.data)) {
+    const columnCount = new Set(
+      props.data
+        .filter((row): row is Record<string, unknown> => isPlainObject(row))
+        .flatMap((row) => Object.keys(row)),
+    ).size
+
+    if (columnCount > 0) {
+      return Math.max(DEFAULT_STRUCTURED_PREVIEW_OPTIONS.maxColumns, columnCount)
+    }
+  }
+
+  if (isPlainObject(props.data) && Array.isArray(props.data.payload)) {
+    const columnCount = new Set(
+      props.data.payload
+        .filter((row): row is Record<string, unknown> => isPlainObject(row))
+        .flatMap((row) => Object.keys(row)),
+    ).size
+
+    if (columnCount > 0) {
+      return Math.max(DEFAULT_STRUCTURED_PREVIEW_OPTIONS.maxColumns, columnCount)
+    }
+  }
+
+  return DEFAULT_STRUCTURED_PREVIEW_OPTIONS.maxColumns
+})
+
 const structuredPreview = computed(() =>
   createStructuredPreview(props.data, {
     ...DEFAULT_STRUCTURED_PREVIEW_OPTIONS,
     maxRows: 3,
-    maxColumns: 8,
+    maxColumns: previewColumnLimit.value,
     maxStringLength: 20,
     maxGroups: 3,
     maxGroupRows: 2,

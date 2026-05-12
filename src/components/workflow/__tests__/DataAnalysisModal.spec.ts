@@ -249,10 +249,10 @@ describe('DataAnalysisModal', () => {
     })
 
     expect(wrapper.get('[data-test="analysis-preview-summary"]').text()).toContain('表格数据')
-    expect(wrapper.get('[data-test="analysis-preview-omitted-columns"]').text()).toContain('已省略')
+    expect(wrapper.find('[data-test="analysis-preview-omitted-columns"]').exists()).toBe(false)
     expect(wrapper.find('[data-test="analysis-preview-text"]').exists()).toBe(false)
     const sidebarText = wrapper.get('.structured-preview').text()
-    expect(sidebarText).not.toContain('field_17')
+    expect(sidebarText).toContain('field_17')
     expect(sidebarText).not.toContain('x'.repeat(20))
     expect(wrapper.find('pre').exists()).toBe(false)
   })

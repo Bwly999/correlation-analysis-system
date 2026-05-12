@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import type { StructuredPreview } from './previewSerialization'
 import { stringifyStructuredPreview } from './previewSerialization'
 
@@ -11,6 +11,7 @@ const props = defineProps<{
 }>()
 
 const showTextPreview = ref(false)
+const keyScrollRef = ref<HTMLElement | null>(null)
 
 const testPrefix = computed(() => props.prefix ?? 'data-preview')
 const previewText = computed(() =>
@@ -37,13 +38,24 @@ const hasSampleOverflow = computed(() => {
   if (props.preview.summary.omittedGroupCount && props.preview.summary.omittedGroupCount > 0) return true
   return false
 })
-const visibleKeyColumns = computed(() => props.preview.columns.slice(0, 12))
+const visibleKeyColumns = computed(() => props.preview.columns)
 const hasKeyColumns = computed(() => visibleKeyColumns.value.length > 0)
 const sampleCountLabel = computed(() => {
   if (hasTableRows.value) return `${visibleSampleRows.value.length} 条`
   if (hasGroupRows.value) return `${visibleGroupRows.value.length} 条`
   return '0 条'
 })
+
+watch(
+  () => props.preview.columns.join('|'),
+  async () => {
+    await nextTick()
+    if (keyScrollRef.value) {
+      keyScrollRef.value.scrollTop = 0
+    }
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
@@ -81,7 +93,7 @@ const sampleCountLabel = computed(() => {
 
       <div v-if="hasKeyColumns" class="structured-preview__keys-card">
         <div class="structured-preview__panel-label">Keys</div>
-        <div class="structured-preview__keys-scroll custom-scrollbar">
+        <div ref="keyScrollRef" class="structured-preview__keys-scroll custom-scrollbar">
           <span
             v-for="column in visibleKeyColumns"
             :key="column"
@@ -219,6 +231,7 @@ const sampleCountLabel = computed(() => {
   --preview-primary: #2563eb;
   --preview-primary-soft: #eff6ff;
   --preview-dark: #0f172a;
+  --preview-top-card-height: 11.6rem;
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
@@ -247,13 +260,14 @@ const sampleCountLabel = computed(() => {
 
 .structured-preview__top-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(7rem, 0.8fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.65rem;
-  align-items: start;
+  align-items: stretch;
 }
 
 .structured-preview__hero {
-  min-height: 7.9rem;
+  height: var(--preview-top-card-height);
+  min-height: var(--preview-top-card-height);
   padding: 0.9rem 1rem;
   border-radius: 1.15rem;
   background: linear-gradient(160deg, #0f172a 0%, #172554 100%);
@@ -299,7 +313,8 @@ const sampleCountLabel = computed(() => {
 }
 
 .structured-preview__keys-card {
-  min-height: 9.4rem;
+  height: var(--preview-top-card-height);
+  min-height: var(--preview-top-card-height);
   padding: 0.78rem 0.78rem 0.72rem;
   display: flex;
   flex-direction: column;
@@ -311,13 +326,14 @@ const sampleCountLabel = computed(() => {
 }
 
 .structured-preview__keys-scroll {
-  margin-top: 0.55rem;
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
-  height: 7.1rem;
+  gap: 0.42rem;
+  flex: 1;
+  min-height: 0;
   overflow: auto;
   padding-right: 0.28rem;
+  padding-bottom: 0.5rem;
 }
 
 .structured-preview__key-pill {
@@ -325,14 +341,17 @@ const sampleCountLabel = computed(() => {
   align-items: center;
   min-height: 2rem;
   padding: 0.5rem 0.72rem;
-  border-radius: 0.82rem;
+  border-radius: 0.72rem;
   border: 1px solid rgba(226, 232, 240, 0.92);
   background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
   color: #334155;
   font-size: 11px;
   font-weight: 700;
-  line-height: 1.3;
+  line-height: 1.25;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.88);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .structured-preview__key-pill:first-child {

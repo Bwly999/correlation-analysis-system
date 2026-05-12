@@ -6,8 +6,9 @@
 
 - **优化节点配置弹窗分栏拖动条与结果预览 KEYS 区域体验**:
   - `src/components/workflow/NodeConfigModal.vue` 重绘左右分栏拖动条样式，改为更直观的导轨与胶囊把手，并移除中部点状装饰，提升可拖拽识别度。
-  - `src/components/workflow/StructuredDataPreview.vue` 调整 `KEYS` 卡片高度、列表滚动区与字段 pill 样式，修复右上角列区留白、字段挤压以及联动影响 `Preview` 高度的问题。
-  - 补跑 `NodeConfigModal` 与 `DataAnalysisModal` 相关测试，确认分栏拖动与右侧结构化预览未回归。
+  - `src/components/workflow/DataDisplayPanel.vue` 与 `src/components/workflow/DataAnalysisModal.vue` 统一按真实字段总数生成结构化预览，修复 `KEYS` 与样本区被入口层截断、无法展示全部列的问题。
+  - `src/components/workflow/StructuredDataPreview.vue` 调整顶部 `PREVIEW / KEYS` 的等宽等高布局、整体高度、滚动区余量与字段 pill 样式，修复右上角列区留白、字段挤压和内容显示不全的问题。
+  - 补跑 `NodeConfigModal`、`DataDisplayPanel` 与 `DataAnalysisModal` 相关测试，确认分栏拖动与右侧结构化预览未回归。
 
 - **修复工作流图表箱线分布 tooltip 数值为空的问题**:
   - `src/components/workflow/DataChart.vue` 的箱线图 tooltip 现在可兼容 ECharts 传入的数组、`data.value` 与 `value` 三种数据形态，单表箱线分布不再全部显示为 `--`。

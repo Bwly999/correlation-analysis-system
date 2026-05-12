@@ -29,8 +29,8 @@ describe('DataDisplayPanel', () => {
     })
 
     expect(wrapper.get('[data-test="data-preview-summary"]').text()).toContain('表格数据')
-    expect(wrapper.get('[data-test="data-preview-omitted-columns"]').text()).toContain('已省略')
-    expect(wrapper.text()).not.toContain('field_15')
+    expect(wrapper.find('[data-test="data-preview-omitted-columns"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('field_15')
     expect(wrapper.text()).not.toContain('x'.repeat(24))
     expect(wrapper.find('pre').exists()).toBe(false)
   })

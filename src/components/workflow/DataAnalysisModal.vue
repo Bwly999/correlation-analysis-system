@@ -3,6 +3,7 @@ import { computed, watch } from 'vue'
 import Dialog from 'primevue/dialog'
 import InputNumber from 'primevue/inputnumber'
 import { X, BarChart3, Database, Download, FileJson, Layers, ChevronRight, PanelLeftClose, PanelLeftOpen } from 'lucide-vue-next'
+import { isPlainObject } from '@/nodes/result'
 import DataChart from './DataChart.vue'
 import { provideWorkflowOverlayHost, useWorkflowOverlayHost } from './workflowOverlayHost'
 import StructuredDataPreview from './StructuredDataPreview.vue'
@@ -13,6 +14,7 @@ import {
   getResultGroups,
   getResultKindLabel,
   getResultRows,
+  getResultSchemaFields,
   getResultViewerKey,
   normalizeWorkflowResult,
 } from './resultView'
@@ -75,11 +77,32 @@ const fallbackChartData = computed(() => {
 })
 
 const viewLabel = computed(() => getResultKindLabel(props.data))
+const previewColumnLimit = computed(() => {
+  const schemaCount = getResultSchemaFields(props.data).length
+  if (schemaCount > 0) {
+    return Math.max(DEFAULT_STRUCTURED_PREVIEW_OPTIONS.maxColumns, schemaCount)
+  }
+
+  const normalized = normalizedResult.value
+  if (normalized?.kind === 'json' && Array.isArray(normalized.payload)) {
+    const columnCount = new Set(
+      normalized.payload
+        .filter((row): row is Record<string, unknown> => isPlainObject(row))
+        .flatMap((row) => Object.keys(row)),
+    ).size
+
+    if (columnCount > 0) {
+      return Math.max(DEFAULT_STRUCTURED_PREVIEW_OPTIONS.maxColumns, columnCount)
+    }
+  }
+
+  return DEFAULT_STRUCTURED_PREVIEW_OPTIONS.maxColumns
+})
 const structuredPreview = computed(() =>
   createStructuredPreview(props.data, {
     ...DEFAULT_STRUCTURED_PREVIEW_OPTIONS,
     maxRows: Math.min(3, previewLimit.value),
-    maxColumns: 12,
+    maxColumns: previewColumnLimit.value,
     maxStringLength: 18,
     maxGroups: 4,
     maxGroupRows: Math.max(1, Math.min(3, previewLimit.value)),
