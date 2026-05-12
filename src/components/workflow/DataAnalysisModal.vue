@@ -184,83 +184,82 @@ const exportData = () => {
     </template>
 
     <div class="flex h-full overflow-hidden bg-slate-50/50 p-4 gap-4">
-      <!-- 折叠态：竖向图标条 -->
       <div
-        v-if="sidebarCollapsed"
-        class="flex flex-col items-center gap-3 py-3 w-11 shrink-0"
+        class="sidebar-shell"
+        :class="{ 'sidebar-shell--collapsed': sidebarCollapsed }"
       >
-        <button
-          class="sidebar-toggle-btn"
-          title="展开预览面板"
-          @click="sidebarCollapsed = false"
-        >
-          <PanelLeftOpen :size="16" />
-        </button>
-        <div class="w-6 h-px bg-slate-200 my-1"></div>
-        <button
-          class="sidebar-icon-btn"
-          title="结果预览"
-          @click="sidebarCollapsed = false"
-        >
-          <FileJson :size="16" />
-        </button>
-      </div>
+        <Transition name="sidebar-panel" mode="out-in">
+          <div
+            v-if="sidebarCollapsed"
+            key="collapsed"
+            class="sidebar-collapsed"
+          >
+            <button
+              class="sidebar-toggle-btn"
+              title="展开预览面板"
+              @click="sidebarCollapsed = false"
+            >
+              <PanelLeftOpen :size="16" />
+            </button>
+          </div>
 
-      <!-- 展开态：完整侧栏 -->
-      <div
-        v-else
-        class="sidebar-expanded"
-      >
-        <div
-          class="flex-1 bg-white rounded-2xl border border-slate-200/60 shadow-sm flex flex-col overflow-hidden"
-        >
-          <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-            <div class="flex items-center gap-2">
-              <FileJson :size="14" class="text-slate-500" />
-              <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest"
-                >结果预览</span
+          <div
+            v-else
+            key="expanded"
+            class="sidebar-expanded"
+          >
+            <div
+              class="flex-1 bg-white rounded-2xl border border-slate-200/60 shadow-sm flex flex-col overflow-hidden"
+            >
+              <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <FileJson :size="14" class="text-slate-500" />
+                  <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest"
+                    >结果预览</span
+                  >
+                </div>
+                <div class="flex items-center gap-1.5">
+                  <div v-if="previewCount > 0" class="flex items-center gap-2">
+                    <span class="text-[9px] font-bold text-slate-400 uppercase">显示数量</span>
+                    <InputNumber
+                      v-model="previewLimit"
+                      :min="1"
+                      :max="3"
+                      class="preview-limit-input"
+                      :use-grouping="false"
+                    />
+                  </div>
+                  <button
+                    class="sidebar-toggle-btn"
+                    title="收起预览面板"
+                    @click="sidebarCollapsed = true"
+                  >
+                    <PanelLeftClose :size="16" />
+                  </button>
+                </div>
+              </div>
+              <div
+                class="flex-1 overflow-auto p-5 font-mono text-[11px] leading-relaxed text-slate-600 custom-scrollbar bg-[#fafafa]"
               >
-            </div>
-            <div class="flex items-center gap-1.5">
-              <div v-if="previewCount > 0" class="flex items-center gap-2">
-                <span class="text-[9px] font-bold text-slate-400 uppercase">显示数量</span>
-                <InputNumber
-                  v-model="previewLimit"
-                  :min="1"
-                  :max="3"
-                  class="preview-limit-input"
-                  :use-grouping="false"
+                <StructuredDataPreview
+                  :preview="structuredPreview"
+                  :text-max-length="3600"
+                  prefix="analysis-preview"
+                  allow-text-toggle
                 />
               </div>
-              <button
-                class="sidebar-toggle-btn"
-                title="收起预览面板"
-                @click="sidebarCollapsed = true"
+              <div
+                v-if="previewCount > 0"
+                class="px-5 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between"
               >
-                <PanelLeftClose :size="16" />
-              </button>
+                <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wider"
+                  >Total: {{ previewCount }} Records</span
+                >
+                <Layers :size="12" class="text-slate-400" />
+              </div>
             </div>
           </div>
-          <div
-            class="flex-1 overflow-auto p-5 font-mono text-[11px] leading-relaxed text-slate-600 custom-scrollbar bg-[#fafafa]"
-          >
-            <StructuredDataPreview
-              :preview="structuredPreview"
-              :text-max-length="3600"
-              prefix="analysis-preview"
-              allow-text-toggle
-            />
-          </div>
-          <div
-            v-if="previewCount > 0"
-            class="px-5 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between"
-          >
-            <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wider"
-              >Total: {{ previewCount }} Records</span
-            >
-            <Layers :size="12" class="text-slate-400" />
-          </div>
-        </div>
+        </Transition>
       </div>
 
       <div
@@ -321,6 +320,40 @@ const exportData = () => {
   gap: 1rem;
 }
 
+.sidebar-shell {
+  width: 20rem;
+  flex-shrink: 0;
+  overflow: hidden;
+  transition:
+    width 0.24s ease,
+    transform 0.24s ease;
+}
+
+.sidebar-shell--collapsed {
+  width: 2.75rem;
+}
+
+.sidebar-collapsed {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  width: 2.75rem;
+  padding-top: 0.75rem;
+}
+
+.sidebar-panel-enter-active,
+.sidebar-panel-leave-active {
+  transition:
+    opacity 0.2s ease,
+    transform 0.22s ease;
+}
+
+.sidebar-panel-enter-from,
+.sidebar-panel-leave-to {
+  opacity: 0;
+  transform: translateX(-8px);
+}
+
 .sidebar-toggle-btn {
   width: 2rem;
   height: 2rem;
@@ -340,23 +373,5 @@ const exportData = () => {
 }
 .sidebar-toggle-btn:active {
   transform: scale(0.92);
-}
-
-.sidebar-icon-btn {
-  width: 2rem;
-  height: 2rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 0.625rem;
-  color: #94a3b8;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  background: transparent;
-  border: none;
-}
-.sidebar-icon-btn:hover {
-  background: #f1f5f9;
-  color: #2563eb;
 }
 </style>

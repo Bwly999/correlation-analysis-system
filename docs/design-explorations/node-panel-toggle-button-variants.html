@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>节点面板 Icon 按钮 6 款重设计</title>
+    <style>
+      :root {
+        --bg-0: #020617;
+        --bg-1: #08101f;
+        --panel: rgba(15, 23, 42, 0.62);
+        --panel-border: rgba(148, 163, 184, 0.16);
+        --text: #e2e8f0;
+        --muted: #8ea0ba;
+        --input: #06b6d4;
+        --input-2: #67e8f9;
+        --output: #2563eb;
+        --output-2: #60a5fa;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        color: var(--text);
+        font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+        background:
+          radial-gradient(circle at 15% 20%, rgba(6, 182, 212, 0.16), transparent 24%),
+          radial-gradient(circle at 82% 18%, rgba(37, 99, 235, 0.18), transparent 28%),
+          radial-gradient(circle at 50% 100%, rgba(96, 165, 250, 0.08), transparent 30%),
+          linear-gradient(180deg, var(--bg-1) 0%, var(--bg-0) 100%);
+        overflow-x: hidden;
+      }
+
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        background:
+          linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+        background-size: 36px 36px;
+        mask-image: radial-gradient(circle at center, black 45%, transparent 100%);
+        pointer-events: none;
+      }
+
+      .page {
+        width: min(1280px, calc(100vw - 40px));
+        margin: 0 auto;
+        padding: 40px 0 54px;
+      }
+
+      .hero {
+        margin-bottom: 26px;
+      }
+
+      .kicker {
+        margin: 0 0 8px;
+        color: #6dd3e7;
+        font-size: 11px;
+        font-weight: 900;
+        letter-spacing: 0.24em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 34px;
+        line-height: 1.08;
+        letter-spacing: -0.04em;
+      }
+
+      .hero p {
+        margin: 12px 0 0;
+        max-width: 760px;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.75;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 18px;
+      }
+
+      .card {
+        position: relative;
+        border-radius: 28px;
+        padding: 18px 18px 20px;
+        background: linear-gradient(180deg, rgba(15, 23, 42, 0.8), rgba(15, 23, 42, 0.6));
+        border: 1px solid var(--panel-border);
+        box-shadow:
+          0 24px 60px -32px rgba(0, 0, 0, 0.75),
+          inset 0 1px 0 rgba(255, 255, 255, 0.06);
+        overflow: hidden;
+      }
+
+      .card::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(135deg, rgba(255, 255, 255, 0.06), transparent 40%, transparent 100%);
+        pointer-events: none;
+      }
+
+      .card-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+
+      .card-title {
+        font-size: 18px;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+      }
+
+      .card-note {
+        font-size: 12px;
+        color: var(--muted);
+        font-weight: 700;
+      }
+
+      .stage {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .slot {
+        border-radius: 22px;
+        padding: 16px 12px 14px;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(148, 163, 184, 0.1);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 166px;
+      }
+
+      .slot-label {
+        margin-top: 12px;
+        font-size: 11px;
+        font-weight: 900;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+
+      .slot-label.input {
+        color: #85e7f5;
+      }
+
+      .slot-label.output {
+        color: #8db8ff;
+      }
+
+      .btn {
+        --accent: var(--input);
+        --accent-2: var(--input-2);
+        position: relative;
+        width: 84px;
+        height: 84px;
+        border: 0;
+        border-radius: 24px;
+        display: grid;
+        place-items: center;
+        background: transparent;
+        color: white;
+        cursor: pointer;
+        isolation: isolate;
+      }
+
+      .btn.output {
+        --accent: var(--output);
+        --accent-2: var(--output-2);
+      }
+
+      .btn svg {
+        width: 30px;
+        height: 30px;
+        position: relative;
+        z-index: 3;
+        filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.22));
+      }
+
+      .btn .core,
+      .btn .fx,
+      .btn .fx-2 {
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+      }
+
+      .btn .core {
+        z-index: 1;
+      }
+
+      .btn .fx {
+        z-index: 0;
+        pointer-events: none;
+      }
+
+      .btn .fx-2 {
+        z-index: 2;
+        pointer-events: none;
+      }
+
+      .v1 .core {
+        background: linear-gradient(145deg, color-mix(in srgb, var(--accent-2) 84%, white 16%), var(--accent));
+        box-shadow:
+          0 0 0 1px rgba(255, 255, 255, 0.08) inset,
+          0 20px 38px -18px color-mix(in srgb, var(--accent) 52%, transparent),
+          0 0 26px color-mix(in srgb, var(--accent) 45%, transparent);
+        animation: pulseGlow 2.4s ease-in-out infinite;
+      }
+
+      .v1 .fx {
+        inset: -10px;
+        border-radius: 30px;
+        border: 1px solid color-mix(in srgb, var(--accent) 52%, transparent);
+        animation: ringSpread 2.4s ease-out infinite;
+      }
+
+      .v2 .core {
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.12), transparent 36%),
+          linear-gradient(145deg, rgba(7, 10, 25, 0.84), rgba(12, 17, 34, 0.92));
+        border: 1px solid color-mix(in srgb, var(--accent) 46%, rgba(255,255,255,0.18));
+        box-shadow:
+          0 0 0 1px rgba(255, 255, 255, 0.05) inset,
+          0 0 0 4px color-mix(in srgb, var(--accent) 10%, transparent),
+          0 18px 34px -22px rgba(0, 0, 0, 0.85);
+      }
+
+      .v2 .fx {
+        inset: 8px;
+        border-radius: 18px;
+        border: 1px dashed color-mix(in srgb, var(--accent-2) 70%, transparent);
+        animation: rotateFrame 7s linear infinite;
+      }
+
+      .v3 .core {
+        background: linear-gradient(145deg, rgba(14, 22, 42, 0.96), rgba(8, 13, 27, 0.96));
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        box-shadow:
+          0 18px 40px -24px rgba(0, 0, 0, 0.8),
+          0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+      }
+
+      .v3 .fx {
+        inset: 2px;
+        border-radius: 22px;
+        background:
+          linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--accent-2) 80%, transparent) 50%, transparent 100%);
+        opacity: 0.8;
+        filter: blur(10px);
+        animation: sweepX 2.2s ease-in-out infinite;
+      }
+
+      .v3 .fx-2 {
+        inset: -1px;
+        border: 1px solid color-mix(in srgb, var(--accent) 40%, rgba(255,255,255,0.12));
+      }
+
+      .v4 .core {
+        background: linear-gradient(160deg, color-mix(in srgb, var(--accent) 30%, #0f172a), #0b1120 74%);
+        border: 1px solid color-mix(in srgb, var(--accent) 36%, rgba(255,255,255,0.12));
+        box-shadow:
+          0 18px 44px -22px color-mix(in srgb, var(--accent) 32%, transparent),
+          0 0 22px color-mix(in srgb, var(--accent) 24%, transparent);
+      }
+
+      .v4 .fx::before,
+      .v4 .fx::after {
+        content: "";
+        position: absolute;
+        inset: -8px;
+        border-radius: 28px;
+        border: 1px solid color-mix(in srgb, var(--accent-2) 42%, transparent);
+        animation: sonar 2.8s ease-out infinite;
+      }
+
+      .v4 .fx::after {
+        animation-delay: 1.2s;
+      }
+
+      .v5 .core {
+        background:
+          radial-gradient(circle at 30% 28%, rgba(255, 255, 255, 0.18), transparent 30%),
+          linear-gradient(145deg, color-mix(in srgb, var(--accent-2) 52%, #10223b), color-mix(in srgb, var(--accent) 80%, #0b1020));
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.12),
+          0 18px 42px -20px color-mix(in srgb, var(--accent) 42%, transparent);
+        animation: floatTilt 2.8s ease-in-out infinite;
+      }
+
+      .v5 .fx {
+        inset: auto 12px 10px 12px;
+        height: 12px;
+        border-radius: 999px;
+        background: color-mix(in srgb, var(--accent) 34%, transparent);
+        filter: blur(12px);
+        animation: shadowPulse 2.8s ease-in-out infinite;
+      }
+
+      .v6 .core {
+        background: linear-gradient(145deg, rgba(8, 14, 30, 0.98), rgba(11, 18, 36, 0.98));
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        overflow: hidden;
+      }
+
+      .v6 .core::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+          linear-gradient(180deg, transparent 0%, color-mix(in srgb, var(--accent) 34%, transparent) 48%, transparent 100%);
+        transform: translateY(-120%);
+        animation: scanDrop 2.4s ease-in-out infinite;
+      }
+
+      .v6 .core::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, rgba(255,255,255,0.1));
+      }
+
+      .v6 .fx {
+        inset: -4px;
+        border-radius: 26px;
+        background: radial-gradient(circle, color-mix(in srgb, var(--accent-2) 18%, transparent) 0%, transparent 68%);
+        filter: blur(16px);
+        animation: ambient 2.8s ease-in-out infinite;
+      }
+
+      @keyframes pulseGlow {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.06); }
+      }
+
+      @keyframes ringSpread {
+        0% { transform: scale(0.9); opacity: 0; }
+        15% { opacity: 0.72; }
+        100% { transform: scale(1.2); opacity: 0; }
+      }
+
+      @keyframes rotateFrame {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+
+      @keyframes sweepX {
+        0% { transform: translateX(-48%) skewX(-18deg); opacity: 0; }
+        20% { opacity: 0.85; }
+        80% { opacity: 0.85; }
+        100% { transform: translateX(48%) skewX(-18deg); opacity: 0; }
+      }
+
+      @keyframes sonar {
+        0% { transform: scale(0.9); opacity: 0; }
+        18% { opacity: 0.56; }
+        100% { transform: scale(1.18); opacity: 0; }
+      }
+
+      @keyframes floatTilt {
+        0%, 100% { transform: translateY(0) rotate(0deg); }
+        50% { transform: translateY(-4px) rotate(-3deg); }
+      }
+
+      @keyframes shadowPulse {
+        0%, 100% { opacity: 0.38; transform: scaleX(0.92); }
+        50% { opacity: 0.68; transform: scaleX(1.06); }
+      }
+
+      @keyframes scanDrop {
+        0% { transform: translateY(-120%); opacity: 0; }
+        18% { opacity: 0.95; }
+        70% { opacity: 0.95; }
+        100% { transform: translateY(120%); opacity: 0; }
+      }
+
+      @keyframes ambient {
+        0%, 100% { transform: scale(0.96); opacity: 0.45; }
+        50% { transform: scale(1.06); opacity: 0.88; }
+      }
+
+      @media (max-width: 1080px) {
+        .grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      @media (max-width: 720px) {
+        .page {
+          width: min(100vw - 24px, 1280px);
+          padding-top: 24px;
+        }
+
+        .grid {
+          grid-template-columns: 1fr;
+        }
+
+        h1 {
+          font-size: 28px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <section class="hero">
+        <p class="kicker">Frontend Design / Icon Only</p>
+        <h1>节点面板展开按钮 · 6 款炫酷重设计</h1>
+        <p>每款都只保留按钮本体，输入和输出结构一致，仅通过冷青 / 亮蓝区分语义，并加上轻量循环动画，方便你直接按“够不够醒目、够不够喜欢”来挑。</p>
+      </section>
+
+      <section class="grid">
+        <article class="card">
+          <div class="card-head">
+            <div class="card-title">01 脉冲能量块</div>
+            <div class="card-note">发光 + 外环扩散</div>
+          </div>
+          <div class="stage">
+            <div class="slot">
+              <button class="btn input v1" aria-label="输入按钮方案一">
+                <span class="core"></span><span class="fx"></span><span class="fx-2"></span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9">
+                  <path d="M9 4H5v4M15 4h4v4M9 20H5v-4M15 20h4v-4M8 8l3-3M16 8l-3-3M8 16l3 3M16 16l-3 3"></path>
+                </svg>
+              </button>
+              <div class="slot-label input">Input</div>
+            </div>
+            <div class="slot">
+              <button class="btn output v1" aria-label="输出按钮方案一">
+                <span class="core"></span><span class="fx"></span><span class="fx-2"></span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9">
+                  <path d="M9 4H5v4M15 4h4v4M9 20H5v-4M15 20h4v-4M8 8l3-3M16 8l-3-3M8 16l3 3M16 16l-3 3"></path>
+                </svg>
+              </button>
+              <div class="slot-label output">Output</div>
+            </div>
+          </div>
+        </article>
+
+        <article class="card">
+          <div class="card-head">
+            <div class="card-title">02 轨道旋转框</div>
+            <div class="card-note">暗核 + 旋转描边</div>
+          </div>
+          <div class="stage">
+            <div class="slot">
+              <button class="btn input v2" aria-label="输入按钮方案二">
+                <span class="core"></span><span class="fx"></span><span class="fx-2"></span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9">
+                  <path d="M9 4H5v4M15 4h4v4M9 20H5v-4M15 20h4v-4M8 8l3-3M16 8l-3-3M8 16l3 3M16 16l-3 3"></path>
+                </svg>
+              </button>
+              <div class="slot-label input">Input</div>
+            </div>
+            <div class="slot">
+              <button class="btn output v2" aria-label="输出按钮方案二">
+                <span class="core"></span><span class="fx"></span><span class="fx-2"></span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9">
+                  <path d="M9 4H5v4M15 4h4v4M9 20H5v-4M15 20h4v-4M8 8l3-3M16 8l-3-3M8 16l3 3M16 16l-3 3"></path>
+                </svg>
+              </button>
+              <div class="slot-label output">Output</div>
+            </div>
+          </div>
+        </article>
+
+        <article class="card">
+          <div class="card-head">
+            <div class="card-title">03 光刃横扫</div>
+            <div class="card-note">扫光穿过核心</div>
+          </div>
+          <div class="stage">
+            <div class="slot">
+              <button class="btn input v3" aria-label="输入按钮方案三">
+                <span class="core"></span><span class="fx"></span><span class="fx-2"></span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9">
+                  <path d="M9 4H5v4M15 4h4v4M9 20H5v-4M15 20h4v-4M8 8l3-3M16 8l-3-3M8 16l3 3M16 16l-3 3"></path>
+                </svg>
+              </button>
+              <div class="slot-label input">Input</div>
+            </div>
+            <div class="slot">
+              <button class="btn output v3" aria-label="输出按钮方案三">
+                <span class="core"></span><span class="fx"></span><span class="fx-2"></span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9">
+                  <path d="M9 4H5v4M15 4h4v4M9 20H5v-4M15 20h4v-4M8 8l3-3M16 8l-3-3M8 16l3 3M16 16l-3 3"></path>
+                </svg>
+              </button>
+              <div class="slot-label output">Output</div>
+            </div>
+          </div>
+        </article>
+
+        <article class="card">
+          <div class="card-head">
+            <div class="card-title">04 双层声呐环</div>
+            <div class="card-note">连续向外广播</div>
+          </div>
+          <div class="stage">
+            <div class="slot">
+              <button class="btn input v4" aria-label="输入按钮方案四">
+                <span class="core"></span><span class="fx"></span><span class="fx-2"></span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9">
+                  <path d="M9 4H5v4M15 4h4v4M9 20H5v-4M15 20h4v-4M8 8l3-3M16 8l-3-3M8 16l3 3M16 16l-3 3"></path>
+                </svg>
+              </button>
+              <div class="slot-label input">Input</div>
+            </div>
+            <div class="slot">
+              <button class="btn output v4" aria-label="输出按钮方案四">
+                <span class="core"></span><span class="fx"></span><span class="fx-2"></span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9">
+                  <path d="M9 4H5v4M15 4h4v4M9 20H5v-4M15 20h4v-4M8 8l3-3M16 8l-3-3M8 16l3 3M16 16l-3 3"></path>
+                </svg>
+              </button>
+              <div class="slot-label output">Output</div>
+            </div>
+          </div>
+        </article>
+
+        <article class="card">
+          <div class="card-head">
+            <div class="card-title">05 悬浮晶体块</div>
+            <div class="card-note">轻微漂浮感</div>
+          </div>
+          <div class="stage">
+            <div class="slot">
+              <button class="btn input v5" aria-label="输入按钮方案五">
+                <span class="core"></span><span class="fx"></span><span class="fx-2"></span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9">
+                  <path d="M9 4H5v4M15 4h4v4M9 20H5v-4M15 20h4v-4M8 8l3-3M16 8l-3-3M8 16l3 3M16 16l-3 3"></path>
+                </svg>
+              </button>
+              <div class="slot-label input">Input</div>
+            </div>
+            <div class="slot">
+              <button class="btn output v5" aria-label="输出按钮方案五">
+                <span class="core"></span><span class="fx"></span><span class="fx-2"></span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9">
+                  <path d="M9 4H5v4M15 4h4v4M9 20H5v-4M15 20h4v-4M8 8l3-3M16 8l-3-3M8 16l3 3M16 16l-3 3"></path>
+                </svg>
+              </button>
+              <div class="slot-label output">Output</div>
+            </div>
+          </div>
+        </article>
+
+        <article class="card">
+          <div class="card-head">
+            <div class="card-title">06 下落扫描器</div>
+            <div class="card-note">竖向扫描光束</div>
+          </div>
+          <div class="stage">
+            <div class="slot">
+              <button class="btn input v6" aria-label="输入按钮方案六">
+                <span class="core"></span><span class="fx"></span><span class="fx-2"></span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9">
+                  <path d="M9 4H5v4M15 4h4v4M9 20H5v-4M15 20h4v-4M8 8l3-3M16 8l-3-3M8 16l3 3M16 16l-3 3"></path>
+                </svg>
+              </button>
+              <div class="slot-label input">Input</div>
+            </div>
+            <div class="slot">
+              <button class="btn output v6" aria-label="输出按钮方案六">
+                <span class="core"></span><span class="fx"></span><span class="fx-2"></span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9">
+                  <path d="M9 4H5v4M15 4h4v4M9 20H5v-4M15 20h4v-4M8 8l3-3M16 8l-3-3M8 16l3 3M16 16l-3 3"></path>
+                </svg>
+              </button>
+              <div class="slot-label output">Output</div>
+            </div>
+          </div>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>

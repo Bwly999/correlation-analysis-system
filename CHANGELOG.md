@@ -4,6 +4,12 @@
 
 ### 修复 (Fixed)
 
+- **优化节点调试面板的预览按钮与贴边布局**:
+  - `src/components/workflow/DataDisplayPanel.vue` 将输入 / 输出面板的展开按钮升级为更醒目的扫描式高亮按钮，统一交互结构，并按青色 / 蓝色区分语义。
+  - `src/components/workflow/DataAnalysisModal.vue` 为结果预览侧栏补充展开 / 收起过渡动画，移除折叠态多余图标，减少界面生硬感。
+  - `src/components/workflow/NodeConfigModal.vue` 调整节点调试面板内容容器与贴边布局，修复顶部横线未铺满、侧栏区域未完整贴边以及底部横向滚动条问题。
+  - 新增 `docs/design-explorations/node-panel-toggle-button-variants.html` 作为按钮视觉探索稿，保留供后续继续比对。
+
 - **优化节点配置弹窗分栏拖动条与结果预览 KEYS 区域体验**:
   - `src/components/workflow/NodeConfigModal.vue` 重绘左右分栏拖动条样式，改为更直观的导轨与胶囊把手，并移除中部点状装饰，提升可拖拽识别度。
   - `src/components/workflow/DataDisplayPanel.vue` 与 `src/components/workflow/DataAnalysisModal.vue` 统一按真实字段总数生成结构化预览，修复 `KEYS` 与样本区被入口层截断、无法展示全部列的问题。

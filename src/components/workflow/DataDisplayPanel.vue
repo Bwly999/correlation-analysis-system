@@ -28,6 +28,13 @@ const emit = defineEmits<{
   generateMock: []
 }>()
 
+const panelToneClass = computed(() =>
+  props.type === 'input' ? 'data-panel-toggle--input' : 'data-panel-toggle--output',
+)
+const detailButtonLabel = computed(() =>
+  props.type === 'input' ? '展开输入数据深度分析' : '展开输出数据深度分析',
+)
+
 const previewColumnLimit = computed(() => {
   const schemaCount = getResultSchemaFields(props.data).length
   if (schemaCount > 0) {
@@ -98,11 +105,14 @@ const structuredPreview = computed(() =>
           <ToggleSwitch v-model="useManualInput" class="!scale-[0.6]" />
         </div>
         <button
-          class="p-1.5 hover:bg-slate-200 rounded-lg transition-all text-slate-400 hover:text-slate-600 cursor-pointer"
-          title="打开深度分析窗口"
+          :class="['data-panel-toggle', panelToneClass]"
+          :title="detailButtonLabel"
+          :aria-label="detailButtonLabel"
           @click="emit('openDetail')"
         >
-          <Maximize :size="12" />
+          <span class="data-panel-toggle__core"></span>
+          <span class="data-panel-toggle__glow"></span>
+          <Maximize :size="18" class="data-panel-toggle__icon" />
         </button>
       </div>
     </div>
@@ -148,5 +158,134 @@ const structuredPreview = computed(() =>
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: #cbd5e1;
+}
+
+.data-panel-toggle {
+  --toggle-accent: #06b6d4;
+  --toggle-accent-soft: #67e8f9;
+  position: relative;
+  width: 2.9rem;
+  height: 2.9rem;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 0.95rem;
+  background: transparent;
+  color: white;
+  cursor: pointer;
+  isolation: isolate;
+  transition:
+    transform 0.22s ease,
+    filter 0.22s ease;
+}
+
+.data-panel-toggle--input {
+  --toggle-accent: #06b6d4;
+  --toggle-accent-soft: #67e8f9;
+}
+
+.data-panel-toggle--output {
+  --toggle-accent: #2563eb;
+  --toggle-accent-soft: #60a5fa;
+}
+
+.data-panel-toggle:hover {
+  transform: translateY(-1px) scale(1.03);
+  filter: saturate(1.08);
+}
+
+.data-panel-toggle:active {
+  transform: scale(0.95);
+}
+
+.data-panel-toggle__core,
+.data-panel-toggle__glow {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.data-panel-toggle__core {
+  overflow: hidden;
+  background: linear-gradient(145deg, rgba(8, 14, 30, 0.98), rgba(11, 18, 36, 0.98));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 16px 30px -20px color-mix(in srgb, var(--toggle-accent) 45%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--toggle-accent) 20%, rgba(255, 255, 255, 0.08));
+}
+
+.data-panel-toggle__core::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    color-mix(in srgb, var(--toggle-accent-soft) 52%, transparent) 48%,
+    transparent 100%
+  );
+  transform: translateY(-120%);
+  animation: data-panel-toggle-scan 2.45s ease-in-out infinite;
+}
+
+.data-panel-toggle__core::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 0 0 1px color-mix(in srgb, var(--toggle-accent) 22%, transparent);
+}
+
+.data-panel-toggle__glow {
+  inset: -0.3rem;
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--toggle-accent-soft) 22%, transparent) 0%,
+    transparent 72%
+  );
+  filter: blur(14px);
+  opacity: 0.84;
+  animation: data-panel-toggle-ambient 2.8s ease-in-out infinite;
+}
+
+.data-panel-toggle__icon {
+  position: relative;
+  z-index: 2;
+  color: #f8fbff;
+  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.22));
+}
+
+@keyframes data-panel-toggle-scan {
+  0% {
+    transform: translateY(-120%);
+    opacity: 0;
+  }
+  18% {
+    opacity: 0.92;
+  }
+  72% {
+    opacity: 0.92;
+  }
+  100% {
+    transform: translateY(120%);
+    opacity: 0;
+  }
+}
+
+@keyframes data-panel-toggle-ambient {
+  0%,
+  100% {
+    transform: scale(0.96);
+    opacity: 0.4;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.78;
+  }
 }
 </style>

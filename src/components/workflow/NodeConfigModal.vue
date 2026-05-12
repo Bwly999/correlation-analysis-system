@@ -786,19 +786,22 @@ onBeforeUnmount(() => {
 
     <div
       v-if="node"
-      ref="debugWorkspaceRef"
-      class="ndv-body flex h-full bg-white border-t -mx-6 overflow-hidden"
-      :class="{
-        'cursor-row-resize select-none': isResizingLeft,
-        'cursor-col-resize select-none': isResizingHorizontally,
-      }"
+      class="ndv-body-shell flex-1 min-h-0 -mx-6 -mb-6 overflow-hidden"
     >
-      <!-- 左侧边栏 -->
       <div
-        data-testid="debug-left-pane"
-        class="bg-[#f1f5f9] flex flex-col overflow-hidden shrink-0"
-        :style="{ width: `${leftPaneWidth}px` }"
+        ref="debugWorkspaceRef"
+        class="ndv-body flex h-full min-h-0 min-w-0 bg-white border-t overflow-hidden"
+        :class="{
+          'cursor-row-resize select-none': isResizingLeft,
+          'cursor-col-resize select-none': isResizingHorizontally,
+        }"
       >
+        <!-- 左侧边栏 -->
+        <div
+          data-testid="debug-left-pane"
+          class="bg-[#f1f5f9] flex flex-col overflow-hidden shrink-0"
+          :style="{ width: `${leftPaneWidth}px` }"
+        >
         <!-- 上部分：输入数据 -->
         <div
           class="shrink-0 min-h-0 p-4 pb-2 flex flex-col"
@@ -846,233 +849,234 @@ onBeforeUnmount(() => {
             :input-data="inputData"
           />
         </div>
-      </div>
-
-      <div
-        data-testid="left-pane-horizontal-resizer"
-        class="debug-column-resizer shrink-0 cursor-col-resize"
-        :class="{ 'debug-column-resizer--active': isResizingHorizontally }"
-        @mousedown="startResizingLeftPaneWidth"
-      >
-        <div class="debug-column-resizer__grip" />
-      </div>
-
-      <!-- 中心配置区域 -->
-      <div class="flex-1 flex flex-col bg-white relative min-w-0">
-        <div
-          class="flex items-center justify-between border-b px-4 bg-white sticky top-0 z-10 shrink-0"
-        >
-          <div class="flex">
-            <button
-              v-for="tab in [
-                { id: 'parameters', label: '参数设置' },
-                { id: 'settings', label: '运行设置' },
-              ]"
-              :key="tab.id"
-              :class="[
-                'px-8 py-4 text-xs font-bold uppercase border-b-2 transition-all cursor-pointer',
-                activeTab === tab.id
-                  ? 'border-indigo-600 text-indigo-600'
-                  : 'border-transparent text-slate-400',
-              ]"
-              @click="activeTab = tab.id"
-            >
-              {{ tab.label }}
-            </button>
-          </div>
-          <div class="flex items-center gap-2">
-            <div
-              v-tooltip.bottom="debugActionGuideText"
-              class="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 text-[12px] font-medium text-slate-500"
-            >
-              <span>调试说明</span>
-              <HelpCircle :size="14" class="text-slate-400" />
-            </div>
-            <button
-              data-testid="node-config-rerun-button"
-              :disabled="isCurrentNodeDebugRunning"
-              class="rounded-lg border border-slate-200 bg-white px-4 py-2 text-[12px] font-bold text-slate-600 shadow-sm transition-all hover:border-amber-200 hover:bg-amber-50 hover:text-amber-700 active:scale-95 disabled:opacity-70"
-              @click="runCurrentNode(true)"
-            >
-              重跑上游后调试
-            </button>
-            <button
-              data-testid="node-config-debug-button"
-              :disabled="isCurrentNodeDebugRunning"
-              class="n8n-debug-btn h-9 px-5 rounded-lg border-none shadow-sm hover:shadow-md active:scale-95 transition-all flex items-center gap-2 cursor-pointer outline-none disabled:opacity-70"
-              @click="runCurrentNode(false)"
-            >
-              <Loader2
-                v-if="isCurrentNodeDebugRunning"
-                :size="16"
-                class="text-white animate-spin"
-              />
-              <Bug v-else :size="16" class="text-white" />
-              <span
-                class="text-[12px] font-bold text-white uppercase tracking-wider"
-              >
-                {{ isCurrentNodeDebugRunning ? "正在调试..." : "调试节点" }}
-              </span>
-            </button>
-            <button
-              v-if="isCurrentNodeDebugRunning"
-              data-testid="node-config-stop-button"
-              class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-600 shadow-sm transition-all hover:bg-rose-100 active:scale-95"
-              @click="store.stopExecution()"
-            >
-              <Square :size="15" fill="currentColor" />
-            </button>
-          </div>
         </div>
 
         <div
-          class="flex-1 p-8 overflow-y-auto custom-scrollbar bg-white min-h-0"
+          data-testid="left-pane-horizontal-resizer"
+          class="debug-column-resizer shrink-0 cursor-col-resize"
+          :class="{ 'debug-column-resizer--active': isResizingHorizontally }"
+          @mousedown="startResizingLeftPaneWidth"
         >
+          <div class="debug-column-resizer__grip" />
+        </div>
+
+        <!-- 中心配置区域 -->
+        <div class="flex-1 flex flex-col bg-white relative min-w-0 min-h-0">
           <div
-            v-if="activeTab === 'parameters'"
-            class="mx-auto max-w-3xl space-y-6"
+            class="flex items-center justify-between border-b px-4 bg-white sticky top-0 z-10 shrink-0"
           >
-            <div
-              v-if="currentFileImportTask"
-              class="rounded-2xl border border-blue-200 bg-blue-50/80 px-4 py-3"
-            >
-              <div class="flex items-center justify-between gap-3">
-                <div class="text-sm font-semibold text-blue-900">
-                  后台解析中
-                </div>
-                <div class="text-[12px] font-semibold text-blue-700">
-                  {{ currentFileImportTask.progress }}%
-                </div>
-              </div>
-              <div class="mt-1 text-[12px] text-blue-700">
-                {{ currentFileImportTask.fileName }} ·
-                {{ currentFileImportPhaseText }}
-              </div>
-            </div>
-            <div
-              class="flex items-center gap-3 rounded-2xl border px-4 py-3"
-              :class="
-                nodeHelpSummary.tone === 'warning'
-                  ? 'border-amber-200 bg-amber-50'
-                  : 'border-slate-200 bg-slate-50/85'
-              "
-            >
-              <div
-                class="shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em]"
-                :class="
-                  nodeHelpSummary.tone === 'warning'
-                    ? 'bg-amber-100 text-amber-700'
-                    : 'bg-white text-slate-500 border border-slate-200'
-                "
-              >
-                {{ nodeHelpSummary.title }}
-              </div>
-
-              <div class="min-w-0 flex-1">
-                <p class="truncate text-sm font-medium text-slate-700">
-                  <span class="text-slate-900">{{
-                    nodeDefinition?.displayName ?? node?.data.label
-                  }}</span>
-                  <span class="mx-2 text-slate-300">·</span>
-                  <span>{{ nodeHelpSummary.summary }}</span>
-                </p>
-              </div>
-
+            <div class="flex">
               <button
-                v-if="nodeDefinition"
-                data-testid="node-help-trigger"
-                class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:border-blue-200 hover:text-blue-600"
-                @click="isHelpDialogVisible = true"
+                v-for="tab in [
+                  { id: 'parameters', label: '参数设置' },
+                  { id: 'settings', label: '运行设置' },
+                ]"
+                :key="tab.id"
+                :class="[
+                  'px-8 py-4 text-xs font-bold uppercase border-b-2 transition-all cursor-pointer',
+                  activeTab === tab.id
+                    ? 'border-indigo-600 text-indigo-600'
+                    : 'border-transparent text-slate-400',
+                ]"
+                @click="activeTab = tab.id"
               >
-                <HelpCircle :size="16" />
+                {{ tab.label }}
               </button>
             </div>
+            <div class="flex items-center gap-2">
+              <div
+                v-tooltip.bottom="debugActionGuideText"
+                class="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 text-[12px] font-medium text-slate-500"
+              >
+                <span>调试说明</span>
+                <HelpCircle :size="14" class="text-slate-400" />
+              </div>
+              <button
+                data-testid="node-config-rerun-button"
+                :disabled="isCurrentNodeDebugRunning"
+                class="rounded-lg border border-slate-200 bg-white px-4 py-2 text-[12px] font-bold text-slate-600 shadow-sm transition-all hover:border-amber-200 hover:bg-amber-50 hover:text-amber-700 active:scale-95 disabled:opacity-70"
+                @click="runCurrentNode(true)"
+              >
+                重跑上游后调试
+              </button>
+              <button
+                data-testid="node-config-debug-button"
+                :disabled="isCurrentNodeDebugRunning"
+                class="n8n-debug-btn h-9 px-5 rounded-lg border-none shadow-sm hover:shadow-md active:scale-95 transition-all flex items-center gap-2 cursor-pointer outline-none disabled:opacity-70"
+                @click="runCurrentNode(false)"
+              >
+                <Loader2
+                  v-if="isCurrentNodeDebugRunning"
+                  :size="16"
+                  class="text-white animate-spin"
+                />
+                <Bug v-else :size="16" class="text-white" />
+                <span
+                  class="text-[12px] font-bold text-white uppercase tracking-wider"
+                >
+                  {{ isCurrentNodeDebugRunning ? "正在调试..." : "调试节点" }}
+                </span>
+              </button>
+              <button
+                v-if="isCurrentNodeDebugRunning"
+                data-testid="node-config-stop-button"
+                class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-600 shadow-sm transition-all hover:bg-rose-100 active:scale-95"
+                @click="store.stopExecution()"
+              >
+                <Square :size="15" fill="currentColor" />
+              </button>
+            </div>
+          </div>
+          <div
+            class="flex-1 p-8 overflow-y-auto custom-scrollbar bg-white min-h-0"
+          >
             <div
-              v-if="correlationSetupGuide"
-              data-testid="correlation-setup-guide"
-              v-tooltip.bottom="correlationSetupGuide.items.join('\n')"
-              class="flex items-center justify-between gap-3 rounded-2xl border border-blue-200 bg-blue-50/70 px-4 py-3"
+              v-if="activeTab === 'parameters'"
+              class="mx-auto max-w-3xl space-y-6"
             >
-              <div class="min-w-0">
-                <div class="text-sm font-semibold text-slate-900">
-                  {{ correlationSetupGuide.title }}
+              <div
+                v-if="currentFileImportTask"
+                class="rounded-2xl border border-blue-200 bg-blue-50/80 px-4 py-3"
+              >
+                <div class="flex items-center justify-between gap-3">
+                  <div class="text-sm font-semibold text-blue-900">
+                    后台解析中
+                  </div>
+                  <div class="text-[12px] font-semibold text-blue-700">
+                    {{ currentFileImportTask.progress }}%
+                  </div>
                 </div>
-                <div class="mt-1 text-[12px] text-slate-500">
-                  可用数值字段 {{ availableNumericFactorCount }} 个
+                <div class="mt-1 text-[12px] text-blue-700">
+                  {{ currentFileImportTask.fileName }} ·
+                  {{ currentFileImportPhaseText }}
                 </div>
               </div>
               <div
-                class="inline-flex items-center gap-2 text-[12px] font-medium text-blue-700"
+                class="flex items-center gap-3 rounded-2xl border px-4 py-3"
+                :class="
+                  nodeHelpSummary.tone === 'warning'
+                    ? 'border-amber-200 bg-amber-50'
+                    : 'border-slate-200 bg-slate-50/85'
+                "
               >
-                <span
-                  class="rounded-full border border-blue-200 bg-white px-3 py-1 text-[11px] font-bold"
+                <div
+                  class="shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em]"
+                  :class="
+                    nodeHelpSummary.tone === 'warning'
+                      ? 'bg-amber-100 text-amber-700'
+                      : 'bg-white text-slate-500 border border-slate-200'
+                  "
                 >
-                  首次配置
-                </span>
-                <HelpCircle :size="14" class="text-blue-500" />
+                  {{ nodeHelpSummary.title }}
+                </div>
+
+                <div class="min-w-0 flex-1">
+                  <p class="truncate text-sm font-medium text-slate-700">
+                    <span class="text-slate-900">{{
+                      nodeDefinition?.displayName ?? node?.data.label
+                    }}</span>
+                    <span class="mx-2 text-slate-300">·</span>
+                    <span>{{ nodeHelpSummary.summary }}</span>
+                  </p>
+                </div>
+
+                <button
+                  v-if="nodeDefinition"
+                  data-testid="node-help-trigger"
+                  class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:border-blue-200 hover:text-blue-600"
+                  @click="isHelpDialogVisible = true"
+                >
+                  <HelpCircle :size="16" />
+                </button>
               </div>
+              <div
+                v-if="correlationSetupGuide"
+                data-testid="correlation-setup-guide"
+                v-tooltip.bottom="correlationSetupGuide.items.join('\n')"
+                class="flex items-center justify-between gap-3 rounded-2xl border border-blue-200 bg-blue-50/70 px-4 py-3"
+              >
+                <div class="min-w-0">
+                  <div class="text-sm font-semibold text-slate-900">
+                    {{ correlationSetupGuide.title }}
+                  </div>
+                  <div class="mt-1 text-[12px] text-slate-500">
+                    可用数值字段 {{ availableNumericFactorCount }} 个
+                  </div>
+                </div>
+                <div
+                  class="inline-flex items-center gap-2 text-[12px] font-medium text-blue-700"
+                >
+                  <span
+                    class="rounded-full border border-blue-200 bg-white px-3 py-1 text-[11px] font-bold"
+                  >
+                    首次配置
+                  </span>
+                  <HelpCircle :size="14" class="text-blue-500" />
+                </div>
+              </div>
+
+              <ConfigForm
+                v-model:config="config"
+                :properties="staticProperties"
+                :reset-properties="nodeDefinition?.properties"
+                :upstream-factors="upstreamFactors"
+                :node-id="node?.id"
+                :input-data="inputData"
+                @save="saveConfig"
+              />
             </div>
-            <ConfigForm
-              v-model:config="config"
-              :properties="staticProperties"
-              :reset-properties="nodeDefinition?.properties"
-              :upstream-factors="upstreamFactors"
-              :node-id="node?.id"
-              :input-data="inputData"
+            <div v-else class="mx-auto h-full w-full max-w-3xl">
+              <RuntimeSettingsPanel
+                :is-trigger="node.data.category === 'trigger'"
+                :reuse-last-runtime-inputs="localReuseLastRuntimeInputs"
+                @update:reuse-last-runtime-inputs="
+                  localReuseLastRuntimeInputs = $event
+                "
+                @reset-runtime-inputs="resetSavedRuntimeInputs"
+              />
+            </div>
+
+            <ConfigFooter
+              class="shrink-0"
+              @close="emit('close')"
               @save="saveConfig"
             />
           </div>
-          <div v-else class="mx-auto h-full w-full max-w-3xl">
-            <RuntimeSettingsPanel
-              :is-trigger="node.data.category === 'trigger'"
-              :reuse-last-runtime-inputs="localReuseLastRuntimeInputs"
-              @update:reuse-last-runtime-inputs="
-                localReuseLastRuntimeInputs = $event
-              "
-              @reset-runtime-inputs="resetSavedRuntimeInputs"
-            />
-          </div>
         </div>
 
-        <ConfigFooter
-          class="shrink-0"
-          @close="emit('close')"
-          @save="saveConfig"
-        />
-      </div>
+        <div
+          data-testid="right-pane-horizontal-resizer"
+          class="debug-column-resizer shrink-0 cursor-col-resize"
+          :class="{ 'debug-column-resizer--active': isResizingHorizontally }"
+          @mousedown="startResizingRightPaneWidth"
+        >
+          <div class="debug-column-resizer__grip" />
+        </div>
 
-      <div
-        data-testid="right-pane-horizontal-resizer"
-        class="debug-column-resizer shrink-0 cursor-col-resize"
-        :class="{ 'debug-column-resizer--active': isResizingHorizontally }"
-        @mousedown="startResizingRightPaneWidth"
-      >
-        <div class="debug-column-resizer__grip" />
-      </div>
-
-      <!-- 右侧边栏 -->
-      <div
-        data-testid="debug-right-pane"
-        class="bg-[#f1f5f9] flex flex-col overflow-hidden shrink-0"
-        :style="{ width: `${rightPaneWidth}px` }"
-      >
-        <div class="flex-1 p-4 flex flex-col min-h-0">
-          <NodeDebugErrorCard
-            v-if="currentNodeError"
-            class="mb-3 shrink-0"
-            :message="currentNodeError"
-            :disabled="isCurrentNodeDebugRunning"
-            @retry="runCurrentNode(false)"
-            @rerun-upstream="runCurrentNode(true)"
-            @open-logs="openExecutionLogs"
-          />
-          <DataDisplayPanel
-            title="节点输出 (OUTPUT)"
-            :data="node.data.output"
-            type="output"
-            :is-pinned="node.data.isPinned"
-            @open-detail="openAnalysis('输出数据', node.data.output)"
-          />
+        <!-- 右侧边栏 -->
+        <div
+          data-testid="debug-right-pane"
+          class="bg-[#f1f5f9] flex flex-col overflow-hidden shrink-0"
+          :style="{ width: `${rightPaneWidth}px` }"
+        >
+          <div class="flex-1 p-4 flex flex-col min-h-0">
+            <NodeDebugErrorCard
+              v-if="currentNodeError"
+              class="mb-3 shrink-0"
+              :message="currentNodeError"
+              :disabled="isCurrentNodeDebugRunning"
+              @retry="runCurrentNode(false)"
+              @rerun-upstream="runCurrentNode(true)"
+              @open-logs="openExecutionLogs"
+            />
+            <DataDisplayPanel
+              title="节点输出 (OUTPUT)"
+              :data="node.data.output"
+              type="output"
+              :is-pinned="node.data.isPinned"
+              @open-detail="openAnalysis('输出数据', node.data.output)"
+            />
+          </div>
         </div>
       </div>
     </div>
@@ -1173,6 +1177,21 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+:deep(.ndv-dialog.p-dialog) {
+  overflow: hidden;
+}
+
+:deep(.ndv-dialog .p-dialog-header) {
+  padding: 1.25rem 1.5rem 1rem !important;
+  background: #ffffff;
+}
+
+:deep(.ndv-dialog .p-dialog-content) {
+  padding: 0 1.5rem 1.5rem !important;
+  overflow: hidden !important;
+  background: #ffffff;
+}
+
 .custom-scrollbar::-webkit-scrollbar {
   width: 4px;
 }
