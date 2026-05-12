@@ -665,7 +665,14 @@ const createNormalDistributionOption = (rows: ChartRow[], keys: string[], xAxisN
 }
 
 const createBoxplotTooltipFormatter = () => (params: Record<string, unknown>) => {
-  const rawData = Array.isArray(params.data) ? params.data : []
+  const dataSource = Array.isArray(params.data)
+    ? params.data
+    : Array.isArray((params.data as { value?: unknown } | undefined)?.value)
+      ? ((params.data as { value: unknown[] }).value ?? [])
+      : Array.isArray(params.value)
+        ? params.value
+        : []
+  const rawData = Array.isArray(dataSource) ? dataSource : []
   const stats = rawData.length >= 5 ? rawData.slice(-5) : []
   const [min, q1, median, q3, max] = stats
   const factorName = String(params.name ?? '')

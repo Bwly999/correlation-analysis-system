@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### 修复 (Fixed)
+
+- **修复工作流图表箱线分布 tooltip 数值为空的问题**:
+  - `src/components/workflow/DataChart.vue` 的箱线图 tooltip 现在可兼容 ECharts 传入的数组、`data.value` 与 `value` 三种数据形态，单表箱线分布不再全部显示为 `--`。
+  - 补充 `DataChart` 回归测试，覆盖单表箱线图 tooltip 正确展示最大值、中位数和最小值的场景。
+
 ### 新增 (Added)
 
 - **规范 Agentic Kernel smoke 产物输出与回放脚本**:

@@ -115,6 +115,9 @@ vi.mock('primevue/inputnumber', () => ({
 const getChartOption = (wrapper: ReturnType<typeof mount>) =>
   JSON.parse(wrapper.get('[data-test="chart-option"]').attributes('data-option') || '{}')
 
+const getChartOptionObject = (wrapper: ReturnType<typeof mount>) =>
+  wrapper.getComponent({ name: 'VChartStub' }).props('option') as Record<string, any>
+
 const getChartUpdateOptions = (wrapper: ReturnType<typeof mount>) =>
   JSON.parse(wrapper.get('[data-test="chart-option"]').attributes('data-update-options') || '{}')
 
@@ -508,6 +511,38 @@ describe('DataChart', () => {
     expect(option.series[0].emphasis.itemStyle.borderWidth).toBeGreaterThan(2)
     expect(option.series[0].data[0].itemStyle.borderColor).not.toBe(option.series[0].data[1].itemStyle.borderColor)
     expect(option.series[0].data[0].itemStyle.color).not.toBe(option.series[0].data[1].itemStyle.color)
+  })
+
+  it('shows single-table boxplot tooltip stats from data item values', async () => {
+    const wrapper = mount(DataChart, {
+      props: {
+        data: [
+          { score: 1, cost: 10 },
+          { score: 2, cost: 12 },
+          { score: 3, cost: 15 },
+        ],
+      },
+    })
+
+    await wrapper.get('[data-test="chart-type-select"]').setValue('boxplot')
+    await wrapper.get('[data-test="chart-key-select"]').setValue(['score'])
+
+    const option = getChartOptionObject(wrapper)
+    const formatter = option.tooltip.formatter as (params: Record<string, unknown>) => string
+    const tooltipHtml = formatter({
+      name: 'score',
+      seriesName: '数据分布',
+      marker: '<span></span>',
+      data: option.series[0].data[0],
+    })
+
+    expect(tooltipHtml).toContain('最大值')
+    expect(tooltipHtml).toContain('3')
+    expect(tooltipHtml).toContain('中位数')
+    expect(tooltipHtml).toContain('2')
+    expect(tooltipHtml).toContain('最小值')
+    expect(tooltipHtml).toContain('1')
+    expect(tooltipHtml).not.toContain('--')
   })
 
   it('discovers grouped numeric factors from all rows and keeps only common fields across groups', () => {
