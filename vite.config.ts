@@ -5,7 +5,6 @@ import type { Plugin } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
 import tailwindcss from '@tailwindcss/vite'
-import monacoEditorPlugin from 'vite-plugin-monaco-editor'
 import AutoImport from 'unplugin-auto-import/vite'
 
 const devEnv = loadEnv(process.env.NODE_ENV || 'development', process.cwd(), '')
@@ -133,9 +132,6 @@ export default defineConfig({
       eslintrc: {
         enabled: true,
       },
-    }),
-    (monacoEditorPlugin as any).default({
-      languageWorkers: ['json', 'typescript', 'editorWorkerService'],
     }),
     workflowAiDevMiddleware(),
   ],

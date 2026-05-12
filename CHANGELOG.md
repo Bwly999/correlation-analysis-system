@@ -4,6 +4,12 @@
 
 ### 修复 (Fixed)
 
+- **修复 JS 代码执行节点 Monaco 编辑器在生产环境下缺少代码提示的问题**:
+  - `src/components/workflow/monacoEnvironment.ts` 新增 Monaco worker 初始化入口，统一通过 Vite 原生 `?worker` 方式装配 `editor/json/typescript` worker，避免子路径部署时 worker 走根路径绝对地址而加载失败。
+  - `src/components/workflow/MonacoEditor.vue` 在编辑器初始化前显式注册 `MonacoEnvironment.getWorker`，保留现有 `loader.config({ monaco })` 和 `javascriptDefaults.addExtraLib` 声明注入逻辑，确保 `JS代码执行` 节点在 build 后仍能获得 `rows` 声明提示与基础补全。
+  - `vite.config.ts` 移除 `vite-plugin-monaco-editor` 的 worker 注入，避免构建产物继续向 `index.html` 写入 `/monacoeditorwork/...` 根路径脚本。
+  - `src/components/workflow/__tests__/MonacoEditor.spec.ts` 补充回归测试，覆盖 `MonacoEnvironment.getWorker` 注册、不同语言 worker 路由以及 JS 节点声明注入能力。
+
 - **修复节点调试弹窗的固定高度与中部独立滚动布局**:
   - `src/components/workflow/NodeConfigModal.vue` 恢复节点调试弹窗固定 `88vh` 高度，避免外层 `Dialog` 出现全局滚动条。
   - 将中部参数区调整为独立滚动容器，并把底部操作区固定在滚动区域之外，确保只有“参数设置”层滚动。

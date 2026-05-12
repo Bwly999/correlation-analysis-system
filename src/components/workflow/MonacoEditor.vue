@@ -2,8 +2,10 @@
 import { onBeforeUnmount, ref, watch } from 'vue'
 import { VueMonacoEditor, loader } from '@guolao/vue-monaco-editor'
 import * as monaco from 'monaco-editor'
+import { ensureMonacoEnvironment } from './monacoEnvironment'
 
 // 配置本地异步加载，不走 CDN
+ensureMonacoEnvironment()
 loader.config({ monaco })
 
 const _props = defineProps<{
@@ -50,6 +52,7 @@ const MONACO_OPTIONS: monaco.editor.IStandaloneEditorConstructionOptions = {
   theme: 'vs',
   readOnly: _props.readOnly || false,
   editContext: false,
+  fixedOverflowWidgets: true,
   folding: true,
   tabSize: 2,
   wordWrap: 'on',
