@@ -1024,17 +1024,14 @@ describe('Node Definitions Execution Logic', () => {
 
   describe('js-transform', () => {
     it('should expose the JS transform node with Chinese labels and code defaults', () => {
+      const codeProperty = jsTransformNode.properties.find((property) => property.name === 'code')
+
       expect(jsTransformNode.displayName).toBe('JS代码执行')
       expect(jsTransformNode.category).toBe('action')
-      expect(jsTransformNode.properties.find((property) => property.name === 'code')?.type).toBe(
-        'json',
-      )
-      expect(
-        jsTransformNode.properties.find((property) => property.name === 'code')?.editorLanguage,
-      ).toBe('javascript')
-      expect(
-        jsTransformNode.properties.find((property) => property.name === 'code')?.editorDeclarations,
-      ).toContain('declare const rows')
+      expect(codeProperty?.type).toBe('json')
+      expect(codeProperty?.editorLanguage).toBe('javascript')
+      expect(codeProperty?.editorHeight).toBe('560px')
+      expect(codeProperty?.editorDeclarations).toContain('declare const rows')
     })
 
     it('should transform table rows and keep standardized table output', async () => {

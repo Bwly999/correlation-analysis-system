@@ -112,7 +112,10 @@ const updateSubItem = (index: number, subPropName: string, value: unknown) => {
 </script>
 
 <template>
-  <div class="flex flex-col gap-3 shrink-0">
+  <div
+    class="flex flex-col gap-3 shrink-0"
+    :class="{ 'min-h-0': prop.type === 'json' }"
+  >
     <label v-if="prop.type !== 'collection' && !isHeroSelectButton" class="ndv-label shrink-0">
       {{ prop.displayName }}
       <span v-if="prop.required" class="ml-1 text-rose-500">*</span>

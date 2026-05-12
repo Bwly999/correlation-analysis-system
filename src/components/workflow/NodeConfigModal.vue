@@ -767,7 +767,10 @@ onBeforeUnmount(() => {
   <Dialog
     :visible="visible"
     modal
+    blockScroll
     class="ndv-dialog"
+    contentClass="ndv-dialog-content"
+    :contentStyle="{ padding: '0' }"
     :style="{ width: '92vw', maxWidth: '1600px', height: '88vh' }"
     :draggable="false"
     :closable="false"
@@ -786,7 +789,7 @@ onBeforeUnmount(() => {
 
     <div
       v-if="node"
-      class="ndv-body-shell flex-1 min-h-0 -mx-6 -mb-6 overflow-hidden"
+      class="ndv-body-shell flex h-full flex-1 min-h-0 overflow-hidden"
     >
       <div
         ref="debugWorkspaceRef"
@@ -1178,6 +1181,8 @@ onBeforeUnmount(() => {
 
 <style scoped>
 :deep(.ndv-dialog.p-dialog) {
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
 }
 
@@ -1187,6 +1192,10 @@ onBeforeUnmount(() => {
 }
 
 :deep(.ndv-dialog .p-dialog-content) {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
   padding: 0 1.5rem 1.5rem !important;
   overflow: hidden !important;
   background: #ffffff;

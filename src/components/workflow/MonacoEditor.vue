@@ -45,7 +45,7 @@ const MONACO_OPTIONS: monaco.editor.IStandaloneEditorConstructionOptions = {
   fontSize: 12,
   fontFamily: 'JetBrains Mono, Menlo, Monaco, Consolas, monospace',
   lineHeight: 18,
-  padding: { top: 8, bottom: 8 },
+  padding: { top: 12, bottom: 16 },
   renderLineHighlight: 'all',
   theme: 'vs',
   readOnly: _props.readOnly || false,
@@ -96,21 +96,18 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div
-    class="monaco-wrapper border border-slate-200 rounded-xl overflow-hidden bg-white shadow-inner"
-    :style="{ height: height || '300px' }"
-  >
+  <div class="monaco-wrapper border border-slate-200 rounded-none bg-white shadow-inner">
     <VueMonacoEditor
       :value="modelValue"
       :language="language || 'json'"
+      :height="height || '300px'"
       :options="MONACO_OPTIONS"
+      class-name="monaco-instance"
       @mount="handleMount"
       @change="onChange"
     >
       <template #default>
-        <div
-          class="flex items-center justify-center h-full text-slate-400 gap-3 text-xs bg-slate-50"
-        >
+        <div class="flex items-center justify-center h-full text-slate-400 gap-3 text-xs bg-slate-50">
           <div
             class="w-4 h-4 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin"
           ></div>
@@ -123,8 +120,16 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .monaco-wrapper {
-  position: relative;
+  min-height: 0;
 }
+
+:deep(.monaco-editor),
+:deep(.monaco-editor-background),
+:deep(.monaco-editor .margin),
+:deep(.overflow-guard) {
+  border-radius: 0 !important;
+}
+
 :deep(.monaco-editor) {
   --vscode-editor-background: transparent !important;
   --vscode-editorGutter-background: transparent !important;

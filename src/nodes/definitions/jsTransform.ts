@@ -44,7 +44,7 @@ export const jsTransformNode: NodeDefinition = {
       default: DEFAULT_JS_CODE,
       editorLanguage: 'javascript',
       editorDeclarations: JS_TRANSFORM_DECLARATIONS,
-      editorHeight: '320px',
+      editorHeight: '560px',
       description:
         '可用变量只有 rows。只能写同步 JS，且必须显式 return 数组对象列表。',
     },

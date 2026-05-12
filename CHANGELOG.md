@@ -4,6 +4,12 @@
 
 ### 修复 (Fixed)
 
+- **优化 JS 代码执行节点的 Monaco 编辑器布局与搜索交互稳定性**:
+  - `src/nodes/definitions/jsTransform.ts` 将“JS代码执行”节点的代码编辑区提升为更高的主编辑区域，并在 `src/nodes/__tests__/nodeDefinitions.spec.ts` 补充对应断言。
+  - `src/components/workflow/MonacoEditor.vue` 将编辑器外壳改为直角样式，保留必要的上下内容留白，同时把封装收回到更接近 `@guolao/vue-monaco-editor` 默认 demo 的挂载方式，避免自定义 find widget 布局覆盖影响 `Ctrl+F` 右上角操作按钮。
+  - `src/components/workflow/config/PropertyField.vue` 与 `src/components/workflow/NodeConfigModal.vue` 补充 `min-height` / `flex` 约束，确保放大后的代码编辑器在节点参数区内稳定占位，不再被容器压缩。
+  - 新增 `src/components/workflow/__tests__/MonacoEditor.spec.ts`，覆盖 Monaco 高度透传、直角外观以及“贴近默认 demo 用法”的回归约束。
+
 - **优化节点调试面板的预览按钮与贴边布局**:
   - `src/components/workflow/DataDisplayPanel.vue` 将输入 / 输出面板的展开按钮升级为更醒目的扫描式高亮按钮，统一交互结构，并按青色 / 蓝色区分语义。
   - `src/components/workflow/DataAnalysisModal.vue` 为结果预览侧栏补充展开 / 收起过渡动画，移除折叠态多余图标，减少界面生硬感。
