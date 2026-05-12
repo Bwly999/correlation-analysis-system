@@ -4,6 +4,12 @@
 
 ### 修复 (Fixed)
 
+- **修复节点调试弹窗的固定高度与中部独立滚动布局**:
+  - `src/components/workflow/NodeConfigModal.vue` 恢复节点调试弹窗固定 `88vh` 高度，避免外层 `Dialog` 出现全局滚动条。
+  - 将中部参数区调整为独立滚动容器，并把底部操作区固定在滚动区域之外，确保只有“参数设置”层滚动。
+  - 收紧弹窗内容高度链与宽度撑满关系，修复中部区域布局错位与右侧留白异常。
+  - `src/components/workflow/__tests__/NodeConfigModal.spec.ts` 新增对应回归测试，覆盖固定高度和局部滚动约束。
+
 - **优化 JS 代码执行节点的 Monaco 编辑器布局与搜索交互稳定性**:
   - `src/nodes/definitions/jsTransform.ts` 将“JS代码执行”节点的代码编辑区提升为更高的主编辑区域，并在 `src/nodes/__tests__/nodeDefinitions.spec.ts` 补充对应断言。
   - `src/components/workflow/MonacoEditor.vue` 将编辑器外壳改为直角样式，保留必要的上下内容留白，同时把封装收回到更接近 `@guolao/vue-monaco-editor` 默认 demo 的挂载方式，避免自定义 find widget 布局覆盖影响 `Ctrl+F` 右上角操作按钮。

@@ -789,11 +789,11 @@ onBeforeUnmount(() => {
 
     <div
       v-if="node"
-      class="ndv-body-shell flex h-full flex-1 min-h-0 overflow-hidden"
+      class="ndv-body-shell flex h-full min-h-0 overflow-hidden"
     >
       <div
         ref="debugWorkspaceRef"
-        class="ndv-body flex h-full min-h-0 min-w-0 bg-white border-t overflow-hidden"
+        class="ndv-body flex h-full w-full min-h-0 min-w-0 bg-white border-t overflow-hidden"
         :class="{
           'cursor-row-resize select-none': isResizingLeft,
           'cursor-col-resize select-none': isResizingHorizontally,
@@ -866,7 +866,7 @@ onBeforeUnmount(() => {
         <!-- 中心配置区域 -->
         <div class="flex-1 flex flex-col bg-white relative min-w-0 min-h-0">
           <div
-            class="flex items-center justify-between border-b px-4 bg-white sticky top-0 z-10 shrink-0"
+            class="flex items-center justify-between border-b px-4 bg-white shrink-0"
           >
             <div class="flex">
               <button
@@ -930,113 +930,112 @@ onBeforeUnmount(() => {
               </button>
             </div>
           </div>
-          <div
-            class="flex-1 p-8 overflow-y-auto custom-scrollbar bg-white min-h-0"
-          >
+          <div class="flex min-h-0 flex-1 flex-col bg-white">
             <div
-              v-if="activeTab === 'parameters'"
-              class="mx-auto max-w-3xl space-y-6"
+              class="custom-scrollbar flex-1 overflow-y-auto bg-white min-h-0 px-6 py-6 xl:px-8"
             >
-              <div
-                v-if="currentFileImportTask"
-                class="rounded-2xl border border-blue-200 bg-blue-50/80 px-4 py-3"
-              >
-                <div class="flex items-center justify-between gap-3">
-                  <div class="text-sm font-semibold text-blue-900">
-                    后台解析中
-                  </div>
-                  <div class="text-[12px] font-semibold text-blue-700">
-                    {{ currentFileImportTask.progress }}%
-                  </div>
-                </div>
-                <div class="mt-1 text-[12px] text-blue-700">
-                  {{ currentFileImportTask.fileName }} ·
-                  {{ currentFileImportPhaseText }}
-                </div>
-              </div>
-              <div
-                class="flex items-center gap-3 rounded-2xl border px-4 py-3"
-                :class="
-                  nodeHelpSummary.tone === 'warning'
-                    ? 'border-amber-200 bg-amber-50'
-                    : 'border-slate-200 bg-slate-50/85'
-                "
-              >
+              <div v-if="activeTab === 'parameters'" class="w-full max-w-5xl space-y-6">
                 <div
-                  class="shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em]"
+                  v-if="currentFileImportTask"
+                  class="rounded-2xl border border-blue-200 bg-blue-50/80 px-4 py-3"
+                >
+                  <div class="flex items-center justify-between gap-3">
+                    <div class="text-sm font-semibold text-blue-900">
+                      后台解析中
+                    </div>
+                    <div class="text-[12px] font-semibold text-blue-700">
+                      {{ currentFileImportTask.progress }}%
+                    </div>
+                  </div>
+                  <div class="mt-1 text-[12px] text-blue-700">
+                    {{ currentFileImportTask.fileName }} ·
+                    {{ currentFileImportPhaseText }}
+                  </div>
+                </div>
+                <div
+                  class="flex items-center gap-3 rounded-2xl border px-4 py-3"
                   :class="
                     nodeHelpSummary.tone === 'warning'
-                      ? 'bg-amber-100 text-amber-700'
-                      : 'bg-white text-slate-500 border border-slate-200'
+                      ? 'border-amber-200 bg-amber-50'
+                      : 'border-slate-200 bg-slate-50/85'
                   "
                 >
-                  {{ nodeHelpSummary.title }}
-                </div>
-
-                <div class="min-w-0 flex-1">
-                  <p class="truncate text-sm font-medium text-slate-700">
-                    <span class="text-slate-900">{{
-                      nodeDefinition?.displayName ?? node?.data.label
-                    }}</span>
-                    <span class="mx-2 text-slate-300">·</span>
-                    <span>{{ nodeHelpSummary.summary }}</span>
-                  </p>
-                </div>
-
-                <button
-                  v-if="nodeDefinition"
-                  data-testid="node-help-trigger"
-                  class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:border-blue-200 hover:text-blue-600"
-                  @click="isHelpDialogVisible = true"
-                >
-                  <HelpCircle :size="16" />
-                </button>
-              </div>
-              <div
-                v-if="correlationSetupGuide"
-                data-testid="correlation-setup-guide"
-                v-tooltip.bottom="correlationSetupGuide.items.join('\n')"
-                class="flex items-center justify-between gap-3 rounded-2xl border border-blue-200 bg-blue-50/70 px-4 py-3"
-              >
-                <div class="min-w-0">
-                  <div class="text-sm font-semibold text-slate-900">
-                    {{ correlationSetupGuide.title }}
+                  <div
+                    class="shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em]"
+                    :class="
+                      nodeHelpSummary.tone === 'warning'
+                        ? 'bg-amber-100 text-amber-700'
+                        : 'bg-white text-slate-500 border border-slate-200'
+                    "
+                  >
+                    {{ nodeHelpSummary.title }}
                   </div>
-                  <div class="mt-1 text-[12px] text-slate-500">
-                    可用数值字段 {{ availableNumericFactorCount }} 个
+
+                  <div class="min-w-0 flex-1">
+                    <p class="truncate text-sm font-medium text-slate-700">
+                      <span class="text-slate-900">{{
+                        nodeDefinition?.displayName ?? node?.data.label
+                      }}</span>
+                      <span class="mx-2 text-slate-300">·</span>
+                      <span>{{ nodeHelpSummary.summary }}</span>
+                    </p>
                   </div>
+
+                  <button
+                    v-if="nodeDefinition"
+                    data-testid="node-help-trigger"
+                    class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:border-blue-200 hover:text-blue-600"
+                    @click="isHelpDialogVisible = true"
+                  >
+                    <HelpCircle :size="16" />
+                  </button>
                 </div>
                 <div
-                  class="inline-flex items-center gap-2 text-[12px] font-medium text-blue-700"
+                  v-if="correlationSetupGuide"
+                  data-testid="correlation-setup-guide"
+                  v-tooltip.bottom="correlationSetupGuide.items.join('\n')"
+                  class="flex items-center justify-between gap-3 rounded-2xl border border-blue-200 bg-blue-50/70 px-4 py-3"
                 >
-                  <span
-                    class="rounded-full border border-blue-200 bg-white px-3 py-1 text-[11px] font-bold"
+                  <div class="min-w-0">
+                    <div class="text-sm font-semibold text-slate-900">
+                      {{ correlationSetupGuide.title }}
+                    </div>
+                    <div class="mt-1 text-[12px] text-slate-500">
+                      可用数值字段 {{ availableNumericFactorCount }} 个
+                    </div>
+                  </div>
+                  <div
+                    class="inline-flex items-center gap-2 text-[12px] font-medium text-blue-700"
                   >
-                    首次配置
-                  </span>
-                  <HelpCircle :size="14" class="text-blue-500" />
+                    <span
+                      class="rounded-full border border-blue-200 bg-white px-3 py-1 text-[11px] font-bold"
+                    >
+                      首次配置
+                    </span>
+                    <HelpCircle :size="14" class="text-blue-500" />
+                  </div>
                 </div>
-              </div>
 
-              <ConfigForm
-                v-model:config="config"
-                :properties="staticProperties"
-                :reset-properties="nodeDefinition?.properties"
-                :upstream-factors="upstreamFactors"
-                :node-id="node?.id"
-                :input-data="inputData"
-                @save="saveConfig"
-              />
-            </div>
-            <div v-else class="mx-auto h-full w-full max-w-3xl">
-              <RuntimeSettingsPanel
-                :is-trigger="node.data.category === 'trigger'"
-                :reuse-last-runtime-inputs="localReuseLastRuntimeInputs"
-                @update:reuse-last-runtime-inputs="
-                  localReuseLastRuntimeInputs = $event
-                "
-                @reset-runtime-inputs="resetSavedRuntimeInputs"
-              />
+                <ConfigForm
+                  v-model:config="config"
+                  :properties="staticProperties"
+                  :reset-properties="nodeDefinition?.properties"
+                  :upstream-factors="upstreamFactors"
+                  :node-id="node?.id"
+                  :input-data="inputData"
+                  @save="saveConfig"
+                />
+              </div>
+              <div v-else class="h-full w-full max-w-5xl">
+                <RuntimeSettingsPanel
+                  :is-trigger="node.data.category === 'trigger'"
+                  :reuse-last-runtime-inputs="localReuseLastRuntimeInputs"
+                  @update:reuse-last-runtime-inputs="
+                    localReuseLastRuntimeInputs = $event
+                  "
+                  @reset-runtime-inputs="resetSavedRuntimeInputs"
+                />
+              </div>
             </div>
 
             <ConfigFooter
@@ -1191,12 +1190,11 @@ onBeforeUnmount(() => {
   background: #ffffff;
 }
 
-:deep(.ndv-dialog .p-dialog-content) {
+:deep(.ndv-dialog-content) {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
   min-height: 0;
-  padding: 0 1.5rem 1.5rem !important;
   overflow: hidden !important;
   background: #ffffff;
 }

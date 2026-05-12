@@ -31,9 +31,16 @@ describe("NodeConfigModal", () => {
 
   const dialogStub = {
     name: "Dialog",
-    props: ["visible", "draggable"],
+    props: [
+      "visible",
+      "draggable",
+      "style",
+      "contentStyle",
+      "contentClass",
+      "blockScroll",
+    ],
     template:
-      '<div class="dialog-stub" :data-visible="String(visible)" :data-draggable="String(draggable)"><template v-if="visible"><slot name="header" /><slot /></template></div>',
+      '<div class="dialog-stub" :data-visible="String(visible)" :data-draggable="String(draggable)" :data-style="JSON.stringify(style ?? {})" :data-content-style="JSON.stringify(contentStyle ?? {})" :data-content-class="contentClass ?? \'\'" :data-block-scroll="String(Boolean(blockScroll))"><template v-if="visible"><slot name="header" /><slot /></template></div>',
   };
 
   it("passes a multi-input summary to the input display panel for multi-input nodes", () => {
@@ -1977,5 +1984,66 @@ describe("NodeConfigModal", () => {
     expect(store.nodes[0]?.data.config.fetchMode).toBe("time");
     expect(store.nodes[0]?.data.config.timeRange).toBeNull();
     expect(store.nodes[0]?.data.config.materialType).toBe("");
+  });
+
+  it("keeps a fixed dialog height and limits scrolling to the center config area", () => {
+    const store = useWorkflowStore();
+    store.nodes = [
+      {
+        id: "layout-node",
+        type: "custom",
+        position: { x: 0, y: 0 },
+        label: "布局测试节点",
+        data: {
+          label: "布局测试节点",
+          type: "data-cleaning",
+          category: "action",
+          status: "idle",
+          config: {},
+          logs: [],
+          useManualInput: false,
+          manualInput: "",
+          isPinned: false,
+        },
+      } as any,
+    ];
+
+    const wrapper = mount(NodeConfigModal, {
+      props: { visible: true, nodeId: "layout-node" },
+      global: {
+        stubs: {
+          Dialog: dialogStub,
+          DataDisplayPanel: true,
+          DataAnalysisModal: true,
+          ConfigHeader: {
+            template: "<div />",
+            props: ["nodeLabel", "isPinned", "nodeType"],
+          },
+          ConfigFooter: {
+            template: '<div data-testid="config-footer-stub">底部操作区</div>',
+          },
+          ConfigForm: {
+            template: "<div />",
+            props: ["config", "properties", "upstreamFactors"],
+          },
+          RuntimeInputs: {
+            template: "<div />",
+            props: ["config", "properties", "upstreamFactors"],
+          },
+        },
+      },
+    });
+
+    const dialog = wrapper.get(".dialog-stub");
+    const bodyShell = wrapper.get(".ndv-body-shell");
+    const body = wrapper.get(".ndv-body");
+    const centerScrollArea = wrapper.get(".custom-scrollbar");
+    const footer = wrapper.get('[data-testid="config-footer-stub"]');
+
+    expect(dialog.attributes("data-style")).toContain('"height":"88vh"');
+    expect(dialog.attributes("data-style")).not.toContain('"maxHeight":"88vh"');
+    expect(bodyShell.classes()).toContain("h-full");
+    expect(body.classes()).toContain("w-full");
+    expect(centerScrollArea.element.contains(footer.element)).toBe(false);
   });
 });
