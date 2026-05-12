@@ -8,6 +8,11 @@
   - `src/components/workflow/DataChart.vue` 的箱线图 tooltip 现在可兼容 ECharts 传入的数组、`data.value` 与 `value` 三种数据形态，单表箱线分布不再全部显示为 `--`。
   - 补充 `DataChart` 回归测试，覆盖单表箱线图 tooltip 正确展示最大值、中位数和最小值的场景。
 
+- **增强工作流箱线图的箱须口径与离群点展示**:
+  - `DataChart` 的默认箱须口径改为 `1.5 IQR`，并新增 `2% / 98%` 分位模式，可在图表内右上角直接切换。
+  - 两种模式下超出箱须范围的值都会以散点叠加展示，tooltip 会同步说明当前箱须口径和离群点数值。
+  - `src/utils/stats.ts` 新增标准箱线统计 helper，并补充 `DataChart` 回归测试覆盖两种箱须模式和离群点渲染。
+
 ### 新增 (Added)
 
 - **规范 Agentic Kernel smoke 产物输出与回放脚本**:

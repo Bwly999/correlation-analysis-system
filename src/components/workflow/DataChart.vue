@@ -3,7 +3,7 @@ import { computed, markRaw, ref, shallowRef, watch } from 'vue'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
-import { BarChart, BoxplotChart, LineChart } from 'echarts/charts'
+import { BarChart, BoxplotChart, LineChart, ScatterChart } from 'echarts/charts'
 import {
   DataZoomComponent,
   DatasetComponent,
@@ -29,7 +29,10 @@ import {
   Settings2,
   Trash2,
 } from 'lucide-vue-next'
-import { calculateBoxValues } from '@/utils/stats'
+import {
+  calculateBoxplotStats,
+  type BoxplotWhiskerMode,
+} from '@/utils/stats'
 import { useScopedResultPreviewStorage } from './useScopedResultPreviewStorage'
 import { useWorkflowOverlayHost } from './workflowOverlayHost'
 import SearchAppendMultiSelect from './common/SearchAppendMultiSelect.vue'
@@ -53,6 +56,7 @@ use([
   LineChart,
   BarChart,
   BoxplotChart,
+  ScatterChart,
   GridComponent,
   TooltipComponent,
   TitleComponent,
@@ -103,6 +107,11 @@ const skipInvalidRows = useScopedResultPreviewStorage(
   'chart-skip-invalid-rows',
   false,
 )
+const boxplotWhiskerMode = useScopedResultPreviewStorage<BoxplotWhiskerMode>(
+  props.storageScopeKey,
+  'chart-boxplot-whisker-mode',
+  'iqr',
+)
 const isPresetPanelOpen = ref(false)
 const presetNameInput = ref('')
 const selectedPresetId = useScopedResultPreviewStorage<string | null>(props.storageScopeKey, 'chart-selected-preset', null)
@@ -121,6 +130,11 @@ const chartUpdateOptions = markRaw({
   notMerge: true,
   lazyUpdate: true,
 })
+
+const boxplotWhiskerModeOptions = [
+  { label: '1.5 IQR', value: 'iqr' as const },
+  { label: '2% / 98%', value: 'percentile' as const },
+]
 
 const createDefaultPresetName = () => {
   const now = new Date()
@@ -446,6 +460,34 @@ const formatBoxValue = (value: unknown) => {
   return value.toFixed(2).replace(/\.?0+$/, '')
 }
 
+const currentBoxplotWhiskerModeLabel = computed(
+  () => boxplotWhiskerModeOptions.find((item) => item.value === boxplotWhiskerMode.value)?.label ?? '1.5 IQR',
+)
+
+const boxplotToggleVisible = computed(() => hasRenderableData.value && chartType.value === 'boxplot')
+
+const createBoxplotOutlierTooltipFormatter = () => (params: Record<string, unknown>) => {
+  const data = (params.data as { value?: [number, number]; factorName?: string; groupName?: string } | undefined) ?? {}
+  const pointValue = Array.isArray(data.value) ? data.value[1] : Array.isArray(params.value) ? params.value[1] : undefined
+  const factorName = String(data.factorName ?? params.name ?? '')
+  const groupName = String(data.groupName ?? '')
+  const title = groupName ? `${factorName} / ${groupName}` : factorName
+  const marker = String(params.marker ?? '')
+
+  return [
+    `<div style="padding: 4px 2px;">`,
+    `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;color:#0f172a;font-size:13px;font-weight:700;">${marker}<span>${title}</span></div>`,
+    `<div style="display:grid;grid-template-columns:auto auto;gap:4px 16px;font-size:11px;color:#475569;">`,
+    `<span>类型</span><span style="color:#0f172a;text-align:right;font-weight:600;">离群点</span>`,
+    `<span>箱须口径</span><span style="color:#0f172a;text-align:right;font-weight:600;">${currentBoxplotWhiskerModeLabel.value}</span>`,
+    `<span>数值</span><span style="color:#0f172a;text-align:right;font-weight:600;">${formatBoxValue(pointValue)}</span>`,
+    `</div>`,
+    `</div>`,
+  ].join('')
+}
+
+const getGroupedScatterOffset = (index: number, total: number) => [Math.round((index - (total - 1) / 2) * 16), 0]
+
 const getNormalDistributionValues = (rows: ChartRow[], key: string) =>
   rows.map((row) => row[key]).filter(isFiniteNumber)
 
@@ -664,7 +706,7 @@ const createNormalDistributionOption = (rows: ChartRow[], keys: string[], xAxisN
   }
 }
 
-const createBoxplotTooltipFormatter = () => (params: Record<string, unknown>) => {
+const createBoxplotTooltipFormatter = (whiskerModeLabel: string) => (params: Record<string, unknown>) => {
   const dataSource = Array.isArray(params.data)
     ? params.data
     : Array.isArray((params.data as { value?: unknown } | undefined)?.value)
@@ -684,6 +726,7 @@ const createBoxplotTooltipFormatter = () => (params: Record<string, unknown>) =>
     `<div style="padding: 4px 2px;">`,
     `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;color:#0f172a;font-size:13px;font-weight:700;">${marker}<span>${title}</span></div>`,
     `<div style="display:grid;grid-template-columns:auto auto;gap:4px 16px;font-size:11px;color:#475569;">`,
+    `<span>箱须口径</span><span style="color:#0f172a;text-align:right;font-weight:600;">${whiskerModeLabel}</span>`,
     `<span>最大值</span><span style="color:#0f172a;text-align:right;font-weight:600;">${formatBoxValue(max)}</span>`,
     `<span>上四分位</span><span style="color:#0f172a;text-align:right;font-weight:600;">${formatBoxValue(q3)}</span>`,
     `<span>中位数</span><span style="color:#0f172a;text-align:right;font-weight:600;">${formatBoxValue(median)}</span>`,
@@ -694,7 +737,7 @@ const createBoxplotTooltipFormatter = () => (params: Record<string, unknown>) =>
   ].join('')
 }
 
-const createBoxplotBaseOption = (keys: string[]): Record<string, any> => ({
+const createBoxplotBaseOption = (keys: string[], whiskerModeLabel: string): Record<string, any> => ({
   animation: false,
   useDirtyRect: true,
   backgroundColor: 'transparent',
@@ -709,7 +752,7 @@ const createBoxplotBaseOption = (keys: string[]): Record<string, any> => ({
     padding: 12,
     textStyle: { color: '#475569' },
     extraCssText: 'box-shadow: 0 10px 15px -3px rgba(15, 23, 42, 0.12); border-radius: 12px;',
-    formatter: createBoxplotTooltipFormatter(),
+    formatter: createBoxplotTooltipFormatter(whiskerModeLabel),
   },
   legend: {
     show: true,
@@ -754,8 +797,8 @@ const createBoxplotBaseOption = (keys: string[]): Record<string, any> => ({
     axisLabel: { color: '#64748b', fontSize: 11 },
     splitLine: { lineStyle: { color: '#e2e8f0', type: 'dashed' } },
   },
-    series: [] as Array<Record<string, unknown>>,
-  })
+  series: [] as Array<Record<string, unknown>>,
+})
 
 const applyNormalizationAxis = (axis: Record<string, any>) => {
   if (!isNormalizedView.value) {
@@ -825,7 +868,7 @@ const chartOption = computed(() => {
   }
 
   if (isGroupedData.value) {
-    Object.assign(option, createBoxplotBaseOption(keys))
+    Object.assign(option, createBoxplotBaseOption(keys, currentBoxplotWhiskerModeLabel.value))
     applyNormalizationAxis(option.yAxis)
     const normalizedGroups = isNormalizedView.value
       ? (sourceData as ChartGroup[]).map((group) => ({
@@ -833,14 +876,14 @@ const chartOption = computed(() => {
           data: normalizeChartRows(group.data ?? [], keys, normalizationStats.value, normalizationMethod.value),
         }))
       : (sourceData as ChartGroup[])
-    option.series = (sourceData as ChartGroup[]).map((group, index) => {
+    const boxplotSeries = (sourceData as ChartGroup[]).map((group, index) => {
       const color = BOX_PLOT_COLORS[index % BOX_PLOT_COLORS.length]!
       const activeGroup = normalizedGroups[index] ?? group
 
       return {
         name: group.name,
         type: 'boxplot',
-        data: keys.map((key) => calculateBoxValues(activeGroup.data || [], key)),
+        data: keys.map((key) => calculateBoxplotStats(activeGroup.data || [], key, boxplotWhiskerMode.value).boxValues),
         itemStyle: {
           color: toRgba(color, 0.2),
           borderColor: color,
@@ -854,19 +897,63 @@ const chartOption = computed(() => {
         },
       }
     })
+    const outlierSeries = (sourceData as ChartGroup[]).flatMap((group, index, groups) => {
+      const color = BOX_PLOT_COLORS[index % BOX_PLOT_COLORS.length]!
+      const activeGroup = normalizedGroups[index] ?? group
+      const scatterData = keys.flatMap((key, keyIndex) =>
+        calculateBoxplotStats(activeGroup.data || [], key, boxplotWhiskerMode.value).outliers.map((value) => ({
+          value: [keyIndex, value] as [number, number],
+          factorName: key,
+          groupName: group.name,
+        })),
+      )
+
+      if (scatterData.length === 0) return []
+
+      return [
+        {
+          name: `${group.name}-离群点`,
+          type: 'scatter',
+          data: scatterData,
+          symbolSize: 8,
+          symbolOffset: getGroupedScatterOffset(index, groups.length),
+          z: 4,
+          legendHoverLink: false,
+          itemStyle: {
+            color,
+            borderColor: '#ffffff',
+            borderWidth: 1.2,
+          },
+          tooltip: {
+            trigger: 'item',
+            formatter: createBoxplotOutlierTooltipFormatter(),
+          },
+        },
+      ]
+    })
+    option.legend.data = boxplotSeries.map((series: { name: string }) => series.name)
+    option.series = [...boxplotSeries, ...outlierSeries]
   } else if (chartType.value === 'boxplot') {
-    Object.assign(option, createBoxplotBaseOption(keys))
+    Object.assign(option, createBoxplotBaseOption(keys, currentBoxplotWhiskerModeLabel.value))
     applyNormalizationAxis(option.yAxis)
     const boxplotRows = isNormalizedView.value
       ? normalizeChartRows(sourceData as ChartRow[], keys, normalizationStats.value, normalizationMethod.value)
       : (sourceData as ChartRow[])
+    const boxStatsByKey = keys.map((key) => calculateBoxplotStats(boxplotRows, key, boxplotWhiskerMode.value))
+    const outlierData = boxStatsByKey.flatMap((stats, index) =>
+      stats.outliers.map((value) => ({
+        value: [index, value] as [number, number],
+        factorName: keys[index] ?? '',
+      })),
+    )
+    option.legend.data = ['数据分布']
     option.series = [
       {
         name: '数据分布',
         type: 'boxplot',
-        data: keys.map((key, index) =>
+        data: boxStatsByKey.map((stats, index) =>
           createBoxplotDataItem(
-            calculateBoxValues(boxplotRows, key),
+            stats.boxValues,
             BOX_PLOT_COLORS[index % BOX_PLOT_COLORS.length]!,
           ),
         ),
@@ -883,6 +970,25 @@ const chartOption = computed(() => {
         },
       },
     ]
+    if (outlierData.length > 0) {
+      option.series.push({
+        name: '离群点',
+        type: 'scatter',
+        data: outlierData,
+        symbolSize: 8,
+        z: 4,
+        legendHoverLink: false,
+        itemStyle: {
+          color: '#0f172a',
+          borderColor: '#ffffff',
+          borderWidth: 1.2,
+        },
+        tooltip: {
+          trigger: 'item',
+          formatter: createBoxplotOutlierTooltipFormatter(),
+        },
+      })
+    }
   } else if (chartType.value === 'normal') {
     const normalRows = isNormalizedView.value
       ? normalizeChartRows(sourceData as ChartRow[], keys, normalizationStats.value, normalizationMethod.value)
@@ -997,6 +1103,14 @@ watch(
   normalizationMethod,
   (value) => {
     if (value !== 'min-max' && value !== 'z-score') normalizationMethod.value = 'min-max'
+  },
+  { immediate: true },
+)
+
+watch(
+  boxplotWhiskerMode,
+  (value) => {
+    if (value !== 'iqr' && value !== 'percentile') boxplotWhiskerMode.value = 'iqr'
   },
   { immediate: true },
 )
@@ -1387,7 +1501,25 @@ watch(
           data-test="chart-scroll-viewport"
           class="chart-scroll-viewport flex-1 min-w-0 min-h-0 overflow-y-auto overflow-x-hidden pr-2"
         >
-          <div v-if="hasRenderableData" data-test="chart-host" class="h-full w-full" :style="chartHostStyle">
+          <div v-if="hasRenderableData" data-test="chart-host" class="h-full w-full relative" :style="chartHostStyle">
+            <div
+              v-if="boxplotToggleVisible"
+              data-test="boxplot-whisker-mode-toggle"
+              class="absolute right-3 top-3 z-10 flex items-center gap-1 rounded-xl border border-slate-200 bg-white/95 p-1 shadow-sm backdrop-blur"
+            >
+              <button
+                v-for="modeOption in boxplotWhiskerModeOptions"
+                :key="modeOption.value"
+                :data-test="`boxplot-whisker-mode-${modeOption.value}`"
+                class="boxplot-mode-button"
+                :class="{ 'boxplot-mode-button--active': boxplotWhiskerMode === modeOption.value }"
+                :data-state="boxplotWhiskerMode === modeOption.value ? 'active' : 'inactive'"
+                type="button"
+                @click="boxplotWhiskerMode = modeOption.value"
+              >
+                {{ modeOption.label }}
+              </button>
+            </div>
             <VChart ref="chartRef" :option="chartOption" :update-options="chartUpdateOptions" autoresize />
           </div>
         </div>
@@ -1626,6 +1758,27 @@ watch(
   background: #2563eb;
   color: #ffffff;
   box-shadow: 0 6px 12px -10px rgba(37, 99, 235, 0.8);
+}
+
+.boxplot-mode-button {
+  border: none;
+  border-radius: 10px;
+  padding: 6px 10px;
+  background: transparent;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.boxplot-mode-button--active {
+  background: #0f172a;
+  color: #ffffff;
+  box-shadow: 0 8px 16px -14px rgba(15, 23, 42, 0.8);
 }
 
 .chart-checkbox-label {

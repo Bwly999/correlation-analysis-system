@@ -545,6 +545,53 @@ describe('DataChart', () => {
     expect(tooltipHtml).not.toContain('--')
   })
 
+  it('uses 1.5 IQR whiskers and renders outliers as scatter points for single-table boxplots', async () => {
+    const wrapper = mount(DataChart, {
+      props: {
+        data: [{ score: 1 }, { score: 2 }, { score: 3 }, { score: 4 }, { score: 100 }],
+      },
+    })
+
+    await wrapper.get('[data-test="chart-type-select"]').setValue('boxplot')
+    await wrapper.get('[data-test="chart-key-select"]').setValue(['score'])
+
+    const option = getChartOption(wrapper)
+    const boxplotSeries = option.series.find((series: { type: string }) => series.type === 'boxplot')
+    const scatterSeries = option.series.find((series: { type: string }) => series.type === 'scatter')
+    const scatterValues = scatterSeries.data.map((item: { value: [number, number] }) => item.value)
+
+    expect(boxplotSeries.data[0].value).toEqual([1, 2, 3, 4, 4])
+    expect(scatterValues).toEqual([[0, 100]])
+  })
+
+  it('switches boxplot whiskers to 2% and 98% percentiles inside the chart panel', async () => {
+    const wrapper = mount(DataChart, {
+      props: {
+        data: [{ score: 1 }, { score: 2 }, { score: 3 }, { score: 4 }, { score: 100 }],
+      },
+    })
+
+    await wrapper.get('[data-test="chart-type-select"]').setValue('boxplot')
+    await wrapper.get('[data-test="chart-key-select"]').setValue(['score'])
+
+    expect(wrapper.get('[data-test="boxplot-whisker-mode-toggle"]').text()).toContain('1.5 IQR')
+
+    await wrapper.get('[data-test="boxplot-whisker-mode-percentile"]').trigger('click')
+
+    const option = getChartOption(wrapper)
+    const boxplotSeries = option.series.find((series: { type: string }) => series.type === 'boxplot')
+    const scatterSeries = option.series.find((series: { type: string }) => series.type === 'scatter')
+    const scatterValues = scatterSeries.data.map((item: { value: [number, number] }) => item.value)
+
+    expect(wrapper.get('[data-test="boxplot-whisker-mode-percentile"]').attributes('data-state')).toBe('active')
+    expect(boxplotSeries.data[0].value[0]).not.toBe(1)
+    expect(boxplotSeries.data[0].value[4]).not.toBe(4)
+    expect(scatterValues).toEqual([
+      [0, 1],
+      [0, 100],
+    ])
+  })
+
   it('discovers grouped numeric factors from all rows and keeps only common fields across groups', () => {
     const wrapper = mount(DataChart, {
       props: {
