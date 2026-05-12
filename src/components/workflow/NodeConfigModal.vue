@@ -1192,72 +1192,100 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 14px;
-  background: rgba(248, 250, 252, 0.34);
+  width: 18px;
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.88) 0%, rgba(241, 245, 249, 0.92) 100%);
   transition:
     background 0.18s ease,
     box-shadow 0.18s ease,
-    opacity 0.18s ease;
+    opacity 0.18s ease,
+    transform 0.18s ease;
 }
 
 .debug-column-resizer::before {
   content: "";
   position: absolute;
-  top: 0;
-  bottom: 0;
+  top: 12px;
+  bottom: 12px;
   left: 50%;
   width: 1px;
   transform: translateX(-50%);
   background: linear-gradient(
     180deg,
-    rgba(203, 213, 225, 0.14) 0%,
-    rgba(148, 163, 184, 0.55) 12%,
-    rgba(148, 163, 184, 0.55) 88%,
-    rgba(203, 213, 225, 0.14) 100%
+    rgba(203, 213, 225, 0) 0%,
+    rgba(148, 163, 184, 0.48) 14%,
+    rgba(148, 163, 184, 0.62) 50%,
+    rgba(148, 163, 184, 0.48) 86%,
+    rgba(203, 213, 225, 0) 100%
   );
 }
 
 .debug-column-resizer:hover {
-  background: rgba(239, 246, 255, 0.68);
+  background: linear-gradient(180deg, rgba(239, 246, 255, 0.96) 0%, rgba(219, 234, 254, 0.9) 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(191, 219, 254, 0.85),
+    0 0 0 3px rgba(219, 234, 254, 0.26);
 }
 
 .debug-column-resizer:hover::before,
 .debug-column-resizer--active::before {
   background: linear-gradient(
     180deg,
-    rgba(147, 197, 253, 0.12) 0%,
-    rgba(59, 130, 246, 0.74) 12%,
-    rgba(59, 130, 246, 0.74) 88%,
-    rgba(147, 197, 253, 0.12) 100%
+    rgba(147, 197, 253, 0) 0%,
+    rgba(59, 130, 246, 0.7) 14%,
+    rgba(37, 99, 235, 0.95) 50%,
+    rgba(59, 130, 246, 0.7) 86%,
+    rgba(147, 197, 253, 0) 100%
   );
 }
 
 .debug-column-resizer__grip {
   position: relative;
   z-index: 1;
-  width: 4px;
-  height: 34px;
+  width: 10px;
+  height: 78px;
   border-radius: 999px;
-  background: repeating-linear-gradient(
-    180deg,
-    rgba(148, 163, 184, 0.92) 0 4px,
-    transparent 4px 8px
-  );
-  opacity: 0.72;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.96) 100%);
+  box-shadow:
+    0 10px 18px rgba(148, 163, 184, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.96);
+  opacity: 0.98;
   transition:
     opacity 0.18s ease,
     background 0.18s ease,
-    transform 0.18s ease;
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    border-color 0.18s ease;
+}
+
+.debug-column-resizer__grip::before {
+  content: "";
+  position: absolute;
+  inset: 15px 3px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(203, 213, 225, 0.16) 0%, rgba(148, 163, 184, 0.5) 100%);
 }
 
 .debug-column-resizer:hover .debug-column-resizer__grip,
 .debug-column-resizer--active .debug-column-resizer__grip {
   opacity: 1;
-  transform: scaleY(1.02);
-  background: repeating-linear-gradient(
-    180deg,
-    rgba(59, 130, 246, 0.92) 0 4px,
-    transparent 4px 8px
-  );
+  transform: scale(1.04);
+  border-color: rgba(147, 197, 253, 0.95);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.99) 0%, rgba(239, 246, 255, 0.98) 100%);
+  box-shadow:
+    0 14px 26px rgba(59, 130, 246, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.98);
+}
+
+.debug-column-resizer:hover .debug-column-resizer__grip::before,
+.debug-column-resizer--active .debug-column-resizer__grip::before {
+  background: linear-gradient(180deg, rgba(191, 219, 254, 0.22) 0%, rgba(59, 130, 246, 0.56) 100%);
+}
+
+.debug-column-resizer--active {
+  background: linear-gradient(180deg, rgba(239, 246, 255, 0.98) 0%, rgba(219, 234, 254, 0.94) 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(147, 197, 253, 0.96),
+    0 0 0 4px rgba(191, 219, 254, 0.26);
 }
 </style>

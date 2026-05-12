@@ -249,6 +249,7 @@ const sampleCountLabel = computed(() => {
   display: grid;
   grid-template-columns: minmax(0, 1.2fr) minmax(7rem, 0.8fr);
   gap: 0.65rem;
+  align-items: start;
 }
 
 .structured-preview__hero {
@@ -298,10 +299,11 @@ const sampleCountLabel = computed(() => {
 }
 
 .structured-preview__keys-card {
-  min-height: 7.9rem;
+  min-height: 9.4rem;
   padding: 0.78rem 0.78rem 0.72rem;
   display: flex;
   flex-direction: column;
+  gap: 0.55rem;
 }
 
 .structured-preview__panel-label {
@@ -313,24 +315,33 @@ const sampleCountLabel = computed(() => {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  max-height: 5.75rem;
+  height: 7.1rem;
   overflow: auto;
-  padding-right: 0.2rem;
+  padding-right: 0.28rem;
 }
 
 .structured-preview__key-pill {
-  padding: 0.45rem 0.65rem;
-  border-radius: 0.7rem;
-  background: #f8fafc;
+  display: flex;
+  align-items: center;
+  min-height: 2rem;
+  padding: 0.5rem 0.72rem;
+  border-radius: 0.82rem;
+  border: 1px solid rgba(226, 232, 240, 0.92);
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
   color: #334155;
   font-size: 11px;
   font-weight: 700;
   line-height: 1.3;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.88);
 }
 
 .structured-preview__key-pill:first-child {
-  background: var(--preview-primary-soft);
+  border-color: rgba(191, 219, 254, 0.98);
+  background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%);
   color: #1d4ed8;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 6px 16px rgba(37, 99, 235, 0.12);
 }
 
 .structured-preview__stats {
