@@ -609,6 +609,24 @@ describe('Node Definitions Execution Logic', () => {
       expect(legacy.stats.rowsRemovedByMissing).toBe(5)
     })
 
+    it('should treat missing target column keys as missing values when dropping rows', async () => {
+      const input = createTableResult([
+        { target: 1 },
+        { factor: 10, target: 2 },
+        { factor: null, target: 3 },
+      ])
+
+      const result = await dataMissingOutlierNode.execute(input, {
+        targetColumns: ['factor'],
+        missingValueStrategy: 'drop',
+        outlierMethod: 'none',
+      })
+
+      const legacy = asLegacy(result)
+      expect(legacy.data).toEqual([{ factor: 10, target: 2 }])
+      expect(legacy.stats.rowsRemovedByMissing).toBe(2)
+    })
+
     it('should fill broad missing values in target columns', async () => {
       const input = createTableResult([
         { factor: 10, target: 1 },

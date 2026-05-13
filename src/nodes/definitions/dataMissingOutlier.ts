@@ -131,7 +131,12 @@ export const dataMissingOutlierNode: NodeDefinition = {
       })
     }
 
-    const allFields = Object.keys(data[0])
+    const allFields = Array.from(
+      data.reduce((fieldSet: Set<string>, row: Record<string, unknown>) => {
+        Object.keys(row).forEach((field) => fieldSet.add(field))
+        return fieldSet
+      }, new Set<string>()),
+    )
     const targetFields =
       Array.isArray(config.targetColumns) && config.targetColumns.length > 0
         ? config.targetColumns.filter((field: string) => allFields.includes(field))

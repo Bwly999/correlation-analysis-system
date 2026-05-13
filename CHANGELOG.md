@@ -4,6 +4,10 @@
 
 ### 修复 (Fixed)
 
+- **修复缺失/异常值处理节点无法删除缺少目标字段键的数据行的问题**:
+  - `src/nodes/definitions/dataMissingOutlier.ts` 改为从整批数据汇总字段并集，不再只依赖首行字段，确保对象缺少目标字段 key 时也会按缺失值参与删除。
+  - `src/nodes/__tests__/nodeDefinitions.spec.ts` 补充回归测试，覆盖“首行缺少目标字段键”且按目标字段删除缺失行的场景。
+
 - **修复单调性分析热力图 tooltip 与摘要帮助说明**:
   - `src/nodes/definitions/correlation/shared.ts` 将单调性分析热力图的 hover 数据扩展为携带 `r / p / 样本量 / X字段 / Y字段` 的结构化对象，tooltip 现可同时展示相关系数、近似 `p` 值与样本量，同时保持热力图格内标签仍显示 `r`。
   - 同文件补充“分析摘要”帮助文案，新增 `r` 强弱区间与 `p` 显著性区间说明，并明确需要结合样本量一起解读。
