@@ -16,6 +16,14 @@ type PairDetail = {
   pValue: number | null
 }
 
+type CorrelationHeatmapDatum = {
+  value: [number, number, number]
+  pValue: number | null
+  sampleSize: number
+  xField: string
+  yField: string
+}
+
 type CorrelationMetrics = {
   numericFieldCount: number
   rowCount: number
@@ -740,6 +748,20 @@ export const executeCorrelationAnalysis = async (
       item.correlation,
     ] as [number, number, number])
 
+  const heatmapSeriesData = pairDetails
+    .filter((item) => heatmapXFields.includes(item.xField))
+    .map((item) => ({
+      value: [
+        heatmapXFields.indexOf(item.xField),
+        yFields.indexOf(item.yField),
+        item.correlation,
+      ] as [number, number, number],
+      pValue: item.pValue,
+      sampleSize: item.sampleSize,
+      xField: item.xField,
+      yField: item.yField,
+    })) as CorrelationHeatmapDatum[]
+
   const validPairs = pairDetails.filter((item) => item.sampleSize >= 4)
   const strongRelationCount = validPairs.filter((item) => Math.abs(item.correlation) >= 0.6).length
   const significantRelationCount = validPairs.filter(
@@ -790,11 +812,25 @@ export const executeCorrelationAnalysis = async (
   const heatmapOption = {
     tooltip: {
       position: 'top',
-      formatter: (params: { data: [number, number, number] }) => {
-        const [xIndex, yIndex, value] = params.data
-        const xLabel = heatmapXFields[xIndex] ?? ''
-        const yLabel = yFields[yIndex] ?? ''
-        return `${yLabel} vs ${xLabel}<br/>r = ${value}`
+      formatter: (params: { data: CorrelationHeatmapDatum | [number, number, number] }) => {
+        const datum = Array.isArray(params.data)
+          ? {
+              value: params.data,
+              pValue: null,
+              sampleSize: 0,
+              xField: heatmapXFields[params.data[0] ?? -1] ?? '',
+              yField: yFields[params.data[1] ?? -1] ?? '',
+            }
+          : params.data
+        const [xIndex, yIndex, value] = datum.value
+        const xLabel = datum.xField || heatmapXFields[xIndex] || ''
+        const yLabel = datum.yField || yFields[yIndex] || ''
+        return [
+          `${yLabel} vs ${xLabel}`,
+          `r = ${value}`,
+          `近似 p = ${formatPValue(datum.pValue)}`,
+          `样本量 = ${datum.sampleSize || '--'}`,
+        ].join('<br/>')
       },
     },
     grid: { top: 72, left: 90, right: 20, bottom: 70 },
@@ -823,10 +859,13 @@ export const executeCorrelationAnalysis = async (
       {
         name: meta.chartSeriesName,
         type: 'heatmap',
-        data: heatmapMatrixData,
+        data: heatmapSeriesData,
         label: {
           show: true,
-          formatter: (params: { data: [number, number, number] }) => params.data[2].toFixed(2),
+          formatter: (params: { data: CorrelationHeatmapDatum | [number, number, number] }) => {
+            const value = Array.isArray(params.data) ? params.data[2] : params.data.value[2]
+            return value.toFixed(2)
+          },
           color: '#0f172a',
           fontSize: 11,
         },
@@ -888,8 +927,15 @@ export const executeCorrelationAnalysis = async (
           content: summaryLines.join('\n'),
           help: {
             summary: '整体说明本次相关性计算覆盖的样本、X/Y 字段数量和风险数量。',
-            howToRead: ['先确认样本量与字段数量是否符合预期，再结合风险提示判断结果是否稳定。'],
-            cautions: ['相关性只能说明变量共同变化方向和强弱，不能直接证明因果关系。'],
+            howToRead: [
+              '先确认样本量与字段数量是否符合预期，再结合风险提示判断结果是否稳定。',
+              'r 用来看方向和强弱，p 用来看统计显著性，解读时需要把二者和样本量一起看。',
+            ],
+            cautions: [
+              '|r| < 0.2 通常表示很弱；0.2 <= |r| < 0.4 表示较弱；0.4 <= |r| < 0.6 表示中等；0.6 <= |r| < 0.8 表示较强；|r| >= 0.8 表示很强。',
+              'p >= 0.05 通常认为不显著；0.01 <= p < 0.05 表示显著；0.001 <= p < 0.01 表示高度显著；p < 0.001 表示极显著。',
+              '相关性只能说明变量共同变化方向和强弱，不能直接证明因果关系。',
+            ],
           },
         },
         {

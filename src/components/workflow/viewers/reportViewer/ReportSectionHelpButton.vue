@@ -34,7 +34,6 @@ const tooltipText = computed(() => {
     v-tooltip.bottom="tooltipText"
     :data-test="`report-section-help-${sectionKey}`"
     :aria-label="`查看${title || '该区块'}说明`"
-    :title="tooltipText"
     class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600"
     type="button"
   >

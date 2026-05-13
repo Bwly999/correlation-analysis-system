@@ -4,6 +4,12 @@
 
 ### 修复 (Fixed)
 
+- **修复单调性分析热力图 tooltip 与摘要帮助说明**:
+  - `src/nodes/definitions/correlation/shared.ts` 将单调性分析热力图的 hover 数据扩展为携带 `r / p / 样本量 / X字段 / Y字段` 的结构化对象，tooltip 现可同时展示相关系数、近似 `p` 值与样本量，同时保持热力图格内标签仍显示 `r`。
+  - 同文件补充“分析摘要”帮助文案，新增 `r` 强弱区间与 `p` 显著性区间说明，并明确需要结合样本量一起解读。
+  - `src/components/workflow/viewers/reportViewer/ReportSectionHelpButton.vue` 移除原生 `title` 属性，修复帮助 `?` 图标同时出现黑底自定义 tooltip 和白底浏览器原生 tooltip 的重复问题。
+  - `src/nodes/__tests__/nodeDefinitions.spec.ts` 与 `src/components/workflow/__tests__/ReportViewer.spec.ts` 补充回归测试，覆盖热力图 tooltip 元数据、摘要帮助分层说明以及帮助按钮不再输出原生 tooltip。
+
 - **修复 JS 代码执行节点 Monaco 编辑器在生产环境下缺少代码提示的问题**:
   - `src/components/workflow/monacoEnvironment.ts` 新增 Monaco worker 初始化入口，统一通过 Vite 原生 `?worker` 方式装配 `editor/json/typescript` worker，避免子路径部署时 worker 走根路径绝对地址而加载失败。
   - `src/components/workflow/MonacoEditor.vue` 在编辑器初始化前显式注册 `MonacoEnvironment.getWorker`，保留现有 `loader.config({ monaco })` 和 `javascriptDefaults.addExtraLib` 声明注入逻辑，确保 `JS代码执行` 节点在 build 后仍能获得 `rows` 声明提示与基础补全。

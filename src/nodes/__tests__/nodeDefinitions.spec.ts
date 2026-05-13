@@ -1673,10 +1673,50 @@ describe('Node Definitions Execution Logic', () => {
       expect(legacy.report.title).toBe('单调性分析')
       expect(legacy.report.metadata.method).toBe('pearson')
       expect(legacy.report.sections[0].type).toBe('summary')
+      expect(legacy.report.sections[0].help?.howToRead?.join(' ')).toContain('r')
+      expect(legacy.report.sections[0].help?.howToRead?.join(' ')).toContain('p')
+      expect(legacy.report.sections[0].help?.cautions?.join(' ')).toContain('|r| < 0.2')
+      expect(legacy.report.sections[0].help?.cautions?.join(' ')).toContain('p >= 0.05')
       expect(legacy.report.sections[1].key).toBe('matrix')
       expect(legacy.report.sections[1].help?.howToRead[0]).toContain('颜色')
       expect(legacy.metrics.method).toBe('pearson')
       expect(result.preview?.viewer).toBe('report-viewer')
+    })
+
+    it('should expose heatmap tooltip metadata for correlation analysis', async () => {
+      const input = createTableResult([
+        { target: 1, f1: 1, f2: 10 },
+        { target: 2, f1: 2, f2: 8 },
+        { target: 3, f1: 3, f2: 6 },
+        { target: 4, f1: 4, f2: 4 },
+        { target: 5, f1: 5, f2: 2 },
+      ])
+
+      const result = await correlationAnalysisNode.execute(input, {
+        xFields: ['f1', 'f2'],
+        yFields: ['target'],
+        heatmapTopN: 2,
+        rankingTopN: 2,
+      })
+
+      const legacy = asLegacy(result)
+      const heatmapData = legacy.report.sections[1].option.series[0].data
+      const firstCell = heatmapData[0]
+      const tooltipFormatter = legacy.report.sections[1].option.tooltip.formatter as (
+        params: Record<string, unknown>,
+      ) => string
+      const tooltipHtml = tooltipFormatter({ data: firstCell })
+
+      expect(firstCell).toMatchObject({
+        value: [0, 0, 1],
+        xField: 'f1',
+        yField: 'target',
+        sampleSize: 5,
+      })
+      expect(firstCell.pValue).toBeTypeOf('number')
+      expect(tooltipHtml).toContain('r = 1')
+      expect(tooltipHtml).toContain('近似 p')
+      expect(tooltipHtml).toContain('样本量 = 5')
     })
 
     it('should respect separate heatmap and ranking factor limits and keep topN backward compatibility', async () => {

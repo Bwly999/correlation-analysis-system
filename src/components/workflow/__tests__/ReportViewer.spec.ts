@@ -350,6 +350,7 @@ describe('ReportViewer', () => {
     expect(helpButton.attributes('data-tooltip-value')).toContain('怎么看：先看样本量，再看风险提示。')
     expect(helpButton.attributes('data-tooltip-value')).toContain('注意：样本过少时不要过度解读。')
     expect(tooltipValues).toHaveLength(1)
+    expect(helpButton.attributes('title')).toBeUndefined()
     expect(wrapper.find('[data-test="report-section-help-details"]').exists()).toBe(false)
   })
 
