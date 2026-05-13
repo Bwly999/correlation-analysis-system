@@ -247,6 +247,7 @@ export const logisticRegressionClassificationNode: NodeDefinition<
       displayName: '测试集占比',
       type: 'number',
       default: 0.2,
+      numberMode: 'decimal',
       description: '控制训练/测试集切分比例，默认 0.2。',
     },
     {
@@ -254,6 +255,7 @@ export const logisticRegressionClassificationNode: NodeDefinition<
       displayName: '正则化强度',
       type: 'number',
       default: 1,
+      numberMode: 'decimal',
       description: '对应逻辑回归中的 C 参数，值越大正则化越弱。',
     },
     {

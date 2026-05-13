@@ -415,6 +415,7 @@ export const classificationFactorScreeningNode: NodeDefinition<unknown, Screenin
       displayName: '显著性阈值',
       type: 'number',
       default: 0.05,
+      numberMode: 'decimal',
       description: '用于判断单因子结果是否显著，默认 0.05。',
     },
     {

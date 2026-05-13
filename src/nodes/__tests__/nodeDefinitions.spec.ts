@@ -58,6 +58,8 @@ import { lassoNode } from '../definitions/lasso'
 import { multipleLinearRegressionNode } from '../definitions/multipleLinearRegression'
 import { pcaNode } from '../definitions/pca'
 import { randomForestFeatureImportanceNode } from '../definitions/randomForestFeatureImportance'
+import { logisticRegressionClassificationNode } from '../definitions/logisticRegressionClassification'
+import { classificationFactorScreeningNode } from '../definitions/classificationFactorScreening'
 import { correlationAnalysisNode } from '../definitions/correlationAnalysis'
 import { pearsonNode } from '../definitions/pearson'
 import { sortNode } from '../definitions/sort'
@@ -253,6 +255,7 @@ describe('Node Definitions Execution Logic', () => {
       type: 'number',
       displayName: 'IQR 倍数',
       default: 1.5,
+      numberMode: 'decimal',
     })
     expect(iqrThresholdProperty?.displayIf?.({ outlierMethod: 'iqr' })).toBe(true)
     expect(iqrThresholdProperty?.displayIf?.({ outlierMethod: 'none' })).toBe(false)
@@ -260,6 +263,7 @@ describe('Node Definitions Execution Logic', () => {
       type: 'number',
       displayName: '预估异常比例',
       default: 0.05,
+      numberMode: 'decimal',
     })
     expect(outlierContaminationProperty?.displayIf?.({ outlierMethod: 'isolation_forest' })).toBe(
       true,
@@ -313,6 +317,7 @@ describe('Node Definitions Execution Logic', () => {
       displayName: '学习率',
       default: 0.05,
       group: '高级参数',
+      numberMode: 'decimal',
     })
     expect(properties.maxDepth).toMatchObject({
       type: 'number',
@@ -325,6 +330,7 @@ describe('Node Definitions Execution Logic', () => {
       displayName: '测试集比例',
       default: 0.2,
       group: '高级参数',
+      numberMode: 'decimal',
     })
     expect(properties.randomSeed).toMatchObject({
       type: 'number',
@@ -349,6 +355,7 @@ describe('Node Definitions Execution Logic', () => {
       displayName: '自动调参阈值',
       default: 0.6,
       group: '高级参数',
+      numberMode: 'decimal',
     })
     expect(properties.tuningIterations).toMatchObject({
       type: 'number',
@@ -502,6 +509,49 @@ describe('Node Definitions Execution Logic', () => {
   it('should expose the unified correlation node as monotonicity analysis', () => {
     expect(correlationAnalysisNode.displayName).toBe('单调性分析')
     expect(correlationAnalysisNode.description).toBe('分析因子与目标值的单调性关系。')
+  })
+
+  it('should mark decimal analysis thresholds and keep integer counts unchanged', () => {
+    const logisticTestSize = logisticRegressionClassificationNode.properties.find(
+      (property) => property.name === 'testSize',
+    )
+    const logisticRegularizationStrength = logisticRegressionClassificationNode.properties.find(
+      (property) => property.name === 'regularizationStrength',
+    )
+    const screeningAlpha = classificationFactorScreeningNode.properties.find(
+      (property) => property.name === 'alpha',
+    )
+    const screeningMaxResultCount = classificationFactorScreeningNode.properties.find(
+      (property) => property.name === 'maxResultCount',
+    )
+    const dataMissingIqrK = dataMissingOutlierNode.properties.find(
+      (property) => property.name === 'iqrK',
+    )
+    const dataMissingPercentile = dataMissingOutlierNode.properties.find(
+      (property) => property.name === 'percentile',
+    )
+    const manualRangeRules = dataMissingOutlierNode.properties.find(
+      (property) => property.name === 'manualRangeRules',
+    )
+    const lowerBound = manualRangeRules?.properties?.find((property) => property.name === 'lowerBound')
+    const upperBound = manualRangeRules?.properties?.find((property) => property.name === 'upperBound')
+    const dataCleaningIqrK = dataCleaningNode.properties.find((property) => property.name === 'iqrK')
+    const dataCleaningPercentile = dataCleaningNode.properties.find(
+      (property) => property.name === 'percentile',
+    )
+    const xgboostTreeCount = xgboostShapNode.properties.find((property) => property.name === 'nEstimators')
+
+    expect(logisticTestSize?.numberMode).toBe('decimal')
+    expect(logisticRegularizationStrength?.numberMode).toBe('decimal')
+    expect(screeningAlpha?.numberMode).toBe('decimal')
+    expect(screeningMaxResultCount?.numberMode).toBeUndefined()
+    expect(dataMissingIqrK?.numberMode).toBe('decimal')
+    expect(dataMissingPercentile?.numberMode).toBe('decimal')
+    expect(lowerBound?.numberMode).toBe('decimal')
+    expect(upperBound?.numberMode).toBe('decimal')
+    expect(dataCleaningIqrK?.numberMode).toBe('decimal')
+    expect(dataCleaningPercentile?.numberMode).toBe('decimal')
+    expect(xgboostTreeCount?.numberMode).toBeUndefined()
   })
 
   describe('split cleaning nodes', () => {

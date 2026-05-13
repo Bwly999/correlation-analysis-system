@@ -864,6 +864,71 @@ describe('PropertyField', () => {
     expect(requiredWrapper.text()).toContain('*')
   })
 
+  it('number 属性默认按整数模式渲染 InputNumber', () => {
+    setActivePinia(createPinia())
+
+    const wrapper = mount(PropertyField, {
+      props: {
+        prop: {
+          name: 'topN',
+          displayName: '重点展示因子数',
+          type: 'number',
+          default: 8,
+        },
+        modelValue: 8,
+        upstreamFactors: [],
+      },
+      global: {
+        directives: {
+          tooltip: () => undefined,
+        },
+        stubs: {
+          InputNumber: {
+            props: ['modelValue', 'step', 'maxFractionDigits'],
+            template:
+              '<div class="input-number-mode">{{ modelValue }}|{{ step }}|{{ maxFractionDigits }}</div>',
+          },
+        },
+      },
+    })
+
+    expect(wrapper.find('.input-number-mode').text()).toBe('8|1|0')
+  })
+
+  it('number 属性声明 decimal 模式后传递小数配置给 InputNumber', () => {
+    setActivePinia(createPinia())
+
+    const wrapper = mount(PropertyField, {
+      props: {
+        prop: {
+          name: 'learningRate',
+          displayName: '学习率',
+          type: 'number',
+          default: 0.05,
+          numberMode: 'decimal',
+          step: 0.001,
+          maxFractionDigits: 4,
+        },
+        modelValue: 0.05,
+        upstreamFactors: [],
+      },
+      global: {
+        directives: {
+          tooltip: () => undefined,
+        },
+        stubs: {
+          InputNumber: {
+            props: ['modelValue', 'step', 'maxFractionDigits'],
+            template:
+              '<div class="input-number-mode">{{ modelValue }}|{{ step }}|{{ maxFractionDigits }}</div>',
+          },
+        },
+      },
+    })
+
+    expect(wrapper.find('.input-number-mode').text()).toBe('0.05|0.001|4')
+  })
+
   it('为分析字段在缺少上游可选字段时展示紧凑空状态提示', () => {
     setActivePinia(createPinia())
 

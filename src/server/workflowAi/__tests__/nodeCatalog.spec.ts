@@ -105,4 +105,26 @@ describe('buildServerWorkflowAiNodeCatalog', () => {
     const outlierMethod = item?.properties.find((property) => property.name === 'outlierMethod')
     expect(outlierMethod?.description).toContain('manual_range')
   })
+
+  it('exposes decimal number metadata in server-safe node catalogs', () => {
+    const catalog = buildServerWorkflowAiNodeCatalog()
+    const dataMissingOutlier = catalog.find((item) => item.name === 'data-missing-outlier')
+    const pearson = catalog.find((item) => item.name === 'pearson')
+    const iqrK = dataMissingOutlier?.properties.find((property) => property.name === 'iqrK')
+    const percentile = dataMissingOutlier?.properties.find((property) => property.name === 'percentile')
+    const heatmapTopN = pearson?.properties.find((property) => property.name === 'heatmapTopN')
+
+    expect(iqrK).toMatchObject({
+      type: 'number',
+      numberMode: 'decimal',
+    })
+    expect(percentile).toMatchObject({
+      type: 'number',
+      numberMode: 'decimal',
+    })
+    expect(heatmapTopN).toMatchObject({
+      type: 'number',
+    })
+    expect(heatmapTopN).not.toHaveProperty('numberMode')
+  })
 })

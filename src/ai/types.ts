@@ -19,6 +19,9 @@ export interface WorkflowAiNodeCatalogItem {
     isRuntimeInput: boolean
     defaultValue: unknown
     description: string
+    numberMode?: 'integer' | 'decimal'
+    step?: number
+    maxFractionDigits?: number
   }>
   help: unknown
   assistantHints: unknown

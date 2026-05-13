@@ -85,6 +85,7 @@ export const dataCleaningNode: NodeDefinition = {
       displayName: 'IQR 系数 (k)',
       type: 'number',
       default: 1.5,
+      numberMode: 'decimal',
       displayIf: (config) => config.outlierMethod === 'iqr',
       description:
         'IQR 方法的系数。通常 1.5 用于检测中度异常，3.0 用于检测极端异常。值越大，保留的数据越多。',
@@ -94,6 +95,7 @@ export const dataCleaningNode: NodeDefinition = {
       displayName: '剔除比例 (%)',
       type: 'number',
       default: 1,
+      numberMode: 'decimal',
       displayIf: (config) => config.outlierMethod === 'percentile',
       description:
         '从数据两端剔除的比例。例如输入 1 表示剔除最小的 1% 和最大的 1% 数据。范围建议 0.5 - 5。',

@@ -73,6 +73,7 @@ export const dataMissingOutlierNode: NodeDefinition = {
       displayName: 'IQR 系数 (k)',
       type: 'number',
       default: 1.5,
+      numberMode: 'decimal',
       displayIf: (config) => config.outlierMethod === 'iqr',
     },
     {
@@ -80,6 +81,7 @@ export const dataMissingOutlierNode: NodeDefinition = {
       displayName: '剔除比例 (%)',
       type: 'number',
       default: 1,
+      numberMode: 'decimal',
       displayIf: (config) => config.outlierMethod === 'percentile',
     },
     {
@@ -105,6 +107,7 @@ export const dataMissingOutlierNode: NodeDefinition = {
           displayName: '下限(>)',
           type: 'number',
           default: null,
+          numberMode: 'decimal',
           description: '留空表示不设下限。',
         },
         {
@@ -112,6 +115,7 @@ export const dataMissingOutlierNode: NodeDefinition = {
           displayName: '上限(<)',
           type: 'number',
           default: null,
+          numberMode: 'decimal',
           description: '留空表示不设上限。',
         },
       ],

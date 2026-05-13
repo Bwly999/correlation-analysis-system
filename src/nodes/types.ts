@@ -57,6 +57,9 @@ export interface NodeProperty {
   default?: any
   description?: string
   group?: string
+  numberMode?: 'integer' | 'decimal'
+  step?: number
+  maxFractionDigits?: number
   placeholder?: string
   editorLanguage?: 'json' | 'javascript' | 'typescript'
   editorDeclarations?: string

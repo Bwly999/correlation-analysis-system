@@ -223,10 +223,12 @@ const SERVER_SAFE_NODE_CATALOG: WorkflowAiNodeCatalogItem[] = [
       }),
       createProperty('iqrK', 'IQR 系数', 'number', {
         defaultValue: 1.5,
+        numberMode: 'decimal',
         description: 'outlierMethod=iqr 时生效。',
       }),
       createProperty('percentile', '剔除比例(%)', 'number', {
         defaultValue: 1,
+        numberMode: 'decimal',
         description: 'outlierMethod=percentile 时生效。',
       }),
       createProperty('manualRangeRules', '手动区间规则', 'collection', {
@@ -621,6 +623,11 @@ export const buildServerWorkflowAiNodeCatalog = (): WorkflowAiNodeCatalogItem[] 
       isRuntimeInput: property.isRuntimeInput,
       defaultValue: property.defaultValue,
       description: property.description,
+      ...(property.numberMode ? { numberMode: property.numberMode } : {}),
+      ...(typeof property.step === 'number' ? { step: property.step } : {}),
+      ...(typeof property.maxFractionDigits === 'number'
+        ? { maxFractionDigits: property.maxFractionDigits }
+        : {}),
     })),
     assistantHints: item.assistantHints
       ? {

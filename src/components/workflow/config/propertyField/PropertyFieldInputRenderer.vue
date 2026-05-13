@@ -175,7 +175,24 @@ const rendererDefinitions = computed<Record<NonCollectionPropertyType, PropertyF
 
 const resolvedRenderer = computed(() => rendererDefinitions.value[props.prop.type as NonCollectionPropertyType] ?? null)
 const resolvedComponent = computed(() => resolvedRenderer.value?.component ?? null)
-const resolvedProps = computed(() => resolvedRenderer.value?.buildProps() ?? {})
+const resolvedProps = computed(() => {
+  const baseProps = resolvedRenderer.value?.buildProps() ?? {}
+  if (props.prop.type !== 'number') return baseProps
+
+  if (props.prop.numberMode === 'decimal') {
+    return {
+      ...baseProps,
+      step: props.prop.step ?? 0.01,
+      maxFractionDigits: props.prop.maxFractionDigits ?? 6,
+    }
+  }
+
+  return {
+    ...baseProps,
+    step: 1,
+    maxFractionDigits: 0,
+  }
+})
 </script>
 
 <template>

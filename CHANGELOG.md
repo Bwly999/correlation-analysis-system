@@ -4,6 +4,15 @@
 
 ### 变更 (Changed)
 
+- **支持节点数字参数按需切换整数 / 小数输入模式**:
+  - `src/nodes/types.ts`、`src/ai/types.ts` 与 `src/server/workflowAi/nodeCatalog.ts` 为 `number` 属性补充 `numberMode`、`step`、`maxFractionDigits` 元数据，统一支持整数与小数两种输入语义。
+  - `src/components/workflow/config/propertyField/PropertyFieldInputRenderer.vue` 按数字属性元数据集中配置 PrimeVue `InputNumber`，默认保持整数模式，小数场景可复用同一组件渲染链路。
+  - `src/nodes/definitions/xgboostShap.ts`、`src/nodes/definitions/logisticRegressionClassification.ts`、`src/nodes/definitions/classificationFactorScreening.ts`、`src/nodes/definitions/dataMissingOutlier.ts` 与 `src/nodes/definitions/dataCleaning.ts` 将学习率、测试比例、阈值、边界值、正则强度等字段切换为小数模式，同时保留计数类参数的整数约束。
+  - `src/components/workflow/config/__tests__/PropertyField.spec.ts`、`src/nodes/__tests__/nodeDefinitions.spec.ts` 与 `src/server/workflowAi/__tests__/nodeCatalog.spec.ts` 补充回归测试，覆盖默认整数行为、小数模式透传以及节点目录元数据同步。
+  - `工作流节点说明.md` 同步补充 `NodeProperty` 数字属性设计规则，明确整数 / 小数模式的使用边界。
+
+### 变更 (Changed)
+
 - **收敛图表结果预览并下线 `chart-display` 新建入口**:
   - `src/components/workflow/DataChart.vue` 扩展结果预览图表能力，单表统一支持折线云图、散点图、柱状图、箱线分布和正态分布，多组结果支持箱线图、多组散点图和多组柱状图。
   - `src/nodes/result.ts`、`src/components/workflow/resultView.ts` 与 `src/nodes/definitions/dataAggregation.ts` 新增 `preview.props.chartDefaults` 首开图表提示协议，聚合结果可直接引导预览进入更合适的对比图。
