@@ -33,7 +33,10 @@ import {
   calculateBoxplotStats,
   type BoxplotWhiskerMode,
 } from '@/utils/stats'
-import { useScopedResultPreviewStorage } from './useScopedResultPreviewStorage'
+import {
+  buildScopedResultPreviewStorageKey,
+  useScopedResultPreviewStorage,
+} from './useScopedResultPreviewStorage'
 import { useWorkflowOverlayHost } from './workflowOverlayHost'
 import SearchAppendMultiSelect from './common/SearchAppendMultiSelect.vue'
 import {
@@ -49,7 +52,13 @@ import {
   getRenderableNumericFieldsFromRows,
 } from './dataChartSeriesFiltering'
 import { getCommonNumericFieldsFromGroups } from './groupedResultSchema'
-import { getResultGroups, getResultRows, getResultSchemaFields } from './resultView'
+import {
+  getResultGroups,
+  getResultPreviewChartDefaults,
+  getResultRows,
+  getResultSchemaFields,
+} from './resultView'
+import type { PreviewChartMode } from '@/nodes/result'
 
 use([
   CanvasRenderer,
@@ -79,11 +88,17 @@ type ChartFilterPreset = {
   updatedAt: number
 }
 
+type GroupedChartType = 'boxplot' | 'grouped-scatter' | 'grouped-bar'
+type TableChartType = 'line' | 'scatter' | 'bar' | 'boxplot' | 'normal'
+type ChartType = TableChartType | GroupedChartType
+
 const LINE_CHART_RENDER_LIMIT = 1200
 const NORMAL_DISTRIBUTION_BIN_COUNT = 20
 const NORMAL_DISTRIBUTION_CURVE_POINTS = 80
 const NORMAL_DISTRIBUTION_COLUMNS = 2
 const BOX_PLOT_COLORS = ['#2563eb', '#10b981', '#f59e0b', '#f43f5e', '#06b6d4', '#475569']
+const TABLE_CHART_TYPES: TableChartType[] = ['line', 'scatter', 'bar', 'boxplot', 'normal']
+const GROUPED_CHART_TYPES: GroupedChartType[] = ['boxplot', 'grouped-scatter', 'grouped-bar']
 
 const props = defineProps<{
   data: unknown
@@ -91,9 +106,20 @@ const props = defineProps<{
 }>()
 const { overlayAppendTo } = useWorkflowOverlayHost()
 
-const chartType = useScopedResultPreviewStorage(props.storageScopeKey, 'chart-type', 'line')
+const hasStoredScopedSlice = (slice: string) => {
+  const storageKey = buildScopedResultPreviewStorageKey(props.storageScopeKey, slice)
+  if (!storageKey || typeof window === 'undefined') return false
+  return window.localStorage.getItem(storageKey) !== null
+}
+
+const hadStoredChartTypeAtMount = hasStoredScopedSlice('chart-type')
+const hadStoredSelectedKeysAtMount = hasStoredScopedSlice('chart-selected-keys')
+const hadStoredXAxisFieldAtMount = hasStoredScopedSlice('chart-x-field')
+
+const chartType = useScopedResultPreviewStorage<ChartType>(props.storageScopeKey, 'chart-type', 'line')
 const maxPoints = useScopedResultPreviewStorage(props.storageScopeKey, 'chart-max-points', 5000)
 const selectedKeys = useScopedResultPreviewStorage<string[]>(props.storageScopeKey, 'chart-selected-keys', [])
+const xField = useScopedResultPreviewStorage<string | null>(props.storageScopeKey, 'chart-x-field', null)
 const lowerBound = useScopedResultPreviewStorage<number | null>(props.storageScopeKey, 'chart-lower-bound', null)
 const upperBound = useScopedResultPreviewStorage<number | null>(props.storageScopeKey, 'chart-upper-bound', null)
 const viewMode = useScopedResultPreviewStorage<'raw' | 'normalized'>(props.storageScopeKey, 'chart-view-mode', 'raw')
@@ -130,6 +156,29 @@ const chartUpdateOptions = markRaw({
   notMerge: true,
   lazyUpdate: true,
 })
+const hasAppliedInitialChartState = shallowRef(false)
+
+const isGroupedChartType = (value: string): value is GroupedChartType =>
+  GROUPED_CHART_TYPES.includes(value as GroupedChartType)
+
+const isTableChartType = (value: string): value is TableChartType =>
+  TABLE_CHART_TYPES.includes(value as TableChartType)
+
+const normalizeLegacyTableChartType = (value: string): TableChartType | null => {
+  if (value === 'histogram') return 'normal'
+  return isTableChartType(value) ? value : null
+}
+
+const usesSampling = computed(() => chartType.value === 'line')
+const supportsNormalizationForChartType = computed(() =>
+  chartType.value === 'line' || chartType.value === 'boxplot' || chartType.value === 'normal',
+)
+const requiresXAxisField = computed(
+  () =>
+    chartType.value === 'scatter'
+    || chartType.value === 'bar'
+    || chartType.value === 'grouped-scatter',
+)
 
 const boxplotWhiskerModeOptions = [
   { label: '1.5 IQR', value: 'iqr' as const },
@@ -236,19 +285,36 @@ const hasRenderableData = computed(() => groupedData.value.length > 0 || tableRo
 
 const chartTypes = computed(() => {
   if (isGroupedData.value) {
-    return [{ label: '多组因子对比', value: 'boxplot', icon: markRaw(Layers) }]
+    return [
+      { label: '多组因子对比', value: 'boxplot' as const, icon: markRaw(Layers) },
+      { label: '多组散点图', value: 'grouped-scatter' as const, icon: markRaw(LineChartIcon) },
+      { label: '多组柱状图', value: 'grouped-bar' as const, icon: markRaw(BoxSelect) },
+    ]
   }
   return [
-    { label: '折线云图', value: 'line', icon: markRaw(LineChartIcon) },
-    { label: '箱线分布', value: 'boxplot', icon: markRaw(BoxSelect) },
-    { label: '正态分布', value: 'normal', icon: markRaw(LineChartIcon) },
+    { label: '折线云图', value: 'line' as const, icon: markRaw(LineChartIcon) },
+    { label: '散点图', value: 'scatter' as const, icon: markRaw(LineChartIcon) },
+    { label: '柱状图', value: 'bar' as const, icon: markRaw(BoxSelect) },
+    { label: '箱线分布', value: 'boxplot' as const, icon: markRaw(BoxSelect) },
+    { label: '正态分布', value: 'normal' as const, icon: markRaw(LineChartIcon) },
   ]
 })
 
 watch(
   isGroupedData,
   (grouped) => {
-    if (grouped) chartType.value = 'boxplot'
+    if (grouped) {
+      if (!isGroupedChartType(chartType.value)) chartType.value = 'boxplot'
+      return
+    }
+
+    const normalizedChartType = normalizeLegacyTableChartType(String(chartType.value))
+    if (normalizedChartType && normalizedChartType !== chartType.value) {
+      chartType.value = normalizedChartType
+      return
+    }
+
+    if (!isTableChartType(String(chartType.value))) chartType.value = 'line'
   },
   { immediate: true },
 )
@@ -264,6 +330,149 @@ const availableKeys = computed(() => {
   return getRenderableNumericFieldsFromRows(tableRows.value, schemaFields)
 })
 
+const schemaFields = computed(() => getResultSchemaFields(props.data))
+
+const allFieldNames = computed(() => {
+  if (schemaFields.value.length > 0) {
+    return schemaFields.value.map((field) => field.name)
+  }
+
+  const fieldNames = new Set<string>()
+  tableRows.value.forEach((row) => {
+    Object.keys(row).forEach((field) => fieldNames.add(field))
+  })
+  return [...fieldNames]
+})
+
+const categoricalFieldNames = computed(() => {
+  if (schemaFields.value.length > 0) {
+    return schemaFields.value
+      .filter((field) => field.type !== 'number' && !availableKeys.value.includes(field.name))
+      .map((field) => field.name)
+  }
+
+  return allFieldNames.value.filter((field) => !availableKeys.value.includes(field))
+})
+
+const availableXAxisOptions = computed(() => {
+  if (isGroupedData.value) {
+    if (chartType.value === 'grouped-scatter') return availableKeys.value
+    return []
+  }
+
+  if (chartType.value === 'scatter') return availableKeys.value
+  if (chartType.value === 'bar') return allFieldNames.value
+  return []
+})
+
+const previewChartDefaults = computed(() => getResultPreviewChartDefaults(props.data))
+
+const hasAnyStoredChartState = () =>
+  hadStoredChartTypeAtMount || hadStoredSelectedKeysAtMount || hadStoredXAxisFieldAtMount
+
+const resolveInitialChartState = () => {
+  const numericKeys = availableKeys.value
+  const firstNumericKey = numericKeys[0] ?? null
+  const previewDefaults = previewChartDefaults.value
+
+  if (previewDefaults) {
+    if (isGroupedData.value) {
+      const previewMode = previewDefaults.mode
+      if (isGroupedChartType(previewMode)) {
+        const resolvedYFields = (previewDefaults.yFields ?? []).filter((field) => numericKeys.includes(field))
+        const resolvedSelectedKeys = resolvedYFields.length > 0
+          ? [resolvedYFields[0]!]
+          : firstNumericKey
+            ? [firstNumericKey]
+            : []
+        const resolvedXAxis =
+          typeof previewDefaults.xField === 'string' && previewDefaults.xField.length > 0
+            ? previewDefaults.xField
+            : null
+
+        return {
+          chartType: previewMode,
+          selectedKeys: resolvedSelectedKeys,
+          xField: resolvedXAxis,
+        }
+      }
+    } else {
+      const previewMode = normalizeLegacyTableChartType(previewDefaults.mode)
+      if (previewMode) {
+        const resolvedYFields = (previewDefaults.yFields ?? []).filter((field) => numericKeys.includes(field))
+        const resolvedSelectedKeys =
+          resolvedYFields.length > 0
+            ? (previewMode === 'line' || previewMode === 'boxplot' || previewMode === 'normal'
+              ? resolvedYFields
+              : [resolvedYFields[0]!])
+            : firstNumericKey
+              ? [firstNumericKey]
+              : []
+        const resolvedXAxis =
+          typeof previewDefaults.xField === 'string' && previewDefaults.xField.length > 0
+            ? previewDefaults.xField
+            : null
+
+        return {
+          chartType: previewMode,
+          selectedKeys: resolvedSelectedKeys,
+          xField: resolvedXAxis,
+        }
+      }
+    }
+
+    if (isGroupedData.value) {
+      const resolvedYFields = (previewDefaults.yFields ?? []).filter((field) => numericKeys.includes(field))
+      return {
+        chartType: 'boxplot' as ChartType,
+        selectedKeys: resolvedYFields.length > 0
+          ? [resolvedYFields[0]!]
+          : firstNumericKey
+            ? [firstNumericKey]
+            : [],
+        xField: null,
+      }
+    }
+  }
+
+  if (isGroupedData.value) {
+    return {
+      chartType: 'boxplot' as ChartType,
+      selectedKeys: firstNumericKey ? [firstNumericKey] : [],
+      xField: null,
+    }
+  }
+
+  return {
+    chartType: 'line' as ChartType,
+    selectedKeys: firstNumericKey ? [firstNumericKey] : [],
+    xField: null,
+  }
+}
+
+const applyInitialChartState = () => {
+  if (hasAppliedInitialChartState.value || !hasRenderableData.value) return
+
+  if (!hasAnyStoredChartState()) {
+    const initialState = resolveInitialChartState()
+    chartType.value = initialState.chartType
+    selectedKeys.value = initialState.selectedKeys
+    xField.value = initialState.xField
+  }
+
+  hasAppliedInitialChartState.value = true
+}
+
+applyInitialChartState()
+
+watch(
+  [hasRenderableData, availableKeys, allFieldNames],
+  () => {
+    applyInitialChartState()
+  },
+  { immediate: true },
+)
+
 watch(
   availableKeys,
   (newKeys) => {
@@ -275,6 +484,21 @@ watch(
     }
 
     if (newKeys.length > 0) selectedKeys.value = [newKeys[0]!]
+  },
+  { immediate: true },
+)
+
+watch(
+  [availableXAxisOptions, requiresXAxisField],
+  ([nextXAxisOptions, nextRequiresXAxisField]) => {
+    if (!nextRequiresXAxisField || nextXAxisOptions.length === 0) {
+      if (!nextRequiresXAxisField) xField.value = null
+      return
+    }
+
+    if (!xField.value || !nextXAxisOptions.includes(xField.value)) {
+      xField.value = nextXAxisOptions[0] ?? null
+    }
   },
   { immediate: true },
 )
@@ -322,7 +546,9 @@ const normalizationSourceRows = computed(() => {
   return filteredData.value as ChartRow[]
 })
 
-const supportsNormalization = computed(() => normalizedKeys.value.length > 0)
+const supportsNormalization = computed(
+  () => normalizedKeys.value.length > 0 && supportsNormalizationForChartType.value,
+)
 
 const normalizationStats = computed(() => {
   if (!supportsNormalization.value) return buildNormalizationStats([], [])
@@ -438,6 +664,14 @@ const toRgba = (hexColor: string, alpha: number) => {
   const blue = Number.parseInt(sanitized.slice(4, 6), 16)
 
   return `rgba(${red}, ${green}, ${blue}, ${alpha})`
+}
+
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
+
+const formatIntervalValue = (value: number) => {
+  if (!Number.isFinite(value)) return ''
+  if (Number.isInteger(value)) return String(value)
+  return value.toFixed(2).replace(/\.?0+$/, '')
 }
 
 const createBoxplotDataItem = (values: number[], color: string) => ({
@@ -817,13 +1051,15 @@ const chartOption = computed(() => {
   const sourceData = filteredData.value || []
   const keys = normalizedKeys.value
   if (keys.length === 0) return {}
+  const primaryKey = keys[0] ?? ''
+  const xAxisField = xField.value ?? availableXAxisOptions.value[0] ?? null
 
   const option: any = {
     animation: false,
     useDirtyRect: true,
     backgroundColor: 'transparent',
     hoverLayer: true,
-    color: ['#4f46e5', '#10b981', '#f59e0b', '#ec4899', '#06b6d4', '#8b5cf6', '#ef4444', '#14b8a6'],
+    color: ['#2563eb', '#10b981', '#f59e0b', '#f43f5e', '#06b6d4', '#475569', '#ef4444', '#14b8a6'],
     tooltip: {
       trigger: 'item',
       confine: true,
@@ -868,6 +1104,51 @@ const chartOption = computed(() => {
   }
 
   if (isGroupedData.value) {
+    if (chartType.value === 'grouped-scatter') {
+      const groupedScatterSeries = (sourceData as ChartGroup[]).map((group) => ({
+        name: group.name,
+        type: 'scatter',
+        symbolSize: 8,
+        data: group.data
+          .filter((row) => xAxisField && typeof row[xAxisField] === 'number' && typeof row[primaryKey] === 'number')
+          .map((row) => [row[xAxisField as string], row[primaryKey]]),
+      }))
+
+      option.title = { text: `${xAxisField ?? 'X'} vs ${primaryKey} 分组散点图`, left: 'center' }
+      option.tooltip.trigger = 'item'
+      option.legend.data = groupedScatterSeries.map((series: { name: string }) => series.name)
+      option.grid = { top: '18%', bottom: '15%', left: '10%', right: '10%', containLabel: true }
+      option.xAxis = { type: 'value', name: xAxisField, boundaryGap: ['5%', '5%'] }
+      option.yAxis = { type: 'value', name: primaryKey, scale: true, boundaryGap: ['15%', '15%'] }
+      option.series = groupedScatterSeries
+      return markRaw(option)
+    }
+
+    if (chartType.value === 'grouped-bar') {
+      option.title = { text: `${primaryKey} 分组对比`, left: 'center' }
+      option.tooltip.trigger = 'axis'
+      option.legend.data = [primaryKey]
+      option.grid = { top: '18%', bottom: '15%', left: '10%', right: '10%', containLabel: true }
+      option.xAxis = {
+        type: 'category',
+        data: (sourceData as ChartGroup[]).map((group) => group.name),
+        boundaryGap: true,
+      }
+      option.yAxis = { type: 'value', boundaryGap: ['0%', '15%'] }
+      option.series = [
+        {
+          name: primaryKey,
+          type: 'bar',
+          data: (sourceData as ChartGroup[]).map((group) => {
+            const firstValidRow = group.data.find((row) => typeof row[primaryKey] === 'number')
+            return firstValidRow?.[primaryKey] ?? null
+          }),
+          itemStyle: { color: '#2563eb' },
+        },
+      ]
+      return markRaw(option)
+    }
+
     Object.assign(option, createBoxplotBaseOption(keys, currentBoxplotWhiskerModeLabel.value))
     applyNormalizationAxis(option.yAxis)
     const normalizedGroups = isNormalizedView.value
@@ -989,6 +1270,42 @@ const chartOption = computed(() => {
         },
       })
     }
+  } else if (chartType.value === 'scatter') {
+    option.title = { text: `${xAxisField ?? 'X'} vs ${primaryKey} 散点分布`, left: 'center' }
+    option.tooltip.trigger = 'item'
+    option.grid = { top: '15%', bottom: '15%', left: '10%', right: '10%', containLabel: true }
+    option.xAxis = { type: 'value', name: xAxisField, boundaryGap: ['5%', '5%'] }
+    option.yAxis = { type: 'value', name: primaryKey, scale: true, boundaryGap: ['15%', '15%'] }
+    option.series = [
+      {
+        type: 'scatter',
+        symbolSize: 8,
+        data: (sourceData as ChartRow[])
+          .filter((row) => xAxisField && typeof row[xAxisField] === 'number' && typeof row[primaryKey] === 'number')
+          .map((row) => [row[xAxisField as string], row[primaryKey]]),
+        itemStyle: { color: '#0ea5e9' },
+      },
+    ]
+  } else if (chartType.value === 'bar') {
+    option.title = { text: `${primaryKey} 分类对比`, left: 'center' }
+    option.tooltip.trigger = 'axis'
+    option.grid = { top: '15%', bottom: '15%', left: '10%', right: '10%', containLabel: true }
+    option.xAxis = {
+      type: 'category',
+      data: (sourceData as ChartRow[]).map((row) => row[xAxisField as string]),
+      boundaryGap: true,
+    }
+    option.yAxis = { type: 'value', boundaryGap: ['0%', '15%'] }
+    option.series = [
+      {
+        name: primaryKey,
+        type: 'bar',
+        data: (sourceData as ChartRow[]).map((row) =>
+          typeof row[primaryKey] === 'number' ? row[primaryKey] : null,
+        ),
+        itemStyle: { color: '#2563eb' },
+      },
+    ]
   } else if (chartType.value === 'normal') {
     const normalRows = isNormalizedView.value
       ? normalizeChartRows(sourceData as ChartRow[], keys, normalizationStats.value, normalizationMethod.value)
@@ -1247,7 +1564,7 @@ watch(
         </div>
 
         <div
-          v-if="!isGroupedData"
+          v-if="usesSampling"
           class="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-100 rounded-lg shadow-sm"
         >
           <Settings2 :size="14" class="text-slate-400" />
@@ -1259,6 +1576,26 @@ watch(
             class="filter-input w-20"
             :use-grouping="false"
           />
+        </div>
+
+        <div
+          v-if="requiresXAxisField && availableXAxisOptions.length > 0"
+          class="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-100 rounded-lg shadow-sm"
+        >
+          <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">X轴</span>
+          <select
+            v-model="xField"
+            data-test="chart-x-field-select"
+            class="chart-axis-select"
+          >
+            <option
+              v-for="field in availableXAxisOptions"
+              :key="field"
+              :value="field"
+            >
+              {{ field }}
+            </option>
+          </select>
         </div>
 
         <div class="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-100 rounded-lg shadow-sm">
@@ -1474,7 +1811,6 @@ watch(
         option-label="label"
         option-value="value"
         class="chart-type-select"
-        :disabled="isGroupedData"
       >
         <template #value="slotProps">
           <div v-if="slotProps.value" class="flex items-center gap-2 text-slate-800">
@@ -1612,6 +1948,18 @@ watch(
   padding: 2px 8px;
   display: flex;
   align-items: center;
+}
+
+.chart-axis-select {
+  min-width: 132px;
+  max-width: 220px;
+  padding: 4px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #0f172a;
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .preset-trigger-button {

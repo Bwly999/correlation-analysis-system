@@ -6,6 +6,7 @@ import {
   isPlainObject,
   normalizeNodeResult,
   type FieldSchema,
+  type NodePreviewChartDefaults,
   type NodeResult,
 } from '@/nodes/result'
 import { inferCommonSchemaFromGroups } from './groupedResultSchema'
@@ -79,6 +80,24 @@ export const getResultChartOption = (value: unknown) => {
   }
 
   return null
+}
+
+export const getResultPreviewChartDefaults = (value: unknown): NodePreviewChartDefaults | null => {
+  const normalized = normalizeWorkflowResult(value)
+  const chartDefaults = normalized?.preview?.props?.chartDefaults
+
+  if (!chartDefaults || !isPlainObject(chartDefaults) || typeof chartDefaults.mode !== 'string') {
+    return null
+  }
+
+  return {
+    mode: chartDefaults.mode,
+    xField: typeof chartDefaults.xField === 'string' ? chartDefaults.xField : undefined,
+    yFields: Array.isArray(chartDefaults.yFields)
+      ? chartDefaults.yFields.filter((field): field is string => typeof field === 'string' && field.trim().length > 0)
+      : undefined,
+    groupMode: chartDefaults.groupMode === 'compare-groups' ? 'compare-groups' : undefined,
+  }
 }
 
 export const getResultFileInfo = (value: unknown) => {

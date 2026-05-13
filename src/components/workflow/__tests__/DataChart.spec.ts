@@ -295,6 +295,8 @@ describe('DataChart', () => {
       .findAll('option')
       .map((option) => option.text())
 
+    expect(tableChartTypes).toContain('散点图')
+    expect(tableChartTypes).toContain('柱状图')
     expect(tableChartTypes).toContain('正态分布')
 
     const groupedWrapper = mount(DataChart, {
@@ -311,7 +313,230 @@ describe('DataChart', () => {
       .findAll('option')
       .map((option) => option.text())
 
-    expect(groupedChartTypes).toEqual(['多组因子对比'])
+    expect(groupedChartTypes).toEqual(['多组因子对比', '多组散点图', '多组柱状图'])
+  })
+
+  it('prefers preview chart defaults when no local chart state exists', () => {
+    localStorage.clear()
+
+    const wrapper = mount(DataChart, {
+      props: {
+        storageScopeKey: 'chart-defaults-node',
+        data: {
+          kind: 'table',
+          payload: [
+            { group: 'A', score_mean: 92, cost_mean: 18 },
+            { group: 'B', score_mean: 88, cost_mean: 21 },
+          ],
+          preview: {
+            viewer: 'table-chart-combo-viewer',
+            props: {
+              chartDefaults: {
+                mode: 'bar',
+                xField: 'group',
+                yFields: ['score_mean'],
+              },
+            },
+          },
+        },
+      },
+    })
+
+    expect((wrapper.get('[data-test="chart-type-select"]').element as HTMLSelectElement).value).toBe(
+      'bar',
+    )
+    expect(
+      Array.from((wrapper.get('[data-test="chart-key-select"]').element as HTMLSelectElement).selectedOptions).map(
+        (option) => option.value,
+      ),
+    ).toEqual(['score_mean'])
+
+    const option = getChartOption(wrapper)
+    expect(option.xAxis.type).toBe('category')
+    expect(option.xAxis.data).toEqual(['A', 'B'])
+    expect(option.series[0].type).toBe('bar')
+    expect(option.series[0].data).toEqual([92, 88])
+  })
+
+  it('uses line charts as the fallback default even when table data contains category fields', () => {
+    localStorage.clear()
+
+    const wrapper = mount(DataChart, {
+      props: {
+        data: {
+          kind: 'table',
+          payload: [
+            { group: 'A', score_mean: 92, cost_mean: 18 },
+            { group: 'B', score_mean: 88, cost_mean: 21 },
+          ],
+        },
+      },
+    })
+
+    expect((wrapper.get('[data-test="chart-type-select"]').element as HTMLSelectElement).value).toBe(
+      'line',
+    )
+    const option = getChartOption(wrapper)
+    expect(option.tooltip.trigger).toBe('axis')
+    expect(option.xAxis.data).toEqual([1, 2])
+    expect(option.series[0].type).toBe('line')
+  })
+
+  it('renders table scatter charts with explicit x and y field defaults', () => {
+    localStorage.clear()
+
+    const wrapper = mount(DataChart, {
+      props: {
+        data: {
+          kind: 'table',
+          payload: [
+            { temperature: 10, score: 1 },
+            { temperature: 20, score: 2 },
+          ],
+          preview: {
+            viewer: 'table-chart-combo-viewer',
+            props: {
+              chartDefaults: {
+                mode: 'scatter',
+                xField: 'temperature',
+                yFields: ['score'],
+              },
+            },
+          },
+        },
+      },
+    })
+
+    const option = getChartOption(wrapper)
+    expect((wrapper.get('[data-test="chart-type-select"]').element as HTMLSelectElement).value).toBe(
+      'scatter',
+    )
+    expect(option.xAxis.type).toBe('value')
+    expect(option.xAxis.name).toBe('temperature')
+    expect(option.series[0].type).toBe('scatter')
+    expect(option.series[0].data).toEqual([
+      [10, 1],
+      [20, 2],
+    ])
+  })
+
+  it('falls back to normal distribution when preview defaults still request legacy histogram mode', () => {
+    localStorage.clear()
+
+    const wrapper = mount(DataChart, {
+      props: {
+        data: {
+          kind: 'table',
+          payload: [{ score: 1 }, { score: 2 }, { score: 2 }, { score: 3 }, { score: 5 }, { score: 8 }],
+          preview: {
+            viewer: 'table-chart-combo-viewer',
+            props: {
+              chartDefaults: {
+                mode: 'histogram',
+                yFields: ['score'],
+              },
+            },
+          },
+        },
+      },
+    })
+
+    const option = getChartOption(wrapper)
+    expect((wrapper.get('[data-test="chart-type-select"]').element as HTMLSelectElement).value).toBe(
+      'normal',
+    )
+    expect(option.series.map((series: { type: string }) => series.type)).toEqual(['bar', 'line'])
+  })
+
+  it('migrates stored legacy histogram mode to normal distribution on first render', () => {
+    localStorage.clear()
+    localStorage.setItem('workflow-result-preview:legacy-histogram-node:chart-type', 'histogram')
+
+    const wrapper = mount(DataChart, {
+      props: {
+        storageScopeKey: 'legacy-histogram-node',
+        data: [{ score: 1 }, { score: 2 }, { score: 3 }],
+      },
+    })
+
+    expect((wrapper.get('[data-test="chart-type-select"]').element as HTMLSelectElement).value).toBe(
+      'normal',
+    )
+  })
+
+  it('renders grouped scatter charts from preview defaults', () => {
+    localStorage.clear()
+
+    const wrapper = mount(DataChart, {
+      props: {
+        data: {
+          kind: 'tableCollection',
+          payload: [
+            { name: 'A', data: [{ temperature: 10, score: 1 }, { temperature: 20, score: 2 }] },
+            { name: 'B', data: [{ temperature: 15, score: 3 }, { temperature: 25, score: 4 }] },
+          ],
+          preview: {
+            viewer: 'table-chart-combo-viewer',
+            props: {
+              chartDefaults: {
+                mode: 'grouped-scatter',
+                xField: 'temperature',
+                yFields: ['score'],
+              },
+            },
+          },
+        },
+      },
+    })
+
+    const option = getChartOption(wrapper)
+    expect((wrapper.get('[data-test="chart-type-select"]').element as HTMLSelectElement).value).toBe(
+      'grouped-scatter',
+    )
+    expect(option.series).toHaveLength(2)
+    expect(option.series[0].type).toBe('scatter')
+    expect(option.series[0].data).toEqual([
+      [10, 1],
+      [20, 2],
+    ])
+    expect(option.series[1].data).toEqual([
+      [15, 3],
+      [25, 4],
+    ])
+  })
+
+  it('renders grouped bar charts from preview defaults', () => {
+    localStorage.clear()
+
+    const wrapper = mount(DataChart, {
+      props: {
+        data: {
+          kind: 'tableCollection',
+          payload: [
+            { name: 'A', data: [{ score_mean: 92 }] },
+            { name: 'B', data: [{ score_mean: 88 }] },
+          ],
+          preview: {
+            viewer: 'table-chart-combo-viewer',
+            props: {
+              chartDefaults: {
+                mode: 'grouped-bar',
+                yFields: ['score_mean'],
+              },
+            },
+          },
+        },
+      },
+    })
+
+    const option = getChartOption(wrapper)
+    expect((wrapper.get('[data-test="chart-type-select"]').element as HTMLSelectElement).value).toBe(
+      'grouped-bar',
+    )
+    expect(option.xAxis.type).toBe('category')
+    expect(option.xAxis.data).toEqual(['A', 'B'])
+    expect(option.series[0].type).toBe('bar')
+    expect(option.series[0].data).toEqual([92, 88])
   })
 
   it('renders selected factors as independent normal distribution panels in two columns', async () => {

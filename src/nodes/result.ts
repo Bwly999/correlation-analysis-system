@@ -23,11 +23,30 @@ export interface NodeSchema {
   fields?: FieldSchema[]
 }
 
+export type PreviewChartMode =
+  | 'line'
+  | 'scatter'
+  | 'bar'
+  | 'histogram'
+  | 'boxplot'
+  | 'normal'
+  | 'grouped-scatter'
+  | 'grouped-bar'
+
+export interface NodePreviewChartDefaults {
+  mode: PreviewChartMode
+  xField?: string
+  yFields?: string[]
+  groupMode?: 'compare-groups'
+}
+
 export interface NodePreviewSpec {
   viewer: string
   title?: string
   summary?: string
-  props?: Record<string, unknown>
+  props?: Record<string, unknown> & {
+    chartDefaults?: NodePreviewChartDefaults
+  }
 }
 
 export interface NodeResult<T = unknown> {

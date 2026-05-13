@@ -100,6 +100,29 @@ describe('remaining nodes standardized result protocol', () => {
     })
   })
 
+  it('data-aggregation group_by mode should default preview charts to line mode', async () => {
+    const result = await dataAggregationNode.execute(
+      createTableResult([
+        { process: 'A', score: 10, cost: 20 },
+        { process: 'A', score: 20, cost: 30 },
+        { process: 'B', score: 30, cost: 40 },
+      ]),
+      {
+        mode: 'group_by',
+        groupByField: 'process',
+        groupByMethods: ['mean'],
+        targetColumns: ['score', 'cost'],
+      },
+    )
+
+    expect(result.kind).toBe('table')
+    expect(result.preview?.viewer).toBe('table-chart-combo-viewer')
+    expect(result.preview?.props?.chartDefaults).toMatchObject({
+      mode: 'line',
+      yFields: ['score_mean'],
+    })
+  })
+
   it('data-aggregation time window mode should return a standardized summary table', async () => {
     const result = await dataAggregationNode.execute(
       createTableResult([

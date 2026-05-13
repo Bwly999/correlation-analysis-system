@@ -25,7 +25,6 @@ export const helpCenterContent: HelpCenterContent = {
         'xgboost-shap',
         'random-forest-feature-importance',
         'multiple-linear-regression',
-        'chart-display',
       ],
       pitfalls: [
         '初次尝试建议先使用“相关性分析”查看全局趋势，再用“XGBoost”探查深度影响。',

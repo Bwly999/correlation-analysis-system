@@ -53,29 +53,6 @@
         "isPinned": false,
         "logs": []
       }
-    },
-    {
-      "id": "template_chart_display",
-      "type": "custom",
-      "position": { "x": 680, "y": 180 },
-      "label": "图表展示",
-      "data": {
-        "label": "图表展示",
-        "type": "chart-display",
-        "category": "terminal",
-        "config": {
-          "chartType": "bar",
-          "xAxis": "group",
-          "yAxis": "score_mean"
-        },
-        "reuseLastRuntimeInputs": false,
-        "status": "idle",
-        "output": null,
-        "manualInput": "",
-        "useManualInput": false,
-        "isPinned": false,
-        "logs": []
-      }
     }
   ],
   "edges": [
@@ -83,13 +60,6 @@
       "id": "template_edge_1",
       "source": "template_manual_json",
       "target": "template_data_aggregation",
-      "type": "n8n",
-      "animated": true
-    },
-    {
-      "id": "template_edge_2",
-      "source": "template_data_aggregation",
-      "target": "template_chart_display",
       "type": "n8n",
       "animated": true
     }

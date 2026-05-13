@@ -4,6 +4,7 @@ import type { NodeAssistantHints, NodeHelpDoc } from '../help/types.js'
 
 export type NodeCategory = 'trigger' | 'action' | 'terminal'
 export type NodeInputMode = 'single' | 'multiple'
+export type NodeAvailability = 'active' | 'legacy'
 
 export type NodeExecutionJsonPrimitive = string | number | boolean | null
 export type NodeExecutionJsonValue =
@@ -103,6 +104,7 @@ export interface NodeDefinition<
   libraryGroup?: NodeLibraryGroupId
   libraryAliases?: string[]
   libraryKeywords?: string[]
+  availability?: NodeAvailability
   isLegacy?: boolean
   properties: NodeProperty[]
   inputMode?: NodeInputMode

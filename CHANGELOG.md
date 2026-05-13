@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### 变更 (Changed)
+
+- **收敛图表结果预览并下线 `chart-display` 新建入口**:
+  - `src/components/workflow/DataChart.vue` 扩展结果预览图表能力，单表统一支持折线云图、散点图、柱状图、箱线分布和正态分布，多组结果支持箱线图、多组散点图和多组柱状图。
+  - `src/nodes/result.ts`、`src/components/workflow/resultView.ts` 与 `src/nodes/definitions/dataAggregation.ts` 新增 `preview.props.chartDefaults` 首开图表提示协议，聚合结果可直接引导预览进入更合适的对比图。
+  - `src/nodes/types.ts`、`src/nodes/registry.ts`、`src/server/workflowAi/nodeCatalog.ts`、`src/help/content.ts`、`src/workflow/templates.ts` 与 `src/workflow/template-configs/dashboard-comparison.json` 将 `chart-display` 降级为历史兼容节点，不再出现在新建入口、AI 候选和模板推荐路径中。
+  - 结果预览移除直方图模式，历史 `histogram` 预览配置会自动迁移为正态分布图，避免与现有分布图能力重复。
+  - `工作流系统.md`、`工作流节点说明.md` 以及相关测试同步更新，补充 legacy 节点可用性、默认看图职责和模板回归约束。
+
 ### 修复 (Fixed)
 
 - **修复缺失/异常值处理节点无法删除缺少目标字段键的数据行的问题**:

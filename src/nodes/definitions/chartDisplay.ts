@@ -199,6 +199,8 @@ export const chartDisplayNode: NodeDefinition = {
   displayName: '图表展示',
   icon: 'pie-chart',
   category: 'terminal',
+  availability: 'legacy',
+  isLegacy: true,
   description: '将输入数据转换为可视化图表，支持散点图、柱状图、分布图和箱线图。',
   properties: [
     {

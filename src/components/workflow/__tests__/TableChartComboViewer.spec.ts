@@ -366,6 +366,42 @@ describe('TableChartComboViewer', () => {
     expect(wrapper.html()).toContain('data-test="chart-key-select"')
   })
 
+  it('passes preview chart defaults through to the derived chart view on first open', () => {
+    localStorage.clear()
+
+    const wrapper = mount(TableChartComboViewer, {
+      props: {
+        storageScopeKey: 'combo-defaults-node',
+        data: {
+          kind: 'table',
+          payload: [
+            { group: 'A', score_mean: 92, cost_mean: 18 },
+            { group: 'B', score_mean: 88, cost_mean: 21 },
+          ],
+          preview: {
+            viewer: 'table-chart-combo-viewer',
+            props: {
+              chartDefaults: {
+                mode: 'bar',
+                xField: 'group',
+                yFields: ['score_mean'],
+              },
+            },
+          },
+        },
+      },
+    })
+
+    expect((wrapper.get('[data-test="chart-type-select"]').element as HTMLSelectElement).value).toBe(
+      'bar',
+    )
+    const option = JSON.parse(
+      wrapper.get('[data-test="chart-option"]').attributes('data-option') || '{}',
+    )
+    expect(option.xAxis.data).toEqual(['A', 'B'])
+    expect(option.series[0].data).toEqual([92, 88])
+  })
+
   it('keeps derived chart settings when switching between chart and split modes', async () => {
     const wrapper = mount(TableChartComboViewer, {
       props: {

@@ -293,6 +293,19 @@ export const dataAggregationNode: NodeDefinition = {
             groupCount: Object.keys(groupedRows).length,
           },
         },
+        preview: {
+          viewer: 'table-chart-combo-viewer',
+          props: {
+            chartDefaults: {
+              mode: 'line',
+              xField: groupKey,
+              yFields: targetFields
+                .filter((field) => field !== groupKey)
+                .flatMap((field) => methods.slice(0, 1).map((method) => `${field}_${method}`))
+                .slice(0, 1),
+            },
+          },
+        },
       })
     }
 

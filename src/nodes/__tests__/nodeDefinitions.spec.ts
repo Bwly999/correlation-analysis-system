@@ -541,6 +541,12 @@ describe('Node Definitions Execution Logic', () => {
       expect(creatableNodeDefinitions.map((definition) => definition.name)).not.toContain('data-export')
     })
 
+    it('should keep chart-display as a hidden legacy compatibility node', () => {
+      expect(chartDisplayNode.availability).toBe('legacy')
+      expect(nodeDefinitions.map((definition) => definition.name)).toContain('chart-display')
+      expect(creatableNodeDefinitions.map((definition) => definition.name)).not.toContain('chart-display')
+    })
+
     it('should support manual range filtering with multiple AND rules', async () => {
       const input = createTableResult([
         { abc: 1.5, ef: 10 },

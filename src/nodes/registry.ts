@@ -65,11 +65,14 @@ const rawNodeDefinitions: NodeDefinition[] = [
 ]
 
 export const nodeDefinitions: NodeDefinition[] = rawNodeDefinitions.map((definition) =>
-  attachNodeHelp(definition),
+  attachNodeHelp({
+    ...definition,
+    availability: definition.availability ?? (definition.isLegacy ? 'legacy' : 'active'),
+  }),
 )
 
 export const creatableNodeDefinitions: NodeDefinition[] = nodeDefinitions.filter(
-  (definition) => !definition.isLegacy,
+  (definition) => definition.availability !== 'legacy' && !definition.isLegacy,
 )
 
 export const getNodeDefinition = (name: string) => {

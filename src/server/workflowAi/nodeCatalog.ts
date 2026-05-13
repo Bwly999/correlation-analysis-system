@@ -608,36 +608,6 @@ const SERVER_SAFE_NODE_CATALOG: WorkflowAiNodeCatalogItem[] = [
       useCases: ['小样本秩相关分析', '排序一致性验证'],
     },
   }),
-  createCatalogItem({
-    name: 'chart-display',
-    displayName: '图表展示',
-    category: 'terminal',
-    description: '将输入数据转换为可视化图表，支持散点图、柱状图、分布图和箱线图。',
-    properties: [
-      createProperty('chartType', '图表类型', 'options', {
-        defaultValue: 'scatter',
-        description: '可选 scatter、bar、histogram、boxplot。',
-        options: [
-          { value: 'scatter', label: 'scatter' },
-          { value: 'bar', label: 'bar' },
-          { value: 'histogram', label: 'histogram' },
-          { value: 'boxplot', label: 'boxplot' },
-        ],
-      }),
-      createProperty('xAxis', 'X 轴字段', 'string', {
-        defaultValue: '',
-        description: '散点图和柱状图常用的横轴字段名。',
-      }),
-      createProperty('yAxis', 'Y 轴字段', 'string', {
-        defaultValue: '',
-        description: '用于展示的数值字段名；可按图表类型填写。',
-      }),
-    ],
-    assistantHints: {
-      keywords: ['图表', '可视化', '散点图', '柱状图', '直方图'],
-      useCases: ['相关结果可视化', '样本分布展示', '分组对比展示'],
-    },
-  }),
 ]
 
 export const buildServerWorkflowAiNodeCatalog = (): WorkflowAiNodeCatalogItem[] =>
