@@ -21,6 +21,7 @@ import {
 } from './sessionStore.js'
 import { bridgePiEvent, tryExtractWorkflowPlan, type PiAgentSseEvent } from './eventBridge.js'
 import { buildAllTools } from './tools/index.js'
+import { FrontendBridge } from './frontendBridge.js'
 
 // --- Runtime 管理 ---
 
@@ -31,6 +32,8 @@ interface PiAgentRuntime {
   isStreaming: boolean
   currentMessageId: { value: string }
   eventListeners: Set<(event: PiAgentSseEvent) => void>
+  /** 前端桥接 — 用于原子工作流工具的请求-响应转发 */
+  bridge: FrontendBridge
   unsubscribe?: () => void
 }
 
@@ -52,10 +55,31 @@ export async function createPiAgentSession(
   // 1. 创建会话记录
   const record = createSessionRecord(request, userId)
 
-  // 2. 构建工具集
-  const tools = buildAllTools({ request, userId })
+  // 2. 预创建 runtime 骨架（listeners 集合需要先存在，供 bridge 回调使用）
+  const eventListeners = new Set<(event: PiAgentSseEvent) => void>()
 
-  // 3. 创建 Pi Agent session
+  // 3. 创建前端桥接（每个用户会话独立）
+  const bridge = new FrontendBridge((event) => {
+    const sseEvent: PiAgentSseEvent = {
+      type: 'tool.execute',
+      sessionId: record.sessionId,
+      toolCallId: event.toolCallId,
+      toolName: event.toolName,
+      params: event.params,
+    }
+    for (const listener of eventListeners) {
+      try {
+        listener(sseEvent)
+      } catch {
+        // ignore listener errors
+      }
+    }
+  })
+
+  // 4. 构建工具集（传入 bridge 以启用原子工作流工具）
+  const tools = buildAllTools({ request, userId, bridge })
+
+  // 5. 创建 Pi Agent session
   const { authStorage, modelRegistry } = createModelRegistryFromProfile(request.profile)
   const model = buildModelFromProfile(request.profile)
 
@@ -70,14 +94,15 @@ export async function createPiAgentSession(
     noTools: 'builtin', // 禁用内置的 read/bash/edit/write 工具
   })
 
-  // 4. 创建 runtime
+  // 6. 构造完整 runtime
   const runtime: PiAgentRuntime = {
     session,
     sessionId: record.sessionId,
     record,
     isStreaming: false,
     currentMessageId: { value: '' },
-    eventListeners: new Set(),
+    eventListeners,
+    bridge,
   }
 
   // 5. 订阅 Pi SDK 事件
@@ -195,6 +220,7 @@ export function disposePiAgentSession(sessionId: string): void {
   const runtime = runtimes.get(sessionId)
   if (!runtime) return
 
+  runtime.bridge.dispose()
   runtime.unsubscribe?.()
   runtime.session.dispose()
   runtime.eventListeners.clear()
@@ -205,6 +231,24 @@ export function disposeAllPiAgentSessions(): void {
   for (const sessionId of runtimes.keys()) {
     disposePiAgentSession(sessionId)
   }
+}
+
+/**
+ * 前端返回工具执行结果时调用
+ * 将结果传递给对应 runtime 的 FrontendBridge，resolve 工具执行中挂起的 Promise
+ */
+export function resolvePiAgentToolResult(
+  sessionId: string,
+  toolCallId: string,
+  result: { content: Array<{ type: 'text'; text: string }>; details: Record<string, unknown>; isError?: boolean },
+): boolean {
+  const runtime = runtimes.get(sessionId)
+  if (!runtime) return false
+
+  if (result.isError) {
+    return runtime.bridge.rejectResult(toolCallId, new Error(result.content[0]?.text || '前端执行错误'))
+  }
+  return runtime.bridge.resolveResult(toolCallId, result)
 }
 
 /**

@@ -9,6 +9,7 @@ import {
   sendPiAgentMessage,
   subscribePiAgentEvents,
   getPiAgentSession,
+  resolvePiAgentToolResult,
 } from '../piAgent/gateway.js'
 
 const resolveUserId = (context: any): string => {
@@ -69,6 +70,19 @@ export const createPiAgentRoutes = (): HttpDomainHandler<ServerDependencies> => 
       unsubscribe()
       context.response.end()
     })
+    return true
+  }
+
+  // POST /api/pi-agent/sessions/:id/tool-result - 前端返回工具执行结果
+  const toolResultMatch = pathname.match(/^\/api\/pi-agent\/sessions\/([^/]+)\/tool-result$/)
+  if (method === 'POST' && toolResultMatch) {
+    const sessionId = decodeURIComponent(toolResultMatch[1] ?? '')
+    const body = await context.readJsonBody<{
+      toolCallId: string
+      result: { content: Array<{ type: 'text'; text: string }>; details: Record<string, unknown>; isError?: boolean }
+    }>()
+    const ok = resolvePiAgentToolResult(sessionId, body.toolCallId, body.result)
+    context.sendJson(ok ? 200 : 404, { ok })
     return true
   }
 

@@ -20,6 +20,7 @@ export type PiAgentSseEvent =
   | { type: 'message.completed'; sessionId: string; messageId: string; content: string }
   | { type: 'tool.start'; sessionId: string; toolCall: PiAgentToolCall }
   | { type: 'tool.end'; sessionId: string; toolCallId: string; result: string; isError: boolean }
+  | { type: 'tool.execute'; sessionId: string; toolCallId: string; toolName: string; params: Record<string, unknown> }
   | { type: 'workflow.apply'; sessionId: string; plan: WorkflowAiPlan }
   | { type: 'error'; sessionId: string; message: string }
 
@@ -34,6 +35,15 @@ const TOOL_DISPLAY_NAMES: Record<string, string> = {
   workflow_update_partial_workflow: '增量修改工作流',
   workflow_validate_workflow: '校验工作流结构',
   workflow_test_workflow: '测试完整工作流',
+  // 原子工作流操作工具
+  wf_addNode: '添加节点',
+  wf_connectNodes: '连接节点',
+  wf_updateNodeConfig: '更新节点配置',
+  wf_renameNode: '重命名节点',
+  wf_removeNode: '删除节点',
+  wf_disconnectEdge: '断开连线',
+  wf_moveNode: '移动节点',
+  wf_executeWorkflow: '执行工作流',
 }
 
 const WORKFLOW_MUTATION_TOOLS = new Set([

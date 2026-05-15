@@ -5,6 +5,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { useWorkflowAiStore } from './workflowAiStore'
 import { useWorkflowStore } from './workflowStore'
+import { WorkflowApi } from '@/api/workflowApi'
 
 export interface PiAgentMessage {
   id: string
@@ -288,6 +289,11 @@ export const usePiAgentStore = defineStore('piAgent', () => {
         break
       }
 
+      case 'tool.execute': {
+        handleToolExecute(event)
+        break
+      }
+
       case 'workflow.apply': {
         try {
           const workflowStore = useWorkflowStore()
@@ -303,6 +309,109 @@ export const usePiAgentStore = defineStore('piAgent', () => {
         errorMessage.value = event.message
         break
       }
+    }
+  }
+
+  /**
+   * Tool Name → WorkflowApi 方法的轻量路由映射
+   * 遵循"不做 switch-case，用映射表"的原则
+   */
+  const TOOL_EXECUTORS: Record<string, (params: Record<string, unknown>) => unknown> = {
+    wf_addNode: (p) =>
+      WorkflowApi.addNode(
+        p.nodeType as string,
+        p.label as string | undefined,
+        p.position as { x: number; y: number } | undefined,
+        p.config as Record<string, unknown> | undefined,
+      ),
+    wf_connectNodes: (p) =>
+      WorkflowApi.connectNodes(
+        p.sourceId as string,
+        p.targetId as string,
+        p.sourceHandle || p.targetHandle
+          ? { sourceHandle: p.sourceHandle as string, targetHandle: p.targetHandle as string }
+          : undefined,
+      ),
+    wf_updateNodeConfig: (p) =>
+      WorkflowApi.updateNodeConfig(p.nodeId as string, p.config as Record<string, unknown>),
+    wf_renameNode: (p) =>
+      WorkflowApi.renameNode(p.nodeId as string, p.label as string),
+    wf_removeNode: (p) =>
+      WorkflowApi.removeNode(p.nodeId as string),
+    wf_disconnectEdge: (p) =>
+      WorkflowApi.disconnectEdge(p.edgeId as string),
+    wf_moveNode: (p) =>
+      WorkflowApi.moveNode(p.nodeId as string, p.position as { x: number; y: number }),
+    wf_executeWorkflow: (p) => {
+      const workflowStore = useWorkflowStore()
+      const nodeIds = p.nodeIds as string[] | undefined
+      // 触发工作流执行（使用 AI 检查专用的执行方法）
+      if (nodeIds && nodeIds.length > 0) {
+        for (const nodeId of nodeIds) {
+          workflowStore.executeForAiInspection(nodeId)
+        }
+      }
+      return { executed: nodeIds?.length || 0 }
+    },
+  }
+
+  /**
+   * 处理 tool.execute 事件：
+   * 1. 执行对应的 WorkflowApi 操作
+   * 2. 将结果通过 HTTP POST 返回给后端
+   */
+  async function handleToolExecute(event: {
+    sessionId: string
+    toolCallId: string
+    toolName: string
+    params: Record<string, unknown>
+  }) {
+    const executor = TOOL_EXECUTORS[event.toolName]
+    if (!executor) {
+      await sendToolResult(event.sessionId, event.toolCallId, {
+        content: [{ type: 'text', text: `未知工具: ${event.toolName}` }],
+        details: {},
+        isError: true,
+      })
+      return
+    }
+
+    try {
+      const result = executor(event.params)
+      const resultText =
+        typeof result === 'string'
+          ? result
+          : JSON.stringify(result, null, 2)
+
+      await sendToolResult(event.sessionId, event.toolCallId, {
+        content: [{ type: 'text', text: resultText }],
+        details: result && typeof result === 'object' ? (result as Record<string, unknown>) : {},
+      })
+    } catch (err: any) {
+      await sendToolResult(event.sessionId, event.toolCallId, {
+        content: [{ type: 'text', text: err?.message || '执行失败' }],
+        details: {},
+        isError: true,
+      })
+    }
+  }
+
+  /**
+   * 将工具执行结果通过 HTTP POST 发送回后端
+   */
+  async function sendToolResult(
+    sid: string,
+    toolCallId: string,
+    result: { content: Array<{ type: 'text'; text: string }>; details: Record<string, unknown>; isError?: boolean },
+  ) {
+    try {
+      await fetch(`/api/pi-agent/sessions/${sid}/tool-result`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ toolCallId, result }),
+      })
+    } catch {
+      console.warn('[PiAgent] 发送工具结果失败')
     }
   }
 
