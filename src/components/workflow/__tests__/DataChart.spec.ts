@@ -1291,6 +1291,63 @@ describe('DataChart', () => {
     expect(firstSeries.emphasis.disabled).toBe(true)
   })
 
+  it('renders a table-style tooltip for line charts so wide multi-factor rows stay scannable', () => {
+    const wrapper = mount(DataChart, {
+      props: {
+        data: [
+          { score: 12, other: 19, temp: 25.56 },
+          { score: 16, other: 21, temp: 26.13 },
+        ],
+      },
+    })
+
+    const option = getChartOptionObject(wrapper)
+    const formatter = option.tooltip.formatter as (
+      params: Array<Record<string, unknown>> | Record<string, unknown>,
+    ) => string
+    const tooltipHtml = formatter([
+      { axisValueLabel: '1', seriesName: 'score', dataIndex: 0, data: 12 },
+      { axisValueLabel: '1', seriesName: 'other', dataIndex: 0, data: 19 },
+      { axisValueLabel: '1', seriesName: 'temp', dataIndex: 0, data: 25.56 },
+    ])
+
+    expect(tooltipHtml).toContain('样本 1')
+    expect(tooltipHtml).toContain('<table')
+    expect(tooltipHtml).toContain('字段')
+    expect(tooltipHtml).toContain('数值')
+    expect(tooltipHtml).toContain('score')
+    expect(tooltipHtml).toContain('other')
+    expect(tooltipHtml).toContain('temp')
+  })
+
+  it('folds tooltip rows after the display threshold for wide line charts', () => {
+    const row = Object.fromEntries(Array.from({ length: 14 }, (_, index) => [`field_${index + 1}`, index + 1]))
+    const wrapper = mount(DataChart, {
+      props: {
+        data: [row, row],
+      },
+    })
+
+    const option = getChartOptionObject(wrapper)
+    const formatter = option.tooltip.formatter as (
+      params: Array<Record<string, unknown>> | Record<string, unknown>,
+    ) => string
+    const tooltipHtml = formatter(
+      Array.from({ length: 14 }, (_, index) => ({
+        axisValueLabel: '1',
+        seriesName: `field_${index + 1}`,
+        dataIndex: 0,
+        data: index + 1,
+      })),
+    )
+
+    expect(tooltipHtml).toContain('field_1')
+    expect(tooltipHtml).toContain('field_12')
+    expect(tooltipHtml).not.toContain('field_13')
+    expect(tooltipHtml).not.toContain('field_14')
+    expect(tooltipHtml).toContain('还有 2 个字段')
+  })
+
   it('anchors the preset panel beside the trigger and changes trigger style after opening', async () => {
     const wrapper = mount(DataChart, {
       props: {

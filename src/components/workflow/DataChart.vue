@@ -93,6 +93,7 @@ type TableChartType = 'line' | 'scatter' | 'bar' | 'boxplot' | 'normal'
 type ChartType = TableChartType | GroupedChartType
 
 const LINE_CHART_RENDER_LIMIT = 1200
+const LINE_TOOLTIP_MAX_ROWS = 12
 const NORMAL_DISTRIBUTION_BIN_COUNT = 20
 const NORMAL_DISTRIBUTION_CURVE_POINTS = 80
 const NORMAL_DISTRIBUTION_COLUMNS = 2
@@ -692,6 +693,114 @@ const formatBoxValue = (value: unknown) => {
   if (typeof value !== 'number' || !Number.isFinite(value)) return '--'
   if (Number.isInteger(value)) return String(value)
   return value.toFixed(2).replace(/\.?0+$/, '')
+}
+
+const escapeTooltipHtml = (value: unknown) =>
+  String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
+
+const createLineTooltipFormatter = (
+  sampledRows: ChartRow[],
+  activeNormalizationMethod: NormalizationMethod,
+) => {
+  let lastCacheKey: string | null = null
+  let lastTooltipHtml = ''
+
+  return (params: Array<Record<string, unknown>> | Record<string, unknown>) => {
+    const paramList = Array.isArray(params) ? params : [params]
+    const firstItem = paramList[0] ?? {}
+    const dataIndex = Number(firstItem.dataIndex ?? -1)
+    const axisValue = firstItem.axisValueLabel ?? firstItem.axisValue ?? ''
+    const cacheKey = `${dataIndex}|${String(axisValue)}|${paramList.length}|${isNormalizedView.value ? 'normalized' : 'raw'}`
+
+    if (cacheKey === lastCacheKey) {
+      return lastTooltipHtml
+    }
+
+    const rawRow = sampledRows[dataIndex] ?? null
+    const normalizationLabel = activeNormalizationMethod === 'min-max' ? '归一化值' : '标准分值'
+    const isNormalized = isNormalizedView.value
+    const headerCells = isNormalized
+      ? [
+          `<th style="padding:0 0 8px;text-align:left;font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#94a3b8;border-bottom:1px solid #e2e8f0;">字段</th>`,
+          `<th style="padding:0 0 8px;text-align:right;font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#94a3b8;border-bottom:1px solid #e2e8f0;">原始值</th>`,
+          `<th style="padding:0 0 8px;text-align:right;font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#94a3b8;border-bottom:1px solid #e2e8f0;">${normalizationLabel}</th>`,
+        ].join('')
+      : [
+          `<th style="padding:0 0 8px;text-align:left;font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#94a3b8;border-bottom:1px solid #e2e8f0;">字段</th>`,
+          `<th style="padding:0 0 8px;text-align:right;font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#94a3b8;border-bottom:1px solid #e2e8f0;">数值</th>`,
+        ].join('')
+
+    const visibleItems = paramList.slice(0, LINE_TOOLTIP_MAX_ROWS)
+    const hiddenFieldCount = Math.max(0, paramList.length - visibleItems.length)
+
+    const rowsHtml = visibleItems
+      .map((item, index) => {
+      const seriesName = String(item.seriesName ?? '')
+      const rawValue = rawRow?.[seriesName]
+      const rawValueLabel = formatBoxValue(rawValue)
+      const displayValueLabel = formatBoxValue(item.data)
+      const marker = String(item.marker ?? '')
+      const backgroundColor = index % 2 === 0 ? 'rgba(248, 250, 252, 0.9)' : '#ffffff'
+      const seriesCell = [
+        `<td style="padding:9px 0 9px 10px;background:${backgroundColor};border-bottom:1px solid #f1f5f9;">`,
+        `<div style="display:flex;align-items:center;gap:8px;min-width:0;">`,
+        `<span style="flex:none;">${marker}</span>`,
+        `<span style="font-size:12px;font-weight:600;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeTooltipHtml(seriesName)}</span>`,
+        `</div>`,
+        `</td>`,
+      ].join('')
+
+      if (isNormalized) {
+        return [
+          `<tr>`,
+          seriesCell,
+          `<td style="padding:9px 0 9px 12px;text-align:right;font-size:12px;font-variant-numeric:tabular-nums;color:#475569;background:${backgroundColor};border-bottom:1px solid #f1f5f9;">${rawValueLabel}</td>`,
+          `<td style="padding:9px 10px 9px 12px;text-align:right;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;color:#2563eb;background:${backgroundColor};border-bottom:1px solid #f1f5f9;">${displayValueLabel}</td>`,
+          `</tr>`,
+        ].join('')
+      }
+
+      return [
+        `<tr>`,
+        seriesCell,
+        `<td style="padding:9px 10px 9px 12px;text-align:right;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;color:#0f172a;background:${backgroundColor};border-bottom:1px solid #f1f5f9;">${displayValueLabel}</td>`,
+        `</tr>`,
+      ].join('')
+    })
+    .join('')
+
+    const summaryRow = hiddenFieldCount > 0
+      ? isNormalized
+        ? `<tr><td colspan="3" style="padding:10px 12px;text-align:center;font-size:11px;font-weight:600;color:#475569;background:#f8fafc;">还有 ${hiddenFieldCount} 个字段，继续拖动或筛选后查看</td></tr>`
+        : `<tr><td colspan="2" style="padding:10px 12px;text-align:center;font-size:11px;font-weight:600;color:#475569;background:#f8fafc;">还有 ${hiddenFieldCount} 个字段，继续拖动或筛选后查看</td></tr>`
+      : ''
+
+    lastCacheKey = cacheKey
+    lastTooltipHtml = [
+      `<div style="min-width:280px;max-width:420px;padding:2px 0;">`,
+      `<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px;">`,
+      `<div>`,
+      `<div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#94a3b8;">结果定位</div>`,
+      `<div style="margin-top:4px;font-size:14px;font-weight:700;color:#0f172a;">样本 ${escapeTooltipHtml(axisValue)}</div>`,
+      `</div>`,
+      `<div style="flex:none;border:1px solid #dbeafe;background:#eff6ff;color:#1d4ed8;border-radius:999px;padding:3px 8px;font-size:10px;font-weight:700;">${paramList.length} 列</div>`,
+      `</div>`,
+      `<div style="max-height:240px;overflow:auto;border:1px solid #e2e8f0;border-radius:14px;background:linear-gradient(180deg,#ffffff 0%,#f8fafc 100%);">`,
+      `<table style="width:100%;border-collapse:separate;border-spacing:0;table-layout:auto;">`,
+      `<thead><tr>${headerCells}</tr></thead>`,
+      `<tbody>${rowsHtml}${summaryRow}</tbody>`,
+      `</table>`,
+      `</div>`,
+      `</div>`,
+    ].join('')
+
+    return lastTooltipHtml
+  }
 }
 
 const currentBoxplotWhiskerModeLabel = computed(
@@ -1333,36 +1442,14 @@ const chartOption = computed(() => {
     }
     option.tooltip.triggerOn = 'mousemove'
     option.xAxis.data = sampledIndex
-    option.tooltip.formatter = (params: Array<Record<string, unknown>> | Record<string, unknown>) => {
-      const paramList = Array.isArray(params) ? params : [params]
-      const axisValue = paramList[0]?.axisValueLabel ?? paramList[0]?.axisValue ?? ''
-      const lines = [`样本 ${axisValue}`]
-
-      paramList.forEach((item) => {
-        const seriesName = String(item.seriesName ?? '')
-        const seriesStats = normalizationStats.value.get(seriesName)
-        const rawRow = sampledRows[Number(item.dataIndex ?? -1)] ?? null
-        const rawValue = rawRow?.[seriesName]
-        const displayValue = item.data
-
-        if (isNormalizedView.value) {
-          const normalizationLabel =
-            activeNormalizationMethod === 'min-max' ? '归一化值' : '标准分值'
-          lines.push(
-            `${seriesName}<br/>原始值：${rawValue ?? '--'}<br/>${normalizationLabel}：${displayValue ?? '--'}`,
-          )
-          return
-        }
-
-        const statsLabel =
-          seriesStats && activeNormalizationMethod === 'min-max'
-            ? `最小值 ${seriesStats.min} / 最大值 ${seriesStats.max}`
-            : undefined
-        lines.push(statsLabel ? `${seriesName}：${displayValue}<br/>${statsLabel}` : `${seriesName}：${displayValue}`)
-      })
-
-      return lines.join('<br/>')
-    }
+    option.tooltip.backgroundColor = '#ffffff'
+    option.tooltip.borderColor = '#dbe5f1'
+    option.tooltip.borderWidth = 1
+    option.tooltip.padding = 14
+    option.tooltip.extraCssText =
+      'box-shadow: 0 20px 45px -24px rgba(15, 23, 42, 0.28); border-radius: 18px;'
+    option.tooltip.textStyle = { color: '#475569' }
+    option.tooltip.formatter = createLineTooltipFormatter(sampledRows, activeNormalizationMethod)
     applyNormalizationAxis(option.yAxis)
     option.series = keys.map((key) => ({
       name: key,

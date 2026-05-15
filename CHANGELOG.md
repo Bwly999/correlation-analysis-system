@@ -4,6 +4,11 @@
 
 ### 变更 (Changed)
 
+- **优化结果预览折线云图 tooltip 的信息结构与大字段展示体验**:
+  - `src/components/workflow/DataChart.vue` 将折线云图 tooltip 升级为表格化信息卡，支持原始值 / 归一化值分栏展示，字段较多时默认只渲染前 12 行并提示剩余字段数量。
+  - 同文件为折线云图 tooltip 增加最近一次 hover 结果缓存，减少鼠标在同一样本点附近移动时的重复 HTML 拼接开销，同时避免缓存累积导致额外内存占用。
+  - `src/components/workflow/__tests__/DataChart.spec.ts` 补充回归测试，覆盖折线云图 tooltip 的表格结构与宽字段折叠摘要行为。
+
 - **支持节点数字参数按需切换整数 / 小数输入模式**:
   - `src/nodes/types.ts`、`src/ai/types.ts` 与 `src/server/workflowAi/nodeCatalog.ts` 为 `number` 属性补充 `numberMode`、`step`、`maxFractionDigits` 元数据，统一支持整数与小数两种输入语义。
   - `src/components/workflow/config/propertyField/PropertyFieldInputRenderer.vue` 按数字属性元数据集中配置 PrimeVue `InputNumber`，默认保持整数模式，小数场景可复用同一组件渲染链路。
