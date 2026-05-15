@@ -1,4 +1,5 @@
 import builtins
+import sys
 import types
 import unittest
 from unittest.mock import patch
@@ -35,7 +36,7 @@ class XgboostShapAnalysisTests(unittest.TestCase):
 
         self.assertEqual(clamped['learning_rate'], 0.5)
         self.assertEqual(clamped['max_depth'], 12)
-        self.assertEqual(clamped['test_size'], 0.4)
+        self.assertEqual(clamped['test_size'], 0.9)
         self.assertEqual(clamped['shap_sample_limit'], 100)
 
     def test_xgboost_shap_config_accepts_user_overrides(self):
@@ -71,6 +72,15 @@ class XgboostShapAnalysisTests(unittest.TestCase):
                 'tuning_cv': 4,
             },
         )
+
+    def test_xgboost_shap_config_accepts_zero_and_one_test_size_for_model_layer_fallback(self):
+        from backend.algorithms.xgboost_shap_analysis import _normalize_model_config
+
+        zero_test_size = _normalize_model_config({'testSize': 0})
+        one_test_size = _normalize_model_config({'testSize': 1})
+
+        self.assertEqual(zero_test_size['test_size'], 0.0)
+        self.assertEqual(one_test_size['test_size'], 0.95)
 
     def test_model_core_uses_custom_training_parameters_and_can_disable_tuning(self):
         from backend.algorithm import robust_insight_tool as tool
@@ -119,6 +129,133 @@ class XgboostShapAnalysisTests(unittest.TestCase):
         self.assertEqual(captured_regressor_kwargs[0]['max_depth'], 7)
         self.assertEqual(captured_regressor_kwargs[0]['random_state'], 99)
         self.assertEqual(search_calls['count'], 0)
+
+    def test_model_core_keeps_zero_test_size_for_special_train_split_and_clamps_upper_bound(self):
+        sys.modules.pop('backend.algorithm.robust_insight_tool', None)
+
+        fake_pyplot = types.SimpleNamespace(rcParams={})
+        fake_matplotlib = types.ModuleType('matplotlib')
+        fake_matplotlib.pyplot = fake_pyplot
+        fake_matplotlib.font_manager = types.SimpleNamespace(fontManager=types.SimpleNamespace(ttflist=[]))
+        fake_seaborn = types.ModuleType('seaborn')
+        fake_xgboost = types.ModuleType('xgboost')
+        fake_xgboost.XGBRegressor = object
+        fake_shap = types.ModuleType('shap')
+        fake_model_selection = types.ModuleType('sklearn.model_selection')
+        fake_model_selection.train_test_split = lambda *args, **kwargs: args
+        fake_model_selection.RandomizedSearchCV = object
+        fake_preprocessing = types.ModuleType('sklearn.preprocessing')
+        fake_preprocessing.LabelEncoder = object
+        fake_metrics = types.ModuleType('sklearn.metrics')
+        fake_metrics.r2_score = lambda *args, **kwargs: 0.0
+        fake_metrics.mean_absolute_error = lambda *args, **kwargs: 0.0
+        fake_ensemble = types.ModuleType('sklearn.ensemble')
+        fake_ensemble.IsolationForest = object
+
+        with patch.dict(
+            sys.modules,
+            {
+                'matplotlib': fake_matplotlib,
+                'matplotlib.pyplot': fake_pyplot,
+                'matplotlib.font_manager': fake_matplotlib.font_manager,
+                'seaborn': fake_seaborn,
+                'xgboost': fake_xgboost,
+                'shap': fake_shap,
+                'sklearn.model_selection': fake_model_selection,
+                'sklearn.preprocessing': fake_preprocessing,
+                'sklearn.metrics': fake_metrics,
+                'sklearn.ensemble': fake_ensemble,
+            },
+        ):
+            from backend.algorithm import robust_insight_tool as tool
+
+            self.assertEqual(tool.ModelCore(test_size=0).test_size, 0.0)
+            self.assertEqual(tool.ModelCore(test_size=1).test_size, 0.95)
+            self.assertEqual(tool.ModelCore(test_size=0.35).test_size, 0.35)
+
+    def test_model_core_uses_full_training_data_when_test_size_is_zero(self):
+        sys.modules.pop('backend.algorithm.robust_insight_tool', None)
+
+        fake_pyplot = types.SimpleNamespace(rcParams={})
+        fake_matplotlib = types.ModuleType('matplotlib')
+        fake_matplotlib.pyplot = fake_pyplot
+        fake_matplotlib.font_manager = types.SimpleNamespace(fontManager=types.SimpleNamespace(ttflist=[]))
+        fake_seaborn = types.ModuleType('seaborn')
+        fake_shap = types.ModuleType('shap')
+
+        split_calls = []
+        fit_calls = []
+
+        class FakeRegressor:
+            def __init__(self, **kwargs):
+                self.kwargs = kwargs
+
+            def fit(self, X, y, eval_set=None, verbose=False):
+                fit_calls.append(
+                    {
+                        'X_train': X.copy(),
+                        'y_train': y.copy(),
+                        'eval_set': eval_set,
+                    }
+                )
+                return self
+
+            def predict(self, X):
+                return np.zeros(len(X))
+
+        def fake_train_test_split(X, y, test_size=None, random_state=None):
+            split_calls.append(
+                {
+                    'X': X.copy(),
+                    'y': y.copy(),
+                    'test_size': test_size,
+                    'random_state': random_state,
+                }
+            )
+            return X.iloc[:3], X.iloc[3:], y.iloc[:3], y.iloc[3:]
+
+        fake_xgboost = types.ModuleType('xgboost')
+        fake_xgboost.XGBRegressor = FakeRegressor
+        fake_model_selection = types.ModuleType('sklearn.model_selection')
+        fake_model_selection.train_test_split = fake_train_test_split
+        fake_model_selection.RandomizedSearchCV = object
+        fake_preprocessing = types.ModuleType('sklearn.preprocessing')
+        fake_preprocessing.LabelEncoder = object
+        fake_metrics = types.ModuleType('sklearn.metrics')
+        fake_metrics.r2_score = lambda *args, **kwargs: 0.1
+        fake_metrics.mean_absolute_error = lambda *args, **kwargs: 1.0
+        fake_ensemble = types.ModuleType('sklearn.ensemble')
+        fake_ensemble.IsolationForest = object
+
+        with patch.dict(
+            sys.modules,
+            {
+                'matplotlib': fake_matplotlib,
+                'matplotlib.pyplot': fake_pyplot,
+                'matplotlib.font_manager': fake_matplotlib.font_manager,
+                'seaborn': fake_seaborn,
+                'xgboost': fake_xgboost,
+                'shap': fake_shap,
+                'sklearn.model_selection': fake_model_selection,
+                'sklearn.preprocessing': fake_preprocessing,
+                'sklearn.metrics': fake_metrics,
+                'sklearn.ensemble': fake_ensemble,
+            },
+        ):
+            from backend.algorithm import robust_insight_tool as tool
+
+            X = pd.DataFrame({'f1': [1.0, 2.0, 3.0, 4.0], 'f2': [2.0, 3.0, 4.0, 5.0]})
+            y = pd.Series([1.0, 2.0, 3.0, 4.0])
+
+            tool.ModelCore(test_size=0, auto_tune_enabled=False).train(X, y)
+
+        self.assertEqual(len(split_calls), 1)
+        self.assertEqual(split_calls[0]['test_size'], 0.2)
+        self.assertEqual(len(fit_calls), 1)
+        pd.testing.assert_frame_equal(fit_calls[0]['X_train'], X)
+        pd.testing.assert_series_equal(fit_calls[0]['y_train'], y)
+        pd.testing.assert_frame_equal(fit_calls[0]['eval_set'][0][0], X.iloc[3:])
+        pd.testing.assert_series_equal(fit_calls[0]['eval_set'][0][1], y.iloc[3:])
 
     def test_insight_engine_uses_custom_shap_sample_limit(self):
         from backend.algorithm import robust_insight_tool as tool

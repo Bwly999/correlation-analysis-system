@@ -332,6 +332,7 @@ describe('Node Definitions Execution Logic', () => {
       group: '高级参数',
       numberMode: 'decimal',
     })
+    expect(properties.testSize?.description).toContain('0 到 0.95')
     expect(properties.randomSeed).toMatchObject({
       type: 'number',
       displayName: '随机种子',

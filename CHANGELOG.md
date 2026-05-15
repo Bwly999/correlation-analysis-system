@@ -4,6 +4,12 @@
 
 ### 变更 (Changed)
 
+- **调整 XGBoost + SHAP 的测试集比例边界与 `0` 值切分逻辑**:
+  - `src/nodes/definitions/xgboostShap.ts` 将 `testSize` 参数说明更新为 `0 ~ 0.95`，并明确 `0` 时使用全量训练集、额外随机抽取 20% 数据作为测试集。
+  - `backend/algorithms/xgboost_shap_analysis.py` 将 `testSize` 的后端归一化上限调整为 `0.95`，保持 `0` 可以透传到模型层做特殊处理。
+  - `backend/algorithm/robust_insight_tool.py` 为 `testSize = 0` 增加专用切分分支，避免 `train_test_split(test_size=0)` 报错，同时满足“训练集全量、测试集抽样”的建模需求。
+  - `backend/tests/test_xgboost_shap_analysis.py` 与 `src/nodes/__tests__/nodeDefinitions.spec.ts` 补充回归测试，覆盖 `0` 特殊分支、`0.95` 上限钳制和前端文案同步。
+
 - **修复结果预览图表在 Infinity 场景下的布局错乱**:
   - `src/components/workflow/DataChart.vue` 统一将折线、散点、柱状、分组散点与分组柱状图的可绘制数值口径收敛为有限数，阻断 `Infinity / -Infinity / NaN` 继续进入 ECharts 坐标轴与缩放计算。
   - 原始折线图在未开启“异常值过滤”时改为对非法值输出 `null` 空洞而不是补 `0`，既保留样本位置，也避免图表被错误零值拉偏。

@@ -363,6 +363,10 @@ class DataEngine:
 # ==========================================
 class ModelCore:
     """封装 XGBoost 逻辑，包含自动超参数调优。"""
+    @staticmethod
+    def _normalize_test_size(value: Optional[float]) -> float:
+        return DataEngine._clamp_float(value, AppConfig.TEST_SIZE, 0.0, 0.95)
+
     def __init__(
         self,
         n_estimators: Optional[int] = None,
@@ -383,7 +387,7 @@ class ModelCore:
             learning_rate, AppConfig.MODEL_LEARNING_RATE, 0.001, 0.5
         )
         self.max_depth = DataEngine._clamp_int(max_depth, AppConfig.MODEL_MAX_DEPTH, 2, 12)
-        self.test_size = DataEngine._clamp_float(test_size, AppConfig.TEST_SIZE, 0.05, 0.4)
+        self.test_size = self._normalize_test_size(test_size)
         self.random_seed = DataEngine._clamp_int(random_seed, AppConfig.RANDOM_SEED, 0, 2**32 - 1)
         self.auto_tune_enabled = True if auto_tune_enabled is None else bool(auto_tune_enabled)
         self.auto_tune_threshold = DataEngine._clamp_float(
@@ -398,9 +402,15 @@ class ModelCore:
         :param metric: 'r2' 或 'mae'。决定了自动调优的优化目标和 Champion 模型选择标准。
         """
         logger.info(f"开始切分数据集... (优化目标: {metric.upper()})")
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=self.test_size, random_state=self.random_seed
-        )
+        if self.test_size == 0:
+            X_train, y_train = X, y
+            _, X_test, _, y_test = train_test_split(
+                X, y, test_size=AppConfig.TEST_SIZE, random_state=self.random_seed
+            )
+        else:
+            X_train, X_test, y_train, y_test = train_test_split(
+                X, y, test_size=self.test_size, random_state=self.random_seed
+            )
 
         logger.info(f">>> 阶段1: 快速训练 (LR={self.learning_rate})...")
         # 1. 训练默认模型

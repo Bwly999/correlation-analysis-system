@@ -51,7 +51,7 @@ def _normalize_model_config(config: Dict[str, Any]) -> Dict[str, Any]:
         'n_estimators': _clamp_int(config.get('nEstimators'), 500, 50, 5000),
         'learning_rate': _clamp_float(config.get('learningRate'), 0.05, 0.001, 0.5),
         'max_depth': _clamp_int(config.get('maxDepth'), 6, 2, 12),
-        'test_size': _clamp_float(config.get('testSize'), 0.2, 0.05, 0.4),
+        'test_size': _clamp_float(config.get('testSize'), 0.2, 0.0, 0.95),
         'random_seed': _clamp_int(config.get('randomSeed'), 42, 0, 2**32 - 1),
         'shap_sample_limit': _clamp_int(config.get('shapSampleLimit'), 2000, 100, 1000000),
         'auto_tune_enabled': _normalize_bool(config.get('autoTuneEnabled'), True),

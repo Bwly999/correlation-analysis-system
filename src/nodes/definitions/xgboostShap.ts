@@ -237,7 +237,7 @@ export const xgboostShapNode: NodeDefinition = {
       default: 0.2,
       numberMode: 'decimal',
       group: ADVANCED_GROUP,
-      description: '用于验证模型效果的数据比例，后端会限制在 0.05 到 0.4 之间。',
+      description: '用于验证模型效果的数据比例，后端允许 0 到 0.95；当填写 0 时会使用全量训练集，并额外随机抽取 20% 数据作为测试集。',
     },
     {
       name: 'randomSeed',
