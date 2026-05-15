@@ -3,6 +3,8 @@
  */
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { useWorkflowAiStore } from './workflowAiStore'
+import { useWorkflowStore } from './workflowStore'
 
 export interface PiAgentMessage {
   id: string
@@ -46,17 +48,64 @@ export const usePiAgentStore = defineStore('piAgent', () => {
 
   // --- Actions ---
 
-  async function createSession(request: {
-    mode: string
-    prompt: string
-    profile: { id: string; name: string; baseUrl: string; model: string; apiKey?: string }
-    workflowSnapshot?: unknown
-    dataSources?: unknown[]
-    nodeCatalog?: unknown[]
-  }) {
+  async function ensureSession(prompt: string) {
+    if (sessionId.value) return true
+
+    const aiStore = useWorkflowAiStore()
+    const workflowStore = useWorkflowStore()
+
+    // 确保 profiles 已加载
+    if (!aiStore.selectedProfile) {
+      await aiStore.loadProfiles()
+    }
+
+    // 获取当前选中的 profile，如果没有则取第一个可用的
+    let profile = aiStore.selectedProfile
+    if (!profile) {
+      // 直接从后端获取 profiles
+      try {
+        const res = await fetch('/api/workflow-ai/model-profiles')
+        if (res.ok) {
+          const data = await res.json()
+          const profiles = data.profiles || []
+          profile = profiles.find((p: any) => p.enabled) || profiles[0]
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    if (!profile) {
+      errorMessage.value = '未配置模型，请在 .env.local 中设置 OPENAI_API_KEY 等环境变量'
+      status.value = 'failed'
+      return false
+    }
+
+    // 构建 session 请求
+    const request = {
+      mode: 'create' as const,
+      prompt,
+      profile,
+      workflowSnapshot: workflowStore.nodes.length > 0
+        ? {
+            name: workflowStore.workflowName || '未命名工作流',
+            nodes: workflowStore.nodes,
+            edges: workflowStore.edges,
+          }
+        : undefined,
+      dataSources: aiStore.contextHints?.schemaSummaries?.map((s: any) => ({
+        id: s.nodeId,
+        kind: 'file' as const,
+        entryNodeType: 'file-import' as const,
+        label: s.nodeLabel,
+        schemaSummary: s,
+        bindingPayload: {},
+      })) || [],
+      nodeCatalog: [],
+    }
+
     status.value = 'connecting'
     errorMessage.value = ''
-    messages.value = []
 
     try {
       const res = await fetch('/api/pi-agent/sessions', {
@@ -76,17 +125,25 @@ export const usePiAgentStore = defineStore('piAgent', () => {
 
       // 连接事件流
       connectEventStream(data.sessionId)
+      return true
     } catch (err: any) {
       status.value = 'failed'
       errorMessage.value = err?.message || '创建会话失败'
+      return false
     }
   }
 
   async function sendMessage(text?: string) {
     const content = text || inputText.value.trim()
-    if (!content || !sessionId.value) return
+    if (!content) return
 
     inputText.value = ''
+
+    // 如果没有 session，先创建
+    if (!sessionId.value) {
+      const ok = await ensureSession(content)
+      if (!ok) return
+    }
 
     // 添加用户消息
     messages.value.push({
@@ -265,7 +322,7 @@ export const usePiAgentStore = defineStore('piAgent', () => {
     isStreaming,
     canSend,
     // Actions
-    createSession,
+    ensureSession,
     sendMessage,
     disconnect,
     reset,

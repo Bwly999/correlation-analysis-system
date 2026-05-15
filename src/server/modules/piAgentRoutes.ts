@@ -4,7 +4,6 @@
 import type { WorkflowAiPlanRequest } from '../../ai/types.js'
 import type { ServerDependencies } from '../bootstrap/serverDependencies.js'
 import type { HttpDomainHandler } from '../http/types.js'
-import { requireWorkflowUser } from '../http/workflowUser.js'
 import {
   createPiAgentSession,
   sendPiAgentMessage,
@@ -12,14 +11,24 @@ import {
   getPiAgentSession,
 } from '../piAgent/gateway.js'
 
+const resolveUserId = (context: any): string => {
+  try {
+    const header = context.request.headers['x-workflow-user-id']
+    if (header) return Array.isArray(header) ? header[0] : header
+  } catch {
+    // ignore
+  }
+  return 'default-user'
+}
+
 export const createPiAgentRoutes = (): HttpDomainHandler<ServerDependencies> => async (context) => {
   const { pathname, method } = context
 
   // POST /api/pi-agent/sessions - 创建会话
   if (method === 'POST' && pathname === '/api/pi-agent/sessions') {
-    const currentUser = requireWorkflowUser(context)
+    const userId = resolveUserId(context)
     const body = await context.readJsonBody<WorkflowAiPlanRequest>()
-    const result = await createPiAgentSession(body, currentUser.id)
+    const result = await createPiAgentSession(body, userId)
     context.sendJson(200, result)
     return true
   }
