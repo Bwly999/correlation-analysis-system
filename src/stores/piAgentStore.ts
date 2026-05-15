@@ -288,6 +288,16 @@ export const usePiAgentStore = defineStore('piAgent', () => {
         break
       }
 
+      case 'workflow.apply': {
+        try {
+          const workflowStore = useWorkflowStore()
+          workflowStore.applyWorkflowAiPlan(event.plan)
+        } catch (err: any) {
+          console.warn('[PiAgent] 应用工作流计划失败:', err?.message || err)
+        }
+        break
+      }
+
       case 'error': {
         status.value = 'failed'
         errorMessage.value = event.message

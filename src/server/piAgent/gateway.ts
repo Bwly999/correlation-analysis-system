@@ -19,7 +19,7 @@ import {
   appendMessage,
   type PiAgentSessionRecord,
 } from './sessionStore.js'
-import { bridgePiEvent, type PiAgentSseEvent } from './eventBridge.js'
+import { bridgePiEvent, tryExtractWorkflowPlan, type PiAgentSseEvent } from './eventBridge.js'
 import { buildAllTools } from './tools/index.js'
 
 // --- Runtime 管理 ---
@@ -90,6 +90,16 @@ export async function createPiAgentSession(
 
     // 桥接事件
     const sseEvents = bridgePiEvent(event, record, runtime.currentMessageId)
+
+    // 检测 workflow 工具执行完成 → 发射 workflow.apply 事件
+    if (event.type === 'tool_execution_end' && !event.isError) {
+      const resultText = extractToolResultTextForApply(event.result)
+      const plan = tryExtractWorkflowPlan(event.toolName, resultText)
+      if (plan) {
+        sseEvents.push({ type: 'workflow.apply', sessionId: record.sessionId, plan })
+      }
+    }
+
     for (const sseEvent of sseEvents) {
       for (const listener of runtime.eventListeners) {
         try {
@@ -195,4 +205,20 @@ export function disposeAllPiAgentSessions(): void {
   for (const sessionId of runtimes.keys()) {
     disposePiAgentSession(sessionId)
   }
+}
+
+/**
+ * 从 Pi SDK 工具结果中提取文本内容
+ * Pi SDK 返回 { content: [{ type: 'text', text: '...' }], details: {} }
+ */
+function extractToolResultTextForApply(result: any): string {
+  if (!result) return ''
+  if (typeof result === 'string') return result
+  if (result.content && Array.isArray(result.content)) {
+    return result.content
+      .filter((block: any) => block.type === 'text')
+      .map((block: any) => block.text || '')
+      .join('')
+  }
+  return ''
 }

@@ -121,6 +121,7 @@ export function createWorkflowTools(request: WorkflowAiPlanRequest) {
             {
               success: true,
               message: '工作流修改成功',
+              plan,
               draft: {
                 summary: updatedDraft.summary,
                 nodeCount: updatedDraft.nodes.length,
