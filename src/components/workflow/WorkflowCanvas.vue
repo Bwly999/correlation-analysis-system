@@ -11,6 +11,7 @@ import WorkflowHeader from './WorkflowHeader.vue'
 import AgentWorkspace from '../agent/AgentWorkspace.vue'
 import AgentObservabilityToggle from '../agent/AgentObservabilityToggle.vue'
 import AgentObservabilityDrawer from '../agent/AgentObservabilityDrawer.vue'
+import PiAgentPanel from '../piAgent/PiAgentPanel.vue'
 import BaseNode from './nodes/BaseNode.vue'
 import LogPanel from './LogPanel.vue'
 import NodeConfigModal from './NodeConfigModal.vue'
@@ -59,6 +60,7 @@ const isWorkflowListVisible = ref(false)
 const workflowManagerInitialTab = ref('0')
 const isSidebarVisible = ref(true)
 const isAiPanelVisible = ref(false)
+const usePiAgent = ref(true)
 const isAgentObservabilityVisible = ref(false)
 const isHelpCenterVisible = ref(false)
 const viewportWidth = ref(typeof window === 'undefined' ? 1920 : window.innerWidth)
@@ -586,8 +588,13 @@ onBeforeUnmount(() => {
 
       <div class="workflow-workspace" :class="{ 'workflow-workspace--agent': isAgentMode }">
         <AgentWorkspace
+          v-if="!usePiAgent"
           :visible="isAiPanelVisible"
           @focus-report="() => undefined"
+        />
+        <PiAgentPanel
+          v-if="usePiAgent && isAiPanelVisible"
+          class="pi-agent-workspace"
         />
 
         <section class="execution-workspace">
@@ -998,6 +1005,26 @@ onBeforeUnmount(() => {
 
   .workflow-workspace--agent .execution-workspace {
     height: 100%;
+  }
+}
+
+.pi-agent-workspace {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  border-right: 1px solid #e2e8f0;
+}
+
+@media (max-width: 1280px) {
+  .pi-agent-workspace {
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: min(440px, calc(100vw - 32px));
+    max-width: calc(100vw - 24px);
+    z-index: 140;
+    box-shadow: 20px 0 48px rgba(15, 23, 42, 0.16);
   }
 }
 </style>
