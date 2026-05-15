@@ -314,7 +314,12 @@ export const chartDisplayNode: NodeDefinition = {
                 {
                   name: targetYKey,
                   type: 'bar',
-                  data: validGroups.map((group) => group.data[0]?.[targetYKey] ?? null),
+                  data: validGroups.map((group) => {
+                    const firstValidRow = group.data.find((row) =>
+                      typeof row[targetYKey] === 'number' && Number.isFinite(row[targetYKey] as number),
+                    )
+                    return firstValidRow?.[targetYKey] ?? null
+                  }),
                 },
               ],
             }
@@ -329,7 +334,15 @@ export const chartDisplayNode: NodeDefinition = {
                 name: group.name,
                 type: 'scatter',
                 symbolSize: 8,
-                data: group.data.map((row) => [row[xKey], row[targetYKey]]),
+                data: group.data
+                  .filter(
+                    (row) =>
+                      typeof row[xKey] === 'number'
+                      && Number.isFinite(row[xKey] as number)
+                      && typeof row[targetYKey] === 'number'
+                      && Number.isFinite(row[targetYKey] as number),
+                  )
+                  .map((row) => [row[xKey], row[targetYKey]]),
               })),
             }
 
@@ -418,7 +431,15 @@ export const chartDisplayNode: NodeDefinition = {
         series: [
           {
             symbolSize: 8,
-            data: rows.map((row) => [row[xKey], row[targetYKey]]),
+            data: rows
+              .filter(
+                (row) =>
+                  typeof row[xKey] === 'number'
+                  && Number.isFinite(row[xKey] as number)
+                  && typeof row[targetYKey] === 'number'
+                  && Number.isFinite(row[targetYKey] as number),
+              )
+              .map((row) => [row[xKey], row[targetYKey]]),
             type: 'scatter',
             itemStyle: { color: '#0ea5e9' },
           },
@@ -431,7 +452,16 @@ export const chartDisplayNode: NodeDefinition = {
         grid: { top: '15%', bottom: '15%', left: '10%', right: '10%', containLabel: true },
         xAxis: { type: 'category', data: rows.map((row) => row[xKey]), boundaryGap: true },
         yAxis: { type: 'value', boundaryGap: ['0%', '15%'] },
-        series: [{ data: rows.map((row) => row[targetYKey]), type: 'bar' }],
+        series: [
+          {
+            data: rows.map((row) =>
+              typeof row[targetYKey] === 'number' && Number.isFinite(row[targetYKey] as number)
+                ? row[targetYKey]
+                : null,
+            ),
+            type: 'bar',
+          },
+        ],
       }
     } else {
       option = createBoxplotBaseOption([targetYKey], `${targetYKey} 分布`)

@@ -4,6 +4,12 @@
 
 ### 变更 (Changed)
 
+- **修复结果预览图表在 Infinity 场景下的布局错乱**:
+  - `src/components/workflow/DataChart.vue` 统一将折线、散点、柱状、分组散点与分组柱状图的可绘制数值口径收敛为有限数，阻断 `Infinity / -Infinity / NaN` 继续进入 ECharts 坐标轴与缩放计算。
+  - 原始折线图在未开启“异常值过滤”时改为对非法值输出 `null` 空洞而不是补 `0`，既保留样本位置，也避免图表被错误零值拉偏。
+  - `src/utils/stats.ts` 与 `src/nodes/definitions/chartDisplay.ts` 同步加固箱线统计和 legacy 图表节点，确保箱体、离群点、静态散点图与静态柱状图同样只消费有限数值。
+  - `src/components/workflow/__tests__/DataChart.spec.ts` 补充 Infinity 回归测试，覆盖原始折线空洞、分组散点/柱状跳过异常值以及单表/多组箱线统计保持有限值的场景。
+
 - **统一节点本地同步执行前的 loading 渲染时机**:
   - `src/stores/workflowStore.ts` 在节点进入 `running` 后、真正执行本地节点逻辑前统一插入 `nextTick + requestAnimationFrame` 的 UI 让步点，确保单调性分析、PCA、VIF、方差分析等前端同步计算节点能先渲染按钮与节点 loading 状态。
   - 保持现有 `isRunning + activeExecutionScope + activeExecutionNodeId` 作为唯一运行态来源，不新增第二套按钮 loading 状态，画布悬浮调试、节点配置弹窗与全局运行共用同一套修复。

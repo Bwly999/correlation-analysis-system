@@ -1,3 +1,6 @@
+const isFiniteNumber = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value)
+
 /**
  * 计算一组数值的箱线图五个关键统计值 [最小值, 下四分位数, 中位数, 上四分位数, 最大值]
  * 针对大数据量自动进行采样以平衡精度与性能
@@ -5,7 +8,7 @@
 const getNumericValues = (data: any[], key: string) => {
   let values = data
     .map((r) => r[key])
-    .filter((v): v is number => typeof v === 'number')
+    .filter(isFiniteNumber)
 
   if (values.length === 0) return []
 

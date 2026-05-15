@@ -834,6 +834,11 @@ const getGroupedScatterOffset = (index: number, total: number) => [Math.round((i
 const getNormalDistributionValues = (rows: ChartRow[], key: string) =>
   rows.map((row) => row[key]).filter(isFiniteNumber)
 
+const getFiniteRowValue = (row: ChartRow, key: string) => {
+  const value = row[key]
+  return isFiniteNumber(value) ? value : null
+}
+
 const calculateMean = (values: number[]) =>
   values.reduce((sum, value) => sum + value, 0) / Math.max(values.length, 1)
 
@@ -1219,8 +1224,11 @@ const chartOption = computed(() => {
         type: 'scatter',
         symbolSize: 8,
         data: group.data
-          .filter((row) => xAxisField && typeof row[xAxisField] === 'number' && typeof row[primaryKey] === 'number')
-          .map((row) => [row[xAxisField as string], row[primaryKey]]),
+          .filter((row) => {
+            if (!xAxisField) return false
+            return isFiniteNumber(row[xAxisField]) && isFiniteNumber(row[primaryKey])
+          })
+          .map((row) => [row[xAxisField as string] as number, row[primaryKey] as number]),
       }))
 
       option.title = { text: `${xAxisField ?? 'X'} vs ${primaryKey} 分组散点图`, left: 'center' }
@@ -1249,8 +1257,8 @@ const chartOption = computed(() => {
           name: primaryKey,
           type: 'bar',
           data: (sourceData as ChartGroup[]).map((group) => {
-            const firstValidRow = group.data.find((row) => typeof row[primaryKey] === 'number')
-            return firstValidRow?.[primaryKey] ?? null
+            const firstValidRow = group.data.find((row) => isFiniteNumber(row[primaryKey]))
+            return firstValidRow ? (firstValidRow[primaryKey] as number) : null
           }),
           itemStyle: { color: '#2563eb' },
         },
@@ -1390,8 +1398,11 @@ const chartOption = computed(() => {
         type: 'scatter',
         symbolSize: 8,
         data: (sourceData as ChartRow[])
-          .filter((row) => xAxisField && typeof row[xAxisField] === 'number' && typeof row[primaryKey] === 'number')
-          .map((row) => [row[xAxisField as string], row[primaryKey]]),
+          .filter((row) => {
+            if (!xAxisField) return false
+            return isFiniteNumber(row[xAxisField]) && isFiniteNumber(row[primaryKey])
+          })
+          .map((row) => [row[xAxisField as string] as number, row[primaryKey] as number]),
         itemStyle: { color: '#0ea5e9' },
       },
     ]
@@ -1409,9 +1420,7 @@ const chartOption = computed(() => {
       {
         name: primaryKey,
         type: 'bar',
-        data: (sourceData as ChartRow[]).map((row) =>
-          typeof row[primaryKey] === 'number' ? row[primaryKey] : null,
-        ),
+        data: (sourceData as ChartRow[]).map((row) => getFiniteRowValue(row, primaryKey)),
         itemStyle: { color: '#2563eb' },
       },
     ]
@@ -1457,9 +1466,7 @@ const chartOption = computed(() => {
       data: sampledRows.map((row) =>
         isNormalizedView.value
           ? normalizeSeriesValue(row[key], normalizationStats.value.get(key), activeNormalizationMethod)
-          : typeof row[key] === 'number'
-            ? row[key]
-            : 0,
+          : getFiniteRowValue(row, key),
       ),
       showSymbol: false,
       lineStyle: { width: 2.5 },

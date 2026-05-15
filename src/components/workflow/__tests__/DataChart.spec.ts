@@ -616,6 +616,97 @@ describe('DataChart', () => {
     expect(allPoints.every(([x, y]: [number, number]) => Number.isFinite(x) && Number.isFinite(y))).toBe(true)
   })
 
+  it('renders raw line charts with null gaps instead of leaking Infinity into series data', () => {
+    const wrapper = mount(DataChart, {
+      props: {
+        data: [
+          { score: 10 },
+          { score: Infinity },
+          { score: 20 },
+        ],
+      },
+    })
+
+    const option = getChartOptionObject(wrapper)
+
+    expect(option.xAxis.data).toEqual([1, 2, 3])
+    expect(option.series[0].data).toEqual([10, null, 20])
+    expect(option.series[0].data.every((value: number | null) => value === null || Number.isFinite(value))).toBe(true)
+  })
+
+  it('filters Infinity out of grouped scatter and grouped bar chart data', async () => {
+    const wrapper = mount(DataChart, {
+      props: {
+        data: [
+          {
+            name: 'A',
+            data: [
+              { temperature: Infinity, score: 1 },
+              { temperature: 10, score: 2 },
+            ],
+          },
+          {
+            name: 'B',
+            data: [
+              { temperature: 20, score: Infinity },
+              { temperature: 25, score: 5 },
+            ],
+          },
+        ],
+      },
+    })
+
+    await wrapper.get('[data-test="chart-key-select"]').setValue(['score'])
+    await wrapper.get('[data-test="chart-type-select"]').setValue('grouped-scatter')
+    await wrapper.get('[data-test="chart-x-field-select"]').setValue('temperature')
+
+    const scatterOption = getChartOptionObject(wrapper)
+    expect(scatterOption.series[0].data).toEqual([[10, 2]])
+    expect(scatterOption.series[1].data).toEqual([[25, 5]])
+
+    await wrapper.get('[data-test="chart-type-select"]').setValue('grouped-bar')
+
+    const barOption = getChartOptionObject(wrapper)
+    expect(barOption.series[0].data).toEqual([1, 5])
+    expect(barOption.series[0].data.every((value: number | null) => value === null || Number.isFinite(value))).toBe(true)
+  })
+
+  it('keeps single-table and grouped boxplot stats finite when rows contain Infinity', async () => {
+    const singleWrapper = mount(DataChart, {
+      props: {
+        data: [{ score: 1 }, { score: 2 }, { score: Infinity }, { score: 4 }],
+      },
+    })
+
+    await singleWrapper.get('[data-test="chart-type-select"]').setValue('boxplot')
+    const singleOption = getChartOptionObject(singleWrapper)
+    expect(singleOption.series[0].data[0].value.every((value: number) => Number.isFinite(value))).toBe(true)
+
+    const groupedWrapper = mount(DataChart, {
+      props: {
+        data: [
+          { name: 'A', data: [{ score: 1 }, { score: Infinity }, { score: 3 }] },
+          { name: 'B', data: [{ score: 4 }, { score: 5 }, { score: Infinity }] },
+        ],
+      },
+    })
+
+    const groupedOption = getChartOptionObject(groupedWrapper)
+    const boxplotSeries = groupedOption.series.filter((series: { type: string }) => series.type === 'boxplot')
+    const outlierSeries = groupedOption.series.filter((series: { type: string }) => series.type === 'scatter')
+
+    expect(
+      boxplotSeries.every((series: { data: Array<[number, number, number, number, number]> }) =>
+        series.data.every((item) => item.every((value) => Number.isFinite(value))),
+      ),
+    ).toBe(true)
+    expect(
+      outlierSeries.every((series: { data: Array<{ value: [number, number] }> }) =>
+        series.data.every((item) => Number.isFinite(item.value[1])),
+      ),
+    ).toBe(true)
+  })
+
   it('uses full option replacement to avoid vue-echarts smart replaceMerge errors when switching chart shapes', async () => {
     const wrapper = mount(DataChart, {
       props: {
@@ -1080,7 +1171,7 @@ describe('DataChart', () => {
     expect(wrapper.find('[data-test="chart-skip-invalid-help"]').exists()).toBe(true)
     expect((wrapper.get('[data-test="chart-skip-invalid-checkbox"]').element as HTMLInputElement).checked).toBe(false)
     expect(option.xAxis.data).toEqual([1, 2, 3])
-    expect(option.series[0].data).toEqual([10, 0, 20])
+    expect(option.series[0].data).toEqual([10, null, 20])
   })
 
   it('drops invalid line rows when the invalid-row toggle is enabled', async () => {
