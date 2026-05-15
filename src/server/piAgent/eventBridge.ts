@@ -1,0 +1,164 @@
+/**
+ * Pi Agent 事件桥接：将 Pi SDK 原生事件转换为前端可消费的 SSE 事件
+ */
+import { randomUUID } from 'node:crypto'
+import type { PiAgentSessionRecord, PiAgentToolCall } from './sessionStore.js'
+import {
+  appendMessage,
+  appendToolCall,
+  updateSessionRecord,
+  updateToolCall,
+} from './sessionStore.js'
+
+/** 前端 SSE 事件类型 */
+export type PiAgentSseEvent =
+  | { type: 'session.status'; sessionId: string; status: string }
+  | { type: 'message.start'; sessionId: string; messageId: string; role: string }
+  | { type: 'message.delta'; sessionId: string; messageId: string; delta: string }
+  | { type: 'message.thinking_delta'; sessionId: string; messageId: string; delta: string }
+  | { type: 'message.completed'; sessionId: string; messageId: string; content: string }
+  | { type: 'tool.start'; sessionId: string; toolCall: PiAgentToolCall }
+  | { type: 'tool.end'; sessionId: string; toolCallId: string; result: string; isError: boolean }
+  | { type: 'error'; sessionId: string; message: string }
+
+const TOOL_DISPLAY_NAMES: Record<string, string> = {
+  workflow_get_session_context: '读取分析上下文',
+  workflow_get_node_catalog: '读取节点目录',
+  workflow_get_node_definition: '读取节点定义',
+  workflow_list_data_sources: '列出数据源',
+  workflow_get_data_source_schema: '读取字段摘要',
+  workflow_search_nodes: '搜索节点',
+  workflow_create_workflow: '创建工作流',
+  workflow_update_partial_workflow: '增量修改工作流',
+  workflow_validate_workflow: '校验工作流结构',
+  workflow_test_workflow: '测试完整工作流',
+}
+
+/**
+ * 将 Pi SDK AgentEvent 转换为 SSE 事件并更新 session store
+ */
+export function bridgePiEvent(
+  piEvent: any,
+  record: PiAgentSessionRecord,
+  currentMessageId: { value: string },
+): PiAgentSseEvent[] {
+  const sessionId = record.sessionId
+  const events: PiAgentSseEvent[] = []
+
+  switch (piEvent.type) {
+    case 'agent_start': {
+      updateSessionRecord(sessionId, { status: 'running' })
+      events.push({ type: 'session.status', sessionId, status: 'running' })
+      break
+    }
+
+    case 'agent_end': {
+      updateSessionRecord(sessionId, { status: 'completed' })
+      events.push({ type: 'session.status', sessionId, status: 'completed' })
+      break
+    }
+
+    case 'message_start': {
+      const msgId = randomUUID()
+      currentMessageId.value = msgId
+      appendMessage(sessionId, {
+        id: msgId,
+        role: 'assistant',
+        content: '',
+        status: 'streaming',
+        createdAt: Date.now(),
+      })
+      events.push({ type: 'message.start', sessionId, messageId: msgId, role: 'assistant' })
+      break
+    }
+
+    case 'message_update': {
+      const msgEvent = piEvent.assistantMessageEvent
+      if (!msgEvent) break
+      const msgId = currentMessageId.value
+
+      if (msgEvent.type === 'text_delta') {
+        events.push({ type: 'message.delta', sessionId, messageId: msgId, delta: msgEvent.delta })
+      } else if (msgEvent.type === 'thinking_delta') {
+        events.push({
+          type: 'message.thinking_delta',
+          sessionId,
+          messageId: msgId,
+          delta: msgEvent.delta,
+        })
+      }
+      break
+    }
+
+    case 'message_end': {
+      const msgId = currentMessageId.value
+      // 从 piEvent.message 中提取最终文本
+      const finalText = extractTextFromMessage(piEvent.message)
+      // 更新 store 中的消息
+      const msg = record.messages.find((m) => m.id === msgId)
+      if (msg) {
+        msg.content = finalText
+        msg.status = 'completed'
+      }
+      events.push({ type: 'message.completed', sessionId, messageId: msgId, content: finalText })
+      break
+    }
+
+    case 'tool_execution_start': {
+      const toolCall: PiAgentToolCall = {
+        id: piEvent.toolCallId || randomUUID(),
+        toolName: piEvent.toolName,
+        displayName: TOOL_DISPLAY_NAMES[piEvent.toolName] || piEvent.toolName,
+        args: piEvent.args,
+        status: 'running',
+        startedAt: Date.now(),
+      }
+      appendToolCall(sessionId, toolCall)
+      events.push({ type: 'tool.start', sessionId, toolCall })
+      break
+    }
+
+    case 'tool_execution_end': {
+      const toolCallId = piEvent.toolCallId
+      const resultText = extractToolResultText(piEvent.result)
+      const isError = piEvent.isError || false
+      updateToolCall(sessionId, toolCallId, {
+        status: isError ? 'failed' : 'success',
+        result: resultText,
+        isError,
+        finishedAt: Date.now(),
+      })
+      events.push({ type: 'tool.end', sessionId, toolCallId, result: resultText, isError })
+      break
+    }
+  }
+
+  return events
+}
+
+function extractTextFromMessage(message: any): string {
+  if (!message) return ''
+  if (typeof message === 'string') return message
+  // Pi SDK AgentMessage 有 content 数组
+  if (message.content && Array.isArray(message.content)) {
+    return message.content
+      .filter((block: any) => block.type === 'text')
+      .map((block: any) => block.text || '')
+      .join('')
+  }
+  if (message.text) return message.text
+  return ''
+}
+
+function extractToolResultText(result: any): string {
+  if (!result) return ''
+  if (typeof result === 'string') return result
+  // Pi SDK tool result: { content: [{ type: 'text', text: '...' }] }
+  if (result.content && Array.isArray(result.content)) {
+    return result.content
+      .filter((block: any) => block.type === 'text')
+      .map((block: any) => block.text || '')
+      .join('')
+  }
+  return JSON.stringify(result)
+}
