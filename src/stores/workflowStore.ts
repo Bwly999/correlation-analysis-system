@@ -1,5 +1,5 @@
 ﻿import { defineStore } from 'pinia'
-import { ref, shallowRef, markRaw, toRaw, watch } from 'vue'
+import { ref, shallowRef, markRaw, toRaw, watch, nextTick } from 'vue'
 import type { Ref } from 'vue'
 import { type Node, type Edge, type NodeChange, type EdgeChange } from '@vue-flow/core'
 import { getNodeDefinition } from '@/nodes/registry'
@@ -1586,6 +1586,19 @@ export const useWorkflowStore = defineStore('workflow', () => {
     }
   }
 
+  const yieldExecutionForUiPaint = async () => {
+    await nextTick()
+
+    await new Promise<void>((resolve) => {
+      if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(() => resolve())
+        return
+      }
+
+      setTimeout(resolve, 0)
+    })
+  }
+
   const createExecutionSnapshotNodes = (sourceNodes: WorkflowNode[]): WorkflowNodeSnapshot[] =>
     sourceNodes.map((node) => ({
       id: node.id,
@@ -1688,9 +1701,14 @@ export const useWorkflowStore = defineStore('workflow', () => {
         }
       }
 
+      node.data.status = 'running'
+      node.data.error = undefined
+      await yieldExecutionForUiPaint()
+
+      if (isStopping.value) throw new Error('User Aborted')
+
       if (node.data.useManualInput) {
         addLog(`节点 ${node.data.label} 使用手动模拟输入运行`, 'info', nodeId)
-        node.data.error = undefined
         let parsedInput = node.data.manualInput
         if (typeof parsedInput === 'string' && parsedInput.trim()) {
           try {
@@ -1705,9 +1723,6 @@ export const useWorkflowStore = defineStore('workflow', () => {
         node.data.error = undefined
         return node.data.output
       }
-
-      node.data.status = 'running'
-      node.data.error = undefined
 
       if (node.data.type === 'file-import') {
         const file = resolvedConfig.fileData as File | undefined

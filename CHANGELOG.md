@@ -4,6 +4,11 @@
 
 ### 变更 (Changed)
 
+- **统一节点本地同步执行前的 loading 渲染时机**:
+  - `src/stores/workflowStore.ts` 在节点进入 `running` 后、真正执行本地节点逻辑前统一插入 `nextTick + requestAnimationFrame` 的 UI 让步点，确保单调性分析、PCA、VIF、方差分析等前端同步计算节点能先渲染按钮与节点 loading 状态。
+  - 保持现有 `isRunning + activeExecutionScope + activeExecutionNodeId` 作为唯一运行态来源，不新增第二套按钮 loading 状态，画布悬浮调试、节点配置弹窗与全局运行共用同一套修复。
+  - `src/stores/__tests__/workflowStore.spec.ts`、`src/components/workflow/__tests__/BaseNode.spec.ts` 与 `src/components/workflow/__tests__/NodeConfigModal.spec.ts` 补充同步节点回归测试，覆盖 store 核心执行链路、节点悬浮工具栏与节点配置弹窗中的 loading 可见性。
+
 - **优化结果预览折线云图 tooltip 的信息结构与大字段展示体验**:
   - `src/components/workflow/DataChart.vue` 将折线云图 tooltip 升级为表格化信息卡，支持原始值 / 归一化值分栏展示，字段较多时默认只渲染前 12 行并提示剩余字段数量。
   - 同文件为折线云图 tooltip 增加最近一次 hover 结果缓存，减少鼠标在同一样本点附近移动时的重复 HTML 拼接开销，同时避免缓存累积导致额外内存占用。

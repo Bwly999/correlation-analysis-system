@@ -468,51 +468,140 @@ describe('Workflow Store', () => {
     expect(result.payload.length).toBeGreaterThan(0)
   })
 
-  it('should track file import background progress and clear task state after completion', async () => {
-    const deferred = createDeferred<ReturnType<typeof createTableResult>>()
-    let progressHandler: ((progress: FileImportProgress) => void) | undefined
+  it('should yield a paint turn before executing synchronous local nodes', async () => {
+    const syncNodeDefinition = {
+      name: 'test-sync-local-node',
+      displayName: '同步本地节点',
+      icon: 'zap',
+      category: 'action' as const,
+      description: 'test',
+      properties: [],
+      execute: () => createJsonResult({ ok: true }),
+    }
 
-    vi.spyOn(fileImportTaskModule, 'createFileImportTask').mockImplementation((_file, _options, onProgress) => {
-      progressHandler = onProgress
-      return {
-        result: deferred.promise,
-        cancel: vi.fn(),
-      }
-    })
+    nodeDefinitions.push(syncNodeDefinition)
 
-    const store = useWorkflowStore()
-    const node = store.addAndConnectNode('file-import', 'Trigger', { x: 0, y: 0 })!
-    node.data.config.fileData = new File(['col1,col2\n1,2'], 'test.csv', { type: 'text/csv' })
+    const originalRequestAnimationFrame = globalThis.requestAnimationFrame
+    let executeStarted = false
+    const scheduledPaintCallbacks: Array<() => void> = []
 
-    const executionPromise = store.executeNode(node.id, true)
-
-    progressHandler?.({ phase: 'parsing', progress: 35 })
-    await Promise.resolve()
-
-    expect(store.fileImportTasks[node.id]).toMatchObject({
-      phase: 'parsing',
-      progress: 35,
-      fileName: 'test.csv',
-      canCancel: true,
-    })
-
-    deferred.resolve(
-      createTableResult([{ col1: 1, col2: 2 }], {
-        schema: {
-          fields: [
-            { name: 'col1', type: 'number' },
-            { name: 'col2', type: 'number' },
-          ],
-        },
-        meta: { rowCount: 1, filename: 'test.csv', sourceType: 'csv' },
-        preview: { summary: '共 1 行，2 个字段', viewer: 'table-chart-combo-viewer' },
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn((callback: FrameRequestCallback) => {
+        scheduledPaintCallbacks.push(() => callback(16))
+        return 1
       }),
     )
 
-    await executionPromise
+    syncNodeDefinition.execute = () => {
+      executeStarted = true
+      return createJsonResult({ ok: true })
+    }
 
-    expect(store.fileImportTasks[node.id]).toBeUndefined()
-    expect(node.data.status).toBe('success')
+    try {
+      const store = useWorkflowStore()
+      const node = store.addAndConnectNode('test-sync-local-node', '同步节点', { x: 0, y: 0 })!
+
+      const executionPromise = store.executeNode(node.id, true)
+
+      expect(store.isRunning).toBe(true)
+      expect(store.activeExecutionScope).toBe('single')
+      expect(store.activeExecutionNodeId).toBe(node.id)
+      expect(executeStarted).toBe(false)
+
+      await Promise.resolve()
+
+      expect(executeStarted).toBe(false)
+      expect(scheduledPaintCallbacks).toHaveLength(1)
+
+      scheduledPaintCallbacks[0]?.()
+      const result = await executionPromise
+
+      expect(result).toMatchObject({
+        kind: 'json',
+        payload: { ok: true },
+      })
+      expect(executeStarted).toBe(true)
+      expect(node.data.status).toBe('success')
+    } finally {
+      const index = nodeDefinitions.findIndex(
+        (definition) => definition.name === 'test-sync-local-node',
+      )
+      if (index >= 0) nodeDefinitions.splice(index, 1)
+
+      if (originalRequestAnimationFrame) {
+        vi.stubGlobal('requestAnimationFrame', originalRequestAnimationFrame)
+      } else {
+        vi.unstubAllGlobals()
+      }
+    }
+  })
+
+  it('should track file import background progress and clear task state after completion', async () => {
+    const deferred = createDeferred<ReturnType<typeof createTableResult>>()
+    let progressHandler: ((progress: FileImportProgress) => void) | undefined
+    const originalRequestAnimationFrame = globalThis.requestAnimationFrame
+
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn((callback: FrameRequestCallback) => {
+        callback(16)
+        return 1
+      }),
+    )
+
+    try {
+      vi.spyOn(fileImportTaskModule, 'createFileImportTask').mockImplementation((_file, _options, onProgress) => {
+        progressHandler = onProgress
+        return {
+          result: deferred.promise,
+          cancel: vi.fn(),
+        }
+      })
+
+      const store = useWorkflowStore()
+      const node = store.addAndConnectNode('file-import', 'Trigger', { x: 0, y: 0 })!
+      node.data.config.fileData = new File(['col1,col2\n1,2'], 'test.csv', { type: 'text/csv' })
+
+      const executionPromise = store.executeNode(node.id, true)
+      await vi.waitFor(() => {
+        expect(store.fileImportTasks[node.id]).toBeDefined()
+      })
+
+      progressHandler?.({ phase: 'parsing', progress: 35 })
+      await Promise.resolve()
+
+      expect(store.fileImportTasks[node.id]).toMatchObject({
+        phase: 'parsing',
+        progress: 35,
+        fileName: 'test.csv',
+        canCancel: true,
+      })
+
+      deferred.resolve(
+        createTableResult([{ col1: 1, col2: 2 }], {
+          schema: {
+            fields: [
+              { name: 'col1', type: 'number' },
+              { name: 'col2', type: 'number' },
+            ],
+          },
+          meta: { rowCount: 1, filename: 'test.csv', sourceType: 'csv' },
+          preview: { summary: '共 1 行，2 个字段', viewer: 'table-chart-combo-viewer' },
+        }),
+      )
+
+      await executionPromise
+
+      expect(store.fileImportTasks[node.id]).toBeUndefined()
+      expect(node.data.status).toBe('success')
+    } finally {
+      if (originalRequestAnimationFrame) {
+        vi.stubGlobal('requestAnimationFrame', originalRequestAnimationFrame)
+      } else {
+        vi.unstubAllGlobals()
+      }
+    }
   })
 
   it('should support workflow persistence (save/load)', async () => {
@@ -689,29 +778,49 @@ describe('Workflow Store', () => {
     const cancel = vi.fn(() => {
       deferred.reject(new Error('IMPORT_CANCELLED'))
     })
+    const originalRequestAnimationFrame = globalThis.requestAnimationFrame
 
-    vi.spyOn(fileImportTaskModule, 'createFileImportTask').mockImplementation(() => ({
-      result: deferred.promise,
-      cancel,
-    }))
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn((callback: FrameRequestCallback) => {
+        callback(16)
+        return 1
+      }),
+    )
 
-    const store = useWorkflowStore()
-    const node = store.addAndConnectNode('file-import', 'Trigger', { x: 0, y: 0 })!
-    node.data.config.fileData = new File(['col1,col2\n1,2'], 'test.csv', { type: 'text/csv' })
+    try {
+      vi.spyOn(fileImportTaskModule, 'createFileImportTask').mockImplementation(() => ({
+        result: deferred.promise,
+        cancel,
+      }))
 
-    const executionPromise = store.executeNode(node.id, true)
+      const store = useWorkflowStore()
+      const node = store.addAndConnectNode('file-import', 'Trigger', { x: 0, y: 0 })!
+      node.data.config.fileData = new File(['col1,col2\n1,2'], 'test.csv', { type: 'text/csv' })
 
-    expect(store.fileImportTasks[node.id]).toMatchObject({
-      fileName: 'test.csv',
-      canCancel: true,
-    })
+      const executionPromise = store.executeNode(node.id, true)
+      await vi.waitFor(() => {
+        expect(store.fileImportTasks[node.id]).toBeDefined()
+      })
 
-    store.stopExecution()
+      expect(store.fileImportTasks[node.id]).toMatchObject({
+        fileName: 'test.csv',
+        canCancel: true,
+      })
 
-    await expect(executionPromise).resolves.toBe('STOPPED')
-    expect(cancel).toHaveBeenCalledTimes(1)
-    expect(store.fileImportTasks[node.id]).toBeUndefined()
-    expect(node.data.status).toBe('idle')
+      store.stopExecution()
+
+      await expect(executionPromise).resolves.toBe('STOPPED')
+      expect(cancel).toHaveBeenCalledTimes(1)
+      expect(store.fileImportTasks[node.id]).toBeUndefined()
+      expect(node.data.status).toBe('idle')
+    } finally {
+      if (originalRequestAnimationFrame) {
+        vi.stubGlobal('requestAnimationFrame', originalRequestAnimationFrame)
+      } else {
+        vi.unstubAllGlobals()
+      }
+    }
   })
 
   it('should return WAIT_INPUT if trigger node lacks runtime input', async () => {
@@ -1614,6 +1723,15 @@ describe('Workflow Store', () => {
 
   it('should execute immediate nodes without waiting for a fixed timer', async () => {
     vi.useFakeTimers()
+    const originalRequestAnimationFrame = globalThis.requestAnimationFrame
+
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn((callback: FrameRequestCallback) => {
+        callback(16)
+        return 1
+      }),
+    )
 
     const fastNodeDefinition = {
       name: 'test-fast-node',
@@ -1639,6 +1757,12 @@ describe('Workflow Store', () => {
         payload: { ok: true },
       })
     } finally {
+      if (originalRequestAnimationFrame) {
+        vi.stubGlobal('requestAnimationFrame', originalRequestAnimationFrame)
+      } else {
+        vi.unstubAllGlobals()
+      }
+
       const nodeIndex = nodeDefinitions.findIndex((definition) => definition.name === 'test-fast-node')
       if (nodeIndex >= 0) nodeDefinitions.splice(nodeIndex, 1)
     }

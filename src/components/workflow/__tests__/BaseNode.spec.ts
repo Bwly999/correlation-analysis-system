@@ -6,6 +6,7 @@ import PrimeVue from 'primevue/config'
 import { Position } from '@vue-flow/core'
 import BaseNode from '../nodes/BaseNode.vue'
 import { useWorkflowStore } from '@/stores/workflowStore'
+import { nodeDefinitions } from '@/nodes/registry'
 
 describe('BaseNode', () => {
   beforeEach(() => {
@@ -208,6 +209,107 @@ describe('BaseNode', () => {
     await stopButton.trigger('click')
 
     expect(stopSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows a loading debug state after clicking a synchronous node debug action', async () => {
+    const syncNodeDefinition = {
+      name: 'test-sync-debug-node',
+      displayName: '同步调试节点',
+      icon: 'zap',
+      category: 'action' as const,
+      description: 'test',
+      properties: [],
+      execute: () => ({ kind: 'json' as const, payload: { ok: true } }),
+    }
+
+    nodeDefinitions.push(syncNodeDefinition)
+
+    const originalRequestAnimationFrame = globalThis.requestAnimationFrame
+    const scheduledPaintCallbacks: Array<() => void> = []
+
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn((callback: FrameRequestCallback) => {
+        scheduledPaintCallbacks.push(() => callback(16))
+        return 1
+      }),
+    )
+
+    try {
+      const store = useWorkflowStore()
+      store.nodes = [
+        {
+          id: 'sync-debug-node',
+          type: 'custom',
+          position: { x: 0, y: 0 },
+          label: '同步调试节点',
+          data: {
+            label: '同步调试节点',
+            type: 'test-sync-debug-node',
+            category: 'action',
+            status: 'idle',
+            config: {},
+            logs: [],
+            useManualInput: false,
+            manualInput: '',
+            isPinned: false,
+          },
+        } as any,
+      ]
+
+      const wrapper = mount(BaseNode, {
+        props: {
+          id: 'sync-debug-node',
+          type: 'custom',
+          selected: false,
+          dragging: false,
+          connectable: true,
+          resizing: false,
+          position: { x: 0, y: 0 },
+          dimensions: { width: 110, height: 110 },
+          isValidTargetPos: () => true,
+          isValidSourcePos: () => true,
+          zIndex: 1,
+          targetPosition: Position.Left,
+          sourcePosition: Position.Right,
+          data: store.nodes[0]!.data,
+          events: {} as any,
+        } as any,
+        global: {
+          plugins: [PrimeVue],
+          directives: { tooltip: () => undefined },
+          stubs: {
+            Handle: { template: '<div />' },
+            NodeToolbar: { template: '<div><slot /></div>' },
+            NodeIcon: { template: '<div>ICON</div>' },
+          },
+        },
+      })
+
+      wrapper.vm.$el.dispatchEvent(new MouseEvent('mouseenter'))
+      await wrapper.get('[data-testid="debug-node-button"]').trigger('click')
+      await wrapper.vm.$nextTick()
+
+      const debugButton = wrapper.get('[data-testid="debug-node-button"]')
+      const rerunButton = wrapper.get('[data-testid="debug-node-rerun-button"]')
+
+      expect(debugButton.attributes('disabled')).toBeDefined()
+      expect(rerunButton.attributes('disabled')).toBeDefined()
+      expect(wrapper.html()).toContain('animate-spin')
+
+      scheduledPaintCallbacks[0]?.()
+      await Promise.resolve()
+      await wrapper.vm.$nextTick()
+    } finally {
+      const index = nodeDefinitions.findIndex((definition) => definition.name === 'test-sync-debug-node')
+      if (index >= 0) nodeDefinitions.splice(index, 1)
+
+      if (originalRequestAnimationFrame) {
+        vi.stubGlobal('requestAnimationFrame', originalRequestAnimationFrame)
+      } else {
+        vi.unstubAllGlobals()
+      }
+    }
   })
 
   it('opens result preview from the hover toolbox when the node already has output', async () => {

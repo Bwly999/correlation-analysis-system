@@ -6,6 +6,7 @@ import { createPinia, setActivePinia } from "pinia";
 import { nextTick } from "vue";
 import NodeConfigModal from "../NodeConfigModal.vue";
 import { useWorkflowStore } from "@/stores/workflowStore";
+import { nodeDefinitions } from "@/nodes/registry";
 
 const mockToastAdd = vi.fn();
 
@@ -1297,6 +1298,109 @@ describe("NodeConfigModal", () => {
     await stopButton.trigger("click");
 
     expect(stopSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows loading copy after clicking debug for a synchronous local node", async () => {
+    const syncNodeDefinition = {
+      name: "test-sync-config-node",
+      displayName: "同步配置节点",
+      icon: "zap",
+      category: "action" as const,
+      description: "test",
+      properties: [],
+      execute: () => ({
+        kind: "json" as const,
+        payload: { ok: true },
+      }),
+    };
+
+    nodeDefinitions.push(syncNodeDefinition);
+
+    const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
+    const scheduledPaintCallbacks: Array<() => void> = [];
+
+    vi.stubGlobal(
+      "requestAnimationFrame",
+      vi.fn((callback: FrameRequestCallback) => {
+        scheduledPaintCallbacks.push(() => callback(16));
+        return 1;
+      }),
+    );
+
+    try {
+      const store = useWorkflowStore();
+      store.nodes = [
+        {
+          id: "sync-config-node",
+          type: "custom",
+          position: { x: 300, y: 0 },
+          label: "同步配置节点",
+          data: {
+            label: "同步配置节点",
+            type: "test-sync-config-node",
+            category: "action",
+            status: "idle",
+            config: {},
+            logs: [],
+            useManualInput: false,
+            manualInput: "",
+            isPinned: false,
+            output: null,
+          },
+        } as any,
+      ];
+
+      const wrapper = mount(NodeConfigModal, {
+        props: { visible: true, nodeId: "sync-config-node" },
+        global: {
+          stubs: {
+            Dialog: dialogStub,
+            DataDisplayPanel: {
+              props: ["title"],
+              template: '<div class="data-display-panel">{{ title }}</div>',
+            },
+            DataAnalysisModal: true,
+            ConfigHeader: {
+              template: "<div />",
+              props: ["nodeLabel", "isPinned", "nodeType"],
+            },
+            ConfigFooter: { template: "<div />" },
+            ConfigForm: {
+              template: "<div />",
+              props: ["config", "properties", "upstreamFactors"],
+            },
+            RuntimeInputs: {
+              template: "<div />",
+              props: ["config", "properties", "upstreamFactors"],
+            },
+          },
+        },
+      });
+
+      await wrapper.get('[data-testid="node-config-debug-button"]').trigger("click");
+      await nextTick();
+
+      expect(wrapper.text()).toContain("正在调试...");
+      expect(
+        wrapper.get('[data-testid="node-config-debug-button"]').attributes("disabled"),
+      ).toBeDefined();
+
+      scheduledPaintCallbacks[0]?.();
+      await Promise.resolve();
+      await nextTick();
+      wrapper.unmount();
+    } finally {
+      const index = nodeDefinitions.findIndex(
+        (definition) => definition.name === "test-sync-config-node",
+      );
+      if (index >= 0) nodeDefinitions.splice(index, 1);
+
+      if (originalRequestAnimationFrame) {
+        vi.stubGlobal("requestAnimationFrame", originalRequestAnimationFrame);
+      } else {
+        vi.unstubAllGlobals();
+      }
+    }
   });
 
   it("shows a success toast after applying node config changes", async () => {
