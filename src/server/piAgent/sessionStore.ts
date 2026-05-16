@@ -3,6 +3,7 @@
  */
 import { randomUUID } from 'node:crypto'
 import type { WorkflowAiModelProfile, WorkflowAiPlanRequest } from '../../ai/types.js'
+import { sanitizePiAgentDataSources } from './safePayload.js'
 
 export interface PiAgentSessionRecord {
   sessionId: string
@@ -46,18 +47,25 @@ export function createSessionRecord(
   userId: string,
 ): PiAgentSessionRecord {
   const now = Date.now()
+  const sanitizedRequest: WorkflowAiPlanRequest = {
+    ...request,
+    dataSources: sanitizePiAgentDataSources(request.dataSources).map((dataSource) => ({
+      ...dataSource,
+      bindingPayload: {},
+    })) as WorkflowAiPlanRequest['dataSources'],
+  }
   const record: PiAgentSessionRecord = {
     sessionId: randomUUID(),
     userId,
     status: 'idle',
-    mode: request.mode,
-    prompt: request.prompt,
+    mode: sanitizedRequest.mode,
+    prompt: sanitizedRequest.prompt,
     profile: {
-      id: request.profile.id,
-      name: request.profile.name,
-      model: request.profile.model,
+      id: sanitizedRequest.profile.id,
+      name: sanitizedRequest.profile.name,
+      model: sanitizedRequest.profile.model,
     },
-    request,
+    request: sanitizedRequest,
     messages: [],
     toolCalls: [],
     createdAt: now,

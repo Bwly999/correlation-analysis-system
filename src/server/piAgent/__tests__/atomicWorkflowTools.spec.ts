@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { createAtomicWorkflowTools } from '../tools/atomicWorkflowTools.js'
 import type { FrontendBridge, ToolResult } from '../frontendBridge.js'
+import type { PiAgentSafeToolResult } from '../../../ai/types.js'
 
 /** 创建一个模拟的 FrontendBridge，允许测试控制 resolve/reject */
 function createMockBridge() {
@@ -43,7 +44,18 @@ function createMockBridge() {
 }
 
 /** 成功结果工厂 */
-const successResult = (text: string, details: Record<string, unknown> = {}): ToolResult => ({
+const successDetails = (summary: string): PiAgentSafeToolResult => ({
+  ok: true,
+  scope: 'global',
+  executionId: null,
+  status: 'success',
+  summary,
+  nodes: [],
+  artifacts: [],
+  warnings: [],
+})
+
+const successResult = (text: string, details: PiAgentSafeToolResult = successDetails(text)): ToolResult => ({
   content: [{ type: 'text', text }],
   details,
 })
@@ -78,11 +90,11 @@ describe('原子工作流工具 (atomicWorkflowTools)', () => {
         { nodeType: 'manual-json-import', label: '测试', position: { x: 100, y: 200 } },
       )
 
-      mock.resolve('call_001', successResult('节点创建成功', { nodeId: 'node_abc' }))
+      mock.resolve('call_001', successResult('节点创建成功'))
       const result = await resultPromise
 
       expect((result as any).content[0]?.text).toBe('节点创建成功')
-      expect((result as any).details.nodeId).toBe('node_abc')
+      expect((result as any).details.summary).toBe('节点创建成功')
     })
   })
 
@@ -104,10 +116,10 @@ describe('原子工作流工具 (atomicWorkflowTools)', () => {
         targetId: 'node_b',
       })
 
-      mock.resolve('call_002', successResult('连线创建成功', { edgeId: 'edge_001' }))
+      mock.resolve('call_002', successResult('连线创建成功'))
       const result = await resultPromise
 
-      expect((result as any).details.edgeId).toBe('edge_001')
+      expect((result as any).details.summary).toBe('连线创建成功')
     })
   })
 
@@ -240,8 +252,32 @@ describe('原子工作流工具 (atomicWorkflowTools)', () => {
     })
   })
 
+  describe('workflow_debug_node', () => {
+    it('应将 debugNode 调用转发到 FrontendBridge', async () => {
+      const tool = tools.find((t) => t.name === 'workflow_debug_node')!
+      expect(tool).toBeDefined()
+
+      const resultPromise = tool.execute(
+        'call_009',
+        { nodeId: 'node_debug_1', mode: 'rerun_upstream', includeUpstreamTrace: true },
+        undefined as any,
+        undefined as any,
+        undefined as any,
+      )
+
+      expect(mock.bridge.request).toHaveBeenCalledWith('call_009', 'workflow_debug_node', {
+        nodeId: 'node_debug_1',
+        mode: 'rerun_upstream',
+        includeUpstreamTrace: true,
+      })
+
+      mock.resolve('call_009', successResult('节点调试完成'))
+      await resultPromise
+    })
+  })
+
   describe('所有工具应覆盖所有操作类型', () => {
-    it('应包含 8 个原子操作工具', () => {
+    it('应包含 9 个原子操作工具', () => {
       const names = tools.map((t) => t.name)
       expect(names).toContain('wf_addNode')
       expect(names).toContain('wf_connectNodes')
@@ -251,7 +287,8 @@ describe('原子工作流工具 (atomicWorkflowTools)', () => {
       expect(names).toContain('wf_disconnectEdge')
       expect(names).toContain('wf_moveNode')
       expect(names).toContain('wf_executeWorkflow')
-      expect(tools).toHaveLength(8)
+      expect(names).toContain('workflow_debug_node')
+      expect(tools).toHaveLength(9)
     })
 
     it('每个工具执行错误时应返回错误结果', async () => {

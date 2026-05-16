@@ -8,6 +8,9 @@ import { useWorkflowStore } from './workflowStore'
 import { WorkflowApi } from '@/api/workflowApi'
 import { fetchWithWorkflowContext } from '@/services/workflowRequestContext'
 import { getPiWorkflowToolSpecsByTarget } from '@/shared/piWorkflowTools'
+import { buildPiAgentSafeToolResult } from './piAgentSafeToolResult'
+import type { PiAgentSafeToolResult } from '@/ai/types'
+import type { WorkflowExecutionResult, WorkflowNodeDebugResult } from './workflowStore'
 
 export interface PiAgentMessage {
   id: string
@@ -30,6 +33,21 @@ export interface PiAgentToolCall {
 }
 
 type SessionStatus = 'idle' | 'connecting' | 'running' | 'completed' | 'failed'
+type RawExecutionResult = WorkflowExecutionResult | WorkflowNodeDebugResult
+
+const isWorkflowExecutionResult = (value: unknown): value is WorkflowExecutionResult =>
+  Boolean(value)
+  && typeof value === 'object'
+  && 'scope' in (value as Record<string, unknown>)
+  && 'status' in (value as Record<string, unknown>)
+  && ((value as Record<string, unknown>).scope === 'global')
+
+const isWorkflowNodeDebugResult = (value: unknown): value is WorkflowNodeDebugResult =>
+  Boolean(value)
+  && typeof value === 'object'
+  && 'scope' in (value as Record<string, unknown>)
+  && (value as Record<string, unknown>).scope === 'single'
+  && 'output' in (value as Record<string, unknown>)
 
 export const usePiAgentStore = defineStore('piAgent', () => {
   // --- State ---
@@ -38,6 +56,7 @@ export const usePiAgentStore = defineStore('piAgent', () => {
   const messages = ref<PiAgentMessage[]>([])
   const errorMessage = ref('')
   const inputText = ref('')
+  const localExecutionCache = new Map<string, RawExecutionResult>()
 
   // SSE 连接
   let eventSource: AbortController | null = null
@@ -372,7 +391,16 @@ export const usePiAgentStore = defineStore('piAgent', () => {
     if (!executor) {
       await sendToolResult(event.sessionId, event.toolCallId, {
         content: [{ type: 'text', text: `未知工具: ${event.toolName}` }],
-        details: {},
+        details: {
+          ok: false,
+          scope: event.toolName === 'workflow_debug_node' ? 'single' : 'global',
+          executionId: null,
+          status: 'failed',
+          summary: `未知工具: ${event.toolName}`,
+          nodes: [],
+          artifacts: [],
+          warnings: [`未知工具: ${event.toolName}`],
+        },
         isError: true,
       })
       return
@@ -380,19 +408,25 @@ export const usePiAgentStore = defineStore('piAgent', () => {
 
     try {
       const result = await executor(event.params)
-      const resultText =
-        typeof result === 'string'
-          ? result
-          : JSON.stringify(result, null, 2)
+      const safeResult = toSafeToolResult(event.toolName, event.toolCallId, result)
 
       await sendToolResult(event.sessionId, event.toolCallId, {
-        content: [{ type: 'text', text: resultText }],
-        details: result && typeof result === 'object' ? (result as Record<string, unknown>) : {},
+        content: [{ type: 'text', text: safeResult.summary }],
+        details: safeResult,
       })
     } catch (err: any) {
       await sendToolResult(event.sessionId, event.toolCallId, {
         content: [{ type: 'text', text: err?.message || '执行失败' }],
-        details: {},
+        details: {
+          ok: false,
+          scope: event.toolName === 'workflow_debug_node' ? 'single' : 'global',
+          executionId: null,
+          status: 'failed',
+          summary: err?.message || '执行失败',
+          nodes: [],
+          artifacts: [],
+          warnings: [err?.message || '执行失败'],
+        },
         isError: true,
       })
     }
@@ -404,7 +438,7 @@ export const usePiAgentStore = defineStore('piAgent', () => {
   async function sendToolResult(
     sid: string,
     toolCallId: string,
-    result: { content: Array<{ type: 'text'; text: string }>; details: Record<string, unknown>; isError?: boolean },
+    result: { content: Array<{ type: 'text'; text: string }>; details: PiAgentSafeToolResult; isError?: boolean },
   ) {
     try {
       await fetchWithWorkflowContext(`/api/pi-agent/sessions/${sid}/tool-result`, {
@@ -421,6 +455,7 @@ export const usePiAgentStore = defineStore('piAgent', () => {
     eventSource?.abort()
     eventSource = null
     ndjsonReader = null
+    localExecutionCache.clear()
   }
 
   function reset() {
@@ -430,6 +465,42 @@ export const usePiAgentStore = defineStore('piAgent', () => {
     messages.value = []
     errorMessage.value = ''
     inputText.value = ''
+  }
+
+  function cacheExecutionResult(
+    sid: string,
+    toolCallId: string,
+    result: RawExecutionResult,
+  ) {
+    const executionId = 'executionId' in result && result.executionId ? result.executionId : null
+    const cacheKey = executionId ? `${sid}:${executionId}` : `${sid}:${toolCallId}`
+    localExecutionCache.set(cacheKey, result)
+  }
+
+  function toSafeToolResult(
+    toolName: string,
+    toolCallId: string,
+    result: unknown,
+  ): PiAgentSafeToolResult {
+    if (isWorkflowExecutionResult(result) || isWorkflowNodeDebugResult(result)) {
+      cacheExecutionResult(sessionId.value ?? 'unknown', toolCallId, result)
+      return buildPiAgentSafeToolResult({
+        toolName,
+        toolCallId,
+        rawResult: result,
+      })
+    }
+
+    return {
+      ok: true,
+      scope: toolName === 'workflow_debug_node' ? 'single' : 'global',
+      executionId: null,
+      status: 'success',
+      summary: typeof result === 'string' ? result : '操作已完成',
+      nodes: [],
+      artifacts: [],
+      warnings: [],
+    }
   }
 
   return {

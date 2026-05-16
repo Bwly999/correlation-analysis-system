@@ -1,6 +1,18 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 import { FrontendBridge } from '../frontendBridge.js'
 import type { ToolResult, SendToFrontendFn } from '../frontendBridge.js'
+import type { PiAgentSafeToolResult } from '../../../ai/types.js'
+
+const details = (summary = 'ok'): PiAgentSafeToolResult => ({
+  ok: true,
+  scope: 'global',
+  executionId: null,
+  status: 'success',
+  summary,
+  nodes: [],
+  artifacts: [],
+  warnings: [],
+})
 
 describe('FrontendBridge', () => {
   let bridge: FrontendBridge
@@ -38,7 +50,7 @@ describe('FrontendBridge', () => {
     it('调用 resolveResult 应 resolve 对应的 Promise 并返回正确结果', async () => {
       const expectedResult: ToolResult = {
         content: [{ type: 'text', text: '节点创建成功' }],
-        details: { nodeId: 'node_abc' },
+        details: details('节点创建成功'),
       }
 
       const promise = bridge.request('call_001', 'wf_addNode', { nodeType: 'test' })
@@ -51,7 +63,7 @@ describe('FrontendBridge', () => {
     it('调用 resolveResult 对未知 toolCallId 应返回 false', () => {
       const result: ToolResult = {
         content: [{ type: 'text', text: 'ok' }],
-        details: {},
+        details: details(),
       }
 
       const resolved = bridge.resolveResult('unknown_call_id', result)
@@ -62,7 +74,7 @@ describe('FrontendBridge', () => {
       bridge.request('call_001', 'wf_addNode', { nodeType: 'test' })
       const result: ToolResult = {
         content: [{ type: 'text', text: 'ok' }],
-        details: {},
+        details: details(),
       }
 
       const resolved = bridge.resolveResult('call_001', result)
@@ -80,9 +92,9 @@ describe('FrontendBridge', () => {
     })
 
     it('多个并发请求应独立解析，互不干扰', async () => {
-      const result1: ToolResult = { content: [{ type: 'text', text: '结果1' }], details: {} }
-      const result2: ToolResult = { content: [{ type: 'text', text: '结果2' }], details: {} }
-      const result3: ToolResult = { content: [{ type: 'text', text: '结果3' }], details: {} }
+      const result1: ToolResult = { content: [{ type: 'text', text: '结果1' }], details: details('结果1') }
+      const result2: ToolResult = { content: [{ type: 'text', text: '结果2' }], details: details('结果2') }
+      const result3: ToolResult = { content: [{ type: 'text', text: '结果3' }], details: details('结果3') }
 
       const p1 = bridge.request('call_001', 'wf_addNode', { nodeType: 'a' })
       const p2 = bridge.request('call_002', 'wf_addNode', { nodeType: 'b' })
@@ -106,10 +118,10 @@ describe('FrontendBridge', () => {
 
       expect(bridge.pendingCount).toBe(2)
 
-      bridge.resolveResult('call_001', { content: [{ type: 'text', text: 'ok' }], details: {} })
+      bridge.resolveResult('call_001', { content: [{ type: 'text', text: 'ok' }], details: details() })
       expect(bridge.pendingCount).toBe(1)
 
-      bridge.resolveResult('call_002', { content: [{ type: 'text', text: 'ok' }], details: {} })
+      bridge.resolveResult('call_002', { content: [{ type: 'text', text: 'ok' }], details: details() })
       expect(bridge.pendingCount).toBe(0)
     })
 
@@ -148,7 +160,7 @@ describe('FrontendBridge', () => {
       const bridgeWithTimeout = new FrontendBridge(sendToFrontend as unknown as SendToFrontendFn, { timeoutMs: 5000 })
       const expectedResult: ToolResult = {
         content: [{ type: 'text', text: '及时返回' }],
-        details: {},
+        details: details('及时返回'),
       }
 
       const promise = bridgeWithTimeout.request('call_001', 'wf_addNode', { nodeType: 'test' })

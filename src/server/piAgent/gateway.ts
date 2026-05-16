@@ -23,6 +23,7 @@ import {
 import { bridgePiEvent, tryExtractWorkflowPlan, type PiAgentSseEvent } from './eventBridge.js'
 import { buildAllTools } from './tools/index.js'
 import { FrontendBridge } from './frontendBridge.js'
+import { assertPiAgentSafeRequest } from './safePayload.js'
 
 // --- Runtime 管理 ---
 
@@ -54,6 +55,7 @@ export async function createPiAgentSession(
   userId: string,
   workflowRuntime: WorkflowMcpRuntime,
 ): Promise<CreatePiAgentSessionResult> {
+  assertPiAgentSafeRequest(request)
   // 1. 创建会话记录
   const record = createSessionRecord(request, userId)
 
@@ -247,7 +249,7 @@ export function disposeAllPiAgentSessions(): void {
 export function resolvePiAgentToolResult(
   sessionId: string,
   toolCallId: string,
-  result: { content: Array<{ type: 'text'; text: string }>; details: Record<string, unknown>; isError?: boolean },
+  result: { content: Array<{ type: 'text'; text: string }>; details: import('../../ai/types.js').PiAgentSafeToolResult; isError?: boolean },
 ): boolean {
   const runtime = runtimes.get(sessionId)
   if (!runtime) return false

@@ -24,6 +24,11 @@ const {
   getWorkflowMcpHealthSnapshotMock,
   isWorkflowMcpHealthRequestMock,
   isWorkflowMcpRequestMock,
+  createPiAgentSessionMock,
+  sendPiAgentMessageMock,
+  subscribePiAgentEventsMock,
+  getPiAgentSessionMock,
+  resolvePiAgentToolResultMock,
 } = vi.hoisted(() => ({
   generateWorkflowAiPlanMock: vi.fn(),
   streamWorkflowAiPlanMock: vi.fn(),
@@ -46,6 +51,11 @@ const {
   getWorkflowMcpHealthSnapshotMock: vi.fn(),
   isWorkflowMcpHealthRequestMock: vi.fn((pathname: string) => pathname === '/api/opencode/workflow-mcp/health'),
   isWorkflowMcpRequestMock: vi.fn((pathname: string) => pathname === '/api/opencode/workflow-mcp'),
+  createPiAgentSessionMock: vi.fn(),
+  sendPiAgentMessageMock: vi.fn(),
+  subscribePiAgentEventsMock: vi.fn(),
+  getPiAgentSessionMock: vi.fn(),
+  resolvePiAgentToolResultMock: vi.fn(),
 }))
 
 vi.mock('../workflowAi/profiles.js', () => ({
@@ -82,6 +92,14 @@ vi.mock('../opencode/workflowMcpServer.js', () => ({
   getWorkflowMcpHealthSnapshot: getWorkflowMcpHealthSnapshotMock,
   isWorkflowMcpHealthRequest: isWorkflowMcpHealthRequestMock,
   isWorkflowMcpRequest: isWorkflowMcpRequestMock,
+}))
+
+vi.mock('../piAgent/gateway.js', () => ({
+  createPiAgentSession: createPiAgentSessionMock,
+  sendPiAgentMessage: sendPiAgentMessageMock,
+  subscribePiAgentEvents: subscribePiAgentEventsMock,
+  getPiAgentSession: getPiAgentSessionMock,
+  resolvePiAgentToolResult: resolvePiAgentToolResultMock,
 }))
 
 import { createServerHandler } from '../app.js'
@@ -153,12 +171,17 @@ afterEach(() => {
   getAgentObservabilityDebugTraceMock.mockReset()
   handleWorkflowMcpRequestMock.mockReset()
   getWorkflowMcpHealthSnapshotMock.mockReset()
+  createPiAgentSessionMock.mockReset()
+  sendPiAgentMessageMock.mockReset()
+  subscribePiAgentEventsMock.mockReset()
+  getPiAgentSessionMock.mockReset()
+  resolvePiAgentToolResultMock.mockReset()
   isWorkflowMcpHealthRequestMock.mockImplementation((pathname: string) => pathname === '/api/opencode/workflow-mcp/health')
   isWorkflowMcpRequestMock.mockImplementation((pathname: string) => pathname === '/api/opencode/workflow-mcp')
 })
 
 describe('workflow ai routes', () => {
-  it('rejects agent session creation when workflow-scoped requests omit the workflow user', async () => {
+  it('returns disabled message for legacy agent session creation route', async () => {
     const handler = createServerHandler()
     const response = createResponse()
 
@@ -172,325 +195,13 @@ describe('workflow ai routes', () => {
       response,
     )
 
-    expect(response.statusCode).toBe(400)
+    expect(response.statusCode).toBe(410)
     expect(JSON.parse(response.body)).toEqual({
-      message: '缺少用户标识，请通过 x-workflow-user-id 请求头或 defaultUser 依赖注入提供用户',
+      message: '通用助手链路已停用，请改用 Pi Agent 主链 /api/pi-agent/sessions',
     })
   })
 
-  it('uses explicitly injected current user when creating agent session', async () => {
-    createAgentSessionMock.mockResolvedValueOnce({
-      session: {
-        id: 'agent_injected',
-        mode: 'edit',
-        prompt: '帮我分析影响销量的关键因素',
-        status: 'idle',
-        profile: {
-          id: 'custom',
-          name: '测试模型',
-          model: 'glm-4.7',
-        },
-        workflowId: null,
-        createdAt: 1,
-        updatedAt: 1,
-      },
-      projection: {
-        workflow: {
-          workflowId: null,
-          workflowName: '销量诊断流程',
-          draftNodeCount: 2,
-          draftEdgeCount: 1,
-          draftSummary: '已载入当前画布，等待开始分析。',
-          versionCount: 0,
-          latestVersionId: null,
-          proposedPlan: null,
-        },
-        analysis: {
-          goal: '帮我分析影响销量的关键因素',
-          summary: '系统已记录当前分析目标，等待模型开始处理。',
-          candidateTargets: ['sales'],
-          candidateFactors: ['price', 'discount'],
-          methods: [],
-          findings: [],
-          risks: [],
-          recommendations: [],
-        },
-        execution: {
-          status: 'idle',
-          latestAction: '等待用户发送分析指令',
-          toolCalls: [],
-          pendingApprovals: [],
-        },
-        canvasSync: {
-          status: 'idle',
-          message: '当前草案尚未同步到画布',
-        },
-        error: null,
-        updatedAt: 1,
-      },
-    })
-
-    const handler = createServerHandler({
-      resolveStorageUser: () => ({
-        id: 'injected-user-id',
-        name: '注入用户',
-      }),
-    })
-    const response = createResponse()
-
-    await handler(
-      createRequest('POST', '/api/agent/sessions', {
-        mode: 'edit',
-        prompt: '帮我分析影响销量的关键因素',
-        profile: { id: 'custom', name: '测试模型', baseUrl: 'http://example.com', model: 'glm-4.7', enabled: true, source: 'custom' },
-        workflowSnapshot: {
-          name: '销量诊断流程',
-          nodes: [{ id: 'node_1' }, { id: 'node_2' }],
-          edges: [{ id: 'edge_1', source: 'node_1', target: 'node_2' }],
-        },
-        nodeCatalog: [],
-      }),
-      response,
-    )
-
-    expect(response.statusCode).toBe(200)
-    expect(createAgentSessionMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        userId: 'injected-user-id',
-      }),
-    )
-  })
-
-  it('creates an agent session from the new session route', async () => {
-    createAgentSessionMock.mockResolvedValueOnce({
-      session: {
-        id: 'agent_1',
-        mode: 'edit',
-        prompt: '帮我分析影响销量的关键因素',
-        status: 'idle',
-        profile: {
-          id: 'custom',
-          name: '测试模型',
-          model: 'glm-4.7',
-        },
-        workflowId: null,
-        createdAt: 1,
-        updatedAt: 1,
-      },
-      projection: {
-        workflow: {
-          workflowId: null,
-          workflowName: '销量诊断流程',
-          draftNodeCount: 2,
-          draftEdgeCount: 1,
-          draftSummary: '已载入当前画布，等待开始分析。',
-          versionCount: 0,
-          latestVersionId: null,
-          proposedPlan: null,
-        },
-        analysis: {
-          goal: '帮我分析影响销量的关键因素',
-          summary: '系统已记录当前分析目标，等待模型开始处理。',
-          candidateTargets: ['sales'],
-          candidateFactors: ['price', 'discount'],
-          methods: [],
-          findings: [],
-          risks: [],
-          recommendations: [],
-        },
-        execution: {
-          status: 'idle',
-          latestAction: '等待用户发送分析指令',
-          toolCalls: [],
-          pendingApprovals: [],
-        },
-        canvasSync: {
-          status: 'idle',
-          message: '当前草案尚未同步到画布',
-        },
-        error: null,
-        updatedAt: 1,
-      },
-    })
-
-    const handler = createServerHandler()
-    const response = createResponse()
-
-    await handler(
-      createRequest('POST', '/api/agent/sessions', {
-        mode: 'edit',
-        prompt: '帮我分析影响销量的关键因素',
-        profile: { id: 'custom', name: '测试模型', baseUrl: 'http://example.com', model: 'glm-4.7', enabled: true, source: 'custom' },
-        workflowSnapshot: {
-          name: '销量诊断流程',
-          nodes: [{ id: 'node_1' }, { id: 'node_2' }],
-          edges: [{ id: 'edge_1', source: 'node_1', target: 'node_2' }],
-        },
-        nodeCatalog: [],
-      }),
-      response,
-    )
-
-    expect(response.statusCode).toBe(200)
-    expect(createAgentSessionMock).toHaveBeenCalledWith({
-      request: expect.objectContaining({
-        prompt: '帮我分析影响销量的关键因素',
-      }),
-      userId: 'workflow-ai-route-user',
-    })
-    expect(JSON.parse(response.body)).toEqual({
-      session: expect.objectContaining({
-        id: 'agent_1',
-        status: 'idle',
-      }),
-      projection: expect.objectContaining({
-        workflow: expect.objectContaining({
-          workflowName: '销量诊断流程',
-        }),
-      }),
-    })
-  })
-
-  it('uses auth-injected workflow user when creating an agent session', async () => {
-    createAgentSessionMock.mockResolvedValueOnce({
-      session: {
-        id: 'agent_jwt',
-        mode: 'edit',
-        prompt: '帮我分析影响销量的关键因素',
-        status: 'idle',
-        profile: {
-          id: 'custom',
-          name: '测试模型',
-          model: 'glm-4.7',
-        },
-        workflowId: null,
-        createdAt: 1,
-        updatedAt: 1,
-      },
-      projection: {
-        workflow: {
-          workflowId: null,
-          workflowName: '销量诊断流程',
-          draftNodeCount: 2,
-          draftEdgeCount: 1,
-          draftSummary: '已载入当前画布，等待开始分析。',
-          versionCount: 0,
-          latestVersionId: null,
-          proposedPlan: null,
-        },
-        analysis: {
-          goal: '帮我分析影响销量的关键因素',
-          summary: '系统已记录当前分析目标，等待模型开始处理。',
-          candidateTargets: ['sales'],
-          candidateFactors: ['price', 'discount'],
-          methods: [],
-          findings: [],
-          risks: [],
-          recommendations: [],
-        },
-        execution: {
-          status: 'idle',
-          latestAction: '等待用户发送分析指令',
-          toolCalls: [],
-          pendingApprovals: [],
-        },
-        canvasSync: {
-          status: 'idle',
-          message: '当前草案尚未同步到画布',
-        },
-        error: null,
-        updatedAt: 1,
-      },
-    })
-    const handler = createServerHandler({
-      authGuard: {
-        async authenticate(headers) {
-          headers['x-workflow-user-id'] = 'jwt-agent-user'
-          headers['x-workflow-user-name'] = 'JWT Agent 用户'
-          return { enabled: true, user: { id: 'jwt-agent-user', name: 'JWT Agent 用户' } }
-        },
-      },
-    })
-    const response = createResponse()
-
-    await handler(
-      createRequest('POST', '/api/agent/sessions', {
-        mode: 'edit',
-        prompt: '帮我分析影响销量的关键因素',
-        profile: { id: 'custom', name: '测试模型', baseUrl: 'http://example.com', model: 'glm-4.7', enabled: true, source: 'custom' },
-        nodeCatalog: [],
-      }, {
-        'x-workflow-user-id': 'spoofed-user',
-        'x-workflow-user-name': '伪造用户',
-      }),
-      response,
-    )
-
-    expect(response.statusCode).toBe(200)
-    expect(createAgentSessionMock).toHaveBeenCalledWith(expect.objectContaining({
-      userId: 'jwt-agent-user',
-    }))
-  })
-
-  it('sends a message through the agent session message route', async () => {
-    sendAgentSessionMessageMock.mockResolvedValueOnce({
-      session: {
-        id: 'agent_1',
-        mode: 'edit',
-        prompt: '帮我分析影响销量的关键因素',
-        status: 'completed',
-        profile: {
-          id: 'custom',
-          name: '测试模型',
-          model: 'glm-4.7',
-        },
-        workflowId: null,
-        createdAt: 1,
-        updatedAt: 2,
-      },
-      projection: {
-        workflow: {
-          workflowId: null,
-          workflowName: '销量诊断流程',
-          draftNodeCount: 2,
-          draftEdgeCount: 1,
-          draftSummary: '建议先保留导入、筛选和相关性分析三段主链。',
-          versionCount: 0,
-          latestVersionId: null,
-          proposedPlan: null,
-        },
-        analysis: {
-          goal: '帮我分析影响销量的关键因素',
-          summary: '价格和折扣目前是最值得优先验证的两个候选因子。',
-          candidateTargets: ['sales'],
-          candidateFactors: ['price', 'discount'],
-          methods: ['相关性分析'],
-          findings: ['销量适合作为目标字段'],
-          risks: [],
-          recommendations: ['先校验缺失值和异常值'],
-        },
-        execution: {
-          status: 'completed',
-          latestAction: '本轮分析已完成',
-          toolCalls: [],
-          pendingApprovals: [],
-        },
-        canvasSync: {
-          status: 'idle',
-          message: '当前草案尚未同步到画布',
-        },
-        error: null,
-        updatedAt: 2,
-      },
-      assistantMessage: {
-        id: 'assistant_1',
-        role: 'assistant',
-        content: '价格和折扣目前是最值得优先验证的两个候选因子。',
-        status: 'completed',
-        createdAt: 2,
-      },
-    })
-
+  it('returns disabled message for legacy agent session message route', async () => {
     const handler = createServerHandler()
     const response = createResponse()
 
@@ -501,27 +212,9 @@ describe('workflow ai routes', () => {
       response,
     )
 
-    expect(response.statusCode).toBe(200)
-    expect(sendAgentSessionMessageMock).toHaveBeenCalledWith(
-      {
-        sessionId: 'agent_1',
-        message: '继续分析当前销量问题',
-      },
-      expect.any(Function),
-    )
+    expect(response.statusCode).toBe(410)
     expect(JSON.parse(response.body)).toEqual({
-      session: expect.objectContaining({
-        id: 'agent_1',
-        status: 'completed',
-      }),
-      projection: expect.objectContaining({
-        analysis: expect.objectContaining({
-          summary: '价格和折扣目前是最值得优先验证的两个候选因子。',
-        }),
-      }),
-      assistantMessage: expect.objectContaining({
-        role: 'assistant',
-      }),
+      message: '通用助手链路已停用，请改用 Pi Agent 主链 /api/pi-agent/sessions',
     })
   })
 

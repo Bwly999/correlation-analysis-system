@@ -13,10 +13,12 @@
  * 6. bridge.request() 返回的 Promise 被 resolve/reject
  */
 
+import type { PiAgentSafeToolResult } from '../../ai/types.js'
+
 /** 工具执行结果格式（与 Pi SDK defineTool execute 返回类型一致） */
 export interface ToolResult {
   content: Array<{ type: 'text'; text: string }>
-  details: Record<string, unknown>
+  details: PiAgentSafeToolResult
   isError?: boolean
 }
 

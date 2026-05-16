@@ -54,6 +54,13 @@
   - `src/components/workflow/viewers/reportViewer/ReportSectionHelpButton.vue` 移除原生 `title` 属性，修复帮助 `?` 图标同时出现黑底自定义 tooltip 和白底浏览器原生 tooltip 的重复问题。
   - `src/nodes/__tests__/nodeDefinitions.spec.ts` 与 `src/components/workflow/__tests__/ReportViewer.spec.ts` 补充回归测试，覆盖热力图 tooltip 元数据、摘要帮助分层说明以及帮助按钮不再输出原生 tooltip。
 
+- **收口 Pi Agent 大结果回传链路，避免完整数据进入后端与模型上下文**:
+  - `src/stores/piAgentStore.ts` 与 `src/stores/piAgentSafeToolResult.ts` 新增 Pi Agent 执行安全摘要协议和前端会话内本地执行缓存，统一让 `wf_executeWorkflow` / `workflow_debug_node` 只回传安全摘要，不再把完整节点结果整包 POST 回后端。
+  - `src/server/piAgent/safePayload.ts`、`src/server/modules/piAgentRoutes.ts`、`src/server/piAgent/sessionStore.ts` 为 Pi Agent session 创建链路补充请求校验与数据源脱敏，拒绝包含 `bindingPayload.rows` 或可疑大数组的载荷，并确保服务端只保留摘要化上下文。
+  - `src/server/piAgent/tools/sharedRuntimeTools.ts`、`src/server/piAgent/tools/contextTools.ts`、`src/server/piAgent/tools/atomicWorkflowTools.ts`、`src/server/piAgent/frontendBridge.ts` 统一执行类工具和上下文类工具的安全返回结构，表格结果限制为最多 `3` 行样本、每行最多 `200` 字段，同时为报告、图表、文件和 JSON 结果返回稳定摘要。
+  - `src/server/modules/agentRoutes.ts`、`src/components/workflow/WorkflowHeader.vue` 关闭旧 `/api/agent/*` 通用助手主链并收拢 UI 入口语义，明确提示改用 Pi Agent 主链。
+  - 补充 `src/server/piAgent/__tests__/safePayload.spec.ts`、`src/server/piAgent/__tests__/piAgentRoutes.spec.ts`、`src/stores/__tests__/piAgentSafeToolResult.spec.ts` 等回归测试，并通过 Pi Agent 路由、原子工具、前端摘要器、WorkflowCanvas 与 `pnpm build` 验证主链改造。
+
 - **修复 JS 代码执行节点 Monaco 编辑器在生产环境下缺少代码提示的问题**:
   - `src/components/workflow/monacoEnvironment.ts` 新增 Monaco worker 初始化入口，统一通过 Vite 原生 `?worker` 方式装配 `editor/json/typescript` worker，避免子路径部署时 worker 走根路径绝对地址而加载失败。
   - `src/components/workflow/MonacoEditor.vue` 在编辑器初始化前显式注册 `MonacoEnvironment.getWorker`，保留现有 `loader.config({ monaco })` 和 `javascriptDefaults.addExtraLib` 声明注入逻辑，确保 `JS代码执行` 节点在 build 后仍能获得 `rows` 声明提示与基础补全。

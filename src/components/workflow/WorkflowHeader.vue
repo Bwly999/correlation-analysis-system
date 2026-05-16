@@ -283,7 +283,7 @@ const formatDuration = (ms: number) => {
         @click="emit('toggleAi')"
       >
         <Bot :size="14" />
-        <span>{{ props.isAiPanelVisible ? '收起助手' : '通用助手' }}</span>
+        <span>{{ props.isAiPanelVisible ? '收起 Pi Agent' : 'Pi Agent' }}</span>
       </button>
 
       <button v-if="!store.isHistoryMode" class="file-btn" @click="toggleMenu">

@@ -20,6 +20,7 @@ import { requireWorkflowUser } from '../http/workflowUser.js'
 import type { HttpDomainHandler } from '../http/types.js'
 
 const isAgentObservabilityEnabled = () => process.env.NODE_ENV === 'development'
+const LEGACY_AGENT_DISABLED_MESSAGE = '通用助手链路已停用，请改用 Pi Agent 主链 /api/pi-agent/sessions'
 
 export const createAgentRoutes = (): HttpDomainHandler<ServerDependencies> => async (context) => {
   const { pathname, method } = context
@@ -40,13 +41,7 @@ export const createAgentRoutes = (): HttpDomainHandler<ServerDependencies> => as
   }
 
   if (method === 'POST' && pathname === '/api/agent/sessions') {
-    const currentUser = requireWorkflowUser(context)
-    const body = await context.readJsonBody<WorkflowAiPlanRequest>()
-    const result = await createAgentSession({
-      request: body,
-      userId: currentUser.id,
-    })
-    context.sendJson(200, result)
+    context.sendJson(410, { message: LEGACY_AGENT_DISABLED_MESSAGE })
     return true
   }
 
@@ -62,41 +57,22 @@ export const createAgentRoutes = (): HttpDomainHandler<ServerDependencies> => as
   }
 
   if (method === 'POST' && agentSessionMessagesMatch) {
-    const sessionId = decodeURIComponent(agentSessionMessagesMatch[1] ?? '')
-    const body = await context.readJsonBody<AgentSessionMessageRequest>()
-    const result = await sendAgentSessionMessage(
-      {
-        sessionId,
-        message: body.content,
-      },
-      () => undefined,
-    )
-    context.sendJson(200, result)
+    context.sendJson(410, { message: LEGACY_AGENT_DISABLED_MESSAGE })
     return true
   }
 
   if (method === 'GET' && agentSessionEventsMatch) {
-    const sessionId = decodeURIComponent(agentSessionEventsMatch[1] ?? '')
-    const snapshot = getAgentSession(sessionId)
-    if (!snapshot) {
-      context.sendJson(404, { message: '未找到 Agent 会话' })
-      return true
-    }
+    context.sendJson(410, { message: LEGACY_AGENT_DISABLED_MESSAGE })
+    return true
+  }
 
-    context.startNdjson(200)
-    const unsubscribe = subscribeToAgentSessionEvents(sessionId, (event) => {
-      context.writeNdjson(event)
-    })
+  if (method === 'GET' && agentSessionProjectionMatch) {
+    context.sendJson(410, { message: LEGACY_AGENT_DISABLED_MESSAGE })
+    return true
+  }
 
-    if (!unsubscribe) {
-      context.response.end()
-      return true
-    }
-
-    context.request.on('close', () => {
-      unsubscribe()
-      context.response.end()
-    })
+  if (method === 'POST' && agentSessionCanvasSyncMatch) {
+    context.sendJson(410, { message: LEGACY_AGENT_DISABLED_MESSAGE })
     return true
   }
 
@@ -139,28 +115,6 @@ export const createAgentRoutes = (): HttpDomainHandler<ServerDependencies> => as
       return true
     }
     context.sendJson(200, trace)
-    return true
-  }
-
-  if (method === 'GET' && agentSessionProjectionMatch) {
-    const sessionId = decodeURIComponent(agentSessionProjectionMatch[1] ?? '')
-    const projection = getAgentProjection(sessionId)
-    if (!projection) {
-      context.sendJson(404, { message: '未找到 Agent 会话' })
-      return true
-    }
-    context.sendJson(200, { projection })
-    return true
-  }
-
-  if (method === 'POST' && agentSessionCanvasSyncMatch) {
-    const sessionId = decodeURIComponent(agentSessionCanvasSyncMatch[1] ?? '')
-    const body = await context.readJsonBody<AgentSessionCanvasSyncRequest>()
-    const result = await syncAgentCanvas({
-      sessionId,
-      workflowSnapshot: body.workflowSnapshot,
-    })
-    context.sendJson(200, result)
     return true
   }
 

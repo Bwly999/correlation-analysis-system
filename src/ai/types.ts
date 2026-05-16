@@ -125,6 +125,45 @@ export interface WorkflowAiDataSourceDescriptor {
   bindingPayload: Record<string, unknown>
 }
 
+export interface PiAgentSafeNodeSummary {
+  nodeId: string
+  nodeLabel: string
+  resultKind: string
+  summary: string
+  status?: string
+  rowCount?: number
+  columnCount?: number
+  groupCount?: number
+  columns?: string[]
+  sampleRows?: Array<Record<string, unknown>>
+  schemaSummary?: Record<string, unknown>
+  columnStatsPreview?: Array<Record<string, unknown>>
+  groups?: Array<Record<string, unknown>>
+  title?: string
+  keyMetrics?: unknown[]
+  findings?: string[]
+  recommendations?: string[]
+  chartType?: string
+  dimensions?: Record<string, unknown>
+  seriesSummary?: Array<Record<string, unknown>>
+  fileName?: string
+  fileType?: string
+  fileSize?: number
+  topLevelKeys?: string[]
+  textSummary?: string
+}
+
+export interface PiAgentSafeToolResult {
+  ok: boolean
+  scope: 'global' | 'single'
+  executionId: string | null
+  status: string
+  summary: string
+  nodes: PiAgentSafeNodeSummary[]
+  artifacts: Array<Record<string, unknown>>
+  warnings: string[]
+}
+
 export interface WorkflowAiToolTraceItem {
   id?: string
   toolName: string

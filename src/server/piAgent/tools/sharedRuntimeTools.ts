@@ -1,10 +1,12 @@
 import { defineTool } from '@earendil-works/pi-coding-agent'
 import { Type } from 'typebox'
+import type { WorkflowAiPlan } from '../../../ai/types.js'
 import type { WorkflowAiPlanRequest } from '../../../ai/types.js'
 import type { WorkflowMcpRuntime } from '../../opencode/workflowMcpRuntime.js'
 import { getPiWorkflowToolSpecsByTarget } from '../../../shared/piWorkflowTools.js'
 import { buildServerWorkflowAiNodeCatalog, getServerNodeCatalogItem } from '../../workflowAi/nodeCatalog.js'
 import type { ExecutionRecord } from '../../../utils/storage/types.js'
+import { sanitizePiAgentDataSources } from '../safePayload.js'
 
 const paginate = <T>(items: T[], input: { limit?: number; offset?: number } = {}) => {
   const limit = Math.min(Math.max(Math.floor(input.limit ?? 20), 1), 100)
@@ -30,7 +32,7 @@ const buildResult = (structuredContent: Record<string, unknown>, isError = false
 
 const buildPersistedExecutionEvidence = (execution: ExecutionRecord) => {
   const evidence = execution.nodes
-    .filter((node) => node.data.status === 'success' && node.data.output && typeof node.data.output === 'object')
+    .filter((node: ExecutionRecord['nodes'][number]) => node.data.status === 'success' && node.data.output && typeof node.data.output === 'object')
     .map((node) => {
       const output = node.data.output as Record<string, unknown>
       const payload = output.payload
@@ -70,6 +72,7 @@ export interface CreateSharedRuntimeToolsOptions {
 export function createSharedRuntimeTools(options: CreateSharedRuntimeToolsOptions) {
   const { request, runtime, userId } = options
   const specs = getPiWorkflowToolSpecsByTarget('server_runtime')
+  const safeDataSources = sanitizePiAgentDataSources(request.dataSources)
 
   return specs.map((spec) => {
     switch (spec.name) {
@@ -85,7 +88,7 @@ export function createSharedRuntimeTools(options: CreateSharedRuntimeToolsOption
               prompt: request.prompt,
               workflowSnapshot: request.workflowSnapshot ?? null,
               contextHints: request.contextHints ?? null,
-              dataSources: request.dataSources ?? [],
+              dataSources: safeDataSources,
             })
           },
         })
@@ -112,7 +115,7 @@ export function createSharedRuntimeTools(options: CreateSharedRuntimeToolsOption
             offset: Type.Optional(Type.Number()),
           }),
           async execute(_callId, params) {
-            return buildResult(paginate(request.dataSources ?? [], params))
+            return buildResult(paginate(safeDataSources, params))
           },
         })
       case 'workflow_get_data_source_schema':
@@ -124,7 +127,7 @@ export function createSharedRuntimeTools(options: CreateSharedRuntimeToolsOption
             dataSourceId: Type.String(),
           }),
           async execute(_callId, params) {
-            const item = (request.dataSources ?? []).find((source) => source.id === params.dataSourceId)
+            const item = safeDataSources.find((source) => source.id === params.dataSourceId)
             return buildResult(item
               ? { found: true, item }
               : { found: false, message: `未找到数据源: ${params.dataSourceId}` })

@@ -81,7 +81,7 @@ describe('workflow-scoped route contract', () => {
           nodeCatalog: [],
         }),
         assertBody: (body: string) => {
-          expect(JSON.parse(body)).toEqual({ message: expectedMessage })
+          expect(JSON.parse(body)).toEqual({ message: '通用助手链路已停用，请改用 Pi Agent 主链 /api/pi-agent/sessions' })
         },
       },
       {
@@ -117,7 +117,7 @@ describe('workflow-scoped route contract', () => {
     for (const candidate of workflowRequests) {
       const response = createResponse()
       await handler(candidate.request, response)
-      expect(response.statusCode, candidate.name).toBe(400)
+      expect(response.statusCode, candidate.name).toBe(candidate.name === 'agent' ? 410 : 400)
       candidate.assertBody(response.body)
     }
   })

@@ -5,6 +5,7 @@ import { defineTool } from '@earendil-works/pi-coding-agent'
 import { Type } from 'typebox'
 import type { WorkflowAiPlanRequest } from '../../../ai/types.js'
 import { buildServerWorkflowAiNodeCatalog } from '../../workflowAi/nodeCatalog.js'
+import { sanitizePiAgentDataSources } from '../safePayload.js'
 
 const result = (text: string, isError = false) => ({
   content: [{ type: 'text' as const, text }],
@@ -13,6 +14,7 @@ const result = (text: string, isError = false) => ({
 })
 
 export function createContextTools(request: WorkflowAiPlanRequest) {
+  const safeDataSources = sanitizePiAgentDataSources(request.dataSources)
   const getSessionContext = defineTool({
     name: 'workflow_get_session_context',
     label: '读取分析上下文',
@@ -60,7 +62,7 @@ export function createContextTools(request: WorkflowAiPlanRequest) {
     description: '列出当前会话中可用的所有数据源，包括文件名、字段信息和绑定参数。',
     parameters: Type.Object({}),
     async execute(_callId, _params, _signal, _onUpdate, _ctx) {
-      const dataSources = request.dataSources || []
+      const dataSources = safeDataSources
       return result(JSON.stringify(dataSources, null, 2))
     },
   })
@@ -73,11 +75,11 @@ export function createContextTools(request: WorkflowAiPlanRequest) {
       dataSourceId: Type.String({ description: '数据源 ID' }),
     }),
     async execute(_callId, params, _signal, _onUpdate, _ctx) {
-      const ds = (request.dataSources || []).find((d) => d.id === params.dataSourceId)
+      const ds = safeDataSources.find((d) => d.id === params.dataSourceId)
       if (!ds) {
         return result(`未找到数据源: ${params.dataSourceId}`, true)
       }
-      return result(JSON.stringify(ds.schemaSummary, null, 2))
+      return result(JSON.stringify(ds, null, 2))
     },
   })
 

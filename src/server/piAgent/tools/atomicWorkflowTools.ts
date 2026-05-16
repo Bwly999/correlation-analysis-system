@@ -11,15 +11,27 @@
 import { defineTool } from '@earendil-works/pi-coding-agent'
 import { Type } from 'typebox'
 import type { FrontendBridge } from '../frontendBridge.js'
+import type { PiAgentSafeToolResult } from '../../../ai/types.js'
 
 const POSITION_SCHEMA = Type.Object({
   x: Type.Number({ description: 'X 坐标' }),
   y: Type.Number({ description: 'Y 坐标' }),
 })
 
+const buildFallbackDetails = (scope: 'global' | 'single', message: string): PiAgentSafeToolResult => ({
+  ok: false,
+  scope,
+  executionId: null,
+  status: 'failed',
+  summary: message,
+  nodes: [],
+  artifacts: [],
+  warnings: [message],
+})
+
 const errorResult = (message: string) => ({
   content: [{ type: 'text' as const, text: message }],
-  details: {},
+  details: buildFallbackDetails('global', message),
   isError: true,
 })
 
@@ -200,6 +212,33 @@ export function createAtomicWorkflowTools(bridge: FrontendBridge) {
     },
   })
 
+  const debugNode = defineTool({
+    name: 'workflow_debug_node',
+    label: '调试节点',
+    description: `调试指定节点，并按统一执行摘要协议返回安全结果。
+
+参数说明：
+- nodeId: 要调试的节点 ID
+- mode: 调试模式，rerun_upstream 表示强制重跑上游
+- includeUpstreamTrace: 是否附带上游追踪信息标记`,
+    parameters: Type.Object({
+      nodeId: Type.String({ description: '节点 ID' }),
+      mode: Type.Optional(Type.String({ description: '调试模式' })),
+      includeUpstreamTrace: Type.Optional(Type.Boolean({ description: '是否附带上游追踪信息标记' })),
+    }),
+    async execute(callId, params, _signal, _onUpdate, _ctx) {
+      try {
+        return await bridge.request(callId, 'workflow_debug_node', params as Record<string, unknown>)
+      } catch (err: any) {
+        return {
+          content: [{ type: 'text' as const, text: err?.message || '调试节点失败' }],
+          details: buildFallbackDetails('single', err?.message || '调试节点失败'),
+          isError: true,
+        }
+      }
+    },
+  })
+
   return [
     addNode,
     connectNodes,
@@ -209,5 +248,6 @@ export function createAtomicWorkflowTools(bridge: FrontendBridge) {
     disconnectEdge,
     moveNode,
     executeWorkflow,
+    debugNode,
   ]
 }

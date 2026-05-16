@@ -12,16 +12,27 @@ import {
   getPiAgentSession,
   resolvePiAgentToolResult,
 } from '../piAgent/gateway.js'
+import type { PiAgentSafeToolResult } from '../../ai/types.js'
+import { PI_AGENT_RAW_ROWS_ERROR_MESSAGE, assertPiAgentSafeRequest } from '../piAgent/safePayload.js'
 
 export const createPiAgentRoutes = (): HttpDomainHandler<ServerDependencies> => async (context) => {
   const { pathname, method } = context
 
   // POST /api/pi-agent/sessions - 创建会话
   if (method === 'POST' && pathname === '/api/pi-agent/sessions') {
-    const user = requireWorkflowUser(context)
-    const body = await context.readJsonBody<WorkflowAiPlanRequest>()
-    const result = await createPiAgentSession(body, user.id, context.dependencies.workflowMcpRuntime)
-    context.sendJson(200, result)
+    try {
+      const user = requireWorkflowUser(context)
+      const body = await context.readJsonBody<WorkflowAiPlanRequest>()
+      assertPiAgentSafeRequest(body)
+      const result = await createPiAgentSession(body, user.id, context.dependencies.workflowMcpRuntime)
+      context.sendJson(200, result)
+    } catch (error) {
+      if (error instanceof Error && error.message === PI_AGENT_RAW_ROWS_ERROR_MESSAGE) {
+        context.sendJson(400, { message: error.message })
+        return true
+      }
+      throw error
+    }
     return true
   }
 
@@ -70,7 +81,7 @@ export const createPiAgentRoutes = (): HttpDomainHandler<ServerDependencies> => 
     const sessionId = decodeURIComponent(toolResultMatch[1] ?? '')
     const body = await context.readJsonBody<{
       toolCallId: string
-      result: { content: Array<{ type: 'text'; text: string }>; details: Record<string, unknown>; isError?: boolean }
+      result: { content: Array<{ type: 'text'; text: string }>; details: PiAgentSafeToolResult; isError?: boolean }
     }>()
     const ok = resolvePiAgentToolResult(sessionId, body.toolCallId, body.result)
     context.sendJson(ok ? 200 : 404, { ok })
