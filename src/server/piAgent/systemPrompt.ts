@@ -21,10 +21,10 @@ export function buildSystemPrompt(request: WorkflowAiPlanRequest): string {
 1. 先用 workflow_get_session_context 了解当前分析上下文
 2. 用 workflow_list_data_sources 查看可用数据源
 3. 用 workflow_get_node_catalog 了解可用节点类型
-4. 用 workflow_search_nodes 或 workflow_get_node_definition 查找具体节点
+4. 用 workflow_search_nodes 或 workflow_get_node 查找具体节点
 5. 根据需求创建或修改工作流
 6. 用 workflow_validate_workflow 校验工作流结构
-7. 用 workflow_test_workflow 测试工作流执行
+7. 优先通过前端画布主链执行和调试：使用 wf_executeWorkflow、workflow_debug_node 时，本质上是在操作当前 GUI 画布并复用同一条执行链路
 
 ## 规则
 

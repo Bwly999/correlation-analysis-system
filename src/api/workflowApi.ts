@@ -8,6 +8,8 @@
 import { useWorkflowStore } from '@/stores/workflowStore'
 import type { WorkflowNode } from '@/utils/storage'
 import type { Edge } from '@vue-flow/core'
+import type { WorkflowExecutionResult, WorkflowNodeDebugResult } from '@/stores/workflowStore'
+import type { WorkflowAiPlan } from '@/ai/types'
 
 const getStore = () => useWorkflowStore()
 
@@ -99,5 +101,26 @@ export const WorkflowApi = {
   moveNode(nodeId: string, position: { x: number; y: number }): void {
     const store = getStore()
     store.setNodePositionById(nodeId, position)
+  },
+
+  async runWorkflow(): Promise<WorkflowExecutionResult> {
+    const store = getStore()
+    return store.runGlobalAndCollect()
+  },
+
+  async debugNode(
+    nodeId: string,
+    options?: { rerunUpstream?: boolean },
+  ): Promise<WorkflowNodeDebugResult> {
+    const store = getStore()
+    return store.debugNodeAndCollect(nodeId, {
+      rerunUpstream: options?.rerunUpstream ?? false,
+    })
+  },
+
+  async executePlanOnCanvas(plan: WorkflowAiPlan): Promise<WorkflowExecutionResult> {
+    const store = getStore()
+    store.applyWorkflowAiPlan(plan)
+    return store.runGlobalAndCollect()
   },
 }

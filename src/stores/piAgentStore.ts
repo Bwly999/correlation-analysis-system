@@ -6,6 +6,8 @@ import { ref, computed } from 'vue'
 import { useWorkflowAiStore } from './workflowAiStore'
 import { useWorkflowStore } from './workflowStore'
 import { WorkflowApi } from '@/api/workflowApi'
+import { fetchWithWorkflowContext } from '@/services/workflowRequestContext'
+import { getPiWorkflowToolSpecsByTarget } from '@/shared/piWorkflowTools'
 
 export interface PiAgentMessage {
   id: string
@@ -109,7 +111,7 @@ export const usePiAgentStore = defineStore('piAgent', () => {
     errorMessage.value = ''
 
     try {
-      const res = await fetch('/api/pi-agent/sessions', {
+      const res = await fetchWithWorkflowContext('/api/pi-agent/sessions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(request),
@@ -160,7 +162,7 @@ export const usePiAgentStore = defineStore('piAgent', () => {
     status.value = 'running'
 
     try {
-      const res = await fetch(`/api/pi-agent/sessions/${sessionId.value}/messages`, {
+      const res = await fetchWithWorkflowContext(`/api/pi-agent/sessions/${sessionId.value}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content }),
@@ -180,7 +182,7 @@ export const usePiAgentStore = defineStore('piAgent', () => {
     const controller = new AbortController()
     eventSource = controller
 
-    fetch(`/api/pi-agent/sessions/${sid}/events`, { signal: controller.signal })
+    fetchWithWorkflowContext(`/api/pi-agent/sessions/${sid}/events`, { signal: controller.signal })
       .then((res) => {
         if (!res.ok || !res.body) return
         const reader = res.body.getReader()
@@ -316,15 +318,15 @@ export const usePiAgentStore = defineStore('piAgent', () => {
    * Tool Name → WorkflowApi 方法的轻量路由映射
    * 遵循"不做 switch-case，用映射表"的原则
    */
-  const TOOL_EXECUTORS: Record<string, (params: Record<string, unknown>) => unknown> = {
-    wf_addNode: (p) =>
+  const executorImplementations: Record<string, (params: Record<string, unknown>) => unknown | Promise<unknown>> = {
+    addNode: (p) =>
       WorkflowApi.addNode(
         p.nodeType as string,
         p.label as string | undefined,
         p.position as { x: number; y: number } | undefined,
         p.config as Record<string, unknown> | undefined,
       ),
-    wf_connectNodes: (p) =>
+    connectNodes: (p) =>
       WorkflowApi.connectNodes(
         p.sourceId as string,
         p.targetId as string,
@@ -332,28 +334,28 @@ export const usePiAgentStore = defineStore('piAgent', () => {
           ? { sourceHandle: p.sourceHandle as string, targetHandle: p.targetHandle as string }
           : undefined,
       ),
-    wf_updateNodeConfig: (p) =>
+    updateNodeConfig: (p) =>
       WorkflowApi.updateNodeConfig(p.nodeId as string, p.config as Record<string, unknown>),
-    wf_renameNode: (p) =>
+    renameNode: (p) =>
       WorkflowApi.renameNode(p.nodeId as string, p.label as string),
-    wf_removeNode: (p) =>
+    removeNode: (p) =>
       WorkflowApi.removeNode(p.nodeId as string),
-    wf_disconnectEdge: (p) =>
+    disconnectEdge: (p) =>
       WorkflowApi.disconnectEdge(p.edgeId as string),
-    wf_moveNode: (p) =>
+    moveNode: (p) =>
       WorkflowApi.moveNode(p.nodeId as string, p.position as { x: number; y: number }),
-    wf_executeWorkflow: (p) => {
-      const workflowStore = useWorkflowStore()
-      const nodeIds = p.nodeIds as string[] | undefined
-      // 触发工作流执行（使用 AI 检查专用的执行方法）
-      if (nodeIds && nodeIds.length > 0) {
-        for (const nodeId of nodeIds) {
-          workflowStore.executeForAiInspection(nodeId)
-        }
-      }
-      return { executed: nodeIds?.length || 0 }
-    },
+    runWorkflow: async () => WorkflowApi.runWorkflow(),
+    debugNode: async (p) =>
+      WorkflowApi.debugNode(p.nodeId as string, {
+        rerunUpstream: p.mode === 'rerun_upstream',
+      }),
   }
+
+  const TOOL_EXECUTORS = Object.fromEntries(
+    getPiWorkflowToolSpecsByTarget('frontend_canvas')
+      .map((spec) => [spec.name, executorImplementations[spec.executorKey]])
+      .filter((entry) => typeof entry[1] === 'function'),
+  ) as Record<string, (params: Record<string, unknown>) => unknown | Promise<unknown>>
 
   /**
    * 处理 tool.execute 事件：
@@ -377,7 +379,7 @@ export const usePiAgentStore = defineStore('piAgent', () => {
     }
 
     try {
-      const result = executor(event.params)
+      const result = await executor(event.params)
       const resultText =
         typeof result === 'string'
           ? result
@@ -405,7 +407,7 @@ export const usePiAgentStore = defineStore('piAgent', () => {
     result: { content: Array<{ type: 'text'; text: string }>; details: Record<string, unknown>; isError?: boolean },
   ) {
     try {
-      await fetch(`/api/pi-agent/sessions/${sid}/tool-result`, {
+      await fetchWithWorkflowContext(`/api/pi-agent/sessions/${sid}/tool-result`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ toolCallId, result }),

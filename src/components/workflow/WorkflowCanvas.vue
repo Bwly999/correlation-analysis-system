@@ -8,7 +8,6 @@ import { useWorkflowAiStore } from '@/stores/workflowAiStore'
 import { useAgentObservabilityStore } from '@/stores/agentObservabilityStore'
 import NodeSidebar from './NodeSidebar.vue'
 import WorkflowHeader from './WorkflowHeader.vue'
-import AgentWorkspace from '../agent/AgentWorkspace.vue'
 import AgentObservabilityToggle from '../agent/AgentObservabilityToggle.vue'
 import AgentObservabilityDrawer from '../agent/AgentObservabilityDrawer.vue'
 import PiAgentPanel from '../piAgent/PiAgentPanel.vue'
@@ -60,7 +59,6 @@ const isWorkflowListVisible = ref(false)
 const workflowManagerInitialTab = ref('0')
 const isSidebarVisible = ref(true)
 const isAiPanelVisible = ref(false)
-const usePiAgent = ref(true)
 const isAgentObservabilityVisible = ref(false)
 const isHelpCenterVisible = ref(false)
 const viewportWidth = ref(typeof window === 'undefined' ? 1920 : window.innerWidth)
@@ -587,13 +585,8 @@ onBeforeUnmount(() => {
       <WorkflowHistoryBanner v-if="store.isHistoryMode" @exit="store.exitHistoryMode()" />
 
       <div class="workflow-workspace" :class="{ 'workflow-workspace--agent': isAgentMode }">
-        <AgentWorkspace
-          v-if="!usePiAgent"
-          :visible="isAiPanelVisible"
-          @focus-report="() => undefined"
-        />
         <PiAgentPanel
-          v-if="usePiAgent && isAiPanelVisible"
+          v-if="isAiPanelVisible"
           class="pi-agent-workspace"
         />
 

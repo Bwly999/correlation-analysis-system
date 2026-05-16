@@ -1322,7 +1322,7 @@ describe('WorkflowCanvas', () => {
     )
   })
 
-  it('keeps the legacy single-canvas layout before the agent workspace is opened', async () => {
+  it('keeps the single-canvas layout before the pi agent panel is opened', async () => {
     const wrapper = mount(WorkflowCanvas, {
       global: {
         stubs: {
@@ -1349,14 +1349,13 @@ describe('WorkflowCanvas', () => {
       },
     })
 
-    const agentWorkspace = wrapper.findComponent({ name: 'AgentWorkspace' })
-    expect(agentWorkspace.exists()).toBe(true)
-    expect(agentWorkspace.attributes('data-visible')).toBe('false')
+    const piAgentPanel = wrapper.findComponent({ name: 'PiAgentPanel' })
+    expect(piAgentPanel.exists()).toBe(false)
     expect(wrapper.find('.workflow-workspace').classes()).not.toContain('workflow-workspace--agent')
     expect(wrapper.find('.workflow-page-sidebar').exists()).toBe(true)
   })
 
-  it('collapses the agent workspace from the header action entry', async () => {
+  it('opens the pi agent panel from the header action entry', async () => {
     const workflowHeaderStub = defineComponent({
       name: 'WorkflowHeader',
       emits: ['toggle-ai'],
@@ -1390,11 +1389,11 @@ describe('WorkflowCanvas', () => {
       },
     })
 
-    expect(wrapper.findComponent({ name: 'AgentWorkspace' }).attributes('data-visible')).toBe('false')
+    expect(wrapper.findComponent({ name: 'PiAgentPanel' }).exists()).toBe(false)
 
     await wrapper.find('[data-testid="workflow-header-ai-toggle"]').trigger('click')
 
-    expect(wrapper.findComponent({ name: 'AgentWorkspace' }).attributes('data-visible')).toBe('true')
+    expect(wrapper.findComponent({ name: 'PiAgentPanel' }).exists()).toBe(true)
     expect(wrapper.text()).not.toContain('执行工作区')
     expect(wrapper.find('.workflow-workspace').classes()).toContain('workflow-workspace--agent')
     expect(wrapper.find('.workflow-page-sidebar').exists()).toBe(true)

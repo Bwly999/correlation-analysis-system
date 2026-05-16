@@ -67,6 +67,23 @@ export type WorkflowRunDashboardState = {
   terminalNodeIds: string[]
 }
 
+export type WorkflowExecutionResult = {
+  ok: boolean
+  scope: 'global' | 'single'
+  executionId: string | null
+  status: WorkflowRunDashboardState['status'] | 'idle'
+  dashboardSummary: WorkflowRunDashboardState | null
+  nodeResults: WorkflowNodeSnapshot[]
+}
+
+export type WorkflowNodeDebugResult = {
+  ok: boolean
+  scope: 'single'
+  nodeId: string
+  status: 'success' | 'error' | 'stopped' | 'waiting_input'
+  output: unknown
+}
+
 type DebugExecutionOptions = {
   rerunUpstream?: boolean
   isNested?: boolean
@@ -2040,6 +2057,52 @@ export const useWorkflowStore = defineStore('workflow', () => {
     }
   }
 
+  const runGlobalAndCollect = async (): Promise<WorkflowExecutionResult> => {
+    await runGlobal()
+    const latestRecord = executionHistory.value[0] ?? null
+    return {
+      ok: Boolean(lastRunDashboard.value) && lastRunDashboard.value?.status !== 'error',
+      scope: 'global',
+      executionId: latestRecord?.id ?? null,
+      status: lastRunDashboard.value?.status ?? 'idle',
+      dashboardSummary: lastRunDashboard.value ? cloneJsonValue(lastRunDashboard.value) : null,
+      nodeResults: latestRecord ? cloneJsonValue(latestRecord.nodes) : [],
+    }
+  }
+
+  const debugNodeAndCollect = async (
+    nodeId: string,
+    options: DebugExecutionOptions = {},
+  ): Promise<WorkflowNodeDebugResult> => {
+    const result = await executeNode(nodeId, true, 'single', options)
+    if (result === 'WAIT_INPUT') {
+      return {
+        ok: false,
+        scope: 'single',
+        nodeId,
+        status: 'waiting_input',
+        output: null,
+      }
+    }
+    if (result === 'STOPPED') {
+      return {
+        ok: false,
+        scope: 'single',
+        nodeId,
+        status: 'stopped',
+        output: null,
+      }
+    }
+    const currentNode = findNodeById(nodeId)
+    return {
+      ok: currentNode?.data.status === 'success',
+      scope: 'single',
+      nodeId,
+      status: currentNode?.data.status === 'error' ? 'error' : 'success',
+      output: cloneInspectionValue(result),
+    }
+  }
+
   const saveExecution = async (record: ExecutionRecord) => {
     try {
       const limitedHistory = await storageProvider.saveHistory(record, 20)
@@ -2126,6 +2189,8 @@ export const useWorkflowStore = defineStore('workflow', () => {
     executeForAiInspection,
     resumePendingExecution,
     runGlobal,
+    runGlobalAndCollect,
+    debugNodeAndCollect,
     getSavedWorkflows,
     loadCurrentStorageUser,
     loadWorkflowVersions,

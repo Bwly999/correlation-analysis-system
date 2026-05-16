@@ -85,6 +85,18 @@ describe('workflow-scoped route contract', () => {
         },
       },
       {
+        name: 'pi-agent',
+        request: createRequest('POST', '/api/pi-agent/sessions', {
+          mode: 'edit',
+          prompt: '帮我分析当前画布',
+          profile: { id: 'custom', name: '测试模型', baseUrl: 'http://example.com', model: 'glm-4.7', enabled: true, source: 'custom' },
+          nodeCatalog: [],
+        }),
+        assertBody: (body: string) => {
+          expect(JSON.parse(body)).toEqual({ message: expectedMessage })
+        },
+      },
+      {
         name: 'workflow-mcp',
         request: createRequest('POST', '/api/opencode/workflow-mcp', undefined, {
           'x-workflow-session-id': 'session_contract',

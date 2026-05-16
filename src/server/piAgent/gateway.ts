@@ -10,6 +10,7 @@ import {
 } from '@earendil-works/pi-coding-agent'
 import type { AgentSession } from '@earendil-works/pi-coding-agent'
 import type { WorkflowAiPlanRequest } from '../../ai/types.js'
+import type { WorkflowMcpRuntime } from '../opencode/workflowMcpRuntime.js'
 import { buildModelFromProfile, createModelRegistryFromProfile } from './modelAdapter.js'
 import { buildSystemPrompt } from './systemPrompt.js'
 import {
@@ -51,6 +52,7 @@ export interface CreatePiAgentSessionResult {
 export async function createPiAgentSession(
   request: WorkflowAiPlanRequest,
   userId: string,
+  workflowRuntime: WorkflowMcpRuntime,
 ): Promise<CreatePiAgentSessionResult> {
   // 1. 创建会话记录
   const record = createSessionRecord(request, userId)
@@ -77,7 +79,12 @@ export async function createPiAgentSession(
   })
 
   // 4. 构建工具集（传入 bridge 以启用原子工作流工具）
-  const tools = buildAllTools({ request, userId, bridge })
+  const tools = buildAllTools({
+    request,
+    userId,
+    bridge,
+    runtime: workflowRuntime,
+  })
 
   // 5. 创建 Pi Agent session
   const { authStorage, modelRegistry } = createModelRegistryFromProfile(request.profile)
