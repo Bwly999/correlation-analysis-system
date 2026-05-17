@@ -81,7 +81,7 @@ export function getSessionRecord(sessionId: string): PiAgentSessionRecord | unde
 
 export function updateSessionRecord(
   sessionId: string,
-  update: Partial<Pick<PiAgentSessionRecord, 'status' | 'updatedAt'>>,
+  update: Partial<Pick<PiAgentSessionRecord, 'status' | 'updatedAt' | 'request'>>,
 ): void {
   const record = sessions.get(sessionId)
   if (!record) return

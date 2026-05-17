@@ -371,6 +371,15 @@ export const useWorkflowStore = defineStore('workflow', () => {
       })
     })
 
+  const createAgentWorkflowSnapshot = () => ({
+    name: workflowName.value,
+    nodes: serializeWorkflowStructureNodes(getCurrentNodes()).map((node) => ({
+      ...node,
+      position: findNodeById(node.id)?.position ?? null,
+    })),
+    edges: serializeWorkflowEdges(getCurrentEdges()),
+  })
+
   const getSelectedNodes = (sourceNodes: WorkflowNode[] = getCurrentNodes()) =>
     sourceNodes.filter((node) => node.selected)
 
@@ -2217,6 +2226,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     removeEdge,
     exportWorkflow,
     importWorkflow,
+    createAgentWorkflowSnapshot,
     loadHistory,
     clearHistory,
     enterHistoryMode,

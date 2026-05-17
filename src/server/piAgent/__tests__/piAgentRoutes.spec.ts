@@ -8,6 +8,7 @@ const {
   subscribePiAgentEventsMock,
   getPiAgentSessionMock,
   resolvePiAgentToolResultMock,
+  syncPiAgentCanvasMock,
   getAgentObservabilityDebugFilesMock,
   getAgentObservabilityDebugHealthMock,
   getAgentObservabilityDebugReplayMock,
@@ -18,6 +19,7 @@ const {
   subscribePiAgentEventsMock: vi.fn(),
   getPiAgentSessionMock: vi.fn(),
   resolvePiAgentToolResultMock: vi.fn(),
+  syncPiAgentCanvasMock: vi.fn(),
   getAgentObservabilityDebugFilesMock: vi.fn(),
   getAgentObservabilityDebugHealthMock: vi.fn(),
   getAgentObservabilityDebugReplayMock: vi.fn(),
@@ -30,6 +32,7 @@ vi.mock('../gateway.js', () => ({
   subscribePiAgentEvents: subscribePiAgentEventsMock,
   getPiAgentSession: getPiAgentSessionMock,
   resolvePiAgentToolResult: resolvePiAgentToolResultMock,
+  syncPiAgentCanvas: syncPiAgentCanvasMock,
 }))
 
 vi.mock('../../opencode/gateway.js', () => ({
@@ -120,6 +123,7 @@ afterEach(() => {
   subscribePiAgentEventsMock.mockReset()
   getPiAgentSessionMock.mockReset()
   resolvePiAgentToolResultMock.mockReset()
+  syncPiAgentCanvasMock.mockReset()
   getAgentObservabilityDebugFilesMock.mockReset()
   getAgentObservabilityDebugHealthMock.mockReset()
   getAgentObservabilityDebugReplayMock.mockReset()
@@ -250,6 +254,64 @@ describe('piAgentRoutes', () => {
     expect(getAgentObservabilityDebugTraceMock).toHaveBeenCalledWith('session_1', {
       limit: undefined,
       offset: undefined,
+    })
+  })
+
+  it('forwards canvas sync requests to the pi agent gateway', async () => {
+    syncPiAgentCanvasMock.mockResolvedValueOnce({
+      projection: {
+        workflow: {
+          workflowName: '当前画布',
+          draftNodeCount: 1,
+          draftEdgeCount: 0,
+        },
+      },
+      syncSummary: '已同步当前画布，共 1 个节点、0 条连线',
+    })
+
+    const handler = createPiAgentRoutes()
+    const request = createRequest('POST', '/api/pi-agent/sessions/session_1/canvas-sync', {
+      workflowSnapshot: {
+        name: '当前画布',
+        nodes: [{ id: 'node_1', type: 'custom' }],
+        edges: [],
+      },
+    })
+    const response = createResponse()
+
+    const handled = await handler(createContext(request, response) as any)
+
+    expect(handled).toBe(true)
+    expect(response.statusCode).toBe(200)
+    expect(syncPiAgentCanvasMock).toHaveBeenCalledWith({
+      sessionId: 'session_1',
+      workflowSnapshot: {
+        name: '当前画布',
+        nodes: [{ id: 'node_1', type: 'custom' }],
+        edges: [],
+      },
+    })
+  })
+
+  it('returns 404 when canvas sync target session does not exist', async () => {
+    syncPiAgentCanvasMock.mockRejectedValueOnce(new Error('未找到 Pi Agent 会话'))
+
+    const handler = createPiAgentRoutes()
+    const request = createRequest('POST', '/api/pi-agent/sessions/missing/canvas-sync', {
+      workflowSnapshot: {
+        name: '当前画布',
+        nodes: [],
+        edges: [],
+      },
+    })
+    const response = createResponse()
+
+    const handled = await handler(createContext(request, response) as any)
+
+    expect(handled).toBe(true)
+    expect(response.statusCode).toBe(404)
+    expect(JSON.parse(response.body)).toEqual({
+      message: '未找到 Pi Agent 会话',
     })
   })
 })

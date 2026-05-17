@@ -1551,6 +1551,11 @@ export const syncAgentCanvas = async (input: {
   }
 }) => {
   const record = updateAgentSessionRecord(input.sessionId, (draft) => {
+    draft.request.workflowSnapshot = {
+      name: input.workflowSnapshot.name,
+      nodes: input.workflowSnapshot.nodes,
+      edges: input.workflowSnapshot.edges,
+    }
     draft.projection = applyCanvasSyncState(
       {
         ...draft.projection,

@@ -2,17 +2,20 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { usePiAgentStore } from '../piAgentStore'
 import { usePiAgentConfigStore } from '../piAgentConfigStore'
+import { useWorkflowStore } from '../workflowStore'
 
 const {
   createPiAgentSessionMock,
   resolvePiAgentToolResultMock,
   sendPiAgentMessageMock,
+  syncPiAgentCanvasMock,
   streamPiAgentEventsMock,
   fetchSystemModelProfilesMock,
 } = vi.hoisted(() => ({
   createPiAgentSessionMock: vi.fn(),
   resolvePiAgentToolResultMock: vi.fn(),
   sendPiAgentMessageMock: vi.fn(),
+  syncPiAgentCanvasMock: vi.fn(),
   streamPiAgentEventsMock: vi.fn(),
   fetchSystemModelProfilesMock: vi.fn(),
 }))
@@ -21,6 +24,7 @@ vi.mock('@/services/piAgentClient', () => ({
   createPiAgentSession: createPiAgentSessionMock,
   resolvePiAgentToolResult: resolvePiAgentToolResultMock,
   sendPiAgentMessage: sendPiAgentMessageMock,
+  syncPiAgentCanvas: syncPiAgentCanvasMock,
   streamPiAgentEvents: streamPiAgentEventsMock,
 }))
 
@@ -34,6 +38,10 @@ describe('piAgentStore', () => {
     setActivePinia(createPinia())
     localStorage.clear()
     vi.clearAllMocks()
+    syncPiAgentCanvasMock.mockResolvedValue({
+      projection: {} as any,
+      syncSummary: '已同步当前画布，共 0 个节点、0 条连线',
+    })
   })
 
   it('fails clearly when no model profile is available', async () => {
@@ -69,12 +77,19 @@ describe('piAgentStore', () => {
 
     const configStore = usePiAgentConfigStore()
     const store = usePiAgentStore()
+    const workflowStore = useWorkflowStore()
     await configStore.loadProfiles()
+    workflowStore.addAndConnectNode('manual-json-import', '手动输入数据', { x: 0, y: 0 })
     store.inputText = '帮我分析销量'
 
     await store.sendMessage()
 
     expect(createPiAgentSessionMock).toHaveBeenCalledTimes(1)
+    expect(syncPiAgentCanvasMock).toHaveBeenCalledWith('pi_session_1', {
+      name: workflowStore.workflowName,
+      nodes: expect.any(Array),
+      edges: expect.any(Array),
+    })
     expect(sendPiAgentMessageMock).toHaveBeenCalledWith('pi_session_1', '帮我分析销量')
     expect(store.sessionId).toBe('pi_session_1')
     expect(store.messages[0]).toEqual(
@@ -83,6 +98,73 @@ describe('piAgentStore', () => {
         content: '帮我分析销量',
       }),
     )
+  })
+
+  it('stops sending when canvas sync before message fails', async () => {
+    fetchSystemModelProfilesMock.mockResolvedValueOnce([
+      {
+        id: 'profile_1',
+        name: '默认模型',
+        baseUrl: 'http://example.com',
+        model: 'glm-4.7',
+        enabled: true,
+        source: 'system' as const,
+      },
+    ])
+    createPiAgentSessionMock.mockResolvedValueOnce({
+      sessionId: 'pi_session_1',
+      status: 'idle',
+      mode: 'edit',
+      prompt: '帮我分析销量',
+    })
+    syncPiAgentCanvasMock.mockRejectedValueOnce(new Error('同步当前画布失败'))
+    streamPiAgentEventsMock.mockResolvedValueOnce(undefined)
+
+    const configStore = usePiAgentConfigStore()
+    const store = usePiAgentStore()
+    const workflowStore = useWorkflowStore()
+    await configStore.loadProfiles()
+    workflowStore.addAndConnectNode('manual-json-import', '手动输入数据', { x: 0, y: 0 })
+
+    await store.sendMessage('帮我分析销量')
+
+    expect(sendPiAgentMessageMock).not.toHaveBeenCalled()
+    expect(store.status).toBe('failed')
+    expect(store.errorMessage).toContain('同步当前画布失败')
+  })
+
+  it('syncs canvas after structure/config tools but skips moveNode', async () => {
+    const store = usePiAgentStore()
+    const workflowStore = useWorkflowStore()
+
+    store.sessionId = 'pi_session_1'
+    workflowStore.addAndConnectNode('manual-json-import', '手动输入数据', { x: 0, y: 0 })
+
+    await store['handleEvent']?.({
+      type: 'tool.execute',
+      sessionId: 'pi_session_1',
+      toolCallId: 'tool_add',
+      toolName: 'wf_addNode',
+      params: {
+        nodeType: 'chart-display',
+        label: '图表展示',
+        position: { x: 320, y: 0 },
+      },
+    })
+
+    await store['handleEvent']?.({
+      type: 'tool.execute',
+      sessionId: 'pi_session_1',
+      toolCallId: 'tool_move',
+      toolName: 'wf_moveNode',
+      params: {
+        nodeId: workflowStore.nodes[0]?.id,
+        position: { x: 100, y: 100 },
+      },
+    })
+
+    expect(syncPiAgentCanvasMock).toHaveBeenCalledTimes(1)
+    expect(resolvePiAgentToolResultMock).toHaveBeenCalledTimes(1)
   })
 
   it('applies streamed assistant events into message list and status', async () => {

@@ -24,6 +24,7 @@ import { bridgePiEvent, tryExtractWorkflowPlan, type PiAgentSseEvent } from './e
 import { buildAllTools } from './tools/index.js'
 import { FrontendBridge } from './frontendBridge.js'
 import { assertPiAgentSafeRequest } from './safePayload.js'
+import type { AgentSessionCanvasSyncResponse } from '../../ai/types.js'
 
 // --- Runtime 管理 ---
 
@@ -223,6 +224,74 @@ export function subscribePiAgentEvents(
 
 export function getPiAgentSession(sessionId: string) {
   return getSessionRecord(sessionId) || null
+}
+
+export async function syncPiAgentCanvas(input: {
+  sessionId: string
+  workflowSnapshot: {
+    name: string
+    nodes: unknown[]
+    edges: unknown[]
+  }
+}): Promise<AgentSessionCanvasSyncResponse> {
+  const runtime = runtimes.get(input.sessionId)
+  if (!runtime) {
+    throw new Error('未找到 Pi Agent 会话')
+  }
+
+  const nextRequest = {
+    ...runtime.record.request,
+    workflowSnapshot: {
+      name: input.workflowSnapshot.name,
+      nodes: input.workflowSnapshot.nodes,
+      edges: input.workflowSnapshot.edges,
+    },
+  }
+
+  runtime.record.request = nextRequest
+  updateSessionRecord(input.sessionId, {
+    request: nextRequest,
+  })
+
+  return {
+    projection: {
+      workflow: {
+        workflowId: null,
+        workflowName: input.workflowSnapshot.name,
+        draftNodeCount: input.workflowSnapshot.nodes.length,
+        draftEdgeCount: input.workflowSnapshot.edges.length,
+        draftSummary: '',
+        versionCount: 0,
+        latestVersionId: null,
+        proposedPlan: null,
+      },
+      analysis: {
+        goal: runtime.record.prompt,
+        summary: '',
+        candidateTargets: [],
+        candidateFactors: [],
+        methods: [],
+        findings: [],
+        risks: [],
+        recommendations: [],
+      },
+      execution: {
+        status: 'idle',
+        latestAction: '当前画布已同步',
+        toolCalls: [],
+        pendingApprovals: [],
+        latestToolSummary: '',
+      },
+      canvasSync: {
+        status: 'synced',
+        message: `已同步当前画布，共 ${input.workflowSnapshot.nodes.length} 个节点、${input.workflowSnapshot.edges.length} 条连线`,
+        syncedAt: Date.now(),
+      },
+      error: null,
+      updatedAt: Date.now(),
+    },
+    syncSummary: `已同步当前画布，共 ${input.workflowSnapshot.nodes.length} 个节点、${input.workflowSnapshot.edges.length} 条连线`,
+  }
 }
 
 export function disposePiAgentSession(sessionId: string): void {

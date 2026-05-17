@@ -11,6 +11,7 @@ import {
   subscribePiAgentEvents,
   getPiAgentSession,
   resolvePiAgentToolResult,
+  syncPiAgentCanvas,
 } from '../piAgent/gateway.js'
 import {
   getAgentObservabilityDebugFiles,
@@ -147,6 +148,33 @@ export const createPiAgentRoutes = (): HttpDomainHandler<ServerDependencies> => 
     }>()
     const ok = resolvePiAgentToolResult(sessionId, body.toolCallId, body.result)
     context.sendJson(ok ? 200 : 404, { ok })
+    return true
+  }
+
+  // POST /api/pi-agent/sessions/:id/canvas-sync - 同步当前画布快照
+  const canvasSyncMatch = pathname.match(/^\/api\/pi-agent\/sessions\/([^/]+)\/canvas-sync$/)
+  if (method === 'POST' && canvasSyncMatch) {
+    const sessionId = decodeURIComponent(canvasSyncMatch[1] ?? '')
+    try {
+      const body = await context.readJsonBody<{
+        workflowSnapshot: {
+          name: string
+          nodes: unknown[]
+          edges: unknown[]
+        }
+      }>()
+      const result = await syncPiAgentCanvas({
+        sessionId,
+        workflowSnapshot: body.workflowSnapshot,
+      })
+      context.sendJson(200, result)
+    } catch (error) {
+      if (error instanceof Error && error.message === '未找到 Pi Agent 会话') {
+        context.sendJson(404, { message: error.message })
+        return true
+      }
+      throw error
+    }
     return true
   }
 

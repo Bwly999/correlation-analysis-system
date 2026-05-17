@@ -15,6 +15,7 @@ import {
   createPiAgentSession,
   resolvePiAgentToolResult,
   sendPiAgentMessage,
+  syncPiAgentCanvas,
   streamPiAgentEvents,
 } from '@/services/piAgentClient'
 
@@ -63,6 +64,14 @@ export const usePiAgentStore = defineStore('piAgent', () => {
   const errorMessage = ref('')
   const inputText = ref('')
   const localExecutionCache = new Map<string, RawExecutionResult>()
+  const STRUCTURE_SYNC_TOOL_NAMES = new Set([
+    'wf_addNode',
+    'wf_connectNodes',
+    'wf_updateNodeConfig',
+    'wf_renameNode',
+    'wf_removeNode',
+    'wf_disconnectEdge',
+  ])
 
   // SSE 连接
   let eventSource: AbortController | null = null
@@ -148,6 +157,14 @@ export const usePiAgentStore = defineStore('piAgent', () => {
     if (!sessionId.value) {
       const ok = await ensureSession(content)
       if (!ok) return
+    }
+
+    try {
+      await syncCanvasSnapshotIfNeeded()
+    } catch (err: any) {
+      status.value = 'failed'
+      errorMessage.value = err?.message || '同步当前画布失败'
+      return
     }
 
     // 添加用户消息
@@ -381,6 +398,10 @@ export const usePiAgentStore = defineStore('piAgent', () => {
       const result = await executor(event.params)
       const safeResult = toSafeToolResult(event.toolName, event.toolCallId, result)
 
+      if (STRUCTURE_SYNC_TOOL_NAMES.has(event.toolName)) {
+        await syncCanvasSnapshotIfNeeded()
+      }
+
       await sendToolResult(event.sessionId, event.toolCallId, {
         content: [{ type: 'text', text: safeResult.summary }],
         details: safeResult,
@@ -401,6 +422,12 @@ export const usePiAgentStore = defineStore('piAgent', () => {
         isError: true,
       })
     }
+  }
+
+  async function syncCanvasSnapshotIfNeeded() {
+    if (!sessionId.value) return
+    const workflowStore = useWorkflowStore()
+    await syncPiAgentCanvas(sessionId.value, workflowStore.createAgentWorkflowSnapshot())
   }
 
   /**
@@ -483,6 +510,7 @@ export const usePiAgentStore = defineStore('piAgent', () => {
     // Actions
     ensureSession,
     sendMessage,
+    syncCanvasSnapshotIfNeeded,
     disconnect,
     reset,
     handleEvent,

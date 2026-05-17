@@ -40,6 +40,7 @@ import {
   disposeAllAgentRuntimes,
   getAgentSession,
   sendAgentSessionMessage,
+  syncAgentCanvas,
 } from '../gateway.js'
 import { getAgentSessionRecord } from '../agentSessionStore.js'
 
@@ -888,5 +889,35 @@ describe('agent session bridge', () => {
         }),
       }),
     )
+  })
+
+  it('updates the session workflowSnapshot when agent canvas sync is requested', async () => {
+    const created = await createAgentSession({
+      request: buildAgentRequest(),
+      userId: 'user_1',
+    })
+
+    const synced = await syncAgentCanvas({
+      sessionId: created.session.id,
+      workflowSnapshot: {
+        name: '同步后画布',
+        nodes: [{ id: 'node_synced', type: 'custom', label: '同步节点' }],
+        edges: [],
+      },
+    })
+
+    const record = getAgentSessionRecord(created.session.id)
+    expect(record?.request.workflowSnapshot).toEqual({
+      name: '同步后画布',
+      nodes: [{ id: 'node_synced', type: 'custom', label: '同步节点' }],
+      edges: [],
+    })
+    expect(record?.projection.workflow).toMatchObject({
+      workflowName: '同步后画布',
+      draftNodeCount: 1,
+      draftEdgeCount: 0,
+    })
+    expect(record?.projection.canvasSync.status).toBe('synced')
+    expect(synced.syncSummary).toContain('已同步当前画布')
   })
 })

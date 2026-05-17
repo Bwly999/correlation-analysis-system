@@ -3,6 +3,7 @@ import type {
   AgentObservabilityDebugHealth,
   AgentObservabilityDebugReplayResponse,
   AgentObservabilityDebugTraceResponse,
+  AgentSessionCanvasSyncResponse,
   PiAgentSafeToolResult,
   WorkflowAiPlanRequest,
 } from '@/ai/types'
@@ -61,6 +62,25 @@ export const sendPiAgentMessage = async (
   })
 
   return await readJsonOrThrow<PiAgentSendMessageResponse>(response, '发送 Pi Agent 消息失败')
+}
+
+export const syncPiAgentCanvas = async (
+  sessionId: string,
+  workflowSnapshot: {
+    name: string
+    nodes: unknown[]
+    edges: unknown[]
+  },
+): Promise<AgentSessionCanvasSyncResponse> => {
+  const response = await fetchWithWorkflowContext(`/api/pi-agent/sessions/${sessionId}/canvas-sync`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ workflowSnapshot }),
+  })
+
+  return await readJsonOrThrow<AgentSessionCanvasSyncResponse>(response, '同步 Pi Agent 画布失败')
 }
 
 export const streamPiAgentEvents = async (
