@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### 变更 (Changed)
+
+- **重构 Pi Agent 前端消息面板，升级为 Tailwind 工作台风格并补齐 markdown 渲染**:
+  - `src/components/piAgent/PiAgentPanel.vue`、`src/components/piAgent/PiAgentMessageList.vue`、`src/components/piAgent/PiAgentThinkingBlock.vue` 与 `src/components/piAgent/PiAgentToolCallCard.vue` 统一改为 Tailwind 结构化样式，重做头部状态、空态、输入区、思考块、工具卡片和加载态。
+  - 新增 `src/components/piAgent/PiAgentMarkdownRenderer.vue`、`src/components/piAgent/piAgentMarkdown.ts` 与 `src/components/piAgent/piAgentContentFilter.ts`，为助手正文提供 markdown 渲染、代码高亮、安全清洗与上下文过滤能力。
+  - 新增 `marked` 与 `highlight.js` 依赖，并补充 Pi Agent markdown、过滤器和 dev 原文切换回归测试。
+
 ### 修复 (Fixed)
 
 - **前端收口 Pi Agent 大上下文传输，避免大表/大报告/大图表直接进入后端与模型上下文**:

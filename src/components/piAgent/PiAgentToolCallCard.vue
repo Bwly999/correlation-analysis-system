@@ -2,6 +2,7 @@
 /**
  * Pi Agent 工具调用卡片
  */
+import { CheckCircle2, ChevronRight, CircleDot, LoaderCircle, OctagonAlert } from 'lucide-vue-next'
 import { ref } from 'vue'
 import type { PiAgentToolCall } from '../../stores/piAgentStore'
 
@@ -13,144 +14,62 @@ const expanded = ref(false)
 </script>
 
 <template>
-  <div class="pi-agent-tool-card" :class="[`status-${toolCall.status}`]">
-    <button class="tool-header" @click="expanded = !expanded">
-      <span class="tool-status-dot" />
-      <span class="tool-name">{{ toolCall.displayName }}</span>
-      <span v-if="toolCall.status === 'running'" class="tool-spinner">⏳</span>
-      <span v-else-if="toolCall.status === 'success'" class="tool-check">✓</span>
-      <span v-else-if="toolCall.status === 'failed'" class="tool-error">✗</span>
-      <span class="tool-arrow" :class="{ expanded }">▶</span>
-    </button>
-    <div v-if="expanded" class="tool-details">
-      <div v-if="toolCall.args" class="tool-section">
-        <div class="tool-section-label">参数</div>
-        <pre class="tool-json">{{ JSON.stringify(toolCall.args, null, 2) }}</pre>
+  <div
+    class="overflow-hidden rounded-2xl border text-[12px] shadow-[0_16px_28px_-28px_rgba(15,23,42,0.45)]"
+    :class="{
+      'status-running border-amber-200 bg-amber-50/70': toolCall.status === 'running',
+      'status-success border-emerald-200 bg-emerald-50/70': toolCall.status === 'success',
+      'status-failed border-rose-200 bg-rose-50/70': toolCall.status === 'failed',
+    }"
+  >
+    <button
+      class="flex w-full items-center gap-2 px-3.5 py-3 text-left"
+      @click="expanded = !expanded"
+    >
+      <span
+        class="flex h-7 w-7 items-center justify-center rounded-xl border bg-white"
+        :class="{
+          'border-amber-200 text-amber-600': toolCall.status === 'running',
+          'border-emerald-200 text-emerald-600': toolCall.status === 'success',
+          'border-rose-200 text-rose-600': toolCall.status === 'failed',
+        }"
+      >
+        <LoaderCircle v-if="toolCall.status === 'running'" :size="14" class="animate-spin" />
+        <CheckCircle2 v-else-if="toolCall.status === 'success'" :size="14" />
+        <OctagonAlert v-else-if="toolCall.status === 'failed'" :size="14" />
+      </span>
+      <div class="min-w-0 flex-1">
+        <div class="truncate font-semibold text-slate-800">{{ toolCall.displayName }}</div>
+        <div class="mt-0.5 flex items-center gap-1.5 text-[11px]" :class="{
+          'text-amber-700': toolCall.status === 'running',
+          'text-emerald-700': toolCall.status === 'success',
+          'text-rose-700': toolCall.status === 'failed',
+        }">
+          <CircleDot :size="10" />
+          {{ toolCall.status === 'running' ? '执行中' : toolCall.status === 'success' ? '已完成' : '执行失败' }}
+        </div>
       </div>
-      <div v-if="toolCall.result" class="tool-section">
-        <div class="tool-section-label">结果</div>
-        <pre class="tool-json" :class="{ error: toolCall.isError }">{{ toolCall.result }}</pre>
+      <ChevronRight
+        :size="14"
+        class="shrink-0 text-slate-400 transition"
+        :class="expanded ? 'rotate-90' : ''"
+      />
+    </button>
+    <div
+      v-if="expanded"
+      class="border-t border-slate-200/80 bg-white/80 px-3.5 py-3"
+    >
+      <div v-if="toolCall.args" class="mb-3 last:mb-0">
+        <div class="mb-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">参数</div>
+        <pre class="overflow-x-auto rounded-xl bg-slate-950 px-3 py-2.5 font-mono text-[11px] leading-5 text-slate-100">{{ JSON.stringify(toolCall.args, null, 2) }}</pre>
+      </div>
+      <div v-if="toolCall.result">
+        <div class="mb-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">结果</div>
+        <pre
+          class="overflow-x-auto rounded-xl px-3 py-2.5 font-mono text-[11px] leading-5"
+          :class="toolCall.isError ? 'bg-rose-50 text-rose-700' : 'bg-slate-100 text-slate-700'"
+        >{{ toolCall.result }}</pre>
       </div>
     </div>
   </div>
 </template>
-
-<style scoped>
-.pi-agent-tool-card {
-  margin: 4px 0;
-  border-radius: 6px;
-  border: 1px solid var(--p-surface-200, #e2e8f0);
-  overflow: hidden;
-  font-size: 12px;
-}
-
-.tool-header {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  padding: 6px 10px;
-  background: var(--p-surface-50, #f8fafc);
-  border: none;
-  cursor: pointer;
-  text-align: left;
-  color: var(--p-surface-700, #334155);
-}
-
-.tool-header:hover {
-  background: var(--p-surface-100, #f1f5f9);
-}
-
-.tool-status-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.status-running .tool-status-dot {
-  background: #f59e0b;
-  animation: pulse 1s infinite;
-}
-
-.status-success .tool-status-dot {
-  background: #10b981;
-}
-
-.status-failed .tool-status-dot {
-  background: #ef4444;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
-}
-
-.tool-name {
-  flex: 1;
-  font-weight: 500;
-}
-
-.tool-spinner {
-  font-size: 12px;
-}
-
-.tool-check {
-  color: #10b981;
-  font-weight: bold;
-}
-
-.tool-error {
-  color: #ef4444;
-  font-weight: bold;
-}
-
-.tool-arrow {
-  transition: transform 0.2s;
-  font-size: 10px;
-  color: var(--p-surface-400);
-}
-
-.tool-arrow.expanded {
-  transform: rotate(90deg);
-}
-
-.tool-details {
-  border-top: 1px solid var(--p-surface-200, #e2e8f0);
-  padding: 8px 10px;
-}
-
-.tool-section {
-  margin-bottom: 6px;
-}
-
-.tool-section:last-child {
-  margin-bottom: 0;
-}
-
-.tool-section-label {
-  font-size: 11px;
-  color: var(--p-surface-500, #64748b);
-  margin-bottom: 2px;
-  font-weight: 500;
-}
-
-.tool-json {
-  margin: 0;
-  padding: 6px 8px;
-  background: var(--p-surface-50, #f8fafc);
-  border-radius: 4px;
-  font-size: 11px;
-  line-height: 1.4;
-  overflow-x: auto;
-  max-height: 150px;
-  overflow-y: auto;
-  white-space: pre-wrap;
-  word-break: break-all;
-}
-
-.tool-json.error {
-  background: #fef2f2;
-  color: #dc2626;
-}
-</style>

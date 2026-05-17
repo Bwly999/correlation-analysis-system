@@ -66,10 +66,13 @@ describe('sharedRuntimeTools', () => {
     if (!tool) throw new Error('缺少 workflow_get_session_context 工具')
 
     const result = await tool.execute('call_1', {}, undefined as never, undefined as never, undefined as never)
-    const text = result.content[0]?.text ?? '{}'
+    const firstContent = result.content[0]
+    const text = firstContent && 'text' in firstContent ? firstContent.text : '{}'
     const payload = JSON.parse(text) as Record<string, unknown>
 
-    expect(payload.workflowSnapshotSummary).toEqual({
+    const workflowSnapshotSummary = payload.workflowSnapshotSummary as Record<string, any>
+
+    expect(workflowSnapshotSummary).toEqual({
       name: '当前工作流',
       nodes: [
         {

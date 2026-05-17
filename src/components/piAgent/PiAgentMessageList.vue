@@ -6,6 +6,11 @@ import { nextTick, watch, ref } from 'vue'
 import { usePiAgentStore } from '../../stores/piAgentStore'
 import PiAgentThinkingBlock from './PiAgentThinkingBlock.vue'
 import PiAgentToolCallCard from './PiAgentToolCallCard.vue'
+import PiAgentMarkdownRenderer from './PiAgentMarkdownRenderer.vue'
+
+defineProps<{
+  debugVisible?: boolean
+}>()
 
 const store = usePiAgentStore()
 const listRef = ref<HTMLElement | null>(null)
@@ -36,142 +41,84 @@ watch(
 </script>
 
 <template>
-  <div ref="listRef" class="pi-agent-message-list">
+  <div
+    ref="listRef"
+    class="flex flex-1 flex-col gap-4 overflow-y-auto px-4 py-4"
+  >
+    <div
+      v-if="store.messages.length === 0"
+      class="flex min-h-[240px] flex-1 items-center justify-center"
+    >
+      <div class="max-w-[320px] rounded-[28px] border border-slate-200/80 bg-white/80 px-6 py-7 text-center shadow-[0_25px_50px_-36px_rgba(15,23,42,0.35)] backdrop-blur-xl">
+        <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-950 text-lg font-bold text-blue-300">
+          Pi
+        </div>
+        <h3 class="text-[16px] font-bold tracking-[-0.02em] text-slate-900">Pi Agent 已就位</h3>
+        <p class="mt-2 text-[13px] leading-6 text-slate-500">
+          你可以让它解读当前工作流、定位问题、规划节点步骤，或直接帮助推进下一步分析。
+        </p>
+      </div>
+    </div>
+
     <div
       v-for="msg in store.messages"
       :key="msg.id"
-      class="message-item"
-      :class="[`role-${msg.role}`]"
+      class="flex flex-col"
+      :class="msg.role === 'user' ? 'items-end' : 'items-start'"
     >
-      <!-- 用户消息 -->
-      <div v-if="msg.role === 'user'" class="message-bubble user-bubble">
+      <div
+        v-if="msg.role === 'user'"
+        class="max-w-[88%] rounded-[20px] rounded-br-md bg-slate-950 px-4 py-3 text-[13px] leading-6 text-white shadow-[0_24px_36px_-28px_rgba(15,23,42,0.7)]"
+      >
         {{ msg.content }}
       </div>
 
-      <!-- 助手消息 -->
-      <div v-else class="assistant-block">
-        <!-- 思考块 -->
+      <div
+        v-else
+        class="max-w-[94%] space-y-2"
+      >
         <PiAgentThinkingBlock v-if="msg.thinking" :thinking="msg.thinking" />
 
-        <!-- 工具调用 -->
         <PiAgentToolCallCard
           v-for="tc in msg.toolCalls"
           :key="tc.id"
           :tool-call="tc"
         />
 
-        <!-- 文本内容 -->
-        <div v-if="msg.content" class="message-bubble assistant-bubble">
-          <span>{{ msg.content }}</span>
-          <span v-if="msg.status === 'streaming'" class="cursor-blink">▊</span>
+        <div
+          v-if="msg.content"
+          class="rounded-[24px] rounded-tl-md border border-slate-200/80 bg-white/92 px-4 py-4 shadow-[0_24px_45px_-34px_rgba(15,23,42,0.35)] backdrop-blur"
+        >
+          <div class="flex items-end gap-1.5">
+            <div class="min-w-0 flex-1">
+              <PiAgentMarkdownRenderer :content="msg.content" :debug-visible="debugVisible" />
+            </div>
+            <span
+              v-if="msg.status === 'streaming'"
+              class="cursor-blink mb-1 inline-block text-blue-500"
+            >
+              ▊
+            </span>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- 加载指示器 -->
-    <div v-if="store.isStreaming && !store.messages.some(m => m.status === 'streaming')" class="loading-indicator">
-      <span class="loading-dot" />
-      <span class="loading-dot" />
-      <span class="loading-dot" />
+    <div
+      v-if="store.isStreaming && !store.messages.some(m => m.status === 'streaming')"
+      class="flex items-center gap-2 rounded-2xl border border-slate-200/80 bg-white/80 px-4 py-3 text-[12px] text-slate-500 shadow-[0_18px_30px_-26px_rgba(15,23,42,0.3)] backdrop-blur"
+    >
+      <span class="h-2 w-2 animate-pulse rounded-full bg-blue-500" />
+      <span class="h-2 w-2 animate-pulse rounded-full bg-blue-400 [animation-delay:120ms]" />
+      <span class="h-2 w-2 animate-pulse rounded-full bg-blue-300 [animation-delay:240ms]" />
+      <span class="ml-1">Pi Agent 正在整理回复与工具结果...</span>
     </div>
 
-    <!-- 错误提示 -->
-    <div v-if="store.errorMessage" class="error-banner">
+    <div
+      v-if="store.errorMessage"
+      class="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-[12px] leading-6 text-rose-700"
+    >
       {{ store.errorMessage }}
     </div>
   </div>
 </template>
-
-<style scoped>
-.pi-agent-message-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.message-item {
-  display: flex;
-  flex-direction: column;
-}
-
-.role-user {
-  align-items: flex-end;
-}
-
-.role-assistant {
-  align-items: flex-start;
-}
-
-.message-bubble {
-  max-width: 85%;
-  padding: 8px 12px;
-  border-radius: 12px;
-  font-size: 13px;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.user-bubble {
-  background: var(--p-primary-color, #2563eb);
-  color: white;
-  border-bottom-right-radius: 4px;
-}
-
-.assistant-bubble {
-  background: var(--p-surface-100, #f1f5f9);
-  color: var(--p-surface-800, #1e293b);
-  border-bottom-left-radius: 4px;
-}
-
-.assistant-block {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  max-width: 90%;
-}
-
-.cursor-blink {
-  animation: blink 1s step-end infinite;
-  color: var(--p-surface-400);
-}
-
-@keyframes blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
-}
-
-.loading-indicator {
-  display: flex;
-  gap: 4px;
-  padding: 8px 12px;
-}
-
-.loading-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--p-surface-400, #94a3b8);
-  animation: bounce 1.4s infinite ease-in-out both;
-}
-
-.loading-dot:nth-child(1) { animation-delay: -0.32s; }
-.loading-dot:nth-child(2) { animation-delay: -0.16s; }
-
-@keyframes bounce {
-  0%, 80%, 100% { transform: scale(0); }
-  40% { transform: scale(1); }
-}
-
-.error-banner {
-  padding: 8px 12px;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  border-radius: 8px;
-  color: #dc2626;
-  font-size: 12px;
-}
-</style>
