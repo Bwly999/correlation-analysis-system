@@ -22,7 +22,7 @@ function handleKeydown(e: KeyboardEvent) {
 </script>
 
 <template>
-  <div class="pi-agent-panel">
+  <div class="pi-agent-panel" @keydown.stop>
     <!-- 头部 -->
     <div class="panel-header">
       <span class="header-title">Pi Agent</span>

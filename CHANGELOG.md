@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### 修复 (Fixed)
+
+- **修复 Agent 对话框与画布快捷键冲突**:
+  - `src/components/workflow/WorkflowCanvas.vue` 为画布全局快捷键补充 Agent 面板、弹窗等排除区域判断，并在存在原生文本选区时保留浏览器默认 `Ctrl/Cmd + C` 复制行为，避免 Agent 对话内容复制时误触发节点复制。
+  - `src/components/piAgent/PiAgentPanel.vue` 为 Agent 面板根容器增加键盘事件拦截，减少面板内部快捷键继续冒泡到画布层的概率。
+  - `src/components/workflow/__tests__/WorkflowCanvas.spec.ts` 补充回归测试，覆盖 Agent 面板内按键、文本选区复制与画布快捷键隔离场景。
+
 ### 变更 (Changed)
 
 - **调整 XGBoost + SHAP 的测试集比例边界与 `0` 值切分逻辑**:

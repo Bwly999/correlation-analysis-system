@@ -66,6 +66,7 @@ const isUnsavedDialogVisible = ref(false)
 const pendingWorkflowAction = ref<(() => Promise<void> | void) | null>(null)
 const isResettingView = ref(false)
 const isShortcutHintsCollapsed = ref(false)
+const isEditableFocused = ref(false)
 const canvasViewportRef = useTemplateRef<HTMLDivElement>('canvasViewport')
 
 const layoutMetrics = computed(() => getWorkflowLayoutMetrics(viewportWidth.value))
@@ -120,17 +121,20 @@ const isCanvasShortcutBlocked = computed(
     isUnsavedDialogVisible.value ||
     isHelpCenterVisible.value,
 )
+const isCanvasShortcutGloballyDisabled = computed(
+  () => isCanvasShortcutBlocked.value || isEditableFocused.value,
+)
 const deleteKeyCode = computed(() => null)
 const selectionKeyCode = computed(() =>
-  isCanvasShortcutBlocked.value ? false : isMacLikePlatform.value ? 'Meta' : 'Control',
+  isCanvasShortcutGloballyDisabled.value ? false : isMacLikePlatform.value ? 'Meta' : 'Control',
 )
 const multiSelectionKeyCode = computed(() =>
-  isCanvasShortcutBlocked.value ? null : isMacLikePlatform.value ? 'Meta' : 'Control',
+  isCanvasShortcutGloballyDisabled.value ? null : isMacLikePlatform.value ? 'Meta' : 'Control',
 )
 const zoomActivationKeyCode = computed(() =>
-  isCanvasShortcutBlocked.value ? null : isMacLikePlatform.value ? 'Meta' : 'Control',
+  isCanvasShortcutGloballyDisabled.value ? null : isMacLikePlatform.value ? 'Meta' : 'Control',
 )
-const panActivationKeyCode = computed(() => (isCanvasShortcutBlocked.value ? null : 'Space'))
+const panActivationKeyCode = computed(() => (isCanvasShortcutGloballyDisabled.value ? null : 'Space'))
 const shortcutCardRight = computed(() =>
   `${(isSidebarVisible.value ? layoutMetrics.value.sidebarWidth : 0) + layoutMetrics.value.contentPadding}px`,
 )
@@ -280,7 +284,7 @@ const handleBeforeUnload = (event: BeforeUnloadEvent) => {
   event.returnValue = ''
 }
 
-const isEditableKeyboardTarget = (target: EventTarget | null) => {
+const isEditableKeyboardTarget = (target: EventTarget | null): boolean => {
   if (!(target instanceof HTMLElement)) return false
 
   return (
@@ -288,6 +292,29 @@ const isEditableKeyboardTarget = (target: EventTarget | null) => {
     || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
     || Boolean(target.closest('[contenteditable="true"]'))
   )
+}
+
+const isInsideCanvasShortcutExcludedArea = (target: EventTarget | null): boolean => {
+  if (!(target instanceof HTMLElement)) return false
+
+  return Boolean(
+    target.closest('.pi-agent-panel')
+    || target.closest('.agent-observability-drawer')
+    || target.closest('.p-dialog'),
+  )
+}
+
+const hasActiveTextSelection = (): boolean => {
+  if (typeof window === 'undefined' || typeof window.getSelection !== 'function') {
+    return false
+  }
+
+  const selection = window.getSelection()
+  if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
+    return false
+  }
+
+  return selection.toString().length > 0
 }
 
 const getCanvasPasteAnchor = () => {
@@ -304,7 +331,12 @@ const getCanvasPasteAnchor = () => {
 }
 
 const handleWindowKeydown = async (event: KeyboardEvent) => {
-  if (store.isHistoryMode || isCanvasShortcutBlocked.value || isEditableKeyboardTarget(event.target)) {
+  if (
+    store.isHistoryMode
+    || isCanvasShortcutBlocked.value
+    || isEditableKeyboardTarget(event.target)
+    || isInsideCanvasShortcutExcludedArea(event.target)
+  ) {
     return
   }
 
@@ -323,6 +355,10 @@ const handleWindowKeydown = async (event: KeyboardEvent) => {
   }
 
   if (matchesKey('c', 'KeyC')) {
+    if (hasActiveTextSelection()) {
+      return
+    }
+
     event.preventDefault()
     store.duplicateSelectedNodes()
     return
@@ -346,8 +382,21 @@ const handleWindowKeydown = async (event: KeyboardEvent) => {
   }
 }
 
+const handleFocusIn = (e: FocusEvent) => {
+  isEditableFocused.value = isEditableKeyboardTarget(e.target)
+}
+
+const handleFocusOut = (e: FocusEvent) => {
+  // 延迟检查，因为 focusout 时 activeElement 可能尚未切换
+  requestAnimationFrame(() => {
+    isEditableFocused.value = isEditableKeyboardTarget(document.activeElement)
+  })
+}
+
 onMounted(async () => {
   window.addEventListener('keydown', handleWindowKeydown)
+  window.addEventListener('focusin', handleFocusIn)
+  window.addEventListener('focusout', handleFocusOut)
   window.addEventListener('resize', onWindowResize)
   window.addEventListener('beforeunload', handleBeforeUnload)
   window.addEventListener('workflow:open-log-panel', handleOpenLogPanel)
@@ -550,6 +599,8 @@ const onDropLocal = (event: DragEvent) => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleWindowKeydown)
+  window.removeEventListener('focusin', handleFocusIn)
+  window.removeEventListener('focusout', handleFocusOut)
   window.removeEventListener('resize', onWindowResize)
   window.removeEventListener('beforeunload', handleBeforeUnload)
   window.removeEventListener('workflow:open-log-panel', handleOpenLogPanel)

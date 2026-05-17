@@ -386,6 +386,176 @@ describe('WorkflowCanvas', () => {
     expect(duplicateSpy).toHaveBeenCalledTimes(1)
   })
 
+  it('does not route canvas shortcuts when the pi agent panel handles the key event', async () => {
+    const store = useWorkflowStore()
+    const duplicateSpy = vi.spyOn(store, 'duplicateSelectedNodes').mockImplementation(() => [])
+
+    const workflowHeaderStub = defineComponent({
+      name: 'WorkflowHeader',
+      emits: ['toggle-ai'],
+      template:
+        '<button data-testid="workflow-header-ai-toggle" @click="$emit(\'toggle-ai\')">分析代理</button>',
+    })
+
+    const wrapper = mount(WorkflowCanvas, {
+      global: {
+        stubs: {
+          Background: { template: '<div />' },
+          Controls: { template: '<div />' },
+          NodeSidebar: { template: '<div />' },
+          WorkflowHeader: workflowHeaderStub,
+          BaseNode: { template: '<div />' },
+          LogPanel: { template: '<div />' },
+          NodeConfigModal: { template: '<div />' },
+          RuntimeInputModal: runtimeInputModalStub,
+          WorkflowResultDashboardModal: { template: '<div />' },
+          WorkflowManagerModal: workflowManagerModalStub,
+          UnsavedWorkflowDialog: { template: '<div />' },
+          HelpCenterModal: { template: '<div />' },
+          ConfirmDialog: { template: '<div />' },
+          Toast: { template: '<div />' },
+          Button: { template: '<button><slot /></button>' },
+          N8nEdge: { template: '<div />' },
+          PiAgentPanel: defineComponent({
+            name: 'PiAgentPanel',
+            template:
+              '<div class="pi-agent-panel-stub" tabindex="0"><textarea class="agent-input" @keydown.stop></textarea></div>',
+          }),
+        },
+        directives: {
+          tooltip: () => undefined,
+        },
+      },
+    })
+
+    await wrapper.get('[data-testid="workflow-header-ai-toggle"]').trigger('click')
+
+    const textarea = wrapper.get('.agent-input')
+    await textarea.trigger('keydown', {
+      key: 'c',
+      code: 'KeyC',
+      ctrlKey: true,
+    })
+
+    await flushAsyncWork()
+
+    expect(duplicateSpy).not.toHaveBeenCalled()
+  })
+
+  it('does not route Ctrl+C to canvas duplication when the event comes from the pi agent panel', async () => {
+    const store = useWorkflowStore()
+    const duplicateSpy = vi.spyOn(store, 'duplicateSelectedNodes').mockImplementation(() => [])
+
+    mount(WorkflowCanvas, {
+      global: {
+        stubs: {
+          Background: { template: '<div />' },
+          Controls: { template: '<div />' },
+          NodeSidebar: { template: '<div />' },
+          WorkflowHeader: { template: '<div />' },
+          BaseNode: { template: '<div />' },
+          LogPanel: { template: '<div />' },
+          NodeConfigModal: { template: '<div />' },
+          RuntimeInputModal: runtimeInputModalStub,
+          WorkflowResultDashboardModal: { template: '<div />' },
+          WorkflowManagerModal: workflowManagerModalStub,
+          UnsavedWorkflowDialog: { template: '<div />' },
+          HelpCenterModal: { template: '<div />' },
+          ConfirmDialog: { template: '<div />' },
+          Toast: { template: '<div />' },
+          Button: { template: '<button><slot /></button>' },
+          N8nEdge: { template: '<div />' },
+        },
+        directives: {
+          tooltip: () => undefined,
+        },
+      },
+    })
+
+    const piAgentPanel = document.createElement('div')
+    piAgentPanel.className = 'pi-agent-panel'
+    const message = document.createElement('div')
+    message.textContent = 'Agent 消息'
+    piAgentPanel.appendChild(message)
+    document.body.appendChild(piAgentPanel)
+
+    try {
+      const event = new KeyboardEvent('keydown', {
+        key: 'c',
+        code: 'KeyC',
+        ctrlKey: true,
+        cancelable: true,
+      })
+
+      Object.defineProperty(event, 'target', {
+        configurable: true,
+        value: message,
+      })
+
+      window.dispatchEvent(event)
+      await flushAsyncWork()
+
+      expect(event.defaultPrevented).toBe(false)
+      expect(duplicateSpy).not.toHaveBeenCalled()
+    } finally {
+      piAgentPanel.remove()
+    }
+  })
+
+  it('keeps native copy behavior when text is selected', async () => {
+    const store = useWorkflowStore()
+    const duplicateSpy = vi.spyOn(store, 'duplicateSelectedNodes').mockImplementation(() => [])
+
+    mount(WorkflowCanvas, {
+      global: {
+        stubs: {
+          Background: { template: '<div />' },
+          Controls: { template: '<div />' },
+          NodeSidebar: { template: '<div />' },
+          WorkflowHeader: { template: '<div />' },
+          BaseNode: { template: '<div />' },
+          LogPanel: { template: '<div />' },
+          NodeConfigModal: { template: '<div />' },
+          RuntimeInputModal: runtimeInputModalStub,
+          WorkflowResultDashboardModal: { template: '<div />' },
+          WorkflowManagerModal: workflowManagerModalStub,
+          UnsavedWorkflowDialog: { template: '<div />' },
+          HelpCenterModal: { template: '<div />' },
+          ConfirmDialog: { template: '<div />' },
+          Toast: { template: '<div />' },
+          Button: { template: '<button><slot /></button>' },
+          N8nEdge: { template: '<div />' },
+        },
+        directives: {
+          tooltip: () => undefined,
+        },
+      },
+    })
+
+    const selectionSpy = vi.spyOn(window, 'getSelection').mockReturnValue({
+      isCollapsed: false,
+      rangeCount: 1,
+      toString: () => '已选中文本',
+    } as Selection)
+
+    try {
+      const event = new KeyboardEvent('keydown', {
+        key: 'c',
+        code: 'KeyC',
+        ctrlKey: true,
+        cancelable: true,
+      })
+
+      window.dispatchEvent(event)
+      await flushAsyncWork()
+
+      expect(event.defaultPrevented).toBe(false)
+      expect(duplicateSpy).not.toHaveBeenCalled()
+    } finally {
+      selectionSpy.mockRestore()
+    }
+  })
+
   it('does not save the workflow from the canvas when node config is open', async () => {
     const store = useWorkflowStore()
     const saveSpy = vi.spyOn(store, 'saveWorkflow').mockResolvedValue(undefined as any)
