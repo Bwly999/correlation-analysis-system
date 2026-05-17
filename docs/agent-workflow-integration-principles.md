@@ -37,6 +37,13 @@
 
 设计一个轻量的路由层实现自动映射，而非手动写 switch-case。
 
+补充约束：
+
+- `wf_executeWorkflow` 是 Pi Agent 前端画布层的统一执行入口
+- `scope=workflow` 表示整条工作流执行
+- `scope=node` 表示单节点调试
+- upstream trace 不由该前端统一入口返回；如需 upstream trace，继续走 MCP 服务端 `workflow_debug_node`
+
 ### 原则四：每个用户完全隔离，多人同时使用互不干扰
 
 - 每个用户有一个独立的 `createAgentSession()` 实例

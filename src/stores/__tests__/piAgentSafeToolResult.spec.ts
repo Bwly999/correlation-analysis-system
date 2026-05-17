@@ -78,7 +78,7 @@ describe('piAgentSafeToolResult', () => {
 
   it('uses the same safe structure for single-node debug results', () => {
     const result = buildPiAgentSafeToolResult({
-      toolName: 'workflow_debug_node',
+      toolName: 'wf_executeWorkflow',
       toolCallId: 'call_2',
       rawResult: {
         ok: true,
@@ -115,5 +115,6 @@ describe('piAgentSafeToolResult', () => {
       findings: ['价格上涨时销量同步提升'],
       recommendations: ['继续验证折扣因素'],
     })
+    expect(result.summary).toContain('单节点')
   })
 })

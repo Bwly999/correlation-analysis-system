@@ -24,7 +24,7 @@ export function buildSystemPrompt(request: WorkflowAiPlanRequest): string {
 4. 用 workflow_search_nodes 或 workflow_get_node 查找具体节点
 5. 根据需求创建或修改工作流
 6. 用 workflow_validate_workflow 校验工作流结构
-7. 优先通过前端画布主链执行和调试：使用 wf_executeWorkflow、workflow_debug_node 时，本质上是在操作当前 GUI 画布并复用同一条执行链路
+7. 优先通过前端画布主链执行和调试：使用 wf_executeWorkflow 时，本质上是在操作当前 GUI 画布并复用同一条执行链路；scope=workflow 表示整链执行，scope=node 表示单节点调试
 
 ## 规则
 

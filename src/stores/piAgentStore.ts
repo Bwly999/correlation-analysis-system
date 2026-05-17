@@ -6,6 +6,7 @@ import { ref, computed } from 'vue'
 import { useWorkflowAiStore } from './workflowAiStore'
 import { useWorkflowStore } from './workflowStore'
 import { WorkflowApi } from '@/api/workflowApi'
+import type { WorkflowExecutionOptions } from '@/api/workflowApi'
 import { fetchWithWorkflowContext } from '@/services/workflowRequestContext'
 import { getPiWorkflowToolSpecsByTarget } from '@/shared/piWorkflowTools'
 import { buildPiAgentSafeToolResult } from './piAgentSafeToolResult'
@@ -363,11 +364,26 @@ export const usePiAgentStore = defineStore('piAgent', () => {
       WorkflowApi.disconnectEdge(p.edgeId as string),
     moveNode: (p) =>
       WorkflowApi.moveNode(p.nodeId as string, p.position as { x: number; y: number }),
-    runWorkflow: async () => WorkflowApi.runWorkflow(),
-    debugNode: async (p) =>
-      WorkflowApi.debugNode(p.nodeId as string, {
-        rerunUpstream: p.mode === 'rerun_upstream',
-      }),
+    runWorkflow: async (p) => {
+      const mode =
+        p.mode === 'reuse_cached_upstream' || p.mode === 'rerun_upstream'
+          ? p.mode
+          : undefined
+
+      const executionOptions: WorkflowExecutionOptions =
+        p.scope === 'node'
+          ? {
+              scope: 'node',
+              nodeId: p.nodeId as string,
+              ...(mode ? { mode } : {}),
+            }
+          : {
+              scope: 'workflow',
+              ...(mode ? { mode } : {}),
+            }
+
+      return WorkflowApi.executeWorkflow(executionOptions)
+    },
   }
 
   const TOOL_EXECUTORS = Object.fromEntries(
@@ -388,12 +404,13 @@ export const usePiAgentStore = defineStore('piAgent', () => {
     params: Record<string, unknown>
   }) {
     const executor = TOOL_EXECUTORS[event.toolName]
+    const requestedScope = event.params.scope === 'node' ? 'single' : 'global'
     if (!executor) {
       await sendToolResult(event.sessionId, event.toolCallId, {
         content: [{ type: 'text', text: `未知工具: ${event.toolName}` }],
         details: {
           ok: false,
-          scope: event.toolName === 'workflow_debug_node' ? 'single' : 'global',
+          scope: requestedScope,
           executionId: null,
           status: 'failed',
           summary: `未知工具: ${event.toolName}`,
@@ -419,7 +436,7 @@ export const usePiAgentStore = defineStore('piAgent', () => {
         content: [{ type: 'text', text: err?.message || '执行失败' }],
         details: {
           ok: false,
-          scope: event.toolName === 'workflow_debug_node' ? 'single' : 'global',
+          scope: requestedScope,
           executionId: null,
           status: 'failed',
           summary: err?.message || '执行失败',
@@ -493,7 +510,7 @@ export const usePiAgentStore = defineStore('piAgent', () => {
 
     return {
       ok: true,
-      scope: toolName === 'workflow_debug_node' ? 'single' : 'global',
+      scope: 'global',
       executionId: null,
       status: 'success',
       summary: typeof result === 'string' ? result : '操作已完成',

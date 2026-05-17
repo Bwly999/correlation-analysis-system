@@ -20,9 +20,9 @@ describe('Pi workflow tool registry', () => {
         'wf_disconnectEdge',
         'wf_moveNode',
         'wf_executeWorkflow',
-        'workflow_debug_node',
       ]),
     )
+    expect(frontendNames).not.toContain('workflow_debug_node')
   })
 
   it('covers the expected server runtime workflow tools', () => {
@@ -57,9 +57,7 @@ describe('Pi workflow tool registry', () => {
   })
 
   it('routes execution-class workflow tools to the frontend canvas main path', () => {
-    expect(getPiWorkflowToolSpec('workflow_debug_node')).toMatchObject({
-      target: 'frontend_canvas',
-    })
+    expect(getPiWorkflowToolSpec('workflow_debug_node')).toBeUndefined()
     expect(getPiWorkflowToolSpec('workflow_test_workflow')).toBeUndefined()
     expect(getPiWorkflowToolSpec('workflow_execute_plan')).toBeUndefined()
     expect(getPiWorkflowToolSpec('workflow_get_node_definition')).toBeUndefined()
@@ -72,5 +70,11 @@ describe('Pi workflow tool registry', () => {
       executorKey: 'runWorkflow',
       riskLevel: 'medium',
     })
+    expect(getPiWorkflowToolSpec('wf_executeWorkflow')?.inputSchema).toMatchObject({
+      scope: "'workflow' | 'node'",
+      nodeId: 'string?',
+      mode: "'reuse_cached_upstream' | 'rerun_upstream'?",
+    })
+    expect(getPiWorkflowToolSpec('wf_executeWorkflow')?.inputSchema).not.toHaveProperty('includeUpstreamTrace')
   })
 })

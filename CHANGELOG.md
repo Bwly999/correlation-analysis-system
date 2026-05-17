@@ -42,6 +42,12 @@
   - 结果预览移除直方图模式，历史 `histogram` 预览配置会自动迁移为正态分布图，避免与现有分布图能力重复。
   - `工作流系统.md`、`工作流节点说明.md` 以及相关测试同步更新，补充 legacy 节点可用性、默认看图职责和模板回归约束。
 
+- **合并 Pi Agent 前端画布执行入口，统一 `wf_executeWorkflow` 语义**:
+  - `src/shared/piWorkflowTools.ts`、`src/server/piAgent/tools/atomicWorkflowTools.ts` 与 `src/api/workflowApi.ts` 将 Pi Agent 前端画布执行能力收敛为单一 `wf_executeWorkflow` 入口，新增 `scope=workflow|node` 与单节点 `mode` 调试语义，不再暴露前端层 `workflow_debug_node`。
+  - `src/stores/piAgentStore.ts` 与 `src/stores/piAgentSafeToolResult.ts` 统一按真实执行结果的 `scope` 路由与生成安全摘要，移除对工具名推断“全局执行 / 单节点调试”的旧逻辑。
+  - `src/server/piAgent/systemPrompt.ts`、`src/server/piAgent/eventBridge.ts`、`docs/agent-workflow-integration-principles.md` 与 `工作流系统.md` 同步收敛文档和提示词口径，明确 upstream trace 仅保留在 MCP 服务端 `workflow_debug_node`，Pi Agent 前端统一入口不再返回该能力。
+  - 补充 `atomicWorkflowTools`、`toolRegistry`、`workflowApi` 与 `piAgentSafeToolResult` 回归测试，覆盖统一入口的整链执行、单节点调试和 schema 收口行为。
+
 ### 修复 (Fixed)
 
 - **修复缺失/异常值处理节点无法删除缺少目标字段键的数据行的问题**:

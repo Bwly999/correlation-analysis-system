@@ -39,7 +39,6 @@ const TOOL_DISPLAY_NAMES: Record<string, string> = {
   workflow_update_partial_workflow: '增量修改工作流',
   workflow_update_full_workflow: '整包更新工作流',
   workflow_validate_workflow: '校验工作流结构',
-  workflow_debug_node: '调试节点',
   workflow_executions: '读取执行历史',
   workflow_list_workflow_versions: '读取版本列表',
   workflow_get_workflow_version: '读取版本详情',
@@ -54,7 +53,7 @@ const TOOL_DISPLAY_NAMES: Record<string, string> = {
   wf_removeNode: '删除节点',
   wf_disconnectEdge: '断开连线',
   wf_moveNode: '移动节点',
-  wf_executeWorkflow: '执行工作流',
+  wf_executeWorkflow: '执行工作流/调试节点',
 }
 
 const WORKFLOW_MUTATION_TOOLS = new Set([

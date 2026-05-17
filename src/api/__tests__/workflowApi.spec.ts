@@ -41,4 +41,57 @@ describe('WorkflowApi', () => {
     expect(store.lastRunDashboard?.status).toBe('success')
     expect(store.nodes.find((node) => node.id === terminal.id)?.data.status).toBe('success')
   })
+
+  it('routes unified workflow execution to the global execution path', async () => {
+    const trigger = WorkflowApi.addNode('manual-json-import', '数据输入', { x: 0, y: 0 })
+    const terminal = WorkflowApi.addNode('pearson', 'Pearson', { x: 320, y: 0 })
+
+    trigger.data.config.jsonData = JSON.stringify([
+      { price: 10, sales: 100 },
+      { price: 12, sales: 120 },
+      { price: 14, sales: 140 },
+      { price: 16, sales: 155 },
+    ])
+    terminal.data.config.xFields = ['price']
+    terminal.data.config.yFields = ['sales']
+
+    WorkflowApi.connectNodes(trigger.id, terminal.id)
+
+    const result = await WorkflowApi.executeWorkflow({ scope: 'workflow' })
+
+    expect(result).toMatchObject({
+      ok: true,
+      scope: 'global',
+      status: 'success',
+    })
+  })
+
+  it('routes unified workflow execution to the single-node debug path', async () => {
+    const trigger = WorkflowApi.addNode('manual-json-import', '数据输入', { x: 0, y: 0 })
+    const terminal = WorkflowApi.addNode('pearson', 'Pearson', { x: 320, y: 0 })
+
+    trigger.data.config.jsonData = JSON.stringify([
+      { price: 10, sales: 100 },
+      { price: 12, sales: 120 },
+      { price: 14, sales: 140 },
+      { price: 16, sales: 155 },
+    ])
+    terminal.data.config.xFields = ['price']
+    terminal.data.config.yFields = ['sales']
+
+    WorkflowApi.connectNodes(trigger.id, terminal.id)
+
+    const result = await WorkflowApi.executeWorkflow({
+      scope: 'node',
+      nodeId: terminal.id,
+      mode: 'rerun_upstream',
+    })
+
+    expect(result).toMatchObject({
+      ok: true,
+      scope: 'single',
+      nodeId: terminal.id,
+      status: 'success',
+    })
+  })
 })

@@ -13,6 +13,18 @@ import type { WorkflowAiPlan } from '@/ai/types'
 
 const getStore = () => useWorkflowStore()
 
+export type WorkflowExecutionOptions =
+  | {
+      scope: 'workflow'
+      nodeId?: string
+      mode?: 'reuse_cached_upstream' | 'rerun_upstream'
+    }
+  | {
+      scope: 'node'
+      nodeId: string
+      mode?: 'reuse_cached_upstream' | 'rerun_upstream'
+    }
+
 export const WorkflowApi = {
   /**
    * 在画布上添加一个节点
@@ -116,6 +128,18 @@ export const WorkflowApi = {
     return store.debugNodeAndCollect(nodeId, {
       rerunUpstream: options?.rerunUpstream ?? false,
     })
+  },
+
+  async executeWorkflow(
+    options: WorkflowExecutionOptions,
+  ): Promise<WorkflowExecutionResult | WorkflowNodeDebugResult> {
+    if (options.scope === 'node') {
+      return this.debugNode(options.nodeId, {
+        rerunUpstream: options.mode === 'rerun_upstream',
+      })
+    }
+
+    return this.runWorkflow()
   },
 
   async executePlanOnCanvas(plan: WorkflowAiPlan): Promise<WorkflowExecutionResult> {

@@ -289,8 +289,8 @@ const summarizeDebugNode = (result: WorkflowNodeDebugResult): PiAgentSafeNodeSum
   }
 }
 
-const buildToolSummaryText = (toolName: string, nodes: PiAgentSafeNodeSummary[], scope: 'global' | 'single') => {
-  const actionLabel = toolName === 'workflow_debug_node' ? '调试' : '执行'
+const buildToolSummaryText = (nodes: PiAgentSafeNodeSummary[], scope: 'global' | 'single') => {
+  const actionLabel = '执行'
   if (nodes.length === 0) return `${actionLabel}已完成，未返回可用节点摘要`
   const primary = nodes[0]
   if (!primary) return `${actionLabel}已完成，未返回可用节点摘要`
@@ -303,7 +303,7 @@ export const buildPiAgentSafeToolResult = (input: {
   toolCallId: string
   rawResult: ExecutionLike
 }): PiAgentSafeToolResult => {
-  const { toolName, rawResult } = input
+  const { rawResult } = input
   const nodes =
     rawResult.scope === 'global'
       ? rawResult.nodeResults
@@ -316,7 +316,7 @@ export const buildPiAgentSafeToolResult = (input: {
     scope: rawResult.scope,
     executionId: 'executionId' in rawResult ? rawResult.executionId ?? null : null,
     status: rawResult.status,
-    summary: buildToolSummaryText(toolName, nodes, rawResult.scope),
+    summary: buildToolSummaryText(nodes, rawResult.scope),
     nodes,
     artifacts: [],
     warnings: rawResult.ok ? [] : ['执行未成功完成，请根据节点摘要继续排查'],

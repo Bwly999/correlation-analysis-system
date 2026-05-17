@@ -96,21 +96,11 @@ export const PI_WORKFLOW_TOOL_SPECS: PiWorkflowToolSpec[] = [
     target: 'frontend_canvas',
     riskLevel: 'medium',
     executorKey: 'runWorkflow',
-    description: '执行当前工作流，默认走与 GUI 一致的真实执行主路径。',
+    description: '统一执行当前 GUI 画布，可执行整链或调试单节点。',
     inputSchema: {
-      nodeIds: 'string[]?',
-    },
-  },
-  {
-    name: 'workflow_debug_node',
-    target: 'frontend_canvas',
-    riskLevel: 'medium',
-    executorKey: 'debugNode',
-    description: '调试当前画布中的指定节点，复用 GUI 单节点调试主路径。',
-    inputSchema: {
-      nodeId: 'string',
+      scope: '\'workflow\' | \'node\'',
+      nodeId: 'string?',
       mode: '\'reuse_cached_upstream\' | \'rerun_upstream\'?',
-      includeUpstreamTrace: 'boolean?',
     },
   },
   {

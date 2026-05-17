@@ -232,43 +232,41 @@ describe('原子工作流工具 (atomicWorkflowTools)', () => {
   })
 
   describe('wf_executeWorkflow', () => {
-    it('应将 executeWorkflow 调用转发到 FrontendBridge', async () => {
+    it('应将全局执行参数转发到 FrontendBridge', async () => {
       const tool = tools.find((t) => t.name === 'wf_executeWorkflow')!
 
       const resultPromise = tool.execute(
         'call_008',
-        { nodeIds: ['node_a', 'node_b'] },
+        { scope: 'workflow' },
         undefined as any,
         undefined as any,
         undefined as any,
       )
 
       expect(mock.bridge.request).toHaveBeenCalledWith('call_008', 'wf_executeWorkflow', {
-        nodeIds: ['node_a', 'node_b'],
+        scope: 'workflow',
       })
 
       mock.resolve('call_008', successResult('工作流执行完成'))
       await resultPromise
     })
-  })
 
-  describe('workflow_debug_node', () => {
-    it('应将 debugNode 调用转发到 FrontendBridge', async () => {
-      const tool = tools.find((t) => t.name === 'workflow_debug_node')!
+    it('应将单节点调试参数转发到 FrontendBridge', async () => {
+      const tool = tools.find((t) => t.name === 'wf_executeWorkflow')!
       expect(tool).toBeDefined()
 
       const resultPromise = tool.execute(
         'call_009',
-        { nodeId: 'node_debug_1', mode: 'rerun_upstream', includeUpstreamTrace: true },
+        { scope: 'node', nodeId: 'node_debug_1', mode: 'rerun_upstream' },
         undefined as any,
         undefined as any,
         undefined as any,
       )
 
-      expect(mock.bridge.request).toHaveBeenCalledWith('call_009', 'workflow_debug_node', {
+      expect(mock.bridge.request).toHaveBeenCalledWith('call_009', 'wf_executeWorkflow', {
+        scope: 'node',
         nodeId: 'node_debug_1',
         mode: 'rerun_upstream',
-        includeUpstreamTrace: true,
       })
 
       mock.resolve('call_009', successResult('节点调试完成'))
@@ -277,7 +275,7 @@ describe('原子工作流工具 (atomicWorkflowTools)', () => {
   })
 
   describe('所有工具应覆盖所有操作类型', () => {
-    it('应包含 9 个原子操作工具', () => {
+    it('应包含 8 个原子操作工具', () => {
       const names = tools.map((t) => t.name)
       expect(names).toContain('wf_addNode')
       expect(names).toContain('wf_connectNodes')
@@ -287,8 +285,8 @@ describe('原子工作流工具 (atomicWorkflowTools)', () => {
       expect(names).toContain('wf_disconnectEdge')
       expect(names).toContain('wf_moveNode')
       expect(names).toContain('wf_executeWorkflow')
-      expect(names).toContain('workflow_debug_node')
-      expect(tools).toHaveLength(9)
+      expect(names).not.toContain('workflow_debug_node')
+      expect(tools).toHaveLength(8)
     })
 
     it('每个工具执行错误时应返回错误结果', async () => {

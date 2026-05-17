@@ -18,6 +18,16 @@ const POSITION_SCHEMA = Type.Object({
   y: Type.Number({ description: 'Y 坐标' }),
 })
 
+const EXECUTION_SCOPE_SCHEMA = Type.Union([
+  Type.Literal('workflow'),
+  Type.Literal('node'),
+], { description: '执行范围：整条工作流或单节点调试' })
+
+const DEBUG_MODE_SCHEMA = Type.Union([
+  Type.Literal('reuse_cached_upstream'),
+  Type.Literal('rerun_upstream'),
+], { description: '单节点调试模式' })
+
 const buildFallbackDetails = (scope: 'global' | 'single', message: string): PiAgentSafeToolResult => ({
   ok: false,
   scope,
@@ -196,45 +206,22 @@ export function createAtomicWorkflowTools(bridge: FrontendBridge) {
   const executeWorkflow = defineTool({
     name: 'wf_executeWorkflow',
     label: '执行工作流',
-    description: `执行工作流中的指定节点或全部节点。
+    description: `统一执行当前 GUI 画布，可执行整条工作流或调试单节点。
 
 参数说明：
-- nodeIds: 要执行的节点 ID 列表（为空则执行全部）`,
+- scope: workflow 表示整条工作流，node 表示单节点调试
+- nodeId: 当 scope=node 时，要调试的节点 ID
+- mode: 单节点调试模式，rerun_upstream 表示强制重跑上游`,
     parameters: Type.Object({
-      nodeIds: Type.Optional(Type.Array(Type.String(), { description: '要执行的节点 ID 列表' })),
+      scope: EXECUTION_SCOPE_SCHEMA,
+      nodeId: Type.Optional(Type.String({ description: '单节点调试时的节点 ID' })),
+      mode: Type.Optional(DEBUG_MODE_SCHEMA),
     }),
     async execute(callId, params, _signal, _onUpdate, _ctx) {
       try {
         return await bridge.request(callId, 'wf_executeWorkflow', params as Record<string, unknown>)
       } catch (err: any) {
         return errorResult(err?.message || '执行工作流失败')
-      }
-    },
-  })
-
-  const debugNode = defineTool({
-    name: 'workflow_debug_node',
-    label: '调试节点',
-    description: `调试指定节点，并按统一执行摘要协议返回安全结果。
-
-参数说明：
-- nodeId: 要调试的节点 ID
-- mode: 调试模式，rerun_upstream 表示强制重跑上游
-- includeUpstreamTrace: 是否附带上游追踪信息标记`,
-    parameters: Type.Object({
-      nodeId: Type.String({ description: '节点 ID' }),
-      mode: Type.Optional(Type.String({ description: '调试模式' })),
-      includeUpstreamTrace: Type.Optional(Type.Boolean({ description: '是否附带上游追踪信息标记' })),
-    }),
-    async execute(callId, params, _signal, _onUpdate, _ctx) {
-      try {
-        return await bridge.request(callId, 'workflow_debug_node', params as Record<string, unknown>)
-      } catch (err: any) {
-        return {
-          content: [{ type: 'text' as const, text: err?.message || '调试节点失败' }],
-          details: buildFallbackDetails('single', err?.message || '调试节点失败'),
-          isError: true,
-        }
       }
     },
   })
@@ -248,6 +235,5 @@ export function createAtomicWorkflowTools(bridge: FrontendBridge) {
     disconnectEdge,
     moveNode,
     executeWorkflow,
-    debugNode,
   ]
 }
