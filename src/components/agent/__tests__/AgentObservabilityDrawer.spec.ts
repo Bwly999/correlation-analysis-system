@@ -4,15 +4,15 @@ import { createPinia, setActivePinia } from 'pinia'
 import AgentObservabilityDrawer from '../AgentObservabilityDrawer.vue'
 import { useAgentObservabilityStore } from '@/stores/agentObservabilityStore'
 
-vi.mock('@/services/agentWorkspace', () => ({
-  getAgentObservabilityDebugHealth: vi.fn().mockResolvedValue({
+vi.mock('@/services/piAgentClient', () => ({
+  getPiAgentObservabilityDebugHealth: vi.fn().mockResolvedValue({
     enabled: true,
     logRootDir: 'C:/trace-root',
     activeTraceCount: 1,
     lastWriteAt: 1,
     writeFailures: 0,
   }),
-  getAgentObservabilityDebugTrace: vi.fn().mockResolvedValue({
+  getPiAgentObservabilityDebugTrace: vi.fn().mockResolvedValue({
     enabled: true,
     sessionId: 'session_1',
     traceId: 'trace_1',
@@ -57,7 +57,7 @@ vi.mock('@/services/agentWorkspace', () => ({
     rawMessages: [],
     parseFailures: [],
   }),
-  getAgentObservabilityDebugReplay: vi.fn().mockResolvedValue({
+  getPiAgentObservabilityDebugReplay: vi.fn().mockResolvedValue({
     sessionId: 'session_1',
     traceId: 'trace_1',
     totalEvents: 3,
@@ -73,7 +73,7 @@ vi.mock('@/services/agentWorkspace', () => ({
       latestError: null,
     },
   }),
-  getAgentObservabilityDebugFiles: vi.fn().mockResolvedValue({
+  getPiAgentObservabilityDebugFiles: vi.fn().mockResolvedValue({
     rootDir: 'C:/trace-root/2026-05-09/session_1',
     manifestFile: 'manifest.json',
     eventsFile: 'events.ndjson',

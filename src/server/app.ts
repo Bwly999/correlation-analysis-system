@@ -1,7 +1,6 @@
 import { createServerDependencies, type CreateServerDependenciesOptions } from './bootstrap/serverDependencies.js'
 import { createJwtAuthGuard, type JwtAuthGuard } from './auth/jwtAuth.js'
 import { createHttpHandler } from './http/handler.js'
-import { createAgentRoutes } from './modules/agentRoutes.js'
 import { createAnalysisRoutes } from './modules/analysisRoutes.js'
 import { createStorageRoutes } from './modules/storageRoutes.js'
 import { createWorkflowAiRoutes } from './modules/workflowAiRoutes.js'
@@ -26,7 +25,6 @@ export const createServerHandler = (
     domains: [
       createPiAgentRoutes(),
       createWorkflowMcpRoutes(),
-      createAgentRoutes(),
       createStorageRoutes(),
       createAnalysisRoutes(),
       createWorkflowAiRoutes(),

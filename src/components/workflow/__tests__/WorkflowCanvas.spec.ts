@@ -5,7 +5,6 @@ import { createPinia, setActivePinia } from 'pinia'
 import { defineComponent } from 'vue'
 import WorkflowCanvas from '../WorkflowCanvas.vue'
 import { useWorkflowStore } from '@/stores/workflowStore'
-import { useWorkflowAiStore } from '@/stores/workflowAiStore'
 
 vi.mock('../MonacoEditor.vue', () => ({ default: { template: '<div />' } }))
 vi.mock('@/utils/devtoolsEnvironment', () => ({
@@ -41,13 +40,6 @@ const workflowResultDashboardModalStub = defineComponent({
   template:
     '<div class="workflow-result-dashboard-modal-stub" :data-visible="visible">{{ summary?.workflowName }}</div>',
 })
-const workflowAiPanelStub = defineComponent({
-  name: 'WorkflowAiPanel',
-  props: {
-    visible: Boolean,
-  },
-  template: '<div class="workflow-ai-panel-stub" :data-visible="visible"></div>',
-})
 const toastStub = defineComponent({
   name: 'Toast',
   props: {
@@ -56,14 +48,6 @@ const toastStub = defineComponent({
   },
   template:
     '<div class="toast-stub" :data-group="group ?? \'default\'" :data-position="position ?? \'top-right\'"></div>',
-})
-
-const agentWorkspaceStub = defineComponent({
-  name: 'AgentWorkspace',
-  props: {
-    visible: Boolean,
-  },
-  template: '<div class="agent-workspace-stub" :data-visible="visible"></div>',
 })
 
 const dataAnalysisModalStub = defineComponent({
@@ -78,22 +62,6 @@ const dataAnalysisModalStub = defineComponent({
   template:
     '<div class="data-analysis-modal-stub" :data-visible="String(visible)" :data-storage-scope-key="storageScopeKey ?? \'\'">{{ title }}</div>',
 })
-
-vi.mock('../WorkflowAiPanel.vue', () => ({
-  default: {
-    name: 'WorkflowAiPanel',
-    props: ['visible'],
-    template: '<div class="workflow-ai-panel-stub" :data-visible="visible"></div>',
-  },
-}))
-
-vi.mock('../agent/AgentWorkspace.vue', () => ({
-  default: {
-    name: 'AgentWorkspace',
-    props: ['visible'],
-    template: '<div class="agent-workspace-stub" :data-visible="visible"></div>',
-  },
-}))
 
 const flushAsyncWork = async () => {
   await Promise.resolve()
@@ -1414,7 +1382,6 @@ describe('WorkflowCanvas', () => {
           Controls: { template: '<div />' },
           NodeSidebar: { template: '<div />' },
           WorkflowHeader: workflowHeaderStub,
-          AgentWorkspace: agentWorkspaceStub,
           BaseNode: { template: '<div />' },
           LogPanel: { template: '<div />' },
           NodeConfigModal: { template: '<div />' },
@@ -1442,76 +1409,6 @@ describe('WorkflowCanvas', () => {
     expect(wrapper.find('.workflow-page-sidebar').exists()).toBe(true)
   })
 
-  it('keeps the canvas free of agent runtime banners while the agent session is streaming', async () => {
-    const aiStore = useWorkflowAiStore()
-    aiStore.streamStatus = 'streaming'
-    aiStore.streamHeadline = '正在执行节点：Pearson 相关系数'
-    aiStore.projectionSnapshot = {
-      workflow: {
-        workflowId: 'wf_1',
-        workflowName: '销量分析',
-        draftNodeCount: 3,
-        draftEdgeCount: 2,
-        draftSummary: '已生成销量分析工作流草案',
-        versionCount: 1,
-        latestVersionId: 'version_1',
-        proposedPlan: null,
-      },
-      analysis: {
-        goal: '分析销量与价格关系',
-        summary: '价格和折扣对销量影响最明显',
-        candidateTargets: ['销量'],
-        candidateFactors: ['价格', '折扣'],
-        methods: ['Pearson 相关性分析'],
-        findings: ['价格和折扣对销量影响最明显'],
-        risks: [],
-        recommendations: [],
-      },
-      execution: {
-        status: 'running',
-        latestAction: '正在执行节点：Pearson 相关系数',
-        toolCalls: [],
-        pendingApprovals: [],
-      },
-      canvasSync: {
-        status: 'synced',
-        message: '已自动同步到画布',
-      },
-      error: null,
-      updatedAt: Date.now(),
-    }
-    aiStore.lastAppliedSnapshotId = 'snapshot_1'
-
-    const wrapper = mount(WorkflowCanvas, {
-      global: {
-        stubs: {
-          Background: { template: '<div />' },
-          Controls: { template: '<div />' },
-          NodeSidebar: { template: '<div />' },
-          WorkflowHeader: { template: '<div />' },
-          AgentWorkspace: agentWorkspaceStub,
-          BaseNode: { template: '<div />' },
-          LogPanel: { template: '<div />' },
-          NodeConfigModal: { template: '<div />' },
-          RuntimeInputModal: runtimeInputModalStub,
-          WorkflowResultDashboardModal: workflowResultDashboardModalStub,
-          WorkflowManagerModal: workflowManagerModalStub,
-          UnsavedWorkflowDialog: { template: '<div />' },
-          HelpCenterModal: { template: '<div />' },
-          ConfirmDialog: { template: '<div />' },
-          Toast: { template: '<div />' },
-          Button: { template: '<button><slot /></button>' },
-          N8nEdge: { template: '<div />' },
-        },
-        directives: {
-          tooltip: () => undefined,
-        },
-      },
-    })
-
-    expect(wrapper.find('[data-testid="execution-workspace-banner"]').exists()).toBe(false)
-  })
-
   it('mounts a dedicated bottom-left toast for node config feedback', () => {
     const wrapper = mount(WorkflowCanvas, {
       global: {
@@ -1520,7 +1417,6 @@ describe('WorkflowCanvas', () => {
           Controls: { template: '<div />' },
           NodeSidebar: { template: '<div />' },
           WorkflowHeader: { template: '<div />' },
-          AgentWorkspace: agentWorkspaceStub,
           BaseNode: { template: '<div />' },
           LogPanel: { template: '<div />' },
           NodeConfigModal: { template: '<div />' },
@@ -1584,7 +1480,6 @@ describe('WorkflowCanvas', () => {
           Controls: { template: '<div />' },
           NodeSidebar: { template: '<div />' },
           WorkflowHeader: workflowHeaderStub,
-          AgentWorkspace: agentWorkspaceStub,
           AgentObservabilityToggle: agentObservabilityToggleStub,
           AgentObservabilityDrawer: agentObservabilityDrawerStub,
           BaseNode: { template: '<div />' },

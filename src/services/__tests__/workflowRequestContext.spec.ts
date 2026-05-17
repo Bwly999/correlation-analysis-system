@@ -78,13 +78,13 @@ describe('workflowRequestContext', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    await fetchWithWorkflowContext('/api/agent/sessions/agent_1/events', {
+    await fetchWithWorkflowContext('/api/pi-agent/sessions/pi_session_1/events', {
       headers: {
         Accept: 'application/x-ndjson',
       },
     })
 
-    expect(fetchMock).toHaveBeenCalledWith('/api/agent/sessions/agent_1/events', {
+    expect(fetchMock).toHaveBeenCalledWith('/api/pi-agent/sessions/pi_session_1/events', {
       headers: {
         'x-workflow-user-id': 'user_fetch',
         'x-workflow-user-name': encodeURIComponent('抓取用户'),

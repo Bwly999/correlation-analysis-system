@@ -3,15 +3,20 @@
  */
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { useWorkflowAiStore } from './workflowAiStore'
+import { usePiAgentConfigStore } from './piAgentConfigStore'
 import { useWorkflowStore } from './workflowStore'
 import { WorkflowApi } from '@/api/workflowApi'
 import type { WorkflowExecutionOptions } from '@/api/workflowApi'
-import { fetchWithWorkflowContext } from '@/services/workflowRequestContext'
 import { getPiWorkflowToolSpecsByTarget } from '@/shared/piWorkflowTools'
 import { buildPiAgentSafeToolResult } from './piAgentSafeToolResult'
 import type { PiAgentSafeToolResult } from '@/ai/types'
 import type { WorkflowExecutionResult, WorkflowNodeDebugResult } from './workflowStore'
+import {
+  createPiAgentSession,
+  resolvePiAgentToolResult,
+  sendPiAgentMessage,
+  streamPiAgentEvents,
+} from '@/services/piAgentClient'
 
 export interface PiAgentMessage {
   id: string
@@ -74,35 +79,22 @@ export const usePiAgentStore = defineStore('piAgent', () => {
   async function ensureSession(prompt: string) {
     if (sessionId.value) return true
 
-    const aiStore = useWorkflowAiStore()
+    const configStore = usePiAgentConfigStore()
     const workflowStore = useWorkflowStore()
 
     // 确保 profiles 已加载
-    if (!aiStore.selectedProfile) {
-      await aiStore.loadProfiles()
+    if (!configStore.selectedProfile) {
+      await configStore.loadProfiles()
     }
 
-    // 获取当前选中的 profile，如果没有则取第一个可用的
-    let profile = aiStore.selectedProfile
-    if (!profile) {
-      // 直接从后端获取 profiles
-      try {
-        const res = await fetch('/api/workflow-ai/model-profiles')
-        if (res.ok) {
-          const data = await res.json()
-          const profiles = data.profiles || []
-          profile = profiles.find((p: any) => p.enabled) || profiles[0]
-        }
-      } catch {
-        // ignore
-      }
-    }
-
+    const profile = configStore.selectedProfile
     if (!profile) {
       errorMessage.value = '未配置模型，请在 .env.local 中设置 OPENAI_API_KEY 等环境变量'
       status.value = 'failed'
       return false
     }
+
+    const contextHints = await configStore.buildContextHints(workflowStore as any, prompt)
 
     // 构建 session 请求
     const request = {
@@ -116,7 +108,8 @@ export const usePiAgentStore = defineStore('piAgent', () => {
             edges: workflowStore.edges,
           }
         : undefined,
-      dataSources: aiStore.contextHints?.schemaSummaries?.map((s: any) => ({
+      contextHints: contextHints ?? undefined,
+      dataSources: contextHints?.schemaSummaries?.map((s: any) => ({
         id: s.nodeId,
         kind: 'file' as const,
         entryNodeType: 'file-import' as const,
@@ -131,18 +124,7 @@ export const usePiAgentStore = defineStore('piAgent', () => {
     errorMessage.value = ''
 
     try {
-      const res = await fetchWithWorkflowContext('/api/pi-agent/sessions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(request),
-      })
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ message: '创建会话失败' }))
-        throw new Error(err.message || `HTTP ${res.status}`)
-      }
-
-      const data = await res.json()
+      const data = await createPiAgentSession(request)
       sessionId.value = data.sessionId
       status.value = 'idle'
 
@@ -182,15 +164,9 @@ export const usePiAgentStore = defineStore('piAgent', () => {
     status.value = 'running'
 
     try {
-      const res = await fetchWithWorkflowContext(`/api/pi-agent/sessions/${sessionId.value}/messages`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content }),
-      })
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ message: '发送失败' }))
-        throw new Error(err.message || `HTTP ${res.status}`)
+      const result = await sendPiAgentMessage(sessionId.value!, content)
+      if (!result.ok) {
+        throw new Error(result.error || '发送消息失败')
       }
     } catch (err: any) {
       status.value = 'failed'
@@ -202,35 +178,13 @@ export const usePiAgentStore = defineStore('piAgent', () => {
     const controller = new AbortController()
     eventSource = controller
 
-    fetchWithWorkflowContext(`/api/pi-agent/sessions/${sid}/events`, { signal: controller.signal })
+    streamPiAgentEvents(sid, {
+      onEvent: (event) => {
+        handleEvent(event)
+      },
+    })
       .then((res) => {
-        if (!res.ok || !res.body) return
-        const reader = res.body.getReader()
-        ndjsonReader = reader
-        const decoder = new TextDecoder()
-        let buffer = ''
-
-        const pump = (): Promise<void> =>
-          reader.read().then(({ done, value }) => {
-            if (done) return
-            buffer += decoder.decode(value, { stream: true })
-            const lines = buffer.split('\n')
-            buffer = lines.pop() || ''
-
-            for (const line of lines) {
-              const trimmed = line.trim()
-              if (!trimmed) continue
-              try {
-                const event = JSON.parse(trimmed)
-                handleEvent(event)
-              } catch {
-                // ignore parse errors
-              }
-            }
-            return pump()
-          })
-
-        return pump()
+        return res
       })
       .catch(() => {
         // connection closed
@@ -458,11 +412,7 @@ export const usePiAgentStore = defineStore('piAgent', () => {
     result: { content: Array<{ type: 'text'; text: string }>; details: PiAgentSafeToolResult; isError?: boolean },
   ) {
     try {
-      await fetchWithWorkflowContext(`/api/pi-agent/sessions/${sid}/tool-result`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ toolCallId, result }),
-      })
+      await resolvePiAgentToolResult(sid, toolCallId, result)
     } catch {
       console.warn('[PiAgent] 发送工具结果失败')
     }
@@ -535,5 +485,6 @@ export const usePiAgentStore = defineStore('piAgent', () => {
     sendMessage,
     disconnect,
     reset,
+    handleEvent,
   }
 })

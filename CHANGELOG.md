@@ -42,6 +42,12 @@
   - 结果预览移除直方图模式，历史 `histogram` 预览配置会自动迁移为正态分布图，避免与现有分布图能力重复。
   - `工作流系统.md`、`工作流节点说明.md` 以及相关测试同步更新，补充 legacy 节点可用性、默认看图职责和模板回归约束。
 
+- **将 Agent 主链全面收敛到 Pi Agent**:
+  - `src/components/workflow/WorkflowCanvas.vue`、`src/stores/piAgentStore.ts`、`src/stores/piAgentConfigStore.ts` 与 `src/services/piAgentClient.ts` 将前端唯一 Agent 入口统一到 `Pi Agent`，移除对旧 `workflowAiStore`、`WorkflowAiPanel`、`AgentWorkspace` 和 `agentWorkspace` facade 的运行时依赖，并补齐模型配置读取、上下文摘要与会话请求组装等共享能力。
+  - `src/server/app.ts` 与 `src/server/modules/piAgentRoutes.ts` 将后端唯一 Agent 业务入口统一到 `/api/pi-agent/*`，删除旧 `/api/agent/*` 路由，同时把 observability 调试能力迁入 `Pi Agent` 命名空间。
+  - 删除旧 Agent Workspace 组件、`workflowAiStore`、旧 smoke 脚本及对应测试，只保留基于 `Pi Agent` 主链的前后端验收；同步更新 `工作流系统.md`，明确当前系统唯一 Agent 通路为 `Pi Agent`。
+
+### 变更 (Changed)
 - **合并 Pi Agent 前端画布执行入口，统一 `wf_executeWorkflow` 语义**:
   - `src/shared/piWorkflowTools.ts`、`src/server/piAgent/tools/atomicWorkflowTools.ts` 与 `src/api/workflowApi.ts` 将 Pi Agent 前端画布执行能力收敛为单一 `wf_executeWorkflow` 入口，新增 `scope=workflow|node` 与单节点 `mode` 调试语义，不再暴露前端层 `workflow_debug_node`。
   - `src/stores/piAgentStore.ts` 与 `src/stores/piAgentSafeToolResult.ts` 统一按真实执行结果的 `scope` 路由与生成安全摘要，移除对工具名推断“全局执行 / 单节点调试”的旧逻辑。

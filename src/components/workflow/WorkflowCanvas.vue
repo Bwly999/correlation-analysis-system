@@ -4,8 +4,8 @@ import { VueFlow, useVueFlow, type Connection } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
 import { useWorkflowStore } from '@/stores/workflowStore'
-import { useWorkflowAiStore } from '@/stores/workflowAiStore'
 import { useAgentObservabilityStore } from '@/stores/agentObservabilityStore'
+import { usePiAgentStore } from '@/stores/piAgentStore'
 import NodeSidebar from './NodeSidebar.vue'
 import WorkflowHeader from './WorkflowHeader.vue'
 import AgentObservabilityToggle from '../agent/AgentObservabilityToggle.vue'
@@ -49,8 +49,8 @@ import { isAgentObservabilityEnabledInDev } from '@/utils/devtoolsEnvironment'
 
 const { onConnect, addEdges, project, findNode, fitView, getViewport, setViewport } = useVueFlow()
 const store = useWorkflowStore()
-const aiStore = useWorkflowAiStore()
 const observabilityStore = useAgentObservabilityStore()
+const piAgentStore = usePiAgentStore()
 const toast = useToast()
 
 const isConfigVisible = ref(false)
@@ -494,15 +494,7 @@ watch(
 )
 
 watch(
-  () => `${store.nodes.map((node) => node.id).join('|')}::${store.edges.map((edge) => edge.id).join('|')}`,
-  () => {
-    if (!aiStore.activeSession) return
-    aiStore.syncAnalysisCanvas(store as any)
-  },
-)
-
-watch(
-  () => aiStore.activeSession?.id ?? '',
+  () => piAgentStore.sessionId ?? '',
   (sessionId) => {
     observabilityStore.setActiveSessionId(sessionId)
   },

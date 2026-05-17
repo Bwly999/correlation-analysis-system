@@ -73,18 +73,6 @@ describe('workflow-scoped route contract', () => {
         },
       },
       {
-        name: 'agent',
-        request: createRequest('POST', '/api/agent/sessions', {
-          mode: 'edit',
-          prompt: '帮我分析当前画布',
-          profile: { id: 'custom', name: '测试模型', baseUrl: 'http://example.com', model: 'glm-4.7', enabled: true, source: 'custom' },
-          nodeCatalog: [],
-        }),
-        assertBody: (body: string) => {
-          expect(JSON.parse(body)).toEqual({ message: '通用助手链路已停用，请改用 Pi Agent 主链 /api/pi-agent/sessions' })
-        },
-      },
-      {
         name: 'pi-agent',
         request: createRequest('POST', '/api/pi-agent/sessions', {
           mode: 'edit',
@@ -117,7 +105,7 @@ describe('workflow-scoped route contract', () => {
     for (const candidate of workflowRequests) {
       const response = createResponse()
       await handler(candidate.request, response)
-      expect(response.statusCode, candidate.name).toBe(candidate.name === 'agent' ? 410 : 400)
+      expect(response.statusCode, candidate.name).toBe(400)
       candidate.assertBody(response.body)
     }
   })

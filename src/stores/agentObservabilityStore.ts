@@ -7,11 +7,11 @@ import type {
   AgentObservabilityDebugTraceResponse,
 } from '@/ai/types'
 import {
-  getAgentObservabilityDebugFiles,
-  getAgentObservabilityDebugHealth,
-  getAgentObservabilityDebugReplay,
-  getAgentObservabilityDebugTrace,
-} from '@/services/agentWorkspace'
+  getPiAgentObservabilityDebugFiles,
+  getPiAgentObservabilityDebugHealth,
+  getPiAgentObservabilityDebugReplay,
+  getPiAgentObservabilityDebugTrace,
+} from '@/services/piAgentClient'
 
 export const useAgentObservabilityStore = defineStore('agent-observability', () => {
   const drawerVisible = ref(false)
@@ -49,7 +49,7 @@ export const useAgentObservabilityStore = defineStore('agent-observability', () 
   }
 
   const loadHealth = async () => {
-    health.value = await getAgentObservabilityDebugHealth()
+    health.value = await getPiAgentObservabilityDebugHealth()
     return health.value
   }
 
@@ -59,8 +59,8 @@ export const useAgentObservabilityStore = defineStore('agent-observability', () 
     errorMessage.value = ''
     try {
       const [nextTrace, nextFiles] = await Promise.all([
-        getAgentObservabilityDebugTrace(effectiveSessionId.value, options),
-        getAgentObservabilityDebugFiles(effectiveSessionId.value),
+        getPiAgentObservabilityDebugTrace(effectiveSessionId.value, options),
+        getPiAgentObservabilityDebugFiles(effectiveSessionId.value),
       ])
       trace.value = nextTrace
       files.value = nextFiles
@@ -78,7 +78,7 @@ export const useAgentObservabilityStore = defineStore('agent-observability', () 
     replayLoading.value = true
     errorMessage.value = ''
     try {
-      const nextReplay = await getAgentObservabilityDebugReplay(effectiveSessionId.value, seq)
+      const nextReplay = await getPiAgentObservabilityDebugReplay(effectiveSessionId.value, seq)
       replay.value = nextReplay
       return nextReplay
     } catch (error: any) {

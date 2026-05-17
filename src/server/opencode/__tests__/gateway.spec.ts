@@ -266,6 +266,7 @@ describe('agent session bridge', () => {
     expect(sessionPromptAsyncMock).toHaveBeenCalledTimes(1)
     expect(sessionPromptAsyncMock).toHaveBeenCalledWith(
       expect.objectContaining({
+        agent: 'general',
         sessionID: 'opencode_session_1',
         messageID: expect.stringMatching(/^msg_/),
         tools: expect.objectContaining({
@@ -278,7 +279,7 @@ describe('agent session bridge', () => {
             text: '继续给出当前分析建议',
           },
         ],
-        system: expect.stringContaining('通用工作助手'),
+        system: expect.stringContaining('AI 工作助手'),
         format: undefined,
       }),
     )

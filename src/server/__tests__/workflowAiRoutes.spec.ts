@@ -181,43 +181,6 @@ afterEach(() => {
 })
 
 describe('workflow ai routes', () => {
-  it('returns disabled message for legacy agent session creation route', async () => {
-    const handler = createServerHandler()
-    const response = createResponse()
-
-    await handler(
-      createRequest('POST', '/api/agent/sessions', {
-        mode: 'edit',
-        prompt: '帮我分析影响销量的关键因素',
-        profile: { id: 'custom', name: '测试模型', baseUrl: 'http://example.com', model: 'glm-4.7', enabled: true, source: 'custom' },
-        nodeCatalog: [],
-      }, {}),
-      response,
-    )
-
-    expect(response.statusCode).toBe(410)
-    expect(JSON.parse(response.body)).toEqual({
-      message: '通用助手链路已停用，请改用 Pi Agent 主链 /api/pi-agent/sessions',
-    })
-  })
-
-  it('returns disabled message for legacy agent session message route', async () => {
-    const handler = createServerHandler()
-    const response = createResponse()
-
-    await handler(
-      createRequest('POST', '/api/agent/sessions/agent_1/messages', {
-        content: '继续分析当前销量问题',
-      }),
-      response,
-    )
-
-    expect(response.statusCode).toBe(410)
-    expect(JSON.parse(response.body)).toEqual({
-      message: '通用助手链路已停用，请改用 Pi Agent 主链 /api/pi-agent/sessions',
-    })
-  })
-
   it('returns 404 for removed legacy analysis-agent routes', async () => {
     const handler = createServerHandler()
 
@@ -641,19 +604,19 @@ describe('workflow ai routes', () => {
     })
   })
 
-  it('returns 404 for agent dev trace routes outside development mode', async () => {
+  it('returns 404 for pi agent dev trace routes outside development mode', async () => {
     vi.stubEnv('NODE_ENV', 'production')
     const handler = createServerHandler()
     const response = createResponse()
 
-    await handler(createRequest('GET', '/api/agent/sessions/agent_1/debug-trace'), response)
+    await handler(createRequest('GET', '/api/pi-agent/sessions/agent_1/debug-trace'), response)
 
     expect(response.statusCode).toBe(404)
     expect(JSON.parse(response.body)).toEqual({ message: '未找到接口' })
     expect(getAgentObservabilityDebugTraceMock).not.toHaveBeenCalled()
   })
 
-  it('returns the current agent debug trace in development mode', async () => {
+  it('returns the current pi agent debug trace in development mode', async () => {
     vi.stubEnv('NODE_ENV', 'development')
     getAgentObservabilityDebugTraceMock.mockReturnValueOnce({
       enabled: true,
@@ -705,7 +668,7 @@ describe('workflow ai routes', () => {
     const handler = createServerHandler()
     const response = createResponse()
 
-    await handler(createRequest('GET', '/api/agent/sessions/agent_1/debug-trace?limit=50&offset=0'), response)
+    await handler(createRequest('GET', '/api/pi-agent/sessions/agent_1/debug-trace?limit=50&offset=0'), response)
 
     expect(response.statusCode).toBe(200)
     expect(getAgentObservabilityDebugTraceMock).toHaveBeenCalledWith('agent_1', {
@@ -721,7 +684,7 @@ describe('workflow ai routes', () => {
     )
   })
 
-  it('returns the current agent debug replay in development mode', async () => {
+  it('returns the current pi agent debug replay in development mode', async () => {
     vi.stubEnv('NODE_ENV', 'development')
     getAgentObservabilityDebugReplayMock.mockReturnValueOnce({
       sessionId: 'agent_1',
@@ -750,7 +713,7 @@ describe('workflow ai routes', () => {
     const handler = createServerHandler()
     const response = createResponse()
 
-    await handler(createRequest('GET', '/api/agent/sessions/agent_1/debug-trace/replay?seq=1'), response)
+    await handler(createRequest('GET', '/api/pi-agent/sessions/agent_1/debug-trace/replay?seq=1'), response)
 
     expect(response.statusCode).toBe(200)
     expect(getAgentObservabilityDebugReplayMock).toHaveBeenCalledWith('agent_1', 1)
@@ -763,7 +726,7 @@ describe('workflow ai routes', () => {
     )
   })
 
-  it('returns the current agent debug files in development mode', async () => {
+  it('returns the current pi agent debug files in development mode', async () => {
     vi.stubEnv('NODE_ENV', 'development')
     getAgentObservabilityDebugFilesMock.mockReturnValueOnce({
       rootDir: 'C:\\trace\\agent_1',
@@ -779,7 +742,7 @@ describe('workflow ai routes', () => {
     const handler = createServerHandler()
     const response = createResponse()
 
-    await handler(createRequest('GET', '/api/agent/sessions/agent_1/debug-trace/files'), response)
+    await handler(createRequest('GET', '/api/pi-agent/sessions/agent_1/debug-trace/files'), response)
 
     expect(response.statusCode).toBe(200)
     expect(getAgentObservabilityDebugFilesMock).toHaveBeenCalledWith('agent_1')
@@ -790,7 +753,7 @@ describe('workflow ai routes', () => {
     )
   })
 
-  it('returns agent debug health in development mode', async () => {
+  it('returns pi agent debug health in development mode', async () => {
     vi.stubEnv('NODE_ENV', 'development')
     getAgentObservabilityDebugHealthMock.mockReturnValueOnce({
       enabled: true,
@@ -803,7 +766,7 @@ describe('workflow ai routes', () => {
     const handler = createServerHandler()
     const response = createResponse()
 
-    await handler(createRequest('GET', '/api/agent/debug/health'), response)
+    await handler(createRequest('GET', '/api/pi-agent/debug/health'), response)
 
     expect(response.statusCode).toBe(200)
     expect(getAgentObservabilityDebugHealthMock).toHaveBeenCalledTimes(1)
