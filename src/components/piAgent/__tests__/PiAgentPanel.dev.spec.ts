@@ -19,7 +19,9 @@ describe('PiAgentPanel dev raw toggle', () => {
       {
         id: 'assistant_1',
         role: 'assistant',
+        visibility: 'assistant_visible',
         content: '你是一个数据分析助手，帮助用户构建和执行多因子相关性分析工作流。',
+        rawContent: '你是一个数据分析助手，帮助用户构建和执行多因子相关性分析工作流。',
         thinking: '',
         status: 'completed',
         toolCalls: [],

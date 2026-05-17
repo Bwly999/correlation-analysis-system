@@ -15,6 +15,7 @@ describe('PiAgentMessageList', () => {
       {
         id: 'assistant_1',
         role: 'assistant',
+        visibility: 'assistant_visible',
         content: [
           '# 分析结论',
           '',
@@ -72,6 +73,7 @@ describe('PiAgentMessageList', () => {
       {
         id: 'assistant_streaming',
         role: 'assistant',
+        visibility: 'assistant_visible',
         content: '## 实时结论\n\n- 正在生成',
         thinking: '',
         status: 'streaming',

@@ -23,7 +23,9 @@ import { buildSanitizedWorkflowSnapshot } from './piAgentSanitize'
 export interface PiAgentMessage {
   id: string
   role: 'user' | 'assistant'
+  visibility: 'user' | 'assistant_visible' | 'assistant_debug'
   content: string
+  rawContent?: string
   thinking: string
   status: 'streaming' | 'completed'
   toolCalls: PiAgentToolCall[]
@@ -173,7 +175,9 @@ export const usePiAgentStore = defineStore('piAgent', () => {
     messages.value.push({
       id: `user_${Date.now()}`,
       role: 'user',
+      visibility: 'user',
       content,
+      rawContent: content,
       thinking: '',
       status: 'completed',
       toolCalls: [],
@@ -227,7 +231,9 @@ export const usePiAgentStore = defineStore('piAgent', () => {
         messages.value.push({
           id: event.messageId,
           role: 'assistant',
+          visibility: event.visibility ?? 'assistant_visible',
           content: '',
+          rawContent: '',
           thinking: '',
           status: 'streaming',
           toolCalls: [],
@@ -238,7 +244,10 @@ export const usePiAgentStore = defineStore('piAgent', () => {
 
       case 'message.delta': {
         const msg = messages.value.find((m) => m.id === event.messageId)
-        if (msg) msg.content += event.delta
+        if (msg) {
+          msg.content += event.delta
+          msg.rawContent = `${msg.rawContent ?? ''}${event.delta}`
+        }
         break
       }
 
@@ -252,6 +261,8 @@ export const usePiAgentStore = defineStore('piAgent', () => {
         const msg = messages.value.find((m) => m.id === event.messageId)
         if (msg) {
           msg.content = event.content || msg.content
+          msg.rawContent = event.rawContent || event.content || msg.rawContent
+          msg.visibility = event.visibility ?? msg.visibility
           msg.status = 'completed'
         }
         break

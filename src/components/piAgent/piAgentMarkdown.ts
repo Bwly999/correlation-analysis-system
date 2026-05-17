@@ -1,6 +1,8 @@
 import hljs from 'highlight.js'
 import { marked } from 'marked'
 
+type MarkedRenderer = InstanceType<typeof marked.Renderer>
+
 const escapeHtml = (value: string) =>
   value
     .split('&').join('&amp;')
@@ -20,9 +22,9 @@ const headingClassMap: Record<'h1' | 'h2' | 'h3' | 'h4', string> = {
   h3: 'mb-3 text-[0.95rem] font-bold leading-tight tracking-[-0.02em] text-slate-900',
   h4: 'mb-3 text-[0.9rem] font-bold leading-tight tracking-[-0.02em] text-slate-900',
 }
-const parseInlineTokens = (renderer: marked.Renderer, tokens: unknown[] | undefined) =>
+const parseInlineTokens = (renderer: MarkedRenderer, tokens: unknown[] | undefined) =>
   renderer.parser.parseInline((tokens ?? []) as never)
-const parseBlockTokens = (renderer: marked.Renderer, tokens: unknown[] | undefined) =>
+const parseBlockTokens = (renderer: MarkedRenderer, tokens: unknown[] | undefined) =>
   renderer.parser.parse((tokens ?? []) as never, false)
 
 const safeRenderer = new marked.Renderer()

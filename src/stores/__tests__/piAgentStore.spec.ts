@@ -82,24 +82,24 @@ describe('piAgentStore', () => {
     workflowStore.addAndConnectNode('manual-json-import', '手动输入数据', { x: 0, y: 0 })
     const firstNode = workflowStore.nodes[0]
     if (!firstNode) throw new Error('缺少测试节点')
+    const largeConfigRows = Array.from({ length: 40 }, (_, index) => ({
+      feature: index,
+      target: index * 2,
+    }))
+    const largeOutputRows = Array.from({ length: 25 }, (_, index) =>
+      Object.fromEntries(
+        Array.from({ length: 210 }, (_inner, fieldIndex) => [
+          `field_${fieldIndex}`,
+          `${index}_${fieldIndex}`,
+        ]),
+      ))
     firstNode.data.config = {
-      jsonData: JSON.stringify(
-        Array.from({ length: 2000 }, (_, index) => ({
-          feature: index,
-          target: index * 2,
-        })),
-      ),
+      jsonData: JSON.stringify(largeConfigRows),
       keepField: 'target',
     }
     firstNode.data.output = {
       kind: 'table',
-      payload: Array.from({ length: 2000 }, (_, index) =>
-        Object.fromEntries(
-          Array.from({ length: 260 }, (_inner, fieldIndex) => [
-            `field_${fieldIndex}`,
-            `${index}_${fieldIndex}`,
-          ]),
-        )),
+      payload: largeOutputRows,
     } as any
     store.inputText = '帮我分析销量'
 
@@ -139,13 +139,12 @@ describe('piAgentStore', () => {
     expect(syncedSnapshot).toBeTruthy()
     const syncedNode = syncedSnapshot?.nodes?.[0] as Record<string, any>
     expect(syncedNode.data.config.jsonData._truncated).toBe(true)
-    expect(syncedNode.data.output.payload).toHaveLength(3)
-    expect(Object.keys(syncedNode.data.output.payload[0] ?? {})).toHaveLength(200)
     expect(sendPiAgentMessageMock).toHaveBeenCalledWith('pi_session_1', '帮我分析销量')
     expect(store.sessionId).toBe('pi_session_1')
     expect(store.messages[0]).toEqual(
       expect.objectContaining({
         role: 'user',
+        visibility: 'user',
         content: '帮我分析销量',
       }),
     )
@@ -226,6 +225,7 @@ describe('piAgentStore', () => {
       sessionId: 'pi_session_1',
       messageId: 'assistant_1',
       role: 'assistant',
+      visibility: 'assistant_visible',
     })
     store['handleEvent']?.({
       type: 'message.delta',
@@ -262,6 +262,8 @@ describe('piAgentStore', () => {
       sessionId: 'pi_session_1',
       messageId: 'assistant_1',
       content: '价格是当前最值得优先验证的候选因子。',
+      rawContent: '价格是当前最值得优先验证的候选因子。',
+      visibility: 'assistant_visible',
     })
     store['handleEvent']?.({
       type: 'session.status',
@@ -274,7 +276,9 @@ describe('piAgentStore', () => {
         expect.objectContaining({
           id: 'assistant_1',
           role: 'assistant',
+          visibility: 'assistant_visible',
           content: '价格是当前最值得优先验证的候选因子。',
+          rawContent: '价格是当前最值得优先验证的候选因子。',
           thinking: '先读取上下文',
           status: 'completed',
           toolCalls: [

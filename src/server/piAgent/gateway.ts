@@ -5,6 +5,7 @@
 import { randomUUID } from 'node:crypto'
 import {
   createAgentSession,
+  DefaultResourceLoader,
   SessionManager,
   defineTool,
 } from '@earendil-works/pi-coding-agent'
@@ -92,6 +93,12 @@ export async function createPiAgentSession(
   // 5. 创建 Pi Agent session
   const { authStorage, modelRegistry } = createModelRegistryFromProfile(request.profile)
   const model = buildModelFromProfile(request.profile)
+  const resourceLoader = new DefaultResourceLoader({
+    cwd: process.cwd(),
+    agentDir: process.cwd(),
+    systemPromptOverride: () => buildSystemPrompt(request),
+  })
+  await resourceLoader.reload()
 
   const { session } = await createAgentSession({
     sessionManager: SessionManager.inMemory(),
@@ -101,6 +108,7 @@ export async function createPiAgentSession(
     thinkingLevel: 'low',
     cwd: process.cwd(),
     customTools: tools,
+    resourceLoader,
     noTools: 'builtin', // 禁用内置的 read/bash/edit/write 工具
   })
 
@@ -168,7 +176,9 @@ export async function sendPiAgentMessage(
   appendMessage(sessionId, {
     id: randomUUID(),
     role: 'user',
+    visibility: 'user',
     content: message,
+    rawContent: message,
     status: 'completed',
     createdAt: Date.now(),
   })
@@ -176,15 +186,10 @@ export async function sendPiAgentMessage(
   // 异步发送（不阻塞响应）
   const sendPromise = (async () => {
     try {
-      // 构建包含系统提示的完整消息
-      const fullPrompt = runtime.record.messages.length <= 1
-        ? `${buildSystemPrompt(runtime.record.request)}\n\n用户消息：${message}`
-        : message
-
       if (runtime.isStreaming) {
-        await runtime.session.followUp(fullPrompt)
+        await runtime.session.followUp(message)
       } else {
-        await runtime.session.prompt(fullPrompt)
+        await runtime.session.prompt(message)
       }
     } catch (err: any) {
       updateSessionRecord(sessionId, { status: 'failed' })

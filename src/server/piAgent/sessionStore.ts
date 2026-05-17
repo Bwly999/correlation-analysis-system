@@ -22,7 +22,9 @@ export interface PiAgentSessionRecord {
 export interface PiAgentMessage {
   id: string
   role: 'user' | 'assistant'
+  visibility: 'user' | 'assistant_visible' | 'assistant_debug'
   content: string
+  rawContent?: string
   thinking?: string
   status: 'streaming' | 'completed'
   createdAt: number

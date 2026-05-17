@@ -4,6 +4,17 @@
 
 ### 变更 (Changed)
 
+- **重构 Pi Agent 消息协议并收口正文展示链路**:
+  - `src/server/piAgent/gateway.ts`、`src/server/piAgent/eventBridge.ts`、`src/server/piAgent/sessionStore.ts` 与 `src/stores/piAgentStore.ts` 将系统提示注入、用户消息、助手正文、thinking 和工具事件拆分为独立链路，前端默认只渲染结构化后的助手正文，不再依赖关键词过滤器识别系统提示或工具摘要。
+  - `src/components/piAgent/PiAgentMarkdownRenderer.vue`、`src/components/piAgent/PiAgentMessageList.vue` 与相关测试切换为基于结构化 `content/rawContent/visibility` 的渲染方式，dev 原文查看保留在调试字段，不再作为默认展示链路。
+  - `工作流系统.md` 同步补充 Pi Agent 消息协议分层说明，明确系统提示与工具原始结果不属于默认用户可见消息流。
+
+### 修复 (Fixed)
+
+- **修复 Pi Agent 对话区重复回显用户消息与工具结果串入正文的问题**:
+  - `src/server/piAgent/eventBridge.ts` 现在只桥接 `assistant` 消息生命周期事件，忽略 `user` 与 `toolResult` 类型消息，避免用户输入再次出现在左侧助手区域，也避免工具返回的原始 JSON 被误当作助手正文渲染。
+  - 新增/更新 `src/server/piAgent/__tests__/eventBridge.spec.ts` 等回归测试，覆盖用户消息不重复渲染、工具结果不混入 assistant 正文，以及结构化消息可见性字段的行为约束。
+
 - **重构 Pi Agent 前端消息面板，升级为 Tailwind 工作台风格并补齐 markdown 渲染**:
   - `src/components/piAgent/PiAgentPanel.vue`、`src/components/piAgent/PiAgentMessageList.vue`、`src/components/piAgent/PiAgentThinkingBlock.vue` 与 `src/components/piAgent/PiAgentToolCallCard.vue` 统一改为 Tailwind 结构化样式，重做头部状态、空态、输入区、思考块、工具卡片和加载态。
   - 新增 `src/components/piAgent/PiAgentMarkdownRenderer.vue`、`src/components/piAgent/piAgentMarkdown.ts` 与 `src/components/piAgent/piAgentContentFilter.ts`，为助手正文提供 markdown 渲染、代码高亮、安全清洗与上下文过滤能力。

@@ -91,7 +91,7 @@ watch(
         >
           <div class="flex items-end gap-1.5">
             <div class="min-w-0 flex-1">
-              <PiAgentMarkdownRenderer :content="msg.content" :debug-visible="debugVisible" />
+              <PiAgentMarkdownRenderer :content="debugVisible && msg.rawContent ? msg.rawContent : msg.content" />
             </div>
             <span
               v-if="msg.status === 'streaming'"

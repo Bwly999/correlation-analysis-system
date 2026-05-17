@@ -1,15 +1,13 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { stripPiAgentToolSummary } from './piAgentContentFilter'
 import { renderPiAgentMarkdown } from './piAgentMarkdown'
 
 const props = defineProps<{
   content: string
-  debugVisible?: boolean
 }>()
 
 const renderedHtml = computed(() =>
-  renderPiAgentMarkdown(props.debugVisible ? props.content : stripPiAgentToolSummary(props.content)),
+  renderPiAgentMarkdown(props.content),
 )
 </script>
 

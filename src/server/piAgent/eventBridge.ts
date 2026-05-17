@@ -14,10 +14,23 @@ import {
 /** 前端 SSE 事件类型 */
 export type PiAgentSseEvent =
   | { type: 'session.status'; sessionId: string; status: string }
-  | { type: 'message.start'; sessionId: string; messageId: string; role: string }
+  | {
+      type: 'message.start'
+      sessionId: string
+      messageId: string
+      role: string
+      visibility: 'assistant_visible' | 'assistant_debug'
+    }
   | { type: 'message.delta'; sessionId: string; messageId: string; delta: string }
   | { type: 'message.thinking_delta'; sessionId: string; messageId: string; delta: string }
-  | { type: 'message.completed'; sessionId: string; messageId: string; content: string }
+  | {
+      type: 'message.completed'
+      sessionId: string
+      messageId: string
+      content: string
+      rawContent: string
+      visibility: 'assistant_visible' | 'assistant_debug'
+    }
   | { type: 'tool.start'; sessionId: string; toolCall: PiAgentToolCall }
   | { type: 'tool.end'; sessionId: string; toolCallId: string; result: string; isError: boolean }
   | { type: 'tool.execute'; sessionId: string; toolCallId: string; toolName: string; params: Record<string, unknown> }
@@ -103,16 +116,25 @@ export function bridgePiEvent(
     }
 
     case 'message_start': {
+      if (!isAssistantMessage(piEvent.message)) break
       const msgId = randomUUID()
       currentMessageId.value = msgId
       appendMessage(sessionId, {
         id: msgId,
         role: 'assistant',
+        visibility: 'assistant_visible',
         content: '',
+        rawContent: '',
         status: 'streaming',
         createdAt: Date.now(),
       })
-      events.push({ type: 'message.start', sessionId, messageId: msgId, role: 'assistant' })
+      events.push({
+        type: 'message.start',
+        sessionId,
+        messageId: msgId,
+        role: 'assistant',
+        visibility: 'assistant_visible',
+      })
       break
     }
 
@@ -120,6 +142,7 @@ export function bridgePiEvent(
       const msgEvent = piEvent.assistantMessageEvent
       if (!msgEvent) break
       const msgId = currentMessageId.value
+      if (!msgId) break
 
       if (msgEvent.type === 'text_delta') {
         events.push({ type: 'message.delta', sessionId, messageId: msgId, delta: msgEvent.delta })
@@ -135,16 +158,27 @@ export function bridgePiEvent(
     }
 
     case 'message_end': {
+      if (!isAssistantMessage(piEvent.message)) break
       const msgId = currentMessageId.value
+      if (!msgId) break
       // 从 piEvent.message 中提取最终文本
       const finalText = extractTextFromMessage(piEvent.message)
       // 更新 store 中的消息
       const msg = record.messages.find((m) => m.id === msgId)
       if (msg) {
         msg.content = finalText
+        msg.rawContent = finalText
         msg.status = 'completed'
       }
-      events.push({ type: 'message.completed', sessionId, messageId: msgId, content: finalText })
+      events.push({
+        type: 'message.completed',
+        sessionId,
+        messageId: msgId,
+        content: finalText,
+        rawContent: finalText,
+        visibility: 'assistant_visible',
+      })
+      currentMessageId.value = ''
       break
     }
 
@@ -178,6 +212,10 @@ export function bridgePiEvent(
   }
 
   return events
+}
+
+function isAssistantMessage(message: any): boolean {
+  return message?.role === 'assistant'
 }
 
 function extractTextFromMessage(message: any): string {
