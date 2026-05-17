@@ -30,8 +30,15 @@ export function createContextTools(request: WorkflowAiPlanRequest) {
           kind: ds.kind,
           label: ds.label,
           entryNodeType: ds.entryNodeType,
-        })),
+          })),
         existingWorkflow: request.workflowSnapshot
+          ? {
+              name: request.workflowSnapshot.name,
+              nodeCount: request.workflowSnapshot.nodes.length,
+              edgeCount: request.workflowSnapshot.edges.length,
+            }
+          : null,
+        workflowSnapshotSummary: request.workflowSnapshot
           ? {
               name: request.workflowSnapshot.name,
               nodeCount: request.workflowSnapshot.nodes.length,

@@ -18,6 +18,7 @@ import {
   syncPiAgentCanvas,
   streamPiAgentEvents,
 } from '@/services/piAgentClient'
+import { buildSanitizedWorkflowSnapshot } from './piAgentSanitize'
 
 export interface PiAgentMessage {
   id: string
@@ -104,19 +105,20 @@ export const usePiAgentStore = defineStore('piAgent', () => {
     }
 
     const contextHints = await configStore.buildContextHints(workflowStore as any, prompt)
+    const workflowSnapshot = workflowStore.nodes.length > 0
+      ? buildSanitizedWorkflowSnapshot({
+          name: workflowStore.workflowName || '未命名工作流',
+          nodes: workflowStore.nodes as any[],
+          edges: workflowStore.edges as any[],
+        })
+      : undefined
 
     // 构建 session 请求
     const request = {
       mode: 'create' as const,
       prompt,
       profile,
-      workflowSnapshot: workflowStore.nodes.length > 0
-        ? {
-            name: workflowStore.workflowName || '未命名工作流',
-            nodes: workflowStore.nodes,
-            edges: workflowStore.edges,
-          }
-        : undefined,
+      workflowSnapshot,
       contextHints: contextHints ?? undefined,
       dataSources: contextHints?.schemaSummaries?.map((s: any) => ({
         id: s.nodeId,
@@ -427,7 +429,12 @@ export const usePiAgentStore = defineStore('piAgent', () => {
   async function syncCanvasSnapshotIfNeeded() {
     if (!sessionId.value) return
     const workflowStore = useWorkflowStore()
-    await syncPiAgentCanvas(sessionId.value, workflowStore.createAgentWorkflowSnapshot())
+    const snapshot = workflowStore.createAgentWorkflowSnapshot()
+    await syncPiAgentCanvas(sessionId.value, buildSanitizedWorkflowSnapshot({
+      name: snapshot.name,
+      nodes: snapshot.nodes as any[],
+      edges: snapshot.edges as any[],
+    }))
   }
 
   /**

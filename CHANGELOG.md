@@ -4,6 +4,12 @@
 
 ### 修复 (Fixed)
 
+- **前端收口 Pi Agent 大上下文传输，避免大表/大报告/大图表直接进入后端与模型上下文**:
+  - `src/stores/piAgentSanitize.ts` 新增统一的 Pi Agent 安全快照构建逻辑，前端在建会话和画布同步前会先将 `workflowSnapshot` 收口为安全摘要：节点仅保留必要结构字段，`edges` 只保留连线结构，表格类输出最多保留 `3` 行、每行最多 `200` 列，并对 `jsonData`、`rows`、`data`、`sourceData`、`payload`、长文本摘要、报告结论数组、图表序列等高风险字段做摘要化处理。
+  - `src/stores/piAgentStore.ts` 将 Pi Agent 会话创建与 `canvas-sync` 全部切换为统一的安全快照入口，避免不同链路重复拼装快照时遗漏裁剪规则。
+  - `src/server/piAgent/tools/sharedRuntimeTools.ts` 与 `src/server/piAgent/tools/contextTools.ts` 将面向 Agent 的上下文字段显式收口为 `workflowSnapshotSummary` 语义，避免后续误将未裁剪原始快照直接暴露给 Agent。
+  - 新增 `src/stores/__tests__/piAgentSanitize.spec.ts`、`src/server/piAgent/__tests__/sharedRuntimeTools.spec.ts` 与 `src/services/__tests__/piAgentRequestPayload.spec.ts`，覆盖本地文件导入、手动 JSON、大数组聚合、`js-transform`、分析报告、图表输出、结构化连线，以及“前端请求后端时实际发出的 JSON body”拦截校验，确认 `createPiAgentSession` 与 `syncPiAgentCanvas` 发送的请求体不会包含完整大表数据。
+
 - **修复 Agent 对话框与画布快捷键冲突**:
   - `src/components/workflow/WorkflowCanvas.vue` 为画布全局快捷键补充 Agent 面板、弹窗等排除区域判断，并在存在原生文本选区时保留浏览器默认 `Ctrl/Cmd + C` 复制行为，避免 Agent 对话内容复制时误触发节点复制。
   - `src/components/piAgent/PiAgentPanel.vue` 为 Agent 面板根容器增加键盘事件拦截，减少面板内部快捷键继续冒泡到画布层的概率。

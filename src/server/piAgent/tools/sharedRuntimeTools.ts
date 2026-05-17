@@ -86,7 +86,7 @@ export function createSharedRuntimeTools(options: CreateSharedRuntimeToolsOption
             return buildResult({
               mode: request.mode,
               prompt: request.prompt,
-              workflowSnapshot: request.workflowSnapshot ?? null,
+              workflowSnapshotSummary: request.workflowSnapshot ?? null,
               contextHints: request.contextHints ?? null,
               dataSources: safeDataSources,
             })

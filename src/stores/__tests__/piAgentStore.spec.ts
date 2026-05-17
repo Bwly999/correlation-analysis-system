@@ -80,16 +80,67 @@ describe('piAgentStore', () => {
     const workflowStore = useWorkflowStore()
     await configStore.loadProfiles()
     workflowStore.addAndConnectNode('manual-json-import', '手动输入数据', { x: 0, y: 0 })
+    const firstNode = workflowStore.nodes[0]
+    if (!firstNode) throw new Error('缺少测试节点')
+    firstNode.data.config = {
+      jsonData: JSON.stringify(
+        Array.from({ length: 2000 }, (_, index) => ({
+          feature: index,
+          target: index * 2,
+        })),
+      ),
+      keepField: 'target',
+    }
+    firstNode.data.output = {
+      kind: 'table',
+      payload: Array.from({ length: 2000 }, (_, index) =>
+        Object.fromEntries(
+          Array.from({ length: 260 }, (_inner, fieldIndex) => [
+            `field_${fieldIndex}`,
+            `${index}_${fieldIndex}`,
+          ]),
+        )),
+    } as any
     store.inputText = '帮我分析销量'
 
     await store.sendMessage()
 
     expect(createPiAgentSessionMock).toHaveBeenCalledTimes(1)
+    expect(createPiAgentSessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workflowSnapshot: expect.objectContaining({
+          nodes: expect.arrayContaining([
+            expect.objectContaining({
+              data: expect.objectContaining({
+                config: expect.objectContaining({
+                  jsonData: expect.objectContaining({
+                    _truncated: true,
+                    _type: 'string',
+                  }),
+                  keepField: 'target',
+                }),
+                output: expect.objectContaining({
+                  kind: 'table',
+                  payload: expect.any(Array),
+                  _truncated: true,
+                }),
+              }),
+            }),
+          ]),
+        }),
+      }),
+    )
     expect(syncPiAgentCanvasMock).toHaveBeenCalledWith('pi_session_1', {
       name: workflowStore.workflowName,
       nodes: expect.any(Array),
       edges: expect.any(Array),
     })
+    const syncedSnapshot = syncPiAgentCanvasMock.mock.calls[0]?.[1]
+    expect(syncedSnapshot).toBeTruthy()
+    const syncedNode = syncedSnapshot?.nodes?.[0] as Record<string, any>
+    expect(syncedNode.data.config.jsonData._truncated).toBe(true)
+    expect(syncedNode.data.output.payload).toHaveLength(3)
+    expect(Object.keys(syncedNode.data.output.payload[0] ?? {})).toHaveLength(200)
     expect(sendPiAgentMessageMock).toHaveBeenCalledWith('pi_session_1', '帮我分析销量')
     expect(store.sessionId).toBe('pi_session_1')
     expect(store.messages[0]).toEqual(

@@ -117,4 +117,82 @@ describe('piAgentSafeToolResult', () => {
     })
     expect(result.summary).toContain('单节点')
   })
+
+  it('summarizes oversized report outputs without returning full findings or metrics', () => {
+    const result = buildPiAgentSafeToolResult({
+      toolName: 'wf_executeWorkflow',
+      toolCallId: 'call_3',
+      rawResult: {
+        ok: true,
+        scope: 'single',
+        nodeId: 'node_model',
+        status: 'success',
+        output: {
+          kind: 'report',
+          payload: {
+            title: '模型诊断报告',
+            summary: '价格、渠道和促销都值得优先验证。'.repeat(20),
+            keyMetrics: Array.from({ length: 100 }, (_, index) => ({
+              name: `metric_${index}`,
+              value: index,
+            })),
+            findings: Array.from({ length: 50 }, (_, index) => `发现_${index}_${'结论'.repeat(20)}`),
+            recommendations: Array.from({ length: 60 }, (_, index) => `建议_${index}_${'优化'.repeat(20)}`),
+          },
+        },
+      },
+    })
+
+    expect(result.nodes).toHaveLength(1)
+    const node = result.nodes[0]
+    expect(node).toBeDefined()
+    expect(node?.resultKind).toBe('report')
+    expect(node?.keyMetrics).toHaveLength(5)
+    expect(node?.findings).toHaveLength(5)
+    expect(node?.recommendations).toHaveLength(5)
+    expect(String(node?.summary ?? '').length).toBeLessThanOrEqual(123)
+  })
+
+  it('summarizes chart outputs without returning full axis or series payloads', () => {
+    const result = buildPiAgentSafeToolResult({
+      toolName: 'wf_executeWorkflow',
+      toolCallId: 'call_4',
+      rawResult: {
+        ok: true,
+        scope: 'single',
+        nodeId: 'node_chart',
+        status: 'success',
+        output: {
+          kind: 'chart',
+          payload: {
+            title: '重要性图表',
+            xAxis: {
+              data: Array.from({ length: 300 }, (_, index) => `feature_${index}`),
+            },
+            series: Array.from({ length: 12 }, (_, index) => ({
+              name: `series_${index}`,
+              type: 'bar',
+              data: Array.from({ length: 500 }, (_inner, pointIndex) => pointIndex + index),
+            })),
+          },
+        },
+      },
+    })
+
+    expect(result.nodes).toHaveLength(1)
+    const node = result.nodes[0]
+    expect(node).toBeDefined()
+    expect(node?.resultKind).toBe('chart')
+    expect(node?.dimensions).toEqual({
+      categories: 300,
+      series: 12,
+    })
+    expect(node?.seriesSummary).toHaveLength(5)
+    expect(node?.seriesSummary?.[0]).toEqual(
+      expect.objectContaining({
+        name: 'series_0',
+        type: 'bar',
+      }),
+    )
+  })
 })
