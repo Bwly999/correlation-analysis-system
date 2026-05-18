@@ -34,17 +34,19 @@ vi.mock('primevue/select', () => ({
     name: 'PrimeSelectStub',
     props: ['modelValue', 'options', 'optionLabel', 'optionValue', 'disabled', 'appendTo'],
     emits: ['update:modelValue'],
-    setup(props, { emit }) {
+    inheritAttrs: false,
+    setup(props, { emit, attrs }) {
       return () =>
         h(
           'select',
           {
-            'data-test': 'chart-type-select',
+            ...attrs,
+            'data-test': attrs['data-test'] ?? 'chart-type-select',
             'data-append-to-type': props.appendTo && typeof props.appendTo === 'object' ? 'element' : String(props.appendTo ?? ''),
             disabled: props.disabled,
-            value: props.modelValue,
+            value: props.modelValue ?? '',
             onChange: (event: Event) =>
-              emit('update:modelValue', (event.target as HTMLSelectElement).value),
+              emit('update:modelValue', (event.target as HTMLSelectElement).value || null),
           },
           (props.options ?? []).map((option: any) =>
             h(
@@ -413,10 +415,48 @@ describe('DataChart', () => {
     )
     expect(option.xAxis.type).toBe('value')
     expect(option.xAxis.name).toBe('temperature')
+    expect(option.title).toBeUndefined()
     expect(option.series[0].type).toBe('scatter')
     expect(option.series[0].data).toEqual([
       [10, 1],
       [20, 2],
+    ])
+  })
+
+  it('falls back to row index when table scatter charts do not select an x field', () => {
+    localStorage.clear()
+
+    const wrapper = mount(DataChart, {
+      props: {
+        data: {
+          kind: 'table',
+          payload: [
+            { score: 1, cost: 10 },
+            { score: 2, cost: 12 },
+          ],
+          preview: {
+            viewer: 'table-chart-combo-viewer',
+            props: {
+              chartDefaults: {
+                mode: 'scatter',
+                yFields: ['score'],
+              },
+            },
+          },
+        },
+      },
+    })
+
+    const option = getChartOption(wrapper)
+    expect((wrapper.get('[data-test="chart-type-select"]').element as HTMLSelectElement).value).toBe(
+      'scatter',
+    )
+    expect(option.xAxis.type).toBe('value')
+    expect(option.xAxis.name).toBeUndefined()
+    expect(option.title).toBeUndefined()
+    expect(option.series[0].data).toEqual([
+      [1, 1],
+      [2, 2],
     ])
   })
 
@@ -502,6 +542,45 @@ describe('DataChart', () => {
     expect(option.series[1].data).toEqual([
       [15, 3],
       [25, 4],
+    ])
+  })
+
+  it('falls back to group-local row index when grouped scatter charts do not select an x field', () => {
+    localStorage.clear()
+
+    const wrapper = mount(DataChart, {
+      props: {
+        data: {
+          kind: 'tableCollection',
+          payload: [
+            { name: 'A', data: [{ score: 1 }, { score: 2 }] },
+            { name: 'B', data: [{ score: 3 }, { score: 4 }] },
+          ],
+          preview: {
+            viewer: 'table-chart-combo-viewer',
+            props: {
+              chartDefaults: {
+                mode: 'grouped-scatter',
+                yFields: ['score'],
+              },
+            },
+          },
+        },
+      },
+    })
+
+    const option = getChartOption(wrapper)
+    expect((wrapper.get('[data-test="chart-type-select"]').element as HTMLSelectElement).value).toBe(
+      'grouped-scatter',
+    )
+    expect(option.title).toBeUndefined()
+    expect(option.series[0].data).toEqual([
+      [1, 1],
+      [2, 2],
+    ])
+    expect(option.series[1].data).toEqual([
+      [1, 3],
+      [2, 4],
     ])
   })
 
@@ -669,6 +748,61 @@ describe('DataChart', () => {
     const barOption = getChartOptionObject(wrapper)
     expect(barOption.series[0].data).toEqual([1, 5])
     expect(barOption.series[0].data.every((value: number | null) => value === null || Number.isFinite(value))).toBe(true)
+  })
+
+  it('keeps index fallback after clearing the x field and restores that empty state from local storage', async () => {
+    localStorage.clear()
+
+    const wrapper = mount(DataChart, {
+      props: {
+        storageScopeKey: 'chart-x-clear-node',
+        data: {
+          kind: 'table',
+          payload: [
+            { group: 'A', score: 11 },
+            { group: 'B', score: 22 },
+          ],
+          preview: {
+            viewer: 'table-chart-combo-viewer',
+            props: {
+              chartDefaults: {
+                mode: 'bar',
+                xField: 'group',
+                yFields: ['score'],
+              },
+            },
+          },
+        },
+      },
+    })
+
+    await wrapper.get('[data-test="chart-x-field-clear"]').trigger('click')
+    await nextTick()
+
+    const option = getChartOption(wrapper)
+    expect(option.title).toBeUndefined()
+    expect(option.xAxis.data).toEqual([1, 2])
+    expect(option.series[0].data).toEqual([11, 22])
+    expect(localStorage.getItem('workflow-result-preview:chart-x-clear-node:chart-x-field')).toBe('null')
+
+    await wrapper.unmount()
+
+    const remounted = mount(DataChart, {
+      props: {
+        storageScopeKey: 'chart-x-clear-node',
+        data: {
+          kind: 'table',
+          payload: [
+            { group: 'A', score: 11 },
+            { group: 'B', score: 22 },
+          ],
+        },
+      },
+    })
+
+    const remountedOption = getChartOption(remounted)
+    expect(remountedOption.xAxis.data).toEqual([1, 2])
+    expect(remountedOption.series[0].data).toEqual([11, 22])
   })
 
   it('keeps single-table and grouped boxplot stats finite when rows contain Infinity', async () => {

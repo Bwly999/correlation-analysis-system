@@ -9,7 +9,6 @@ import {
   DatasetComponent,
   GridComponent,
   LegendComponent,
-  TitleComponent,
   TooltipComponent,
   TransformComponent,
 } from 'echarts/components'
@@ -39,6 +38,7 @@ import {
 } from './useScopedResultPreviewStorage'
 import { useWorkflowOverlayHost } from './workflowOverlayHost'
 import SearchAppendMultiSelect from './common/SearchAppendMultiSelect.vue'
+import SearchAppendSelect from './common/SearchAppendSelect.vue'
 import {
   buildNormalizationStats,
   isFiniteNumber,
@@ -68,7 +68,6 @@ use([
   ScatterChart,
   GridComponent,
   TooltipComponent,
-  TitleComponent,
   LegendComponent,
   DataZoomComponent,
   DatasetComponent,
@@ -174,7 +173,7 @@ const usesSampling = computed(() => chartType.value === 'line')
 const supportsNormalizationForChartType = computed(() =>
   chartType.value === 'line' || chartType.value === 'boxplot' || chartType.value === 'normal',
 )
-const requiresXAxisField = computed(
+const showsXAxisFieldSelector = computed(
   () =>
     chartType.value === 'scatter'
     || chartType.value === 'bar'
@@ -490,19 +489,25 @@ watch(
 )
 
 watch(
-  [availableXAxisOptions, requiresXAxisField],
-  ([nextXAxisOptions, nextRequiresXAxisField]) => {
-    if (!nextRequiresXAxisField || nextXAxisOptions.length === 0) {
-      if (!nextRequiresXAxisField) xField.value = null
+  [availableXAxisOptions, showsXAxisFieldSelector],
+  ([nextXAxisOptions, nextShowsXAxisFieldSelector]) => {
+    if (!nextShowsXAxisFieldSelector || nextXAxisOptions.length === 0) {
+      if (!nextShowsXAxisFieldSelector) xField.value = null
       return
     }
 
-    if (!xField.value || !nextXAxisOptions.includes(xField.value)) {
-      xField.value = nextXAxisOptions[0] ?? null
+    if (xField.value && !nextXAxisOptions.includes(xField.value)) {
+      xField.value = null
     }
   },
   { immediate: true },
 )
+
+watch(xField, (value) => {
+  const storageKey = buildScopedResultPreviewStorageKey(props.storageScopeKey, 'chart-x-field')
+  if (!storageKey || typeof window === 'undefined') return
+  window.localStorage.setItem(storageKey, JSON.stringify(value))
+})
 
 watch(
   () => [lowerBound.value, upperBound.value] as const,
@@ -606,6 +611,13 @@ const selectedPreset = computed(
 
 const presetTriggerIcon = computed(() => (isPresetPanelOpen.value ? PanelRightClose : PanelRightOpen))
 
+const getRowIndexValue = (index: number) => index + 1
+
+const getChartXAxisValue = (row: ChartRow, index: number, field: string | null) => {
+  if (!field) return getRowIndexValue(index)
+  return row[field]
+}
+
 const saveCurrentPreset = () => {
   const preset: ChartFilterPreset = {
     id: `chart_filter_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
@@ -697,11 +709,11 @@ const formatBoxValue = (value: unknown) => {
 
 const escapeTooltipHtml = (value: unknown) =>
   String(value ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
 
 const createLineTooltipFormatter = (
   sampledRows: ChartRow[],
@@ -924,35 +936,6 @@ const createNormalDistributionOption = (rows: ChartRow[], keys: string[], xAxisN
       icon: 'roundRect',
       textStyle: { color: '#64748b', fontSize: 11, fontWeight: '600' },
     },
-    title: keys.map((key, index) => {
-      const values = getNormalDistributionValues(rows, key)
-      const { rawMin, rawMax, rawMean, rawStd } = createNormalDistributionSeriesData(values)
-      const columnIndex = index % NORMAL_DISTRIBUTION_COLUMNS
-      const rowIndex = Math.floor(index / NORMAL_DISTRIBUTION_COLUMNS)
-
-      const statsParts = [
-        `均值: ${formatBoxValue(rawMean)}`,
-        `最大值: ${formatBoxValue(rawMax)}`,
-        `最小值: ${formatBoxValue(rawMin)}`,
-        `标准差: ${formatBoxValue(rawStd)}`,
-      ]
-
-      return {
-        text: key,
-        subtext: statsParts.join('  '),
-        left: columnIndex === 0 ? '6%' : '56%',
-        top: `${8 + rowHeight * rowIndex}%`,
-        textStyle: {
-          color: '#0f172a',
-          fontSize: 12,
-          fontWeight: 700,
-        },
-        subtextStyle: {
-          color: '#64748b',
-          fontSize: 10,
-        },
-      }
-    }),
     grid: keys.map((_, index) => {
       const columnIndex = index % NORMAL_DISTRIBUTION_COLUMNS
       const rowIndex = Math.floor(index / NORMAL_DISTRIBUTION_COLUMNS)
@@ -960,7 +943,7 @@ const createNormalDistributionOption = (rows: ChartRow[], keys: string[], xAxisN
       return {
         left: columnIndex === 0 ? '6%' : '56%',
         width: '38%',
-        top: `${17 + rowHeight * rowIndex}%`,
+        top: `${10 + rowHeight * rowIndex}%`,
         height: `${Math.max(10, rowHeight - 15)}%`,
         containLabel: true,
       }
@@ -1166,7 +1149,7 @@ const chartOption = computed(() => {
   const keys = normalizedKeys.value
   if (keys.length === 0) return {}
   const primaryKey = keys[0] ?? ''
-  const xAxisField = xField.value ?? availableXAxisOptions.value[0] ?? null
+  const xAxisField = xField.value
 
   const option: any = {
     animation: false,
@@ -1223,26 +1206,29 @@ const chartOption = computed(() => {
         name: group.name,
         type: 'scatter',
         symbolSize: 8,
-        data: group.data
-          .filter((row) => {
-            if (!xAxisField) return false
-            return isFiniteNumber(row[xAxisField]) && isFiniteNumber(row[primaryKey])
-          })
-          .map((row) => [row[xAxisField as string] as number, row[primaryKey] as number]),
+        data: group.data.reduce<Array<[number, number]>>((points, row, index) => {
+          const xAxisValue = getChartXAxisValue(row, index, xAxisField)
+          const yAxisValue = row[primaryKey]
+          if (!isFiniteNumber(xAxisValue) || !isFiniteNumber(yAxisValue)) return points
+          points.push([xAxisValue, yAxisValue])
+          return points
+        }, []),
       }))
 
-      option.title = { text: `${xAxisField ?? 'X'} vs ${primaryKey} 分组散点图`, left: 'center' }
       option.tooltip.trigger = 'item'
       option.legend.data = groupedScatterSeries.map((series: { name: string }) => series.name)
       option.grid = { top: '18%', bottom: '15%', left: '10%', right: '10%', containLabel: true }
-      option.xAxis = { type: 'value', name: xAxisField, boundaryGap: ['5%', '5%'] }
+      option.xAxis = {
+        type: 'value',
+        ...(xAxisField ? { name: xAxisField } : {}),
+        boundaryGap: ['5%', '5%'],
+      }
       option.yAxis = { type: 'value', name: primaryKey, scale: true, boundaryGap: ['15%', '15%'] }
       option.series = groupedScatterSeries
       return markRaw(option)
     }
 
     if (chartType.value === 'grouped-bar') {
-      option.title = { text: `${primaryKey} 分组对比`, left: 'center' }
       option.tooltip.trigger = 'axis'
       option.legend.data = [primaryKey]
       option.grid = { top: '18%', bottom: '15%', left: '10%', right: '10%', containLabel: true }
@@ -1388,31 +1374,34 @@ const chartOption = computed(() => {
       })
     }
   } else if (chartType.value === 'scatter') {
-    option.title = { text: `${xAxisField ?? 'X'} vs ${primaryKey} 散点分布`, left: 'center' }
     option.tooltip.trigger = 'item'
     option.grid = { top: '15%', bottom: '15%', left: '10%', right: '10%', containLabel: true }
-    option.xAxis = { type: 'value', name: xAxisField, boundaryGap: ['5%', '5%'] }
+    option.xAxis = {
+      type: 'value',
+      ...(xAxisField ? { name: xAxisField } : {}),
+      boundaryGap: ['5%', '5%'],
+    }
     option.yAxis = { type: 'value', name: primaryKey, scale: true, boundaryGap: ['15%', '15%'] }
     option.series = [
       {
         type: 'scatter',
         symbolSize: 8,
-        data: (sourceData as ChartRow[])
-          .filter((row) => {
-            if (!xAxisField) return false
-            return isFiniteNumber(row[xAxisField]) && isFiniteNumber(row[primaryKey])
-          })
-          .map((row) => [row[xAxisField as string] as number, row[primaryKey] as number]),
+        data: (sourceData as ChartRow[]).reduce<Array<[number, number]>>((points, row, index) => {
+          const xAxisValue = getChartXAxisValue(row, index, xAxisField)
+          const yAxisValue = row[primaryKey]
+          if (!isFiniteNumber(xAxisValue) || !isFiniteNumber(yAxisValue)) return points
+          points.push([xAxisValue, yAxisValue])
+          return points
+        }, []),
         itemStyle: { color: '#0ea5e9' },
       },
     ]
   } else if (chartType.value === 'bar') {
-    option.title = { text: `${primaryKey} 分类对比`, left: 'center' }
     option.tooltip.trigger = 'axis'
     option.grid = { top: '15%', bottom: '15%', left: '10%', right: '10%', containLabel: true }
     option.xAxis = {
       type: 'category',
-      data: (sourceData as ChartRow[]).map((row) => row[xAxisField as string]),
+      data: (sourceData as ChartRow[]).map((row, index) => getChartXAxisValue(row, index, xAxisField)),
       boundaryGap: true,
     }
     option.yAxis = { type: 'value', boundaryGap: ['0%', '15%'] }
@@ -1673,23 +1662,19 @@ watch(
         </div>
 
         <div
-          v-if="requiresXAxisField && availableXAxisOptions.length > 0"
+          v-if="showsXAxisFieldSelector && availableXAxisOptions.length > 0"
           class="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-100 rounded-lg shadow-sm"
         >
           <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">X轴</span>
-          <select
+          <SearchAppendSelect
             v-model="xField"
-            data-test="chart-x-field-select"
-            class="chart-axis-select"
-          >
-            <option
-              v-for="field in availableXAxisOptions"
-              :key="field"
-              :value="field"
-            >
-              {{ field }}
-            </option>
-          </select>
+            :options="availableXAxisOptions"
+            :append-to="overlayAppendTo"
+            placeholder="选择X轴字段"
+            select-class="property-select chart-axis-select"
+            select-test-id="chart-x-field-select"
+            clear-button-test-id="chart-x-field-clear"
+          />
         </div>
 
         <div class="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-100 rounded-lg shadow-sm">
@@ -2044,16 +2029,26 @@ watch(
   align-items: center;
 }
 
-.chart-axis-select {
+:deep(.property-select .p-select-label) {
+  padding: 2px 8px;
+  display: flex;
+  align-items: center;
+}
+
+:deep(.chart-axis-select) {
   min-width: 132px;
   max-width: 220px;
-  padding: 4px 10px;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
-  background: #f8fafc;
-  color: #0f172a;
-  font-size: 11px;
-  font-weight: 700;
+}
+
+:deep(.chart-axis-select .p-select-label) {
+  padding-right: 10px;
+}
+
+:deep(.chart-axis-select .p-select-dropdown) {
+  width: 28px;
+  color: #94a3b8;
 }
 
 .preset-trigger-button {
