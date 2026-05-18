@@ -52,7 +52,6 @@ const MONACO_OPTIONS: monaco.editor.IStandaloneEditorConstructionOptions = {
   theme: 'vs',
   readOnly: _props.readOnly || false,
   editContext: false,
-  fixedOverflowWidgets: true,
   folding: true,
   tabSize: 2,
   wordWrap: 'on',

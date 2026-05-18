@@ -1183,6 +1183,7 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  transform: none !important;
 }
 
 :deep(.ndv-dialog .p-dialog-header) {

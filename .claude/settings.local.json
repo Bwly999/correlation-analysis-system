@@ -6,7 +6,9 @@
       "Bash(npx tsc:*)",
       "Bash(npx vitest:*)",
       "Bash(pnpm build:*)",
-      "Bash(pip show:*)"
+      "Bash(pip show:*)",
+      "Bash(npx ctx7@latest:*)",
+      "WebSearch"
     ]
   }
 }

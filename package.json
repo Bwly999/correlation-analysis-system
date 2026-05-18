@@ -84,7 +84,7 @@
     "eslint-plugin-vue": "^10.8.0",
     "globals": "^17.4.0",
     "jsdom": "^28.1.0",
-    "monaco-editor": "^0.55.1",
+    "monaco-editor": "^0.54.0",
     "npm-run-all2": "^8.0.4",
     "prettier": "3.8.1",
     "tailwindcss": "^4.2.1",

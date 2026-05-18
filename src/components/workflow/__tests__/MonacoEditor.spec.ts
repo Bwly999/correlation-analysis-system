@@ -33,7 +33,7 @@ vi.mock('@guolao/vue-monaco-editor', () => ({
     name: 'VueMonacoEditor',
     props: ['value', 'language', 'options', 'height', 'className'],
     template:
-      '<div class="vue-monaco-editor-mock" :class="className" :data-language="language" :data-height="height" :data-top-padding="options.padding?.top" :data-bottom-padding="options.padding?.bottom"><slot /></div>',
+      '<div class="vue-monaco-editor-mock" :class="className" :data-language="language" :data-height="height" :data-top-padding="options.padding?.top" :data-bottom-padding="options.padding?.bottom" :data-fixed-overflow="options.fixedOverflowWidgets"><slot /></div>',
   },
 }))
 
@@ -140,6 +140,7 @@ describe('MonacoEditor', () => {
     expect(shell.classes()).not.toContain('overflow-hidden')
     expect(shell.attributes('style')).toBeUndefined()
     expect(editor.classes()).toContain('monaco-instance')
+    expect(editor.attributes('data-fixed-overflow')).toBeUndefined()
   })
 
   it('keeps injecting declarations into javascriptDefaults for JS 节点提示', () => {
