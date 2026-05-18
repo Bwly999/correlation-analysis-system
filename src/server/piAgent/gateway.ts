@@ -26,6 +26,14 @@ import { buildAllTools } from './tools/index.js'
 import { FrontendBridge } from './frontendBridge.js'
 import { assertPiAgentSafeRequest } from './safePayload.js'
 import type { AgentSessionCanvasSyncResponse } from '../../ai/types.js'
+export {
+  createJsTransformAgentSession,
+  disposeAllJsTransformAgentSessions,
+  getJsTransformAgentSession,
+  resolveJsTransformAgentToolResult,
+  sendJsTransformAgentMessage,
+  subscribeJsTransformAgentEvents,
+} from './jsTransformAgentGateway.js'
 
 // --- Runtime 管理 ---
 

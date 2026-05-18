@@ -1300,6 +1300,122 @@ describe("NodeConfigModal", () => {
     expect(stopSpy).toHaveBeenCalledTimes(1);
   });
 
+  it("shows the js transform agent panel only for js-transform nodes", () => {
+    const store = useWorkflowStore();
+    store.nodes = [
+      {
+        id: "source-1",
+        type: "custom",
+        position: { x: 0, y: 0 },
+        label: "来源一",
+        data: {
+          label: "来源一",
+          type: "manual-json-import",
+          category: "trigger",
+          status: "success",
+          config: {},
+          logs: [],
+          useManualInput: false,
+          manualInput: "",
+          isPinned: false,
+          output: {
+            kind: "table",
+            payload: [{ date: "2026-05-01", revenue: 12 }],
+          },
+        },
+      } as any,
+      {
+        id: "js-node",
+        type: "custom",
+        position: { x: 300, y: 0 },
+        label: "JS代码执行",
+        data: {
+          label: "JS代码执行",
+          type: "js-transform",
+          category: "action",
+          status: "idle",
+          config: { code: "return rows" },
+          logs: [],
+          useManualInput: false,
+          manualInput: "",
+          isPinned: false,
+        },
+      } as any,
+      {
+        id: "pearson-node",
+        type: "custom",
+        position: { x: 600, y: 0 },
+        label: "Pearson 分析",
+        data: {
+          label: "Pearson 分析",
+          type: "pearson",
+          category: "terminal",
+          status: "idle",
+          config: { xFields: [], yFields: [] },
+          logs: [],
+          useManualInput: false,
+          manualInput: "",
+          isPinned: false,
+        },
+      } as any,
+    ];
+    store.edges = [
+      {
+        id: "e1",
+        source: "source-1",
+        target: "js-node",
+        type: "n8n",
+        animated: true,
+      },
+      {
+        id: "e2",
+        source: "source-1",
+        target: "pearson-node",
+        type: "n8n",
+        animated: true,
+      },
+    ] as any;
+
+    const globalStubs = {
+      Dialog: dialogStub,
+      DataDisplayPanel: true,
+      DataAnalysisModal: true,
+      ConfigHeader: {
+        template: "<div />",
+        props: ["nodeLabel", "isPinned", "nodeType"],
+      },
+      ConfigFooter: { template: "<div />" },
+      ConfigForm: {
+        template: "<div />",
+        props: ["config", "properties", "upstreamFactors"],
+      },
+      RuntimeInputs: {
+        template: "<div />",
+        props: ["config", "properties", "upstreamFactors"],
+      },
+      JsTransformAgentPanel: {
+        template: '<div data-testid="js-transform-agent-panel" />',
+      },
+    };
+
+    const jsWrapper = mount(NodeConfigModal, {
+      props: { visible: true, nodeId: "js-node" },
+      global: {
+        stubs: globalStubs,
+      },
+    });
+
+    const pearsonWrapper = mount(NodeConfigModal, {
+      props: { visible: true, nodeId: "pearson-node" },
+      global: {
+        stubs: globalStubs,
+      },
+    });
+
+    expect(jsWrapper.find('[data-testid="js-transform-agent-panel"]').exists()).toBe(true);
+    expect(pearsonWrapper.find('[data-testid="js-transform-agent-panel"]').exists()).toBe(false);
+  });
+
   it("shows loading copy after clicking debug for a synchronous local node", async () => {
     const syncNodeDefinition = {
       name: "test-sync-config-node",

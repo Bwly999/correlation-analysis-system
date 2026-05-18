@@ -4,10 +4,15 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 
 const {
   createPiAgentSessionMock,
+  createJsTransformAgentSessionMock,
   sendPiAgentMessageMock,
+  sendJsTransformAgentMessageMock,
   subscribePiAgentEventsMock,
+  subscribeJsTransformAgentEventsMock,
   getPiAgentSessionMock,
+  getJsTransformAgentSessionMock,
   resolvePiAgentToolResultMock,
+  resolveJsTransformAgentToolResultMock,
   syncPiAgentCanvasMock,
   getAgentObservabilityDebugFilesMock,
   getAgentObservabilityDebugHealthMock,
@@ -15,10 +20,15 @@ const {
   getAgentObservabilityDebugTraceMock,
 } = vi.hoisted(() => ({
   createPiAgentSessionMock: vi.fn(),
+  createJsTransformAgentSessionMock: vi.fn(),
   sendPiAgentMessageMock: vi.fn(),
+  sendJsTransformAgentMessageMock: vi.fn(),
   subscribePiAgentEventsMock: vi.fn(),
+  subscribeJsTransformAgentEventsMock: vi.fn(),
   getPiAgentSessionMock: vi.fn(),
+  getJsTransformAgentSessionMock: vi.fn(),
   resolvePiAgentToolResultMock: vi.fn(),
+  resolveJsTransformAgentToolResultMock: vi.fn(),
   syncPiAgentCanvasMock: vi.fn(),
   getAgentObservabilityDebugFilesMock: vi.fn(),
   getAgentObservabilityDebugHealthMock: vi.fn(),
@@ -28,10 +38,15 @@ const {
 
 vi.mock('../gateway.js', () => ({
   createPiAgentSession: createPiAgentSessionMock,
+  createJsTransformAgentSession: createJsTransformAgentSessionMock,
   sendPiAgentMessage: sendPiAgentMessageMock,
+  sendJsTransformAgentMessage: sendJsTransformAgentMessageMock,
   subscribePiAgentEvents: subscribePiAgentEventsMock,
+  subscribeJsTransformAgentEvents: subscribeJsTransformAgentEventsMock,
   getPiAgentSession: getPiAgentSessionMock,
+  getJsTransformAgentSession: getJsTransformAgentSessionMock,
   resolvePiAgentToolResult: resolvePiAgentToolResultMock,
+  resolveJsTransformAgentToolResult: resolveJsTransformAgentToolResultMock,
   syncPiAgentCanvas: syncPiAgentCanvasMock,
 }))
 
@@ -119,10 +134,15 @@ const createContext = (request: IncomingMessage, response: MockResponse) => {
 afterEach(() => {
   vi.restoreAllMocks()
   createPiAgentSessionMock.mockReset()
+  createJsTransformAgentSessionMock.mockReset()
   sendPiAgentMessageMock.mockReset()
+  sendJsTransformAgentMessageMock.mockReset()
   subscribePiAgentEventsMock.mockReset()
+  subscribeJsTransformAgentEventsMock.mockReset()
   getPiAgentSessionMock.mockReset()
+  getJsTransformAgentSessionMock.mockReset()
   resolvePiAgentToolResultMock.mockReset()
+  resolveJsTransformAgentToolResultMock.mockReset()
   syncPiAgentCanvasMock.mockReset()
   getAgentObservabilityDebugFilesMock.mockReset()
   getAgentObservabilityDebugHealthMock.mockReset()
@@ -131,6 +151,76 @@ afterEach(() => {
 })
 
 describe('piAgentRoutes', () => {
+  it('creates js transform agent sessions through the dedicated route', async () => {
+    createJsTransformAgentSessionMock.mockResolvedValueOnce({
+      sessionId: 'js_agent_session_1',
+      status: 'idle',
+      mode: 'agent',
+      prompt: '把字符串日期转成月份字段',
+    })
+
+    const handler = createPiAgentRoutes()
+    const request = createRequest('POST', '/api/pi-agent/js-transform/sessions', {
+      nodeId: 'node_js_1',
+      mode: 'agent',
+      prompt: '把字符串日期转成月份字段',
+      profile: {
+        id: 'profile_1',
+        name: '测试模型',
+        baseUrl: 'http://example.com',
+        model: 'glm-4.7',
+        enabled: true,
+        source: 'custom',
+      },
+      nodeContext: {
+        node: {
+          nodeId: 'node_js_1',
+          nodeLabel: 'JS代码执行',
+          nodeType: 'js-transform',
+        },
+        task: '把字符串日期转成月份字段',
+        codeContext: {
+          currentCode: 'return rows',
+          language: 'javascript',
+          declarations: 'declare const rows: Array<Record<string, unknown>>',
+          constraints: ['只能写同步 JS'],
+        },
+        inputContext: {
+          inputMode: 'single',
+          rowCount: 1,
+          sourceSummary: '上游输入共 1 行',
+          sampleRows: [{ date: '2026-05-01' }],
+          schemaSummary: {
+            fields: [{ name: 'date', type: 'string', nullable: false }],
+          },
+        },
+        latestDebugContext: {
+          status: 'idle',
+          summary: '当前尚未调试',
+          outputSample: [],
+          errorMessage: '',
+        },
+        capabilities: {
+          ask: ['read_context'],
+          agent: ['read_context', 'update_current_code', 'debug_current_node'],
+        },
+      },
+    })
+    const response = createResponse()
+
+    const handled = await handler(createContext(request, response) as any)
+
+    expect(handled).toBe(true)
+    expect(response.statusCode).toBe(200)
+    expect(createJsTransformAgentSessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        nodeId: 'node_js_1',
+        mode: 'agent',
+      }),
+      'pi-agent-route-user',
+    )
+  })
+
   it('rejects unsafe session payloads that contain raw rows', async () => {
     const handler = createPiAgentRoutes()
     const request = createRequest('POST', '/api/pi-agent/sessions', {

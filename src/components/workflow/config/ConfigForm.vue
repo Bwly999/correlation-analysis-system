@@ -1,5 +1,10 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import type {
+  JsTransformAgentContext,
+  JsTransformAgentSafeDebugResult,
+  WorkflowAiModelProfile,
+} from '@/ai/types'
 import { type NodeProperty } from '@/nodes/types'
 import PropertyField from './PropertyField.vue'
 import { applyDependencyReset } from './configDependencies'
@@ -18,6 +23,11 @@ const props = defineProps<{
   upstreamFactors: UpstreamFactorOption[]
   nodeId?: string | null
   inputData?: unknown
+  agentProfile?: WorkflowAiModelProfile | null
+  agentOutputData?: unknown
+  agentErrorMessage?: string
+  buildJsTransformAgentContext?: (() => JsTransformAgentContext) | undefined
+  onAgentDebugNode?: (mode: 'reuse_cached_upstream' | 'rerun_upstream') => Promise<JsTransformAgentSafeDebugResult>
 }>()
 
 const emit = defineEmits<{
@@ -118,6 +128,11 @@ const updateConfig = (propName: string, value: any) => {
           :config-context="config"
           :node-id="nodeId"
           :input-data="inputData"
+          :agent-profile="agentProfile"
+          :agent-output-data="agentOutputData"
+          :agent-error-message="agentErrorMessage"
+          :build-js-transform-agent-context="buildJsTransformAgentContext"
+          :on-agent-debug-node="onAgentDebugNode"
           @update:model-value="(val) => updateConfig(prop.name, val)"
           @save="emit('save')"
         />
@@ -144,6 +159,11 @@ const updateConfig = (propName: string, value: any) => {
             :config-context="config"
             :node-id="nodeId"
             :input-data="inputData"
+            :agent-profile="agentProfile"
+            :agent-output-data="agentOutputData"
+            :agent-error-message="agentErrorMessage"
+            :build-js-transform-agent-context="buildJsTransformAgentContext"
+            :on-agent-debug-node="onAgentDebugNode"
             @update:model-value="(val) => updateConfig(prop.name, val)"
             @save="emit('save')"
           />

@@ -1106,6 +1106,7 @@ describe('Node Definitions Execution Logic', () => {
       expect(codeProperty?.type).toBe('json')
       expect(codeProperty?.editorLanguage).toBe('javascript')
       expect(codeProperty?.editorHeight).toBe('560px')
+      expect(codeProperty?.enableEditorAgent).toBe(true)
       expect(codeProperty?.editorDeclarations).toContain('declare const rows')
     })
 

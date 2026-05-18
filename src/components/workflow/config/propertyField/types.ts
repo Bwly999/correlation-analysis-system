@@ -1,3 +1,8 @@
+import type {
+  JsTransformAgentContext,
+  JsTransformAgentSafeDebugResult,
+  WorkflowAiModelProfile,
+} from "@/ai/types";
 import type { NodeProperty } from "@/nodes/types";
 
 export interface PropertyFieldUpstreamFactor {
@@ -16,4 +21,9 @@ export interface PropertyFieldProps {
   configContext?: Record<string, unknown>;
   nodeId?: string | null;
   inputData?: unknown;
+  agentProfile?: WorkflowAiModelProfile | null;
+  agentOutputData?: unknown;
+  agentErrorMessage?: string;
+  buildJsTransformAgentContext?: (() => JsTransformAgentContext) | undefined;
+  onAgentDebugNode?: (mode: "reuse_cached_upstream" | "rerun_upstream") => Promise<JsTransformAgentSafeDebugResult>;
 }

@@ -45,6 +45,7 @@ export const jsTransformNode: NodeDefinition = {
       editorLanguage: 'javascript',
       editorDeclarations: JS_TRANSFORM_DECLARATIONS,
       editorHeight: '560px',
+      enableEditorAgent: true,
       description:
         '可用变量只有 rows。只能写同步 JS，且必须显式 return 数组对象列表。',
     },

@@ -1,5 +1,10 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, type Component } from 'vue'
+import type {
+  JsTransformAgentContext,
+  JsTransformAgentSafeDebugResult,
+  WorkflowAiModelProfile,
+} from '@/ai/types'
 import DatePicker from 'primevue/datepicker'
 import InputNumber from 'primevue/inputnumber'
 import InputText from 'primevue/inputtext'
@@ -11,6 +16,7 @@ import PropertyFieldFileInput from './inputs/PropertyFieldFileInput.vue'
 import PropertyFieldFileColumnTextarea from './inputs/PropertyFieldFileColumnTextarea.vue'
 import PropertyFieldMultiOptionsInput from './inputs/PropertyFieldMultiOptionsInput.vue'
 import PropertyFieldOptionsInput from './inputs/PropertyFieldOptionsInput.vue'
+import PropertyFieldCodeEditorWithAgent from './inputs/PropertyFieldCodeEditorWithAgent.vue'
 import PropertyFieldSelectButton from './inputs/PropertyFieldSelectButton.vue'
 import PropertyFieldTagsInput from './inputs/PropertyFieldTagsInput.vue'
 import PropertyFieldTreeInput from './inputs/PropertyFieldTreeInput.vue'
@@ -33,6 +39,13 @@ const props = defineProps<{
   isOptionsLoading: boolean
   optionsError: string
   isHeroSelectButton: boolean
+  nodeId?: string | null
+  inputData?: unknown
+  agentProfile?: WorkflowAiModelProfile | null
+  agentOutputData?: unknown
+  agentErrorMessage?: string
+  buildJsTransformAgentContext?: (() => JsTransformAgentContext) | undefined
+  onAgentDebugNode?: (mode: 'reuse_cached_upstream' | 'rerun_upstream') => Promise<JsTransformAgentSafeDebugResult>
 }>()
 
 const emit = defineEmits<{
@@ -129,12 +142,28 @@ const rendererDefinitions = computed<Record<NonCollectionPropertyType, PropertyF
       }),
     },
     json: {
-      component: MonacoEditor,
-      buildProps: () => ({
-        height: props.prop.editorHeight || '400px',
-        language: props.prop.editorLanguage || 'json',
-        declarations: props.prop.editorDeclarations,
-      }),
+      component: props.prop.enableEditorAgent ? PropertyFieldCodeEditorWithAgent : MonacoEditor,
+      buildProps: () => {
+        const baseProps = {
+          height: props.prop.editorHeight || '400px',
+          language: props.prop.editorLanguage || 'json',
+          declarations: props.prop.editorDeclarations,
+        }
+
+        if (!props.prop.enableEditorAgent) {
+          return baseProps
+        }
+
+        return {
+          ...baseProps,
+          nodeId: props.nodeId,
+          contextBuilder: props.buildJsTransformAgentContext,
+          profile: props.agentProfile,
+          outputData: props.agentOutputData,
+          errorMessage: props.agentErrorMessage,
+          onDebugNode: props.onAgentDebugNode,
+        }
+      },
     },
     boolean: {
       component: ToggleSwitch,

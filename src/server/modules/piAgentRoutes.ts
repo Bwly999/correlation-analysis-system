@@ -1,16 +1,25 @@
 /**
  * Pi Agent 路由
  */
-import type { WorkflowAiPlanRequest } from '../../ai/types.js'
+import type {
+  JsTransformAgentSessionRequest,
+  JsTransformAgentSafeDebugResult,
+  WorkflowAiPlanRequest,
+} from '../../ai/types.js'
 import type { ServerDependencies } from '../bootstrap/serverDependencies.js'
 import type { HttpDomainHandler } from '../http/types.js'
 import { requireWorkflowUser } from '../http/workflowUser.js'
 import {
   createPiAgentSession,
+  createJsTransformAgentSession,
   sendPiAgentMessage,
+  sendJsTransformAgentMessage,
   subscribePiAgentEvents,
+  subscribeJsTransformAgentEvents,
   getPiAgentSession,
+  getJsTransformAgentSession,
   resolvePiAgentToolResult,
+  resolveJsTransformAgentToolResult,
   syncPiAgentCanvas,
 } from '../piAgent/gateway.js'
 import {
@@ -81,6 +90,14 @@ export const createPiAgentRoutes = (): HttpDomainHandler<ServerDependencies> => 
     return true
   }
 
+  if (method === 'POST' && pathname === '/api/pi-agent/js-transform/sessions') {
+    const user = requireWorkflowUser(context)
+    const body = await context.readJsonBody<JsTransformAgentSessionRequest>()
+    const result = await createJsTransformAgentSession(body, user.id)
+    context.sendJson(200, result)
+    return true
+  }
+
   // POST /api/pi-agent/sessions - 创建会话
   if (method === 'POST' && pathname === '/api/pi-agent/sessions') {
     try {
@@ -99,6 +116,15 @@ export const createPiAgentRoutes = (): HttpDomainHandler<ServerDependencies> => 
     return true
   }
 
+  const jsMessagesMatch = pathname.match(/^\/api\/pi-agent\/js-transform\/sessions\/([^/]+)\/messages$/)
+  if (method === 'POST' && jsMessagesMatch) {
+    const sessionId = decodeURIComponent(jsMessagesMatch[1] ?? '')
+    const body = await context.readJsonBody<{ content: string }>()
+    const result = await sendJsTransformAgentMessage(sessionId, body.content)
+    context.sendJson(200, result)
+    return true
+  }
+
   // POST /api/pi-agent/sessions/:id/messages - 发送消息
   const messagesMatch = pathname.match(/^\/api\/pi-agent\/sessions\/([^/]+)\/messages$/)
   if (method === 'POST' && messagesMatch) {
@@ -106,6 +132,32 @@ export const createPiAgentRoutes = (): HttpDomainHandler<ServerDependencies> => 
     const body = await context.readJsonBody<{ content: string }>()
     const result = await sendPiAgentMessage(sessionId, body.content)
     context.sendJson(200, result)
+    return true
+  }
+
+  const jsEventsMatch = pathname.match(/^\/api\/pi-agent\/js-transform\/sessions\/([^/]+)\/events$/)
+  if (method === 'GET' && jsEventsMatch) {
+    const sessionId = decodeURIComponent(jsEventsMatch[1] ?? '')
+    const session = getJsTransformAgentSession(sessionId)
+    if (!session) {
+      context.sendJson(404, { message: '未找到 Pi Agent 会话' })
+      return true
+    }
+
+    context.startNdjson(200)
+    const unsubscribe = subscribeJsTransformAgentEvents(sessionId, (event) => {
+      context.writeNdjson(event)
+    })
+
+    if (!unsubscribe) {
+      context.response.end()
+      return true
+    }
+
+    context.request.on('close', () => {
+      unsubscribe()
+      context.response.end()
+    })
     return true
   }
 
@@ -135,6 +187,22 @@ export const createPiAgentRoutes = (): HttpDomainHandler<ServerDependencies> => 
       unsubscribe()
       context.response.end()
     })
+    return true
+  }
+
+  const jsToolResultMatch = pathname.match(/^\/api\/pi-agent\/js-transform\/sessions\/([^/]+)\/tool-result$/)
+  if (method === 'POST' && jsToolResultMatch) {
+    const sessionId = decodeURIComponent(jsToolResultMatch[1] ?? '')
+    const body = await context.readJsonBody<{
+      toolCallId: string
+      result: {
+        content: Array<{ type: 'text'; text: string }>
+        details: JsTransformAgentSafeDebugResult
+        isError?: boolean
+      }
+    }>()
+    const ok = resolveJsTransformAgentToolResult(sessionId, body.toolCallId, body.result)
+    context.sendJson(ok ? 200 : 404, { ok })
     return true
   }
 
@@ -175,6 +243,18 @@ export const createPiAgentRoutes = (): HttpDomainHandler<ServerDependencies> => 
       }
       throw error
     }
+    return true
+  }
+
+  const jsSessionDetailMatch = pathname.match(/^\/api\/pi-agent\/js-transform\/sessions\/([^/]+)$/)
+  if (method === 'GET' && jsSessionDetailMatch) {
+    const sessionId = decodeURIComponent(jsSessionDetailMatch[1] ?? '')
+    const session = getJsTransformAgentSession(sessionId)
+    if (!session) {
+      context.sendJson(404, { message: '未找到 Pi Agent 会话' })
+      return true
+    }
+    context.sendJson(200, session)
     return true
   }
 

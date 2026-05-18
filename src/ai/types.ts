@@ -902,3 +902,61 @@ export interface WorkflowAiPlanRequest {
   profile: WorkflowAiModelProfile
   nodeCatalog: WorkflowAiNodeCatalogItem[]
 }
+
+export type JsTransformAgentMode = 'ask' | 'agent'
+
+export interface JsTransformAgentContextFieldSummary {
+  name: string
+  type: string
+  nullable: boolean
+}
+
+export interface JsTransformAgentContext {
+  node: {
+    nodeId: string
+    nodeLabel: string
+    nodeType: 'js-transform'
+  }
+  task: string
+  codeContext: {
+    currentCode: string
+    language: 'javascript'
+    declarations: string
+    constraints: string[]
+  }
+  inputContext: {
+    inputMode: 'single' | 'multiple'
+    rowCount: number
+    sourceSummary: string
+    sampleRows: Array<Record<string, unknown>>
+    schemaSummary: {
+      fields: JsTransformAgentContextFieldSummary[]
+    }
+  }
+  latestDebugContext: {
+    status: 'idle' | 'success' | 'error' | 'waiting_input' | 'stopped'
+    summary: string
+    outputSample: Array<Record<string, unknown>>
+    errorMessage: string
+  }
+  capabilities: {
+    ask: Array<'read_context'>
+    agent: Array<'read_context' | 'update_current_code' | 'debug_current_node'>
+  }
+}
+
+export interface JsTransformAgentSessionRequest {
+  nodeId: string
+  mode: JsTransformAgentMode
+  prompt: string
+  profile: WorkflowAiModelProfile
+  nodeContext: JsTransformAgentContext
+}
+
+export interface JsTransformAgentSafeDebugResult {
+  ok: boolean
+  status: JsTransformAgentContext['latestDebugContext']['status']
+  summary: string
+  outputSample: Array<Record<string, unknown>>
+  errorMessage: string
+}

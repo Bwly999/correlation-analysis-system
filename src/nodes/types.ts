@@ -64,6 +64,7 @@ export interface NodeProperty {
   editorLanguage?: 'json' | 'javascript' | 'typescript'
   editorDeclarations?: string
   editorHeight?: string
+  enableEditorAgent?: boolean
   options?: any[]
   properties?: NodeProperty[]
   required?: boolean

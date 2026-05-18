@@ -10,6 +10,7 @@ import {
 import type { Edge } from "@vue-flow/core";
 import { Loader2, Bug, HelpCircle, Square } from "lucide-vue-next";
 import { useWorkflowStore } from "@/stores/workflowStore";
+import { usePiAgentConfigStore } from "@/stores/piAgentConfigStore";
 import { getNodeDefinition } from "@/nodes/registry";
 import {
   createJsonResult,
@@ -37,6 +38,7 @@ import {
   getResultSchemaFields,
   normalizeWorkflowResult,
 } from "./resultView";
+import { buildJsTransformAgentContext } from "@/stores/jsTransformAgentContext";
 import { useHorizontalResize } from "./composables/useHorizontalResize";
 import { useVerticalResize } from "./composables/useVerticalResize";
 
@@ -53,6 +55,7 @@ const emit = defineEmits<{
   close: [];
 }>();
 const store = useWorkflowStore();
+const piAgentConfigStore = usePiAgentConfigStore();
 const toast = useToast();
 const workflowNodes = computed<WorkflowNode[]>(
   () => store.nodes as WorkflowNode[],
@@ -547,6 +550,37 @@ const currentNodeError = computed(() =>
     ? node.value.data.error
     : "",
 );
+const isJsTransformNode = computed(
+  () => nodeDefinition.value?.name === "js-transform",
+);
+const jsTransformDeclarations = computed(
+  () =>
+    nodeDefinition.value?.properties.find((property) => property.name === "code")
+      ?.editorDeclarations ?? "",
+);
+const jsTransformAgentContextBuilder = computed(() => {
+  if (!isJsTransformNode.value || !node.value) return undefined;
+
+  const currentNode = node.value;
+
+  return () =>
+    buildJsTransformAgentContext({
+      nodeId: currentNode.id,
+      nodeLabel: currentNode.data.label,
+      nodeType: "js-transform",
+      currentCode: String(config.value.code ?? ""),
+      declarations: jsTransformDeclarations.value,
+      inputData: inputData.value,
+      outputData: currentNode.data.output,
+      errorMessage: currentNodeError.value,
+      status:
+        currentNode.data.status === "error"
+          ? "error"
+          : currentNode.data.status === "success"
+            ? "success"
+            : "idle",
+    });
+});
 const isCurrentNodeDebugRunning = computed(
   () =>
     !!node.value &&
@@ -578,6 +612,45 @@ const runCurrentNode = async (rerunUpstream = false) => {
     store.refreshUnsavedChanges();
     await store.executeNode(node.value.id, true, "single", { rerunUpstream });
   }
+};
+
+const debugNodeForAgent = async (
+  mode: "reuse_cached_upstream" | "rerun_upstream",
+) => {
+  if (!node.value) {
+    return {
+      ok: false,
+      status: "error" as const,
+      summary: "当前节点不存在，无法调试",
+      outputSample: [],
+      errorMessage: "当前节点不存在",
+    };
+  }
+
+  node.value.data.config = { ...config.value };
+  const result = await store.debugNodeAndCollect(node.value.id, {
+    rerunUpstream: mode === "rerun_upstream",
+  });
+  const outputRows = getResultRows(result.output);
+
+  return {
+    ok: result.ok,
+    status: result.status,
+    summary:
+      outputRows.length > 0
+        ? `当前节点调试成功，输出 ${outputRows.length} 行`
+        : result.ok
+          ? "当前节点调试成功"
+          : currentNodeError.value || "当前节点调试失败",
+    outputSample: outputRows.slice(0, 3).map((row) =>
+      Object.fromEntries(
+        Object.keys(row)
+          .slice(0, 50)
+          .map((key) => [key, row[key]]),
+      ),
+    ),
+    errorMessage: result.ok ? "" : currentNodeError.value || "当前节点调试失败",
+  };
 };
 
 const saveConfig = () => {
@@ -1015,7 +1088,6 @@ onBeforeUnmount(() => {
                     <HelpCircle :size="14" class="text-blue-500" />
                   </div>
                 </div>
-
                 <ConfigForm
                   v-model:config="config"
                   :properties="staticProperties"
@@ -1023,6 +1095,11 @@ onBeforeUnmount(() => {
                   :upstream-factors="upstreamFactors"
                   :node-id="node?.id"
                   :input-data="inputData"
+                  :agent-profile="piAgentConfigStore.selectedProfile"
+                  :agent-output-data="node?.data.output"
+                  :agent-error-message="currentNodeError"
+                  :build-js-transform-agent-context="jsTransformAgentContextBuilder"
+                  :on-agent-debug-node="debugNodeForAgent"
                   @save="saveConfig"
                 />
               </div>

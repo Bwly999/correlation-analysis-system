@@ -164,6 +164,11 @@ const updateSubItem = (index: number, subPropName: string, value: unknown) => {
             :config-context="item"
             :node-id="nodeId"
             :input-data="inputData"
+            :agent-profile="agentProfile"
+            :agent-output-data="agentOutputData"
+            :agent-error-message="agentErrorMessage"
+            :build-js-transform-agent-context="buildJsTransformAgentContext"
+            :on-agent-debug-node="onAgentDebugNode"
             @update:model-value="(value) => updateSubItem(Number(idx), subProp.name, value)"
             @save="emit('save')"
           />
@@ -190,6 +195,13 @@ const updateSubItem = (index: number, subPropName: string, value: unknown) => {
       :is-options-loading="isOptionsLoading"
       :options-error="optionsError"
       :is-hero-select-button="isHeroSelectButton"
+      :node-id="nodeId"
+      :input-data="inputData"
+      :agent-profile="agentProfile"
+      :agent-output-data="agentOutputData"
+      :agent-error-message="agentErrorMessage"
+      :build-js-transform-agent-context="buildJsTransformAgentContext"
+      :on-agent-debug-node="onAgentDebugNode"
     />
 
     <div
