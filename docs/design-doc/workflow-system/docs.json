@@ -1,0 +1,46 @@
+{
+  "navigation": [
+    {
+      "title": "概览",
+      "items": [
+        { "title": "系统概述", "path": "index.md" },
+        { "title": "节点体系", "path": "节点体系.md" },
+        { "title": "连接规则", "path": "连接规则.md" }
+      ]
+    },
+    {
+      "title": "核心协议",
+      "items": [
+        { "title": "节点定义协议", "path": "节点定义协议.md" },
+        { "title": "结果协议", "path": "结果协议.md" },
+        { "title": "多输入协议", "path": "多输入协议.md" }
+      ]
+    },
+    {
+      "title": "执行与持久化",
+      "items": [
+        { "title": "执行引擎", "path": "执行引擎.md" },
+        { "title": "持久化与历史快照", "path": "持久化与历史快照.md" }
+      ]
+    },
+    {
+      "title": "展示与交互",
+      "items": [
+        { "title": "结果展示链路", "path": "结果展示链路.md" }
+      ]
+    },
+    {
+      "title": "基础设施",
+      "items": [
+        { "title": "算法出口", "path": "算法出口.md" },
+        { "title": "性能与构建策略", "path": "性能与构建策略.md" }
+      ]
+    },
+    {
+      "title": "维护",
+      "items": [
+        { "title": "维护原则", "path": "维护原则.md" }
+      ]
+    }
+  ]
+}

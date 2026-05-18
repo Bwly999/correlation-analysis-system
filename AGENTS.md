@@ -1,114 +1,128 @@
-﻿# 多因子相关性分析系统 - Agent 指南
+﻿# AGENTS.md
 
-本仓库是一个多因子相关性分析系统，包含 n8n 风格的工作流编辑器、声明式节点系统和标准化结果协议。
+This file provides guidance to LLM when working with code in this repository.
 
-## 1. 工作流系统文档入口
+## 项目概述
 
-与“工作流系统”直接相关的内容，按以下文档分工维护：
+多因子相关性分析系统 — 一个 n8n 风格的工作流编辑器 + 执行引擎 + AI 辅助分析平台。用户通过拖拽节点构建分析流程，系统执行节点并标准化输出结果。
 
-- `./工作流系统.md`：系统总览、协议、执行链路、持久化、viewer、切包策略
-- `./工作流节点说明.md`：节点清单、节点职责、节点创建规则、节点实现规范
+## 技术栈
 
-要求：
+- **核心框架**: Vue 3 (Composition API, `<script setup>`) + TypeScript
+- **工作流引擎**: Vue Flow (画布、节点、连线)
+- **UI 组件库**: PrimeVue v4
+- **样式方案**: Tailwind CSS v4
+- **状态管理**: Pinia
+- **可视化**: ECharts (vue-echarts)
+- **构建工具**: Vite
+- **测试**: Vitest + jsdom + @vue/test-utils
+- **代码质量**: ESLint + Prettier
+- **服务端**: 纯 Node HTTP server (无 Express), esbuild 打包, tsx 开发
+- **数据库**: MySQL (production via Drizzle ORM), LowDB/localStorage (dev)
+- **AI Agent 核心**: @earendil-works/pi-coding-agent (Pi Agent SDK)
+- **工作流 AI 辅助**: @ai-sdk/openai-compatible + ai (Vercel AI SDK)
 
-- 若工作流系统实现发生变化，先更新 `./工作流系统.md`
-- 若涉及节点新增、节点分类调整、节点属性设计或节点规范变化，同步更新 `./工作流节点说明.md`
-- 本文件只保留约束与入口，不重复维护完整工作流细节
-- 当需要理解系统协议或执行链路时，优先阅读 `./工作流系统.md`
-- 当需要设计、重构或新增节点时，优先阅读 `./工作流节点说明.md`
-
-## 2. 项目技术栈
-
-- 核心框架：Vue 3（Composition API）+ TypeScript
-- 工作流引擎：Vue Flow
-- UI 组件库：PrimeVue v4
-- 样式方案：Tailwind CSS v4
-- 状态管理：Pinia
-- 可视化分析：ECharts
-
-## 3. 开发与测试命令
+## 常用命令
 
 ```bash
-pnpm install
-pnpm dev
-pnpm test:unit
-pnpm build
+pnpm dev            # 前端 Vite 开发服务器
+pnpm build          # 前端 + 服务端构建
+pnpm test:unit      # 运行所有单元测试
+pnpm type-check     # vue-tsc 类型检查
+pnpm lint:fix       # ESLint 自动修复
 ```
 
-补充说明：
+### 运行单个测试
 
-- 提交前至少应跑与改动相关的测试
-- 若改动影响工作流链路、节点协议、viewer 或持久化，默认需要补跑 `pnpm test:unit` 与 `pnpm build`
-- 纯 UI / 视觉样式优化默认不要求执行 TDD 测试；此类改动优先做最小必要验证，例如 `pnpm build`、局部交互检查或定向界面核对
+```bash
+pnpm test:unit -- <test-pattern>
+# 例如: pnpm test:unit -- workflowStore
+```
 
-## 3.1 PrimeVue 文档入口
+## 项目架构
 
-PrimeVue 相关参考文档统一放在 `./ref/primeVue/` 目录下，按以下方式使用：
+### 目录结构
 
-- `./ref/primeVue/llms.txt`：PrimeVue 文档总索引，适合先快速定位指南页、组件页与专题页
-- `./ref/primeVue/llms-full.txt`：PrimeVue 完整文档导出，适合在已知主题后继续查找完整说明、示例与配置细节
-- `./ref/primeVue/multiSelect.txt`：`MultiSelect` 相关专题补充资料
+```
+├── src/                          # 前端源码
+│   ├── nodes/                    # 节点系统 (核心)
+│   │   ├── types.ts              # NodeDefinition 接口定义
+│   │   ├── registry.ts           # 节点注册表 (所有节点汇集处)
+│   │   ├── result.ts             # NodeResult 标准结果协议
+│   │   ├── libraryGroups.ts      # 节点库分组
+│   │   ├── definitions/          # 各节点具体实现 (~30 个节点)
+│   │   └── fileImport/           # 文件导入逻辑
+│   ├── components/
+│   │   ├── workflow/             # 工作流画布组件
+│   │   │   ├── config/           # 节点配置面板
+│   │   │   ├── viewers/          # 结果预览 viewer 组件
+│   │   │   └── composables/      # 拖拽缩放等组合式函数
+│   │   ├── agent/                # Agent 可观测性面板
+│   │   └── piAgent/              # Pi Agent (AI 编码助手) 面板
+│   ├── stores/                   # Pinia 状态管理
+│   │   ├── workflowStore.ts      # 工作流核心 store (~76KB)
+│   │   ├── piAgentStore.ts
+│   │   └── ...
+│   ├── server/                   # 服务端源码 (前后端同仓)
+│   │   ├── app.ts                # 服务端入口 (createServerHandler)
+│   │   ├── http/                 # HTTP 基础设施 (router, handler, CORS, auth)
+│   │   ├── modules/              # 路由模块
+│   │   │   ├── storageRoutes.ts      # 工作流 CRUD
+│   │   │   ├── workflowAiRoutes.ts   # 工作流 AI 辅助
+│   │   │   ├── piAgentRoutes.ts      # Pi Agent (AI Agent)
+│   │   │   └── analysisRoutes.ts     # 分析代理
+│   │   ├── storageDb/            # MySQL 存储实现 (Drizzle)
+│   │   ├── workflowAi/           # 工作流 AI 编排 (LLM 辅助建工作流)
+│   │   ├── piAgent/              # Pi Agent 服务端 (AI Agent 核心)
+│   │   │   └── tools/            # 原子工作流工具集
+│   │   ├── opencode/             # OpenCode/MCP 基础设施 (Pi Agent 复用)
+│   │   └── bootstrap/            # 依赖注入组合根
+│   ├── workflow/                 # 工作流模板 & 连接规则
+│   │   ├── templates.ts           # 模板定义 (相关性排查/因子筛选/变量解释/看板对比)
+│   │   └── connectionRules.ts     # 连线规则
+│   ├── ai/                       # AI 辅助 (draft, recipes, schema inspector)
+│   ├── api/                      # API 客户端
+│   ├── services/                 # 业务服务
+│   ├── shared/                   # 前端/服务端共享代码
+│   ├── utils/                    # 工具函数
+│   │   └── storage/              # 存储层抽象 (localStorage / 服务端)
+│   └── style/                    # 全局样式
+├── server/                       # 服务端启动入口
+│   └── index.ts
+├── scripts/                      # 构建/发布/评估脚本
+└── test/                         # 测试 mock 等
+```
 
-要求：
+### 工作流系统
 
-- 涉及 PrimeVue 用法、属性、事件、插槽、样式方案、表单能力、Pass Through、Tailwind 集成时，优先参考 `./ref/primeVue/` 下文档
-- 推荐先看 `./ref/primeVue/llms.txt`，确认目标主题后再到 `./ref/primeVue/llms-full.txt` 搜索完整正文
-- 若索引内容与完整正文存在信息粒度差异，以 `./ref/primeVue/llms-full.txt` 为准
-- 修改基于 PrimeVue 的实现时，应先核对仓库内已有封装、样式约束和中文文案约束，不要直接照搬外部示例
+包含系统协议、执行链路、持久化、viewer 注册，必要时查阅 `docs/design-doc/workflow-system/`
 
-## 4. 开发约束
+### 节点系统
+包含节点清单、创建规则、实现规范、属性设计，必要时查阅 `docs/design-doc/workflow-nodes/`
 
-### 4.1 文案与交互
+### Pi Agent (AI Agent 主系统)
 
+系统的 AI Agent 核心，基于 `@earendil-works/pi-coding-agent` SDK 构建：
+必要时查阅 `docs/design-doc/Agent系统.md`
+
+## 关键约束
+
+### UI/UX
 - 所有用户可见文案必须使用中文
-- 大模型写入或修改中文内容时必须特别注意编码正确性，严禁产生乱码；若发现乱码，必须先修复后再提交
-- 写入任意文件时只要涉及中文内容，必须在写入后检查是否出现乱码；若发现乱码，必须先修复再继续后续工作
-- 工作流、节点、弹窗、提示语、占位符都应保持中文一致性
-- 若新增工作流相关能力，请同步检查 `工作流系统.md` 与 `工作流节点说明.md` 是否需要更新
+- 主品牌色 Slate-900 (#0f172a), 强调色 Blue-600 (#2563eb)
+- 视觉方向: 极简现代 SaaS
+- 样式编写尽可能使用tailwindcss v4
+- 纯 UI / 视觉样式优化默认不要求执行 TDD 测试；此类改动优先做最小必要验证
 
-### 4.2 UI / UX 约束
+### 工作流开发
+- 新节点分类、属性、命名必须符合 `docs/design-doc/workflow-nodes/` 协议
+- 新结果类型/viewer/多输入节点必须符合 `docs/design-doc/workflow-system/` 协议
+- 涉及连接规则、执行顺序、持久化、节点地图变更 → 同步更新对应文档
 
-- 视觉方向保持“极简现代 SaaS”
-- 主品牌色使用 `Slate-900`（#0f172a）
-- 功能强调色使用 `Blue-600`（#2563eb）
-- 严禁使用紫色 / 靛蓝色作为主视觉强调
-- 画布、节点、连接点等基础规范如有疑问，直接查 `./工作流系统.md`
+### Git规范
+- 禁止使用 worktree；如使用则合并时必须 rebase 不能 merge
 
-### 4.3 工作流实现约束
-
-- 新节点默认遵循当前标准结果协议，不新增旧版执行输入桥
-- 新节点的类别、属性、命名、输入输出设计，必须符合 `./工作流节点说明.md` 中的创建规则与规范
-- 新 viewer、新结果类型、新多输入节点，必须与 `./工作流系统.md` 中描述的协议保持一致
-- 任何影响连接规则、执行顺序、历史模式、持久化快照的变更，都必须同步更新 `./工作流系统.md`
-- 任何影响节点地图、节点职责、节点属性设计的变更，都必须同步更新 `./工作流节点说明.md`
-
-## 5. 提交规范
-
-- Git commit message 必须使用中文
-- 准备提交时必须同步在最上方更新 `CHANGELOG.md`
-- 尽量保持原子化提交，一个 commit 只做一类事情
-
-## 6. 连接规则摘要
-
-这里只保留摘要，完整说明见 `./工作流系统.md` 与 `./工作流节点说明.md`：
-
-- Trigger -> Action / Terminal
-- Action -> Action / Terminal
-- Terminal 不允许继续输出连线
-- 单输入为默认规则，多输入能力由节点定义显式声明
-
-## 7. 推荐工作方式
-
-处理工作流相关任务时，建议按以下顺序进行：
-
-1. 先阅读 `./工作流系统.md`
-2. 若任务涉及节点，再阅读 `./工作流节点说明.md`
-3. 再查看对应实现文件
-4. 修改代码
-5. 同步更新相关文档
-6. 最后更新 `CHANGELOG.md`（若准备提交）
-
-如果任务明确涉及节点流、节点协议、节点设计或工作流架构，但没有同步更新对应文档，应视为未完成。
-
-## 8.Git worktree限制
-除非特殊说明，禁止使用worktree开发，如果使用worktree开发，合并时也必须使用rebase，不能merge
+### 提交规范
+- Commit message 使用中文
+- commit 信息中不要出现 claude 相关的内容
+- 尽量原子化，一个 commit 只做一类事情

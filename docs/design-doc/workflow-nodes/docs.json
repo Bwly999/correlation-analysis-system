@@ -1,0 +1,24 @@
+{
+  "navigation": [
+    {
+      "title": "概览",
+      "items": [
+        { "title": "文档入口", "path": "index.md" },
+        { "title": "节点清单", "path": "节点清单.md" }
+      ]
+    },
+    {
+      "title": "协议与设计",
+      "items": [
+        { "title": "节点定义与属性", "path": "节点定义与属性.md" },
+        { "title": "创建新节点", "path": "创建新节点.md" }
+      ]
+    },
+    {
+      "title": "附录",
+      "items": [
+        { "title": "历史补充说明", "path": "附录-历史补充说明.md" }
+      ]
+    }
+  ]
+}
