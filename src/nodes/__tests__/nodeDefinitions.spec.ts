@@ -1755,6 +1755,7 @@ describe('Node Definitions Execution Logic', () => {
       expect(legacy.report.sections[0].help?.cautions?.join(' ')).toContain('p >= 0.05')
       expect(legacy.report.sections[1].key).toBe('matrix')
       expect(legacy.report.sections[1].help?.howToRead[0]).toContain('颜色')
+      expect(legacy.report.sections[1].option.xAxis.axisLabel.rotate).toBe(40)
       expect(legacy.metrics.method).toBe('pearson')
       expect(result.preview?.viewer).toBe('report-viewer')
     })
@@ -1821,8 +1822,10 @@ describe('Node Definitions Execution Logic', () => {
       )
 
       expect(separated.report.sections[1].option.xAxis.data).toEqual(['f1'])
+      expect(separated.report.sections[1].option.xAxis.axisLabel.rotate).toBe(0)
       expect(separated.report.sections[2].option.yAxis.data).toEqual(['f1', 'f2'])
       expect(legacyFallback.report.sections[1].option.xAxis.data).toEqual(['f1'])
+      expect(legacyFallback.report.sections[1].option.xAxis.axisLabel.rotate).toBe(0)
       expect(legacyFallback.report.sections[2].option.yAxis.data).toEqual(['f1'])
     })
 

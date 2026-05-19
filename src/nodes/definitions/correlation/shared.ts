@@ -58,6 +58,10 @@ type CorrelationMethodMeta = {
 
 export type CorrelationMethod = 'pearson' | 'spearman' | 'kendall'
 
+type ExecuteCorrelationAnalysisOptions = {
+  heatmapXAxisLabelRotate?: number
+}
+
 const EPSILON = 1e-12
 const CORRELATION_NEGATIVE_COLOR = '#60a5fa'
 const CORRELATION_POSITIVE_COLOR = '#991b1b'
@@ -647,6 +651,7 @@ export const executeCorrelationAnalysis = async (
   method: CorrelationMethod,
   input: unknown,
   config: Record<string, unknown>,
+  options: ExecuteCorrelationAnalysisOptions = {},
 ) => {
   const sourceRows = extractTableRows(input)
   if (!sourceRows || sourceRows.length === 0) {
@@ -837,7 +842,10 @@ export const executeCorrelationAnalysis = async (
     xAxis: {
       type: 'category',
       data: heatmapXFields,
-      axisLabel: { interval: 0, rotate: heatmapXFields.length > 8 ? 40 : 0 },
+      axisLabel: {
+        interval: 0,
+        rotate: options.heatmapXAxisLabelRotate ?? (heatmapXFields.length > 8 ? 40 : 0),
+      },
     },
     yAxis: {
       type: 'category',

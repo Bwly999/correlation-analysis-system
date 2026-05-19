@@ -16,8 +16,8 @@ type CorrelationAnalysisConfig = {
   rankingTopN?: number
 }
 
-const DEFAULT_METHOD: CorrelationMethod = 'pearson'
-const ALL_METHODS: CorrelationMethod[] = ['pearson', 'spearman', 'kendall']
+const DEFAULT_METHOD: CorrelationMethod = 'spearman'
+const ALL_METHODS: CorrelationMethod[] = ['spearman', 'pearson', 'kendall']
 
 const normalizeMethod = (config: CorrelationAnalysisConfig): CorrelationMethod => {
   if (config.method && ALL_METHODS.includes(config.method)) {
@@ -100,7 +100,9 @@ export const correlationAnalysisNode: NodeDefinition<unknown, CorrelationAnalysi
   ],
   execute: async (input, config) => {
     const method = normalizeMethod(config)
-    const result = (await executeCorrelationAnalysis(method, input, config)) as NodeResult<Record<string, any>>
+    const result = (await executeCorrelationAnalysis(method, input, config, {
+      heatmapXAxisLabelRotate: 40,
+    })) as NodeResult<Record<string, any>>
     return createReportResult(
       {
         ...(result.payload ?? {}),
