@@ -8,6 +8,7 @@ import {
   createJsTransformAgentSession,
   resolveJsTransformAgentToolResult,
   sendJsTransformAgentMessage,
+  updateJsTransformAgentMode,
   streamJsTransformAgentEvents,
 } from '@/services/jsTransformAgentClient'
 import type { WorkflowAiModelProfile } from '@/ai/types'
@@ -43,6 +44,7 @@ export function useJsTransformAgent() {
   const currentContext = ref<JsTransformAgentContext | null>(null)
   const currentProfile = ref<WorkflowAiModelProfile | null>(null)
   const latestDebugResult = ref<JsTransformAgentSafeDebugResult | null>(null)
+  const externalEventHandler = ref<((event: any) => Promise<boolean> | boolean) | null>(null)
 
   const canSend = computed(() => inputText.value.trim().length > 0 && status.value !== 'connecting')
 
@@ -53,6 +55,24 @@ export function useJsTransformAgent() {
     errorMessage.value = ''
     inputText.value = ''
     latestDebugResult.value = null
+  }
+
+  const switchMode = async (input: {
+    mode: JsTransformAgentMode
+    nodeId: string
+    context: JsTransformAgentContext
+    profile: WorkflowAiModelProfile
+  }) => {
+    mode.value = input.mode
+
+    if (!sessionId.value) return true
+
+    const result = await updateJsTransformAgentMode(sessionId.value, input.mode)
+    if (!result.ok) {
+      throw new Error('切换 JS 节点 AI 模式失败')
+    }
+
+    return true
   }
 
   const ensureSession = async (input: {
@@ -154,6 +174,13 @@ export function useJsTransformAgent() {
   }
 
   const handleEvent = async (event: any) => {
+    if (externalEventHandler.value) {
+      const handled = await externalEventHandler.value(event)
+      if (handled) {
+        return
+      }
+    }
+
     switch (event.type) {
       case 'session.status':
         status.value = event.status
@@ -237,6 +264,8 @@ export function useJsTransformAgent() {
     currentContext,
     currentProfile,
     latestDebugResult,
+    externalEventHandler,
+    switchMode,
     ensureSession,
     sendMessage,
     handleToolResult,

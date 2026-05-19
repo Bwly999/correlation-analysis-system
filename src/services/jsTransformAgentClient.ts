@@ -57,6 +57,21 @@ export const sendJsTransformAgentMessage = async (
   return await readJsonOrThrow<JsTransformAgentSendMessageResponse>(response, '发送 JS 节点 AI 消息失败')
 }
 
+export const updateJsTransformAgentMode = async (
+  sessionId: string,
+  mode: 'ask' | 'agent',
+) => {
+  const response = await fetchWithWorkflowContext(`/api/pi-agent/js-transform/sessions/${sessionId}/mode`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ mode }),
+  })
+
+  return await readJsonOrThrow<{ ok: boolean }>(response, '切换 JS 节点 AI 模式失败')
+}
+
 export const streamJsTransformAgentEvents = async (
   sessionId: string,
   options: { onEvent?: (event: any) => void } = {},

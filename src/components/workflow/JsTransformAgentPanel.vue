@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, onUnmounted, ref, watch } from 'vue'
 import { Bot, CornerDownLeft, MessageSquarePlus, Sparkles, Wrench } from 'lucide-vue-next'
 import type {
   JsTransformAgentContext,
@@ -23,6 +23,8 @@ const props = defineProps<{
 }>()
 
 const agent = useJsTransformAgent()
+const messagesScrollRef = ref<HTMLElement | null>(null)
+const stickToBottom = ref(true)
 
 const statusLabel = computed(() => {
   switch (agent.status.value) {
@@ -45,17 +47,28 @@ const placeholder = computed(() =>
     : 'Agent 模式：描述你想实现的转换逻辑，助手会改代码并调试当前节点',
 )
 
+const inputTextProxy = computed({
+  get: () => agent.inputText.value,
+  set: (value: string) => {
+    agent.inputText.value = value
+  },
+})
+
 const syncContext = () => {
   agent.currentContext.value = props.context
-  if (agent.currentProfile.value?.id !== props.profile.id) {
+  if (!agent.sessionId.value && agent.currentProfile.value?.id !== props.profile.id) {
     agent.reset()
   }
   agent.currentProfile.value = props.profile
 }
 
 const handleSend = async () => {
+  const content = agent.inputText.value.trim()
+  if (!content) return
+
   syncContext()
   await agent.sendMessage({
+    prompt: content,
     mode: agent.mode.value,
     nodeId: props.nodeId,
     context: props.context,
@@ -68,61 +81,153 @@ const handleReset = () => {
   agent.mode.value = 'ask'
 }
 
-const handleToolExecute = async (event: any) => {
-  if (event.toolName === 'js_update_code') {
-    const nextCode = typeof event.params?.code === 'string' ? event.params.code : ''
-    props.onApplyCode(nextCode)
-    await agent.handleToolResult({
-      toolCallId: event.toolCallId,
-      result: {
-        content: [{ type: 'text', text: '当前代码已更新到编辑器' }],
-        details: {
-          ok: true,
-          status: 'success',
-          summary: '当前代码已更新到编辑器',
-          outputSample: [],
-          errorMessage: '',
-        },
-      },
-    })
-    return
-  }
+const handleModeSwitch = async (nextMode: 'ask' | 'agent') => {
+  if (agent.mode.value === nextMode) return
 
-  if (event.toolName === 'js_debug_node') {
-    const result = await props.onDebugNode(event.params?.mode === 'rerun_upstream' ? 'rerun_upstream' : 'reuse_cached_upstream')
-    await agent.handleToolResult({
-      toolCallId: event.toolCallId,
-      result: {
-        content: [{ type: 'text', text: result.summary }],
-        details: result,
-        isError: !result.ok,
-      },
+  const currentText = agent.inputText.value
+  agent.mode.value = nextMode
+
+  try {
+    await agent.switchMode({
+      mode: nextMode,
+      nodeId: props.nodeId,
+      context: props.context,
+      profile: props.profile,
     })
-    return
+  } catch (error: any) {
+    agent.mode.value = nextMode === 'ask' ? 'agent' : 'ask'
+    agent.errorMessage.value = error?.message || '切换模式失败'
+    agent.inputText.value = currentText
   }
 }
 
-const bindEventPump = async () => {
-  const originalHandleEvent = agent.handleEvent
-  agent.handleEvent = async (event: any) => {
-    if (event.type === 'tool.execute') {
-      await handleToolExecute(event)
+const isNearBottom = () => {
+  const el = messagesScrollRef.value
+  if (!el) return true
+
+  return el.scrollHeight - el.scrollTop - el.clientHeight < 48
+}
+
+const scrollToBottom = async () => {
+  await nextTick()
+  const el = messagesScrollRef.value
+  if (!el) return
+  el.scrollTop = el.scrollHeight
+}
+
+const handleMessagesScroll = () => {
+  stickToBottom.value = isNearBottom()
+}
+
+const handleToolExecute = async (event: any) => {
+  try {
+    if (event.toolName === 'js_update_code') {
+      const nextCode = typeof event.params?.code === 'string' ? event.params.code : ''
+      props.onApplyCode(nextCode)
+      await agent.handleToolResult({
+        toolCallId: event.toolCallId,
+        result: {
+          content: [{ type: 'text', text: '当前代码已更新到编辑器' }],
+          details: {
+            ok: true,
+            status: 'success',
+            summary: '当前代码已更新到编辑器',
+            outputSample: [],
+            errorMessage: '',
+          },
+        },
+      })
       return
     }
-    await originalHandleEvent(event)
+
+    if (event.toolName === 'js_debug_node') {
+      const result = await props.onDebugNode(event.params?.mode === 'rerun_upstream' ? 'rerun_upstream' : 'reuse_cached_upstream')
+      await agent.handleToolResult({
+        toolCallId: event.toolCallId,
+        result: {
+          content: [{ type: 'text', text: result.summary }],
+          details: result,
+          isError: !result.ok,
+        },
+      })
+      return
+    }
+  } catch (error: any) {
+    const message = error?.message || '工具执行失败'
+    await agent.handleToolResult({
+      toolCallId: event.toolCallId,
+      result: {
+        content: [{ type: 'text', text: message }],
+        details: {
+          ok: false,
+          status: 'error',
+          summary: message,
+          outputSample: [],
+          errorMessage: message,
+        },
+        isError: true,
+      },
+    })
   }
 }
 
-void bindEventPump()
+agent.externalEventHandler.value = async (event: any) => {
+  if (event.type !== 'tool.execute') {
+    return false
+  }
+
+  await handleToolExecute(event)
+  return true
+}
+
+watch(
+  () => agent.messages.value.map((message) => `${message.id}:${message.content}:${message.thinking}:${message.toolCalls.map((item) => `${item.id}:${item.status}`).join(',')}`).join('|'),
+  async () => {
+    if (stickToBottom.value) {
+      await scrollToBottom()
+    }
+  },
+  { flush: 'post' },
+)
+
+watch(
+  () => agent.errorMessage.value,
+  async () => {
+    if (stickToBottom.value) {
+      await scrollToBottom()
+    }
+  },
+)
+
+onMounted(() => {
+  scrollToBottom()
+})
+
+onUnmounted(() => {
+  const el = messagesScrollRef.value
+  if (el) {
+    el.removeEventListener('scroll', handleMessagesScroll)
+  }
+})
+
+onBeforeUnmount(() => {
+  if (agent.externalEventHandler.value) {
+    agent.externalEventHandler.value = null
+  }
+  const el = messagesScrollRef.value
+  if (el) {
+    el.removeEventListener('scroll', handleMessagesScroll)
+  }
+})
 </script>
 
 <template>
   <section
     data-testid="js-transform-agent-panel"
-    class="overflow-hidden rounded-[24px] border border-blue-200 bg-[radial-gradient(circle_at_top,_rgba(37,99,235,0.08),_transparent_26%),linear-gradient(180deg,_#f8fbff_0%,_#eef6ff_100%)] shadow-[0_24px_44px_-34px_rgba(37,99,235,0.35)]"
+    class="flex h-full min-h-0 flex-col overflow-hidden rounded-[24px] border border-blue-200 bg-[radial-gradient(circle_at_top,_rgba(37,99,235,0.08),_transparent_26%),linear-gradient(180deg,_#f8fbff_0%,_#eef6ff_100%)] shadow-[0_24px_44px_-34px_rgba(37,99,235,0.35)]"
   >
-    <div class="flex items-start justify-between border-b border-blue-100 bg-white/75 px-4 py-4 backdrop-blur">
-      <div class="flex min-w-0 items-start gap-3">
+    <div class="shrink-0 flex items-start justify-between gap-3 border-b border-blue-100 bg-white/75 px-4 py-4 pr-16 backdrop-blur">
+      <div class="flex min-w-0 flex-1 items-start gap-3">
         <div class="flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-slate-950 text-blue-300">
           <Bot :size="18" />
         </div>
@@ -152,7 +257,11 @@ void bindEventPump()
         {{ statusLabel }}
       </span>
     </div>
-    <div class="max-h-[320px] overflow-y-auto px-4 py-4">
+    <div
+      ref="messagesScrollRef"
+      class="min-h-0 flex-1 overflow-y-auto px-4 py-4 custom-scrollbar"
+      @scroll="handleMessagesScroll"
+    >
       <div
         v-for="message in agent.messages.value"
         :key="message.id"
@@ -190,10 +299,10 @@ void bindEventPump()
       </div>
     </div>
 
-    <div class="border-t border-blue-100/80 bg-white/85 px-4 py-4">
+    <div class="shrink-0 border-t border-blue-100/80 bg-white/85 px-4 py-4">
       <div class="rounded-[22px] border border-slate-200 bg-white">
         <textarea
-          v-model="agent.inputText.value"
+          v-model="inputTextProxy"
           class="min-h-[88px] w-full resize-none rounded-t-[22px] border-0 bg-transparent px-4 py-3.5 text-[13px] leading-6 text-slate-800 outline-none placeholder:text-slate-400"
           :placeholder="placeholder"
           rows="3"
@@ -216,7 +325,7 @@ void bindEventPump()
                 :class="agent.mode.value === 'ask'
                   ? 'bg-slate-950 text-white shadow-sm'
                   : 'text-slate-600 hover:text-blue-700'"
-                @click="agent.mode.value = 'ask'"
+                @click="void handleModeSwitch('ask')"
               >
                 Ask
               </button>
@@ -226,7 +335,7 @@ void bindEventPump()
                 :class="agent.mode.value === 'agent'
                   ? 'bg-blue-600 text-white shadow-sm'
                   : 'text-slate-600 hover:text-blue-700'"
-                @click="agent.mode.value = 'agent'"
+                @click="void handleModeSwitch('agent')"
               >
                 Agent
               </button>
@@ -243,7 +352,7 @@ void bindEventPump()
             @click="handleSend"
           >
             <Wrench v-if="agent.mode.value === 'agent'" :size="14" />
-            <span>{{ agent.mode.value === 'agent' ? '开始闭环' : '发送' }}</span>
+            <span>{{ '发送' }}</span>
           </button>
         </div>
       </div>

@@ -7,6 +7,7 @@ const {
   sessionFollowUpMock,
   sessionSubscribeMock,
   sessionDisposeMock,
+  agentStateMock,
   defaultResourceLoaderMock,
   loaderReloadMock,
   sessionManagerInMemoryMock,
@@ -18,6 +19,7 @@ const {
   sessionFollowUpMock: vi.fn(),
   sessionSubscribeMock: vi.fn(),
   sessionDisposeMock: vi.fn(),
+  agentStateMock: { tools: [], systemPrompt: '' },
   defaultResourceLoaderMock: vi.fn(),
   loaderReloadMock: vi.fn(),
   sessionManagerInMemoryMock: vi.fn(),
@@ -119,6 +121,9 @@ describe('jsTransformAgentGateway', () => {
         followUp: sessionFollowUpMock,
         subscribe: sessionSubscribeMock,
         dispose: sessionDisposeMock,
+        agent: {
+          state: agentStateMock,
+        },
       },
     })
     sessionSubscribeMock.mockReturnValue(() => {})
@@ -168,5 +173,18 @@ describe('jsTransformAgentGateway', () => {
       expect(sessionPromptMock).toHaveBeenCalledWith('把字符串日期转成月份字段')
     })
     expect(result).toEqual({ ok: true })
+  })
+
+  it('updates active tools and system prompt when switching mode', async () => {
+    const created = await createJsTransformAgentSession(createRequest('ask'), 'user_1')
+    agentStateMock.tools = []
+    agentStateMock.systemPrompt = ''
+
+    const { updateJsTransformAgentMode } = await import('../jsTransformAgentGateway.js')
+    const result = await updateJsTransformAgentMode(created.sessionId, 'agent')
+
+    expect(result).toEqual({ ok: true })
+    expect(agentStateMock.systemPrompt).toContain('当前是 agent 模式')
+    expect(agentStateMock.tools.length).toBeGreaterThan(0)
   })
 })

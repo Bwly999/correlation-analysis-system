@@ -31,6 +31,7 @@ export {
   disposeAllJsTransformAgentSessions,
   getJsTransformAgentSession,
   resolveJsTransformAgentToolResult,
+  updateJsTransformAgentMode,
   sendJsTransformAgentMessage,
   subscribeJsTransformAgentEvents,
 } from './jsTransformAgentGateway.js'

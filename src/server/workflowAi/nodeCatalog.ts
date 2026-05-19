@@ -447,7 +447,7 @@ const SERVER_SAFE_NODE_CATALOG: WorkflowAiNodeCatalogItem[] = [
       createProperty('code', '转换代码', 'json', {
         required: true,
         defaultValue: 'return rows.map((row) => ({ ...row }))',
-        description: '只允许同步 JS；必须显式 return 数组对象列表；可用变量只有 rows。',
+        description: '只允许同步 JS；默认返回数组对象列表；如果用户意图更适合单个对象结果，也可以返回只包含一个对象的数组；可用变量只有 rows。',
       }),
     ],
     assistantHints: {

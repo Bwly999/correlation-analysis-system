@@ -69,7 +69,7 @@ export const buildJsTransformAgentContext = (input: {
       constraints: [
         '只能写同步 JS',
         '可用变量只有 rows',
-        '必须显式 return 数组对象列表',
+        '默认返回数组对象列表；如果只需要单个对象结果，也可以返回只包含一个对象的数组',
       ],
     },
     inputContext: {

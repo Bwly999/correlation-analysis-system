@@ -14,6 +14,7 @@ import {
   createJsTransformAgentSession,
   sendPiAgentMessage,
   sendJsTransformAgentMessage,
+  updateJsTransformAgentMode,
   subscribePiAgentEvents,
   subscribeJsTransformAgentEvents,
   getPiAgentSession,
@@ -122,6 +123,15 @@ export const createPiAgentRoutes = (): HttpDomainHandler<ServerDependencies> => 
     const body = await context.readJsonBody<{ content: string }>()
     const result = await sendJsTransformAgentMessage(sessionId, body.content)
     context.sendJson(200, result)
+    return true
+  }
+
+  const jsModeMatch = pathname.match(/^\/api\/pi-agent\/js-transform\/sessions\/([^/]+)\/mode$/)
+  if (method === 'POST' && jsModeMatch) {
+    const sessionId = decodeURIComponent(jsModeMatch[1] ?? '')
+    const body = await context.readJsonBody<{ mode: 'ask' | 'agent' }>()
+    const result = await updateJsTransformAgentMode(sessionId, body.mode)
+    context.sendJson(result.ok ? 200 : 404, result)
     return true
   }
 

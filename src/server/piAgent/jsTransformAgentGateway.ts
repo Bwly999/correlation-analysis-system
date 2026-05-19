@@ -19,6 +19,8 @@ import { bridgePiEvent } from './eventBridge.js'
 import { createSessionRecord, getSessionRecord, updateSessionRecord, appendMessage, type PiAgentSessionRecord } from './sessionStore.js'
 
 interface JsTransformAgentRuntime {
+  request: JsTransformAgentSessionRequest
+  currentMode: JsTransformAgentSessionRequest['mode']
   session: AgentSession
   sessionId: string
   record: PiAgentSessionRecord
@@ -27,6 +29,8 @@ interface JsTransformAgentRuntime {
   currentMessageId: { value: string }
   eventListeners: Set<(event: PiAgentSseEvent) => void>
   lastDebugResult: JsTransformAgentSafeDebugResult | null
+  askTools: ReturnType<typeof createJsTransformAgentTools>
+  agentTools: ReturnType<typeof createJsTransformAgentTools>
   unsubscribe?: () => void
 }
 
@@ -146,6 +150,9 @@ const createJsTransformAgentTools = (runtime: {
   ]
 }
 
+const buildActiveTools = (mode: JsTransformAgentSessionRequest['mode'], runtime: JsTransformAgentRuntime) =>
+  mode === 'ask' ? runtime.askTools : runtime.agentTools
+
 export async function createJsTransformAgentSession(
   request: JsTransformAgentSessionRequest,
   userId: string,
@@ -176,14 +183,17 @@ export async function createJsTransformAgentSession(
   })
 
   const state = { lastDebugResult: null as JsTransformAgentSafeDebugResult | null }
-  const tools = createJsTransformAgentTools({ request, bridge, state })
+  const askRequest = { ...request, mode: 'ask' as const }
+  const agentRequest = { ...request, mode: 'agent' as const }
+  const askTools = createJsTransformAgentTools({ request: askRequest, bridge, state })
+  const agentTools = createJsTransformAgentTools({ request: agentRequest, bridge, state })
   const { authStorage, modelRegistry } = createModelRegistryFromProfile(request.profile)
   const model = buildModelFromProfile(request.profile)
 
   const resourceLoader = new DefaultResourceLoader({
     cwd: process.cwd(),
     agentDir: process.cwd(),
-    systemPromptOverride: () => buildJsTransformAgentSystemPrompt(request),
+    systemPromptOverride: () => buildJsTransformAgentSystemPrompt({ ...request, mode: request.mode }),
   })
   await resourceLoader.reload()
 
@@ -194,21 +204,28 @@ export async function createJsTransformAgentSession(
     model: model as never,
     thinkingLevel: 'low',
     cwd: process.cwd(),
-    customTools: tools,
+    customTools: request.mode === 'ask' ? askTools : agentTools,
     resourceLoader,
     noTools: 'builtin',
   })
 
   const runtime: JsTransformAgentRuntime = {
+    request,
     session,
     sessionId: record.sessionId,
     record,
+    currentMode: request.mode,
     bridge,
     isStreaming: false,
     currentMessageId: { value: '' },
     eventListeners,
     lastDebugResult: null,
+    askTools,
+    agentTools,
   }
+
+  ;(runtime.session.agent.state as any).tools = request.mode === 'ask' ? askTools : agentTools
+  ;(runtime.session.agent.state as any).systemPrompt = buildJsTransformAgentSystemPrompt(request)
 
   runtime.unsubscribe = session.subscribe((event) => {
     if (event.type === 'agent_start') {
@@ -233,6 +250,22 @@ export async function createJsTransformAgentSession(
     mode: request.mode,
     prompt: request.prompt,
   }
+}
+
+export async function setJsTransformAgentMode(
+  sessionId: string,
+  mode: JsTransformAgentSessionRequest['mode'],
+): Promise<boolean> {
+  const runtime = runtimes.get(sessionId)
+  if (!runtime) return false
+
+  runtime.currentMode = mode
+  ;(runtime.session.agent.state as any).tools = buildActiveTools(mode, runtime)
+  ;(runtime.session.agent.state as any).systemPrompt = buildJsTransformAgentSystemPrompt({
+    ...runtime.request,
+    mode,
+  })
+  return true
 }
 
 export async function sendJsTransformAgentMessage(
@@ -265,6 +298,16 @@ export async function sendJsTransformAgentMessage(
   })()
 
   sendPromise.catch(() => {})
+  return { ok: true }
+}
+
+export async function updateJsTransformAgentMode(
+  sessionId: string,
+  mode: JsTransformAgentSessionRequest['mode'],
+): Promise<{ ok: boolean; error?: string }> {
+  const runtime = runtimes.get(sessionId)
+  if (!runtime) return { ok: false, error: '会话不存在' }
+  await setJsTransformAgentMode(sessionId, mode)
   return { ok: true }
 }
 

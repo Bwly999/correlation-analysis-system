@@ -328,7 +328,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
           property: 'code',
           title: '转换代码',
           content:
-            '必须显式 return 数组对象列表。只支持同步 JS，不要使用 async、await 或外部变量。',
+            '默认返回数组对象列表；如果用户意图更适合单个对象结果，也可以返回只包含一个对象的数组。只支持同步 JS，不要使用 async、await 或外部变量。',
         },
       ],
       outputGuide: ['固定输出表格结果，适合继续接字段选择、图表展示、相关性分析或导出节点。'],
@@ -351,7 +351,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
       inputKinds: ['table'],
       outputKinds: ['table'],
       requiredConfig: ['code'],
-      recommendedConfigPatterns: ['优先用 rows.map 或 rows.filter + rows.map，保持输出为数组对象列表。'],
+      recommendedConfigPatterns: ['优先用 rows.map 或 rows.filter + rows.map；如果只想表达单个对象结果，也用长度为 1 的数组包裹。'],
       commonMistakes: ['返回普通对象而不是数组', '在代码里使用 async/await', '尝试访问 rows 之外的变量'],
       recommendedPrevNodes: ['file-import', 'manual-json-import', 'data-cleaning', 'data-filter'],
       recommendedNextNodes: ['field-selection', 'sort', 'chart-display', 'correlation-analysis'],
