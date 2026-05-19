@@ -14,6 +14,7 @@ import type {
 import { buildModelFromProfile, createModelRegistryFromProfile } from './modelAdapter.js'
 import { FrontendBridge } from './frontendBridge.js'
 import { buildJsTransformAgentSystemPrompt } from './jsTransformAgentSystemPrompt.js'
+import { createJsTransformAgentModeController } from './jsTransformAgentModeExtension.js'
 import type { PiAgentSseEvent } from './eventBridge.js'
 import { bridgePiEvent } from './eventBridge.js'
 import { createSessionRecord, getSessionRecord, updateSessionRecord, appendMessage, type PiAgentSessionRecord } from './sessionStore.js'
@@ -31,6 +32,7 @@ interface JsTransformAgentRuntime {
   lastDebugResult: JsTransformAgentSafeDebugResult | null
   askTools: ReturnType<typeof createJsTransformAgentTools>
   agentTools: ReturnType<typeof createJsTransformAgentTools>
+  modeController: ReturnType<typeof createJsTransformAgentModeController>
   unsubscribe?: () => void
 }
 
@@ -67,11 +69,7 @@ const createJsTransformAgentTools = (runtime: {
   bridge: FrontendBridge
   state: { lastDebugResult: JsTransformAgentSafeDebugResult | null }
 }) => {
-  if (runtime.request.mode === 'ask') {
-    return []
-  }
-
-  return [
+  const allTools = [
     defineTool({
       name: 'js_get_context',
       label: '读取当前节点上下文',
@@ -148,6 +146,12 @@ const createJsTransformAgentTools = (runtime: {
       },
     }),
   ]
+
+  if (runtime.request.mode === 'ask') {
+    return allTools.filter((tool) => tool.name === 'js_get_context')
+  }
+
+  return allTools
 }
 
 const buildActiveTools = (mode: JsTransformAgentSessionRequest['mode'], runtime: JsTransformAgentRuntime) =>
@@ -190,10 +194,12 @@ export async function createJsTransformAgentSession(
   const { authStorage, modelRegistry } = createModelRegistryFromProfile(request.profile)
   const model = buildModelFromProfile(request.profile)
 
+  const modeController = createJsTransformAgentModeController({ request })
   const resourceLoader = new DefaultResourceLoader({
     cwd: process.cwd(),
     agentDir: process.cwd(),
     systemPromptOverride: () => buildJsTransformAgentSystemPrompt({ ...request, mode: request.mode }),
+    extensionFactories: [modeController.extensionFactory],
   })
   await resourceLoader.reload()
 
@@ -204,7 +210,7 @@ export async function createJsTransformAgentSession(
     model: model as never,
     thinkingLevel: 'low',
     cwd: process.cwd(),
-    customTools: request.mode === 'ask' ? askTools : agentTools,
+    customTools: agentTools,
     resourceLoader,
     noTools: 'builtin',
   })
@@ -222,6 +228,7 @@ export async function createJsTransformAgentSession(
     lastDebugResult: null,
     askTools,
     agentTools,
+    modeController,
   }
 
   ;(runtime.session.agent.state as any).tools = request.mode === 'ask' ? askTools : agentTools
@@ -259,7 +266,14 @@ export async function setJsTransformAgentMode(
   const runtime = runtimes.get(sessionId)
   if (!runtime) return false
 
+  runtime.request = {
+    ...runtime.request,
+    mode,
+  }
   runtime.currentMode = mode
+  runtime.modeController.setMode(mode)
+  runtime.record.mode = 'edit'
+  updateSessionRecord(sessionId, { updatedAt: Date.now() })
   ;(runtime.session.agent.state as any).tools = buildActiveTools(mode, runtime)
   ;(runtime.session.agent.state as any).systemPrompt = buildJsTransformAgentSystemPrompt({
     ...runtime.request,

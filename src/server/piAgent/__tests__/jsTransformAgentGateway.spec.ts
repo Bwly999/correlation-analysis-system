@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { JsTransformAgentSessionRequest } from '@/ai/types'
+import { createJsTransformAgentModeController } from '../jsTransformAgentModeExtension.js'
 
 const {
   createAgentSessionMock,
@@ -136,11 +137,15 @@ describe('jsTransformAgentGateway', () => {
   it('creates ask sessions without any custom tools', async () => {
     await createJsTransformAgentSession(createRequest('ask'), 'user_1')
 
-    expect(createAgentSessionMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        customTools: [],
-      }),
-    )
+    const createArgs = createAgentSessionMock.mock.calls[0]?.[0] as
+      | { customTools?: Array<{ name?: string }> }
+      | undefined
+    expect(createArgs?.customTools?.map((tool) => tool.name)).toEqual([
+      'js_get_context',
+      'js_update_code',
+      'js_debug_node',
+      'js_get_last_debug_result',
+    ])
     const loaderOptions = defaultResourceLoaderMock.mock.calls[0]?.[0] as
       | Record<string, unknown>
       | undefined
@@ -148,6 +153,7 @@ describe('jsTransformAgentGateway', () => {
     expect((loaderOptions?.systemPromptOverride as (value?: unknown) => string)(undefined)).toBe(
       buildJsTransformAgentSystemPrompt(createRequest('ask')),
     )
+    expect(Array.isArray(loaderOptions?.extensionFactories)).toBe(true)
   })
 
   it('creates agent sessions with node-scoped code tools only', async () => {
@@ -186,5 +192,54 @@ describe('jsTransformAgentGateway', () => {
     expect(result).toEqual({ ok: true })
     expect(agentStateMock.systemPrompt).toContain('当前是 agent 模式')
     expect(agentStateMock.tools.length).toBeGreaterThan(0)
+  })
+
+  it('blocks mutating tools in ask mode and allows them after switching back to agent', async () => {
+    const controller = createJsTransformAgentModeController({
+      request: createRequest('agent'),
+    })
+
+    const handlers: Record<string, (event: any, ctx?: any) => Promise<any> | any> = {}
+    const setActiveToolsMock = vi.fn()
+
+    controller.extensionFactory({
+      on: vi.fn((event: string, handler: (event: any, ctx?: any) => Promise<any> | any) => {
+        handlers[event] = handler
+      }),
+      setActiveTools: setActiveToolsMock,
+    } as any)
+
+    await handlers.session_start?.({}, { hasUI: false })
+    controller.setMode('ask')
+
+    expect(setActiveToolsMock).toHaveBeenLastCalledWith(['js_get_context'])
+
+    const blocked = await handlers.tool_call?.({
+      toolName: 'js_update_code',
+      input: { code: 'return rows' },
+    })
+    expect(blocked).toEqual({
+      block: true,
+      reason: '当前处于 ask 模式，不允许调用 js_update_code。请先切换到 agent 模式。',
+    })
+
+    const beforeAgentStart = await handlers.before_agent_start?.({
+      systemPrompt: '旧提示词',
+    })
+    expect(beforeAgentStart.systemPrompt).toContain('当前是 ask 模式')
+
+    controller.setMode('agent')
+    expect(setActiveToolsMock).toHaveBeenLastCalledWith([
+      'js_get_context',
+      'js_update_code',
+      'js_debug_node',
+      'js_get_last_debug_result',
+    ])
+
+    const allowed = await handlers.tool_call?.({
+      toolName: 'js_update_code',
+      input: { code: 'return rows' },
+    })
+    expect(allowed).toBeUndefined()
   })
 })

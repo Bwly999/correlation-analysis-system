@@ -6,11 +6,13 @@ const {
   sendJsTransformAgentMessageMock,
   streamJsTransformAgentEventsMock,
   resolveJsTransformAgentToolResultMock,
+  updateJsTransformAgentModeMock,
 } = vi.hoisted(() => ({
   createJsTransformAgentSessionMock: vi.fn(),
   sendJsTransformAgentMessageMock: vi.fn(),
   streamJsTransformAgentEventsMock: vi.fn(),
   resolveJsTransformAgentToolResultMock: vi.fn(),
+  updateJsTransformAgentModeMock: vi.fn(),
 }))
 
 vi.mock('@/services/jsTransformAgentClient', () => ({
@@ -18,6 +20,7 @@ vi.mock('@/services/jsTransformAgentClient', () => ({
   sendJsTransformAgentMessage: sendJsTransformAgentMessageMock,
   streamJsTransformAgentEvents: streamJsTransformAgentEventsMock,
   resolveJsTransformAgentToolResult: resolveJsTransformAgentToolResultMock,
+  updateJsTransformAgentMode: updateJsTransformAgentModeMock,
 }))
 
 describe('useJsTransformAgent', () => {
@@ -123,5 +126,84 @@ describe('useJsTransformAgent', () => {
       }),
     )
     expect(store.latestDebugResult.value?.summary).toContain('输出 1 行')
+  })
+
+  it('switches mode on the existing session without recreating it', async () => {
+    createJsTransformAgentSessionMock.mockResolvedValueOnce({
+      sessionId: 'js_session_1',
+      status: 'idle',
+      mode: 'agent',
+      prompt: '先进入 agent',
+    })
+    sendJsTransformAgentMessageMock.mockResolvedValue({ ok: true })
+    streamJsTransformAgentEventsMock.mockResolvedValue(undefined)
+    updateJsTransformAgentModeMock.mockResolvedValue({ ok: true })
+
+    const store = useJsTransformAgent()
+    const input = {
+      nodeId: 'node_js_1',
+      profile: {
+        id: 'profile_1',
+        name: '默认模型',
+        baseUrl: 'http://example.com',
+        model: 'glm-4.7',
+        enabled: true,
+        source: 'system' as const,
+      },
+      context: {
+        node: {
+          nodeId: 'node_js_1',
+          nodeLabel: 'JS代码执行',
+          nodeType: 'js-transform' as const,
+        },
+        task: '',
+        codeContext: {
+          currentCode: 'return rows',
+          language: 'javascript' as const,
+          declarations: 'declare const rows: Array<Record<string, unknown>>',
+          constraints: ['只能写同步 JS'],
+        },
+        inputContext: {
+          inputMode: 'single' as const,
+          rowCount: 1,
+          sourceSummary: '上游输入共 1 行',
+          sampleRows: [{ date: '2026-05-01' }],
+          schemaSummary: {
+            fields: [{ name: 'date', type: 'string', nullable: false }],
+          },
+        },
+        latestDebugContext: {
+          status: 'idle' as const,
+          summary: '当前尚未调试',
+          outputSample: [],
+          errorMessage: '',
+        },
+        capabilities: {
+          ask: ['read_context' as const],
+          agent: ['read_context' as const, 'update_current_code' as const, 'debug_current_node' as const],
+        },
+      },
+    }
+
+    await store.sendMessage({
+      ...input,
+      mode: 'agent',
+      prompt: '先进入 agent',
+    })
+
+    await store.switchMode({
+      ...input,
+      mode: 'ask',
+    })
+
+    await store.sendMessage({
+      ...input,
+      mode: 'ask',
+      prompt: '现在只回答问题',
+    })
+
+    expect(updateJsTransformAgentModeMock).toHaveBeenCalledWith('js_session_1', 'ask')
+    expect(createJsTransformAgentSessionMock).toHaveBeenCalledTimes(1)
+    expect(sendJsTransformAgentMessageMock).toHaveBeenNthCalledWith(2, 'js_session_1', '现在只回答问题')
   })
 })
