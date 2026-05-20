@@ -423,6 +423,41 @@ describe('DataChart', () => {
     ])
   })
 
+  it('keeps scatter x-axis tightly aligned to narrow numeric ranges instead of expanding toward zero', () => {
+    localStorage.clear()
+
+    const wrapper = mount(DataChart, {
+      props: {
+        data: {
+          kind: 'table',
+          payload: [
+            { temperature: 179, score: 1 },
+            { temperature: 180, score: 2 },
+            { temperature: 181, score: 3 },
+          ],
+          preview: {
+            viewer: 'table-chart-combo-viewer',
+            props: {
+              chartDefaults: {
+                mode: 'scatter',
+                xField: 'temperature',
+                yFields: ['score'],
+              },
+            },
+          },
+        },
+      },
+    })
+
+    const option = getChartOption(wrapper)
+
+    expect(option.xAxis.scale).toBe(true)
+    expect(option.xAxis.min).toBeGreaterThan(170)
+    expect(option.xAxis.max).toBeLessThan(190)
+    expect(option.xAxis.min).toBeLessThan(179)
+    expect(option.xAxis.max).toBeGreaterThan(181)
+  })
+
   it('falls back to row index when table scatter charts do not select an x field', () => {
     localStorage.clear()
 
@@ -545,6 +580,52 @@ describe('DataChart', () => {
     ])
   })
 
+  it('keeps grouped scatter x-axis tightly aligned to the combined narrow numeric range', () => {
+    localStorage.clear()
+
+    const wrapper = mount(DataChart, {
+      props: {
+        data: {
+          kind: 'tableCollection',
+          payload: [
+            {
+              name: 'A',
+              data: [
+                { temperature: 179, score: 1 },
+                { temperature: 180, score: 2 },
+              ],
+            },
+            {
+              name: 'B',
+              data: [
+                { temperature: 180.5, score: 3 },
+                { temperature: 181, score: 4 },
+              ],
+            },
+          ],
+          preview: {
+            viewer: 'table-chart-combo-viewer',
+            props: {
+              chartDefaults: {
+                mode: 'grouped-scatter',
+                xField: 'temperature',
+                yFields: ['score'],
+              },
+            },
+          },
+        },
+      },
+    })
+
+    const option = getChartOption(wrapper)
+
+    expect(option.xAxis.scale).toBe(true)
+    expect(option.xAxis.min).toBeGreaterThan(170)
+    expect(option.xAxis.max).toBeLessThan(190)
+    expect(option.xAxis.min).toBeLessThan(179)
+    expect(option.xAxis.max).toBeGreaterThan(181)
+  })
+
   it('falls back to group-local row index when grouped scatter charts do not select an x field', () => {
     localStorage.clear()
 
@@ -582,6 +663,40 @@ describe('DataChart', () => {
       [1, 3],
       [2, 4],
     ])
+  })
+
+  it('expands equal scatter x-axis values with a small fallback range', () => {
+    localStorage.clear()
+
+    const wrapper = mount(DataChart, {
+      props: {
+        data: {
+          kind: 'table',
+          payload: [
+            { temperature: 180, score: 1 },
+            { temperature: 180, score: 2 },
+            { temperature: 180, score: 3 },
+          ],
+          preview: {
+            viewer: 'table-chart-combo-viewer',
+            props: {
+              chartDefaults: {
+                mode: 'scatter',
+                xField: 'temperature',
+                yFields: ['score'],
+              },
+            },
+          },
+        },
+      },
+    })
+
+    const option = getChartOption(wrapper)
+
+    expect(option.xAxis.scale).toBe(true)
+    expect(option.xAxis.min).toBeLessThan(180)
+    expect(option.xAxis.max).toBeGreaterThan(180)
+    expect(option.xAxis.min).toBeLessThan(option.xAxis.max)
   })
 
   it('renders grouped bar charts from preview defaults', () => {

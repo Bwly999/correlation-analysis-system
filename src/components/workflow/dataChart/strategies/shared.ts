@@ -554,6 +554,24 @@ export const createBoxplotDataItem = (values: number[], color: string) => ({
 
 export const buildMarkedRawOption = (option: Record<string, any>) => markRaw(option)
 
+export const buildScatterValueAxisRange = (values: number[]) => {
+  const finiteValues = values.filter((value) => Number.isFinite(value))
+  if (finiteValues.length === 0) return {}
+
+  const rawMin = Math.min(...finiteValues)
+  const rawMax = Math.max(...finiteValues)
+  const range = rawMax - rawMin
+  const relativePadding = range > 0 ? range * 0.05 : 0
+  const fallbackPaddingBase = Math.max(Math.abs(rawMin), Math.abs(rawMax), 1)
+  const fallbackPadding = fallbackPaddingBase * 0.01
+  const padding = Math.max(relativePadding, fallbackPadding)
+
+  return {
+    min: rawMin - padding,
+    max: rawMax + padding,
+  }
+}
+
 export const buildGroupedScatterOffset = (index: number, total: number) =>
   [Math.round((index - (total - 1) / 2) * 16), 0]
 

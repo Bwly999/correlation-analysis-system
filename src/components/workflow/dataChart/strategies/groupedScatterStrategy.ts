@@ -1,5 +1,5 @@
 import type { ChartStrategy } from '../types'
-import { buildMarkedRawOption, buildProcessedChartData, createBaseOption, getChartXAxisValue } from './shared'
+import { buildMarkedRawOption, buildProcessedChartData, buildScatterValueAxisRange, createBaseOption, getChartXAxisValue } from './shared'
 import { isFiniteNumber } from '../tools/normalization'
 
 export const groupedScatterStrategy: ChartStrategy = {
@@ -20,11 +20,18 @@ export const groupedScatterStrategy: ChartStrategy = {
         return points
       }, []),
     }))
+    const allXValues = groupedScatterSeries.flatMap((series) => series.data.map(([xAxisValue]) => xAxisValue))
 
     option.tooltip.trigger = 'item'
     option.legend.data = groupedScatterSeries.map((series: { name: string }) => series.name)
     option.grid = { top: '18%', bottom: '15%', left: '10%', right: '10%', containLabel: true }
-    option.xAxis = { type: 'value', ...(model.xField ? { name: model.xField } : {}), boundaryGap: ['5%', '5%'] }
+    option.xAxis = {
+      type: 'value',
+      ...(model.xField ? { name: model.xField } : {}),
+      scale: true,
+      boundaryGap: ['5%', '5%'],
+      ...buildScatterValueAxisRange(allXValues),
+    }
     option.yAxis = { type: 'value', name: model.primaryKey, scale: true, boundaryGap: ['15%', '15%'] }
     option.series = groupedScatterSeries
 
