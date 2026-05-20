@@ -3,24 +3,19 @@ import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import PrimeVue from 'primevue/config'
 import Tooltip from 'primevue/tooltip'
+
+vi.mock('../components/workflow/WorkflowCanvas.vue', () => ({
+  default: {
+    template: '<div class="workflow-canvas-stub" />',
+  },
+}))
+
 import App from '../App.vue'
 
 vi.mock('primevue/usetoast', () => ({
   useToast: () => ({
     add: vi.fn(),
   }),
-}))
-
-// Mock Monaco Editor
-vi.mock('monaco-editor', () => ({
-  editor: {
-    create: vi.fn(() => ({
-      dispose: vi.fn(),
-      getValue: vi.fn(),
-      setValue: vi.fn(),
-      onDidChangeModelContent: vi.fn(),
-    })),
-  },
 }))
 
 // Mock ResizeObserver for Vue Flow
@@ -44,9 +39,6 @@ describe('App', () => {
         plugins: [PrimeVue],
         directives: {
           tooltip: Tooltip,
-        },
-        stubs: {
-          WorkflowCanvas: { template: '<div class="workflow-canvas-stub" />' },
         },
       },
       attachTo: document.getElementById('app') as HTMLElement,

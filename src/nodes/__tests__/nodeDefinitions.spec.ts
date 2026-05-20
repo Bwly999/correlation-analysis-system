@@ -1720,7 +1720,7 @@ describe('Node Definitions Execution Logic', () => {
       expect(legacy.report.sections[4].content).toContain('f1')
     })
 
-    it('should run one selected method in correlation-analysis and default to pearson', async () => {
+    it('should run one selected method in correlation-analysis and default to spearman', async () => {
       const input = createTableResult([
         { target: 1, f1: 1, f2: 10 },
         { target: 2, f1: 2, f2: 8 },
@@ -1741,13 +1741,13 @@ describe('Node Definitions Execution Logic', () => {
       expect(legacy.viewType).toBe('report')
       expect(correlationAnalysisNode.properties[0]?.name).toBe('method')
       expect(correlationAnalysisNode.properties[0]?.type).toBe('options')
-      expect(correlationAnalysisNode.properties[0]?.default).toBe('pearson')
+      expect(correlationAnalysisNode.properties[0]?.default).toBe('spearman')
       expect(correlationAnalysisNode.properties[0]?.options?.[0]).toEqual({
-        name: 'Pearson 相关系数',
-        value: 'pearson',
+        name: 'Spearman 秩相关系数',
+        value: 'spearman',
       })
       expect(legacy.report.title).toBe('单调性分析')
-      expect(legacy.report.metadata.method).toBe('pearson')
+      expect(legacy.report.metadata.method).toBe('spearman')
       expect(legacy.report.sections[0].type).toBe('summary')
       expect(legacy.report.sections[0].help?.howToRead?.join(' ')).toContain('r')
       expect(legacy.report.sections[0].help?.howToRead?.join(' ')).toContain('p')
@@ -1756,7 +1756,7 @@ describe('Node Definitions Execution Logic', () => {
       expect(legacy.report.sections[1].key).toBe('matrix')
       expect(legacy.report.sections[1].help?.howToRead[0]).toContain('颜色')
       expect(legacy.report.sections[1].option.xAxis.axisLabel.rotate).toBe(40)
-      expect(legacy.metrics.method).toBe('pearson')
+      expect(legacy.metrics.method).toBe('spearman')
       expect(result.preview?.viewer).toBe('report-viewer')
     })
 

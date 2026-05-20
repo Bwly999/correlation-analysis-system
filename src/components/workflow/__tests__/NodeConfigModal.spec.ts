@@ -16,6 +16,12 @@ vi.mock("primevue/usetoast", () => ({
   }),
 }));
 
+vi.mock("@/stores/piAgentConfigStore", () => ({
+  usePiAgentConfigStore: () => ({
+    selectedProfile: { id: "profile-1", name: "默认助手" },
+  }),
+}));
+
 enableAutoUnmount(afterEach);
 
 describe("NodeConfigModal", () => {
@@ -1300,7 +1306,7 @@ describe("NodeConfigModal", () => {
     expect(stopSpy).toHaveBeenCalledTimes(1);
   });
 
-  it("shows the js transform agent panel only for js-transform nodes", () => {
+  it("shows the js transform agent entry only for js-transform nodes", () => {
     const store = useWorkflowStore();
     store.nodes = [
       {
@@ -1386,15 +1392,13 @@ describe("NodeConfigModal", () => {
       },
       ConfigFooter: { template: "<div />" },
       ConfigForm: {
-        template: "<div />",
-        props: ["config", "properties", "upstreamFactors"],
+        props: ["properties"],
+        template:
+          '<div><div v-if="properties.some((property) => property.enableEditorAgent)" data-testid="js-transform-agent-toggle" /></div>',
       },
       RuntimeInputs: {
         template: "<div />",
         props: ["config", "properties", "upstreamFactors"],
-      },
-      JsTransformAgentPanel: {
-        template: '<div data-testid="js-transform-agent-panel" />',
       },
     };
 
@@ -1412,8 +1416,8 @@ describe("NodeConfigModal", () => {
       },
     });
 
-    expect(jsWrapper.find('[data-testid="js-transform-agent-panel"]').exists()).toBe(true);
-    expect(pearsonWrapper.find('[data-testid="js-transform-agent-panel"]').exists()).toBe(false);
+    expect(jsWrapper.find('[data-testid="js-transform-agent-toggle"]').exists()).toBe(true);
+    expect(pearsonWrapper.find('[data-testid="js-transform-agent-toggle"]').exists()).toBe(false);
   });
 
   it("shows loading copy after clicking debug for a synchronous local node", async () => {
