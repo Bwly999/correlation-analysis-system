@@ -23,6 +23,7 @@ import WorkflowHistoryBanner from './WorkflowHistoryBanner.vue'
 import WorkflowFloatingControls from './WorkflowFloatingControls.vue'
 import { getWorkflowLayoutMetrics } from './layout'
 import { buildResultDashboardSummary, type WorkflowResultDashboardSummary } from './resultDashboard'
+import { useHorizontalResize } from './composables/useHorizontalResize'
 import N8nEdge from './edges/N8nEdge.vue'
 import {
   ClipboardCopy,
@@ -68,8 +69,46 @@ const isResettingView = ref(false)
 const isShortcutHintsCollapsed = ref(false)
 const isEditableFocused = ref(false)
 const canvasViewportRef = useTemplateRef<HTMLDivElement>('canvasViewport')
+const PI_AGENT_DESKTOP_BREAKPOINT = 1280
+const PI_AGENT_PANEL_DEFAULT_WIDTH = 480
+const PI_AGENT_PANEL_MIN_WIDTH = 360
+const PI_AGENT_PANEL_MAX_WIDTH = 680
+const PI_AGENT_CANVAS_MIN_WIDTH = 360
+const PI_AGENT_RESIZE_HANDLE_WIDTH = 12
+
+const getPiAgentPanelResizeBounds = () => {
+  const maxWidth = Math.min(
+    PI_AGENT_PANEL_MAX_WIDTH,
+    Math.max(PI_AGENT_PANEL_MIN_WIDTH, viewportWidth.value - PI_AGENT_CANVAS_MIN_WIDTH),
+  )
+
+  return {
+    min: PI_AGENT_PANEL_MIN_WIDTH,
+    max: maxWidth,
+  }
+}
+
+const {
+  paneWidth: piAgentPanelWidth,
+  isResizing: isPiAgentPanelResizing,
+  clampWidth: clampPiAgentPanelWidth,
+  startResizing: startResizingPiAgentPanelWidth,
+} = useHorizontalResize(PI_AGENT_PANEL_DEFAULT_WIDTH, getPiAgentPanelResizeBounds)
 
 const layoutMetrics = computed(() => getWorkflowLayoutMetrics(viewportWidth.value))
+const isPiAgentDesktopLayout = computed(
+  () => isAiPanelVisible.value && viewportWidth.value > PI_AGENT_DESKTOP_BREAKPOINT,
+)
+const showPiAgentResizeHandle = computed(() => isPiAgentDesktopLayout.value)
+const workflowWorkspaceStyle = computed(() => {
+  if (!isPiAgentDesktopLayout.value) {
+    return undefined
+  }
+
+  return {
+    gridTemplateColumns: `${piAgentPanelWidth.value}px ${PI_AGENT_RESIZE_HANDLE_WIDTH}px minmax(0, 1fr)`,
+  }
+})
 const logHeight = computed(() =>
   isLogExpanded.value ? layoutMetrics.value.logExpandedHeight : layoutMetrics.value.logCollapsedHeight,
 )
@@ -185,6 +224,10 @@ const canvasShortcutHints = computed(() => [
 
 const onWindowResize = () => {
   viewportWidth.value = window.innerWidth
+}
+
+const syncPiAgentPanelWidthWithinBounds = () => {
+  clampPiAgentPanelWidth(piAgentPanelWidth.value)
 }
 
 const handleOpenLogPanel = () => {
@@ -550,6 +593,22 @@ watch(
   { immediate: true },
 )
 
+watch(
+  () => viewportWidth.value,
+  () => {
+    syncPiAgentPanelWidthWithinBounds()
+  },
+)
+
+watch(
+  () => isAiPanelVisible.value,
+  (visible) => {
+    if (visible) {
+      syncPiAgentPanelWidthWithinBounds()
+    }
+  },
+)
+
 const toggleSidebar = () => {
   isSidebarVisible.value = !isSidebarVisible.value
 }
@@ -627,11 +686,25 @@ onBeforeUnmount(() => {
     >
       <WorkflowHistoryBanner v-if="store.isHistoryMode" @exit="store.exitHistoryMode()" />
 
-      <div class="workflow-workspace" :class="{ 'workflow-workspace--agent': isAgentMode }">
+      <div
+        class="workflow-workspace"
+        :class="{ 'workflow-workspace--agent': isAgentMode }"
+        :style="workflowWorkspaceStyle"
+      >
         <PiAgentPanel
           v-if="isAiPanelVisible"
           class="pi-agent-workspace"
         />
+
+        <div
+          v-if="showPiAgentResizeHandle"
+          data-testid="pi-agent-resize-handle"
+          class="pi-agent-resize-handle"
+          :class="{ 'pi-agent-resize-handle--active': isPiAgentPanelResizing }"
+          @mousedown="startResizingPiAgentPanelWidth"
+        >
+          <div class="pi-agent-resize-handle__grip" />
+        </div>
 
         <section class="execution-workspace">
           <div class="execution-workspace__panel">
@@ -922,7 +995,7 @@ onBeforeUnmount(() => {
 
 .workflow-workspace--agent {
   display: grid;
-  grid-template-columns: minmax(0, 42%) minmax(0, 58%);
+  grid-template-columns: minmax(360px, 40%) minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
 }
 
@@ -1051,6 +1124,73 @@ onBeforeUnmount(() => {
   border-right: 1px solid #e2e8f0;
 }
 
+.pi-agent-resize-handle {
+  position: relative;
+  z-index: 20;
+  cursor: col-resize;
+  user-select: none;
+  background: transparent;
+}
+
+.pi-agent-resize-handle::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  transform: translateX(-50%);
+  background: rgba(148, 163, 184, 0.55);
+  transition:
+    background-color 0.2s ease,
+    box-shadow 0.2s ease,
+    width 0.2s ease;
+}
+
+.pi-agent-resize-handle:hover::before,
+.pi-agent-resize-handle--active::before {
+  width: 2px;
+  background: rgba(37, 99, 235, 0.75);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.pi-agent-resize-handle__grip {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: flex;
+  height: 52px;
+  width: 8px;
+  transform: translate(-50%, -50%);
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 10px 24px -18px rgba(15, 23, 42, 0.45);
+  opacity: 0;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease,
+    background-color 0.2s ease;
+}
+
+.pi-agent-resize-handle__grip::before {
+  content: '';
+  height: 24px;
+  width: 2px;
+  border-radius: 9999px;
+  background: rgba(148, 163, 184, 0.75);
+  box-shadow:
+    -3px 0 0 rgba(148, 163, 184, 0.55),
+    3px 0 0 rgba(148, 163, 184, 0.55);
+}
+
+.pi-agent-resize-handle:hover .pi-agent-resize-handle__grip,
+.pi-agent-resize-handle--active .pi-agent-resize-handle__grip {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1.02);
+}
+
 @media (max-width: 1280px) {
   .pi-agent-workspace {
     position: absolute;
@@ -1061,6 +1201,10 @@ onBeforeUnmount(() => {
     max-width: calc(100vw - 24px);
     z-index: 140;
     box-shadow: 20px 0 48px rgba(15, 23, 42, 0.16);
+  }
+
+  .pi-agent-resize-handle {
+    display: none;
   }
 }
 </style>

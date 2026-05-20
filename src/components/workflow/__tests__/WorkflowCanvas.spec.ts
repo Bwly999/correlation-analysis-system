@@ -1537,6 +1537,70 @@ describe('WorkflowCanvas', () => {
     expect(wrapper.find('.workflow-page-sidebar').exists()).toBe(true)
   })
 
+  it('supports dragging the pi agent divider to resize the desktop panel width', async () => {
+    const originalInnerWidth = window.innerWidth
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      writable: true,
+      value: 1600,
+    })
+
+    const workflowHeaderStub = defineComponent({
+      name: 'WorkflowHeader',
+      emits: ['toggle-ai'],
+      template:
+        '<button data-testid="workflow-header-ai-toggle" @click="$emit(\'toggle-ai\')">分析代理</button>',
+    })
+
+    const wrapper = mount(WorkflowCanvas, {
+      global: {
+        stubs: {
+          Background: { template: '<div />' },
+          Controls: { template: '<div />' },
+          NodeSidebar: { template: '<div />' },
+          WorkflowHeader: workflowHeaderStub,
+          BaseNode: { template: '<div />' },
+          LogPanel: { template: '<div />' },
+          NodeConfigModal: { template: '<div />' },
+          RuntimeInputModal: runtimeInputModalStub,
+          WorkflowResultDashboardModal: { template: '<div />' },
+          WorkflowManagerModal: workflowManagerModalStub,
+          UnsavedWorkflowDialog: { template: '<div />' },
+          HelpCenterModal: { template: '<div />' },
+          ConfirmDialog: { template: '<div />' },
+          Toast: { template: '<div />' },
+          Button: { template: '<button><slot /></button>' },
+          N8nEdge: { template: '<div />' },
+        },
+        directives: {
+          tooltip: () => undefined,
+        },
+      },
+    })
+
+    try {
+      await wrapper.get('[data-testid="workflow-header-ai-toggle"]').trigger('click')
+
+      const workspace = wrapper.get('.workflow-workspace')
+      const resizeHandle = wrapper.get('[data-testid="pi-agent-resize-handle"]')
+
+      expect(workspace.attributes('style')).toContain('grid-template-columns: 480px 12px minmax(0, 1fr);')
+
+      await resizeHandle.trigger('mousedown', { clientX: 200 })
+      document.dispatchEvent(new MouseEvent('mousemove', { clientX: 320 }))
+      document.dispatchEvent(new MouseEvent('mouseup'))
+      await flushAsyncWork()
+
+      expect(workspace.attributes('style')).toContain('grid-template-columns: 600px 12px minmax(0, 1fr);')
+    } finally {
+      Object.defineProperty(window, 'innerWidth', {
+        configurable: true,
+        writable: true,
+        value: originalInnerWidth,
+      })
+    }
+  })
+
   it('keeps the canvas-only right workspace after opening the agent panel', async () => {
     const workflowHeaderStub = defineComponent({
       name: 'WorkflowHeader',

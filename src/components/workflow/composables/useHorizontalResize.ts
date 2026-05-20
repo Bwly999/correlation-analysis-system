@@ -5,14 +5,29 @@ type ResizeHandlers = {
   onMouseUp: () => void
 }
 
+type ResizeBounds = {
+  min: number
+  max: number
+}
+
+type ResizeBoundsInput = ResizeBounds | (() => ResizeBounds)
+
 export const useHorizontalResize = (
   initialWidth: number,
-  bounds: { min: number; max: number },
+  boundsInput: ResizeBoundsInput,
   deltaSign = 1,
 ) => {
   const paneWidth = ref(initialWidth)
   const isResizing = ref(false)
   let activeHandlers: ResizeHandlers | null = null
+
+  const resolveBounds = () =>
+    typeof boundsInput === 'function' ? boundsInput() : boundsInput
+
+  const clampWidth = (nextWidth: number) => {
+    const bounds = resolveBounds()
+    paneWidth.value = Math.max(bounds.min, Math.min(bounds.max, nextWidth))
+  }
 
   const cleanup = () => {
     if (!activeHandlers) return
@@ -25,13 +40,14 @@ export const useHorizontalResize = (
   const startResizing = (event: MouseEvent) => {
     cleanup()
     isResizing.value = true
+    event.preventDefault()
     const startX = event.clientX
     const startWidth = paneWidth.value
 
     const onMouseMove = (moveEvent: MouseEvent) => {
       if (!isResizing.value) return
       const deltaX = (moveEvent.clientX - startX) * deltaSign
-      paneWidth.value = Math.max(bounds.min, Math.min(bounds.max, startWidth + deltaX))
+      clampWidth(startWidth + deltaX)
     }
 
     const onMouseUp = () => {
@@ -50,6 +66,7 @@ export const useHorizontalResize = (
   return {
     paneWidth,
     isResizing,
+    clampWidth,
     startResizing,
   }
 }
