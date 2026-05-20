@@ -1,5 +1,6 @@
 import type { ChartStrategy } from '../types'
 import {
+  applyNormalizationAxis,
   applyNativeVerticalDataZoom,
   buildMarkedRawOption,
   buildProcessedChartData,
@@ -10,11 +11,12 @@ import {
 
 export const barChartStrategy: ChartStrategy = {
   type: 'bar',
-  getEnabledTools: () => ['xField', 'filter'],
+  getEnabledTools: () => ['xField', 'filter', 'normalization'],
   buildModel: buildProcessedChartData,
   buildOption: (model, context) => {
     const option = createBaseOption()
-    const seriesData = model.filteredRows.map((row) => getFiniteRowValue(row, model.primaryKey))
+    const displayRows = context.isNormalizedView.value ? model.normalizedRows : model.filteredRows
+    const seriesData = displayRows.map((row) => getFiniteRowValue(row, model.primaryKey))
     option.tooltip.trigger = 'axis'
     option.grid = { top: '15%', bottom: '15%', left: '10%', right: '14%', containLabel: true }
     option.xAxis = {
@@ -22,7 +24,8 @@ export const barChartStrategy: ChartStrategy = {
       data: model.filteredRows.map((row, index) => getChartXAxisValue(row, index, model.xField)),
       boundaryGap: true,
     }
-    option.yAxis = { type: 'value', boundaryGap: ['0%', '15%'] }
+    option.yAxis = { type: 'value', name: model.primaryKey, boundaryGap: ['0%', '15%'] }
+    applyNormalizationAxis(option.yAxis, context)
     option.series = [
       {
         name: model.primaryKey,

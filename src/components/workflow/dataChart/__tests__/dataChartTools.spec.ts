@@ -33,6 +33,25 @@ describe('dataChart tools', () => {
     expect(normalizeSeriesValue(5, undefined, 'min-max')).toBeNull()
   })
 
+  it('normalizes only selected y fields and keeps x values unchanged for scatter-like data', () => {
+    const rows: ChartRow[] = [
+      { temperature: 10, score: 100, cost: 1000 },
+      { temperature: 20, score: 200, cost: 2000 },
+      { temperature: 30, score: 300, cost: 3000 },
+    ]
+
+    const stats = buildNormalizationStats(rows, ['score', 'cost'])
+    const normalizedRows = normalizeChartRows(rows, ['score', 'cost'], stats, 'z-score')
+
+    expect(normalizedRows.map((row) => row.temperature)).toEqual([10, 20, 30])
+    expect(normalizedRows[0]?.score).toBeLessThan(0)
+    expect(normalizedRows[1]?.score).toBe(0)
+    expect(normalizedRows[2]?.score).toBeGreaterThan(0)
+    expect(normalizedRows[0]?.cost).toBeLessThan(0)
+    expect(normalizedRows[1]?.cost).toBe(0)
+    expect(normalizedRows[2]?.cost).toBeGreaterThan(0)
+  })
+
   it('filters rows and groups by numeric bounds using selected keys', () => {
     const rows: ChartRow[] = [
       { score: 10, revenue: 100 },

@@ -233,6 +233,46 @@ describe('DataChart', () => {
     expect(wrapper.find('[data-test="chart-normalization-method-min-max"]').exists()).toBe(false)
   })
 
+  it('shows normalization controls for line, scatter, bar, and boxplot charts', async () => {
+    localStorage.clear()
+
+    const wrapper = mount(DataChart, {
+      props: {
+        data: [
+          { score: 1, cost: 10, category: 'A' },
+          { score: 2, cost: 12, category: 'B' },
+          { score: 3, cost: 14, category: 'C' },
+        ],
+      },
+    })
+
+    expect(wrapper.find('[data-test="chart-view-mode-raw"]').exists()).toBe(true)
+
+    await wrapper.get('[data-test="chart-type-select"]').setValue('scatter')
+    expect(wrapper.find('[data-test="chart-view-mode-raw"]').exists()).toBe(true)
+
+    await wrapper.get('[data-test="chart-type-select"]').setValue('bar')
+    expect(wrapper.find('[data-test="chart-view-mode-raw"]').exists()).toBe(true)
+
+    await wrapper.get('[data-test="chart-type-select"]').setValue('boxplot')
+    expect(wrapper.find('[data-test="chart-view-mode-raw"]').exists()).toBe(true)
+  })
+
+  it('allows the toolbar tool row to shrink and wrap instead of clipping later tools', () => {
+    const wrapper = mount(DataChart, {
+      props: {
+        data: [
+          { score: 1, cost: 10, revenue: 100, profit: 8, margin: 0.1, category: 'A' },
+          { score: 2, cost: 12, revenue: 120, profit: 10, margin: 0.12, category: 'B' },
+        ],
+      },
+    })
+
+    expect(wrapper.get('[data-test="chart-toolbar-tools"]').classes()).toEqual(
+      expect.arrayContaining(['flex-1', 'min-w-0', 'flex-wrap']),
+    )
+  })
+
   it('normalizes single-table boxplot data with min-max scaling', async () => {
     localStorage.clear()
 
@@ -423,6 +463,46 @@ describe('DataChart', () => {
     ])
   })
 
+  it('renders one scatter series per preview default y field', () => {
+    localStorage.clear()
+
+    const wrapper = mount(DataChart, {
+      props: {
+        data: {
+          kind: 'table',
+          payload: [
+            { temperature: 10, score: 1, cost: 10 },
+            { temperature: 20, score: 2, cost: 12 },
+          ],
+          preview: {
+            viewer: 'table-chart-combo-viewer',
+            props: {
+              chartDefaults: {
+                mode: 'scatter',
+                xField: 'temperature',
+                yFields: ['score', 'cost'],
+              },
+            },
+          },
+        },
+      },
+    })
+
+    const option = getChartOption(wrapper)
+    expect(option.legend.data).toEqual(['score', 'cost'])
+    expect(option.series).toHaveLength(2)
+    expect(option.series[0].name).toBe('score')
+    expect(option.series[0].data).toEqual([
+      [10, 1],
+      [20, 2],
+    ])
+    expect(option.series[1].name).toBe('cost')
+    expect(option.series[1].data).toEqual([
+      [10, 10],
+      [20, 12],
+    ])
+  })
+
   it('keeps scatter x-axis tightly aligned to narrow numeric ranges instead of expanding toward zero', () => {
     localStorage.clear()
 
@@ -492,6 +572,97 @@ describe('DataChart', () => {
     expect(option.series[0].data).toEqual([
       [1, 1],
       [2, 2],
+    ])
+  })
+
+  it('renders multiple scatter series with a shared x axis when selecting multiple y fields manually', async () => {
+    localStorage.clear()
+
+    const wrapper = mount(DataChart, {
+      props: {
+        data: [
+          { temperature: 10, score: 1, cost: 10 },
+          { temperature: 20, score: 2, cost: 12 },
+          { temperature: 30, score: 3, cost: 14 },
+        ],
+      },
+    })
+
+    await wrapper.get('[data-test="chart-type-select"]').setValue('scatter')
+    await wrapper.get('[data-test="chart-key-select"]').setValue(['score', 'cost'])
+    await wrapper.get('[data-test="chart-x-field-select"]').setValue('temperature')
+
+    const option = getChartOption(wrapper)
+    expect(option.legend.data).toEqual(['score', 'cost'])
+    expect(option.series).toHaveLength(2)
+    expect(option.series[0].data).toEqual([
+      [10, 1],
+      [20, 2],
+      [30, 3],
+    ])
+    expect(option.series[1].data).toEqual([
+      [10, 10],
+      [20, 12],
+      [30, 14],
+    ])
+  })
+
+  it('normalizes only scatter y values while keeping x values and raw filtering unchanged', async () => {
+    localStorage.clear()
+
+    const wrapper = mount(DataChart, {
+      props: {
+        data: [
+          { temperature: 10, score: 10, cost: 100 },
+          { temperature: 20, score: 20, cost: 200 },
+          { temperature: 30, score: 30, cost: 300 },
+        ],
+      },
+    })
+
+    await wrapper.get('[data-test="chart-type-select"]').setValue('scatter')
+    await wrapper.get('[data-test="chart-key-select"]').setValue(['score', 'cost'])
+    await wrapper.get('[data-test="chart-x-field-select"]').setValue('temperature')
+    await wrapper.get('[data-test="chart-lower-bound"]').setValue('15')
+    await wrapper.get('[data-test="chart-upper-bound"]').setValue('250')
+    await wrapper.get('[data-test="chart-view-mode-normalized"]').trigger('click')
+
+    const option = getChartOptionObject(wrapper)
+    expect(option.xAxis.name).toBe('temperature')
+    expect(option.xAxis.min).toBeLessThan(20)
+    expect(option.xAxis.max).toBeGreaterThan(20)
+    expect(option.yAxis.name).toBe('归一化值')
+    expect(option.yAxis.min).toBe(0)
+    expect(option.yAxis.max).toBe(1)
+    expect(option.series).toHaveLength(2)
+    expect(option.series[0].data).toEqual([[20, 0.5]])
+    expect(option.series[1].data).toEqual([[20, 0.5]])
+  })
+
+  it('uses row index as the shared x axis for every scatter y series when no x field is selected', async () => {
+    localStorage.clear()
+
+    const wrapper = mount(DataChart, {
+      props: {
+        data: [
+          { score: 1, cost: 10 },
+          { score: 2, cost: 12 },
+        ],
+      },
+    })
+
+    await wrapper.get('[data-test="chart-type-select"]').setValue('scatter')
+    await wrapper.get('[data-test="chart-key-select"]').setValue(['score', 'cost'])
+
+    const option = getChartOption(wrapper)
+    expect(option.series).toHaveLength(2)
+    expect(option.series[0].data).toEqual([
+      [1, 1],
+      [2, 2],
+    ])
+    expect(option.series[1].data).toEqual([
+      [1, 10],
+      [2, 12],
     ])
   })
 
@@ -731,6 +902,42 @@ describe('DataChart', () => {
     expect(option.xAxis.data).toEqual(['A', 'B'])
     expect(option.series[0].type).toBe('bar')
     expect(option.series[0].data).toEqual([92, 88])
+  })
+
+  it('normalizes bar chart y values without changing x-axis categories', async () => {
+    localStorage.clear()
+
+    const wrapper = mount(DataChart, {
+      props: {
+        data: {
+          kind: 'table',
+          payload: [
+            { group: 'A', score: 10 },
+            { group: 'B', score: 20 },
+            { group: 'C', score: 30 },
+          ],
+          preview: {
+            viewer: 'table-chart-combo-viewer',
+            props: {
+              chartDefaults: {
+                mode: 'bar',
+                xField: 'group',
+                yFields: ['score'],
+              },
+            },
+          },
+        },
+      },
+    })
+
+    await wrapper.get('[data-test="chart-view-mode-normalized"]').trigger('click')
+
+    const option = getChartOption(wrapper)
+    expect(option.xAxis.data).toEqual(['A', 'B', 'C'])
+    expect(option.yAxis.name).toBe('归一化值')
+    expect(option.yAxis.min).toBe(0)
+    expect(option.yAxis.max).toBe(1)
+    expect(option.series[0].data).toEqual([0, 0.5, 1])
   })
 
   it('renders selected factors as independent normal distribution panels in two columns', async () => {

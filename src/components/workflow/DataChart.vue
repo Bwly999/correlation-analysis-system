@@ -251,7 +251,7 @@ const boxplotToggleVisible = computed(
 <template>
   <div class="flex flex-col h-full bg-white rounded-2xl overflow-hidden border border-slate-100 shadow-sm">
     <div class="flex items-center justify-between px-6 py-4 border-b border-slate-50 bg-slate-50/30">
-      <div class="flex items-center gap-4 flex-wrap">
+      <div data-test="chart-toolbar-tools" class="flex flex-1 min-w-0 items-center gap-4 flex-wrap">
         <div class="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-100 rounded-lg shadow-sm">
           <ListChecks :size="14" class="text-indigo-500" />
           <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">分析因子</span>

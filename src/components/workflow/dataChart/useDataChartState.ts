@@ -150,9 +150,9 @@ export const useDataChartState = ({
             chartType: previewMode,
             selectedKeys:
               resolvedYFields.length > 0
-                ? previewMode === 'line' || previewMode === 'boxplot' || previewMode === 'normal'
-                  ? resolvedYFields
-                  : [resolvedYFields[0]!]
+                ? previewMode === 'bar'
+                  ? [resolvedYFields[0]!]
+                  : resolvedYFields
                 : firstNumericKey
                   ? [firstNumericKey]
                   : [],

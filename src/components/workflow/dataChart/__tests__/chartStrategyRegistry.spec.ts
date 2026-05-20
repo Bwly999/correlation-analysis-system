@@ -10,8 +10,16 @@ describe('chart strategy registry', () => {
       'outlier',
     ])
 
-    expect(getChartStrategy('scatter').getEnabledTools()).toEqual(['xField', 'filter'])
-    expect(getChartStrategy('bar').getEnabledTools()).toEqual(['xField', 'filter'])
+    expect(getChartStrategy('scatter').getEnabledTools()).toEqual([
+      'xField',
+      'filter',
+      'normalization',
+    ])
+    expect(getChartStrategy('bar').getEnabledTools()).toEqual([
+      'xField',
+      'filter',
+      'normalization',
+    ])
     expect(getChartStrategy('normal').getEnabledTools()).toEqual([
       'filter',
       'normalization',

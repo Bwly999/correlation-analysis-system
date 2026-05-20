@@ -25,7 +25,13 @@ export const useChartNormalization = ({
   const supportsNormalization = computed(
     () =>
       normalizedKeys.value.length > 0 &&
-      (chartType.value === 'line' || chartType.value === 'boxplot' || chartType.value === 'normal'),
+      (
+        chartType.value === 'line' ||
+        chartType.value === 'scatter' ||
+        chartType.value === 'bar' ||
+        chartType.value === 'boxplot' ||
+        chartType.value === 'normal'
+      ),
   )
 
   const normalizationSourceRows = computed(() => {
