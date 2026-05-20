@@ -1,5 +1,6 @@
 import type { ChartStrategy } from '../types'
 import {
+  applyVerticalZoomAxis,
   applyNormalizationAxis,
   buildBoxStatsByKey,
   buildGroupedScatterOffset,
@@ -8,6 +9,7 @@ import {
   createBoxplotBaseOption,
   createBoxplotDataItem,
   createBoxplotOutlierTooltipFormatter,
+  getBoxplotYZoomExtent,
   toRgba,
 } from './shared'
 import { BOX_PLOT_COLORS } from '../constants'
@@ -16,6 +18,25 @@ export const boxplotChartStrategy: ChartStrategy = {
   type: 'boxplot',
   getEnabledTools: () => ['filter', 'normalization', 'outlier', 'boxplotWhisker'],
   buildModel: buildProcessedChartData,
+  getYZoomExtent: (model, context) => {
+    if (context.source.isGroupedData.value) {
+      const activeGroups = context.isNormalizedView.value ? model.normalizedGroups : model.filteredGroups
+      const boxValuesByGroup = activeGroups.flatMap((group) =>
+        model.keys.map((key) => buildBoxStatsByKey(group.data || [], [key], context.state.boxplotWhiskerMode.value)[0]!.boxValues),
+      )
+      const outlierValues = activeGroups.flatMap((group) =>
+        model.keys.flatMap((key) => buildBoxStatsByKey(group.data || [], [key], context.state.boxplotWhiskerMode.value)[0]!.outliers),
+      )
+      return getBoxplotYZoomExtent(boxValuesByGroup, outlierValues)
+    }
+
+    const activeRows = context.isNormalizedView.value ? model.normalizedRows : model.filteredRows
+    const boxStatsByKey = buildBoxStatsByKey(activeRows, model.keys, context.state.boxplotWhiskerMode.value)
+    return getBoxplotYZoomExtent(
+      boxStatsByKey.map((stats) => stats.boxValues),
+      boxStatsByKey.flatMap((stats) => stats.outliers),
+    )
+  },
   buildOption: (model, context) => {
     const whiskerModeLabel =
       context.state.boxplotWhiskerMode.value === 'percentile' ? '2% / 98%' : '1.5 IQR'
@@ -24,6 +45,9 @@ export const boxplotChartStrategy: ChartStrategy = {
       const option = createBoxplotBaseOption(model.keys, whiskerModeLabel)
       applyNormalizationAxis(option.yAxis, context)
       const activeGroups = context.isNormalizedView.value ? model.normalizedGroups : model.filteredGroups
+      const boxValuesByGroup = activeGroups.map((group) =>
+        model.keys.map((key) => buildBoxStatsByKey(group.data || [], [key], context.state.boxplotWhiskerMode.value)[0]!.boxValues),
+      )
       const boxplotSeries = activeGroups.map((group, index) => {
         const color = BOX_PLOT_COLORS[index % BOX_PLOT_COLORS.length]!
         return {
@@ -68,6 +92,14 @@ export const boxplotChartStrategy: ChartStrategy = {
           },
         ]
       })
+      applyVerticalZoomAxis(
+        option.yAxis,
+        context,
+        getBoxplotYZoomExtent(
+          boxValuesByGroup.flat(),
+          outlierSeries.flatMap((series) => series.data.map((item) => item.value[1])),
+        ),
+      )
 
       option.legend.data = boxplotSeries.map((series: { name: string }) => series.name)
       option.series = [...boxplotSeries, ...outlierSeries]
@@ -98,6 +130,14 @@ export const boxplotChartStrategy: ChartStrategy = {
         emphasis: { focus: 'series', itemStyle: { borderWidth: 2.5 } },
       },
     ]
+    applyVerticalZoomAxis(
+      option.yAxis,
+      context,
+      getBoxplotYZoomExtent(
+        boxStatsByKey.map((stats) => stats.boxValues),
+        outlierData.map((item) => item.value[1]),
+      ),
+    )
     if (outlierData.length > 0) {
       option.series.push({
         name: '离群点',

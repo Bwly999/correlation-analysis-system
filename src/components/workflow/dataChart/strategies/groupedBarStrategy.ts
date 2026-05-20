@@ -1,16 +1,26 @@
 import type { ChartStrategy } from '../types'
-import { buildMarkedRawOption, buildProcessedChartData, createBaseOption } from './shared'
+import {
+  applyVerticalZoomAxis,
+  buildMarkedRawOption,
+  buildProcessedChartData,
+  createBaseOption,
+  getBarChartYZoomExtent,
+} from './shared'
 import { isFiniteNumber } from '../tools/normalization'
 
 export const groupedBarStrategy: ChartStrategy = {
   type: 'grouped-bar',
   getEnabledTools: () => ['filter'],
   buildModel: buildProcessedChartData,
-  buildOption: (model) => {
+  buildOption: (model, context) => {
     const option = createBaseOption()
+    const seriesData = model.filteredGroups.map((group) => {
+      const firstValidRow = group.data.find((row) => isFiniteNumber(row[model.primaryKey]))
+      return firstValidRow ? (firstValidRow[model.primaryKey] as number) : null
+    })
     option.tooltip.trigger = 'axis'
     option.legend.data = [model.primaryKey]
-    option.grid = { top: '18%', bottom: '15%', left: '10%', right: '10%', containLabel: true }
+    option.grid = { top: '18%', bottom: '15%', left: '10%', right: '14%', containLabel: true }
     option.xAxis = {
       type: 'category',
       data: model.filteredGroups.map((group) => group.name),
@@ -21,13 +31,11 @@ export const groupedBarStrategy: ChartStrategy = {
       {
         name: model.primaryKey,
         type: 'bar',
-        data: model.filteredGroups.map((group) => {
-          const firstValidRow = group.data.find((row) => isFiniteNumber(row[model.primaryKey]))
-          return firstValidRow ? (firstValidRow[model.primaryKey] as number) : null
-        }),
+        data: seriesData,
         itemStyle: { color: '#2563eb' },
       },
     ]
+    applyVerticalZoomAxis(option.yAxis, context, getBarChartYZoomExtent(seriesData))
 
     return buildMarkedRawOption(option)
   },

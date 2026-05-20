@@ -9,7 +9,7 @@ import {
   NORMAL_DISTRIBUTION_COLUMNS,
   NORMAL_DISTRIBUTION_CURVE_POINTS,
 } from '../constants'
-import type { ChartContext, ChartGroup, ChartRow, ProcessedChartData } from '../types'
+import type { ChartContext, ChartGroup, ChartNumericExtent, ChartRow, ProcessedChartData } from '../types'
 import { downsampleLineRows } from '../tools/sampling'
 import { filterInvalidLineRows } from '../tools/outlierHandling'
 import { isFiniteNumber, normalizeChartRows, normalizeSeriesValue } from '../tools/normalization'
@@ -114,7 +114,7 @@ export const createBaseOption = (): Record<string, any> => ({
     icon: 'roundRect',
     textStyle: { color: '#64748b', fontSize: 11, fontWeight: '600' },
   },
-  grid: { left: '3%', right: '3%', top: '15%', bottom: '20%', containLabel: true },
+  grid: { left: '3%', right: '8%', top: '15%', bottom: '20%', containLabel: true },
   dataZoom: [
     { type: 'inside', xAxisIndex: [0] },
     {
@@ -156,6 +156,81 @@ export const applyNormalizationAxis = (axis: Record<string, any>, context: Chart
   axis.name = context.state.normalizationMethod.value === 'min-max' ? '归一化值' : '标准分值'
   axis.min = context.state.normalizationMethod.value === 'min-max' ? 0 : undefined
   axis.max = context.state.normalizationMethod.value === 'min-max' ? 1 : undefined
+}
+
+export const resolveNumericExtent = (values: number[]): ChartNumericExtent | null => {
+  const finiteValues = values.filter((value) => Number.isFinite(value))
+  if (finiteValues.length === 0) return null
+
+  const min = Math.min(...finiteValues)
+  const max = Math.max(...finiteValues)
+
+  if (min === max) {
+    const padding = Math.max(Math.abs(min) * 0.1, 1)
+    return [min - padding, max + padding]
+  }
+
+  return [min, max]
+}
+
+export const extendNumericExtent = (
+  extent: ChartNumericExtent | null,
+  nextExtent: ChartNumericExtent | null,
+): ChartNumericExtent | null => {
+  if (!extent) return nextExtent
+  if (!nextExtent) return extent
+  return [Math.min(extent[0], nextExtent[0]), Math.max(extent[1], nextExtent[1])]
+}
+
+export const applyVerticalZoomAxis = (
+  axis: Record<string, any>,
+  context: ChartContext,
+  baseExtent: ChartNumericExtent | null,
+) => {
+  if (!baseExtent || !context.state.yZoomEnabled.value) {
+    axis.min = axis.min
+    axis.max = axis.max
+    return
+  }
+
+  const [baseMin, baseMax] = baseExtent
+  const [start, end] = context.state.yZoomRange.value
+  const span = baseMax - baseMin
+
+  if (!Number.isFinite(span) || span <= 0) return
+
+  axis.min = baseMin + (span * start) / 100
+  axis.max = baseMin + (span * end) / 100
+}
+
+export const getLineChartYZoomExtent = (model: ProcessedChartData, context: ChartContext) => {
+  const activeNormalizationMethod = context.state.normalizationMethod.value
+  const values = model.sampledRows.flatMap((row) =>
+    model.keys
+      .map((key) =>
+        context.isNormalizedView.value
+          ? normalizeSeriesValue(row[key], context.normalizationStats.value.get(key), activeNormalizationMethod)
+          : getFiniteRowValue(row, key),
+      )
+      .filter((value): value is number => Number.isFinite(value)),
+  )
+  return resolveNumericExtent(values)
+}
+
+export const getBarChartYZoomExtent = (values: Array<number | null>) =>
+  resolveNumericExtent(values.filter((value): value is number => Number.isFinite(value)))
+
+export const getScatterChartYZoomExtent = (points: Array<[number, number]>) =>
+  resolveNumericExtent(points.map((point) => point[1]))
+
+export const getBoxplotYZoomExtent = (
+  boxValues: Array<Array<number | null | undefined>>,
+  outlierValues: number[] = [],
+) => {
+  const values = boxValues
+    .flat()
+    .filter((value): value is number => Number.isFinite(value))
+  return resolveNumericExtent([...values, ...outlierValues.filter((value) => Number.isFinite(value))])
 }
 
 export const createLineTooltipFormatter = (sampledRows: ChartRow[], context: ChartContext) => {
@@ -330,7 +405,7 @@ export const createBoxplotBaseOption = (keys: string[], whiskerModeLabel: string
     itemGap: 20,
     textStyle: { color: '#0f172a', fontSize: 12, fontWeight: 600 },
   },
-  grid: { left: 0, right: 0, top: 56, bottom: 40, containLabel: true },
+  grid: { left: 0, right: 28, top: 56, bottom: 40, containLabel: true },
   dataZoom: [
     { type: 'inside', xAxisIndex: [0] },
     {

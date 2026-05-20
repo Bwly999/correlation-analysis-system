@@ -3,7 +3,9 @@ import type { BoxplotWhiskerMode } from '@/utils/stats'
 import { buildScopedResultPreviewStorageKey, useScopedResultPreviewStorage } from '../useScopedResultPreviewStorage'
 import type {
   ChartFilterPreset,
+  ChartNumericExtent,
   ChartType,
+  ChartYZoomRange,
   GroupedChartType,
   NormalizationMethod,
   TableChartType,
@@ -16,6 +18,27 @@ const isGroupedChartType = (value: string): value is GroupedChartType =>
 const isTableChartType = (value: string): value is TableChartType =>
   TABLE_CHART_TYPES.includes(value as TableChartType)
 
+const clampZoomStop = (value: number) => Math.min(100, Math.max(0, Math.round(value)))
+const normalizeZoomRange = (value: ChartYZoomRange): ChartYZoomRange => {
+  const start = clampZoomStop(value[0] ?? 0)
+  const end = clampZoomStop(value[1] ?? 100)
+
+  if (start === end) {
+    if (end >= 100) return [Math.max(0, end - 1), end]
+    return [start, Math.min(100, start + 1)]
+  }
+
+  return start < end ? [start, end] : [end, start]
+}
+
+const supportsVerticalZoom = (chartType: ChartType) => chartType !== 'normal'
+
+const normalizeOptionalNumber = (value: unknown): number | null => {
+  if (value === null || value === undefined || value === '') return null
+  const numericValue = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(numericValue) ? numericValue : null
+}
+
 export const normalizeLegacyTableChartType = (value: string): TableChartType | null => {
   if (value === 'histogram') return 'normal'
   return isTableChartType(value) ? value : null
@@ -25,6 +48,20 @@ const hasStoredScopedSlice = (storageScopeKey: string | undefined, slice: string
   const storageKey = buildScopedResultPreviewStorageKey(storageScopeKey, slice)
   if (!storageKey || typeof window === 'undefined') return false
   return window.localStorage.getItem(storageKey) !== null
+}
+
+const readStoredScopedSlice = <T>(storageScopeKey: string | undefined, slice: string, fallback: T): T => {
+  const storageKey = buildScopedResultPreviewStorageKey(storageScopeKey, slice)
+  if (!storageKey || typeof window === 'undefined') return fallback
+
+  const storedValue = window.localStorage.getItem(storageKey)
+  if (storedValue === null) return fallback
+
+  try {
+    return JSON.parse(storedValue) as T
+  } catch {
+    return storedValue as T
+  }
 }
 
 type UseDataChartStateOptions = {
@@ -76,6 +113,9 @@ export const useDataChartState = ({
     'chart-default-preset',
     null,
   )
+  const yZoomEnabled = shallowRef(readStoredScopedSlice(storageScopeKey, 'chart-y-zoom-enabled', false))
+  const yZoomRange = shallowRef<ChartYZoomRange>(readStoredScopedSlice(storageScopeKey, 'chart-y-zoom-range', [0, 100]))
+  const yZoomBaseExtent = shallowRef<ChartNumericExtent | null>(null)
   const hasAppliedInitialChartState = shallowRef(false)
 
   const hasAnyStoredChartState = () =>
@@ -246,6 +286,56 @@ export const useDataChartState = ({
     if (typeof value !== 'boolean') skipInvalidRows.value = false
   }, { immediate: true })
 
+  watch(lowerBound, (value) => {
+    const normalized = normalizeOptionalNumber(value)
+    if (normalized !== value) lowerBound.value = normalized
+  }, { immediate: true })
+
+  watch(upperBound, (value) => {
+    const normalized = normalizeOptionalNumber(value)
+    if (normalized !== value) upperBound.value = normalized
+  }, { immediate: true })
+
+  watch(yZoomRange, (value) => {
+    if (!Array.isArray(value) || value.length !== 2) {
+      yZoomRange.value = [0, 100]
+      return
+    }
+
+    const normalized = normalizeZoomRange(value)
+    if (normalized[0] !== value[0] || normalized[1] !== value[1]) {
+      yZoomRange.value = normalized
+    }
+  }, { immediate: true, deep: true })
+
+  watch(yZoomEnabled, (value) => {
+    if (typeof value !== 'boolean') yZoomEnabled.value = false
+  }, { immediate: true })
+
+  watch([yZoomEnabled, yZoomRange], ([enabled, range]) => {
+    const enabledStorageKey = buildScopedResultPreviewStorageKey(storageScopeKey, 'chart-y-zoom-enabled')
+    const rangeStorageKey = buildScopedResultPreviewStorageKey(storageScopeKey, 'chart-y-zoom-range')
+    if (!enabledStorageKey || !rangeStorageKey || typeof window === 'undefined') return
+
+    const isDefaultRange = range[0] === 0 && range[1] === 100
+    if (!enabled && isDefaultRange) {
+      window.localStorage.removeItem(enabledStorageKey)
+      window.localStorage.removeItem(rangeStorageKey)
+      return
+    }
+
+    window.localStorage.setItem(enabledStorageKey, JSON.stringify(enabled))
+    window.localStorage.setItem(rangeStorageKey, JSON.stringify(range))
+  }, { immediate: true, deep: true })
+
+  watch(chartType, (value) => {
+    if (supportsVerticalZoom(value)) return
+    if (yZoomEnabled.value) yZoomEnabled.value = false
+    if (yZoomRange.value[0] !== 0 || yZoomRange.value[1] !== 100) {
+      yZoomRange.value = [0, 100]
+    }
+  }, { immediate: true })
+
   watch(
     savedPresets,
     (presets) => {
@@ -289,6 +379,9 @@ export const useDataChartState = ({
     selectedPresetId,
     savedPresets,
     defaultPresetId,
+    yZoomEnabled,
+    yZoomRange,
+    yZoomBaseExtent,
     showsXAxisFieldSelector,
   }
 }

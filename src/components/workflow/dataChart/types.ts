@@ -40,6 +40,9 @@ export type ChartFilterPreset = {
   updatedAt: number
 }
 
+export type ChartYZoomRange = [number, number]
+export type ChartNumericExtent = [number, number]
+
 export type DataChartState = {
   chartType: Ref<ChartType>
   maxPoints: Ref<number>
@@ -56,6 +59,10 @@ export type DataChartState = {
   selectedPresetId: Ref<string | null>
   savedPresets: Ref<ChartFilterPreset[]>
   defaultPresetId: Ref<string | 'none' | null>
+  yZoomEnabled: Ref<boolean>
+  yZoomRange: Ref<ChartYZoomRange>
+  yZoomBaseExtent: Ref<ChartNumericExtent | null>
+  showsXAxisFieldSelector: ComputedRef<boolean>
 }
 
 export type DataChartSource = {
@@ -98,5 +105,6 @@ export type ChartStrategy = {
   type: ChartType
   getEnabledTools: () => ChartToolKey[]
   buildModel: (context: ChartContext) => ProcessedChartData
+  getYZoomExtent?: (model: ProcessedChartData, context: ChartContext) => ChartNumericExtent | null
   buildOption: (model: ProcessedChartData, context: ChartContext) => EChartsOption
 }

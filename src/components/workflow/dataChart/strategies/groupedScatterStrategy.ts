@@ -1,12 +1,20 @@
 import type { ChartStrategy } from '../types'
-import { buildMarkedRawOption, buildProcessedChartData, buildScatterValueAxisRange, createBaseOption, getChartXAxisValue } from './shared'
+import {
+  applyVerticalZoomAxis,
+  buildMarkedRawOption,
+  buildProcessedChartData,
+  buildScatterValueAxisRange,
+  createBaseOption,
+  getChartXAxisValue,
+  getScatterChartYZoomExtent,
+} from './shared'
 import { isFiniteNumber } from '../tools/normalization'
 
 export const groupedScatterStrategy: ChartStrategy = {
   type: 'grouped-scatter',
   getEnabledTools: () => ['xField', 'filter'],
   buildModel: buildProcessedChartData,
-  buildOption: (model) => {
+  buildOption: (model, context) => {
     const option = createBaseOption()
     const groupedScatterSeries = model.filteredGroups.map((group) => ({
       name: group.name,
@@ -20,20 +28,21 @@ export const groupedScatterStrategy: ChartStrategy = {
         return points
       }, []),
     }))
-    const allXValues = groupedScatterSeries.flatMap((series) => series.data.map(([xAxisValue]) => xAxisValue))
+    const allPoints = groupedScatterSeries.flatMap((series) => series.data)
 
     option.tooltip.trigger = 'item'
     option.legend.data = groupedScatterSeries.map((series: { name: string }) => series.name)
-    option.grid = { top: '18%', bottom: '15%', left: '10%', right: '10%', containLabel: true }
+    option.grid = { top: '18%', bottom: '15%', left: '10%', right: '14%', containLabel: true }
     option.xAxis = {
       type: 'value',
       ...(model.xField ? { name: model.xField } : {}),
       scale: true,
       boundaryGap: ['5%', '5%'],
-      ...buildScatterValueAxisRange(allXValues),
+      ...buildScatterValueAxisRange(allPoints.map(([xAxisValue]) => xAxisValue)),
     }
     option.yAxis = { type: 'value', name: model.primaryKey, scale: true, boundaryGap: ['15%', '15%'] }
     option.series = groupedScatterSeries
+    applyVerticalZoomAxis(option.yAxis, context, getScatterChartYZoomExtent(allPoints))
 
     return buildMarkedRawOption(option)
   },

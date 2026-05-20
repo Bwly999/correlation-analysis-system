@@ -170,6 +170,58 @@ const chartContext = computed<ChartContext>(() => ({
 }))
 
 const processedModel = computed(() => strategy.value.buildModel(chartContext.value))
+const yZoomExtent = computed(() => strategy.value.getYZoomExtent?.(processedModel.value, chartContext.value) ?? null)
+
+const setVerticalZoomRange = (start: number, end: number) => {
+  const normalizedStart = Math.max(0, Math.min(99, Math.round(start)))
+  const normalizedEnd = Math.max(normalizedStart + 1, Math.min(100, Math.round(end)))
+  state.yZoomRange.value = [normalizedStart, normalizedEnd]
+  state.yZoomEnabled.value = normalizedStart > 0 || normalizedEnd < 100
+}
+
+const updateVerticalZoomStart = (value: number) => {
+  setVerticalZoomRange(value, state.yZoomRange.value[1])
+}
+
+const updateVerticalZoomEnd = (value: number) => {
+  setVerticalZoomRange(state.yZoomRange.value[0], value)
+}
+
+const handleVerticalZoomStartInput = (event: Event) => {
+  updateVerticalZoomStart(Number((event.target as HTMLInputElement).value))
+}
+
+const handleVerticalZoomEndInput = (event: Event) => {
+  updateVerticalZoomEnd(Number((event.target as HTMLInputElement).value))
+}
+
+const resetVerticalZoom = () => {
+  state.yZoomEnabled.value = false
+  state.yZoomRange.value = [0, 100]
+}
+
+const showsVerticalZoomControls = computed(
+  () => source.hasRenderableData.value && state.chartType.value !== 'normal' && yZoomExtent.value !== null,
+)
+
+watch(
+  yZoomExtent,
+  (extent) => {
+    state.yZoomBaseExtent.value = extent
+  },
+  { immediate: true },
+)
+
+watch(
+  showsVerticalZoomControls,
+  (visible) => {
+    if (visible) return
+    if (!state.yZoomEnabled.value && state.yZoomRange.value[0] === 0 && state.yZoomRange.value[1] === 100) return
+    resetVerticalZoom()
+  },
+  { immediate: true },
+)
+
 const chartOption = computed(() => {
   if (!source.availableKeys.value.length) return {}
   return strategy.value.buildOption(processedModel.value, chartContext.value)
@@ -328,6 +380,43 @@ const boxplotToggleVisible = computed(
           class="chart-scroll-viewport flex-1 min-w-0 min-h-0 overflow-y-auto overflow-x-hidden pr-2"
         >
           <div v-if="source.hasRenderableData.value" data-test="chart-host" class="h-full w-full relative" :style="chartHostStyle">
+            <div
+              v-if="showsVerticalZoomControls"
+              data-test="chart-y-zoom-controls"
+              class="chart-y-zoom-controls absolute right-3 top-3 bottom-14 z-10 flex w-14 flex-col items-center rounded-2xl border border-slate-200 bg-white/95 px-2 py-3 shadow-sm backdrop-blur"
+            >
+              <span class="text-[10px] font-black uppercase tracking-widest text-slate-400">纵向缩放</span>
+              <div class="mt-3 flex-1 flex items-center justify-center">
+                <div class="chart-y-zoom-sliders relative flex h-full min-h-[180px] items-center justify-center">
+                  <input
+                    data-test="chart-y-zoom-start"
+                    class="chart-y-zoom-slider chart-y-zoom-slider--start"
+                    type="range"
+                    min="0"
+                    max="99"
+                    :value="state.yZoomRange.value[0]"
+                    @input="handleVerticalZoomStartInput"
+                  />
+                  <input
+                    data-test="chart-y-zoom-end"
+                    class="chart-y-zoom-slider chart-y-zoom-slider--end"
+                    type="range"
+                    min="1"
+                    max="100"
+                    :value="state.yZoomRange.value[1]"
+                    @input="handleVerticalZoomEndInput"
+                  />
+                </div>
+              </div>
+              <button
+                data-test="chart-y-zoom-reset"
+                type="button"
+                class="mt-3 rounded-lg border border-slate-200 px-2 py-1 text-[10px] font-bold text-slate-600 transition hover:border-slate-300 hover:text-slate-900"
+                @click="resetVerticalZoom()"
+              >
+                还原
+              </button>
+            </div>
             <ChartBoxplotWhiskerTool
               v-if="boxplotToggleVisible"
               v-model="state.boxplotWhiskerMode.value"
@@ -436,5 +525,33 @@ const boxplotToggleVisible = computed(
 :deep(.chart-axis-select .p-select-dropdown) {
   width: 28px;
   color: #94a3b8;
+}
+
+.chart-y-zoom-controls {
+  pointer-events: auto;
+}
+
+.chart-y-zoom-sliders {
+  width: 100%;
+}
+
+.chart-y-zoom-slider {
+  position: absolute;
+  inset: auto;
+  width: 180px;
+  height: 18px;
+  margin: 0;
+  transform: rotate(-90deg);
+  transform-origin: center;
+  accent-color: #2563eb;
+  background: transparent;
+}
+
+.chart-y-zoom-slider--start {
+  z-index: 2;
+}
+
+.chart-y-zoom-slider--end {
+  z-index: 1;
 }
 </style>

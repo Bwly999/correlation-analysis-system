@@ -1078,6 +1078,125 @@ describe('DataChart', () => {
     expect(option.series[0].data[0].itemStyle.color).not.toBe(option.series[0].data[1].itemStyle.color)
   })
 
+  it('supports persisted vertical zoom for line charts without mutating series data', async () => {
+    localStorage.clear()
+    localStorage.setItem('workflow-result-preview:node-y-line:chart-y-zoom-enabled', 'true')
+    localStorage.setItem('workflow-result-preview:node-y-line:chart-y-zoom-range', '[25,75]')
+
+    const wrapper = mount(DataChart, {
+      props: {
+        storageScopeKey: 'node-y-line',
+        data: [
+          { score: 10 },
+          { score: 20 },
+          { score: 30 },
+          { score: 40 },
+        ],
+      },
+    })
+
+    expect(wrapper.find('[data-test="chart-y-zoom-controls"]').exists()).toBe(true)
+    expect((wrapper.get('[data-test="chart-y-zoom-start"]').element as HTMLInputElement).value).toBe('25')
+    expect((wrapper.get('[data-test="chart-y-zoom-end"]').element as HTMLInputElement).value).toBe('75')
+
+    const option = getChartOptionObject(wrapper)
+    expect(option.dataZoom[0].xAxisIndex).toEqual([0])
+    expect(option.series[0].data).toEqual([10, 20, 30, 40])
+    expect(option.yAxis.min).toBeGreaterThan(10)
+    expect(option.yAxis.max).toBeLessThan(40)
+
+    await wrapper.get('[data-test="chart-y-zoom-reset"]').trigger('click')
+
+    const resetOption = getChartOptionObject(wrapper)
+    expect(resetOption.series[0].data).toEqual([10, 20, 30, 40])
+    expect(resetOption.yAxis.min).toBeUndefined()
+    expect(resetOption.yAxis.max).toBeUndefined()
+    expect(localStorage.getItem('workflow-result-preview:node-y-line:chart-y-zoom-enabled')).toBeNull()
+    expect(localStorage.getItem('workflow-result-preview:node-y-line:chart-y-zoom-range')).toBeNull()
+  })
+
+  it('applies vertical zoom to scatter charts without dropping plotted points', async () => {
+    localStorage.clear()
+    localStorage.setItem('workflow-result-preview:node-y-scatter:chart-y-zoom-enabled', 'true')
+    localStorage.setItem('workflow-result-preview:node-y-scatter:chart-y-zoom-range', '[20,80]')
+
+    const wrapper = mount(DataChart, {
+      props: {
+        storageScopeKey: 'node-y-scatter',
+        data: [
+          { temperature: 10, score: 5 },
+          { temperature: 20, score: 15 },
+          { temperature: 30, score: 25 },
+        ],
+      },
+    })
+
+    await wrapper.get('[data-test="chart-type-select"]').setValue('scatter')
+    await wrapper.get('[data-test="chart-key-select"]').setValue(['score'])
+    await wrapper.get('[data-test="chart-x-field-select"]').setValue('temperature')
+
+    const option = getChartOptionObject(wrapper)
+
+    expect(wrapper.find('[data-test="chart-y-zoom-controls"]').exists()).toBe(true)
+    expect(option.series[0].data).toEqual([
+      [10, 5],
+      [20, 15],
+      [30, 25],
+    ])
+    expect(option.yAxis.min).toBeGreaterThan(5)
+    expect(option.yAxis.max).toBeLessThan(25)
+  })
+
+  it('changes only the boxplot y-axis viewport during vertical zoom', async () => {
+    localStorage.clear()
+
+    const wrapper = mount(DataChart, {
+      props: {
+        storageScopeKey: 'node-y-boxplot',
+        data: [
+          { score: 1 },
+          { score: 2 },
+          { score: 3 },
+          { score: 40 },
+        ],
+      },
+    })
+
+    await wrapper.get('[data-test="chart-type-select"]').setValue('boxplot')
+
+    const beforeOption = getChartOptionObject(wrapper)
+    const beforeSeries = JSON.parse(JSON.stringify(beforeOption.series))
+
+    await wrapper.get('[data-test="chart-y-zoom-start"]').setValue('15')
+    await wrapper.get('[data-test="chart-y-zoom-end"]').setValue('85')
+
+    const afterOption = getChartOptionObject(wrapper)
+
+    expect(afterOption.series).toEqual(beforeSeries)
+    expect(afterOption.yAxis.min).toBeDefined()
+    expect(afterOption.yAxis.max).toBeDefined()
+  })
+
+  it('does not show vertical zoom controls for normal distribution charts', async () => {
+    localStorage.clear()
+
+    const wrapper = mount(DataChart, {
+      props: {
+        storageScopeKey: 'node-y-normal',
+        data: [
+          { score: 1 },
+          { score: 2 },
+          { score: 3 },
+        ],
+      },
+    })
+
+    await wrapper.get('[data-test="chart-type-select"]').setValue('normal')
+
+    expect(wrapper.find('[data-test="chart-y-zoom-controls"]').exists()).toBe(false)
+    expect(localStorage.getItem('workflow-result-preview:node-y-normal:chart-y-zoom-enabled')).toBeNull()
+  })
+
   it('shows single-table boxplot tooltip stats from data item values', async () => {
     const wrapper = mount(DataChart, {
       props: {

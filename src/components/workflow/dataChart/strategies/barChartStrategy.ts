@@ -1,14 +1,23 @@
 import type { ChartStrategy } from '../types'
-import { buildMarkedRawOption, buildProcessedChartData, createBaseOption, getChartXAxisValue, getFiniteRowValue } from './shared'
+import {
+  applyVerticalZoomAxis,
+  buildMarkedRawOption,
+  buildProcessedChartData,
+  createBaseOption,
+  getBarChartYZoomExtent,
+  getChartXAxisValue,
+  getFiniteRowValue,
+} from './shared'
 
 export const barChartStrategy: ChartStrategy = {
   type: 'bar',
   getEnabledTools: () => ['xField', 'filter'],
   buildModel: buildProcessedChartData,
-  buildOption: (model) => {
+  buildOption: (model, context) => {
     const option = createBaseOption()
+    const seriesData = model.filteredRows.map((row) => getFiniteRowValue(row, model.primaryKey))
     option.tooltip.trigger = 'axis'
-    option.grid = { top: '15%', bottom: '15%', left: '10%', right: '10%', containLabel: true }
+    option.grid = { top: '15%', bottom: '15%', left: '10%', right: '14%', containLabel: true }
     option.xAxis = {
       type: 'category',
       data: model.filteredRows.map((row, index) => getChartXAxisValue(row, index, model.xField)),
@@ -19,10 +28,11 @@ export const barChartStrategy: ChartStrategy = {
       {
         name: model.primaryKey,
         type: 'bar',
-        data: model.filteredRows.map((row) => getFiniteRowValue(row, model.primaryKey)),
+        data: seriesData,
         itemStyle: { color: '#2563eb' },
       },
     ]
+    applyVerticalZoomAxis(option.yAxis, context, getBarChartYZoomExtent(seriesData))
 
     return buildMarkedRawOption(option)
   },

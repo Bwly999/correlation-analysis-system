@@ -4,8 +4,8 @@ import { PanelRightClose, PanelRightOpen } from 'lucide-vue-next'
 import ChartFilterPresetPanel from './ChartFilterPresetPanel.vue'
 import type { ChartFilterPreset } from '../types'
 
-const lowerBound = defineModel<number | string | null>('lowerBound', { required: true })
-const upperBound = defineModel<number | string | null>('upperBound', { required: true })
+const lowerBound = defineModel<number | null>('lowerBound', { required: true })
+const upperBound = defineModel<number | null>('upperBound', { required: true })
 const isPresetPanelOpen = defineModel<boolean>('isPresetPanelOpen', { required: true })
 const presetNameInput = defineModel<string>('presetNameInput', { required: true })
 
