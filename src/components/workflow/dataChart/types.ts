@@ -62,6 +62,7 @@ export type DataChartState = {
   yZoomEnabled: Ref<boolean>
   yZoomRange: Ref<ChartYZoomRange>
   yZoomBaseExtent: Ref<ChartNumericExtent | null>
+  trendLineEnabled: Ref<boolean>
   showsXAxisFieldSelector: ComputedRef<boolean>
 }
 

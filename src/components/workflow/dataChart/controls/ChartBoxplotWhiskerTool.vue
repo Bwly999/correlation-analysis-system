@@ -8,7 +8,7 @@ const model = defineModel<BoxplotWhiskerMode>({ required: true })
 <template>
   <div
     data-test="boxplot-whisker-mode-toggle"
-    class="absolute right-3 top-3 z-10 flex items-center gap-1 rounded-xl border border-slate-200 bg-white/95 p-1 shadow-sm backdrop-blur"
+    class="absolute right-3 top-3 z-20 flex items-center gap-1 rounded-xl border border-slate-200 bg-white/95 p-1 shadow-sm backdrop-blur pointer-events-auto"
   >
     <button
       v-for="modeOption in BOXPLOT_WHISKER_MODE_OPTIONS"

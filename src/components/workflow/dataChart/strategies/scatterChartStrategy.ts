@@ -5,6 +5,7 @@ import {
   buildMarkedRawOption,
   buildProcessedChartData,
   buildScatterValueAxisRange,
+  buildTrendLineSeries,
   createBaseOption,
   getChartXAxisValue,
 } from './shared'
@@ -17,6 +18,7 @@ export const scatterChartStrategy: ChartStrategy = {
   buildOption: (model, context) => {
     const option = createBaseOption()
     const displayRows = context.isNormalizedView.value ? model.normalizedRows : model.filteredRows
+    const trendSeriesList: Record<string, any>[] = []
     const scatterSeries = model.keys.map((key) => {
       const tooltipRows: Array<{
         xAxisValue: number
@@ -102,7 +104,18 @@ export const scatterChartStrategy: ChartStrategy = {
       boundaryGap: ['15%', '15%'],
     }
     applyNormalizationAxis(option.yAxis, context)
-    option.series = scatterSeries.map(({ tooltipRows, ...series }) => series)
+    option.series = scatterSeries.map(({ tooltipRows, data, ...rest }) => {
+      const series: Record<string, any> = { ...rest, data, tooltip: { show: true } }
+      if (context.state.trendLineEnabled.value) {
+        const trendSeries = buildTrendLineSeries(data as Array<[number, number]>, {
+          name: `${String(rest.name)} 趋势线`,
+          coordinateMode: 'value',
+        })
+        if (trendSeries) trendSeriesList.push(trendSeries)
+      }
+      return series
+    })
+    option.series.push(...trendSeriesList)
     applyNativeVerticalDataZoom(
       option,
       context.state.yZoomEnabled.value ? context.state.yZoomRange.value[0] : 0,

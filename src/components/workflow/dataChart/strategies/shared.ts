@@ -196,7 +196,11 @@ export const applyNormalizationAxis = (axis: Record<string, any>, context: Chart
   axis.max = context.state.normalizationMethod.value === 'min-max' ? 1 : undefined
 }
 
-export const createLineTooltipFormatter = (sampledRows: ChartRow[], context: ChartContext) => {
+export const createLineTooltipFormatter = (
+  sampledRows: ChartRow[],
+  context: ChartContext,
+  trendLineFormulaByName: Map<string, string> = new Map(),
+) => {
   let lastCacheKey: string | null = null
   let lastTooltipHtml = ''
 
@@ -265,6 +269,19 @@ export const createLineTooltipFormatter = (sampledRows: ChartRow[], context: Cha
         ? `<tr><td colspan="3" style="padding:10px 12px;text-align:center;font-size:11px;font-weight:600;color:#475569;background:#f8fafc;">还有 ${hiddenFieldCount} 个字段，继续拖动或筛选后查看</td></tr>`
         : `<tr><td colspan="2" style="padding:10px 12px;text-align:center;font-size:11px;font-weight:600;color:#475569;background:#f8fafc;">还有 ${hiddenFieldCount} 个字段，继续拖动或筛选后查看</td></tr>`
       : ''
+    const trendLineEntries = Array.from(trendLineFormulaByName.entries())
+    const trendLineHtml =
+      trendLineEntries.length > 0
+        ? [
+            `<div style="margin-top:12px;padding-top:10px;border-top:1px solid #e2e8f0;">`,
+            `<div style="margin-bottom:6px;font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#94a3b8;">趋势线公式</div>`,
+            ...trendLineEntries.map(
+              ([seriesName, formula]) =>
+                `<div style="display:flex;justify-content:space-between;gap:16px;font-size:11px;color:#475569;"><span>${escapeTooltipHtml(seriesName)}</span><span style="font-weight:700;color:#0f172a;">${escapeTooltipHtml(formula)}</span></div>`,
+            ),
+            `</div>`,
+          ].join('')
+        : ''
 
     lastCacheKey = cacheKey
     lastTooltipHtml = [
@@ -282,6 +299,7 @@ export const createLineTooltipFormatter = (sampledRows: ChartRow[], context: Cha
       `<tbody>${rowsHtml}${summaryRow}</tbody>`,
       `</table>`,
       `</div>`,
+      trendLineHtml,
       `</div>`,
     ].join('')
 
@@ -591,6 +609,95 @@ export const createBoxplotDataItem = (values: number[], color: string) => ({
 })
 
 export const buildMarkedRawOption = (option: Record<string, any>) => markRaw(option)
+
+export const calculateLinearRegression = (
+  points: Array<[number, number]>,
+): { slope: number; intercept: number } | null => {
+  const n = points.length
+  if (n < 2) return null
+
+  let sumX = 0
+  let sumY = 0
+  let sumXY = 0
+  let sumX2 = 0
+  for (const [x, y] of points) {
+    sumX += x
+    sumY += y
+    sumXY += x * y
+    sumX2 += x * x
+  }
+
+  const denominator = n * sumX2 - sumX * sumX
+  if (denominator === 0) return null
+
+  const slope = (n * sumXY - sumX * sumY) / denominator
+  const intercept = (sumY - slope * sumX) / n
+
+  return { slope, intercept }
+}
+
+const formatTrendLineNumber = (value: number) => {
+  if (!Number.isFinite(value)) return '--'
+  if (Math.abs(value) >= 1000 || (Math.abs(value) > 0 && Math.abs(value) < 0.001)) {
+    return value.toExponential(2)
+  }
+  return value.toFixed(4).replace(/\.?0+$/, '')
+}
+
+export const formatTrendLineFormula = (slope: number, intercept: number) => {
+  const slopeLabel = formatTrendLineNumber(slope)
+  const interceptLabel = formatTrendLineNumber(Math.abs(intercept))
+  const operator = intercept >= 0 ? '+' : '-'
+  return `y = ${slopeLabel}x ${operator} ${interceptLabel}`
+}
+
+export const buildTrendLineSeries = (
+  points: Array<[number, number]>,
+  options: {
+    name?: string
+    coordinateMode?: 'category' | 'value'
+    categoryXAxisValues?: number[]
+  } = {},
+): Record<string, any> | null => {
+  const regression = calculateLinearRegression(points)
+  if (!regression) return null
+  const formula = formatTrendLineFormula(regression.slope, regression.intercept)
+  const name = options.name ?? '趋势线'
+
+  let xMin = Infinity
+  let xMax = -Infinity
+  for (const [x] of points) {
+    if (x < xMin) xMin = x
+    if (x > xMax) xMax = x
+  }
+
+  const data =
+    options.coordinateMode === 'category'
+      ? (options.categoryXAxisValues ?? []).map((xValue) => regression.slope * xValue + regression.intercept)
+      : [
+          [xMin, regression.slope * xMin + regression.intercept],
+          [xMax, regression.slope * xMax + regression.intercept],
+        ]
+
+  return {
+    name,
+    type: 'line',
+    data,
+    silent: false,
+    symbol: 'none',
+    showSymbol: false,
+    animation: false,
+    lineStyle: { type: 'dashed', width: 2, opacity: 0.7, color: '#0f172a' },
+    tooltip: {
+      show: true,
+      formatter: () =>
+        `<div style="padding:4px 2px;"><div style="color:#0f172a;font-size:12px;font-weight:700;">${escapeTooltipHtml(name)}</div><div style="margin-top:6px;color:#475569;font-size:11px;">${escapeTooltipHtml(formula)}</div></div>`,
+    },
+    emphasis: { disabled: true },
+    showInLegend: false,
+    trendLineFormula: formula,
+  }
+}
 
 export const buildScatterValueAxisRange = (values: number[]) => {
   const finiteValues = values.filter((value) => Number.isFinite(value))

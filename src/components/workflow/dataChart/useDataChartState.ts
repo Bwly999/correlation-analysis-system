@@ -116,6 +116,7 @@ export const useDataChartState = ({
   const yZoomEnabled = shallowRef(readStoredScopedSlice(storageScopeKey, 'chart-y-zoom-enabled', false))
   const yZoomRange = shallowRef<ChartYZoomRange>(readStoredScopedSlice(storageScopeKey, 'chart-y-zoom-range', [0, 100]))
   const yZoomBaseExtent = shallowRef<ChartNumericExtent | null>(null)
+  const trendLineEnabled = shallowRef(false)
   const hasAppliedInitialChartState = shallowRef(false)
 
   const hasAnyStoredChartState = () =>
@@ -382,6 +383,7 @@ export const useDataChartState = ({
     yZoomEnabled,
     yZoomRange,
     yZoomBaseExtent,
+    trendLineEnabled,
     showsXAxisFieldSelector,
   }
 }

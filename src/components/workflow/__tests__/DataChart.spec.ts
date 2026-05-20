@@ -217,6 +217,76 @@ describe('DataChart', () => {
     expect(option.yAxis.name).toBe('标准分值')
   })
 
+  it('shows the trend line toggle for line and scatter charts and renders trend line series with formulas after toggling', async () => {
+    localStorage.clear()
+
+    const wrapper = mount(DataChart, {
+      props: {
+        data: [
+          { score: 1, other: 2 },
+          { score: 2, other: 4 },
+          { score: 3, other: 6 },
+        ],
+      },
+    })
+
+    expect(wrapper.get('[data-test="trend-line-toggle"]').exists()).toBe(true)
+    expect(wrapper.get('[data-test="trend-line-inactive"]').exists()).toBe(true)
+
+    let option = getChartOption(wrapper)
+    expect(option.series.every((series: { name?: string }) => !String(series.name ?? '').includes('趋势线'))).toBe(true)
+
+    await wrapper.get('[data-test="trend-line-inactive"]').trigger('click')
+
+    option = getChartOption(wrapper)
+    expect(wrapper.get('[data-test="trend-line-active"]').exists()).toBe(true)
+    expect(option.series.some((series: { name?: string }) => String(series.name ?? '').includes('趋势线'))).toBe(true)
+    const lineTrendSeries = option.series.find((series: { name?: string }) => String(series.name ?? '').includes('趋势线'))
+    expect(lineTrendSeries.type).toBe('line')
+    expect(lineTrendSeries.lineStyle.type).toBe('dashed')
+
+    const lineOptionObject = getChartOptionObject(wrapper)
+    const lineTooltipHtml = (lineOptionObject.tooltip.formatter as (params: Array<Record<string, unknown>>) => string)([
+      { axisValueLabel: '1', seriesName: 'score', dataIndex: 0, data: 1, marker: '' },
+      { axisValueLabel: '1', seriesName: 'other', dataIndex: 0, data: 2, marker: '' },
+    ])
+    expect(lineTooltipHtml).toContain('趋势线公式')
+    expect(lineTooltipHtml).toContain('y =')
+
+    await wrapper.get('[data-test="chart-type-select"]').setValue('scatter')
+    await nextTick()
+
+    expect(wrapper.get('[data-test="trend-line-toggle"]').exists()).toBe(true)
+    expect(wrapper.get('[data-test="trend-line-active"]').exists()).toBe(true)
+
+    option = getChartOption(wrapper)
+    const scatterTrendSeries = option.series.find((series: { name?: string }) => String(series.name ?? '').includes('趋势线'))
+    expect(scatterTrendSeries.type).toBe('line')
+    expect(Array.isArray(scatterTrendSeries.data)).toBe(true)
+    expect(scatterTrendSeries.tooltip.show).toBe(true)
+  })
+
+  it('hides the trend line toggle for chart types that do not support it', async () => {
+    localStorage.clear()
+
+    const wrapper = mount(DataChart, {
+      props: {
+        data: [
+          { score: 1, other: 2 },
+          { score: 2, other: 4 },
+        ],
+      },
+    })
+
+    await wrapper.get('[data-test="chart-type-select"]').setValue('boxplot')
+    await nextTick()
+    expect(wrapper.find('[data-test="trend-line-toggle"]').exists()).toBe(false)
+
+    await wrapper.get('[data-test="chart-type-select"]').setValue('normal')
+    await nextTick()
+    expect(wrapper.find('[data-test="trend-line-toggle"]').exists()).toBe(false)
+  })
+
   it('shows normalization controls for grouped boxplot charts', () => {
     localStorage.clear()
 

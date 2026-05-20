@@ -9,6 +9,7 @@ import {
   DatasetComponent,
   GridComponent,
   LegendComponent,
+  MarkLineComponent,
   TooltipComponent,
   TransformComponent,
 } from 'echarts/components'
@@ -26,6 +27,7 @@ import ChartFilterTool from './dataChart/controls/ChartFilterTool.vue'
 import ChartNormalizationTool from './dataChart/controls/ChartNormalizationTool.vue'
 import ChartOutlierTool from './dataChart/controls/ChartOutlierTool.vue'
 import ChartSamplingTool from './dataChart/controls/ChartSamplingTool.vue'
+import ChartTrendLineTool from './dataChart/controls/ChartTrendLineTool.vue'
 import ChartXAxisFieldTool from './dataChart/controls/ChartXAxisFieldTool.vue'
 import { useChartFiltering } from './dataChart/tools/useChartFiltering'
 import { useChartNormalization } from './dataChart/tools/useChartNormalization'
@@ -45,6 +47,7 @@ use([
   DataZoomComponent,
   DatasetComponent,
   TransformComponent,
+  MarkLineComponent,
 ])
 
 const props = defineProps<{
@@ -246,6 +249,10 @@ watch(
 const boxplotToggleVisible = computed(
   () => source.hasRenderableData.value && enabledTools.value.has('boxplotWhisker'),
 )
+
+const trendLineVisible = computed(
+  () => source.hasRenderableData.value && (state.chartType.value === 'line' || state.chartType.value === 'scatter'),
+)
 </script>
 
 <template>
@@ -343,10 +350,16 @@ const boxplotToggleVisible = computed(
           class="chart-scroll-viewport flex-1 min-w-0 min-h-0 overflow-y-auto overflow-x-hidden pr-2"
         >
           <div v-if="source.hasRenderableData.value" data-test="chart-host" class="h-full w-full relative" :style="chartHostStyle">
-            <ChartBoxplotWhiskerTool
-              v-if="boxplotToggleVisible"
-              v-model="state.boxplotWhiskerMode.value"
-            />
+            <div class="absolute inset-0 z-20 pointer-events-none">
+              <ChartBoxplotWhiskerTool
+                v-if="boxplotToggleVisible"
+                v-model="state.boxplotWhiskerMode.value"
+              />
+              <ChartTrendLineTool
+                v-if="trendLineVisible"
+                v-model="state.trendLineEnabled.value"
+              />
+            </div>
             <VChart ref="chartRef" :option="chartOption" :update-options="chartUpdateOptions" autoresize />
           </div>
         </div>
