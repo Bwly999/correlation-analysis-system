@@ -145,6 +145,44 @@ export const createBaseOption = (): Record<string, any> => ({
   series: [],
 })
 
+export const applyNativeVerticalDataZoom = (
+  option: Record<string, any>,
+  start: number,
+  end: number,
+  sliderOverrides: Record<string, unknown> = {},
+) => {
+  option.dataZoom = [
+    ...(option.dataZoom ?? []),
+    {
+      type: 'inside',
+      yAxisIndex: [0],
+      start,
+      end,
+      filterMode: 'empty',
+      zoomOnMouseWheel: false,
+      moveOnMouseWheel: false,
+      moveOnMouseMove: false,
+    },
+    {
+      type: 'slider',
+      yAxisIndex: [0],
+      start,
+      end,
+      filterMode: 'empty',
+      right: 6,
+      width: 16,
+      top: 48,
+      bottom: 36,
+      borderColor: 'transparent',
+      backgroundColor: '#f8fafc',
+      fillerColor: 'rgba(79, 70, 229, 0.1)',
+      handleStyle: { color: '#4f46e5' },
+      textStyle: { color: '#94a3b8', fontSize: 10 },
+      ...sliderOverrides,
+    },
+  ]
+}
+
 export const applyNormalizationAxis = (axis: Record<string, any>, context: ChartContext) => {
   if (!context.isNormalizedView.value) {
     axis.name = undefined
@@ -156,81 +194,6 @@ export const applyNormalizationAxis = (axis: Record<string, any>, context: Chart
   axis.name = context.state.normalizationMethod.value === 'min-max' ? '归一化值' : '标准分值'
   axis.min = context.state.normalizationMethod.value === 'min-max' ? 0 : undefined
   axis.max = context.state.normalizationMethod.value === 'min-max' ? 1 : undefined
-}
-
-export const resolveNumericExtent = (values: number[]): ChartNumericExtent | null => {
-  const finiteValues = values.filter((value) => Number.isFinite(value))
-  if (finiteValues.length === 0) return null
-
-  const min = Math.min(...finiteValues)
-  const max = Math.max(...finiteValues)
-
-  if (min === max) {
-    const padding = Math.max(Math.abs(min) * 0.1, 1)
-    return [min - padding, max + padding]
-  }
-
-  return [min, max]
-}
-
-export const extendNumericExtent = (
-  extent: ChartNumericExtent | null,
-  nextExtent: ChartNumericExtent | null,
-): ChartNumericExtent | null => {
-  if (!extent) return nextExtent
-  if (!nextExtent) return extent
-  return [Math.min(extent[0], nextExtent[0]), Math.max(extent[1], nextExtent[1])]
-}
-
-export const applyVerticalZoomAxis = (
-  axis: Record<string, any>,
-  context: ChartContext,
-  baseExtent: ChartNumericExtent | null,
-) => {
-  if (!baseExtent || !context.state.yZoomEnabled.value) {
-    axis.min = axis.min
-    axis.max = axis.max
-    return
-  }
-
-  const [baseMin, baseMax] = baseExtent
-  const [start, end] = context.state.yZoomRange.value
-  const span = baseMax - baseMin
-
-  if (!Number.isFinite(span) || span <= 0) return
-
-  axis.min = baseMin + (span * start) / 100
-  axis.max = baseMin + (span * end) / 100
-}
-
-export const getLineChartYZoomExtent = (model: ProcessedChartData, context: ChartContext) => {
-  const activeNormalizationMethod = context.state.normalizationMethod.value
-  const values = model.sampledRows.flatMap((row) =>
-    model.keys
-      .map((key) =>
-        context.isNormalizedView.value
-          ? normalizeSeriesValue(row[key], context.normalizationStats.value.get(key), activeNormalizationMethod)
-          : getFiniteRowValue(row, key),
-      )
-      .filter((value): value is number => Number.isFinite(value)),
-  )
-  return resolveNumericExtent(values)
-}
-
-export const getBarChartYZoomExtent = (values: Array<number | null>) =>
-  resolveNumericExtent(values.filter((value): value is number => Number.isFinite(value)))
-
-export const getScatterChartYZoomExtent = (points: Array<[number, number]>) =>
-  resolveNumericExtent(points.map((point) => point[1]))
-
-export const getBoxplotYZoomExtent = (
-  boxValues: Array<Array<number | null | undefined>>,
-  outlierValues: number[] = [],
-) => {
-  const values = boxValues
-    .flat()
-    .filter((value): value is number => Number.isFinite(value))
-  return resolveNumericExtent([...values, ...outlierValues.filter((value) => Number.isFinite(value))])
 }
 
 export const createLineTooltipFormatter = (sampledRows: ChartRow[], context: ChartContext) => {

@@ -1,10 +1,9 @@
 import type { ChartStrategy } from '../types'
 import {
-  applyVerticalZoomAxis,
+  applyNativeVerticalDataZoom,
   buildMarkedRawOption,
   buildProcessedChartData,
   createBaseOption,
-  getBarChartYZoomExtent,
   getChartXAxisValue,
   getFiniteRowValue,
 } from './shared'
@@ -32,7 +31,11 @@ export const barChartStrategy: ChartStrategy = {
         itemStyle: { color: '#2563eb' },
       },
     ]
-    applyVerticalZoomAxis(option.yAxis, context, getBarChartYZoomExtent(seriesData))
+    applyNativeVerticalDataZoom(
+      option,
+      context.state.yZoomEnabled.value ? context.state.yZoomRange.value[0] : 0,
+      context.state.yZoomEnabled.value ? context.state.yZoomRange.value[1] : 100,
+    )
 
     return buildMarkedRawOption(option)
   },

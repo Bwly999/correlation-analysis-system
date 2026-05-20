@@ -1,12 +1,11 @@
 import type { ChartStrategy } from '../types'
 import {
-  applyVerticalZoomAxis,
+  applyNativeVerticalDataZoom,
   buildMarkedRawOption,
   buildProcessedChartData,
   buildScatterValueAxisRange,
   createBaseOption,
   getChartXAxisValue,
-  getScatterChartYZoomExtent,
 } from './shared'
 import { isFiniteNumber } from '../tools/normalization'
 
@@ -42,7 +41,11 @@ export const groupedScatterStrategy: ChartStrategy = {
     }
     option.yAxis = { type: 'value', name: model.primaryKey, scale: true, boundaryGap: ['15%', '15%'] }
     option.series = groupedScatterSeries
-    applyVerticalZoomAxis(option.yAxis, context, getScatterChartYZoomExtent(allPoints))
+    applyNativeVerticalDataZoom(
+      option,
+      context.state.yZoomEnabled.value ? context.state.yZoomRange.value[0] : 0,
+      context.state.yZoomEnabled.value ? context.state.yZoomRange.value[1] : 100,
+    )
 
     return buildMarkedRawOption(option)
   },

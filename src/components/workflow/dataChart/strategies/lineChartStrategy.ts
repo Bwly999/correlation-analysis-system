@@ -1,12 +1,11 @@
 import type { ChartStrategy } from '../types'
 import {
-  applyVerticalZoomAxis,
+  applyNativeVerticalDataZoom,
   applyNormalizationAxis,
   buildMarkedRawOption,
   buildProcessedChartData,
   createBaseOption,
   createLineTooltipFormatter,
-  getLineChartYZoomExtent,
   getFiniteRowValue,
 } from './shared'
 import { normalizeSeriesValue } from '../tools/normalization'
@@ -15,7 +14,6 @@ export const lineChartStrategy: ChartStrategy = {
   type: 'line',
   getEnabledTools: () => ['sampling', 'filter', 'normalization', 'outlier'],
   buildModel: buildProcessedChartData,
-  getYZoomExtent: getLineChartYZoomExtent,
   buildOption: (model, context) => {
     const option = createBaseOption()
     const sampledIndex = Array.from({ length: model.sampledRows.length }, (_, index) => index + 1)
@@ -50,7 +48,11 @@ export const lineChartStrategy: ChartStrategy = {
       hoverAnimation: false,
       emphasis: { disabled: true },
     }))
-    applyVerticalZoomAxis(option.yAxis, context, getLineChartYZoomExtent(model, context))
+    applyNativeVerticalDataZoom(
+      option,
+      context.state.yZoomEnabled.value ? context.state.yZoomRange.value[0] : 0,
+      context.state.yZoomEnabled.value ? context.state.yZoomRange.value[1] : 100,
+    )
 
     return buildMarkedRawOption(option)
   },

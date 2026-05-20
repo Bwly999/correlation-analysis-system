@@ -1,6 +1,6 @@
 import type { ChartStrategy } from '../types'
 import {
-  applyVerticalZoomAxis,
+  applyNativeVerticalDataZoom,
   applyNormalizationAxis,
   buildBoxStatsByKey,
   buildGroupedScatterOffset,
@@ -9,7 +9,6 @@ import {
   createBoxplotBaseOption,
   createBoxplotDataItem,
   createBoxplotOutlierTooltipFormatter,
-  getBoxplotYZoomExtent,
   toRgba,
 } from './shared'
 import { BOX_PLOT_COLORS } from '../constants'
@@ -18,25 +17,6 @@ export const boxplotChartStrategy: ChartStrategy = {
   type: 'boxplot',
   getEnabledTools: () => ['filter', 'normalization', 'outlier', 'boxplotWhisker'],
   buildModel: buildProcessedChartData,
-  getYZoomExtent: (model, context) => {
-    if (context.source.isGroupedData.value) {
-      const activeGroups = context.isNormalizedView.value ? model.normalizedGroups : model.filteredGroups
-      const boxValuesByGroup = activeGroups.flatMap((group) =>
-        model.keys.map((key) => buildBoxStatsByKey(group.data || [], [key], context.state.boxplotWhiskerMode.value)[0]!.boxValues),
-      )
-      const outlierValues = activeGroups.flatMap((group) =>
-        model.keys.flatMap((key) => buildBoxStatsByKey(group.data || [], [key], context.state.boxplotWhiskerMode.value)[0]!.outliers),
-      )
-      return getBoxplotYZoomExtent(boxValuesByGroup, outlierValues)
-    }
-
-    const activeRows = context.isNormalizedView.value ? model.normalizedRows : model.filteredRows
-    const boxStatsByKey = buildBoxStatsByKey(activeRows, model.keys, context.state.boxplotWhiskerMode.value)
-    return getBoxplotYZoomExtent(
-      boxStatsByKey.map((stats) => stats.boxValues),
-      boxStatsByKey.flatMap((stats) => stats.outliers),
-    )
-  },
   buildOption: (model, context) => {
     const whiskerModeLabel =
       context.state.boxplotWhiskerMode.value === 'percentile' ? '2% / 98%' : '1.5 IQR'
@@ -92,13 +72,14 @@ export const boxplotChartStrategy: ChartStrategy = {
           },
         ]
       })
-      applyVerticalZoomAxis(
-        option.yAxis,
-        context,
-        getBoxplotYZoomExtent(
-          boxValuesByGroup.flat(),
-          outlierSeries.flatMap((series) => series.data.map((item) => item.value[1])),
-        ),
+      applyNativeVerticalDataZoom(
+        option,
+        context.state.yZoomEnabled.value ? context.state.yZoomRange.value[0] : 0,
+        context.state.yZoomEnabled.value ? context.state.yZoomRange.value[1] : 100,
+        {
+          top: 56,
+          bottom: 40,
+        },
       )
 
       option.legend.data = boxplotSeries.map((series: { name: string }) => series.name)
@@ -130,13 +111,14 @@ export const boxplotChartStrategy: ChartStrategy = {
         emphasis: { focus: 'series', itemStyle: { borderWidth: 2.5 } },
       },
     ]
-    applyVerticalZoomAxis(
-      option.yAxis,
-      context,
-      getBoxplotYZoomExtent(
-        boxStatsByKey.map((stats) => stats.boxValues),
-        outlierData.map((item) => item.value[1]),
-      ),
+    applyNativeVerticalDataZoom(
+      option,
+      context.state.yZoomEnabled.value ? context.state.yZoomRange.value[0] : 0,
+      context.state.yZoomEnabled.value ? context.state.yZoomRange.value[1] : 100,
+      {
+        top: 56,
+        bottom: 40,
+      },
     )
     if (outlierData.length > 0) {
       option.series.push({

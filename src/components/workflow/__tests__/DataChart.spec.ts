@@ -1095,24 +1095,16 @@ describe('DataChart', () => {
       },
     })
 
-    expect(wrapper.find('[data-test="chart-y-zoom-controls"]').exists()).toBe(true)
-    expect((wrapper.get('[data-test="chart-y-zoom-start"]').element as HTMLInputElement).value).toBe('25')
-    expect((wrapper.get('[data-test="chart-y-zoom-end"]').element as HTMLInputElement).value).toBe('75')
-
     const option = getChartOptionObject(wrapper)
     expect(option.dataZoom[0].xAxisIndex).toEqual([0])
+    expect(option.dataZoom[2].yAxisIndex).toEqual([0])
+    expect(option.dataZoom[2].filterMode).toBe('empty')
+    expect(option.dataZoom[2].start).toBe(25)
+    expect(option.dataZoom[2].end).toBe(75)
+    expect(option.dataZoom[3].yAxisIndex).toEqual([0])
     expect(option.series[0].data).toEqual([10, 20, 30, 40])
-    expect(option.yAxis.min).toBeGreaterThan(10)
-    expect(option.yAxis.max).toBeLessThan(40)
-
-    await wrapper.get('[data-test="chart-y-zoom-reset"]').trigger('click')
-
-    const resetOption = getChartOptionObject(wrapper)
-    expect(resetOption.series[0].data).toEqual([10, 20, 30, 40])
-    expect(resetOption.yAxis.min).toBeUndefined()
-    expect(resetOption.yAxis.max).toBeUndefined()
-    expect(localStorage.getItem('workflow-result-preview:node-y-line:chart-y-zoom-enabled')).toBeNull()
-    expect(localStorage.getItem('workflow-result-preview:node-y-line:chart-y-zoom-range')).toBeNull()
+    expect(option.yAxis.min).toBeUndefined()
+    expect(option.yAxis.max).toBeUndefined()
   })
 
   it('applies vertical zoom to scatter charts without dropping plotted points', async () => {
@@ -1137,18 +1129,22 @@ describe('DataChart', () => {
 
     const option = getChartOptionObject(wrapper)
 
-    expect(wrapper.find('[data-test="chart-y-zoom-controls"]').exists()).toBe(true)
+    expect(option.dataZoom[2].yAxisIndex).toEqual([0])
+    expect(option.dataZoom[2].start).toBe(20)
+    expect(option.dataZoom[2].end).toBe(80)
     expect(option.series[0].data).toEqual([
       [10, 5],
       [20, 15],
       [30, 25],
     ])
-    expect(option.yAxis.min).toBeGreaterThan(5)
-    expect(option.yAxis.max).toBeLessThan(25)
+    expect(option.yAxis.min).toBeUndefined()
+    expect(option.yAxis.max).toBeUndefined()
   })
 
   it('changes only the boxplot y-axis viewport during vertical zoom', async () => {
     localStorage.clear()
+    localStorage.setItem('workflow-result-preview:node-y-boxplot:chart-y-zoom-enabled', 'true')
+    localStorage.setItem('workflow-result-preview:node-y-boxplot:chart-y-zoom-range', '[15,85]')
 
     const wrapper = mount(DataChart, {
       props: {
@@ -1164,17 +1160,14 @@ describe('DataChart', () => {
 
     await wrapper.get('[data-test="chart-type-select"]').setValue('boxplot')
 
-    const beforeOption = getChartOptionObject(wrapper)
-    const beforeSeries = JSON.parse(JSON.stringify(beforeOption.series))
+    const option = getChartOptionObject(wrapper)
 
-    await wrapper.get('[data-test="chart-y-zoom-start"]').setValue('15')
-    await wrapper.get('[data-test="chart-y-zoom-end"]').setValue('85')
-
-    const afterOption = getChartOptionObject(wrapper)
-
-    expect(afterOption.series).toEqual(beforeSeries)
-    expect(afterOption.yAxis.min).toBeDefined()
-    expect(afterOption.yAxis.max).toBeDefined()
+    expect(option.dataZoom[2].yAxisIndex).toEqual([0])
+    expect(option.dataZoom[2].start).toBe(15)
+    expect(option.dataZoom[2].end).toBe(85)
+    expect(option.series[0].data[0].value).toEqual([1, 2, 3, 40, 40])
+    expect(option.yAxis.min).toBeUndefined()
+    expect(option.yAxis.max).toBeUndefined()
   })
 
   it('does not show vertical zoom controls for normal distribution charts', async () => {
@@ -1193,7 +1186,8 @@ describe('DataChart', () => {
 
     await wrapper.get('[data-test="chart-type-select"]').setValue('normal')
 
-    expect(wrapper.find('[data-test="chart-y-zoom-controls"]').exists()).toBe(false)
+    const option = getChartOptionObject(wrapper)
+    expect(option.dataZoom?.some((item: { yAxisIndex?: number[] }) => Array.isArray(item.yAxisIndex)) ?? false).toBe(false)
     expect(localStorage.getItem('workflow-result-preview:node-y-normal:chart-y-zoom-enabled')).toBeNull()
   })
 
