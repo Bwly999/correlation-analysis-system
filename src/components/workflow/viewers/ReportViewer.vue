@@ -105,7 +105,7 @@ const { isExporting, exportCurrentReport, exportOriginalImage } = useReportExpor
 
 const isExportMode = computed(() => props.exportMode === true)
 const collapsibleSectionTitles = new Set(['分析摘要', '结果可信提示', 'X / Y 字段相关明细'])
-const collapsedByDefaultSectionTitles = new Set(['X / Y 字段相关明细'])
+const collapsedByDefaultSectionTitles = new Set<string>()
 const collapsedSections = ref<Record<string, boolean>>({})
 
 const sectionComponentMap: Partial<Record<ReportSectionType, Component>> = {

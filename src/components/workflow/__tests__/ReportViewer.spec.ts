@@ -521,21 +521,16 @@ describe('ReportViewer', () => {
     expect(wrapper.findAll('[data-test="report-risk-item"]')).toHaveLength(2)
   })
 
-  it('expands summary and risks by default but collapses correlation details by default', async () => {
+  it('expands summary, risks, and correlation details by default', async () => {
     const wrapper = mount(ReportViewer, {
       props: { data: createCorrelationReport() },
     })
 
     expect(wrapper.get('[data-test="report-section-summary"]').attributes('data-collapsed')).toBe('false')
     expect(wrapper.get('[data-test="report-section-risks"]').attributes('data-collapsed')).toBe('false')
-    expect(wrapper.get('[data-test="report-section-details"]').attributes('data-collapsed')).toBe('true')
+    expect(wrapper.get('[data-test="report-section-details"]').attributes('data-collapsed')).toBe('false')
     expect(wrapper.text()).toContain('本次共分析 2 个 X 字段与 2 个 Y 字段。')
     expect(wrapper.text()).toContain('样本量偏少')
-    expect(wrapper.text()).not.toContain('"correlation": 0.91')
-
-    await wrapper.get('[data-test="report-section-toggle-details"]').trigger('click')
-
-    expect(wrapper.get('[data-test="report-section-details"]').attributes('data-collapsed')).toBe('false')
     expect(wrapper.get('[data-test="report-json-table"]').attributes('data-row-count')).toBe('1')
     expect(wrapper.get('[data-test="report-json-column-xField"]').attributes('data-sortable')).not.toBe(
       'false',
@@ -547,6 +542,11 @@ describe('ReportViewer', () => {
     await wrapper.get('[data-test="report-section-toggle-details"]').trigger('click')
 
     expect(wrapper.get('[data-test="report-section-details"]').attributes('data-collapsed')).toBe('true')
+    expect(wrapper.text()).not.toContain('"correlation": 0.91')
+
+    await wrapper.get('[data-test="report-section-toggle-details"]').trigger('click')
+
+    expect(wrapper.get('[data-test="report-section-details"]').attributes('data-collapsed')).toBe('false')
     expect(wrapper.text()).not.toContain('"correlation": 0.91')
   })
 
