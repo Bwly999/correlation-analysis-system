@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1920">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --text-main: #0f172a;
+    --text-dim: #64748b;
+    --border: #e2e8f0;
+    --blue: #2563eb;
+    --teal: #0d9488;
+    --amber: #d97706;
+    --slate: #475569;
+  }
+  body {
+    margin: 0; padding: 0;
+    width: 1920px; height: 1080px;
+    overflow: hidden;
+    background: #fcfdfe;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    color: var(--text-main);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Header */
+  .header {
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 80px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 64px;
+    border-bottom: 1px solid var(--border);
+  }
+  .header .slide-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px; font-weight: 500;
+    color: var(--text-dim);
+    letter-spacing: 0.05em;
+  }
+  .header .center-info {
+    display: flex; align-items: center; gap: 16px;
+  }
+  .header .title {
+    font-size: 13px; font-weight: 600;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .header .subtitle-hint {
+    font-size: 11px; color: #94a3b8;
+  }
+  .header .label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 500;
+    color: var(--text-dim);
+    letter-spacing: 0.08em;
+    padding: 4px 12px;
+    border: 1px solid var(--border);
+    border-radius: 100px;
+  }
+
+  /* Main */
+  .main {
+    position: absolute;
+    top: 80px; left: 0; right: 0; bottom: 60px;
+    display: flex;
+    flex-direction: column;
+    padding: 28px 64px;
+    gap: 24px;
+  }
+
+  .section-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 500;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 14px;
+  }
+
+  /* Section 1: Defense Layer 1 */
+  .section1 {
+    flex-shrink: 0;
+  }
+  .cap-cards {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+  }
+  .cap-card {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 22px;
+    position: relative;
+    overflow: hidden;
+  }
+  .cap-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+  }
+  .cap-card:nth-child(1)::before { background: var(--blue); }
+  .cap-card:nth-child(2)::before { background: var(--teal); }
+  .cap-card:nth-child(3)::before { background: var(--amber); }
+  .cap-card:nth-child(4)::before { background: var(--slate); }
+
+  .cap-card .cc-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; font-weight: 500;
+    color: #cbd5e1;
+    margin-bottom: 8px;
+  }
+  .cap-card .cc-title {
+    font-size: 15px; font-weight: 700;
+    margin-bottom: 8px;
+  }
+  .cap-card .cc-desc {
+    font-size: 12px;
+    color: var(--text-dim);
+    line-height: 1.55;
+  }
+
+  /* Section 2: Flow */
+  .section2 {
+    flex-shrink: 0;
+  }
+  .flow-container {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 28px 32px;
+  }
+  .flow-steps {
+    display: flex;
+    gap: 0;
+    align-items: stretch;
+  }
+  .flow-node {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    position: relative;
+  }
+  .flow-node .fn-box {
+    width: 100%;
+    background: #f8fafc;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    text-align: center;
+    position: relative;
+  }
+  .flow-node:nth-child(1) .fn-box { border-top: 3px solid var(--blue); }
+  .flow-node:nth-child(2) .fn-box { border-top: 3px solid var(--teal); }
+  .flow-node:nth-child(3) .fn-box { border-top: 3px solid var(--amber); }
+  .flow-node:nth-child(4) .fn-box { border-top: 3px solid var(--slate); }
+
+  .fn-box .fn-title {
+    font-size: 14px; font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .fn-box .fn-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; font-weight: 500;
+    padding: 2px 8px;
+    border-radius: 100px;
+    display: inline-block;
+    letter-spacing: 0.05em;
+  }
+  .flow-node:nth-child(1) .fn-tag { color: var(--blue); background: rgba(37,99,235,0.08); }
+  .flow-node:nth-child(2) .fn-tag { color: var(--teal); background: rgba(13,148,136,0.08); }
+  .flow-node:nth-child(3) .fn-tag { color: var(--amber); background: rgba(217,119,6,0.08); }
+  .flow-node:nth-child(4) .fn-tag { color: var(--slate); background: rgba(71,85,105,0.08); }
+
+  .flow-node .fn-desc {
+    font-size: 12px;
+    color: var(--text-dim);
+    text-align: center;
+    line-height: 1.5;
+    max-width: 200px;
+  }
+
+  .flow-arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    flex-shrink: 0;
+    align-self: center;
+  }
+
+  /* Section 3: Quality gates */
+  .section3 {
+    flex: 1;
+    display: flex;
+    gap: 24px;
+    min-height: 0;
+  }
+  .metric-cards {
+    display: flex;
+    gap: 20px;
+    flex: 1;
+  }
+  .metric-card {
+    flex: 1;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 28px;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+  }
+  .metric-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+  }
+  .metric-card:nth-child(1)::before { background: var(--blue); }
+  .metric-card:nth-child(2)::before { background: var(--teal); }
+  .metric-card:nth-child(3)::before { background: var(--amber); }
+
+  .mc-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .mc-icon {
+    width: 40px; height: 40px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .metric-card:nth-child(1) .mc-icon { background: rgba(37,99,235,0.08); color: var(--blue); }
+  .metric-card:nth-child(2) .mc-icon { background: rgba(13,148,136,0.08); color: var(--teal); }
+  .metric-card:nth-child(3) .mc-icon { background: rgba(217,119,6,0.08); color: var(--amber); }
+
+  .mc-icon svg { display: block; }
+
+  .mc-title {
+    font-size: 16px; font-weight: 700;
+  }
+  .mc-desc {
+    font-size: 13px;
+    color: var(--text-dim);
+    line-height: 1.6;
+    flex: 1;
+  }
+  .mc-cmd {
+    margin-top: 16px;
+    background: #0f172a;
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: #94a3b8;
+  }
+  .mc-cmd .cmd-highlight { color: #67e8f9; }
+
+  /* Summary box */
+  .summary-box {
+    width: 320px;
+    flex-shrink: 0;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 28px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .summary-box::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--blue), var(--teal), var(--amber), var(--slate));
+  }
+  .summary-box .sb-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; font-weight: 500;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+  .summary-box .sb-formula {
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.8;
+    color: var(--text-main);
+  }
+  .summary-box .sb-formula .f-blue { color: var(--blue); }
+  .summary-box .sb-formula .f-teal { color: var(--teal); }
+  .summary-box .sb-formula .f-amber { color: var(--amber); }
+  .summary-box .sb-formula .f-op { color: var(--text-dim); font-weight: 400; }
+  .summary-box .sb-result {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+    font-size: 13px;
+    color: var(--text-dim);
+    line-height: 1.6;
+  }
+  .summary-box .sb-result strong {
+    color: var(--text-main);
+    font-weight: 600;
+  }
+
+  /* Footer */
+  .footer {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 64px;
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+  .footer .brand { font-weight: 500; }
+  .footer .label-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; font-weight: 500;
+    letter-spacing: 0.1em;
+    color: var(--text-dim);
+    opacity: 0.6;
+  }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <span class="slide-num">07 / 07</span>
+  <div class="center-info">
+    <span class="title">稳定性工程保障</span>
+    <span class="subtitle-hint">从文档到验证 — 构建 Agent 开发的信任链</span>
+  </div>
+  <span class="label">AGENT ENGINEERING</span>
+</div>
+
+<!-- Main -->
+<div class="main">
+  <!-- Section 1: Defense Layer 1 -->
+  <div class="section1">
+    <div class="section-label">// 防御层 1 — 文档先行</div>
+    <div class="cap-cards">
+      <div class="cap-card">
+        <div class="cc-num">01</div>
+        <div class="cc-title">design-doc 协议</div>
+        <div class="cc-desc">工作流系统、节点系统各有独立设计文档，变更必须同步更新</div>
+      </div>
+      <div class="cap-card">
+        <div class="cc-num">02</div>
+        <div class="cc-title">文档 &gt; 记忆</div>
+        <div class="cc-desc">所有约定写入文件，不依赖 Agent 的会话记忆</div>
+      </div>
+      <div class="cap-card">
+        <div class="cc-num">03</div>
+        <div class="cc-title">版本化知识</div>
+        <div class="cc-desc">设计文档随代码演进，始终保持准确</div>
+      </div>
+      <div class="cap-card">
+        <div class="cc-num">04</div>
+        <div class="cc-title">新人友好</div>
+        <div class="cc-desc">新 Agent 会话 / 新开发者都能从文档快速上手</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 2: Defense Layer 2 -->
+  <div class="section2">
+    <div class="section-label">// 防御层 2 — 流程约束</div>
+    <div class="flow-container">
+      <div class="flow-steps">
+        <div class="flow-node">
+          <div class="fn-box">
+            <div class="fn-title">Skill 路由</div>
+            <span class="fn-tag">自动</span>
+          </div>
+          <div class="fn-desc">任务自动匹配最佳 Skill，确保方法论正确</div>
+        </div>
+        <div class="flow-arrow">
+          <svg width="24" height="16" viewBox="0 0 24 16" fill="none"><path d="M1 8h18m0 0l-5-5m5 5l-5 5" stroke="#cbd5e1" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="flow-node">
+          <div class="fn-box">
+            <div class="fn-title">Plan 阶段</div>
+            <span class="fn-tag">人工确认</span>
+          </div>
+          <div class="fn-desc">先输出计划，用户确认后再动手</div>
+        </div>
+        <div class="flow-arrow">
+          <svg width="24" height="16" viewBox="0 0 24 16" fill="none"><path d="M1 8h18m0 0l-5-5m5 5l-5 5" stroke="#cbd5e1" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="flow-node">
+          <div class="fn-box">
+            <div class="fn-title">实现阶段</div>
+            <span class="fn-tag">检查点</span>
+          </div>
+          <div class="fn-desc">遵循 AGENTS.md 约束，最小化修改范围</div>
+        </div>
+        <div class="flow-arrow">
+          <svg width="24" height="16" viewBox="0 0 24 16" fill="none"><path d="M1 8h18m0 0l-5-5m5 5l-5 5" stroke="#cbd5e1" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="flow-node">
+          <div class="fn-box">
+            <div class="fn-title">验证阶段</div>
+            <span class="fn-tag">自动化</span>
+          </div>
+          <div class="fn-desc">类型检查 + 单元测试 + lint，证据先于断言</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 3: Defense Layer 3 -->
+  <div class="section3">
+    <div class="metric-cards">
+      <div class="metric-card">
+        <div class="mc-header">
+          <div class="mc-icon">
+            <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M11 2l2.5 5.5L19 9l-4.5 4 1.5 6-5-3-5 3 1.5-6L3 9l5.5-1.5L11 2z" stroke="#2563eb" stroke-width="1.5" stroke-linejoin="round"/></svg>
+          </div>
+          <div class="mc-title">类型安全</div>
+        </div>
+        <div class="mc-desc">vue-tsc 全量类型检查，编译期捕获错误</div>
+        <div class="mc-cmd"><span class="cmd-highlight">$</span> pnpm type-check</div>
+      </div>
+      <div class="metric-card">
+        <div class="mc-header">
+          <div class="mc-icon">
+            <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><rect x="3" y="3" width="16" height="16" rx="3" stroke="#0d9488" stroke-width="1.5"/><path d="M7 11l3 3 5-6" stroke="#0d9488" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div class="mc-title">测试覆盖</div>
+        </div>
+        <div class="mc-desc">Vitest + @vue/test-utils，核心逻辑有测试保护</div>
+        <div class="mc-cmd"><span class="cmd-highlight">$</span> pnpm test:unit</div>
+      </div>
+      <div class="metric-card">
+        <div class="mc-header">
+          <div class="mc-icon">
+            <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M4 7h14M4 11h14M4 15h10" stroke="#d97706" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </div>
+          <div class="mc-title">代码规范</div>
+        </div>
+        <div class="mc-desc">ESLint + Prettier，自动格式化消除风格差异</div>
+        <div class="mc-cmd"><span class="cmd-highlight">$</span> pnpm lint:fix</div>
+      </div>
+    </div>
+
+    <!-- Summary -->
+    <div class="summary-box">
+      <div class="sb-label">核心理念</div>
+      <div class="sb-formula">
+        <span class="f-blue">文档确定性</span><br>
+        <span class="f-op">+</span> <span class="f-teal">流程约束</span><br>
+        <span class="f-op">+</span> <span class="f-amber">自动化验证</span><br>
+        <span class="f-op">=</span>
+      </div>
+      <div class="sb-result">
+        <strong>可复现的 Agent 开发</strong><br><br>
+        每一次 Agent 会话都产出一致质量的代码，不依赖运气，不依赖人工审查。
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Footer -->
+<div class="footer">
+  <span class="brand">相关性分析系统 &middot; 2026</span>
+  <span class="label-tag">CODEX ENGINEERING WORKFLOW</span>
+</div>
+
+</body>
+</html>

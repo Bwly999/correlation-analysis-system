@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1920">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --text-main: #0f172a;
+    --text-dim: #64748b;
+    --border: #e2e8f0;
+    --blue: #2563eb;
+    --teal: #0d9488;
+    --amber: #d97706;
+    --slate: #475569;
+  }
+  body {
+    margin: 0; padding: 0;
+    width: 1920px; height: 1080px;
+    overflow: hidden;
+    background: #fcfdfe;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    color: var(--text-main);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Header */
+  .header {
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 80px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 64px;
+    border-bottom: 1px solid var(--border);
+  }
+  .header .slide-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px; font-weight: 500;
+    color: var(--text-dim);
+    letter-spacing: 0.05em;
+  }
+  .header .center-info {
+    display: flex; align-items: center; gap: 16px;
+  }
+  .header .title {
+    font-size: 13px; font-weight: 600;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .header .subtitle-hint {
+    font-size: 11px; color: #94a3b8;
+  }
+  .header .label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 500;
+    color: var(--text-dim);
+    letter-spacing: 0.08em;
+    padding: 4px 12px;
+    border: 1px solid var(--border);
+    border-radius: 100px;
+  }
+
+  /* Main */
+  .main {
+    position: absolute;
+    top: 80px; left: 0; right: 0; bottom: 60px;
+    display: flex;
+    flex-direction: column;
+    padding: 28px 64px;
+    gap: 28px;
+  }
+
+  /* Top section: document chain */
+  .top-section {
+    flex-shrink: 0;
+  }
+  .section-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 500;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+  .doc-chain {
+    display: flex;
+    align-items: center;
+    gap: 0;
+  }
+  .doc-card {
+    flex: 1;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 18px 20px;
+    position: relative;
+  }
+  .doc-card.highlight {
+    border-color: var(--blue);
+    border-width: 2px;
+    background: rgba(37,99,235,0.02);
+    box-shadow: 0 0 0 3px rgba(37,99,235,0.06);
+  }
+  .doc-card .dc-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px; font-weight: 700;
+    color: var(--text-main);
+    margin-bottom: 6px;
+  }
+  .doc-card.highlight .dc-name { color: var(--blue); }
+  .doc-card .dc-desc {
+    font-size: 12px;
+    color: var(--text-dim);
+    line-height: 1.4;
+  }
+  .doc-card .dc-num {
+    position: absolute;
+    top: 10px; right: 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; font-weight: 500;
+    color: #cbd5e1;
+  }
+  .doc-arrow {
+    width: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .doc-arrow svg { display: block; }
+
+  /* Bottom section: AGENTS.md structure */
+  .bottom-section {
+    flex: 1;
+    display: flex;
+    gap: 32px;
+    min-height: 0;
+  }
+
+  /* Left: Document outline */
+  .outline-panel {
+    width: 34%;
+    background: #0f172a;
+    border-radius: 10px;
+    padding: 28px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .outline-panel .op-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .outline-panel .op-header .op-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #2563eb;
+  }
+  .outline-panel .op-header .op-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px; font-weight: 700;
+    color: #e2e8f0;
+  }
+  .outline-panel .op-header .op-lang {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: #475569;
+    margin-left: auto;
+  }
+  .outline-tree {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    line-height: 2;
+    color: #94a3b8;
+    flex: 1;
+  }
+  .outline-tree .ot-item { color: #cbd5e1; }
+  .outline-tree .ot-item.active { color: #67e8f9; }
+  .outline-tree .ot-indent { padding-left: 20px; }
+  .outline-tree .ot-leaf { color: #64748b; }
+  .outline-tree .ot-comment { color: #475569; font-style: italic; }
+
+  /* Right: Explanation cards */
+  .explanations {
+    width: 66%;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .exp-card {
+    flex: 1;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 18px 24px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    position: relative;
+    overflow: hidden;
+  }
+  .exp-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; bottom: 0;
+    width: 3px;
+  }
+  .exp-card:nth-child(1)::before { background: var(--blue); }
+  .exp-card:nth-child(2)::before { background: var(--teal); }
+  .exp-card:nth-child(3)::before { background: var(--amber); }
+  .exp-card:nth-child(4)::before { background: var(--slate); }
+  .exp-card:nth-child(5)::before { background: #e11d48; }
+
+  .exp-card .ec-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 28px; font-weight: 700;
+    color: #f1f5f9;
+    flex-shrink: 0;
+    width: 44px;
+    text-align: center;
+  }
+  .exp-card .ec-title {
+    font-size: 15px; font-weight: 700;
+    margin-bottom: 4px;
+    min-width: 130px;
+    flex-shrink: 0;
+  }
+  .exp-card .ec-desc {
+    font-size: 13px;
+    color: var(--text-dim);
+    line-height: 1.5;
+    flex: 1;
+  }
+
+  /* Footer */
+  .footer {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 64px;
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+  .footer .brand { font-weight: 500; }
+  .footer .label-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; font-weight: 500;
+    letter-spacing: 0.1em;
+    color: var(--text-dim);
+    opacity: 0.6;
+  }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <span class="slide-num">05 / 07</span>
+  <div class="center-info">
+    <span class="title">AGENTS.md 文档体系</span>
+    <span class="subtitle-hint">人机协作的契约 — Agent 行为的确定性来源</span>
+  </div>
+  <span class="label">AGENT ENGINEERING</span>
+</div>
+
+<!-- Main -->
+<div class="main">
+  <!-- Top: Document chain -->
+  <div class="top-section">
+    <div class="section-label">// 文档层级</div>
+    <div class="doc-chain">
+      <div class="doc-card highlight">
+        <span class="dc-num">01</span>
+        <div class="dc-name">AGENTS.md</div>
+        <div class="dc-desc">项目核心规约，定义行为边界</div>
+      </div>
+      <div class="doc-arrow">
+        <svg width="24" height="16" viewBox="0 0 24 16" fill="none"><path d="M1 8h18m0 0l-5-5m5 5l-5 5" stroke="#cbd5e1" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="doc-card">
+        <span class="dc-num">02</span>
+        <div class="dc-name">design-doc/</div>
+        <div class="dc-desc">领域协议：工作流系统、节点系统</div>
+      </div>
+      <div class="doc-arrow">
+        <svg width="24" height="16" viewBox="0 0 24 16" fill="none"><path d="M1 8h18m0 0l-5-5m5 5l-5 5" stroke="#cbd5e1" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="doc-card">
+        <span class="dc-num">03</span>
+        <div class="dc-name">节点实现</div>
+        <div class="dc-desc">30+ 节点，遵循协议约束</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom: AGENTS.md structure -->
+  <div class="bottom-section">
+    <!-- Left: outline -->
+    <div class="outline-panel">
+      <div class="op-header">
+        <div class="op-dot"></div>
+        <span class="op-name">AGENTS.md</span>
+        <span class="op-lang">markdown</span>
+      </div>
+      <div class="outline-tree">
+        <div class="ot-item active">项目概述</div>
+        <div class="ot-item">技术栈</div>
+        <div class="ot-item">项目架构</div>
+        <div class="ot-indent ot-leaf">├── 目录结构</div>
+        <div class="ot-indent ot-leaf">├── 工作流系统</div>
+        <div class="ot-indent ot-leaf">├── 节点系统</div>
+        <div class="ot-indent ot-leaf">└── Pi Agent</div>
+        <div class="ot-item">关键约束</div>
+        <div class="ot-indent ot-leaf">├── UI/UX</div>
+        <div class="ot-indent ot-leaf">├── 工作流开发</div>
+        <div class="ot-indent ot-leaf">└── Git / 提交规范</div>
+        <div class="ot-item">开发行为指导</div>
+        <div class="ot-indent ot-leaf">├── 1. 动手前先思考</div>
+        <div class="ot-indent ot-leaf">├── 2. 至简至上</div>
+        <div class="ot-indent ot-leaf">├── 3. 精准修改</div>
+        <div class="ot-indent ot-leaf">└── 4. 目标导向</div>
+      </div>
+    </div>
+
+    <!-- Right: explanation cards -->
+    <div class="explanations">
+      <div class="exp-card">
+        <div class="ec-num">01</div>
+        <div class="ec-title">项目概述</div>
+        <div class="ec-desc">一句话定义系统是什么，让 Agent 理解全局上下文 — "多因子相关性分析系统，n8n 风格工作流编辑器 + 执行引擎 + AI 辅助分析平台"</div>
+      </div>
+      <div class="exp-card">
+        <div class="ec-num">02</div>
+        <div class="ec-title">技术栈</div>
+        <div class="ec-desc">明确技术选型，避免 Agent 推荐不兼容的方案 — Vue 3、Vue Flow、PrimeVue、Tailwind CSS v4、Pinia、ECharts、Vite</div>
+      </div>
+      <div class="exp-card">
+        <div class="ec-num">03</div>
+        <div class="ec-title">项目架构</div>
+        <div class="ec-desc">目录结构 + 系统协议入口，引导 Agent 定位正确文件 — 核心模块、设计文档、关键约束一应俱全</div>
+      </div>
+      <div class="exp-card">
+        <div class="ec-num">04</div>
+        <div class="ec-title">关键约束</div>
+        <div class="ec-desc">硬性规则：中文文案、品牌色 Slate-900、禁止 worktree、原子提交、commit 使用中文 — 违反即为 Bug</div>
+      </div>
+      <div class="exp-card">
+        <div class="ec-num">05</div>
+        <div class="ec-title">开发行为指导</div>
+        <div class="ec-desc">4 条行为准则，塑造 Agent 的工作方式 — 从思考优先级到代码修改范围，每一行代码都需可追溯到需求</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Footer -->
+<div class="footer">
+  <span class="brand">相关性分析系统 &middot; 2026</span>
+  <span class="label-tag">CODEX ENGINEERING WORKFLOW</span>
+</div>
+
+</body>
+</html>

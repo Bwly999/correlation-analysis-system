@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1920">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --text-main: #0f172a;
+    --text-dim: #64748b;
+    --border: #e2e8f0;
+    --blue: #2563eb;
+    --teal: #0d9488;
+    --amber: #d97706;
+    --slate: #475569;
+  }
+  body {
+    margin: 0; padding: 0;
+    width: 1920px; height: 1080px;
+    overflow: hidden;
+    background: #fcfdfe;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    color: var(--text-main);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Header */
+  .header {
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 80px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 64px;
+    border-bottom: 1px solid var(--border);
+  }
+  .header .slide-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px; font-weight: 500;
+    color: var(--text-dim);
+    letter-spacing: 0.05em;
+  }
+  .header .title {
+    font-size: 13px; font-weight: 600;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .header .label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 500;
+    color: var(--text-dim);
+    letter-spacing: 0.08em;
+    padding: 4px 12px;
+    border: 1px solid var(--border);
+    border-radius: 100px;
+  }
+
+  /* Main content */
+  .main {
+    position: absolute;
+    top: 80px; left: 0; right: 0; bottom: 60px;
+    display: flex;
+    padding: 0 64px;
+  }
+  .left {
+    width: 58%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding-right: 48px;
+  }
+  .left .main-title {
+    font-size: 52px;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    line-height: 1.15;
+    color: var(--text-main);
+    margin-bottom: 20px;
+  }
+  .left .subtitle {
+    font-size: 18px;
+    color: var(--text-dim);
+    line-height: 1.6;
+    margin-bottom: 48px;
+    max-width: 520px;
+  }
+  .topic-cards {
+    display: flex;
+    gap: 16px;
+  }
+  .topic-card {
+    flex: 1;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px 22px;
+    background: #fff;
+    position: relative;
+    overflow: hidden;
+  }
+  .topic-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 3px;
+  }
+  .topic-card.blue::before { background: var(--blue); }
+  .topic-card.teal::before { background: var(--teal); }
+  .topic-card.amber::before { background: var(--amber); }
+
+  .topic-card .card-title {
+    font-size: 15px;
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+  .topic-card .card-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 500;
+    padding: 3px 8px;
+    border-radius: 100px;
+    display: inline-block;
+    letter-spacing: 0.05em;
+  }
+  .topic-card.blue .card-tag {
+    color: var(--blue);
+    background: rgba(37,99,235,0.08);
+    border: 1px solid rgba(37,99,235,0.15);
+  }
+  .topic-card.teal .card-tag {
+    color: var(--teal);
+    background: rgba(13,148,136,0.08);
+    border: 1px solid rgba(13,148,136,0.15);
+  }
+  .topic-card.amber .card-tag {
+    color: var(--amber);
+    background: rgba(217,119,6,0.08);
+    border: 1px solid rgba(217,119,6,0.15);
+  }
+
+  /* Right side — diagram */
+  .right {
+    width: 42%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding-left: 48px;
+  }
+  .diagram {
+    width: 100%;
+    max-width: 560px;
+  }
+  .diagram svg {
+    width: 100%;
+    height: auto;
+  }
+
+  /* Footer */
+  .footer {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 64px;
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+  .footer .brand { font-weight: 500; }
+  .footer .label-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    color: var(--text-dim);
+    opacity: 0.6;
+  }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <span class="slide-num">02 / 07</span>
+  <span class="title">Agent Engineering Workflow</span>
+  <span class="label">AGENT ENGINEERING</span>
+</div>
+
+<!-- Main Content -->
+<div class="main">
+  <div class="left">
+    <h1 class="main-title">Agent 驱动开发<br>工程实践</h1>
+    <p class="subtitle">如何使用 Codex 构建、维护、演进复杂前端系统</p>
+    <div class="topic-cards">
+      <div class="topic-card blue">
+        <div class="card-title">Skills 技能体系</div>
+        <span class="card-tag">SKILLS</span>
+      </div>
+      <div class="topic-card teal">
+        <div class="card-title">MCP 工具集成</div>
+        <span class="card-tag">TOOLS</span>
+      </div>
+      <div class="topic-card amber">
+        <div class="card-title">文档与规范</div>
+        <span class="card-tag">DOCS</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="right">
+    <div class="diagram">
+      <svg viewBox="0 0 560 480" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <!-- Developer node -->
+        <rect x="0" y="20" width="160" height="60" rx="8" fill="#fff" stroke="#e2e8f0" stroke-width="1.5"/>
+        <circle cx="28" cy="50" r="10" fill="rgba(37,99,235,0.12)"/>
+        <text x="28" y="54" text-anchor="middle" fill="#2563eb" font-size="11" font-family="JetBrains Mono, monospace" font-weight="700">D</text>
+        <text x="90" y="46" text-anchor="middle" fill="#0f172a" font-size="13" font-family="Plus Jakarta Sans, sans-serif" font-weight="700">Developer</text>
+        <text x="90" y="62" text-anchor="middle" fill="#64748b" font-size="10" font-family="Plus Jakarta Sans, sans-serif">开发者</text>
+
+        <!-- Arrow: Developer -> Codex -->
+        <line x1="160" y1="50" x2="200" y2="50" stroke="#cbd5e1" stroke-width="1.5"/>
+        <polygon points="196,45 206,50 196,55" fill="#cbd5e1"/>
+
+        <!-- Codex node (larger, central) -->
+        <rect x="210" y="10" width="180" height="80" rx="8" fill="#fff" stroke="#2563eb" stroke-width="1.5"/>
+        <rect x="210" y="10" width="180" height="4" rx="2" fill="#2563eb"/>
+        <circle cx="240" cy="50" r="12" fill="rgba(37,99,235,0.12)"/>
+        <text x="240" y="55" text-anchor="middle" fill="#2563eb" font-size="12" font-family="JetBrains Mono, monospace" font-weight="700">CC</text>
+        <text x="330" y="44" text-anchor="middle" fill="#0f172a" font-size="14" font-family="Plus Jakarta Sans, sans-serif" font-weight="700">Codex</text>
+        <text x="330" y="62" text-anchor="middle" fill="#64748b" font-size="10" font-family="Plus Jakarta Sans, sans-serif">AI 编码助手</text>
+
+        <!-- Arrow: Codex -> Capabilities bracket -->
+        <line x1="390" y1="50" x2="430" y2="50" stroke="#cbd5e1" stroke-width="1.5"/>
+        <polygon points="426,45 436,50 426,55" fill="#cbd5e1"/>
+
+        <!-- Capability group box -->
+        <rect x="440" y="0" width="120" height="100" rx="8" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="4,3"/>
+        <text x="500" y="22" text-anchor="middle" fill="#94a3b8" font-size="9" font-family="JetBrains Mono, monospace" font-weight="500" letter-spacing="0.08em">CAPABILITIES</text>
+
+        <!-- Skills pill -->
+        <rect x="454" y="32" width="92" height="20" rx="100px" fill="rgba(37,99,235,0.08)" stroke="rgba(37,99,235,0.2)" stroke-width="1"/>
+        <text x="500" y="46" text-anchor="middle" fill="#2563eb" font-size="10" font-family="JetBrains Mono, monospace" font-weight="500">Skills</text>
+
+        <!-- MCP pill -->
+        <rect x="454" y="58" width="92" height="20" rx="100px" fill="rgba(13,148,136,0.08)" stroke="rgba(13,148,136,0.2)" stroke-width="1"/>
+        <text x="500" y="72" text-anchor="middle" fill="#0d9488" font-size="10" font-family="JetBrains Mono, monospace" font-weight="500">MCP</text>
+
+        <!-- AGENTS.md pill -->
+        <rect x="454" y="84" width="92" height="20" rx="100px" fill="rgba(217,119,6,0.08)" stroke="rgba(217,119,6,0.2)" stroke-width="1"/>
+        <text x="500" y="98" text-anchor="middle" fill="#d97706" font-size="10" font-family="JetBrains Mono, monospace" font-weight="500">AGENTS.md</text>
+
+        <!-- Arrow down from Codex -->
+        <line x1="300" y1="90" x2="300" y2="130" stroke="#cbd5e1" stroke-width="1.5"/>
+        <polygon points="295,126 300,136 305,126" fill="#cbd5e1"/>
+
+        <!-- Process nodes row -->
+        <!-- Skill Routing -->
+        <rect x="80" y="140" width="150" height="50" rx="6" fill="#fff" stroke="#e2e8f0" stroke-width="1"/>
+        <circle cx="104" cy="165" r="7" fill="rgba(37,99,235,0.15)"/>
+        <text x="104" y="169" text-anchor="middle" fill="#2563eb" font-size="9" font-family="JetBrains Mono, monospace" font-weight="700">S</text>
+        <text x="170" y="161" text-anchor="middle" fill="#0f172a" font-size="12" font-family="Plus Jakarta Sans, sans-serif" font-weight="600">Skill 路由</text>
+        <text x="170" y="176" text-anchor="middle" fill="#64748b" font-size="9" font-family="Plus Jakarta Sans, sans-serif">匹配最佳技能</text>
+
+        <!-- Context -->
+        <rect x="270" y="140" width="150" height="50" rx="6" fill="#fff" stroke="#e2e8f0" stroke-width="1"/>
+        <circle cx="294" cy="165" r="7" fill="rgba(13,148,136,0.15)"/>
+        <text x="294" y="169" text-anchor="middle" fill="#0d9488" font-size="9" font-family="JetBrains Mono, monospace" font-weight="700">M</text>
+        <text x="360" y="161" text-anchor="middle" fill="#0f172a" font-size="12" font-family="Plus Jakarta Sans, sans-serif" font-weight="600">MCP 工具</text>
+        <text x="360" y="176" text-anchor="middle" fill="#64748b" font-size="9" font-family="Plus Jakarta Sans, sans-serif">扩展能力边界</text>
+
+        <!-- Constraints -->
+        <rect x="460" y="140" width="150" height="50" rx="6" fill="#fff" stroke="#e2e8f0" stroke-width="1"/>
+        <circle cx="484" cy="165" r="7" fill="rgba(217,119,6,0.15)"/>
+        <text x="484" y="169" text-anchor="middle" fill="#d97706" font-size="9" font-family="JetBrains Mono, monospace" font-weight="700">A</text>
+        <text x="550" y="161" text-anchor="middle" fill="#0f172a" font-size="12" font-family="Plus Jakarta Sans, sans-serif" font-weight="600">行为约束</text>
+        <text x="550" y="176" text-anchor="middle" fill="#64748b" font-size="9" font-family="Plus Jakarta Sans, sans-serif">AGENTS.md 规范</text>
+
+        <!-- Horizontal connector lines -->
+        <line x1="230" y1="165" x2="270" y2="165" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="3,3"/>
+        <line x1="420" y1="165" x2="460" y2="165" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="3,3"/>
+
+        <!-- Arrow down from process row -->
+        <line x1="300" y1="190" x2="300" y2="230" stroke="#cbd5e1" stroke-width="1.5"/>
+        <polygon points="295,226 300,236 305,226" fill="#cbd5e1"/>
+
+        <!-- Quality gate -->
+        <rect x="170" y="240" width="260" height="60" rx="8" fill="#fff" stroke="#475569" stroke-width="1.5"/>
+        <rect x="170" y="240" width="260" height="4" rx="2" fill="#475569"/>
+        <text x="300" y="272" text-anchor="middle" fill="#0f172a" font-size="14" font-family="Plus Jakarta Sans, sans-serif" font-weight="700">Code Quality</text>
+        <text x="300" y="290" text-anchor="middle" fill="#64748b" font-size="10" font-family="Plus Jakarta Sans, sans-serif">类型安全 + 测试覆盖 + 代码规范</text>
+
+        <!-- Bottom outcome boxes -->
+        <line x1="300" y1="300" x2="300" y2="330" stroke="#cbd5e1" stroke-width="1.5"/>
+        <polygon points="295,326 300,336 305,326" fill="#cbd5e1"/>
+
+        <rect x="40" y="340" width="155" height="44" rx="6" fill="rgba(37,99,235,0.04)" stroke="rgba(37,99,235,0.15)" stroke-width="1"/>
+        <text x="117" y="366" text-anchor="middle" fill="#2563eb" font-size="12" font-family="Plus Jakarta Sans, sans-serif" font-weight="600">确定性产出</text>
+
+        <rect x="225" y="340" width="155" height="44" rx="6" fill="rgba(13,148,136,0.04)" stroke="rgba(13,148,136,0.15)" stroke-width="1"/>
+        <text x="302" y="366" text-anchor="middle" fill="#0d9488" font-size="12" font-family="Plus Jakarta Sans, sans-serif" font-weight="600">可维护系统</text>
+
+        <rect x="410" y="340" width="155" height="44" rx="6" fill="rgba(217,119,6,0.04)" stroke="rgba(217,119,6,0.15)" stroke-width="1"/>
+        <text x="487" y="366" text-anchor="middle" fill="#d97706" font-size="12" font-family="Plus Jakarta Sans, sans-serif" font-weight="600">持续演进</text>
+
+        <!-- Connector lines to bottom boxes -->
+        <line x1="300" y1="336" x2="117" y2="340" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="3,3"/>
+        <line x1="300" y1="336" x2="302" y2="340" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="3,3"/>
+        <line x1="300" y1="336" x2="487" y2="340" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="3,3"/>
+
+        <!-- Annotations at bottom -->
+        <text x="80" y="440" fill="#94a3b8" font-size="10" font-family="JetBrains Mono, monospace" font-weight="500" letter-spacing="0.05em">PIPELINE</text>
+        <line x1="80" y1="448" x2="560" y2="448" stroke="#f1f5f9" stroke-width="1"/>
+        <text x="80" y="468" fill="#cbd5e1" font-size="9" font-family="JetBrains Mono, monospace">Developer &rarr; Codex &rarr; [Skills + MCP + AGENTS.md] &rarr; Quality Gate &rarr; Outcome</text>
+      </svg>
+    </div>
+  </div>
+</div>
+
+<!-- Footer -->
+<div class="footer">
+  <span class="brand">相关性分析系统 &middot; 2026</span>
+  <span class="label-tag">CODEX ENGINEERING WORKFLOW</span>
+</div>
+
+</body>
+</html>

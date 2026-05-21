@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1920">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --text-main: #0f172a;
+    --text-dim: #64748b;
+    --border: #e2e8f0;
+    --blue: #2563eb;
+    --teal: #0d9488;
+    --amber: #d97706;
+    --slate: #475569;
+  }
+  body {
+    margin: 0; padding: 0;
+    width: 1920px; height: 1080px;
+    overflow: hidden;
+    background: #fcfdfe;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    color: var(--text-main);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Header */
+  .header {
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 80px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 64px;
+    border-bottom: 1px solid var(--border);
+  }
+  .header .slide-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px; font-weight: 500;
+    color: var(--text-dim);
+    letter-spacing: 0.05em;
+  }
+  .header .title {
+    font-size: 13px; font-weight: 600;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .header .label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 500;
+    color: var(--text-dim);
+    letter-spacing: 0.08em;
+    padding: 4px 12px;
+    border: 1px solid var(--border);
+    border-radius: 100px;
+  }
+
+  /* Main */
+  .main {
+    position: absolute;
+    top: 80px; left: 0; right: 0; bottom: 60px;
+    display: flex;
+    padding: 40px 64px;
+    gap: 48px;
+  }
+
+  /* Left column */
+  .left-col {
+    width: 55%;
+    display: flex;
+    flex-direction: column;
+  }
+  .section-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 500;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 20px;
+  }
+  .skills-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    flex: 1;
+  }
+  .skill-card {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 24px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .skill-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; bottom: 0;
+    width: 4px;
+    border-radius: 8px 0 0 8px;
+  }
+  .skill-card.c-red::before { background: #e11d48; }
+  .skill-card.c-green::before { background: #10b981; }
+  .skill-card.c-blue::before { background: #2563eb; }
+  .skill-card.c-amber::before { background: #d97706; }
+  .skill-card.c-teal::before { background: #0d9488; }
+  .skill-card.c-slate::before { background: #475569; }
+
+  .skill-name {
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 2px;
+  }
+  .skill-desc {
+    font-size: 13px;
+    color: var(--text-dim);
+    line-height: 1.5;
+    flex: 1;
+  }
+  .skill-pill {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; font-weight: 500;
+    padding: 3px 10px;
+    border-radius: 100px;
+    display: inline-block;
+    letter-spacing: 0.06em;
+    width: fit-content;
+    margin-top: auto;
+  }
+  .skill-pill.red { color: #e11d48; background: rgba(225,29,72,0.07); border: 1px solid rgba(225,29,72,0.15); }
+  .skill-pill.green { color: #10b981; background: rgba(16,185,129,0.07); border: 1px solid rgba(16,185,129,0.15); }
+  .skill-pill.blue { color: #2563eb; background: rgba(37,99,235,0.07); border: 1px solid rgba(37,99,235,0.15); }
+  .skill-pill.amber { color: #d97706; background: rgba(217,119,6,0.07); border: 1px solid rgba(217,119,6,0.15); }
+  .skill-pill.teal { color: #0d9488; background: rgba(13,148,136,0.07); border: 1px solid rgba(13,148,136,0.15); }
+  .skill-pill.slate { color: #475569; background: rgba(71,85,105,0.07); border: 1px solid rgba(71,85,105,0.15); }
+
+  /* Right column */
+  .right-col {
+    width: 45%;
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+  }
+
+  /* Flow diagram */
+  .flow-section {
+    flex-shrink: 0;
+  }
+  .flow-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    align-items: stretch;
+  }
+  .flow-step {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 0;
+    position: relative;
+  }
+  .flow-step:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    left: 20px;
+    top: 48px;
+    bottom: -2px;
+    width: 1px;
+    background: var(--border);
+  }
+  .flow-step .dot {
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px; font-weight: 700;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 1;
+  }
+  .flow-step:nth-child(1) .dot { background: rgba(37,99,235,0.1); color: #2563eb; }
+  .flow-step:nth-child(2) .dot { background: rgba(13,148,136,0.1); color: #0d9488; }
+  .flow-step:nth-child(3) .dot { background: rgba(217,119,6,0.1); color: #d97706; }
+  .flow-step:nth-child(4) .dot { background: rgba(71,85,105,0.1); color: #475569; }
+  .flow-step:nth-child(5) .dot { background: rgba(37,99,235,0.1); color: #2563eb; }
+
+  .flow-step .step-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-main);
+  }
+  .flow-step .step-sub {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-top: 2px;
+  }
+  .flow-step .step-box {
+    flex: 1;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 16px;
+  }
+
+  /* Principles */
+  .principles-section {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+  .principles-card {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 28px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  .principles-card .pc-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; font-weight: 700;
+    color: var(--text-dim);
+    letter-spacing: 0.08em;
+  }
+  .principle-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .principle-item .pi-marker {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--blue);
+    margin-top: 7px;
+    flex-shrink: 0;
+  }
+  .principle-item:nth-child(3) .pi-marker { background: var(--teal); }
+  .principle-item:nth-child(4) .pi-marker { background: var(--amber); }
+  .principle-item .pi-text {
+    font-size: 14px;
+    color: var(--text-main);
+    line-height: 1.55;
+  }
+  .principle-item .pi-text code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    background: #f1f5f9;
+    padding: 1px 6px;
+    border-radius: 3px;
+    color: var(--text-main);
+  }
+
+  /* Footer */
+  .footer {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 64px;
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+  .footer .brand { font-weight: 500; }
+  .footer .label-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; font-weight: 500;
+    letter-spacing: 0.1em;
+    color: var(--text-dim);
+    opacity: 0.6;
+  }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <span class="slide-num">03 / 07</span>
+  <span class="title">Skills 技能体系</span>
+  <span class="label">AGENT ENGINEERING</span>
+</div>
+
+<!-- Main Content -->
+<div class="main">
+  <!-- Left: Skill Cards -->
+  <div class="left-col">
+    <div class="section-label">// 核心技能清单</div>
+    <div class="skills-grid">
+      <div class="skill-card c-red">
+        <div class="skill-name">huashu-design</div>
+        <div class="skill-desc">高保真 HTML 设计产出：原型、幻灯片、动画、信息图</div>
+        <span class="skill-pill red">DESIGN</span>
+      </div>
+      <div class="skill-card c-green">
+        <div class="skill-name">vue-best-practices</div>
+        <div class="skill-desc">Vue 3 Composition API + TypeScript 标准开发范式</div>
+        <span class="skill-pill green">FRAMEWORK</span>
+      </div>
+      <div class="skill-card c-blue">
+        <div class="skill-name">frontend-design</div>
+        <div class="skill-desc">生产级前端界面构建，避免 AI slop</div>
+        <span class="skill-pill blue">UI</span>
+      </div>
+      <div class="skill-card c-amber">
+        <div class="skill-name">brainstorming</div>
+        <div class="skill-desc">实现前的需求探索与设计方向选择</div>
+        <span class="skill-pill amber">PROCESS</span>
+      </div>
+      <div class="skill-card c-teal">
+        <div class="skill-name">test-driven-development</div>
+        <div class="skill-desc">测试驱动开发流程：红-绿-重构循环</div>
+        <span class="skill-pill teal">QUALITY</span>
+      </div>
+      <div class="skill-card c-slate">
+        <div class="skill-name">systematic-debugging</div>
+        <div class="skill-desc">系统化调试方法论：复现 → 假设 → 验证</div>
+        <span class="skill-pill slate">DEBUG</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: Mechanism + Principles -->
+  <div class="right-col">
+    <div class="flow-section">
+      <div class="section-label">// 运行机制</div>
+      <div class="flow-steps">
+        <div class="flow-step">
+          <div class="dot">01</div>
+          <div class="step-box">
+            <div class="step-label">用户指令</div>
+            <div class="step-sub">自然语言描述开发需求</div>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="dot">02</div>
+          <div class="step-box">
+            <div class="step-label">Skill 路由匹配</div>
+            <div class="step-sub">1% 相关性即触发 Skill 检查</div>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="dot">03</div>
+          <div class="step-box">
+            <div class="step-label">加载 SKILL.md</div>
+            <div class="step-sub">注入领域知识与行为约束</div>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="dot">04</div>
+          <div class="step-box">
+            <div class="step-label">执行约束流程</div>
+            <div class="step-sub">覆盖默认系统提示词行为</div>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="dot">05</div>
+          <div class="step-box">
+            <div class="step-label">标准化产出</div>
+            <div class="step-sub">符合规范的高质量代码或设计</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="principles-section">
+      <div class="section-label">// 设计原则</div>
+      <div class="principles-card">
+        <div class="principle-item">
+          <div class="pi-marker"></div>
+          <div class="pi-text">优先级：<code>用户指令</code> &gt; <code>Skill</code> &gt; <code>默认行为</code></div>
+        </div>
+        <div class="principle-item">
+          <div class="pi-marker"></div>
+          <div class="pi-text">Skill 覆盖默认系统提示词行为，确保领域专精</div>
+        </div>
+        <div class="principle-item">
+          <div class="pi-marker"></div>
+          <div class="pi-text">1% 相关性即触发 Skill 检查，宁可误触不可遗漏</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Footer -->
+<div class="footer">
+  <span class="brand">相关性分析系统 &middot; 2026</span>
+  <span class="label-tag">CODEX ENGINEERING WORKFLOW</span>
+</div>
+
+</body>
+</html>

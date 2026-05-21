@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1920">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --text-main: #0f172a;
+    --text-dim: #64748b;
+    --border: #e2e8f0;
+    --blue: #2563eb;
+    --teal: #0d9488;
+    --amber: #d97706;
+    --slate: #475569;
+  }
+  body {
+    margin: 0; padding: 0;
+    width: 1920px; height: 1080px;
+    overflow: hidden;
+    background: #fcfdfe;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    color: var(--text-main);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Header */
+  .header {
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 80px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 64px;
+    border-bottom: 1px solid var(--border);
+  }
+  .header .slide-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px; font-weight: 500;
+    color: var(--text-dim);
+    letter-spacing: 0.05em;
+  }
+  .header .title {
+    font-size: 13px; font-weight: 600;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .header .label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 500;
+    color: var(--text-dim);
+    letter-spacing: 0.08em;
+    padding: 4px 12px;
+    border: 1px solid var(--border);
+    border-radius: 100px;
+  }
+
+  /* Main content */
+  .main {
+    position: absolute;
+    top: 80px; left: 0; right: 0; bottom: 60px;
+    display: flex;
+    padding: 0 64px;
+    gap: 48px;
+  }
+
+  /* Left: system overview */
+  .left {
+    width: 27%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding-right: 24px;
+  }
+  .left .section-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 700;
+    color: var(--blue);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+  .left .main-title {
+    font-size: 36px;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    line-height: 1.2;
+    color: var(--text-main);
+    margin-bottom: 16px;
+  }
+  .left .desc {
+    font-size: 13px;
+    color: var(--text-dim);
+    line-height: 1.7;
+    margin-bottom: 28px;
+  }
+
+  .layer-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .layer-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 18px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: #fff;
+    position: relative;
+    overflow: hidden;
+  }
+  .layer-item::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 4px; height: 100%;
+  }
+  .layer-item.blue::before { background: var(--blue); }
+  .layer-item.teal::before { background: var(--teal); }
+  .layer-item.amber::before { background: var(--amber); }
+  .layer-item.slate::before { background: var(--slate); }
+
+  .layer-item .li-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; font-weight: 700;
+    letter-spacing: 0.05em;
+    min-width: 28px;
+  }
+  .layer-item.blue .li-num { color: var(--blue); }
+  .layer-item.teal .li-num { color: var(--teal); }
+  .layer-item.amber .li-num { color: var(--amber); }
+  .layer-item.slate .li-num { color: var(--slate); }
+
+  .layer-item .li-body {}
+  .layer-item .li-name {
+    font-size: 13px; font-weight: 700;
+    margin-bottom: 2px;
+  }
+  .layer-item .li-sub {
+    font-size: 10px; color: var(--text-dim);
+    line-height: 1.4;
+  }
+  .layer-item .li-tag {
+    margin-left: auto;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; font-weight: 500;
+    padding: 2px 8px;
+    border-radius: 100px;
+    white-space: nowrap;
+  }
+  .layer-item.blue .li-tag { color: var(--blue); background: rgba(37,99,235,0.08); border: 1px solid rgba(37,99,235,0.15); }
+  .layer-item.teal .li-tag { color: var(--teal); background: rgba(13,148,136,0.08); border: 1px solid rgba(13,148,136,0.15); }
+  .layer-item.amber .li-tag { color: var(--amber); background: rgba(217,119,6,0.08); border: 1px solid rgba(217,119,6,0.15); }
+  .layer-item.slate .li-tag { color: var(--slate); background: rgba(71,85,105,0.08); border: 1px solid rgba(71,85,105,0.15); }
+
+  /* Right: architecture diagram */
+  .right {
+    width: 73%;
+    position: relative;
+    overflow: hidden;
+  }
+  .arch-frame {
+    position: relative;
+    width: 100%;
+    height: 100%;
+  }
+  .arch-frame iframe {
+    position: absolute;
+    border: none;
+    width: 1240px;
+    height: 1500px;
+    top: 0;
+    left: 0;
+    /* transform: scale(var(--arch-scale, 0.62)); */
+    transform-origin: top left;
+  }
+
+  /* Footer */
+  .footer {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 64px;
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+  .footer .brand { font-weight: 500; }
+  .footer .label-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    color: var(--text-dim);
+    opacity: 0.6;
+  }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <span class="slide-num">01 / 07</span>
+  <span class="title">System Architecture</span>
+  <span class="label">ARCHITECTURE</span>
+</div>
+
+<!-- Main Content -->
+<div class="main">
+  <div class="left">
+    <div class="section-label">part 1 · system</div>
+    <h1 class="main-title">相关性分析系统<br>架构全景</h1>
+    <p class="desc">n8n 风格的工作流编辑器 + 执行引擎 + AI 辅助分析平台。用户通过拖拽节点构建分析流程，系统执行节点并标准化输出结果。</p>
+
+    <div class="layer-list">
+      <div class="layer-item blue">
+        <span class="li-num">01</span>
+        <div class="li-body">
+          <div class="li-name">分析架构层</div>
+          <div class="li-sub">结果协议 · 智能见解 · 算法库 · 特征工程</div>
+        </div>
+        <span class="li-tag">INSIGHT ENGINE</span>
+      </div>
+      <div class="layer-item teal">
+        <span class="li-num">02</span>
+        <div class="li-body">
+          <div class="li-name">UI 交互层</div>
+          <div class="li-sub">工作流画布 · 数据表格 · 可视化图表</div>
+        </div>
+        <span class="li-tag">SAAS EXPERIENCE</span>
+      </div>
+      <div class="layer-item amber">
+        <span class="li-num">03</span>
+        <div class="li-body">
+          <div class="li-name">工作流引擎</div>
+          <div class="li-sub">DAG 拓扑调度 · 快照溯源 · AI 编排</div>
+        </div>
+        <span class="li-tag">EXECUTION & AI</span>
+      </div>
+      <div class="layer-item slate">
+        <span class="li-num">04</span>
+        <div class="li-body">
+          <div class="li-name">后端服务层</div>
+          <div class="li-sub">算法网关 · 中枢网关 · 存储矩阵</div>
+        </div>
+        <span class="li-tag">INFRA</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="right">
+    <div class="arch-frame">
+      <iframe id="arch-iframe" src="../specialized.html" scrolling="no"></iframe>
+    </div>
+  </div>
+</div>
+
+<!-- Footer -->
+<div class="footer">
+  <span class="brand">相关性分析系统 &middot; 2026</span>
+  <span class="label-tag">CODEX ENGINEERING WORKFLOW</span>
+</div>
+
+<script>
+(function() {
+  var frame = document.getElementById('arch-iframe');
+  var baseWidth = 1240;
+  var baseHeight = 1500;
+
+  frame.addEventListener('load', function() {
+    function setZoom() {
+      var parent = frame.parentElement;
+      if (!parent) return;
+      var ch = parent.clientHeight;
+      var cw = parent.clientWidth;
+      var scale = Math.min(cw / baseWidth, ch / baseHeight);
+      var offsetLeft = (cw - baseWidth * scale) / 2 - 18;
+      var offsetTop = (ch - baseHeight * scale) / 2;
+
+      frame.style.setProperty('--arch-scale', scale);
+      frame.style.left = offsetLeft + 'px';
+      frame.style.top = offsetTop + 'px';
+    }
+
+    setZoom();
+    window.addEventListener('resize', setZoom);
+  });
+})();
+</script>
+
+</body>
+</html>

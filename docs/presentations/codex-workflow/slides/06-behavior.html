@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1920">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --text-main: #0f172a;
+    --text-dim: #64748b;
+    --border: #e2e8f0;
+    --blue: #2563eb;
+    --teal: #0d9488;
+    --amber: #d97706;
+    --slate: #475569;
+  }
+  body {
+    margin: 0; padding: 0;
+    width: 1920px; height: 1080px;
+    overflow: hidden;
+    background: #fcfdfe;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    color: var(--text-main);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Header */
+  .header {
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 80px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 64px;
+    border-bottom: 1px solid var(--border);
+  }
+  .header .slide-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px; font-weight: 500;
+    color: var(--text-dim);
+    letter-spacing: 0.05em;
+  }
+  .header .center-info {
+    display: flex; align-items: center; gap: 16px;
+  }
+  .header .title {
+    font-size: 13px; font-weight: 600;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .header .subtitle-hint {
+    font-size: 11px; color: #94a3b8;
+  }
+  .header .label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 500;
+    color: var(--text-dim);
+    letter-spacing: 0.08em;
+    padding: 4px 12px;
+    border: 1px solid var(--border);
+    border-radius: 100px;
+  }
+
+  /* Main */
+  .main {
+    position: absolute;
+    top: 80px; left: 0; right: 0; bottom: 60px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    padding: 32px 64px;
+    gap: 20px;
+  }
+
+  /* Principle cards */
+  .principle-card {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 32px;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .principle-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 4px;
+  }
+  .principle-card::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    pointer-events: none;
+  }
+
+  .principle-card.c1 { background: rgba(37,99,235,0.02); }
+  .principle-card.c1::before { background: var(--blue); }
+  .principle-card.c2 { background: rgba(13,148,136,0.02); }
+  .principle-card.c2::before { background: var(--teal); }
+  .principle-card.c3 { background: rgba(217,119,6,0.02); }
+  .principle-card.c3::before { background: var(--amber); }
+  .principle-card.c4 { background: rgba(71,85,105,0.02); }
+  .principle-card.c4::before { background: var(--slate); }
+
+  .pc-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 4px;
+  }
+  .pc-number {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 36px; font-weight: 700;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+  .c1 .pc-number { color: rgba(37,99,235,0.15); }
+  .c2 .pc-number { color: rgba(13,148,136,0.15); }
+  .c3 .pc-number { color: rgba(217,119,6,0.15); }
+  .c4 .pc-number { color: rgba(71,85,105,0.15); }
+
+  .pc-indicator {
+    width: 10px; height: 10px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+  .c1 .pc-indicator { background: var(--blue); }
+  .c2 .pc-indicator { background: var(--teal); }
+  .c3 .pc-indicator { background: var(--amber); }
+  .c4 .pc-indicator { background: var(--slate); }
+
+  .pc-title {
+    font-size: 18px; font-weight: 700;
+  }
+
+  .pc-desc {
+    font-size: 12px;
+    color: var(--text-dim);
+    line-height: 1.5;
+    margin-bottom: 4px;
+  }
+
+  .pc-rules {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex: 1;
+  }
+  .pc-rule {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 13px;
+    color: var(--text-main);
+    line-height: 1.5;
+  }
+  .pc-rule .rule-bullet {
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    margin-top: 7px;
+    flex-shrink: 0;
+  }
+  .c1 .rule-bullet { background: var(--blue); }
+  .c2 .rule-bullet { background: var(--teal); }
+  .c3 .rule-bullet { background: var(--amber); }
+  .c4 .rule-bullet { background: var(--slate); }
+
+  .pc-quote {
+    margin-top: auto;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+    font-size: 13px;
+    font-style: italic;
+    color: var(--text-dim);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .pc-quote::before {
+    content: '';
+    width: 16px; height: 1px;
+    flex-shrink: 0;
+  }
+  .c1 .pc-quote::before { background: var(--blue); }
+  .c2 .pc-quote::before { background: var(--teal); }
+  .c3 .pc-quote::before { background: var(--amber); }
+  .c4 .pc-quote::before { background: var(--slate); }
+
+  .pc-quote strong {
+    font-style: normal;
+    font-weight: 600;
+  }
+  .c1 .pc-quote strong { color: var(--blue); }
+  .c2 .pc-quote strong { color: var(--teal); }
+  .c3 .pc-quote strong { color: var(--amber); }
+  .c4 .pc-quote strong { color: var(--slate); }
+
+  /* Footer */
+  .footer {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 64px;
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+  .footer .brand { font-weight: 500; }
+  .footer .label-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; font-weight: 500;
+    letter-spacing: 0.1em;
+    color: var(--text-dim);
+    opacity: 0.6;
+  }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <span class="slide-num">06 / 07</span>
+  <div class="center-info">
+    <span class="title">开发行为规范</span>
+    <span class="subtitle-hint">4 条核心准则 — 塑造 Agent 的工程素养</span>
+  </div>
+  <span class="label">AGENT ENGINEERING</span>
+</div>
+
+<!-- Main: 2x2 grid -->
+<div class="main">
+  <!-- Card 1 -->
+  <div class="principle-card c1">
+    <div class="pc-header">
+      <div class="pc-number">01</div>
+      <div class="pc-indicator"></div>
+      <div class="pc-title">动手写代码前先思考</div>
+    </div>
+    <div class="pc-rules">
+      <div class="pc-rule"><div class="rule-bullet"></div>不主观臆断，不掩饰困惑</div>
+      <div class="pc-rule"><div class="rule-bullet"></div>明确阐述假设，不确定就问</div>
+      <div class="pc-rule"><div class="rule-bullet"></div>多种理解方式一并列出，不擅自决定</div>
+      <div class="pc-rule"><div class="rule-bullet"></div>有更简单的方法，提出来</div>
+    </div>
+    <div class="pc-quote"><strong>把权衡方案摆在台面上</strong></div>
+  </div>
+
+  <!-- Card 2 -->
+  <div class="principle-card c2">
+    <div class="pc-header">
+      <div class="pc-number">02</div>
+      <div class="pc-indicator"></div>
+      <div class="pc-title">至简至上</div>
+    </div>
+    <div class="pc-rules">
+      <div class="pc-rule"><div class="rule-bullet"></div>用最少的代码解决问题</div>
+      <div class="pc-rule"><div class="rule-bullet"></div>绝不开发需求之外的功能</div>
+      <div class="pc-rule"><div class="rule-bullet"></div>绝不为单次使用的代码做抽象</div>
+      <div class="pc-rule"><div class="rule-bullet"></div>200 行能搞定就不要写 200 行</div>
+    </div>
+    <div class="pc-quote"><strong>资深工程师会觉得这太复杂了吗？</strong></div>
+  </div>
+
+  <!-- Card 3 -->
+  <div class="principle-card c3">
+    <div class="pc-header">
+      <div class="pc-number">03</div>
+      <div class="pc-indicator"></div>
+      <div class="pc-title">精准修改</div>
+    </div>
+    <div class="pc-rules">
+      <div class="pc-rule"><div class="rule-bullet"></div>只动必须动的地方</div>
+      <div class="pc-rule"><div class="rule-bullet"></div>不要去"优化"相邻代码</div>
+      <div class="pc-rule"><div class="rule-bullet"></div>保持现有代码风格一致</div>
+      <div class="pc-rule"><div class="rule-bullet"></div>改动每一行都必须追溯到用户需求</div>
+    </div>
+    <div class="pc-quote"><strong>只清理自己留下的痕迹</strong></div>
+  </div>
+
+  <!-- Card 4 -->
+  <div class="principle-card c4">
+    <div class="pc-header">
+      <div class="pc-number">04</div>
+      <div class="pc-indicator"></div>
+      <div class="pc-title">目标导向执行</div>
+    </div>
+    <div class="pc-rules">
+      <div class="pc-rule"><div class="rule-bullet"></div>明确验收标准</div>
+      <div class="pc-rule"><div class="rule-bullet"></div>将任务转化为可验证的目标</div>
+      <div class="pc-rule"><div class="rule-bullet"></div>列出简要计划，每步有验证检查项</div>
+      <div class="pc-rule"><div class="rule-bullet"></div>持续循环直到验证通过</div>
+    </div>
+    <div class="pc-quote"><strong>模糊的标准需要频繁的沟通澄清</strong></div>
+  </div>
+</div>
+
+<!-- Footer -->
+<div class="footer">
+  <span class="brand">相关性分析系统 &middot; 2026</span>
+  <span class="label-tag">CODEX ENGINEERING WORKFLOW</span>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1920">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --text-main: #0f172a;
+    --text-dim: #64748b;
+    --border: #e2e8f0;
+    --blue: #2563eb;
+    --teal: #0d9488;
+    --amber: #d97706;
+    --slate: #475569;
+  }
+  body {
+    margin: 0; padding: 0;
+    width: 1920px; height: 1080px;
+    overflow: hidden;
+    background: #fcfdfe;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    color: var(--text-main);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Header */
+  .header {
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 80px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 64px;
+    border-bottom: 1px solid var(--border);
+  }
+  .header .slide-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px; font-weight: 500;
+    color: var(--text-dim);
+    letter-spacing: 0.05em;
+  }
+  .header .center-info {
+    display: flex; align-items: center; gap: 16px;
+  }
+  .header .title {
+    font-size: 13px; font-weight: 600;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .header .subtitle-hint {
+    font-size: 11px; color: #94a3b8;
+  }
+  .header .label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 500;
+    color: var(--text-dim);
+    letter-spacing: 0.08em;
+    padding: 4px 12px;
+    border: 1px solid var(--border);
+    border-radius: 100px;
+  }
+
+  /* Main */
+  .main {
+    position: absolute;
+    top: 80px; left: 0; right: 0; bottom: 60px;
+    display: flex;
+    flex-direction: column;
+    padding: 32px 64px;
+    gap: 28px;
+  }
+
+  /* Three columns */
+  .columns {
+    display: flex;
+    gap: 24px;
+    flex: 1;
+    min-height: 0;
+  }
+  .column {
+    flex: 1;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    position: relative;
+    overflow: hidden;
+  }
+  .column::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+  }
+  .column.blue::before { background: var(--blue); }
+  .column.teal::before { background: var(--teal); }
+  .column.amber::before { background: var(--amber); }
+
+  .col-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .col-header .col-title {
+    font-size: 20px;
+    font-weight: 700;
+  }
+  .col-header .col-pill {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; font-weight: 500;
+    padding: 4px 10px;
+    border-radius: 100px;
+    letter-spacing: 0.05em;
+  }
+  .column.blue .col-pill {
+    color: var(--blue); background: rgba(37,99,235,0.08); border: 1px solid rgba(37,99,235,0.15);
+  }
+  .column.teal .col-pill {
+    color: var(--teal); background: rgba(13,148,136,0.08); border: 1px solid rgba(13,148,136,0.15);
+  }
+  .column.amber .col-pill {
+    color: var(--amber); background: rgba(217,119,6,0.08); border: 1px solid rgba(217,119,6,0.15);
+  }
+
+  .col-desc {
+    font-size: 13px;
+    color: var(--text-dim);
+    line-height: 1.6;
+  }
+
+  .col-features {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .feature-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .feature-item .fi-dot {
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    margin-top: 7px;
+    flex-shrink: 0;
+  }
+  .column.blue .fi-dot { background: var(--blue); }
+  .column.teal .fi-dot { background: var(--teal); }
+  .column.amber .fi-dot { background: var(--amber); }
+
+  .feature-item .fi-text {
+    font-size: 13px;
+    color: var(--text-main);
+    line-height: 1.5;
+  }
+  .feature-item .fi-text code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    background: #f1f5f9;
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+
+  /* Code block */
+  .code-block {
+    background: #0f172a;
+    border-radius: 8px;
+    padding: 16px 18px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    line-height: 1.7;
+    color: #e2e8f0;
+    margin-top: auto;
+  }
+  .code-block .cmd { color: #67e8f9; }
+  .code-block .arg { color: #fbbf24; }
+  .code-block .str { color: #86efac; }
+  .code-block .comment { color: #64748b; }
+
+  /* Browser mockup */
+  .browser-mock {
+    background: #f8fafc;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    margin-top: auto;
+  }
+  .browser-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    background: #fff;
+    border-bottom: 1px solid var(--border);
+  }
+  .browser-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+  }
+  .browser-dot.r { background: #fca5a5; }
+  .browser-dot.y { background: #fcd34d; }
+  .browser-dot.g { background: #86efac; }
+  .browser-url {
+    flex: 1;
+    margin-left: 8px;
+    background: #f1f5f9;
+    border-radius: 4px;
+    padding: 4px 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+  }
+  .browser-content {
+    height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .bc-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+  }
+  .bc-tag.active {
+    background: rgba(13,148,136,0.08);
+    border-color: rgba(13,148,136,0.2);
+    color: var(--teal);
+  }
+
+  /* Web reader visual */
+  .web-visual {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: auto;
+  }
+  .wv-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    background: #f8fafc;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+  }
+  .wv-item .wv-icon {
+    width: 24px; height: 24px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    flex-shrink: 0;
+  }
+  .wv-item:nth-child(1) .wv-icon { background: rgba(217,119,6,0.1); color: var(--amber); }
+  .wv-item:nth-child(2) .wv-icon { background: rgba(217,119,6,0.1); color: var(--amber); }
+  .wv-item:nth-child(3) .wv-icon { background: rgba(217,119,6,0.1); color: var(--amber); }
+  .wv-item .wv-label {
+    font-size: 12px;
+    color: var(--text-main);
+    font-weight: 500;
+  }
+  .wv-item .wv-desc {
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  /* Bottom advantage bar */
+  .advantage-bar {
+    display: flex;
+    gap: 24px;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 22px 32px;
+    flex-shrink: 0;
+  }
+  .advantage-bar .ab-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 500;
+    color: var(--text-dim);
+    letter-spacing: 0.08em;
+    display: flex;
+    align-items: center;
+    white-space: nowrap;
+  }
+  .advantage-item {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 0 16px;
+    border-left: 1px solid var(--border);
+  }
+  .advantage-item .ai-icon {
+    width: 36px; height: 36px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .advantage-item:nth-child(2) .ai-icon { background: rgba(37,99,235,0.08); }
+  .advantage-item:nth-child(3) .ai-icon { background: rgba(13,148,136,0.08); }
+  .advantage-item:nth-child(4) .ai-icon { background: rgba(217,119,6,0.08); }
+  .advantage-item .ai-title {
+    font-size: 14px; font-weight: 600;
+  }
+  .advantage-item .ai-desc {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-top: 2px;
+  }
+
+  /* Footer */
+  .footer {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 64px;
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+  .footer .brand { font-weight: 500; }
+  .footer .label-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; font-weight: 500;
+    letter-spacing: 0.1em;
+    color: var(--text-dim);
+    opacity: 0.6;
+  }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <span class="slide-num">04 / 07</span>
+  <div class="center-info">
+    <span class="title">MCP 工具集成</span>
+    <span class="subtitle-hint">Model Context Protocol — 扩展 Agent 能力边界</span>
+  </div>
+  <span class="label">AGENT ENGINEERING</span>
+</div>
+
+<!-- Main -->
+<div class="main">
+  <div class="columns">
+    <!-- Column 1: Context7 -->
+    <div class="column blue">
+      <div class="col-header">
+        <span class="col-title">Context7</span>
+        <span class="col-pill">文档检索</span>
+      </div>
+      <div class="col-desc">实时获取最新库文档，替代过时的训练数据</div>
+      <div class="col-features">
+        <div class="feature-item">
+          <div class="fi-dot"></div>
+          <div class="fi-text"><code>resolve-library-id</code> — 查找库 ID</div>
+        </div>
+        <div class="feature-item">
+          <div class="fi-dot"></div>
+          <div class="fi-text"><code>query-docs</code> — 查询具体文档</div>
+        </div>
+        <div class="feature-item">
+          <div class="fi-dot"></div>
+          <div class="fi-text">覆盖 React、Vue、Vite 等主流库</div>
+        </div>
+      </div>
+      <div class="code-block">
+        <div><span class="cmd">$</span> <span class="arg">ctx7</span> library <span class="str">"Vue 3"</span> <span class="str">"composition API"</span></div>
+        <div><span class="cmd">$</span> <span class="arg">ctx7</span> docs <span class="str">/vuejs/core</span> <span class="str">"watch vs computed"</span></div>
+        <div><span class="comment">// 返回最新文档片段 + 代码示例</span></div>
+      </div>
+    </div>
+
+    <!-- Column 2: Playwright -->
+    <div class="column teal">
+      <div class="col-header">
+        <span class="col-title">Playwright</span>
+        <span class="col-pill">浏览器自动化</span>
+      </div>
+      <div class="col-desc">页面交互、截图验证、视觉回归测试</div>
+      <div class="col-features">
+        <div class="feature-item">
+          <div class="fi-dot"></div>
+          <div class="fi-text"><code>browser_snapshot</code> — 无障碍快照</div>
+        </div>
+        <div class="feature-item">
+          <div class="fi-dot"></div>
+          <div class="fi-text"><code>browser_click</code> — 元素交互</div>
+        </div>
+        <div class="feature-item">
+          <div class="fi-dot"></div>
+          <div class="fi-text"><code>browser_navigate</code> — 页面导航</div>
+        </div>
+      </div>
+      <div class="browser-mock">
+        <div class="browser-bar">
+          <div class="browser-dot r"></div>
+          <div class="browser-dot y"></div>
+          <div class="browser-dot g"></div>
+          <div class="browser-url">localhost:5173/workflow</div>
+        </div>
+        <div class="browser-content">
+          <span class="bc-tag">snapshot</span>
+          <span class="bc-tag">click</span>
+          <span class="bc-tag active">navigate</span>
+          <span class="bc-tag">screenshot</span>
+          <span class="bc-tag">evaluate</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Column 3: Web Reader -->
+    <div class="column amber">
+      <div class="col-header">
+        <span class="col-title">Web Reader</span>
+        <span class="col-pill">内容抓取</span>
+      </div>
+      <div class="col-desc">抓取并转换网页为 LLM 友好输入</div>
+      <div class="col-features">
+        <div class="feature-item">
+          <div class="fi-dot"></div>
+          <div class="fi-text">Markdown 格式输出</div>
+        </div>
+        <div class="feature-item">
+          <div class="fi-dot"></div>
+          <div class="fi-text">图片摘要与链接提取</div>
+        </div>
+        <div class="feature-item">
+          <div class="fi-dot"></div>
+          <div class="fi-text">缓存机制减少重复请求</div>
+        </div>
+      </div>
+      <div class="web-visual">
+        <div class="wv-item">
+          <div class="wv-icon">&#x26A1;</div>
+          <div>
+            <div class="wv-label">Markdown 输出</div>
+            <div class="wv-desc">HTML → 清洁 Markdown，保留结构</div>
+          </div>
+        </div>
+        <div class="wv-item">
+          <div class="wv-icon">&#x1F4F7;</div>
+          <div>
+            <div class="wv-label">智能摘要</div>
+            <div class="wv-desc">图片描述 + 链接分类提取</div>
+          </div>
+        </div>
+        <div class="wv-item">
+          <div class="wv-icon">&#x1F504;</div>
+          <div>
+            <div class="wv-label">请求缓存</div>
+            <div class="wv-desc">相同 URL 复用结果，节省 token</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Advantage Bar -->
+  <div class="advantage-bar">
+    <div class="ab-label">MCP 架构优势</div>
+    <div class="advantage-item">
+      <div class="ai-icon">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="2" y="6" width="16" height="2" rx="1" fill="#2563eb"/><rect x="2" y="9" width="12" height="2" rx="1" fill="#2563eb" opacity="0.5"/><rect x="2" y="12" width="14" height="2" rx="1" fill="#2563eb" opacity="0.3"/></svg>
+      </div>
+      <div>
+        <div class="ai-title">协议标准化</div>
+        <div class="ai-desc">统一接口规范，降低集成成本</div>
+      </div>
+    </div>
+    <div class="advantage-item">
+      <div class="ai-icon">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="3" y="3" width="6" height="6" rx="2" fill="#0d9488"/><rect x="11" y="3" width="6" height="6" rx="2" fill="#0d9488" opacity="0.5"/><rect x="3" y="11" width="6" height="6" rx="2" fill="#0d9488" opacity="0.5"/><rect x="11" y="11" width="6" height="6" rx="2" fill="#0d9488" opacity="0.3"/></svg>
+      </div>
+      <div>
+        <div class="ai-title">工具可插拔</div>
+        <div class="ai-desc">按需启用 MCP Server，灵活组合</div>
+      </div>
+    </div>
+    <div class="advantage-item">
+      <div class="ai-icon">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 2v16M2 10h16" stroke="#d97706" stroke-width="2" stroke-linecap="round"/><circle cx="10" cy="10" r="3" fill="#d97706" opacity="0.3"/></svg>
+      </div>
+      <div>
+        <div class="ai-title">能力边界持续扩展</div>
+        <div class="ai-desc">新工具接入无需修改 Agent 核心逻辑</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Footer -->
+<div class="footer">
+  <span class="brand">相关性分析系统 &middot; 2026</span>
+  <span class="label-tag">CODEX ENGINEERING WORKFLOW</span>
+</div>
+
+</body>
+</html>
