@@ -73,6 +73,108 @@ describe('Workflow Store', () => {
     expect(node?.data.category).toBe('trigger')
   })
 
+  it('should undo and redo canvas node creation', () => {
+    const store = useWorkflowStore()
+
+    expect(store.canUndoCanvasChange).toBe(false)
+    expect(store.canRedoCanvasChange).toBe(false)
+
+    const node = store.addAndConnectNode('file-import', 'Import Data', { x: 0, y: 0 })
+
+    expect(node).toBeTruthy()
+    expect(store.nodes).toHaveLength(1)
+    expect(store.canUndoCanvasChange).toBe(true)
+
+    expect(store.undoCanvasChange()).toBe(true)
+    expect(store.nodes).toHaveLength(0)
+    expect(store.canRedoCanvasChange).toBe(true)
+
+    expect(store.redoCanvasChange()).toBe(true)
+    expect(store.nodes).toHaveLength(1)
+    expect(store.nodes[0]?.data.label).toBe('Import Data')
+  })
+
+  it('should write logs when undoing and redoing canvas changes', () => {
+    const store = useWorkflowStore()
+
+    store.addAndConnectNode('file-import', 'Import Data', { x: 0, y: 0 })
+
+    expect(store.undoCanvasChange()).toBe(true)
+    expect(store.logs.at(-1)?.message).toBe('已撤销上一步画布操作')
+
+    expect(store.redoCanvasChange()).toBe(true)
+    expect(store.logs.at(-1)?.message).toBe('已恢复下一步画布操作')
+  })
+
+  it('should clear redo history after a new canvas change following undo', () => {
+    const store = useWorkflowStore()
+
+    store.addAndConnectNode('file-import', '节点 A', { x: 0, y: 0 })
+    store.addAndConnectNode('data-cleaning', '节点 B', { x: 160, y: 0 })
+
+    expect(store.undoCanvasChange()).toBe(true)
+    expect(store.canRedoCanvasChange).toBe(true)
+
+    store.addAndConnectNode('pearson', '节点 C', { x: 320, y: 0 })
+
+    expect(store.canRedoCanvasChange).toBe(false)
+    expect(store.redoCanvasChange()).toBe(false)
+  })
+
+  it('should cap canvas history to the latest 30 steps', () => {
+    const store = useWorkflowStore()
+
+    for (let index = 0; index < 35; index += 1) {
+      store.addAndConnectNode('file-import', `节点 ${index + 1}`, { x: index * 20, y: 0 })
+    }
+
+    for (let index = 0; index < 30; index += 1) {
+      expect(store.undoCanvasChange()).toBe(true)
+    }
+
+    expect(store.nodes).toHaveLength(5)
+    expect(store.undoCanvasChange()).toBe(false)
+  })
+
+  it('should record lightweight canvas snapshots without runtime payload fields', () => {
+    const store = useWorkflowStore()
+    const node = store.addAndConnectNode('manual-json-import', '手动输入', { x: 0, y: 0 })!
+
+    node.data.config = {
+      ...node.data.config,
+      jsonData: '{"foo":"bar"}',
+    }
+    node.data.manualInput = '{"huge":"payload"}'
+    node.data.output = createTableResult([{ foo: 'bar' }])
+    node.data.logs = [{ level: 'info', message: 'runtime log' }] as any
+    node.data.error = 'runtime error'
+    node.position = { x: 120, y: 40 }
+
+    store.handleNodeDragStopForUnsavedState(node.id)
+    expect(store.undoCanvasChange()).toBe(true)
+    expect(store.redoCanvasChange()).toBe(true)
+
+    const restoredNode = store.nodes[0]!
+    expect(restoredNode.data.output).toBeUndefined()
+    expect(restoredNode.data.manualInput).toBe('')
+    expect(restoredNode.data.logs).toEqual([])
+    expect(restoredNode.data.error).toBeUndefined()
+    expect(restoredNode.data.config.jsonData).toBe('')
+  })
+
+  it('should reset canvas history when creating a new workflow', () => {
+    const store = useWorkflowStore()
+
+    store.addAndConnectNode('file-import', 'Import Data', { x: 0, y: 0 })
+    expect(store.canUndoCanvasChange).toBe(true)
+
+    store.createNewWorkflow()
+
+    expect(store.canUndoCanvasChange).toBe(false)
+    expect(store.canRedoCanvasChange).toBe(false)
+    expect(store.undoCanvasChange()).toBe(false)
+  })
+
   it('should create a new unsaved workflow from a template', () => {
     const store = useWorkflowStore()
 

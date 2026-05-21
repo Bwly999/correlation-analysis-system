@@ -1,5 +1,5 @@
 ﻿import { defineStore } from 'pinia'
-import { ref, shallowRef, markRaw, toRaw, watch, nextTick } from 'vue'
+import { computed, ref, shallowRef, markRaw, toRaw, watch, nextTick } from 'vue'
 import type { Ref } from 'vue'
 import { type Node, type Edge, type NodeChange, type EdgeChange } from '@vue-flow/core'
 import { getNodeDefinition } from '@/nodes/registry'
@@ -89,6 +89,27 @@ type DebugExecutionOptions = {
   isNested?: boolean
 }
 
+type CanvasHistoryNodeSnapshot = {
+  id: string
+  type: string
+  label: string
+  position: { x: number; y: number }
+  data: {
+    label: string
+    type: string
+    category: WorkflowNode['data']['category']
+    config: Record<string, unknown>
+    reuseLastRuntimeInputs: boolean
+    useManualInput: boolean
+    isPinned: boolean
+  }
+}
+
+type CanvasHistorySnapshot = {
+  nodes: CanvasHistoryNodeSnapshot[]
+  edges: Edge[]
+}
+
 export type FileImportTaskState = {
   phase: FileImportProgress['phase']
   progress: number
@@ -99,6 +120,8 @@ export type FileImportTaskState = {
 }
 
 const MAX_LOG_ENTRIES = 500
+const MAX_CANVAS_HISTORY_STEPS = 30
+const MAX_CANVAS_HISTORY_SNAPSHOTS = MAX_CANVAS_HISTORY_STEPS + 1
 export const useWorkflowStore = defineStore('workflow', () => {
   const nodes = ref([]) as Ref<WorkflowNode[]>
   const edges = ref([]) as Ref<Edge[]>
@@ -147,6 +170,10 @@ export const useWorkflowStore = defineStore('workflow', () => {
   const hasLayoutUnsavedChanges = ref(false)
   const hasUnsavedChanges = ref(false)
   const selectionClipboard = shallowRef<WorkflowSelectionSnapshot | null>(null)
+  const canvasHistorySnapshots = shallowRef<CanvasHistorySnapshot[]>([])
+  const canvasHistoryIndex = ref(0)
+  const lastCanvasHistorySignature = ref('')
+  const isApplyingCanvasHistory = ref(false)
 
   // 历史模式相关状态
   const isHistoryMode = ref(false)
@@ -324,6 +351,29 @@ export const useWorkflowStore = defineStore('workflow', () => {
     return defaultConfig
   }
 
+  const stripCanvasHistoryPayloadFromConfig = (
+    nodeType: string,
+    category: WorkflowNode['data']['category'],
+    config: Record<string, unknown> | null | undefined,
+  ) => {
+    const nextConfig = stripRuntimeInputValuesFromConfig(nodeType, config)
+    if (category !== 'trigger') return nextConfig
+
+    const definition = getNodeDefinition(nodeType)
+    if (!definition) return nextConfig
+
+    definition.properties.forEach((property) => {
+      if (property.type === 'json') {
+        nextConfig[property.name] = ''
+      }
+      if (property.type === 'file') {
+        nextConfig[property.name] = null
+      }
+    })
+
+    return nextConfig
+  }
+
   const serializeWorkflowNodes = (
     sourceNodes: WorkflowNode[],
     options: { includePinnedOutput?: boolean } = {},
@@ -370,6 +420,70 @@ export const useWorkflowStore = defineStore('workflow', () => {
         },
       })
     })
+
+  const serializeCanvasHistoryNodes = (
+    sourceNodes: WorkflowNode[],
+  ): CanvasHistoryNodeSnapshot[] =>
+    sourceNodes.map((node) => {
+      const normalizedNode = normalizeNodeConfigWithDefaults(node)
+
+      return cloneJsonValue({
+        id: normalizedNode.id,
+        type: normalizedNode.type ?? 'custom',
+        label: normalizedNode.label ?? normalizedNode.data.label,
+        position: normalizedNode.position,
+        data: {
+          label: normalizedNode.data.label,
+          type: normalizedNode.data.type,
+          category: normalizedNode.data.category,
+          config: stripCanvasHistoryPayloadFromConfig(
+            normalizedNode.data.type,
+            normalizedNode.data.category,
+            normalizedNode.data.config,
+          ),
+          reuseLastRuntimeInputs: normalizedNode.data.reuseLastRuntimeInputs ?? false,
+          useManualInput: normalizedNode.data.useManualInput ?? false,
+          isPinned: normalizedNode.data.isPinned ?? false,
+        },
+      })
+    })
+
+  const createCanvasHistorySnapshot = (
+    sourceNodes: WorkflowNode[] = getCurrentNodes(),
+    sourceEdges: Edge[] = getCurrentEdges(),
+  ): CanvasHistorySnapshot => ({
+    nodes: serializeCanvasHistoryNodes(sourceNodes),
+    edges: serializeWorkflowEdges(sourceEdges),
+  })
+
+  const getCanvasHistorySnapshotSignature = (snapshot: CanvasHistorySnapshot) =>
+    JSON.stringify(snapshot)
+
+  const restoreCanvasHistoryNodes = (sourceNodes: CanvasHistoryNodeSnapshot[]): WorkflowNode[] =>
+    sourceNodes.map((node) =>
+      normalizeNodeConfigWithDefaults({
+        id: node.id,
+        type: node.type,
+        label: node.label,
+        position: cloneJsonValue(node.position),
+        selected: false,
+        dragging: false,
+        data: {
+          label: node.data.label,
+          type: node.data.type,
+          category: node.data.category,
+          config: cloneJsonValue(node.data.config),
+          reuseLastRuntimeInputs: node.data.reuseLastRuntimeInputs ?? false,
+          status: 'idle',
+          output: undefined,
+          logs: [],
+          useManualInput: node.data.useManualInput ?? false,
+          manualInput: '',
+          isPinned: node.data.isPinned ?? false,
+          error: undefined,
+        },
+      } as WorkflowNode),
+    )
 
   const createAgentWorkflowSnapshot = () => ({
     name: workflowName.value,
@@ -535,6 +649,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     nodes.value = [...currentNodes, ...pastedNodes]
     edges.value = [...currentEdges, ...pastedEdges]
     refreshUnsavedChanges()
+    pushCanvasHistorySnapshot()
     addLog(options?.logMessage ?? `已粘贴 ${pastedNodes.length} 个节点`, 'info')
     return pastedNodes
   }
@@ -588,6 +703,77 @@ export const useWorkflowStore = defineStore('workflow', () => {
       })),
     )
 
+  const resetCanvasHistory = () => {
+    const snapshot = createCanvasHistorySnapshot()
+    canvasHistorySnapshots.value = [snapshot]
+    canvasHistoryIndex.value = 0
+    lastCanvasHistorySignature.value = getCanvasHistorySnapshotSignature(snapshot)
+  }
+
+  const pushCanvasHistorySnapshot = () => {
+    if (isApplyingCanvasHistory.value) return false
+
+    const snapshot = createCanvasHistorySnapshot()
+    const signature = getCanvasHistorySnapshotSignature(snapshot)
+    if (signature === lastCanvasHistorySignature.value) {
+      return false
+    }
+
+    const nextHistory = [
+      ...canvasHistorySnapshots.value.slice(0, canvasHistoryIndex.value + 1),
+      snapshot,
+    ]
+    const trimmedHistory = nextHistory.slice(-MAX_CANVAS_HISTORY_SNAPSHOTS)
+
+    canvasHistorySnapshots.value = trimmedHistory
+    canvasHistoryIndex.value = trimmedHistory.length - 1
+    lastCanvasHistorySignature.value = signature
+    return true
+  }
+
+  const applyCanvasHistorySnapshot = (snapshot: CanvasHistorySnapshot) => {
+    isApplyingCanvasHistory.value = true
+    try {
+      nodes.value = restoreCanvasHistoryNodes(snapshot.nodes)
+      edges.value = cloneWorkflowEdges(snapshot.edges)
+      refreshUnsavedChanges()
+      lastCanvasHistorySignature.value = getCanvasHistorySnapshotSignature(snapshot)
+    } finally {
+      isApplyingCanvasHistory.value = false
+    }
+  }
+
+  const canUndoCanvasChange = computed(() => canvasHistoryIndex.value > 0)
+  const canRedoCanvasChange = computed(
+    () => canvasHistoryIndex.value < canvasHistorySnapshots.value.length - 1,
+  )
+
+  const undoCanvasChange = () => {
+    if (!canUndoCanvasChange.value) return false
+
+    const nextIndex = canvasHistoryIndex.value - 1
+    const snapshot: CanvasHistorySnapshot | undefined = canvasHistorySnapshots.value[nextIndex]
+    if (!snapshot) return false
+
+    canvasHistoryIndex.value = nextIndex
+    applyCanvasHistorySnapshot(snapshot)
+    addLog('已撤销上一步画布操作', 'info')
+    return true
+  }
+
+  const redoCanvasChange = () => {
+    if (!canRedoCanvasChange.value) return false
+
+    const nextIndex = canvasHistoryIndex.value + 1
+    const snapshot: CanvasHistorySnapshot | undefined = canvasHistorySnapshots.value[nextIndex]
+    if (!snapshot) return false
+
+    canvasHistoryIndex.value = nextIndex
+    applyCanvasHistorySnapshot(snapshot)
+    addLog('已恢复下一步画布操作', 'info')
+    return true
+  }
+
   const syncUnsavedChangesState = () => {
     hasUnsavedChanges.value =
       hasExplicitUnsavedChanges.value ||
@@ -637,6 +823,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     if (shouldRefresh) {
       refreshStructureUnsavedChanges()
       refreshLayoutUnsavedChanges()
+      pushCanvasHistorySnapshot()
     }
   }
 
@@ -647,11 +834,13 @@ export const useWorkflowStore = defineStore('workflow', () => {
 
     if (shouldRefresh) {
       refreshStructureUnsavedChanges()
+      pushCanvasHistorySnapshot()
     }
   }
 
   const handleNodeDragStopForUnsavedState = (_nodeId?: string) => {
     refreshLayoutUnsavedChanges()
+    pushCanvasHistorySnapshot()
   }
 
   const resetWorkflowNodeRuntimeState = (sourceNodes: Array<WorkflowNode | WorkflowNodeSnapshot>): WorkflowNode[] =>
@@ -683,6 +872,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     clearWorkflowVersionState()
     addLog('已创建新工作流', 'info')
     syncSavedWorkflowSignature()
+    resetCanvasHistory()
   }
 
   const instantiateWorkflowFromTemplate = (workflow: WorkflowTemplateJsonDefinition) => {
@@ -778,6 +968,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     needsViewReset.value = true
     syncSavedWorkflowSignature()
     markWorkflowAsExplicitlyUnsaved()
+    resetCanvasHistory()
   }
 
   const saveWorkflow = async (name?: string) => {
@@ -816,6 +1007,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
       lastRunDashboard.value = null
       await loadWorkflowVersions(workflow.id)
       syncSavedWorkflowSignature()
+      resetCanvasHistory()
       selectedWorkflowVersionDetail.value = null
     }
   }
@@ -866,6 +1058,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
 
     addLog(`已回滚到版本 ${versionId}`, 'warn')
     syncSavedWorkflowSignature()
+    resetCanvasHistory()
 
     return result
   }
@@ -909,6 +1102,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
         hasStructureUnsavedChanges.value = false
         hasLayoutUnsavedChanges.value = false
         markWorkflowAsExplicitlyUnsaved()
+        resetCanvasHistory()
       } catch (_err) {
         addLog(`导入失败: 格式错误`, 'error')
       }
@@ -953,6 +1147,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     workflowName.value = `${record.workflowName} (历史记录: ${new Date(record.startTime).toLocaleString()})`
     addLog(`正在查看历史运行记录: ${new Date(record.startTime).toLocaleString()}`, 'info')
     needsViewReset.value = true
+    resetCanvasHistory()
   }
 
   const exitHistoryMode = () => {
@@ -968,6 +1163,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     originalWorkflowState.value = null
     addLog('已返回工作流编辑模式', 'info')
     needsViewReset.value = true
+    resetCanvasHistory()
   }
 
   const addLog = (message: string, level: 'info' | 'error' | 'warn' = 'info', nodeId?: string) => {
@@ -1283,6 +1479,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
       pendingConnection.value = null
     }
     refreshUnsavedChanges()
+    pushCanvasHistorySnapshot()
     return newNode
   }
 
@@ -1344,6 +1541,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     }
     node.position = cloneJsonValue(position)
     refreshLayoutUnsavedChanges()
+    pushCanvasHistorySnapshot()
     return node
   }
 
@@ -1380,6 +1578,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     }
     edges.value = [...currentEdges, nextEdge]
     refreshUnsavedChanges()
+    pushCanvasHistorySnapshot()
     return nextEdge
   }
 
@@ -1412,6 +1611,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     currentWorkflowId.value = snapshot.workflowId
     needsViewReset.value = true
     refreshUnsavedChanges()
+    resetCanvasHistory()
     return true
   }
 
@@ -1519,6 +1719,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     nodes.value = [...currentNodes, newNode]
     addLog(`已复制节点: ${original.data.label}`, 'info')
     refreshUnsavedChanges()
+    pushCanvasHistorySnapshot()
     return newNode
   }
 
@@ -1537,6 +1738,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     edges.value = nextEdges
     addLog(`已删除节点: ${removedNode.data.label}`, 'warn')
     refreshUnsavedChanges()
+    pushCanvasHistorySnapshot()
     return removedNode
   }
 
@@ -1553,6 +1755,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     )
     addLog(`已批量删除 ${selectedNodes.length} 个节点`, 'warn')
     refreshUnsavedChanges()
+    pushCanvasHistorySnapshot()
     return selectedNodes
   }
 
@@ -1561,6 +1764,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     const nextEdges: Edge[] = currentEdges.filter((edge) => edge.id !== edgeId)
     edges.value = nextEdges
     refreshUnsavedChanges()
+    pushCanvasHistorySnapshot()
   }
 
   const setPendingConnection = (nextConnection: PendingConnectionState) => {
@@ -2153,6 +2357,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
   void loadHistory({ suppressErrors: true })
   void loadCurrentStorageUser()
   syncSavedWorkflowSignature()
+  resetCanvasHistory()
   watch(
     workflowName,
     () => {
@@ -2187,6 +2392,8 @@ export const useWorkflowStore = defineStore('workflow', () => {
     editableSnapshots,
     isHistoryMode,
     hasUnsavedChanges,
+    canUndoCanvasChange,
+    canRedoCanvasChange,
     addLog,
     stopExecution,
     cancelPendingExecution,
@@ -2234,6 +2441,8 @@ export const useWorkflowStore = defineStore('workflow', () => {
     createNewWorkflow,
     createWorkflowFromTemplate,
     clearWorkflowVersionState,
+    undoCanvasChange,
+    redoCanvasChange,
     setPendingConnection,
     setActiveConfigNodeId,
     setActivePreviewNodeId,

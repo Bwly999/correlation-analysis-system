@@ -386,6 +386,94 @@ describe('WorkflowCanvas', () => {
     expect(duplicateSpy).toHaveBeenCalledTimes(1)
   })
 
+  it('routes Ctrl+Z to canvas undo', async () => {
+    const store = useWorkflowStore()
+    const undoSpy = vi.spyOn(store, 'undoCanvasChange').mockReturnValue(true)
+
+    mount(WorkflowCanvas, {
+      global: {
+        stubs: {
+          Background: { template: '<div />' },
+          Controls: { template: '<div />' },
+          NodeSidebar: { template: '<div />' },
+          WorkflowHeader: { template: '<div />' },
+          BaseNode: { template: '<div />' },
+          LogPanel: { template: '<div />' },
+          NodeConfigModal: { template: '<div />' },
+          RuntimeInputModal: runtimeInputModalStub,
+          WorkflowResultDashboardModal: { template: '<div />' },
+          WorkflowManagerModal: workflowManagerModalStub,
+          UnsavedWorkflowDialog: { template: '<div />' },
+          HelpCenterModal: { template: '<div />' },
+          ConfirmDialog: { template: '<div />' },
+          Toast: { template: '<div />' },
+          Button: { template: '<button><slot /></button>' },
+          N8nEdge: { template: '<div />' },
+        },
+        directives: {
+          tooltip: () => undefined,
+        },
+      },
+    })
+
+    const event = new KeyboardEvent('keydown', {
+      key: 'z',
+      code: 'KeyZ',
+      ctrlKey: true,
+      cancelable: true,
+    })
+
+    window.dispatchEvent(event)
+    await flushAsyncWork()
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(undoSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('routes Ctrl+Y to canvas redo', async () => {
+    const store = useWorkflowStore()
+    const redoSpy = vi.spyOn(store, 'redoCanvasChange').mockReturnValue(true)
+
+    mount(WorkflowCanvas, {
+      global: {
+        stubs: {
+          Background: { template: '<div />' },
+          Controls: { template: '<div />' },
+          NodeSidebar: { template: '<div />' },
+          WorkflowHeader: { template: '<div />' },
+          BaseNode: { template: '<div />' },
+          LogPanel: { template: '<div />' },
+          NodeConfigModal: { template: '<div />' },
+          RuntimeInputModal: runtimeInputModalStub,
+          WorkflowResultDashboardModal: { template: '<div />' },
+          WorkflowManagerModal: workflowManagerModalStub,
+          UnsavedWorkflowDialog: { template: '<div />' },
+          HelpCenterModal: { template: '<div />' },
+          ConfirmDialog: { template: '<div />' },
+          Toast: { template: '<div />' },
+          Button: { template: '<button><slot /></button>' },
+          N8nEdge: { template: '<div />' },
+        },
+        directives: {
+          tooltip: () => undefined,
+        },
+      },
+    })
+
+    const event = new KeyboardEvent('keydown', {
+      key: 'y',
+      code: 'KeyY',
+      ctrlKey: true,
+      cancelable: true,
+    })
+
+    window.dispatchEvent(event)
+    await flushAsyncWork()
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(redoSpy).toHaveBeenCalledTimes(1)
+  })
+
   it('does not route canvas shortcuts when the pi agent panel handles the key event', async () => {
     const store = useWorkflowStore()
     const duplicateSpy = vi.spyOn(store, 'duplicateSelectedNodes').mockImplementation(() => [])
@@ -622,6 +710,73 @@ describe('WorkflowCanvas', () => {
     expect(saveSpy).not.toHaveBeenCalled()
   })
 
+  it('does not route Ctrl+Z to canvas undo when node config is open', async () => {
+    const store = useWorkflowStore()
+    const undoSpy = vi.spyOn(store, 'undoCanvasChange').mockReturnValue(true)
+    findNode.mockReturnValue({ id: 'node_1' })
+    store.nodes = [
+      {
+        id: 'node_1',
+        type: 'custom',
+        position: { x: 0, y: 0 },
+        label: '数据清洗',
+        data: {
+          label: '数据清洗',
+          type: 'data-cleaning',
+          category: 'action',
+          status: 'idle',
+          config: {},
+          logs: [],
+          useManualInput: false,
+          manualInput: '',
+          isPinned: false,
+        },
+      } as any,
+    ]
+
+    mount(WorkflowCanvas, {
+      global: {
+        stubs: {
+          Background: { template: '<div />' },
+          Controls: { template: '<div />' },
+          NodeSidebar: { template: '<div />' },
+          WorkflowHeader: { template: '<div />' },
+          BaseNode: { template: '<div />' },
+          LogPanel: { template: '<div />' },
+          NodeConfigModal: { template: '<div />' },
+          RuntimeInputModal: runtimeInputModalStub,
+          WorkflowResultDashboardModal: { template: '<div />' },
+          WorkflowManagerModal: workflowManagerModalStub,
+          UnsavedWorkflowDialog: { template: '<div />' },
+          HelpCenterModal: { template: '<div />' },
+          ConfirmDialog: { template: '<div />' },
+          Toast: { template: '<div />' },
+          Button: { template: '<button><slot /></button>' },
+          N8nEdge: { template: '<div />' },
+        },
+        directives: {
+          tooltip: () => undefined,
+        },
+      },
+    })
+
+    store.activeConfigNodeId = 'node_1'
+    await flushAsyncWork()
+
+    const event = new KeyboardEvent('keydown', {
+      key: 'z',
+      code: 'KeyZ',
+      ctrlKey: true,
+      cancelable: true,
+    })
+
+    window.dispatchEvent(event)
+    await flushAsyncWork()
+
+    expect(event.defaultPrevented).toBe(false)
+    expect(undoSpy).not.toHaveBeenCalled()
+  })
+
   it('renders readable chinese copy in history mode', () => {
     const store = useWorkflowStore()
     store.isHistoryMode = true
@@ -689,6 +844,8 @@ describe('WorkflowCanvas', () => {
     expect(text).toContain('Ctrl+拖拽')
     expect(text).toContain('Ctrl+C')
     expect(text).toContain('Ctrl+D')
+    expect(text).toContain('Ctrl+Z')
+    expect(text).toContain('Ctrl+Y')
     expect(text).toContain('Ctrl+Del')
     expect(text).toContain('双击节点')
     expect(wrapper.get('[data-testid="canvas-shortcuts-card"]').attributes('style')).toContain('364px')

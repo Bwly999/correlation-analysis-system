@@ -37,6 +37,8 @@ import {
   ChevronLeft,
   ChevronRight,
   MousePointerClick,
+  RotateCcw,
+  RotateCw,
   ScanSearch,
   Settings2,
   Trash2,
@@ -207,6 +209,18 @@ const canvasShortcutHints = computed(() => [
     icon: ClipboardPaste,
     title: `${canvasShortcutModifierLabel.value}+V`,
     description: '粘贴节点',
+  },
+  {
+    key: 'undo',
+    icon: RotateCcw,
+    title: `${canvasShortcutModifierLabel.value}+Z`,
+    description: '撤销操作',
+  },
+  {
+    key: 'redo',
+    icon: RotateCw,
+    title: `${canvasShortcutModifierLabel.value}+Y`,
+    description: '恢复操作',
   },
   {
     key: 'delete',
@@ -394,6 +408,22 @@ const handleWindowKeydown = async (event: KeyboardEvent) => {
   if (matchesKey('s', 'KeyS')) {
     event.preventDefault()
     await saveWorkflowWithToast()
+    return
+  }
+
+  if (matchesKey('z', 'KeyZ')) {
+    const handled = store.undoCanvasChange()
+    if (handled) {
+      event.preventDefault()
+    }
+    return
+  }
+
+  if (matchesKey('y', 'KeyY')) {
+    const handled = store.redoCanvasChange()
+    if (handled) {
+      event.preventDefault()
+    }
     return
   }
 
