@@ -5,6 +5,7 @@ import type {
   UserHistoryDocument,
   UserWorkflowDocument,
 } from '../../storageRepository.js'
+import { buildHistoryRecordObjectKey, type HistoryRecordObjectStorage } from '../../historyObjectStorage.js'
 import { executionHistoryTable, workflowCurrentTable, workflowVersionsTable } from './schema.js'
 import {
   deserializeHistoryDocument,
@@ -214,16 +215,21 @@ export const deleteWorkflowDocument = async (
 export const readHistoryDocument = async <TRecord>(
   db: MysqlStorageDatabase,
   userId: string,
+  objectStorage?: HistoryRecordObjectStorage,
 ): Promise<UserHistoryDocument<TRecord>> => {
   const rows = await db
     .select({
       recordJson: executionHistoryTable.recordJson,
+      recordObjectKey: executionHistoryTable.recordObjectKey,
     })
     .from(executionHistoryTable)
     .where(eq(executionHistoryTable.userId, userId))
     .orderBy(desc(executionHistoryTable.startTimeMs), desc(executionHistoryTable.executionId))
 
-  return deserializeHistoryDocument<TRecord>(rows)
+  return deserializeHistoryDocument<TRecord>(
+    rows,
+    objectStorage ? (recordObjectKey) => objectStorage.getObject(recordObjectKey) : undefined,
+  )
 }
 
 export const writeHistoryDocument = async <TRecord extends ExecutionRecordLike>(
@@ -232,9 +238,10 @@ export const writeHistoryDocument = async <TRecord extends ExecutionRecordLike>(
   updater: (
     document: UserHistoryDocument<TRecord>,
   ) => Promise<UserHistoryDocument<TRecord>> | UserHistoryDocument<TRecord>,
+  objectStorage?: HistoryRecordObjectStorage,
 ): Promise<UserHistoryDocument<TRecord>> =>
   db.transaction(async (tx) => {
-    const currentDocument = await readHistoryDocument<TRecord>(tx, userId)
+    const currentDocument = await readHistoryDocument<TRecord>(tx, userId, objectStorage)
     const nextDocument = cloneJson(await updater(currentDocument))
 
     await tx
@@ -242,9 +249,27 @@ export const writeHistoryDocument = async <TRecord extends ExecutionRecordLike>(
       .where(eq(executionHistoryTable.userId, userId))
 
     if (nextDocument.records.length > 0) {
+      if (objectStorage) {
+        await Promise.all(nextDocument.records.map(async (record) => {
+          const recordObjectKey = buildHistoryRecordObjectKey({
+            userId,
+            workflowId: record.workflowId,
+            executionId: record.id,
+          })
+          await objectStorage.putObject(recordObjectKey, JSON.stringify(record))
+        }))
+      }
+
       await tx.insert(executionHistoryTable).values(
         nextDocument.records.map((record) => {
-          const row = serializeHistoryRecordRow(userId, record)
+          const recordObjectKey = objectStorage
+            ? buildHistoryRecordObjectKey({
+              userId,
+              workflowId: record.workflowId,
+              executionId: record.id,
+            })
+            : null
+          const row = serializeHistoryRecordRow(userId, record, recordObjectKey)
           return {
             executionId: row.executionId,
             userId: row.userId,
@@ -253,7 +278,8 @@ export const writeHistoryDocument = async <TRecord extends ExecutionRecordLike>(
             startTimeMs: row.startTimeMs,
             durationMs: row.durationMs,
             status: row.status,
-            recordJson: JSON.parse(row.recordJson),
+            recordObjectKey: row.recordObjectKey,
+            recordJson: row.recordJson,
           }
         }),
       )

@@ -65,7 +65,8 @@ export type SerializedHistoryRecordRow = {
   startTimeMs: number
   durationMs: number
   status: string
-  recordJson: string
+  recordObjectKey: string | null
+  recordJson: string | null
 }
 
 export const serializeWorkflowCurrentRow = <TWorkflow extends WorkflowLike>(
@@ -96,6 +97,7 @@ export const serializeWorkflowVersionRow = <TWorkflow, TVersion extends Workflow
 export const serializeHistoryRecordRow = <TRecord extends ExecutionRecordLike>(
   userId: string,
   record: TRecord,
+  recordObjectKey: string | null,
 ): SerializedHistoryRecordRow => ({
   executionId: record.id,
   userId,
@@ -104,7 +106,8 @@ export const serializeHistoryRecordRow = <TRecord extends ExecutionRecordLike>(
   startTimeMs: record.startTime,
   durationMs: record.duration,
   status: record.status,
-  recordJson: JSON.stringify(record),
+  recordObjectKey,
+  recordJson: recordObjectKey ? null : JSON.stringify(record),
 })
 
 export const deserializeWorkflowDocument = <TWorkflow, TVersion>(
@@ -116,7 +119,20 @@ export const deserializeWorkflowDocument = <TWorkflow, TVersion>(
 })
 
 export const deserializeHistoryDocument = <TRecord>(
-  rows: Array<{ recordJson: unknown }>,
-): UserHistoryDocument<TRecord> => ({
-  records: rows.map((row) => parseJsonColumn<TRecord>(row.recordJson)),
-})
+  rows: Array<{
+    recordJson: unknown
+    recordObjectKey: unknown
+  }>,
+  resolveObjectRecord?: (recordObjectKey: string) => Promise<string | null> | string | null,
+): Promise<UserHistoryDocument<TRecord>> => Promise.all(
+  rows.map(async (row) => {
+    if (typeof row.recordObjectKey === 'string' && resolveObjectRecord) {
+      const resolved = await resolveObjectRecord(row.recordObjectKey)
+      if (resolved) {
+        return JSON.parse(resolved) as TRecord
+      }
+    }
+
+    return parseJsonColumn<TRecord>(row.recordJson)
+  }),
+).then((records) => ({ records }))

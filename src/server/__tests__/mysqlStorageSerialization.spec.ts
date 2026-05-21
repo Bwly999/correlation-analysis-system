@@ -46,7 +46,7 @@ describe('mysql storage serialization', () => {
     })
   })
 
-  it('deserializes workflow and history documents from row payloads', () => {
+  it('deserializes workflow and history documents from row payloads', async () => {
     const workflow = {
       id: 'wf_2',
       name: '工作流 B',
@@ -86,15 +86,15 @@ describe('mysql storage serialization', () => {
       versions: [version],
     })
 
-    expect(
+    await expect(
       deserializeHistoryDocument([
-        { recordJson: JSON.stringify(record) },
+        { recordJson: JSON.stringify(record), recordObjectKey: null },
       ]),
-    ).toEqual({
+    ).resolves.toEqual({
       records: [record],
     })
 
-    expect(serializeHistoryRecordRow('user-b', record)).toEqual({
+    expect(serializeHistoryRecordRow('user-b', record, null)).toEqual({
       executionId: 'exec_1',
       userId: 'user-b',
       workflowId: 'wf_2',
@@ -102,6 +102,7 @@ describe('mysql storage serialization', () => {
       startTimeMs: 999,
       durationMs: 50,
       status: 'success',
+      recordObjectKey: null,
       recordJson: JSON.stringify(record),
     })
   })

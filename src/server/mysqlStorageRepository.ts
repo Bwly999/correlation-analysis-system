@@ -10,6 +10,7 @@ import {
   type MysqlStorageConfig,
 } from './storageDb/mysql/client.js'
 import { ensureMysqlStorageSchemaReady } from './storageDb/mysql/migrator.js'
+import { createHistoryRecordObjectStorage } from './historyObjectStorage.js'
 import {
   assertMysqlStorageDatabaseExists as assertMysqlStorageDatabaseExistsByPool,
   deleteWorkflowDocument,
@@ -30,6 +31,8 @@ export class MysqlWorkflowStorageRepository<
   private readonly pool
 
   private readonly db
+
+  private readonly historyObjectStorage = createHistoryRecordObjectStorage()
 
   private schemaReadyPromise: Promise<void> | null = null
 
@@ -67,7 +70,7 @@ export class MysqlWorkflowStorageRepository<
 
   async readHistoryDocument(userId: string): Promise<UserHistoryDocument<THistoryRecord>> {
     await this.ensureSchema()
-    return readHistoryDocument<THistoryRecord>(this.db, userId)
+    return readHistoryDocument<THistoryRecord>(this.db, userId, this.historyObjectStorage)
   }
 
   async writeHistoryDocument(
@@ -77,7 +80,12 @@ export class MysqlWorkflowStorageRepository<
     ) => Promise<UserHistoryDocument<THistoryRecord>> | UserHistoryDocument<THistoryRecord>,
   ): Promise<UserHistoryDocument<THistoryRecord>> {
     await this.ensureSchema()
-    return writeHistoryDocument<any>(this.db, userId, updater as any) as Promise<UserHistoryDocument<THistoryRecord>>
+    return writeHistoryDocument<any>(
+      this.db,
+      userId,
+      updater as any,
+      this.historyObjectStorage,
+    ) as Promise<UserHistoryDocument<THistoryRecord>>
   }
 
   private async ensureSchema() {

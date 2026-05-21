@@ -40,7 +40,8 @@ export const executionHistoryTable = mysqlTable('execution_history', {
   startTimeMs: bigint('start_time_ms', { mode: 'number' }).notNull(),
   durationMs: bigint('duration_ms', { mode: 'number' }).notNull(),
   status: varchar('status', { length: 32 }).notNull(),
-  recordJson: json('record_json').notNull(),
+  recordObjectKey: varchar('record_object_key', { length: 512 }),
+  recordJson: varchar('record_json', { length: 65535 }),
 }, (table) => [
   index('idx_execution_history_user_start').on(table.userId, table.startTimeMs),
   index('idx_execution_history_user_workflow_start').on(table.userId, table.workflowId, table.startTimeMs),
