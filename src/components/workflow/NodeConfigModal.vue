@@ -19,7 +19,7 @@ import {
   isPlainObject,
 } from "@/nodes/result";
 import type { WorkflowNode } from "@/utils/storage";
-import { stripRuntimeInputValuesFromConfig } from "@/utils/workflowConfig";
+import { serializeNodeConfigForPersistence } from "@/utils/workflowConfig";
 
 // Sub Components
 import DataDisplayPanel from "./DataDisplayPanel.vue";
@@ -83,6 +83,7 @@ const editedName = ref("");
 const localIsPinned = ref(false);
 const localUseManualInput = ref(false);
 const localManualInput = ref("");
+const localPersistRuntimeInputs = ref(true);
 const localReuseLastRuntimeInputs = ref(false);
 const isHelpDialogVisible = ref(false);
 
@@ -163,6 +164,8 @@ watch(
       localIsPinned.value = node.value.data.isPinned || false;
       localUseManualInput.value = node.value.data.useManualInput || false;
       localManualInput.value = node.value.data.manualInput || "";
+      localPersistRuntimeInputs.value =
+        node.value.data.persistRuntimeInputs ?? true;
       localReuseLastRuntimeInputs.value =
         node.value.data.reuseLastRuntimeInputs || false;
       activeTab.value = "parameters";
@@ -608,6 +611,7 @@ const runCurrentNode = async (rerunUpstream = false) => {
     node.value.data.label = editedName.value;
     node.value.data.useManualInput = localUseManualInput.value;
     node.value.data.manualInput = localManualInput.value;
+    node.value.data.persistRuntimeInputs = localPersistRuntimeInputs.value;
     node.value.data.reuseLastRuntimeInputs = localReuseLastRuntimeInputs.value;
     store.refreshUnsavedChanges();
     await store.executeNode(node.value.id, true, "single", { rerunUpstream });
@@ -656,12 +660,15 @@ const debugNodeForAgent = async (
 const saveConfig = () => {
   if (node.value) {
     node.value.data.label = editedName.value;
-    node.value.data.config = stripRuntimeInputValuesFromConfig(
-      node.value.data.type,
-      config.value,
-    );
+    node.value.data.config = serializeNodeConfigForPersistence({
+      nodeType: node.value.data.type,
+      config: config.value,
+      persistRuntimeInputs: localPersistRuntimeInputs.value,
+    });
     node.value.data.useManualInput = localUseManualInput.value;
     node.value.data.manualInput = localManualInput.value;
+    node.value.data.persistRuntimeInputs = localPersistRuntimeInputs.value;
+    node.value.data.reuseLastRuntimeInputs = localReuseLastRuntimeInputs.value;
     store.refreshUnsavedChanges();
     toast.add({
       group: "node-config",
@@ -676,6 +683,8 @@ const saveConfig = () => {
 const resetSavedRuntimeInputs = () => {
   if (!node.value) return;
   store.resetNodeRuntimeInputs(node.value.id);
+  localPersistRuntimeInputs.value =
+    node.value.data.persistRuntimeInputs ?? true;
   localReuseLastRuntimeInputs.value =
     node.value.data.reuseLastRuntimeInputs ?? false;
   config.value = { ...node.value.data.config };
@@ -1106,7 +1115,11 @@ onBeforeUnmount(() => {
               <div v-else class="h-full w-full max-w-5xl">
                 <RuntimeSettingsPanel
                   :is-trigger="node.data.category === 'trigger'"
+                  :persist-runtime-inputs="localPersistRuntimeInputs"
                   :reuse-last-runtime-inputs="localReuseLastRuntimeInputs"
+                  @update:persist-runtime-inputs="
+                    localPersistRuntimeInputs = $event
+                  "
                   @update:reuse-last-runtime-inputs="
                     localReuseLastRuntimeInputs = $event
                   "

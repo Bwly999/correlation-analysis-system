@@ -110,12 +110,32 @@ const parseSchemeSelections = (selection: unknown) =>
     key.slice(SCHEME_KEY_PREFIX.length),
   )
 
-const ensureDateRange = (value: Date[] | undefined) => {
+const normalizeDateRangeValue = (value: unknown): Date | null => {
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value
+  }
+
+  if (typeof value === 'string' || typeof value === 'number') {
+    const parsed = new Date(value)
+    return Number.isNaN(parsed.getTime()) ? null : parsed
+  }
+
+  return null
+}
+
+const ensureDateRange = (value: unknown) => {
   if (!Array.isArray(value) || value.length < 2 || !value[0] || !value[1]) {
     throw new Error('请选择完整的查询日期范围')
   }
 
-  return [value[0].toISOString(), value[1].toISOString()] as [string, string]
+  const start = normalizeDateRangeValue(value[0])
+  const end = normalizeDateRangeValue(value[1])
+
+  if (!start || !end) {
+    throw new Error('请选择完整的查询日期范围')
+  }
+
+  return [start.toISOString(), end.toISOString()] as [string, string]
 }
 
 const parseProcessSelections = (value: string[] | undefined) =>

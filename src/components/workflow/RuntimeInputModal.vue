@@ -108,8 +108,11 @@ const confirmLabel = computed(() => {
 
 const buildRuntimeConfig = (node: WorkflowNode, reusePreviousValues: boolean) => {
   const nextConfig = { ...node.data.config }
+  const shouldResetRuntimeValues =
+    !reusePreviousValues && (node.data.persistRuntimeInputs ?? true) === false
+
   runtimeProperties.value.forEach((property) => {
-    if (!reusePreviousValues) {
+    if (shouldResetRuntimeValues) {
       nextConfig[property.name] = property.default ?? null
       return
     }

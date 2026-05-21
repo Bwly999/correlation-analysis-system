@@ -203,6 +203,55 @@ describe('RuntimeInputModal', () => {
     expect(wrapper.text()).toContain('selectedProcesses:["涂布"]')
   })
 
+  it('keeps persisted runtime values visible when reuse-last-inputs is disabled', () => {
+    const wrapper = mount(RuntimeInputModal, {
+      props: {
+        visible: true,
+        node: {
+          id: 'neighbor-system-node',
+          type: 'custom',
+          position: { x: 0, y: 0 },
+          label: '看板数据对接',
+          data: {
+            label: '看板数据对接',
+            type: 'neighbor-system',
+            category: 'trigger',
+            status: 'idle',
+            config: {
+              fetchMode: 'time',
+              timeRange: ['2026-04-01T00:00:00.000Z', '2026-04-07T00:00:00.000Z'],
+              materialType: '成品',
+              selectedProcesses: ['涂布'],
+            },
+            logs: [],
+            useManualInput: false,
+            manualInput: '',
+            isPinned: false,
+            persistRuntimeInputs: true,
+            reuseLastRuntimeInputs: false,
+          },
+        } as any,
+      },
+      global: {
+        directives: tooltipDirectives,
+        stubs: {
+          Dialog: dialogStub,
+          Button: true,
+          PropertyField: {
+            props: ['prop', 'modelValue'],
+            template:
+              '<div class="property-field-stub">{{ prop.name }}:{{ Array.isArray(modelValue) ? JSON.stringify(modelValue) : modelValue }}</div>',
+          },
+        },
+      },
+    })
+
+    expect(wrapper.text()).toContain(
+      'timeRange:["2026-04-01T00:00:00.000Z","2026-04-07T00:00:00.000Z"]',
+    )
+    expect(wrapper.text()).toContain('materialType:成品')
+  })
+
   it('shows file import parsing progress when the current node is importing in background', () => {
     const store = useWorkflowStore()
     store.fileImportTasks = {

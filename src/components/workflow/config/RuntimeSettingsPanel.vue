@@ -3,13 +3,19 @@ import ToggleSwitch from 'primevue/toggleswitch'
 
 const props = defineProps<{
   isTrigger: boolean
+  persistRuntimeInputs: boolean
   reuseLastRuntimeInputs: boolean
 }>()
 
 const emit = defineEmits<{
+  'update:persistRuntimeInputs': [value: boolean]
   'update:reuseLastRuntimeInputs': [value: boolean]
   'reset-runtime-inputs': []
 }>()
+
+const updatePersistRuntimeInputs = (value: boolean) => {
+  emit('update:persistRuntimeInputs', value)
+}
 
 const updateReuseLastRuntimeInputs = (value: boolean) => {
   emit('update:reuseLastRuntimeInputs', value)
@@ -22,6 +28,26 @@ const resetRuntimeInputs = () => {
 
 <template>
   <div v-if="isTrigger" class="mx-auto max-w-3xl space-y-4">
+    <div class="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+      <div class="flex items-start justify-between gap-3">
+        <div class="min-w-0">
+          <div class="text-sm font-semibold text-slate-900">允许保存启动参数</div>
+          <p class="mt-1.5 text-[13px] leading-5 text-slate-500">
+            {{
+              persistRuntimeInputs
+                ? '开启后，当前节点的普通启动参数会随工作流一起保存；文件型参数仍不会保存。'
+                : '关闭后，当前节点的启动参数只在本次运行中使用，保存工作流时会自动清空。'
+            }}
+          </p>
+        </div>
+        <ToggleSwitch
+          :model-value="persistRuntimeInputs"
+          class="mt-0.5 shrink-0 !scale-[0.74]"
+          @update:model-value="updatePersistRuntimeInputs"
+        />
+      </div>
+    </div>
+
     <div class="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
       <div class="flex items-start justify-between gap-3">
         <div class="min-w-0">
@@ -47,7 +73,7 @@ const resetRuntimeInputs = () => {
         <div class="min-w-0">
           <div class="text-sm font-semibold text-slate-900">重置已保存启动参数</div>
           <p class="mt-1.5 text-[13px] leading-5 text-slate-500">
-            立即清空当前节点已缓存的运行时输入，并关闭沿用开关。下次运行会重新弹出参数填写。
+            立即清空当前节点已保存或已缓存的启动参数，并关闭沿用开关。下次运行会重新弹出参数填写。
           </p>
         </div>
         <button

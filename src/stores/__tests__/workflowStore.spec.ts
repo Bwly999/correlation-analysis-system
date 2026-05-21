@@ -816,7 +816,7 @@ describe('Workflow Store', () => {
     expect(store.nodes[0]?.data.label).toBe('回滚节点')
   })
 
-  it('should strip runtime input values from workflow persistence snapshots', async () => {
+  it('should persist non-file runtime input values in workflow snapshots by default', async () => {
     const store = useWorkflowStore()
     const trigger = store.addAndConnectNode('neighbor-system', '看板数据对接', { x: 0, y: 0 })!
 
@@ -833,9 +833,51 @@ describe('Workflow Store', () => {
     const savedNode = saved.nodes[0]
 
     expect(savedNode?.data.config.productName).toBe('产品A')
+    expect(savedNode?.data.config.timeRange).toEqual([
+      '2026-04-01T00:00:00.000Z',
+      '2026-04-07T00:00:00.000Z',
+    ])
+    expect(savedNode?.data.config.materialType).toBe('成品')
+    expect(savedNode?.data.config.selectedProcesses).toEqual(['工序A'])
+  })
+
+  it('should strip runtime input values from workflow snapshots when persistence is disabled', async () => {
+    const store = useWorkflowStore()
+    const trigger = store.addAndConnectNode('neighbor-system', '看板数据对接', { x: 0, y: 0 })!
+
+    trigger.data.persistRuntimeInputs = false
+    trigger.data.config.productName = '产品A'
+    trigger.data.config.fetchMode = 'time'
+    trigger.data.config.timeRange = [
+      new Date('2026-04-01T00:00:00.000Z'),
+      new Date('2026-04-07T00:00:00.000Z'),
+    ]
+    trigger.data.config.materialType = '成品'
+    trigger.data.config.selectedProcesses = ['工序A']
+
+    const saved = await store.saveWorkflow('运行时输入剥离')
+    const savedNode = saved.nodes[0]
+
+    expect(savedNode?.data.persistRuntimeInputs).toBe(false)
+    expect(savedNode?.data.config.productName).toBe('产品A')
     expect(savedNode?.data.config.timeRange).toBeNull()
     expect(savedNode?.data.config.materialType).toBe('')
     expect(savedNode?.data.config.selectedProcesses).toEqual([])
+  })
+
+  it('should keep file runtime input values out of workflow snapshots even when persistence is enabled', async () => {
+    const store = useWorkflowStore()
+    const trigger = store.addAndConnectNode('file-import', '文件导入', { x: 0, y: 0 })!
+
+    trigger.data.config.fileData = new File(['a,b\n1,2'], 'test.csv', { type: 'text/csv' })
+    trigger.data.config.format = 'csv'
+
+    const saved = await store.saveWorkflow('文件启动参数')
+    const savedNode = saved.nodes[0]
+
+    expect(savedNode?.data.persistRuntimeInputs).toBe(true)
+    expect(savedNode?.data.config.fileData).toBeNull()
+    expect(savedNode?.data.config.format).toBe('csv')
   })
 
   it('should stop execution when stopExecution is called', async () => {
@@ -949,6 +991,16 @@ describe('Workflow Store', () => {
     expect(neighborNode.data.reuseLastRuntimeInputs).toBe(false)
   })
 
+  it('should default trigger nodes to persist runtime inputs', () => {
+    const store = useWorkflowStore()
+
+    const fileNode = store.addAndConnectNode('file-import', '文件导入', { x: 0, y: 0 })!
+    const neighborNode = store.addAndConnectNode('neighbor-system', '看板数据对接', { x: 0, y: 120 })!
+
+    expect(fileNode.data.persistRuntimeInputs).toBe(true)
+    expect(neighborNode.data.persistRuntimeInputs).toBe(true)
+  })
+
   it('should require runtime input again on the next run when reuse is disabled', async () => {
     const store = useWorkflowStore()
     const node = store.addAndConnectNode('file-import', 'Trigger', { x: 0, y: 0 })!
@@ -999,6 +1051,56 @@ describe('Workflow Store', () => {
     expect(node.data.status).toBe('success')
   })
 
+  it('should preserve persisted non-file runtime inputs after trigger execution even when reuse is disabled', async () => {
+    const triggerDefinition = {
+      name: 'test-persisted-runtime-trigger',
+      displayName: 'Persisted Runtime Trigger',
+      icon: 'test',
+      category: 'trigger' as const,
+      description: 'test',
+      properties: [
+        {
+          name: 'token',
+          displayName: '启动参数',
+          type: 'string' as const,
+          default: '',
+          required: true,
+          isRuntimeInput: true,
+        },
+      ],
+      execute: async (_input: null, config: { token: string }) =>
+        createTableResult([{ token: config.token }]),
+    }
+
+    nodeDefinitions.push(triggerDefinition)
+
+    try {
+      const store = useWorkflowStore()
+      const node = store.addAndConnectNode('test-persisted-runtime-trigger', 'Trigger', { x: 0, y: 0 })!
+
+      node.data.persistRuntimeInputs = true
+      node.data.reuseLastRuntimeInputs = false
+      node.data.config.token = 'persisted-token'
+
+      const firstResult = await store.executeNode(node.id, true)
+      expect(firstResult?.kind).toBe('table')
+      expect(node.data.config.token).toBe('persisted-token')
+
+      node.data.output = null
+      node.data.status = 'idle'
+
+      const secondResult = await store.executeNode(node.id, true)
+      expect(secondResult?.kind).toBe('table')
+      expect(node.data.config.token).toBe('persisted-token')
+      expect(store.pendingExecution).toBeNull()
+    } finally {
+      const nodeIndex = nodeDefinitions.findIndex(
+        (definition) => definition.name === 'test-persisted-runtime-trigger',
+      )
+      if (nodeIndex >= 0) nodeDefinitions.splice(nodeIndex, 1)
+    }
+  })
+
   it('should allow explicitly resetting saved runtime inputs and disable reuse', () => {
     const store = useWorkflowStore()
     const node = store.addAndConnectNode('file-import', 'Trigger', { x: 0, y: 0 })!
@@ -1013,6 +1115,54 @@ describe('Workflow Store', () => {
     expect(node.data.reuseLastRuntimeInputs).toBe(false)
     expect(node.data.config.fileData).toBeNull()
     expect(node.data.config.format).toBe('csv')
+  })
+
+  it('should load saved workflows with runtime input persistence enabled when the field is missing', async () => {
+    const store = useWorkflowStore()
+    const workflowId = 'wf_legacy_runtime_inputs'
+
+    await storageProvider.saveWorkflow({
+      id: workflowId,
+      name: '旧工作流',
+      updatedAt: Date.now(),
+      nodes: [
+        {
+          id: 'legacy-trigger',
+          type: 'custom',
+          position: { x: 0, y: 0 },
+          label: '看板数据对接',
+          data: {
+            label: '看板数据对接',
+            type: 'neighbor-system',
+            category: 'trigger',
+            status: 'idle',
+            config: {
+              productName: '产品A',
+              fetchMode: 'time',
+              timeRange: ['2026-04-01T00:00:00.000Z', '2026-04-02T00:00:00.000Z'],
+              materialType: '成品',
+              selectedProcesses: ['工序A'],
+            },
+            reuseLastRuntimeInputs: false,
+            logs: [],
+            useManualInput: false,
+            manualInput: '',
+            isPinned: false,
+          },
+        },
+      ],
+      edges: [],
+    })
+
+    await store.loadWorkflow(workflowId)
+
+    const loadedNode = store.nodes[0]
+    expect(loadedNode?.data.persistRuntimeInputs).toBe(true)
+    expect(loadedNode?.data.config.productName).toBe('产品A')
+    expect(loadedNode?.data.config.timeRange).toEqual([
+      '2026-04-01T00:00:00.000Z',
+      '2026-04-02T00:00:00.000Z',
+    ])
   })
 
   it('should reuse cached upstream trigger output during downstream debug runs', async () => {
@@ -1995,7 +2145,7 @@ describe('Workflow Store', () => {
     expect(duplicated.data.output).toBeNull()
   })
 
-  it('should serialize selected nodes with only internal edges and stripped runtime state', () => {
+  it('should serialize selected nodes with only internal edges and runtime state that follows persistence rules', () => {
     const store = useWorkflowStore()
     const trigger = store.addAndConnectNode('neighbor-system', '看板数据', { x: 80, y: 120 })!
     const action = store.addAndConnectNode('data-cleaning', '数据清洗', { x: 320, y: 120 })!
@@ -2028,9 +2178,12 @@ describe('Workflow Store', () => {
     expect(selection.nodes[0]?.data.output).toBeNull()
     expect(selection.nodes[0]?.data.logs).toEqual([])
     expect(selection.nodes[0]?.data.config.productName).toBe('产品A')
-    expect(selection.nodes[0]?.data.config.timeRange).toBeNull()
-    expect(selection.nodes[0]?.data.config.materialType).toBe('')
-    expect(selection.nodes[0]?.data.config.selectedProcesses).toEqual([])
+    expect(selection.nodes[0]?.data.config.timeRange).toEqual([
+      '2026-04-01T00:00:00.000Z',
+      '2026-04-02T00:00:00.000Z',
+    ])
+    expect(selection.nodes[0]?.data.config.materialType).toBe('成品')
+    expect(selection.nodes[0]?.data.config.selectedProcesses).toEqual(['工序A'])
   })
 
   it('should duplicate selected nodes immediately with offset, suffix and preserved internal edges', () => {

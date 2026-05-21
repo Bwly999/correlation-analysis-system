@@ -2095,6 +2095,51 @@ describe('Node Definitions Execution Logic', () => {
       expect(legacy.metadata.fetch_mode).toBe('time')
     })
 
+    it('should accept persisted string date ranges for time-based startup params', async () => {
+      mockGetResolvedKanbanAuthToken.mockReturnValue('token-from-host')
+      mockFetchKanbanData.mockResolvedValue({
+        rows: [{ sn: 'SN001', F_TEMP: 12.3 }],
+        metadata: {
+          totalSn: 1,
+        },
+      })
+
+      await neighborSystemNode.execute(null, {
+        productName: '试制产品 A1',
+        sceneSelection: {
+          selectedKey: 'sub-scene:scene-pack::sub-pack-a',
+          value: {
+            sceneId: 'scene-pack',
+            sceneLable: 'PACK',
+            subSceneId: 'sub-pack-a',
+            subSceneLable: 'PACK-A',
+          },
+        },
+        fetchMode: 'time',
+        timeRange: ['2026-03-01T00:00:00.000Z', '2026-03-10T00:00:00.000Z'],
+        materialType: '正极',
+        selectedFactors: {
+          selectedKeys: ['factor:涂布::F_TEMP'],
+          values: [
+            {
+              factorKey: 'F_TEMP',
+              factorName: '温度',
+              materialType: '正极',
+              processName: '涂布',
+              r2Name: 'R2-TEMP',
+            },
+          ],
+        },
+        selectedProcesses: ['装配'],
+      })
+
+      expect(mockFetchKanbanData).toHaveBeenCalledWith(
+        expect.objectContaining({
+          timeRange: ['2026-03-01T00:00:00.000Z', '2026-03-10T00:00:00.000Z'],
+        }),
+      )
+    })
+
     it('should throw error if no factors are selected', async () => {
       mockGetResolvedKanbanAuthToken.mockReturnValue('token-from-host')
       const config = {

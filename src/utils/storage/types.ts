@@ -23,6 +23,7 @@ export interface WorkflowNodeData {
   type: string
   category: 'trigger' | 'action' | 'terminal'
   config: Record<string, unknown>
+  persistRuntimeInputs?: boolean
   reuseLastRuntimeInputs?: boolean
   status: 'idle' | 'running' | 'success' | 'error'
   output?: WorkflowNodeOutput

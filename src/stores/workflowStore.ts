@@ -27,7 +27,10 @@ import {
   type WorkflowSelectionTextPayload,
   type StorageUser,
 } from '@/utils/storage'
-import { stripRuntimeInputValuesFromConfig } from '@/utils/workflowConfig'
+import {
+  serializeNodeConfigForPersistence,
+  stripRuntimeInputValuesFromConfig,
+} from '@/utils/workflowConfig'
 import type {
   WorkflowAiEditableSnapshot,
   WorkflowAiOperation,
@@ -99,6 +102,7 @@ type CanvasHistoryNodeSnapshot = {
     type: string
     category: WorkflowNode['data']['category']
     config: Record<string, unknown>
+    persistRuntimeInputs: boolean
     reuseLastRuntimeInputs: boolean
     useManualInput: boolean
     isPinned: boolean
@@ -325,6 +329,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
 
   const normalizeNodeConfigWithDefaults = (node: WorkflowNode): WorkflowNode => {
     const nextNode = cloneJsonValue(node)
+    nextNode.data.persistRuntimeInputs ??= true
     const definition = getNodeDefinition(nextNode.data.type)
 
     if (!definition) return nextNode
@@ -387,10 +392,12 @@ export const useWorkflowStore = defineStore('workflow', () => {
         label: normalizedNode.label,
         data: {
           ...normalizedNode.data,
-          config: stripRuntimeInputValuesFromConfig(
-            normalizedNode.data.type,
-            normalizedNode.data.config,
-          ),
+          config: serializeNodeConfigForPersistence({
+            nodeType: normalizedNode.data.type,
+            config: normalizedNode.data.config,
+            persistRuntimeInputs: normalizedNode.data.persistRuntimeInputs ?? true,
+          }),
+          persistRuntimeInputs: normalizedNode.data.persistRuntimeInputs ?? true,
           status: 'idle' as const,
           output:
             options.includePinnedOutput && normalizedNode.data.isPinned ? normalizedNode.data.output : null,
@@ -410,10 +417,12 @@ export const useWorkflowStore = defineStore('workflow', () => {
         label: normalizedNode.label,
         data: {
           ...normalizedNode.data,
-          config: stripRuntimeInputValuesFromConfig(
-            normalizedNode.data.type,
-            normalizedNode.data.config,
-          ),
+          config: serializeNodeConfigForPersistence({
+            nodeType: normalizedNode.data.type,
+            config: normalizedNode.data.config,
+            persistRuntimeInputs: normalizedNode.data.persistRuntimeInputs ?? true,
+          }),
+          persistRuntimeInputs: normalizedNode.data.persistRuntimeInputs ?? true,
           status: 'idle' as const,
           output:
             options.includePinnedOutput && normalizedNode.data.isPinned ? normalizedNode.data.output : null,
@@ -441,6 +450,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
             normalizedNode.data.category,
             normalizedNode.data.config,
           ),
+          persistRuntimeInputs: normalizedNode.data.persistRuntimeInputs ?? true,
           reuseLastRuntimeInputs: normalizedNode.data.reuseLastRuntimeInputs ?? false,
           useManualInput: normalizedNode.data.useManualInput ?? false,
           isPinned: normalizedNode.data.isPinned ?? false,
@@ -473,6 +483,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
           type: node.data.type,
           category: node.data.category,
           config: cloneJsonValue(node.data.config),
+          persistRuntimeInputs: node.data.persistRuntimeInputs ?? true,
           reuseLastRuntimeInputs: node.data.reuseLastRuntimeInputs ?? false,
           status: 'idle',
           output: undefined,
@@ -901,6 +912,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
           type: nodeType,
           category: definition.category,
           config: cloneJsonValue(templateNode.data?.config ?? {}),
+          persistRuntimeInputs: templateNode.data?.persistRuntimeInputs ?? true,
           reuseLastRuntimeInputs: templateNode.data?.reuseLastRuntimeInputs ?? false,
           status: 'idle',
           output: null,
@@ -1304,6 +1316,12 @@ export const useWorkflowStore = defineStore('workflow', () => {
     const nextConfig = { ...(resolvedNode?.config ?? node.data.config) }
     definition.properties.forEach((property) => {
       if (!property.isRuntimeInput) return
+
+      const shouldPreservePersistedValue =
+        (node.data.persistRuntimeInputs ?? true) && property.type !== 'file'
+
+      if (shouldPreservePersistedValue) return
+
       nextConfig[property.name] = property.default ?? null
     })
     node.data.config = nextConfig
@@ -1424,6 +1442,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
         category,
         status: 'idle',
         config: defaultConfig,
+        persistRuntimeInputs: true,
         reuseLastRuntimeInputs: false,
         logs: [],
         useManualInput: false,
@@ -1711,7 +1730,11 @@ export const useWorkflowStore = defineStore('workflow', () => {
       y: original.position.y + 40,
     }
     newNode.data.label = `${original.data.label} (副本)`
-    newNode.data.config = stripRuntimeInputValuesFromConfig(newNode.data.type, newNode.data.config)
+    newNode.data.config = serializeNodeConfigForPersistence({
+      nodeType: newNode.data.type,
+      config: newNode.data.config,
+      persistRuntimeInputs: newNode.data.persistRuntimeInputs ?? true,
+    })
     newNode.data.status = 'idle'
     newNode.data.output = null
     newNode.data.logs = []
@@ -1842,6 +1865,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
         type: node.data.type,
         category: node.data.category,
         config: cloneJsonValue(node.data.config ?? {}),
+        persistRuntimeInputs: node.data.persistRuntimeInputs ?? true,
         reuseLastRuntimeInputs: node.data.reuseLastRuntimeInputs,
         status: node.data.status,
         output: cloneOutputForHistory(node.data.output ?? null),

@@ -43,3 +43,31 @@ export const stripRuntimeInputValuesFromConfig = (
 
   return nextConfig
 }
+
+export const serializeNodeConfigForPersistence = ({
+  nodeType,
+  config,
+  persistRuntimeInputs = true,
+}: {
+  nodeType: string
+  config: Record<string, unknown> | null | undefined
+  persistRuntimeInputs?: boolean
+}) => {
+  const nextConfig = cloneConfigValue(config ?? {})
+  const definition = getNodeDefinition(nodeType)
+
+  if (!definition) return nextConfig
+
+  definition.properties.forEach((property) => {
+    if (property.type === 'file') {
+      nextConfig[property.name] = cloneConfigValue(property.default ?? null)
+      return
+    }
+
+    if (!persistRuntimeInputs && property.isRuntimeInput) {
+      nextConfig[property.name] = cloneConfigValue(property.default ?? null)
+    }
+  })
+
+  return nextConfig
+}
