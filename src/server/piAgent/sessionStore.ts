@@ -17,6 +17,7 @@ export interface PiAgentSessionRecord {
   toolCalls: PiAgentToolCall[]
   createdAt: number
   updatedAt: number
+  sessionFile?: string
 }
 
 export interface PiAgentMessage {
@@ -79,6 +80,13 @@ export function createSessionRecord(
 
 export function getSessionRecord(sessionId: string): PiAgentSessionRecord | undefined {
   return sessions.get(sessionId)
+}
+
+export function setSessionFile(sessionId: string, sessionFile: string): void {
+  const record = sessions.get(sessionId)
+  if (!record) return
+  record.sessionFile = sessionFile
+  record.updatedAt = Date.now()
 }
 
 export function updateSessionRecord(

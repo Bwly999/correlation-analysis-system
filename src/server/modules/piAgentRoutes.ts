@@ -9,6 +9,7 @@ import type {
 import type { ServerDependencies } from '../bootstrap/serverDependencies.js'
 import type { HttpDomainHandler } from '../http/types.js'
 import { requireWorkflowUser } from '../http/workflowUser.js'
+import { createServerLogger } from '../logging/serverLogger.js'
 import {
   createPiAgentSession,
   createJsTransformAgentSession,
@@ -36,6 +37,13 @@ const isAgentObservabilityEnabled = () => process.env.NODE_ENV === 'development'
 
 export const createPiAgentRoutes = (): HttpDomainHandler<ServerDependencies> => async (context) => {
   const { pathname, method } = context
+  const logger = createServerLogger({
+    module: 'pi-agent.routes',
+    requestId: context.requestId,
+    userId: context.userId,
+    method: context.method,
+    pathname: context.pathname,
+  })
   const debugHealthMatch = pathname === '/api/pi-agent/debug/health'
   const debugTraceReplayMatch = pathname.match(/^\/api\/pi-agent\/sessions\/([^/]+)\/debug-trace\/replay$/)
   const debugTraceFilesMatch = pathname.match(/^\/api\/pi-agent\/sessions\/([^/]+)\/debug-trace\/files$/)
@@ -95,6 +103,7 @@ export const createPiAgentRoutes = (): HttpDomainHandler<ServerDependencies> => 
     const user = requireWorkflowUser(context)
     const body = await context.readJsonBody<JsTransformAgentSessionRequest>()
     const result = await createJsTransformAgentSession(body, user.id)
+    logger.info('创建 JS Transform Agent 会话', { sessionId: result.sessionId, userId: user.id })
     context.sendJson(200, result)
     return true
   }
@@ -106,6 +115,7 @@ export const createPiAgentRoutes = (): HttpDomainHandler<ServerDependencies> => 
       const body = await context.readJsonBody<WorkflowAiPlanRequest>()
       assertPiAgentSafeRequest(body)
       const result = await createPiAgentSession(body, user.id, context.dependencies.workflowMcpRuntime)
+      logger.info('创建 Pi Agent 会话', { sessionId: result.sessionId, userId: user.id })
       context.sendJson(200, result)
     } catch (error) {
       if (error instanceof Error && error.message === PI_AGENT_RAW_ROWS_ERROR_MESSAGE) {
@@ -141,6 +151,7 @@ export const createPiAgentRoutes = (): HttpDomainHandler<ServerDependencies> => 
     const sessionId = decodeURIComponent(messagesMatch[1] ?? '')
     const body = await context.readJsonBody<{ content: string }>()
     const result = await sendPiAgentMessage(sessionId, body.content)
+    logger.info('发送 Pi Agent 消息', { sessionId })
     context.sendJson(200, result)
     return true
   }
@@ -183,6 +194,7 @@ export const createPiAgentRoutes = (): HttpDomainHandler<ServerDependencies> => 
 
     // 使用 NDJSON 格式推送事件
     context.startNdjson(200)
+    logger.info('订阅 Pi Agent 事件流', { sessionId })
 
     const unsubscribe = subscribePiAgentEvents(sessionId, (event) => {
       context.writeNdjson(event)
@@ -225,6 +237,7 @@ export const createPiAgentRoutes = (): HttpDomainHandler<ServerDependencies> => 
       result: { content: Array<{ type: 'text'; text: string }>; details: PiAgentSafeToolResult; isError?: boolean }
     }>()
     const ok = resolvePiAgentToolResult(sessionId, body.toolCallId, body.result)
+    logger.info('处理 Pi Agent 工具结果', { sessionId, requestId: context.requestId })
     context.sendJson(ok ? 200 : 404, { ok })
     return true
   }
@@ -245,6 +258,7 @@ export const createPiAgentRoutes = (): HttpDomainHandler<ServerDependencies> => 
         sessionId,
         workflowSnapshot: body.workflowSnapshot,
       })
+      logger.info('同步 Pi Agent 画布', { sessionId })
       context.sendJson(200, result)
     } catch (error) {
       if (error instanceof Error && error.message === '未找到 Pi Agent 会话') {
@@ -264,6 +278,7 @@ export const createPiAgentRoutes = (): HttpDomainHandler<ServerDependencies> => 
       context.sendJson(404, { message: '未找到 Pi Agent 会话' })
       return true
     }
+    logger.info('读取 JS Transform Agent 会话', { sessionId })
     context.sendJson(200, session)
     return true
   }
@@ -277,6 +292,7 @@ export const createPiAgentRoutes = (): HttpDomainHandler<ServerDependencies> => 
       context.sendJson(404, { message: '未找到 Pi Agent 会话' })
       return true
     }
+    logger.info('读取 Pi Agent 会话', { sessionId })
     context.sendJson(200, session)
     return true
   }

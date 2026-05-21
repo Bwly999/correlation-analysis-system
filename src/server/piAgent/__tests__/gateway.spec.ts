@@ -10,6 +10,7 @@ const {
   defaultResourceLoaderMock,
   loaderReloadMock,
   sessionManagerInMemoryMock,
+  sessionManagerCreateMock,
   buildAllToolsMock,
   buildModelFromProfileMock,
   createModelRegistryFromProfileMock,
@@ -22,6 +23,7 @@ const {
   defaultResourceLoaderMock: vi.fn(),
   loaderReloadMock: vi.fn(),
   sessionManagerInMemoryMock: vi.fn(),
+  sessionManagerCreateMock: vi.fn(),
   buildAllToolsMock: vi.fn(),
   buildModelFromProfileMock: vi.fn(),
   createModelRegistryFromProfileMock: vi.fn(),
@@ -31,6 +33,7 @@ vi.mock('@earendil-works/pi-coding-agent', () => ({
   createAgentSession: createAgentSessionMock,
   SessionManager: {
     inMemory: sessionManagerInMemoryMock,
+    create: sessionManagerCreateMock,
   },
   DefaultResourceLoader: defaultResourceLoaderMock,
   defineTool: vi.fn(),
@@ -72,6 +75,7 @@ describe('piAgent gateway', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     sessionManagerInMemoryMock.mockReturnValue({ type: 'in-memory-session-manager' })
+    sessionManagerCreateMock.mockReturnValue({ type: 'persistent-session-manager' })
     buildAllToolsMock.mockReturnValue([])
     buildModelFromProfileMock.mockReturnValue({
       id: 'gpt-test',
@@ -115,6 +119,7 @@ describe('piAgent gateway', () => {
     if (typeof systemPromptOverride !== 'function') throw new Error('缺少 systemPromptOverride')
     expect(systemPromptOverride(undefined)).toBe(buildSystemPrompt(request))
     expect(loaderReloadMock).toHaveBeenCalledTimes(1)
+    expect(sessionManagerCreateMock).toHaveBeenCalled()
     expect(createAgentSessionMock).toHaveBeenCalledWith(
       expect.objectContaining({
         resourceLoader: expect.objectContaining({
@@ -125,6 +130,23 @@ describe('piAgent gateway', () => {
       }),
     )
     expect(created.sessionId).toBeTruthy()
+  })
+
+  it('persists the session file path when the SDK returns one', async () => {
+    const request = createRequest()
+    createAgentSessionMock.mockResolvedValueOnce({
+      session: {
+        sessionFile: '/tmp/pi-agent/session.jsonl',
+        prompt: sessionPromptMock,
+        followUp: sessionFollowUpMock,
+        subscribe: sessionSubscribeMock,
+        dispose: sessionDisposeMock,
+      },
+    })
+
+    const created = await createPiAgentSession(request, 'user_1', {} as never)
+    const record = getPiAgentSession(created.sessionId)
+    expect(record?.sessionFile).toBe('/tmp/pi-agent/session.jsonl')
   })
 
   it('sends the first user message as raw content without system prompt or wrapper labels', async () => {

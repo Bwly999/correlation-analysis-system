@@ -3,11 +3,11 @@
  * 管理 Pi Agent session 生命周期：创建、消息发送、事件订阅
  */
 import { randomUUID } from 'node:crypto'
+import { join } from 'node:path'
 import {
   createAgentSession,
   DefaultResourceLoader,
   SessionManager,
-  defineTool,
 } from '@earendil-works/pi-coding-agent'
 import type { AgentSession } from '@earendil-works/pi-coding-agent'
 import type { WorkflowAiPlanRequest } from '../../ai/types.js'
@@ -17,6 +17,7 @@ import { buildSystemPrompt } from './systemPrompt.js'
 import {
   createSessionRecord,
   getSessionRecord,
+  setSessionFile,
   updateSessionRecord,
   appendMessage,
   type PiAgentSessionRecord,
@@ -26,6 +27,8 @@ import { buildAllTools } from './tools/index.js'
 import { FrontendBridge } from './frontendBridge.js'
 import { assertPiAgentSafeRequest } from './safePayload.js'
 import type { AgentSessionCanvasSyncResponse } from '../../ai/types.js'
+import { archivePiAgentSessionFile } from '../logging/sessionArchive.js'
+import { createServerLogger } from '../logging/serverLogger.js'
 export {
   createJsTransformAgentSession,
   disposeAllJsTransformAgentSessions,
@@ -51,6 +54,8 @@ interface PiAgentRuntime {
 }
 
 const runtimes = new Map<string, PiAgentRuntime>()
+const resolvePiAgentSessionRootDir = () =>
+  process.env.PI_AGENT_SESSION_DIR?.trim() || join(process.cwd(), '.workflow-debug', 'pi-agent-sessions')
 
 // --- 公开 API ---
 
@@ -67,8 +72,10 @@ export async function createPiAgentSession(
   workflowRuntime: WorkflowMcpRuntime,
 ): Promise<CreatePiAgentSessionResult> {
   assertPiAgentSafeRequest(request)
+  const logger = createServerLogger({ module: 'pi-agent', userId })
   // 1. 创建会话记录
   const record = createSessionRecord(request, userId)
+  logger.info('创建 Pi Agent 会话', { sessionId: record.sessionId })
 
   // 2. 预创建 runtime 骨架（listeners 集合需要先存在，供 bridge 回调使用）
   const eventListeners = new Set<(event: PiAgentSseEvent) => void>()
@@ -109,8 +116,10 @@ export async function createPiAgentSession(
   })
   await resourceLoader.reload()
 
+  const sessionManager = SessionManager.create(process.cwd(), resolvePiAgentSessionRootDir())
+
   const { session } = await createAgentSession({
-    sessionManager: SessionManager.inMemory(),
+    sessionManager,
     authStorage,
     modelRegistry,
     model: model as any,
@@ -120,6 +129,11 @@ export async function createPiAgentSession(
     resourceLoader,
     noTools: 'builtin', // 禁用内置的 read/bash/edit/write 工具
   })
+  if (session.sessionFile) {
+    setSessionFile(record.sessionId, session.sessionFile)
+    archivePiAgentSessionFile(record.sessionId, session.sessionFile)
+  }
+  logger.info('Pi Agent session 已持久化', { sessionId: record.sessionId })
 
   // 6. 构造完整 runtime
   const runtime: PiAgentRuntime = {
@@ -136,8 +150,10 @@ export async function createPiAgentSession(
   const unsubscribe = session.subscribe((event) => {
     if (event.type === 'agent_start') {
       runtime.isStreaming = true
+      logger.info('Pi Agent 开始运行', { sessionId: record.sessionId })
     } else if (event.type === 'agent_end') {
       runtime.isStreaming = false
+      logger.info('Pi Agent 结束运行', { sessionId: record.sessionId })
     }
 
     // 桥接事件
@@ -179,7 +195,12 @@ export async function sendPiAgentMessage(
   message: string,
 ): Promise<{ ok: boolean; error?: string }> {
   const runtime = runtimes.get(sessionId)
-  if (!runtime) return { ok: false, error: '会话不存在' }
+  if (!runtime) {
+    createServerLogger({ module: 'pi-agent', sessionId }).warn('发送消息失败，会话不存在')
+    return { ok: false, error: '会话不存在' }
+  }
+
+  const logger = createServerLogger({ module: 'pi-agent', sessionId, userId: runtime.record.userId })
 
   // 记录用户消息
   appendMessage(sessionId, {
@@ -191,17 +212,21 @@ export async function sendPiAgentMessage(
     status: 'completed',
     createdAt: Date.now(),
   })
+  logger.info('收到 Pi Agent 用户消息')
 
   // 异步发送（不阻塞响应）
   const sendPromise = (async () => {
     try {
       if (runtime.isStreaming) {
+        logger.info('发送 followUp 到 Pi Agent')
         await runtime.session.followUp(message)
       } else {
+        logger.info('发送 prompt 到 Pi Agent')
         await runtime.session.prompt(message)
       }
     } catch (err: any) {
       updateSessionRecord(sessionId, { status: 'failed' })
+      logger.error('Pi Agent 发送消息失败', { error: err })
       const errorEvent: PiAgentSseEvent = {
         type: 'error',
         sessionId,
@@ -228,7 +253,10 @@ export function subscribePiAgentEvents(
   listener: (event: PiAgentSseEvent) => void,
 ): (() => void) | null {
   const runtime = runtimes.get(sessionId)
-  if (!runtime) return null
+  if (!runtime) {
+    createServerLogger({ module: 'pi-agent', sessionId }).warn('订阅事件失败，会话不存在')
+    return null
+  }
 
   runtime.eventListeners.add(listener)
   return () => {
@@ -266,6 +294,7 @@ export async function syncPiAgentCanvas(input: {
   updateSessionRecord(input.sessionId, {
     request: nextRequest,
   })
+  createServerLogger({ module: 'pi-agent', sessionId: input.sessionId, userId: runtime.record.userId }).info('同步 Pi Agent 画布')
 
   return {
     projection: {
@@ -312,6 +341,7 @@ export function disposePiAgentSession(sessionId: string): void {
   const runtime = runtimes.get(sessionId)
   if (!runtime) return
 
+  createServerLogger({ module: 'pi-agent', sessionId, userId: runtime.record.userId }).info('释放 Pi Agent 会话')
   runtime.bridge.dispose()
   runtime.unsubscribe?.()
   runtime.session.dispose()

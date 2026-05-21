@@ -1,4 +1,5 @@
 import type { ServerResponse } from 'node:http'
+import { createServerLogger } from '../logging/serverLogger.js'
 import { sendJsonResponse } from './response.js'
 
 const resolveErrorStatusCode = (error: unknown): number =>
@@ -13,6 +14,7 @@ const resolveErrorMessage = (error: unknown): string => (error instanceof Error 
 
 export const sendErrorResponse = (response: ServerResponse, error: unknown) => {
   const diagnostics = resolveErrorDiagnostics(error)
+  createServerLogger({ module: 'http.error' }).error('请求处理失败', { pathname: response.req?.url ?? undefined, error })
   sendJsonResponse(
     response,
     resolveErrorStatusCode(error),

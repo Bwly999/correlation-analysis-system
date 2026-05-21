@@ -6,6 +6,8 @@ export interface HttpRequestContext<TDependencies = unknown> {
   url: URL
   pathname: string
   method: string
+  requestId: string
+  userId?: string
   dependencies: TDependencies
   readJsonBody<T>(): Promise<T>
   sendJson(statusCode: number, payload: unknown): void
