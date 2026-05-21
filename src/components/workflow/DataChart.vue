@@ -184,12 +184,16 @@ const chartUpdateOptions = markRaw({ notMerge: true, lazyUpdate: true })
 const chartRef = shallowRef<any>(null)
 
 watch(
-  [chartRef, () => state.chartType.value],
-  ([ref, type]) => {
+  [chartRef, () => state.chartType.value, () => state.trendLineEnabled.value],
+  ([ref, type, trendLineEnabled]) => {
     const instance = ref?.chart || ref?.getEchartsInstance?.()
     if (!instance) return
 
     instance.off('datazoom')
+    instance.off('mouseover')
+    instance.off('mouseout')
+    instance.off('globalout')
+
     instance.on('datazoom', () => {
       const option = instance.getOption?.() as { dataZoom?: Array<Record<string, any>> } | undefined
       const yZoom = option?.dataZoom?.find((item) => Array.isArray(item?.yAxisIndex) && item.yAxisIndex.includes(0))
@@ -203,44 +207,64 @@ watch(
       }
     })
 
-    if (type !== 'normal') {
-      instance.off('mouseover')
-      instance.off('globalout')
+    if (type === 'normal') {
+      instance.on('mouseover', (params: Record<string, any>) => {
+        const si = Number(params.seriesIndex)
+        const di = Number(params.dataIndex)
+        if (!Number.isFinite(si)) return
+
+        instance.dispatchAction({ type: 'downplay' })
+        const pairSi = si % 2 === 0 ? si + 1 : si - 1
+        instance.dispatchAction({ type: 'highlight', seriesIndex: si, dataIndex: di })
+
+        const hoverX = Array.isArray(params.data) ? (params.data[0] as number) : 0
+        const option = instance.getOption()
+        const pairSeries = (option as any).series?.[pairSi] as { data?: Array<[number, number]> } | undefined
+        const pairData = pairSeries?.data
+        if (pairData && pairData.length > 0) {
+          let nearestIdx = 0
+          let minDist = Math.abs((pairData[0]?.[0] ?? 0) - hoverX)
+          for (let i = 1; i < pairData.length; i++) {
+            const dist = Math.abs((pairData[i]?.[0] ?? 0) - hoverX)
+            if (dist < minDist) {
+              minDist = dist
+              nearestIdx = i
+            }
+          }
+          instance.dispatchAction({ type: 'highlight', seriesIndex: pairSi, dataIndex: nearestIdx })
+        }
+      })
+
+      instance.on('globalout', () => {
+        instance.dispatchAction({ type: 'downplay' })
+      })
       return
     }
 
-    instance.off('mouseover')
-    instance.off('globalout')
+    if (type !== 'scatter' || !trendLineEnabled) return
+
+    const isTrendLineEvent = (params: Record<string, any>) =>
+      params.componentType === 'series' &&
+      (params.componentSubType === 'line' || params.seriesType === 'line') &&
+      String(params.seriesName ?? '').includes('趋势线')
 
     instance.on('mouseover', (params: Record<string, any>) => {
-      const si = Number(params.seriesIndex)
-      const di = Number(params.dataIndex)
-      if (!Number.isFinite(si)) return
+      if (!isTrendLineEvent(params)) return
 
-      instance.dispatchAction({ type: 'downplay' })
-      const pairSi = si % 2 === 0 ? si + 1 : si - 1
-      instance.dispatchAction({ type: 'highlight', seriesIndex: si, dataIndex: di })
+      const seriesIndex = Number(params.seriesIndex)
+      if (!Number.isFinite(seriesIndex)) return
 
-      const hoverX = Array.isArray(params.data) ? (params.data[0] as number) : 0
-      const option = instance.getOption()
-      const pairSeries = (option as any).series?.[pairSi] as { data?: Array<[number, number]> } | undefined
-      const pairData = pairSeries?.data
-      if (pairData && pairData.length > 0) {
-        let nearestIdx = 0
-        let minDist = Math.abs((pairData[0]?.[0] ?? 0) - hoverX)
-        for (let i = 1; i < pairData.length; i++) {
-          const dist = Math.abs((pairData[i]?.[0] ?? 0) - hoverX)
-          if (dist < minDist) {
-            minDist = dist
-            nearestIdx = i
-          }
-        }
-        instance.dispatchAction({ type: 'highlight', seriesIndex: pairSi, dataIndex: nearestIdx })
-      }
+      const dataIndex = Number.isFinite(Number(params.dataIndex)) ? Number(params.dataIndex) : 0
+      instance.dispatchAction({ type: 'showTip', seriesIndex, dataIndex })
+    })
+
+    instance.on('mouseout', (params: Record<string, any>) => {
+      if (!isTrendLineEvent(params)) return
+      instance.dispatchAction({ type: 'hideTip' })
     })
 
     instance.on('globalout', () => {
-      instance.dispatchAction({ type: 'downplay' })
+      instance.dispatchAction({ type: 'hideTip' })
     })
   },
   { immediate: true },

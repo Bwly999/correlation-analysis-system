@@ -1,9 +1,32 @@
 import { defineComponent, h, nextTick } from 'vue'
 import { mount } from '@vue/test-utils'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as resultModule from '@/nodes/result'
 import DataChart from '../DataChart.vue'
 import { provideWorkflowOverlayHost } from '../workflowOverlayHost'
+
+type MockChartEventHandler = (params?: Record<string, any>) => void
+
+const createMockEchartsInstance = () => {
+  const listeners = new Map<string, MockChartEventHandler[]>()
+  const instance = {
+    on: vi.fn((eventName: string, handler: MockChartEventHandler) => {
+      const current = listeners.get(eventName) ?? []
+      current.push(handler)
+      listeners.set(eventName, current)
+    }),
+    off: vi.fn((eventName: string) => {
+      listeners.delete(eventName)
+    }),
+    dispatchAction: vi.fn(),
+    getOption: vi.fn(() => ({})),
+    __listeners: listeners,
+  }
+
+  return instance
+}
+
+let mockEchartsInstance = createMockEchartsInstance()
 
 vi.mock('vue-echarts', () => ({
   default: defineComponent({
@@ -18,7 +41,10 @@ vi.mock('vue-echarts', () => ({
         default: undefined,
       },
     },
-    setup(props) {
+    setup(props, { expose }) {
+      expose({
+        getEchartsInstance: () => mockEchartsInstance,
+      })
       return () =>
         h('div', {
           'data-test': 'chart-option',
@@ -28,6 +54,10 @@ vi.mock('vue-echarts', () => ({
     },
   }),
 }))
+
+beforeEach(() => {
+  mockEchartsInstance = createMockEchartsInstance()
+})
 
 vi.mock('primevue/select', () => ({
   default: defineComponent({
@@ -230,11 +260,14 @@ describe('DataChart', () => {
       },
     })
 
+    await wrapper.get('[data-test="chart-key-select"]').setValue(['score', 'other'])
+
     expect(wrapper.get('[data-test="trend-line-toggle"]').exists()).toBe(true)
     expect(wrapper.get('[data-test="trend-line-inactive"]').exists()).toBe(true)
 
     let option = getChartOption(wrapper)
     expect(option.series.every((series: { name?: string }) => !String(series.name ?? '').includes('趋势线'))).toBe(true)
+    expect((option.legend.data ?? []).every((name: string) => !String(name).includes('趋势线'))).toBe(true)
 
     await wrapper.get('[data-test="trend-line-inactive"]').trigger('click')
 
@@ -264,6 +297,59 @@ describe('DataChart', () => {
     expect(scatterTrendSeries.type).toBe('line')
     expect(Array.isArray(scatterTrendSeries.data)).toBe(true)
     expect(scatterTrendSeries.tooltip.show).toBe(true)
+    expect(scatterTrendSeries.triggerLineEvent).toBe(true)
+    expect(scatterTrendSeries.endLabel.show).toBe(true)
+    expect(scatterTrendSeries.endLabel.formatter).toContain('y =')
+    expect(option.legend.data).toEqual(['score', 'other', 'score 趋势线', 'other 趋势线'])
+
+    const scatterOptionObject = getChartOptionObject(wrapper)
+    const scatterTooltipFormatter = scatterOptionObject.tooltip.formatter as (params: Record<string, unknown>) => string
+    const scatterTooltipHtml = scatterTooltipFormatter({
+      seriesName: 'score 趋势线',
+      dataIndex: 0,
+      data: [1, 1],
+      value: [1, 1],
+    })
+    expect(scatterTooltipHtml).toContain('score 趋势线')
+    expect(scatterTooltipHtml).toContain('y =')
+  })
+
+  it('dispatches tooltip actions when hovering scatter trend lines', async () => {
+    const wrapper = mount(DataChart, {
+      props: {
+        data: [
+          { score: 1, other: 2 },
+          { score: 2, other: 4 },
+          { score: 3, other: 6 },
+        ],
+      },
+    })
+
+    await wrapper.get('[data-test="chart-key-select"]').setValue(['score', 'other'])
+    await wrapper.get('[data-test="chart-type-select"]').setValue('scatter')
+    await nextTick()
+    await wrapper.get('[data-test="trend-line-inactive"]').trigger('click')
+    await nextTick()
+
+    mockEchartsInstance.getOption.mockImplementation(() => getChartOptionObject(wrapper))
+
+    const mouseoverHandlers = mockEchartsInstance.__listeners.get('mouseover') ?? []
+    expect(mouseoverHandlers.length).toBeGreaterThan(0)
+
+    mouseoverHandlers[0]?.({
+      componentType: 'series',
+      componentSubType: 'line',
+      seriesType: 'line',
+      seriesName: 'score 趋势线',
+      seriesIndex: 2,
+      dataIndex: 0,
+    })
+
+    expect(mockEchartsInstance.dispatchAction).toHaveBeenCalledWith({
+      type: 'showTip',
+      seriesIndex: 2,
+      dataIndex: 0,
+    })
   })
 
   it('hides the trend line toggle for chart types that do not support it', async () => {

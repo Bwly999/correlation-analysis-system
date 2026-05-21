@@ -651,6 +651,14 @@ export const formatTrendLineFormula = (slope: number, intercept: number) => {
   return `y = ${slopeLabel}x ${operator} ${interceptLabel}`
 }
 
+export const createTrendLineTooltipFormatter = (name: string, formula: string) => () =>
+  [
+    `<div style="padding:4px 2px;">`,
+    `<div style="color:#0f172a;font-size:12px;font-weight:700;">${escapeTooltipHtml(name)}</div>`,
+    `<div style="margin-top:6px;color:#475569;font-size:11px;">${escapeTooltipHtml(formula)}</div>`,
+    `</div>`,
+  ].join('')
+
 export const buildTrendLineSeries = (
   points: Array<[number, number]>,
   options: {
@@ -684,17 +692,34 @@ export const buildTrendLineSeries = (
     type: 'line',
     data,
     silent: false,
+    triggerLineEvent: true,
     symbol: 'none',
     showSymbol: false,
     animation: false,
     lineStyle: { type: 'dashed', width: 2, opacity: 0.7, color: '#0f172a' },
     tooltip: {
       show: true,
-      formatter: () =>
-        `<div style="padding:4px 2px;"><div style="color:#0f172a;font-size:12px;font-weight:700;">${escapeTooltipHtml(name)}</div><div style="margin-top:6px;color:#475569;font-size:11px;">${escapeTooltipHtml(formula)}</div></div>`,
+      formatter: createTrendLineTooltipFormatter(name, formula),
+    },
+    endLabel: {
+      show: true,
+      formatter: formula,
+      color: '#0f172a',
+      fontSize: 11,
+      fontWeight: 700,
+      backgroundColor: 'rgba(255, 255, 255, 0.92)',
+      borderColor: '#cbd5e1',
+      borderWidth: 1,
+      borderRadius: 6,
+      padding: [4, 6],
+      distance: 8,
+    },
+    labelLayout: {
+      hideOverlap: false,
+      moveOverlap: 'shiftY',
     },
     emphasis: { disabled: true },
-    showInLegend: false,
+    showInLegend: true,
     trendLineFormula: formula,
   }
 }

@@ -7,6 +7,7 @@ import {
   buildScatterValueAxisRange,
   buildTrendLineSeries,
   createBaseOption,
+  createTrendLineTooltipFormatter,
   getChartXAxisValue,
 } from './shared'
 import { isFiniteNumber } from '../tools/normalization'
@@ -19,6 +20,7 @@ export const scatterChartStrategy: ChartStrategy = {
     const option = createBaseOption()
     const displayRows = context.isNormalizedView.value ? model.normalizedRows : model.filteredRows
     const trendSeriesList: Record<string, any>[] = []
+    const trendLineFormulaByName = new Map<string, string>()
     const scatterSeries = model.keys.map((key) => {
       const tooltipRows: Array<{
         xAxisValue: number
@@ -56,6 +58,11 @@ export const scatterChartStrategy: ChartStrategy = {
     option.tooltip.trigger = 'item'
     option.tooltip.formatter = (params: Record<string, any>) => {
       const seriesName = String(params.seriesName ?? '')
+      const trendLineFormula = trendLineFormulaByName.get(seriesName)
+      if (trendLineFormula) {
+        return createTrendLineTooltipFormatter(seriesName, trendLineFormula)()
+      }
+
       const dataIndex = Number(params.dataIndex ?? -1)
       const series = scatterSeries.find((item) => item.name === seriesName)
       const point = series?.tooltipRows[dataIndex]
@@ -111,10 +118,19 @@ export const scatterChartStrategy: ChartStrategy = {
           name: `${String(rest.name)} 趋势线`,
           coordinateMode: 'value',
         })
-        if (trendSeries) trendSeriesList.push(trendSeries)
+        if (trendSeries) {
+          trendSeriesList.push(trendSeries)
+          trendLineFormulaByName.set(String(trendSeries.name ?? ''), String(trendSeries.trendLineFormula ?? ''))
+        }
       }
       return series
     })
+    if (trendSeriesList.length > 0) {
+      option.legend.data = [
+        ...scatterSeries.map((series) => series.name),
+        ...trendSeriesList.map((series) => String(series.name ?? '')),
+      ]
+    }
     option.series.push(...trendSeriesList)
     applyNativeVerticalDataZoom(
       option,
