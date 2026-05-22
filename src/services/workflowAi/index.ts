@@ -28,7 +28,7 @@ import type {
   WorkflowAiStreamEvent,
 } from '@/ai/types'
 
-const WORKFLOW_AI_API_BASE_URL = import.meta.env.VITE_WORKFLOW_AI_API_BASE_URL || '/api'
+const WORKFLOW_AI_API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 
 const fetchWorkflowApi = (url: string, init?: RequestInit) =>
   fetchWithWorkflowContext(url, init)

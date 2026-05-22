@@ -1,6 +1,8 @@
 import type { WorkflowAiModelProfile, WorkflowAiModelTestResult } from '@/ai/types'
 import { fetchWithWorkflowContext } from '@/services/workflowRequestContext'
 
+const WORKFLOW_API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
+
 const readJsonOrThrow = async <T>(response: Response, fallbackMessage: string): Promise<T> => {
   const payload = await response.json().catch(() => ({}))
   if (!response.ok) {
@@ -14,7 +16,7 @@ const readJsonOrThrow = async <T>(response: Response, fallbackMessage: string): 
 }
 
 export const fetchSystemModelProfiles = async (): Promise<WorkflowAiModelProfile[]> => {
-  const response = await fetchWithWorkflowContext('/api/workflow-ai/model-profiles')
+  const response = await fetchWithWorkflowContext(`${WORKFLOW_API_BASE_URL}/workflow-ai/model-profiles`)
   const payload = await readJsonOrThrow<{ profiles?: WorkflowAiModelProfile[] }>(response, '加载系统模型配置失败')
   return payload.profiles ?? []
 }
@@ -22,7 +24,7 @@ export const fetchSystemModelProfiles = async (): Promise<WorkflowAiModelProfile
 export const testWorkflowAiModelProfile = async (
   profile: WorkflowAiModelProfile,
 ): Promise<WorkflowAiModelTestResult> => {
-  const response = await fetchWithWorkflowContext('/api/workflow-ai/model-profiles/test', {
+  const response = await fetchWithWorkflowContext(`${WORKFLOW_API_BASE_URL}/workflow-ai/model-profiles/test`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
