@@ -100,10 +100,10 @@ describe('Workflow Store', () => {
     store.addAndConnectNode('file-import', 'Import Data', { x: 0, y: 0 })
 
     expect(store.undoCanvasChange()).toBe(true)
-    expect(store.logs.at(-1)?.message).toBe('已撤销上一步画布操作')
+    expect(store.logs[store.logs.length - 1]?.message).toBe('已撤销上一步画布操作')
 
     expect(store.redoCanvasChange()).toBe(true)
-    expect(store.logs.at(-1)?.message).toBe('已恢复下一步画布操作')
+    expect(store.logs[store.logs.length - 1]?.message).toBe('已恢复下一步画布操作')
   })
 
   it('should clear redo history after a new canvas change following undo', () => {

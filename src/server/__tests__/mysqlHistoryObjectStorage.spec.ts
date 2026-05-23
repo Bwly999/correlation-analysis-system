@@ -47,12 +47,10 @@ describe('mysql history object storage', () => {
     const document = await deserializeHistoryDocument(
       [
         {
-          executionId: 'exec-c',
           recordObjectKey: 'analysis-workflow/history/user-a/workflow-b/exec-c/snapshot-1.json',
           recordJson: null,
         },
         {
-          executionId: 'exec-d',
           recordObjectKey: null,
           recordJson: JSON.stringify({
             id: 'exec-d',

@@ -262,8 +262,8 @@ describe('DataChart', () => {
 
     await wrapper.get('[data-test="chart-key-select"]').setValue(['score', 'other'])
 
-    expect(wrapper.get('[data-test="trend-line-toggle"]').exists()).toBe(true)
-    expect(wrapper.get('[data-test="trend-line-inactive"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="trend-line-toggle"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="trend-line-inactive"]').exists()).toBe(true)
 
     let option = getChartOption(wrapper)
     expect(option.series.every((series: { name?: string }) => !String(series.name ?? '').includes('趋势线'))).toBe(true)
@@ -272,7 +272,7 @@ describe('DataChart', () => {
     await wrapper.get('[data-test="trend-line-inactive"]').trigger('click')
 
     option = getChartOption(wrapper)
-    expect(wrapper.get('[data-test="trend-line-active"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="trend-line-active"]').exists()).toBe(true)
     expect(option.series.some((series: { name?: string }) => String(series.name ?? '').includes('趋势线'))).toBe(true)
     const lineTrendSeries = option.series.find((series: { name?: string }) => String(series.name ?? '').includes('趋势线'))
     expect(lineTrendSeries.type).toBe('line')
@@ -289,8 +289,8 @@ describe('DataChart', () => {
     await wrapper.get('[data-test="chart-type-select"]').setValue('scatter')
     await nextTick()
 
-    expect(wrapper.get('[data-test="trend-line-toggle"]').exists()).toBe(true)
-    expect(wrapper.get('[data-test="trend-line-active"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="trend-line-toggle"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="trend-line-active"]').exists()).toBe(true)
 
     option = getChartOption(wrapper)
     const scatterTrendSeries = option.series.find((series: { name?: string }) => String(series.name ?? '').includes('趋势线'))
