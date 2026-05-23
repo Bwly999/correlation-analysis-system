@@ -2,7 +2,8 @@ import { createHttpRequestContext } from './context.js'
 import type { HttpDomainHandler, HttpRequestHandler } from './types.js'
 import type { WorkflowRequestHeaders } from './workflowHeaders.js'
 import { createServerLogger } from '../logging/serverLogger.js'
-import { createWorkflowUserResolver } from './workflowUser.js'
+import type { WorkflowRequestUser } from './workflowUser.js'
+import { isMissingWorkflowUserError } from './workflowUser.js'
 
 export interface HttpAuthGuard {
   authenticate(headers: WorkflowRequestHeaders): Promise<unknown> | unknown
@@ -12,14 +13,13 @@ export interface HttpHandlerOptions<TDependencies> {
   dependencies: TDependencies
   domains: Array<HttpDomainHandler<TDependencies>>
   authGuard?: HttpAuthGuard
+  resolveRequestUser?: (headers: WorkflowRequestHeaders) => WorkflowRequestUser
 }
 
 export const createHttpHandler = <TDependencies>(
   options: HttpHandlerOptions<TDependencies>,
 ): HttpRequestHandler => async (request, response) => {
-  const resolveWorkflowUser = createWorkflowUserResolver()
-  const user = resolveWorkflowUser(request.headers)
-  const context = createHttpRequestContext(request, response, options.dependencies, user)
+  const context = createHttpRequestContext(request, response, options.dependencies)
   const logger = createServerLogger({
     module: 'http.handler',
     requestId: context.requestId,
@@ -38,6 +38,15 @@ export const createHttpHandler = <TDependencies>(
 
   try {
     await options.authGuard?.authenticate(request.headers)
+    if (options.resolveRequestUser) {
+      try {
+        context.userId = options.resolveRequestUser(request.headers).id
+      } catch (error) {
+        if (!isMissingWorkflowUserError(error)) {
+          throw error
+        }
+      }
+    }
     logger.info('鉴权通过')
 
     for (const domain of options.domains) {

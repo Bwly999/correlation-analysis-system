@@ -19,6 +19,12 @@ const buildMissingWorkflowUserError = () => {
   return error
 }
 
+export const isMissingWorkflowUserError = (error: unknown): boolean =>
+  error instanceof Error
+  && error.message.includes(`缺少用户标识，请通过 ${WORKFLOW_USER_ID_HEADER} 请求头或 defaultUser 依赖注入提供用户`)
+  && 'statusCode' in error
+  && error.statusCode === 400
+
 export const resolveWorkflowUser = (
   headers: WorkflowRequestHeaders,
   defaultUser?: Partial<WorkflowRequestUser>,

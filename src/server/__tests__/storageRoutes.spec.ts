@@ -131,6 +131,24 @@ describe('storage routes', () => {
     })
   })
 
+  it('should fallback to default storage user when request headers do not provide workflow user', async () => {
+    const handler = createServerHandler({
+      defaultStorageUser: {
+        id: 'default-user-1',
+        name: '默认注入用户',
+      },
+    })
+    const response = createResponse()
+
+    await handler(createRequest('GET', '/api/storage/me'), response)
+
+    expect(response.statusCode).toBe(200)
+    expect(JSON.parse(response.body)).toEqual({
+      id: 'default-user-1',
+      name: '默认注入用户',
+    })
+  })
+
   it('should reject node api requests without JWT when auth is enabled', async () => {
     vi.stubEnv('WORKFLOW_JWT_SECRET', 'route-secret')
     const handler = createServerHandler()

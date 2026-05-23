@@ -21,6 +21,7 @@ export const createServerHandler = (
   const dependencies = createServerDependencies(dependencyOptions)
   return createHttpHandler({
     dependencies,
+    resolveRequestUser: dependencies.resolveStorageUser,
     authGuard: authGuard ?? createJwtAuthGuard(),
     domains: [
       createPiAgentRoutes(),
