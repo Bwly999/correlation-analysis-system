@@ -5,6 +5,7 @@ import type {
   WorkflowAiStreamEvent,
 } from '../../ai/types.js'
 import { normalizeNodeResult } from '../../nodes/result.js'
+import { correlationAnalysisNode } from '../../nodes/definitions/correlationAnalysis.js'
 import { materializeDraftGraphToWorkflowSnapshot } from '../../ai/draft/graph.js'
 import { INSPECTABLE_NODE_DEFINITIONS } from '../workflowAi/inspectionRuntimeShared.js'
 
@@ -165,6 +166,11 @@ const executeKendallNode = (
     },
   }
 }
+
+const executeCorrelationAnalysisNode = (
+  input: unknown,
+  config: Record<string, unknown>,
+) => correlationAnalysisNode.execute(input, config)
 
 const executeDataCleaningNode = (
   input: unknown,
@@ -334,6 +340,7 @@ type NodeExecuteFn = (
 ) => unknown
 
 const AGENT_EXECUTABLE_NODES = new Map<string, { execute: NodeExecuteFn; label: string }>([
+  ['correlation-analysis', { execute: executeCorrelationAnalysisNode, label: '单调性分析' }],
   ['pearson', { execute: executePearsonNode, label: 'Pearson 相关分析' }],
   ['spearman', { execute: executeSpearmanNode, label: 'Spearman 相关分析' }],
   ['kendall', { execute: executeKendallNode, label: 'Kendall 等级相关分析' }],
@@ -512,7 +519,7 @@ const executeSingleNode = async (
     if (inspectorDef) {
       result = await inspectorDef.execute(input, config)
     } else {
-      result = agentDef!.execute(input, config)
+      result = await agentDef!.execute(input, config)
     }
 
     const normalized = normalizeNodeResult(result as any)

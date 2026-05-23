@@ -3,6 +3,7 @@ import type { AgenticDataProfile } from './dataProfile.js'
 export type AgenticMethodRecommendation = {
   method: string
   nodeTypes: string[]
+  nodeConfig?: Record<string, unknown>
   reason: string
   priority: 'primary' | 'secondary'
 }
@@ -40,13 +41,15 @@ export const recommendAnalysisMethods = (profile: AgenticDataProfile): AgenticMe
     recommended.push(
       {
         method: 'Pearson 相关系数',
-        nodeTypes: ['pearson'],
+        nodeTypes: ['correlation-analysis'],
+        nodeConfig: { method: 'pearson' },
         reason: '目标字段和候选因子均包含数值字段，适合先检查线性相关强度。',
         priority: 'primary',
       },
       {
         method: 'Spearman 相关系数',
-        nodeTypes: ['spearman'],
+        nodeTypes: ['correlation-analysis'],
+        nodeConfig: { method: 'spearman' },
         reason: '可补充识别单调但非线性的相关关系。',
         priority: 'secondary',
       },

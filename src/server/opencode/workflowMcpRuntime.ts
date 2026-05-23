@@ -18,6 +18,7 @@ import { recommendAnalysisMethods } from './analysisIntelligence/methodAdvisor.j
 import { extractResultEvidence } from './analysisIntelligence/resultEvidence.js'
 import {
   buildServerWorkflowAiNodeCatalog,
+  buildServerWorkflowAiValidationCatalog,
   getServerNodeCatalogItem,
   resolveServerNodePropertyOptions,
 } from '../workflowAi/nodeCatalog.js'
@@ -81,6 +82,8 @@ export interface CreateWorkflowMcpRuntimeOptions {
 }
 
 const cloneValue = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
+const MAX_HISTORY_SAMPLE_SIZE = 10
+const DEFAULT_HISTORY_SAMPLE_SIZE = 3
 
 const resolvePagination = (input: { limit?: number, offset?: number } = {}) => ({
   limit: Math.min(Math.max(Math.floor(input.limit ?? 20), 1), 100),
@@ -105,6 +108,237 @@ const paginateItems = <T>(items: T[], input: { limit?: number, offset?: number }
 }
 
 const normalizeString = (value: unknown) => (typeof value === 'string' ? value.trim().toLowerCase() : '')
+const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+
+const resolveHistorySampleSize = (sampleSize?: number) =>
+  Math.min(Math.max(Math.floor(sampleSize ?? DEFAULT_HISTORY_SAMPLE_SIZE), 1), MAX_HISTORY_SAMPLE_SIZE)
+
+const shallowCompactValue = (value: unknown): unknown => {
+  if (
+    value == null
+    || typeof value === 'string'
+    || typeof value === 'number'
+    || typeof value === 'boolean'
+  ) {
+    return value
+  }
+
+  if (Array.isArray(value)) {
+    return {
+      itemCount: value.length,
+    }
+  }
+
+  if (isRecord(value)) {
+    const scalarEntries = Object.entries(value)
+      .filter(([, entry]) => entry == null || ['string', 'number', 'boolean'].includes(typeof entry))
+      .slice(0, 8)
+
+    return {
+      ...Object.fromEntries(scalarEntries),
+      topLevelKeys: Object.keys(value).slice(0, 12),
+    }
+  }
+
+  return String(value)
+}
+
+const getNodeDataContainer = (node: Record<string, unknown>) =>
+  isRecord(node.data) ? node.data : null
+
+const getNodeField = (node: Record<string, unknown>, key: string) => {
+  const nodeData = getNodeDataContainer(node)
+  return node[key] ?? nodeData?.[key]
+}
+
+const getNodeOutput = (node: Record<string, unknown>) => getNodeField(node, 'output')
+const getNodeStatus = (node: Record<string, unknown>) => getNodeField(node, 'status')
+const getNodeError = (node: Record<string, unknown>) => getNodeField(node, 'error')
+const getNodeType = (node: Record<string, unknown>) => getNodeField(node, 'type')
+const getNodeLabel = (node: Record<string, unknown>) =>
+  getNodeField(node, 'label') ?? nodeFieldFallback(node, 'id')
+
+const nodeFieldFallback = (node: Record<string, unknown>, key: string) => node[key]
+
+const getNodeOutputSummary = (node: Record<string, unknown>, output: unknown) => {
+  const explicitSummary = nodeFieldFallback(node, 'outputSummary')
+  if (typeof explicitSummary === 'string' && explicitSummary.trim()) return explicitSummary
+
+  if (isRecord(output)) {
+    const payload = output.payload
+    if (isRecord(payload)) {
+      if (typeof payload.summary === 'string' && payload.summary.trim()) return payload.summary
+      if (typeof payload.title === 'string' && payload.title.trim()) return payload.title
+    }
+  }
+
+  const error = getNodeError(node)
+  if (typeof error === 'string' && error.trim()) return error
+  return ''
+}
+
+const buildArrayPreview = (items: unknown[], sampleSize: number, kind = 'table') => ({
+  kind,
+  rowCount: items.length,
+  sampleRows: items.slice(0, sampleSize).map((item) => shallowCompactValue(item)) as Array<Record<string, unknown> | unknown>,
+  sampleSize: Math.min(sampleSize, items.length),
+  truncated: items.length > sampleSize,
+})
+
+const buildReportPreview = (payload: Record<string, unknown>, sampleSize: number) => {
+  const recommendations = Array.isArray(payload.recommendations)
+    ? payload.recommendations
+      .filter((item): item is string => typeof item === 'string')
+      .slice(0, sampleSize)
+    : []
+  const findings = Array.isArray(payload.findings)
+    ? payload.findings
+      .filter((item): item is string => typeof item === 'string')
+      .slice(0, sampleSize)
+    : []
+  const sections = Array.isArray(payload.sections)
+    ? payload.sections
+      .filter(isRecord)
+      .slice(0, sampleSize)
+      .map((section) => {
+        const items = Array.isArray(section.items) ? section.items : []
+        return {
+          key: typeof section.key === 'string' ? section.key : undefined,
+          type: typeof section.type === 'string' ? section.type : undefined,
+          itemCount: items.length,
+          sampleItems: items.slice(0, sampleSize).map((item) => shallowCompactValue(item)),
+          truncated: items.length > sampleSize,
+        }
+      })
+    : []
+
+  const totalSectionCount = Array.isArray(payload.sections) ? payload.sections.length : 0
+
+  return {
+    kind: 'report',
+    title: typeof payload.title === 'string' ? payload.title : undefined,
+    summary: typeof payload.summary === 'string' ? payload.summary : undefined,
+    recommendations,
+    findings,
+    sectionCount: totalSectionCount,
+    sections,
+    sampleSize,
+    truncated:
+      recommendations.length < (Array.isArray(payload.recommendations) ? payload.recommendations.length : 0)
+      || findings.length < (Array.isArray(payload.findings) ? payload.findings.length : 0)
+      || sections.length < totalSectionCount
+      || sections.some((section) => section.truncated),
+  }
+}
+
+const buildChartPreview = (payload: Record<string, unknown>, sampleSize: number) => {
+  const option = isRecord(payload.option) ? payload.option : null
+  const series = Array.isArray(option?.series) ? option.series.filter(isRecord) : []
+  return {
+    kind: 'chart',
+    chartType: typeof payload.chartType === 'string'
+      ? payload.chartType
+      : typeof series[0]?.type === 'string'
+        ? series[0].type
+        : undefined,
+    seriesCount: series.length,
+    seriesSummary: series.slice(0, sampleSize).map((item) => ({
+      type: typeof item.type === 'string' ? item.type : undefined,
+      dataPointCount: Array.isArray(item.data) ? item.data.length : undefined,
+      name: typeof item.name === 'string' ? item.name : undefined,
+    })),
+    dimensions: isRecord(payload.dimensions) ? shallowCompactValue(payload.dimensions) : undefined,
+    sampleSize,
+    truncated: series.length > sampleSize || series.some((item) => Array.isArray(item.data) && item.data.length > sampleSize),
+  }
+}
+
+const buildObjectPreview = (payload: Record<string, unknown>, kind: string, sampleSize: number) => ({
+  kind,
+  topLevelKeys: Object.keys(payload).slice(0, 12),
+  scalarFields: Object.fromEntries(
+    Object.entries(payload)
+      .filter(([, value]) => value == null || ['string', 'number', 'boolean'].includes(typeof value))
+      .slice(0, sampleSize),
+  ),
+  sampleSize,
+  truncated: Object.keys(payload).length > 12,
+})
+
+const buildNodeOutputPreview = (output: unknown, sampleSize: number) => {
+  if (!isRecord(output)) return null
+
+  const kind = typeof output.kind === 'string' ? output.kind : 'unknown'
+  const payload = output.payload
+
+  if (Array.isArray(payload)) {
+    return buildArrayPreview(payload, sampleSize, kind === 'unknown' ? 'table' : kind)
+  }
+
+  if (!isRecord(payload)) {
+    return {
+      kind,
+      value: shallowCompactValue(payload),
+      sampleSize: payload === undefined ? 0 : 1,
+      truncated: false,
+    }
+  }
+
+  if (kind === 'report') {
+    return buildReportPreview(payload, sampleSize)
+  }
+
+  if (kind === 'chart') {
+    return buildChartPreview(payload, sampleSize)
+  }
+
+  if (Array.isArray(payload.rows)) {
+    return buildArrayPreview(payload.rows, sampleSize, kind)
+  }
+
+  return buildObjectPreview(payload, kind, sampleSize)
+}
+
+const buildExecutionSummary = (execution: ServerExecutionRecord) => {
+  const nodes = execution.nodes as Array<Record<string, unknown>>
+  const errorNodeCount = nodes.filter((node) => getNodeStatus(node) === 'error').length
+  return {
+    id: execution.id,
+    workflowId: execution.workflowId,
+    workflowName: execution.workflowName,
+    startTime: execution.startTime,
+    duration: execution.duration,
+    status: execution.status,
+    nodeCount: nodes.length,
+    errorNodeCount,
+  }
+}
+
+const buildExecutionNodeSummary = (
+  node: Record<string, unknown>,
+  options: { includePreview: boolean; sampleSize: number },
+) => {
+  const output = getNodeOutput(node)
+  const resultKind = isRecord(output) && typeof output.kind === 'string' ? output.kind : 'unknown'
+  const summary = {
+    nodeId: String(nodeFieldFallback(node, 'id') ?? ''),
+    nodeLabel: String(getNodeLabel(node) ?? ''),
+    nodeType: typeof getNodeType(node) === 'string' ? String(getNodeType(node)) : undefined,
+    status: typeof getNodeStatus(node) === 'string' ? String(getNodeStatus(node)) : undefined,
+    resultKind,
+    outputSummary: getNodeOutputSummary(node, output),
+    error: typeof getNodeError(node) === 'string' ? String(getNodeError(node)) : undefined,
+  }
+
+  if (!options.includePreview || !output) {
+    return summary
+  }
+
+  return {
+    ...summary,
+    preview: buildNodeOutputPreview(output, options.sampleSize),
+  }
+}
 
 const getServerNodeCatalog = () => buildServerWorkflowAiNodeCatalog()
 
@@ -160,10 +394,14 @@ const buildCreatePlanFromSnapshot = (snapshot: WorkflowSnapshot): WorkflowAiPlan
   ],
 })
 
-const buildValidationResult = (snapshot: WorkflowSnapshot, nodeCatalog: WorkflowAiNodeCatalogItem[]) =>
-  validateWorkflowAiPlanAgainstContext(buildCreatePlanFromSnapshot(snapshot), {
-    nodeCatalog,
+const buildValidationResult = (snapshot: WorkflowSnapshot, nodeCatalog: WorkflowAiNodeCatalogItem[]) => {
+  const existingNodeTypes = (snapshot.nodes as SnapshotNodeLike[]).map((node) => String(node.type ?? ''))
+  const validationCatalog = buildServerWorkflowAiValidationCatalog(existingNodeTypes)
+
+  return validateWorkflowAiPlanAgainstContext(buildCreatePlanFromSnapshot(snapshot), {
+    nodeCatalog: validationCatalog.length ? validationCatalog : nodeCatalog,
   })
+}
 
 const ensureWorkflow = async (storage: WorkflowMcpStorageGateway, userId: string, workflowId: string) => {
   const workflow = await storage.getUserWorkflowById(userId, workflowId)
@@ -690,15 +928,20 @@ export const createWorkflowMcpRuntime = (options: CreateWorkflowMcpRuntimeOption
         mode?: 'list' | 'get' | 'node_result' | 'artifacts'
         executionId?: string
         nodeId?: string
+        detailLevel?: 'summary' | 'sample'
+        sampleSize?: number
         limit?: number
         offset?: number
       },
     ) {
       const mode = input.mode ?? 'list'
+      const detailLevel = input.detailLevel ?? (mode === 'node_result' ? 'sample' : 'summary')
+      const includePreview = detailLevel === 'sample'
+      const sampleSize = resolveHistorySampleSize(input.sampleSize)
       const history = await storage.getUserHistory(userId)
 
       if (mode === 'list') {
-        return paginateItems(history, input)
+        return paginateItems(history.map((item) => buildExecutionSummary(item)), input)
       }
 
       const execution = history.find((item) => item.id === input.executionId)
@@ -712,7 +955,11 @@ export const createWorkflowMcpRuntime = (options: CreateWorkflowMcpRuntimeOption
       if (mode === 'get') {
         return {
           found: true,
-          execution,
+          execution: {
+            ...buildExecutionSummary(execution),
+            nodes: (execution.nodes as Array<Record<string, unknown>>).map((node) =>
+              buildExecutionNodeSummary(node, { includePreview, sampleSize })),
+          },
         }
       }
 
@@ -721,17 +968,18 @@ export const createWorkflowMcpRuntime = (options: CreateWorkflowMcpRuntimeOption
         return {
           found: Boolean(node),
           executionId: execution.id,
-          node,
+          ...(node ? { node: buildExecutionNodeSummary(node, { includePreview, sampleSize }) } : { node: null }),
         }
       }
 
       const artifacts = (execution.nodes as Array<Record<string, unknown>>)
-        .filter((node) => node.output)
+        .filter((node) => getNodeOutput(node))
         .map((node) => ({
           artifactId: `${execution.id}:${String(node.id)}`,
           kind: 'node-result',
-          label: String(node.label ?? node.type ?? node.id),
+          label: String(getNodeLabel(node) ?? getNodeType(node) ?? node.id),
           nodeId: String(node.id),
+          resultKind: buildExecutionNodeSummary(node, { includePreview: false, sampleSize }).resultKind,
         }))
 
       return {

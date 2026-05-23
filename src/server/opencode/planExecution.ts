@@ -6,6 +6,7 @@ import type {
   WorkflowAiPlanRequest,
 } from '../../ai/types.js'
 import { validateWorkflowAiPlanAgainstContext } from '../../ai/planValidation.js'
+import { buildServerWorkflowAiValidationCatalog } from '../workflowAi/nodeCatalog.js'
 import { createAgentExecutionRecord } from './agentSessionStore.js'
 import { executeNodesForAgent } from '../workflowExecution/nodeExecutor.js'
 
@@ -110,8 +111,16 @@ export const executeWorkflowPlanForSession = async (input: {
 }): Promise<AgentExecutionRecord> => {
   const dataSources = input.request.dataSources ?? []
   const boundPlan = buildBoundPlan(input.plan, dataSources, input.bindings)
+  const requestedNodeTypes = boundPlan.operations
+    .filter((operation): operation is Extract<WorkflowAiPlan['operations'][number], { type: 'createNode' }> => operation.type === 'createNode')
+    .map((operation) => operation.nodeType)
+  const validationCatalog = [
+    ...input.request.nodeCatalog,
+    ...buildServerWorkflowAiValidationCatalog(requestedNodeTypes)
+      .filter((item) => !input.request.nodeCatalog.some((catalogItem) => catalogItem.name === item.name)),
+  ]
   const validation = validateWorkflowAiPlanAgainstContext(input.plan, {
-    nodeCatalog: input.request.nodeCatalog,
+    nodeCatalog: validationCatalog,
     existingNodes: [],
     existingEdges: [],
   })

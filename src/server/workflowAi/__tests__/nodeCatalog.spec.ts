@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildServerWorkflowAiNodeCatalog,
+  buildServerWorkflowAiValidationCatalog,
   getServerNodeCatalogItem,
   resolveServerNodePropertyOptions,
 } from '../nodeCatalog.js'
@@ -18,8 +19,8 @@ describe('buildServerWorkflowAiNodeCatalog', () => {
           category: 'trigger',
         }),
         expect.objectContaining({
-          name: 'pearson',
-          displayName: 'Pearson 相关系数',
+          name: 'correlation-analysis',
+          displayName: '单调性分析',
           category: 'terminal',
         }),
         expect.objectContaining({
@@ -37,6 +38,11 @@ describe('buildServerWorkflowAiNodeCatalog', () => {
     )
     expect(catalog.some((item) => item.name === 'data-cleaning')).toBe(false)
     expect(catalog.some((item) => item.name === 'data-profiling')).toBe(false)
+    expect(catalog.some((item) => item.name === 'pearson')).toBe(false)
+    expect(catalog.some((item) => item.name === 'spearman')).toBe(false)
+    expect(catalog.some((item) => item.name === 'kendall')).toBe(false)
+    expect(catalog.some((item) => item.name === 'chart-display')).toBe(false)
+    expect(catalog.some((item) => item.name === 'data-export')).toBe(false)
   })
 
   it('exposes static property options for server-safe MCP introspection', async () => {
@@ -103,16 +109,16 @@ describe('buildServerWorkflowAiNodeCatalog', () => {
     expect(item).toBeTruthy()
     expect(item?.properties.some((property) => property.name === 'manualRangeRules')).toBe(true)
     const outlierMethod = item?.properties.find((property) => property.name === 'outlierMethod')
-    expect(outlierMethod?.description).toContain('manual_range')
+    expect(outlierMethod?.description).toContain('IQR')
   })
 
   it('exposes decimal number metadata in server-safe node catalogs', () => {
     const catalog = buildServerWorkflowAiNodeCatalog()
     const dataMissingOutlier = catalog.find((item) => item.name === 'data-missing-outlier')
-    const pearson = catalog.find((item) => item.name === 'pearson')
+    const correlationAnalysis = catalog.find((item) => item.name === 'correlation-analysis')
     const iqrK = dataMissingOutlier?.properties.find((property) => property.name === 'iqrK')
     const percentile = dataMissingOutlier?.properties.find((property) => property.name === 'percentile')
-    const heatmapTopN = pearson?.properties.find((property) => property.name === 'heatmapTopN')
+    const heatmapTopN = correlationAnalysis?.properties.find((property) => property.name === 'heatmapTopN')
 
     expect(iqrK).toMatchObject({
       type: 'number',
@@ -126,5 +132,17 @@ describe('buildServerWorkflowAiNodeCatalog', () => {
       type: 'number',
     })
     expect(heatmapTopN).not.toHaveProperty('numberMode')
+  })
+
+  it('builds a validation catalog that can still recognize legacy compatibility nodes', () => {
+    const catalog = buildServerWorkflowAiValidationCatalog(['pearson', 'data-export'])
+
+    expect(catalog).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'correlation-analysis' }),
+        expect.objectContaining({ name: 'pearson', displayName: 'Pearson 相关系数' }),
+        expect.objectContaining({ name: 'data-export', displayName: '数据导出' }),
+      ]),
+    )
   })
 })

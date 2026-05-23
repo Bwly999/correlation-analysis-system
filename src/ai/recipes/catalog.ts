@@ -7,9 +7,9 @@ export const workflowRecipeCatalog: WorkflowRecipe[] = [
     description: '适合用最小 JSON 样例快速搭一个可运行分析流程。',
     appliesToModes: ['create'],
     keywords: ['json', '快速', '演示', '样例', '最小', 'pearson', '相关'],
-    minimalPattern: ['manual-json-import', 'pearson'],
+    minimalPattern: ['manual-json-import', 'correlation-analysis'],
     preferredEntryNodes: ['manual-json-import'],
-    preferredTerminalNodes: ['pearson', 'spearman', 'kendall'],
+    preferredTerminalNodes: ['correlation-analysis'],
     requiresSchemaInspection: true,
   },
   {
@@ -18,9 +18,9 @@ export const workflowRecipeCatalog: WorkflowRecipe[] = [
     description: '适合单张表上的 Pearson、Spearman、Kendall 相关分析。',
     appliesToModes: ['create', 'edit'],
     keywords: ['相关', '相关性', 'pearson', 'spearman', 'kendall'],
-    minimalPattern: ['manual-json-import', 'pearson'],
+    minimalPattern: ['manual-json-import', 'correlation-analysis'],
     preferredEntryNodes: ['manual-json-import', 'file-import', 'neighbor-system'],
-    preferredTerminalNodes: ['pearson', 'spearman', 'kendall'],
+    preferredTerminalNodes: ['correlation-analysis'],
     requiresSchemaInspection: true,
   },
   {
@@ -42,7 +42,7 @@ export const workflowRecipeCatalog: WorkflowRecipe[] = [
     keywords: ['合并', 'merge', '多来源', '多个来源', '两份', '两个来源', 'sn', '关联'],
     minimalPattern: ['file-import', 'file-import', 'data-merge', 'multiple-linear-regression'],
     preferredEntryNodes: ['file-import', 'manual-json-import', 'neighbor-system'],
-    preferredTerminalNodes: ['multiple-linear-regression', 'pearson', 'random-forest-feature-importance'],
+    preferredTerminalNodes: ['multiple-linear-regression', 'correlation-analysis', 'random-forest-feature-importance'],
     requiresSchemaInspection: true,
   },
   {

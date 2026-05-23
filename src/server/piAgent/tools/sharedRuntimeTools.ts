@@ -5,7 +5,6 @@ import type { WorkflowAiPlanRequest } from '../../../ai/types.js'
 import type { WorkflowMcpRuntime } from '../../opencode/workflowMcpRuntime.js'
 import { getPiWorkflowToolSpecsByTarget } from '../../../shared/piWorkflowTools.js'
 import { buildServerWorkflowAiNodeCatalog, getServerNodeCatalogItem } from '../../workflowAi/nodeCatalog.js'
-import type { ExecutionRecord } from '../../../utils/storage/types.js'
 import { sanitizePiAgentDataSources } from '../safePayload.js'
 
 const paginate = <T>(items: T[], input: { limit?: number; offset?: number } = {}) => {
@@ -30,27 +29,37 @@ const buildResult = (structuredContent: Record<string, unknown>, isError = false
   ...(isError ? { isError: true } : {}),
 })
 
-const buildPersistedExecutionEvidence = (execution: ExecutionRecord) => {
-  const evidence = execution.nodes
-    .filter((node: ExecutionRecord['nodes'][number]) => node.data.status === 'success' && node.data.output && typeof node.data.output === 'object')
+type CompactPersistedExecution = {
+  id: string
+  nodes?: Array<{
+    nodeId: string
+    nodeLabel?: string
+    nodeType?: string
+    status?: string
+    error?: string
+    resultKind?: string
+    preview?: {
+      sampleRows?: unknown[]
+    }
+  }>
+}
+
+const buildPersistedExecutionEvidence = (execution: CompactPersistedExecution) => {
+  const evidence = (execution.nodes ?? [])
+    .filter((node) => node.status === 'success')
     .map((node) => {
-      const output = node.data.output as Record<string, unknown>
-      const payload = output.payload
-      const rows =
-        Array.isArray(payload)
-          ? payload.filter((item) => item && typeof item === 'object').slice(0, 5)
-          : undefined
+      const rows = Array.isArray(node.preview?.sampleRows) ? node.preview.sampleRows.slice(0, 5) : undefined
 
       return {
-        evidenceId: `${execution.id}:${node.id}`,
+        evidenceId: `${execution.id}:${node.nodeId}`,
         executionId: execution.id,
-        nodeId: node.id,
-        nodeLabel: node.data.label,
-        nodeType: node.data.type,
-        statement: node.data.error || `${node.data.label} 已生成可引用执行证据`,
-        resultKind: typeof output.kind === 'string' ? output.kind : 'unknown',
+        nodeId: node.nodeId,
+        nodeLabel: node.nodeLabel,
+        nodeType: node.nodeType,
+        statement: node.error || `${node.nodeLabel ?? node.nodeId} 已生成可引用执行证据`,
+        resultKind: node.resultKind ?? 'unknown',
         metrics: {
-          status: node.data.status,
+          status: node.status,
         },
         ...(rows ? { previewRows: rows } : {}),
       }
@@ -318,6 +327,8 @@ export function createSharedRuntimeTools(options: CreateSharedRuntimeToolsOption
             ])),
             executionId: Type.Optional(Type.String()),
             nodeId: Type.Optional(Type.String()),
+            detailLevel: Type.Optional(Type.Union([Type.Literal('summary'), Type.Literal('sample')])),
+            sampleSize: Type.Optional(Type.Number()),
             limit: Type.Optional(Type.Number()),
             offset: Type.Optional(Type.Number()),
           }),
@@ -377,6 +388,7 @@ export function createSharedRuntimeTools(options: CreateSharedRuntimeToolsOption
             const persisted = await runtime.executions(userId, {
               mode: 'get',
               executionId: params.executionId,
+              detailLevel: 'sample',
             })
             return buildResult({
               found: 'execution' in persisted && Boolean(persisted.execution),
@@ -397,6 +409,7 @@ export function createSharedRuntimeTools(options: CreateSharedRuntimeToolsOption
             const persisted = await runtime.executions(userId, {
               mode: 'get',
               executionId: params.executionId,
+              detailLevel: 'sample',
             })
             if (!('execution' in persisted) || !persisted.execution) {
               return buildResult({
@@ -406,7 +419,7 @@ export function createSharedRuntimeTools(options: CreateSharedRuntimeToolsOption
                 evidence: [],
               })
             }
-            return buildResult(buildPersistedExecutionEvidence(persisted.execution as ExecutionRecord))
+            return buildResult(buildPersistedExecutionEvidence(persisted.execution as CompactPersistedExecution))
           },
         })
       default:

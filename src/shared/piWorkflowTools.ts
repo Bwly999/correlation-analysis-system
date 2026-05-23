@@ -267,6 +267,8 @@ export const PI_WORKFLOW_TOOL_SPECS: PiWorkflowToolSpec[] = [
       mode: '\'list\' | \'get\' | \'node_result\' | \'artifacts\'?',
       executionId: 'string?',
       nodeId: 'string?',
+      detailLevel: '\'summary\' | \'sample\'?',
+      sampleSize: 'number?',
       limit: 'number?',
       offset: 'number?',
     },

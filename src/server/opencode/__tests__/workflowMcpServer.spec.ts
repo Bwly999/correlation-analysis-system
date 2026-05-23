@@ -108,6 +108,47 @@ const buildAgentRequest = () => ({
       help: null,
       assistantHints: null,
     },
+    {
+      name: 'correlation-analysis',
+      displayName: '单调性分析',
+      category: 'terminal',
+      description: '计算相关性。',
+      inputMode: 'single' as const,
+      minInputs: 1,
+      maxInputs: 1,
+      allowedNextCategories: [],
+      properties: [
+        {
+          name: 'method',
+          displayName: '分析方法',
+          type: 'options',
+          required: false,
+          isRuntimeInput: false,
+          defaultValue: 'spearman',
+          description: '选择相关性分析方法',
+        },
+        {
+          name: 'xFields',
+          displayName: 'X 字段',
+          type: 'multi-options',
+          required: true,
+          isRuntimeInput: false,
+          defaultValue: [],
+          description: '候选因子字段',
+        },
+        {
+          name: 'yFields',
+          displayName: 'Y 字段',
+          type: 'multi-options',
+          required: true,
+          isRuntimeInput: false,
+          defaultValue: [],
+          description: '目标字段',
+        },
+      ],
+      help: null,
+      assistantHints: null,
+    },
   ],
   dataSources: [
     {
@@ -142,13 +183,13 @@ const buildAgentRequest = () => ({
   ],
 })
 
-const createRequest = (sessionId: string) =>
+const createRequest = (sessionId: string, userId = 'user_1') =>
   ({
     method: 'POST',
     url: '/api/opencode/workflow-mcp',
     headers: {
       'x-workflow-session-id': sessionId,
-      'x-workflow-user-id': 'user_1',
+      'x-workflow-user-id': userId,
     },
   }) as unknown as IncomingMessage
 
@@ -462,7 +503,8 @@ describe('workflow MCP server', () => {
         recommended: expect.arrayContaining([
           expect.objectContaining({
             method: 'Pearson 相关系数',
-            nodeTypes: ['pearson'],
+            nodeTypes: ['correlation-analysis'],
+            nodeConfig: { method: 'pearson' },
           }),
           expect.objectContaining({
             method: '多元线性回归',
@@ -695,19 +737,25 @@ describe('workflow MCP server', () => {
       total: expect.any(Number),
       items: expect.arrayContaining([
         expect.objectContaining({
-          name: 'pearson',
-          displayName: 'Pearson 相关系数',
+          name: 'correlation-analysis',
+          displayName: '单调性分析',
         }),
       ]),
     })
 
     const nodeResult = await getNode?.({ nodeType: 'pearson', mode: 'docs' })
     expect(nodeResult?.structuredContent).toMatchObject({
+      found: false,
+      message: '未找到节点定义: pearson',
+    })
+
+    const activeNodeResult = await getNode?.({ nodeType: 'correlation-analysis', mode: 'docs' })
+    expect(activeNodeResult?.structuredContent).toMatchObject({
       found: true,
       item: expect.objectContaining({
-        name: 'pearson',
+        name: 'correlation-analysis',
       }),
-      docs: expect.stringContaining('Pearson 相关系数'),
+      docs: expect.stringContaining('单调性分析'),
     })
   })
 
@@ -738,6 +786,64 @@ describe('workflow MCP server', () => {
         expect.objectContaining({ value: 'csv', label: 'CSV' }),
         expect.objectContaining({ value: 'xlsx', label: 'Excel' }),
       ]),
+    })
+  })
+
+  it('keeps legacy nodes valid when validating an existing saved workflow', async () => {
+    const created = await createAgentSession({
+      request: buildAgentRequest(),
+      userId: 'user_1',
+    })
+
+    await saveUserWorkflow('user_1', {
+      id: 'workflow_legacy_validation',
+      name: '历史 Pearson 流程',
+      updatedAt: Date.now(),
+      nodes: [
+        {
+          id: 'node_manual_1',
+          type: 'manual-json-import',
+          label: '手动输入数据',
+          config: {
+            jsonData: JSON.stringify([
+              { price: 10, sales: 100 },
+              { price: 11, sales: 105 },
+            ]),
+          },
+        },
+        {
+          id: 'node_pearson_1',
+          type: 'pearson',
+          label: 'Pearson 相关系数',
+          config: {
+            xFields: ['price'],
+            yFields: ['sales'],
+          },
+        },
+      ],
+      edges: [
+        {
+          id: 'edge_1',
+          source: 'node_manual_1',
+          target: 'node_pearson_1',
+        },
+      ],
+    })
+
+    const request = createRequest(created.session.id)
+    const response = createResponse()
+    await handleWorkflowMcpRequest(request, response, createWorkflowMcpDependencies())
+
+    const validateWorkflow = currentTools.get('workflow_validate_workflow')
+    expect(validateWorkflow).toBeTypeOf('function')
+
+    const result = await validateWorkflow?.({
+      workflowId: 'workflow_legacy_validation',
+    })
+
+    expect(result?.structuredContent).toMatchObject({
+      valid: true,
+      issues: [],
     })
   })
 
@@ -954,19 +1060,20 @@ describe('workflow MCP server', () => {
   })
 
   it('separates read-only workflow version listing from rollback and paginates history', async () => {
+    const userId = 'history_split_user'
     const created = await createAgentSession({
       request: buildAgentRequest(),
-      userId: 'user_1',
+      userId,
     })
 
-    await saveUserWorkflow('user_1', {
+    await saveUserWorkflow(userId, {
       id: 'workflow_versions_split',
       name: '版本测试流程 v1',
       updatedAt: 1,
       nodes: [],
       edges: [],
     })
-    await saveUserWorkflow('user_1', {
+    await saveUserWorkflow(userId, {
       id: 'workflow_versions_split',
       name: '版本测试流程 v2',
       updatedAt: 2,
@@ -974,7 +1081,7 @@ describe('workflow MCP server', () => {
       edges: [],
     })
 
-    await saveUserHistory('user_1', {
+    await saveUserHistory(userId, {
       id: 'exec_a',
       workflowId: 'workflow_versions_split',
       workflowName: '版本测试流程',
@@ -984,7 +1091,7 @@ describe('workflow MCP server', () => {
       nodes: [],
       edges: [],
     })
-    await saveUserHistory('user_1', {
+    await saveUserHistory(userId, {
       id: 'exec_b',
       workflowId: 'workflow_versions_split',
       workflowName: '版本测试流程',
@@ -995,7 +1102,7 @@ describe('workflow MCP server', () => {
       edges: [],
     })
 
-    const request = createRequest(created.session.id)
+    const request = createRequest(created.session.id, userId)
     const response = createResponse()
     await handleWorkflowMcpRequest(request, response, createWorkflowMcpDependencies())
 
@@ -1039,7 +1146,159 @@ describe('workflow MCP server', () => {
       offset: 0,
       hasMore: true,
       nextOffset: 1,
-      items: [expect.objectContaining({ id: 'exec_b' })],
+      items: [expect.objectContaining({ id: 'exec_b', workflowId: 'workflow_versions_split' })],
     })
+    expect(executionResult?.structuredContent.items[0]).not.toHaveProperty('nodes')
+    expect(executionResult?.structuredContent.items[0]).not.toHaveProperty('edges')
+  })
+
+  it('returns compact execution summaries and limited node samples for history reads', async () => {
+    const userId = 'history_compact_user'
+    const created = await createAgentSession({
+      request: buildAgentRequest(),
+      userId,
+    })
+
+    await saveUserHistory(userId, {
+      id: 'exec_compact_1',
+      workflowId: 'workflow_compact',
+      workflowName: '精简历史流程',
+      startTime: 300,
+      duration: 12,
+      status: 'success',
+      nodes: [
+        {
+          id: 'node_table_1',
+          type: 'trigger',
+          label: '大表输入',
+          position: { x: 0, y: 0 },
+          data: {
+            label: '大表输入',
+            type: 'file-import',
+            category: 'trigger',
+            config: {},
+            status: 'success',
+            logs: [],
+            output: {
+              kind: 'table',
+              payload: Array.from({ length: 12 }, (_, index) => ({
+                index,
+                value: `row_${index}`,
+              })),
+            },
+          },
+        },
+        {
+          id: 'node_report_1',
+          type: 'terminal',
+          label: '分析报告',
+          position: { x: 320, y: 0 },
+          data: {
+            label: '分析报告',
+            type: 'report-builder',
+            category: 'terminal',
+            config: {},
+            status: 'success',
+            logs: [],
+            output: {
+              kind: 'report',
+              payload: {
+                title: '历史分析报告',
+                summary: '这是很长的报告摘要',
+                recommendations: ['建议 A', '建议 B', '建议 C', '建议 D'],
+                sections: [
+                  {
+                    key: 'details',
+                    type: 'details',
+                    items: Array.from({ length: 8 }, (_, index) => ({
+                      name: `字段_${index}`,
+                      score: index,
+                    })),
+                  },
+                ],
+              },
+            },
+          },
+        },
+      ],
+      edges: [],
+    })
+
+    const request = createRequest(created.session.id, userId)
+    const response = createResponse()
+    await handleWorkflowMcpRequest(request, response, createWorkflowMcpDependencies())
+
+    const executions = currentTools.get('workflow_executions')
+    expect(executions).toBeTypeOf('function')
+
+    const getResult = await executions?.({
+      mode: 'get',
+      executionId: 'exec_compact_1',
+    })
+    expect(getResult?.structuredContent).toMatchObject({
+      found: true,
+      execution: expect.objectContaining({
+        id: 'exec_compact_1',
+        workflowId: 'workflow_compact',
+        workflowName: '精简历史流程',
+        status: 'success',
+        nodeCount: 2,
+        errorNodeCount: 0,
+        nodes: [
+          expect.objectContaining({
+            nodeId: 'node_table_1',
+            nodeLabel: '大表输入',
+            resultKind: 'table',
+          }),
+          expect.objectContaining({
+            nodeId: 'node_report_1',
+            nodeLabel: '分析报告',
+            resultKind: 'report',
+          }),
+        ],
+      }),
+    })
+    expect(getResult?.structuredContent.execution).not.toHaveProperty('edges')
+    expect(getResult?.structuredContent.execution).not.toHaveProperty('raw')
+    expect(getResult?.structuredContent.execution.nodes[0]).not.toHaveProperty('preview')
+
+    const nodeResult = await executions?.({
+      mode: 'node_result',
+      executionId: 'exec_compact_1',
+      nodeId: 'node_table_1',
+    })
+    expect(nodeResult?.structuredContent).toMatchObject({
+      found: true,
+      executionId: 'exec_compact_1',
+      node: expect.objectContaining({
+        nodeId: 'node_table_1',
+        resultKind: 'table',
+        preview: expect.objectContaining({
+          kind: 'table',
+          rowCount: 12,
+          sampleRows: [
+            expect.objectContaining({ index: 0, value: 'row_0', topLevelKeys: ['index', 'value'] }),
+            expect.objectContaining({ index: 1, value: 'row_1', topLevelKeys: ['index', 'value'] }),
+            expect.objectContaining({ index: 2, value: 'row_2', topLevelKeys: ['index', 'value'] }),
+          ],
+          sampleSize: 3,
+          truncated: true,
+        }),
+      }),
+    })
+    expect(nodeResult?.structuredContent.node.preview.sampleRows).toHaveLength(3)
+
+    const sampledGetResult = await executions?.({
+      mode: 'get',
+      executionId: 'exec_compact_1',
+      detailLevel: 'sample',
+      sampleSize: 99,
+    })
+    expect(sampledGetResult?.structuredContent.execution.nodes[0].preview).toMatchObject({
+      kind: 'table',
+      sampleSize: 10,
+      truncated: true,
+    })
+    expect(sampledGetResult?.structuredContent.execution.nodes[0].preview.sampleRows).toHaveLength(10)
   })
 })

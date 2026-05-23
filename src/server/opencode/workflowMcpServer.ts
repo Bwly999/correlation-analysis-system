@@ -5,6 +5,7 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import * as z from 'zod/v4'
 import type { WorkflowAiPlan, WorkflowAiPlanRequest } from '../../ai/types.js'
 import { validateWorkflowAiPlanAgainstContext } from '../../ai/planValidation.js'
+import { buildServerWorkflowAiValidationCatalog } from '../workflowAi/nodeCatalog.js'
 import {
   getAgentExecutionRecord,
   getAgentSessionRecord,
@@ -402,9 +403,13 @@ const getWorkflowToolDefinitions = (
       plan: planSchema.describe('待校验的工作流计划 JSON'),
     },
     handler: ({ plan }) => {
+      const existingContext = getExistingWorkflowContext(sessionRecord.request)
+      const validationCatalog = buildServerWorkflowAiValidationCatalog(
+        existingContext.existingNodes.map((node) => node.type),
+      )
       const validation = validateWorkflowAiPlanAgainstContext(plan as WorkflowAiPlan, {
-        nodeCatalog: sessionRecord.request.nodeCatalog,
-        ...getExistingWorkflowContext(sessionRecord.request),
+        nodeCatalog: validationCatalog,
+        ...existingContext,
       })
 
       return buildToolResult({
@@ -545,10 +550,20 @@ const getWorkflowToolDefinitions = (
       mode: z.enum(['list', 'get', 'node_result', 'artifacts']).optional(),
       executionId: z.string().optional().describe('执行记录 ID'),
       nodeId: z.string().optional().describe('节点 ID'),
+      detailLevel: z.enum(['summary', 'sample']).optional().describe('返回摘要或少量样本，默认 list/get/artifacts 为 summary，node_result 为 sample'),
+      sampleSize: z.number().int().min(1).max(10).optional().describe('样本条数，默认 3，最大 10'),
       ...paginationSchema,
     },
-    handler: async ({ mode, executionId, nodeId, limit, offset }) =>
-      buildToolResult(await runtime.executions(context.userId, { mode, executionId, nodeId, limit, offset })),
+    handler: async ({ mode, executionId, nodeId, detailLevel, sampleSize, limit, offset }) =>
+      buildToolResult(await runtime.executions(context.userId, {
+        mode,
+        executionId,
+        nodeId,
+        detailLevel,
+        sampleSize,
+        limit,
+        offset,
+      })),
   },
   {
     name: 'workflow_extract_result_evidence',

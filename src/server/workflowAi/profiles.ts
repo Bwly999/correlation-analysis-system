@@ -3,6 +3,7 @@ import { generateText, streamText } from 'ai'
 import { buildRecoverableDraftPlanFromIssues } from '../../ai/draft/graph.js'
 import { validateWorkflowAiPlanAgainstContext } from '../../ai/planValidation.js'
 import { searchWorkflowRecipes } from '../../ai/recipes/search.js'
+import { buildServerWorkflowAiValidationCatalog } from './nodeCatalog.js'
 import type {
   WorkflowAiGenerationAttempt,
   WorkflowAiGenerationDiagnostics,
@@ -24,6 +25,20 @@ const DEFAULT_MODEL = 'glm-4.7'
 const RAW_OUTPUT_EXCERPT_LIMIT = 1200
 const WORKFLOW_AI_MODEL_TIMEOUT_MS = 45_000
 const WORKFLOW_AI_MAX_OUTPUT_TOKENS = 1200
+const LEGACY_CORRELATION_NODE_MAP = {
+  pearson: {
+    nodeType: 'correlation-analysis',
+    method: 'pearson',
+  },
+  spearman: {
+    nodeType: 'correlation-analysis',
+    method: 'spearman',
+  },
+  kendall: {
+    nodeType: 'correlation-analysis',
+    method: 'kendall',
+  },
+} as const
 
 type PromptNodeCatalogItem = {
   name: string
@@ -461,7 +476,7 @@ const buildSkeletonSystemPrompt = (request: WorkflowAiPlanRequest) => {
     ...contextHintPromptBlock,
     '以下是面向模型精简后的节点目录 JSON：',
     catalog,
-    '骨架规划示例：{"summary":"创建一个最小相关性分析流程","assumptions":[],"warnings":[],"questions":[],"operations":[{"id":"node_import_1","type":"createNode","nodeType":"manual-json-import","nodeLabel":"手动输入数据"},{"id":"node_pearson_1","type":"createNode","nodeType":"pearson","nodeLabel":"Pearson 相关系数"},{"id":"edge_1","type":"connectNodes","sourceRef":"node_import_1","targetRef":"node_pearson_1"}]}',
+    '骨架规划示例：{"summary":"创建一个最小相关性分析流程","assumptions":[],"warnings":[],"questions":[],"operations":[{"id":"node_import_1","type":"createNode","nodeType":"manual-json-import","nodeLabel":"手动输入数据"},{"id":"node_correlation_1","type":"createNode","nodeType":"correlation-analysis","nodeLabel":"单调性分析"},{"id":"edge_1","type":"connectNodes","sourceRef":"node_import_1","targetRef":"node_correlation_1"}]}',
   ].join('\n')
 }
 
@@ -906,20 +921,17 @@ const tryBuildHeuristicPlanResponse = (
 
   if (!asksOnlyForFollowup) {
     if (mentionsCorrelation && !shouldPreferProfiling) {
-      const terminalType = /spearman/i.test(instructionText)
+      const method = /spearman/i.test(instructionText)
         ? 'spearman'
         : /kendall/i.test(instructionText)
           ? 'kendall'
           : 'pearson'
       const correlationConfig = inferCorrelationConfig(instructionText, effectiveNumericFields)
       if (correlationConfig) {
-        const terminalLabel =
-          terminalType === 'spearman'
-            ? 'Spearman 秩相关系数'
-            : terminalType === 'kendall'
-              ? 'Kendall 秩相关系数'
-              : 'Pearson 相关系数'
-        appendNode('node_terminal_1', terminalType, terminalLabel, correlationConfig)
+        appendNode('node_terminal_1', 'correlation-analysis', '单调性分析', {
+          ...correlationConfig,
+          method,
+        })
       }
     } else if (canUseProfiling) {
       appendNode('node_terminal_1', 'data-profiling', '数据体检', {
@@ -943,7 +955,7 @@ const tryBuildHeuristicPlanResponse = (
   const summary =
     operations.some((operation) => operation.type === 'createNode' && operation.nodeType === 'data-profiling')
       ? '已基于内嵌 JSON 生成最小数据体检流程'
-      : operations.some((operation) => operation.type === 'createNode' && ['pearson', 'spearman', 'kendall'].includes(operation.nodeType))
+      : operations.some((operation) => operation.type === 'createNode' && operation.nodeType === 'correlation-analysis')
         ? '已基于内嵌 JSON 生成最小相关性分析流程'
         : '已基于内嵌 JSON 生成最小预处理流程'
 
@@ -956,7 +968,7 @@ const tryBuildHeuristicPlanResponse = (
   }
 
   const validation = validateWorkflowAiPlanAgainstContext(plan, {
-    nodeCatalog: request.nodeCatalog,
+    nodeCatalog: buildValidationCatalogForRequest(request),
     existingNodes: (request.workflowSnapshot?.nodes ?? []) as Array<{
       id: string
       type: string
@@ -1003,6 +1015,16 @@ const normalizeModelRequestErrorMessage = (error: unknown) =>
 
 const normalizeComparableText = (value: string) => value.trim().toLowerCase()
 
+const getLegacyCorrelationMapping = (value: string) =>
+  LEGACY_CORRELATION_NODE_MAP[normalizeComparableText(value) as keyof typeof LEGACY_CORRELATION_NODE_MAP]
+
+const buildValidationCatalogForRequest = (request: WorkflowAiPlanRequest) =>
+  buildServerWorkflowAiValidationCatalog(
+    ((request.workflowSnapshot?.nodes ?? []) as Array<Record<string, unknown>>)
+      .map((node) => (typeof node?.type === 'string' ? node.type : ''))
+      .filter(Boolean),
+  )
+
 const resolveNodeTypeFromCatalog = (
   nodeType: string,
   nodeLabel: string | undefined,
@@ -1020,6 +1042,11 @@ const resolveNodeTypeFromCatalog = (
 
   const byDisplayName = findByDisplayName(normalizedNodeType)
   if (byDisplayName) return byDisplayName.name
+
+  const legacyMapping = getLegacyCorrelationMapping(normalizedNodeType)
+  if (legacyMapping && findByName(legacyMapping.nodeType)) {
+    return legacyMapping.nodeType
+  }
 
   if (!['trigger', 'action', 'terminal'].includes(normalizedNodeType)) {
     return nodeType
@@ -1059,6 +1086,18 @@ export const normalizePlanWithCatalog = (
     return {
       ...operation,
       nodeType: resolveNodeTypeFromCatalog(operation.nodeType, operation.nodeLabel, nodeCatalog),
+      config: (() => {
+        const resolvedNodeType = resolveNodeTypeFromCatalog(operation.nodeType, operation.nodeLabel, nodeCatalog)
+        const legacyMapping = getLegacyCorrelationMapping(operation.nodeType)
+        if (!legacyMapping || resolvedNodeType !== legacyMapping.nodeType) {
+          return operation.config
+        }
+
+        return {
+          ...(operation.config ?? {}),
+          method: (operation.config?.method as string | undefined) ?? legacyMapping.method,
+        }
+      })(),
     }
   }),
 })
@@ -1249,7 +1288,7 @@ const emitStageChange = (
 
 const validatePlan = (request: WorkflowAiPlanRequest, plan: WorkflowAiPlan, rawText: string, context: WorkflowAiGenerateAttemptContext) => {
   const validation = validateWorkflowAiPlanAgainstContext(plan, {
-    nodeCatalog: request.nodeCatalog,
+    nodeCatalog: buildValidationCatalogForRequest(request),
     existingNodes: (request.workflowSnapshot?.nodes ?? []) as Array<{
       id: string
       type: string
@@ -1282,7 +1321,7 @@ const validateConfigurablePlan = (
   context: WorkflowAiGenerateAttemptContext,
 ) => {
   const validation = validateWorkflowAiPlanAgainstContext(plan, {
-    nodeCatalog: request.nodeCatalog,
+    nodeCatalog: buildValidationCatalogForRequest(request),
     existingNodes: (request.workflowSnapshot?.nodes ?? []) as Array<{
       id: string
       type: string
@@ -1353,7 +1392,7 @@ const validateSkeletonPlan = (
   }
 
   const validation = validateWorkflowAiPlanAgainstContext(skeletonPlan, {
-    nodeCatalog: request.nodeCatalog,
+    nodeCatalog: buildValidationCatalogForRequest(request),
     existingNodes: (request.workflowSnapshot?.nodes ?? []) as Array<{
       id: string
       type: string

@@ -21,8 +21,16 @@ describe('agentic method advisor', () => {
 
     expect(result.recommended).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ method: 'Pearson 相关系数', nodeTypes: ['pearson'] }),
-        expect.objectContaining({ method: 'Spearman 相关系数', nodeTypes: ['spearman'] }),
+        expect.objectContaining({
+          method: 'Pearson 相关系数',
+          nodeTypes: ['correlation-analysis'],
+          nodeConfig: { method: 'pearson' },
+        }),
+        expect.objectContaining({
+          method: 'Spearman 相关系数',
+          nodeTypes: ['correlation-analysis'],
+          nodeConfig: { method: 'spearman' },
+        }),
         expect.objectContaining({ method: '多元线性回归', nodeTypes: ['multiple-linear-regression'] }),
         expect.objectContaining({ method: '随机森林特征重要度', nodeTypes: ['random-forest-feature-importance'] }),
       ]),

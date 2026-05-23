@@ -71,15 +71,25 @@ describe('workflowAi profiles', () => {
         assistantHints: null,
       },
       {
-        name: 'pearson',
-        displayName: 'Pearson 相关系数',
+        name: 'correlation-analysis',
+        displayName: '单调性分析',
         category: 'terminal',
         description: '相关性分析',
         inputMode: 'single',
         minInputs: 1,
         maxInputs: 1,
         allowedNextCategories: [],
-        properties: [],
+        properties: [
+          {
+            name: 'method',
+            displayName: '分析方法',
+            type: 'options',
+            required: false,
+            isRuntimeInput: false,
+            defaultValue: 'spearman',
+            description: '选择相关性分析方法',
+          },
+        ],
         help: null,
         assistantHints: null,
       },
@@ -190,7 +200,7 @@ describe('workflowAi profiles', () => {
             id: 'node_pearson',
             type: 'createNode',
             nodeType: 'terminal',
-            nodeLabel: 'Pearson 相关系数',
+            nodeLabel: '单调性分析',
           },
         ],
       },
@@ -209,8 +219,8 @@ describe('workflowAi profiles', () => {
           assistantHints: null,
         },
         {
-          name: 'pearson',
-          displayName: 'Pearson 相关系数',
+          name: 'correlation-analysis',
+          displayName: '单调性分析',
           category: 'terminal',
           description: '',
           inputMode: 'single',
@@ -234,8 +244,52 @@ describe('workflowAi profiles', () => {
       {
         id: 'node_pearson',
         type: 'createNode',
-        nodeType: 'pearson',
+        nodeType: 'correlation-analysis',
+        nodeLabel: '单调性分析',
+      },
+    ])
+  })
+
+  it('maps legacy correlation node types to correlation-analysis with method config', () => {
+    const plan = normalizePlanWithCatalog(
+      {
+        summary: '创建一个简单工作流',
+        assumptions: [],
+        warnings: [],
+        questions: [],
+        operations: [
+          {
+            id: 'node_pearson',
+            type: 'createNode',
+            nodeType: 'pearson',
+            nodeLabel: 'Pearson 相关系数',
+          },
+          {
+            id: 'node_spearman',
+            type: 'createNode',
+            nodeType: 'spearman',
+            nodeLabel: 'Spearman 秩相关系数',
+            config: { rankingTopN: 5 },
+          },
+        ],
+      },
+      baseRequest.nodeCatalog,
+    )
+
+    expect(plan.operations).toEqual([
+      {
+        id: 'node_pearson',
+        type: 'createNode',
+        nodeType: 'correlation-analysis',
         nodeLabel: 'Pearson 相关系数',
+        config: { method: 'pearson' },
+      },
+      {
+        id: 'node_spearman',
+        type: 'createNode',
+        nodeType: 'correlation-analysis',
+        nodeLabel: 'Spearman 秩相关系数',
+        config: { rankingTopN: 5, method: 'spearman' },
       },
     ])
   })
@@ -243,10 +297,10 @@ describe('workflowAi profiles', () => {
   it('returns plan diagnostics when fenced JSON can be repaired directly', async () => {
     generateTextMock
       .mockResolvedValueOnce({
-        text: '```json\n{"summary":"创建相关性分析流","assumptions":[],"warnings":[],"questions":[],"operations":[{"id":"node_import","type":"createNode","nodeType":"manual-json-import","nodeLabel":"手动输入数据"},{"id":"node_pearson","type":"createNode","nodeType":"pearson","nodeLabel":"Pearson 相关系数"},{"id":"edge_1","type":"connectNodes","sourceRef":"node_import","targetRef":"node_pearson"}]}\n```',
+        text: '```json\n{"summary":"创建相关性分析流","assumptions":[],"warnings":[],"questions":[],"operations":[{"id":"node_import","type":"createNode","nodeType":"manual-json-import","nodeLabel":"手动输入数据"},{"id":"node_correlation","type":"createNode","nodeType":"correlation-analysis","nodeLabel":"单调性分析"},{"id":"edge_1","type":"connectNodes","sourceRef":"node_import","targetRef":"node_correlation"}]}\n```',
       })
       .mockResolvedValueOnce({
-        text: '```json\n{"summary":"创建相关性分析流","assumptions":[],"warnings":[],"questions":[],"operations":[{"id":"node_import","type":"createNode","nodeType":"manual-json-import","nodeLabel":"手动输入数据","config":{"jsonData":"[]"}},{"id":"node_pearson","type":"createNode","nodeType":"pearson","nodeLabel":"Pearson 相关系数"},{"id":"edge_1","type":"connectNodes","sourceRef":"node_import","targetRef":"node_pearson"}]}\n```',
+        text: '```json\n{"summary":"创建相关性分析流","assumptions":[],"warnings":[],"questions":[],"operations":[{"id":"node_import","type":"createNode","nodeType":"manual-json-import","nodeLabel":"手动输入数据","config":{"jsonData":"[{\\"feature\\":1,\\"target\\":2}]"}},{"id":"node_correlation","type":"createNode","nodeType":"correlation-analysis","nodeLabel":"单调性分析","config":{"method":"pearson","xFields":["feature"],"yFields":["target"]}},{"id":"edge_1","type":"connectNodes","sourceRef":"node_import","targetRef":"node_correlation"}]}\n```',
       })
 
     const result = await generateWorkflowAiPlan(baseRequest)
@@ -266,10 +320,10 @@ describe('workflowAi profiles', () => {
         text: '我建议先导入数据，再分析相关性。',
       })
       .mockResolvedValueOnce({
-        text: '{"summary":"最小可行相关性分析流","assumptions":[],"warnings":["未补充字段筛选"],"questions":[],"operations":[{"id":"node_import","type":"createNode","nodeType":"manual-json-import","nodeLabel":"手动输入数据"},{"id":"node_pearson","type":"createNode","nodeType":"pearson","nodeLabel":"Pearson 相关系数"},{"id":"edge_1","type":"connectNodes","sourceRef":"node_import","targetRef":"node_pearson"}]}',
+        text: '{"summary":"最小可行相关性分析流","assumptions":[],"warnings":["未补充字段筛选"],"questions":[],"operations":[{"id":"node_import","type":"createNode","nodeType":"manual-json-import","nodeLabel":"手动输入数据"},{"id":"node_correlation","type":"createNode","nodeType":"correlation-analysis","nodeLabel":"单调性分析"},{"id":"edge_1","type":"connectNodes","sourceRef":"node_import","targetRef":"node_correlation"}]}',
       })
       .mockResolvedValueOnce({
-        text: '{"summary":"最小可行相关性分析流","assumptions":[],"warnings":["未补充字段筛选"],"questions":[],"operations":[{"id":"node_import","type":"createNode","nodeType":"manual-json-import","nodeLabel":"手动输入数据","config":{"jsonData":"[]"}},{"id":"node_pearson","type":"createNode","nodeType":"pearson","nodeLabel":"Pearson 相关系数"},{"id":"edge_1","type":"connectNodes","sourceRef":"node_import","targetRef":"node_pearson"}]}',
+        text: '{"summary":"最小可行相关性分析流","assumptions":[],"warnings":["未补充字段筛选"],"questions":[],"operations":[{"id":"node_import","type":"createNode","nodeType":"manual-json-import","nodeLabel":"手动输入数据","config":{"jsonData":"[{\\"feature\\":1,\\"target\\":2}]"}},{"id":"node_correlation","type":"createNode","nodeType":"correlation-analysis","nodeLabel":"单调性分析","config":{"method":"pearson","xFields":["feature"],"yFields":["target"]}},{"id":"edge_1","type":"connectNodes","sourceRef":"node_import","targetRef":"node_correlation"}]}',
       })
 
     const result = await generateWorkflowAiPlan(baseRequest)
@@ -331,10 +385,10 @@ describe('workflowAi profiles', () => {
 
     generateTextMock
       .mockResolvedValueOnce({
-        text: '{"summary":"创建相关性分析流","assumptions":[],"warnings":[],"questions":[],"operations":[{"id":"node_import","type":"createNode","nodeType":"manual-json-import","nodeLabel":"手动输入数据"},{"id":"node_pearson","type":"createNode","nodeType":"pearson","nodeLabel":"Pearson 相关系数"},{"id":"edge_1","type":"connectNodes","sourceRef":"node_import","targetRef":"node_pearson"}]}',
+        text: '{"summary":"创建相关性分析流","assumptions":[],"warnings":[],"questions":[],"operations":[{"id":"node_import","type":"createNode","nodeType":"manual-json-import","nodeLabel":"手动输入数据"},{"id":"node_correlation","type":"createNode","nodeType":"correlation-analysis","nodeLabel":"单调性分析"},{"id":"edge_1","type":"connectNodes","sourceRef":"node_import","targetRef":"node_correlation"}]}',
       })
       .mockResolvedValueOnce({
-        text: '{"summary":"创建相关性分析流","assumptions":[],"warnings":[],"questions":[],"operations":[{"id":"node_import","type":"createNode","nodeType":"manual-json-import","nodeLabel":"手动输入数据","config":{"jsonData":"[]"}},{"id":"node_pearson","type":"createNode","nodeType":"pearson","nodeLabel":"Pearson 相关系数"},{"id":"edge_1","type":"connectNodes","sourceRef":"node_import","targetRef":"node_pearson"}]}',
+        text: '{"summary":"创建相关性分析流","assumptions":[],"warnings":[],"questions":[],"operations":[{"id":"node_import","type":"createNode","nodeType":"manual-json-import","nodeLabel":"手动输入数据","config":{"jsonData":"[{\\"feature\\":1,\\"target\\":2}]"}},{"id":"node_correlation","type":"createNode","nodeType":"correlation-analysis","nodeLabel":"单调性分析","config":{"method":"pearson","xFields":["feature"],"yFields":["target"]}},{"id":"edge_1","type":"connectNodes","sourceRef":"node_import","targetRef":"node_correlation"}]}',
       })
 
     await generateWorkflowAiPlan(extendedRequest)
@@ -344,7 +398,7 @@ describe('workflowAi profiles', () => {
     expect(generateTextMock.mock.calls[0]?.[0]?.system).not.toContain('data-export')
     expect(generateTextMock.mock.calls[1]?.[0]?.system).toContain('当前阶段是配置补全')
     expect(generateTextMock.mock.calls[1]?.[0]?.system).toContain('manual-json-import')
-    expect(generateTextMock.mock.calls[1]?.[0]?.system).toContain('pearson')
+    expect(generateTextMock.mock.calls[1]?.[0]?.system).toContain('correlation-analysis')
     expect(generateTextMock.mock.calls[1]?.[0]?.system).not.toContain('data-export')
   })
 
@@ -400,8 +454,8 @@ describe('workflowAi profiles', () => {
           assistantHints: { keywords: ['json', '粘贴', '样例'] },
         },
         {
-          name: 'pearson',
-          displayName: 'Pearson 相关系数',
+          name: 'correlation-analysis',
+          displayName: '单调性分析',
           category: 'terminal',
           description: '相关性分析',
           inputMode: 'single',
@@ -409,6 +463,15 @@ describe('workflowAi profiles', () => {
           maxInputs: 1,
           allowedNextCategories: [],
           properties: [
+            {
+              name: 'method',
+              displayName: '分析方法',
+              type: 'options',
+              required: false,
+              isRuntimeInput: false,
+              defaultValue: 'pearson',
+              description: '选择相关性分析方法',
+            },
             {
               name: 'xFields',
               displayName: 'X 字段',
@@ -436,10 +499,10 @@ describe('workflowAi profiles', () => {
 
     generateTextMock
       .mockResolvedValueOnce({
-        text: '{"summary":"创建相关性分析流","assumptions":[],"warnings":[],"questions":[],"operations":[{"id":"node_import","type":"createNode","nodeType":"manual-json-import","nodeLabel":"手动输入数据"},{"id":"node_pearson","type":"createNode","nodeType":"pearson","nodeLabel":"Pearson 相关系数"},{"id":"edge_1","type":"connectNodes","sourceRef":"node_import","targetRef":"node_pearson"}]}',
+        text: '{"summary":"创建相关性分析流","assumptions":[],"warnings":[],"questions":[],"operations":[{"id":"node_import","type":"createNode","nodeType":"manual-json-import","nodeLabel":"手动输入数据"},{"id":"node_correlation","type":"createNode","nodeType":"correlation-analysis","nodeLabel":"单调性分析"},{"id":"edge_1","type":"connectNodes","sourceRef":"node_import","targetRef":"node_correlation"}]}',
       })
       .mockResolvedValueOnce({
-        text: '{"summary":"创建相关性分析流","assumptions":[],"warnings":[],"questions":[],"operations":[{"id":"node_import","type":"createNode","nodeType":"manual-json-import","nodeLabel":"手动输入数据","config":{"jsonData":"[{\\"feature\\":1,\\"target\\":2}]"}},{"id":"node_pearson","type":"createNode","nodeType":"pearson","nodeLabel":"Pearson 相关系数","config":{"xFields":["feature"],"yFields":["target"]}},{"id":"edge_1","type":"connectNodes","sourceRef":"node_import","targetRef":"node_pearson"}]}',
+        text: '{"summary":"创建相关性分析流","assumptions":[],"warnings":[],"questions":[],"operations":[{"id":"node_import","type":"createNode","nodeType":"manual-json-import","nodeLabel":"手动输入数据","config":{"jsonData":"[{\\"feature\\":1,\\"target\\":2}]"}},{"id":"node_correlation","type":"createNode","nodeType":"correlation-analysis","nodeLabel":"单调性分析","config":{"method":"pearson","xFields":["feature"],"yFields":["target"]}},{"id":"edge_1","type":"connectNodes","sourceRef":"node_import","targetRef":"node_correlation"}]}',
       })
 
     await generateWorkflowAiPlan(realisticRequest)
@@ -550,8 +613,8 @@ describe('workflowAi profiles', () => {
           assistantHints: null,
         },
         {
-          name: 'pearson',
-          displayName: 'Pearson 相关系数',
+          name: 'correlation-analysis',
+          displayName: '单调性分析',
           category: 'terminal',
           description: '相关性分析',
           inputMode: 'single',
@@ -559,6 +622,15 @@ describe('workflowAi profiles', () => {
           maxInputs: 1,
           allowedNextCategories: [],
           properties: [
+            {
+              name: 'method',
+              displayName: '分析方法',
+              type: 'options',
+              required: false,
+              isRuntimeInput: false,
+              defaultValue: 'pearson',
+              description: '选择相关性分析方法',
+            },
             {
               name: 'xFields',
               displayName: 'X 字段',
@@ -586,21 +658,21 @@ describe('workflowAi profiles', () => {
 
     generateTextMock
       .mockResolvedValueOnce({
-        text: '{"summary":"导入 JSON 文件并进行 Pearson 相关性分析的最小工作流","assumptions":[],"warnings":[],"questions":[],"operations":[{"id":"node_import_1","type":"createNode","nodeType":"file-import","nodeLabel":"本地文件导入"},{"id":"node_pearson_1","type":"createNode","nodeType":"pearson","nodeLabel":"Pearson 相关系数"},{"id":"edge_1","type":"connectNodes","sourceRef":"node_import_1","targetRef":"node_pearson_1"}]}',
+        text: '{"summary":"导入 JSON 文件并进行 Pearson 相关性分析的最小工作流","assumptions":[],"warnings":[],"questions":[],"operations":[{"id":"node_import_1","type":"createNode","nodeType":"file-import","nodeLabel":"本地文件导入"},{"id":"node_correlation_1","type":"createNode","nodeType":"correlation-analysis","nodeLabel":"单调性分析"},{"id":"edge_1","type":"connectNodes","sourceRef":"node_import_1","targetRef":"node_correlation_1"}]}',
       })
       .mockResolvedValueOnce({
-        text: '{"summary":"导入 JSON 文件并进行 Pearson 相关性分析的最小工作流","assumptions":["用户将上传 JSON 格式的文件"],"warnings":[],"questions":[],"operations":[{"id":"node_import_1","type":"createNode","nodeType":"file-import","nodeLabel":"本地文件导入","position":{"x":100,"y":100},"config":{}},{"id":"node_pearson_1","type":"createNode","nodeType":"pearson","nodeLabel":"Pearson 相关系数","position":{"x":400,"y":100},"config":{}},{"id":"edge_1","type":"connectNodes","sourceRef":"node_import_1","targetRef":"node_pearson_1"}]}',
+        text: '{"summary":"导入 JSON 文件并进行 Pearson 相关性分析的最小工作流","assumptions":["用户将上传 JSON 格式的文件"],"warnings":[],"questions":[],"operations":[{"id":"node_import_1","type":"createNode","nodeType":"file-import","nodeLabel":"本地文件导入","position":{"x":100,"y":100},"config":{}},{"id":"node_correlation_1","type":"createNode","nodeType":"correlation-analysis","nodeLabel":"单调性分析","position":{"x":400,"y":100},"config":{}},{"id":"edge_1","type":"connectNodes","sourceRef":"node_import_1","targetRef":"node_correlation_1"}]}',
       })
       .mockResolvedValueOnce({
-        text: '```json\n{"summary":"导入 JSON 文件并进行 Pearson 相关性分析的最小工作流","assumptions":["用户将上传 JSON 格式的文件"],"warnings":[],"questions":[],"operations":[{"id":"node_import_1","type":"createNode","nodeType":"file-import","nodeLabel":"本地文件导入","position":{"x":100,"y":100},"config":{}},{"id":"node_pearson_1","type":"createNode","nodeType":"pearson","nodeLabel":"Pearson 相关系数","position":{"x":400,"y":100},"config":{"xFields":[],"yFields":[]}},{"id":"edge_1",',
+        text: '```json\n{"summary":"导入 JSON 文件并进行 Pearson 相关性分析的最小工作流","assumptions":["用户将上传 JSON 格式的文件"],"warnings":[],"questions":[],"operations":[{"id":"node_import_1","type":"createNode","nodeType":"file-import","nodeLabel":"本地文件导入","position":{"x":100,"y":100},"config":{}},{"id":"node_correlation_1","type":"createNode","nodeType":"correlation-analysis","nodeLabel":"单调性分析","position":{"x":400,"y":100},"config":{"method":"pearson","xFields":[],"yFields":[]}},{"id":"edge_1",',
       })
 
     const result = await generateWorkflowAiPlan(realisticRequest)
 
     expect(generateTextMock).toHaveBeenCalledTimes(3)
     expect(result.plan.summary).toBe('导入 JSON 文件并进行 Pearson 相关性分析的最小工作流')
-    expect(result.plan.questions).toContain('请为节点「Pearson 相关系数」补充以下必填配置：X 字段、Y 字段。')
-    expect(result.plan.warnings).toContain('以下节点仍需手动补充配置后才能运行：Pearson 相关系数。')
+    expect(result.plan.questions).toContain('请为节点「单调性分析」补充以下必填配置：X 字段、Y 字段。')
+    expect(result.plan.warnings).toContain('以下节点仍需手动补充配置后才能运行：单调性分析。')
     expect(result.diagnostics.status).toBe('failed')
     expect(result.diagnostics.stage).toBe('parse')
     expect(result.diagnostics.attempts).toHaveLength(3)
@@ -649,10 +721,10 @@ describe('workflowAi profiles', () => {
   it('bypasses streaming for the bigmodel coding endpoint and uses non-streaming generation directly', async () => {
     generateTextMock
       .mockResolvedValueOnce({
-        text: '{"summary":"创建相关性分析流","assumptions":[],"warnings":[],"questions":[],"operations":[{"id":"node_import","type":"createNode","nodeType":"manual-json-import","nodeLabel":"手动输入数据"},{"id":"node_pearson","type":"createNode","nodeType":"pearson","nodeLabel":"Pearson 相关系数"},{"id":"edge_1","type":"connectNodes","sourceRef":"node_import","targetRef":"node_pearson"}]}',
+        text: '{"summary":"创建相关性分析流","assumptions":[],"warnings":[],"questions":[],"operations":[{"id":"node_import","type":"createNode","nodeType":"manual-json-import","nodeLabel":"手动输入数据"},{"id":"node_correlation","type":"createNode","nodeType":"correlation-analysis","nodeLabel":"单调性分析"},{"id":"edge_1","type":"connectNodes","sourceRef":"node_import","targetRef":"node_correlation"}]}',
       })
       .mockResolvedValueOnce({
-        text: '{"summary":"创建相关性分析流","assumptions":[],"warnings":[],"questions":[],"operations":[{"id":"node_import","type":"createNode","nodeType":"manual-json-import","nodeLabel":"手动输入数据","config":{"jsonData":"[{\\"feature\\":1,\\"target\\":2}]"}},{"id":"node_pearson","type":"createNode","nodeType":"pearson","nodeLabel":"Pearson 相关系数"},{"id":"edge_1","type":"connectNodes","sourceRef":"node_import","targetRef":"node_pearson"}]}',
+        text: '{"summary":"创建相关性分析流","assumptions":[],"warnings":[],"questions":[],"operations":[{"id":"node_import","type":"createNode","nodeType":"manual-json-import","nodeLabel":"手动输入数据","config":{"jsonData":"[{\\"feature\\":1,\\"target\\":2}]"}},{"id":"node_correlation","type":"createNode","nodeType":"correlation-analysis","nodeLabel":"单调性分析","config":{"method":"pearson","xFields":["feature"],"yFields":["target"]}},{"id":"edge_1","type":"connectNodes","sourceRef":"node_import","targetRef":"node_correlation"}]}',
       })
 
     const events: Array<{ type: string }> = []
@@ -689,8 +761,9 @@ describe('workflowAi profiles', () => {
       expect.objectContaining({
         id: 'node_terminal_1',
         type: 'createNode',
-        nodeType: 'pearson',
+        nodeType: 'correlation-analysis',
         config: {
+          method: 'pearson',
           xFields: ['x1', 'x2'],
           yFields: ['y'],
           heatmapTopN: 3,
