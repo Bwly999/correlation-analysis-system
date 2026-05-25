@@ -16,6 +16,12 @@ type JsTransformAgentSendMessageResponse = {
   error?: string
 }
 
+type JsTransformAgentAbortResponse = {
+  ok: boolean
+  restoredMessages: string[]
+  error?: string
+}
+
 const readJsonOrThrow = async <T>(response: Response, fallbackMessage: string): Promise<T> => {
   const payload = await response.json().catch(() => ({}))
   if (!response.ok) {
@@ -70,6 +76,19 @@ export const updateJsTransformAgentMode = async (
   })
 
   return await readJsonOrThrow<{ ok: boolean }>(response, '切换 JS 节点 AI 模式失败')
+}
+
+export const abortJsTransformAgentRun = async (
+  sessionId: string,
+): Promise<JsTransformAgentAbortResponse> => {
+  const response = await fetchWithWorkflowContext(`/api/pi-agent/js-transform/sessions/${sessionId}/abort`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  })
+
+  return await readJsonOrThrow<JsTransformAgentAbortResponse>(response, '取消 JS 节点 AI 执行失败')
 }
 
 export const streamJsTransformAgentEvents = async (

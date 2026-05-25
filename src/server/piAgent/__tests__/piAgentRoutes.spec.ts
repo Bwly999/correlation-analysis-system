@@ -7,6 +7,7 @@ const {
   createJsTransformAgentSessionMock,
   sendPiAgentMessageMock,
   sendJsTransformAgentMessageMock,
+  abortJsTransformAgentRunMock,
   subscribePiAgentEventsMock,
   subscribeJsTransformAgentEventsMock,
   getPiAgentSessionMock,
@@ -23,6 +24,7 @@ const {
   createJsTransformAgentSessionMock: vi.fn(),
   sendPiAgentMessageMock: vi.fn(),
   sendJsTransformAgentMessageMock: vi.fn(),
+  abortJsTransformAgentRunMock: vi.fn(),
   subscribePiAgentEventsMock: vi.fn(),
   subscribeJsTransformAgentEventsMock: vi.fn(),
   getPiAgentSessionMock: vi.fn(),
@@ -41,6 +43,7 @@ vi.mock('../gateway.js', () => ({
   createJsTransformAgentSession: createJsTransformAgentSessionMock,
   sendPiAgentMessage: sendPiAgentMessageMock,
   sendJsTransformAgentMessage: sendJsTransformAgentMessageMock,
+  abortJsTransformAgentRun: abortJsTransformAgentRunMock,
   subscribePiAgentEvents: subscribePiAgentEventsMock,
   subscribeJsTransformAgentEvents: subscribeJsTransformAgentEventsMock,
   getPiAgentSession: getPiAgentSessionMock,
@@ -137,6 +140,7 @@ afterEach(() => {
   createJsTransformAgentSessionMock.mockReset()
   sendPiAgentMessageMock.mockReset()
   sendJsTransformAgentMessageMock.mockReset()
+  abortJsTransformAgentRunMock.mockReset()
   subscribePiAgentEventsMock.mockReset()
   subscribeJsTransformAgentEventsMock.mockReset()
   getPiAgentSessionMock.mockReset()
@@ -266,6 +270,27 @@ describe('piAgentRoutes', () => {
       message: 'Pi Agent 会话不允许包含完整行数据，请仅传递摘要上下文',
     })
     expect(createPiAgentSessionMock).not.toHaveBeenCalled()
+  })
+
+  it('aborts a js transform agent run through the dedicated route', async () => {
+    abortJsTransformAgentRunMock.mockResolvedValueOnce({
+      ok: true,
+      restoredMessages: ['继续调试', '解释报错'],
+    })
+
+    const handler = createPiAgentRoutes()
+    const request = createRequest('POST', '/api/pi-agent/js-transform/sessions/js_session_1/abort')
+    const response = createResponse()
+
+    const handled = await handler(createContext(request, response) as any)
+
+    expect(handled).toBe(true)
+    expect(response.statusCode).toBe(200)
+    expect(abortJsTransformAgentRunMock).toHaveBeenCalledWith('js_session_1')
+    expect(JSON.parse(response.body)).toEqual({
+      ok: true,
+      restoredMessages: ['继续调试', '解释报错'],
+    })
   })
 
   it('returns pi agent debug health in development mode', async () => {

@@ -13,6 +13,7 @@ import { createServerLogger } from '../logging/serverLogger.js'
 import {
   createPiAgentSession,
   createJsTransformAgentSession,
+  abortJsTransformAgentRun,
   sendPiAgentMessage,
   sendJsTransformAgentMessage,
   updateJsTransformAgentMode,
@@ -141,6 +142,14 @@ export const createPiAgentRoutes = (): HttpDomainHandler<ServerDependencies> => 
     const sessionId = decodeURIComponent(jsModeMatch[1] ?? '')
     const body = await context.readJsonBody<{ mode: 'ask' | 'agent' }>()
     const result = await updateJsTransformAgentMode(sessionId, body.mode)
+    context.sendJson(result.ok ? 200 : 404, result)
+    return true
+  }
+
+  const jsAbortMatch = pathname.match(/^\/api\/pi-agent\/js-transform\/sessions\/([^/]+)\/abort$/)
+  if (method === 'POST' && jsAbortMatch) {
+    const sessionId = decodeURIComponent(jsAbortMatch[1] ?? '')
+    const result = await abortJsTransformAgentRun(sessionId)
     context.sendJson(result.ok ? 200 : 404, result)
     return true
   }

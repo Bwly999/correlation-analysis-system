@@ -325,6 +325,35 @@ export async function updateJsTransformAgentMode(
   return { ok: true }
 }
 
+export async function abortJsTransformAgentRun(
+  sessionId: string,
+): Promise<{ ok: boolean; restoredMessages: string[]; error?: string }> {
+  const runtime = runtimes.get(sessionId)
+  if (!runtime) return { ok: false, restoredMessages: [], error: '会话不存在' }
+
+  const clearedQueue = runtime.session.clearQueue()
+  const restoredMessages = [...clearedQueue.steering, ...clearedQueue.followUp].filter((item) => item.trim().length > 0)
+
+  runtime.bridge.cancelPendingRequests('当前轮已取消')
+  await runtime.session.abort()
+  runtime.isStreaming = false
+  updateSessionRecord(sessionId, { status: 'idle', updatedAt: Date.now() })
+
+  const statusEvent: PiAgentSseEvent = {
+    type: 'session.status',
+    sessionId,
+    status: 'cancelled',
+  }
+  for (const listener of runtime.eventListeners) {
+    listener(statusEvent)
+  }
+
+  return {
+    ok: true,
+    restoredMessages,
+  }
+}
+
 export function subscribeJsTransformAgentEvents(
   sessionId: string,
   listener: (event: PiAgentSseEvent) => void,

@@ -54,6 +54,12 @@ const inputTextProxy = computed({
   },
 })
 
+const isCaretOnFirstLine = (target: HTMLTextAreaElement) =>
+  !target.value.slice(0, target.selectionStart).includes('\n')
+
+const isCaretOnLastLine = (target: HTMLTextAreaElement) =>
+  !target.value.slice(target.selectionEnd).includes('\n')
+
 const syncContext = () => {
   agent.currentContext.value = props.context
   if (!agent.sessionId.value && agent.currentProfile.value?.id !== props.profile.id) {
@@ -98,6 +104,37 @@ const handleModeSwitch = async (nextMode: 'ask' | 'agent') => {
     agent.mode.value = nextMode === 'ask' ? 'agent' : 'ask'
     agent.errorMessage.value = error?.message || '切换模式失败'
     agent.inputText.value = currentText
+  }
+}
+
+const handleComposerKeydown = async (event: KeyboardEvent) => {
+  const target = event.target
+  if (!(target instanceof HTMLTextAreaElement)) {
+    return
+  }
+
+  if (event.key === 'Enter' && !event.shiftKey) {
+    event.preventDefault()
+    await handleSend()
+    return
+  }
+
+  if (event.key === 'Escape' && agent.status.value === 'running') {
+    event.preventDefault()
+    event.stopPropagation()
+    await agent.cancelCurrentRun()
+    return
+  }
+
+  if (event.key === 'ArrowUp' && isCaretOnFirstLine(target)) {
+    event.preventDefault()
+    agent.recallPreviousInput()
+    return
+  }
+
+  if (event.key === 'ArrowDown' && isCaretOnLastLine(target)) {
+    event.preventDefault()
+    agent.recallNextInput()
   }
 }
 
@@ -306,19 +343,19 @@ onBeforeUnmount(() => {
           class="min-h-[88px] w-full resize-none rounded-t-[22px] border-0 bg-transparent px-4 py-3.5 text-[13px] leading-6 text-slate-800 outline-none placeholder:text-slate-400"
           :placeholder="placeholder"
           rows="3"
-          @keydown="($event) => { if ($event.key === 'Enter' && !$event.shiftKey) { $event.preventDefault(); void handleSend() } }"
+          @keydown="(event) => void handleComposerKeydown(event)"
         />
-        <div class="flex items-center justify-between border-t border-slate-100 px-3 py-3">
-          <div class="flex min-w-0 items-center gap-2">
+        <div class="flex items-center justify-between gap-3 border-t border-slate-100 px-3 py-3">
+          <div class="flex min-w-0 flex-1 items-center gap-2">
             <button
               v-tooltip.top="'新建对话'"
               type="button"
-              class="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+              class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
               @click="handleReset"
             >
               <MessageSquarePlus :size="15" />
             </button>
-            <div class="inline-flex items-center rounded-xl border border-slate-200 bg-slate-50 p-1">
+            <div class="inline-flex shrink-0 items-center rounded-xl border border-slate-200 bg-slate-50 p-1">
               <button
                 type="button"
                 class="rounded-lg px-3 py-1.5 text-[12px] font-semibold transition"
@@ -340,13 +377,13 @@ onBeforeUnmount(() => {
                 Agent
               </button>
             </div>
-            <div class="hidden items-center gap-2 text-[11px] text-slate-500 sm:flex">
+            <div class="hidden min-w-0 max-w-[220px] items-center gap-2 truncate text-[10px] text-slate-500 lg:max-w-[240px] sm:flex">
               <CornerDownLeft :size="13" class="text-slate-400" />
-              Enter 发送，Shift + Enter 换行
+              <span class="truncate">Enter 发送，Shift + Enter 换行，Esc 取消本轮，上下箭头可翻历史</span>
             </div>
           </div>
           <button
-            class="inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-[13px] font-semibold text-white transition disabled:cursor-not-allowed disabled:bg-slate-300"
+            class="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-[13px] font-semibold text-white transition disabled:cursor-not-allowed disabled:bg-slate-300"
             :class="agent.mode.value === 'agent' ? 'bg-blue-600 hover:bg-blue-500' : 'bg-slate-950 hover:bg-slate-800'"
             :disabled="!agent.canSend.value"
             @click="handleSend"

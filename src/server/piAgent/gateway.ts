@@ -30,6 +30,7 @@ import type { AgentSessionCanvasSyncResponse } from '../../ai/types.js'
 import { archivePiAgentSessionFile } from '../logging/sessionArchive.js'
 import { createServerLogger } from '../logging/serverLogger.js'
 export {
+  abortJsTransformAgentRun,
   createJsTransformAgentSession,
   disposeAllJsTransformAgentSessions,
   getJsTransformAgentSession,

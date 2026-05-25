@@ -8,6 +8,8 @@ const {
   sessionFollowUpMock,
   sessionSubscribeMock,
   sessionDisposeMock,
+  sessionAbortMock,
+  sessionClearQueueMock,
   agentStateMock,
   defaultResourceLoaderMock,
   loaderReloadMock,
@@ -20,6 +22,8 @@ const {
   sessionFollowUpMock: vi.fn(),
   sessionSubscribeMock: vi.fn(),
   sessionDisposeMock: vi.fn(),
+  sessionAbortMock: vi.fn(),
+  sessionClearQueueMock: vi.fn(),
   agentStateMock: { tools: [], systemPrompt: '' },
   defaultResourceLoaderMock: vi.fn(),
   loaderReloadMock: vi.fn(),
@@ -43,9 +47,11 @@ vi.mock('../modelAdapter.js', () => ({
 }))
 
 import {
+  abortJsTransformAgentRun,
   createJsTransformAgentSession,
   disposeAllJsTransformAgentSessions,
   sendJsTransformAgentMessage,
+  subscribeJsTransformAgentEvents,
 } from '../jsTransformAgentGateway.js'
 import { buildJsTransformAgentSystemPrompt } from '../jsTransformAgentSystemPrompt.js'
 
@@ -122,12 +128,19 @@ describe('jsTransformAgentGateway', () => {
         followUp: sessionFollowUpMock,
         subscribe: sessionSubscribeMock,
         dispose: sessionDisposeMock,
+        abort: sessionAbortMock,
+        clearQueue: sessionClearQueueMock,
         agent: {
           state: agentStateMock,
         },
       },
     })
     sessionSubscribeMock.mockReturnValue(() => {})
+    sessionAbortMock.mockResolvedValue(undefined)
+    sessionClearQueueMock.mockReturnValue({
+      steering: ['继续调试这段代码'],
+      followUp: ['顺便解释报错'],
+    })
   })
 
   afterEach(() => {
@@ -241,5 +254,27 @@ describe('jsTransformAgentGateway', () => {
       input: { code: 'return rows' },
     })
     expect(allowed).toBeUndefined()
+  })
+
+  it('aborts the current run, clears queued messages, and emits cancelled status', async () => {
+    const created = await createJsTransformAgentSession(createRequest('agent'), 'user_1')
+    const listener = vi.fn()
+    const unsubscribe = subscribeJsTransformAgentEvents(created.sessionId, listener)
+
+    const result = await abortJsTransformAgentRun(created.sessionId)
+
+    expect(result).toEqual({
+      ok: true,
+      restoredMessages: ['继续调试这段代码', '顺便解释报错'],
+    })
+    expect(sessionClearQueueMock).toHaveBeenCalledTimes(1)
+    expect(sessionAbortMock).toHaveBeenCalledTimes(1)
+    expect(listener).toHaveBeenCalledWith({
+      type: 'session.status',
+      sessionId: created.sessionId,
+      status: 'cancelled',
+    })
+
+    unsubscribe?.()
   })
 })

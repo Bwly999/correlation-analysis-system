@@ -135,6 +135,24 @@ describe('FrontendBridge', () => {
       await expect(p2).rejects.toThrow('会话已关闭')
       expect(bridge.pendingCount).toBe(0)
     })
+
+    it('cancelPendingRequests 应 reject 所有待处理请求但保留 bridge 可继续使用', async () => {
+      const p1 = bridge.request('call_001', 'wf_addNode', { nodeType: 'a' })
+      const p2 = bridge.request('call_002', 'wf_addNode', { nodeType: 'b' })
+
+      bridge.cancelPendingRequests('当前轮已取消')
+
+      await expect(p1).rejects.toThrow('当前轮已取消')
+      await expect(p2).rejects.toThrow('当前轮已取消')
+      expect(bridge.pendingCount).toBe(0)
+
+      const p3 = bridge.request('call_003', 'wf_addNode', { nodeType: 'c' })
+      bridge.resolveResult('call_003', { content: [{ type: 'text', text: 'ok' }], details: details() })
+      await expect(p3).resolves.toEqual({
+        content: [{ type: 'text', text: 'ok' }],
+        details: details(),
+      })
+    })
   })
 
   describe('超时处理', () => {

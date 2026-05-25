@@ -5,6 +5,7 @@ import type {
   JsTransformAgentSafeDebugResult,
 } from '@/ai/types'
 import {
+  abortJsTransformAgentRun,
   createJsTransformAgentSession,
   resolveJsTransformAgentToolResult,
   sendJsTransformAgentMessage,
@@ -36,11 +37,14 @@ export interface JsTransformAgentMessage {
 
 export function useJsTransformAgent() {
   const sessionId = ref<string | null>(null)
-  const status = ref<'idle' | 'connecting' | 'running' | 'completed' | 'failed'>('idle')
+  const status = ref<'idle' | 'connecting' | 'running' | 'completed' | 'failed' | 'cancelled'>('idle')
   const mode = ref<JsTransformAgentMode>('ask')
   const messages = ref<JsTransformAgentMessage[]>([])
   const errorMessage = ref('')
   const inputText = ref('')
+  const inputHistory = ref<string[]>([])
+  const historyCursor = ref<number | null>(null)
+  const draftBeforeHistoryBrowse = ref('')
   const currentContext = ref<JsTransformAgentContext | null>(null)
   const currentProfile = ref<WorkflowAiModelProfile | null>(null)
   const latestDebugResult = ref<JsTransformAgentSafeDebugResult | null>(null)
@@ -54,7 +58,51 @@ export function useJsTransformAgent() {
     messages.value = []
     errorMessage.value = ''
     inputText.value = ''
+    inputHistory.value = []
+    historyCursor.value = null
+    draftBeforeHistoryBrowse.value = ''
     latestDebugResult.value = null
+  }
+
+  const pushInputHistory = (content: string) => {
+    const trimmed = content.trim()
+    if (!trimmed) return
+    const lastEntry = inputHistory.value[inputHistory.value.length - 1]
+    if (lastEntry === trimmed) return
+    inputHistory.value.push(trimmed)
+  }
+
+  const exitHistoryBrowse = (nextInput: string) => {
+    inputText.value = nextInput
+    draftBeforeHistoryBrowse.value = nextInput
+    historyCursor.value = null
+  }
+
+  const recallPreviousInput = () => {
+    if (inputHistory.value.length === 0) return inputText.value
+
+    if (historyCursor.value === null) {
+      draftBeforeHistoryBrowse.value = inputText.value
+      historyCursor.value = inputHistory.value.length - 1
+    } else if (historyCursor.value > 0) {
+      historyCursor.value -= 1
+    }
+
+    inputText.value = inputHistory.value[historyCursor.value] ?? inputText.value
+    return inputText.value
+  }
+
+  const recallNextInput = () => {
+    if (historyCursor.value === null) return inputText.value
+
+    if (historyCursor.value >= inputHistory.value.length - 1) {
+      exitHistoryBrowse(draftBeforeHistoryBrowse.value)
+      return inputText.value
+    }
+
+    historyCursor.value += 1
+    inputText.value = inputHistory.value[historyCursor.value] ?? inputText.value
+    return inputText.value
   }
 
   const switchMode = async (input: {
@@ -152,6 +200,9 @@ export function useJsTransformAgent() {
       if (!result.ok) {
         throw new Error(result.error || '发送 JS 节点 AI 消息失败')
       }
+      pushInputHistory(content)
+      historyCursor.value = null
+      draftBeforeHistoryBrowse.value = ''
       return true
     } catch (error: any) {
       status.value = 'failed'
@@ -253,6 +304,27 @@ export function useJsTransformAgent() {
     }
   }
 
+  const cancelCurrentRun = async () => {
+    if (!sessionId.value || status.value !== 'running') return false
+
+    try {
+      const result = await abortJsTransformAgentRun(sessionId.value)
+      if (!result.ok) {
+        throw new Error(result.error || '取消 JS 节点 AI 执行失败')
+      }
+
+      const restoredText = result.restoredMessages.join('\n\n')
+      errorMessage.value = ''
+      status.value = 'cancelled'
+      exitHistoryBrowse(restoredText)
+      return true
+    } catch (error: any) {
+      status.value = 'failed'
+      errorMessage.value = error?.message || '取消 JS 节点 AI 执行失败'
+      return false
+    }
+  }
+
   return {
     sessionId,
     status,
@@ -260,14 +332,21 @@ export function useJsTransformAgent() {
     messages,
     errorMessage,
     inputText,
+    inputHistory,
+    historyCursor,
+    draftBeforeHistoryBrowse,
     canSend,
     currentContext,
     currentProfile,
     latestDebugResult,
     externalEventHandler,
+    pushInputHistory,
+    recallPreviousInput,
+    recallNextInput,
     switchMode,
     ensureSession,
     sendMessage,
+    cancelCurrentRun,
     handleToolResult,
     handleEvent,
     reset,

@@ -127,6 +127,14 @@ export class FrontendBridge {
     return true
   }
 
+  cancelPendingRequests(reason = '当前轮已取消'): void {
+    for (const [toolCallId, pending] of this.pendingRequests) {
+      clearTimeout(pending.timer)
+      this.pendingRequests.delete(toolCallId)
+      pending.reject(new Error(reason))
+    }
+  }
+
   /** 当前待处理的请求数量 */
   get pendingCount(): number {
     return this.pendingRequests.size
@@ -138,10 +146,6 @@ export class FrontendBridge {
    */
   dispose(): void {
     this.disposed = true
-    for (const [toolCallId, pending] of this.pendingRequests) {
-      clearTimeout(pending.timer)
-      pending.reject(new Error('会话已关闭'))
-    }
-    this.pendingRequests.clear()
+    this.cancelPendingRequests('会话已关闭')
   }
 }
