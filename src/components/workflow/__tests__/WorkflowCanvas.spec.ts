@@ -1319,7 +1319,7 @@ describe('WorkflowCanvas', () => {
       },
     ] as any
 
-    store.enterHistoryMode('exec_history_1')
+    await store.enterHistoryMode('exec_history_1')
 
     const wrapper = mount(WorkflowCanvas, {
       global: {

@@ -195,4 +195,27 @@ describe('WorkflowHeader', () => {
     expect(wrapper.find('[data-testid="workflow-save-button"]').text()).toContain('保存更改')
     expect(wrapper.find('[data-testid="workflow-save-button"]').classes()).toContain('save-btn--unsaved')
   })
+
+  it('loads history summaries when the history trigger is clicked', async () => {
+    const store = useWorkflowStore()
+    const loadHistorySpy = vi.spyOn(store, 'loadHistory').mockResolvedValue(undefined)
+
+    const wrapper = mount(WorkflowHeader, {
+      global: {
+        stubs: {
+          Button: { template: '<button @click="$emit(\'click\')"><slot /></button>' },
+          Menu: { template: '<div />' },
+          Popover: {
+            template: '<div><slot /></div>',
+            methods: { toggle() {}, hide() {} },
+          },
+        },
+      },
+    })
+
+    const historyButton = wrapper.find('button[title="查看运行历史"]')
+    await historyButton.trigger('click')
+
+    expect(loadHistorySpy).toHaveBeenCalled()
+  })
 })

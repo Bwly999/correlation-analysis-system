@@ -2,6 +2,7 @@ import type { ServerExecutionRecord, ServerSavedWorkflow } from '../storageServi
 import type { ServerDependencies } from '../bootstrap/serverDependencies.js'
 import { requireWorkflowUser } from '../http/workflowUser.js'
 import type { HttpDomainHandler } from '../http/types.js'
+import { toHistorySummary } from '../storageService.js'
 
 export const createStorageRoutes = (): HttpDomainHandler<ServerDependencies> => async (context) => {
   const { pathname, method, dependencies } = context
@@ -13,6 +14,7 @@ export const createStorageRoutes = (): HttpDomainHandler<ServerDependencies> => 
   )
   const workflowVersionsMatch = pathname.match(/^\/api\/storage\/workflows\/([^/]+)\/versions$/)
   const workflowDetailMatch = pathname.match(/^\/api\/storage\/workflows\/([^/]+)$/)
+  const historyDetailMatch = pathname.match(/^\/api\/storage\/history\/([^/]+)$/)
 
   if (method === 'GET' && pathname === '/api/storage/me') {
     context.sendJson(200, requireWorkflowUser(context))
@@ -96,6 +98,24 @@ export const createStorageRoutes = (): HttpDomainHandler<ServerDependencies> => 
     return true
   }
 
+  if (method === 'GET' && pathname === '/api/storage/history/summaries') {
+    const currentUser = requireWorkflowUser(context)
+    context.sendJson(200, await dependencies.storageService.getUserHistorySummaries(currentUser.id))
+    return true
+  }
+
+  if (method === 'GET' && historyDetailMatch) {
+    const currentUser = requireWorkflowUser(context)
+    const recordId = decodeURIComponent(historyDetailMatch[1] ?? '')
+    const record = await dependencies.storageService.getUserHistoryRecord(currentUser.id, recordId)
+    if (!record) {
+      context.sendJson(404, { message: '未找到运行记录' })
+      return true
+    }
+    context.sendJson(200, record)
+    return true
+  }
+
   if (method === 'POST' && pathname === '/api/storage/history') {
     const currentUser = requireWorkflowUser(context)
     const body = await context.readJsonBody<{ record?: ServerExecutionRecord; limit?: number }>()
@@ -104,7 +124,7 @@ export const createStorageRoutes = (): HttpDomainHandler<ServerDependencies> => 
       return true
     }
     const history = await dependencies.storageService.saveUserHistory(currentUser.id, body.record, body.limit)
-    context.sendJson(200, history)
+    context.sendJson(200, history.map((record) => toHistorySummary(record)))
     return true
   }
 

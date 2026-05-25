@@ -37,8 +37,11 @@ class MockServerStorageProvider implements IStorageProvider {
   async saveHistory(): Promise<any[]> {
     return []
   }
-  async getAllHistory(): Promise<any[]> {
+  async getHistorySummaries(): Promise<any[]> {
     return []
+  }
+  async getHistoryRecord(): Promise<any> {
+    return null
   }
   async clearAllHistory(): Promise<void> {}
 }

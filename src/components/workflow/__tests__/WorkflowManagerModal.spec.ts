@@ -84,6 +84,41 @@ describe('WorkflowManagerModal', () => {
     expect(wrapper.text()).toContain('其他工作流')
   })
 
+  it('shows loading copy while the history list is being fetched', async () => {
+    const store = useWorkflowStore()
+    vi.spyOn(store, 'loadHistory').mockResolvedValue(undefined)
+    store.isHistorySummariesLoading = true
+
+    const wrapper = mount(WorkflowManagerModal, {
+      props: {
+        visible: true,
+        initialTab: '1',
+      },
+      global: {
+        stubs: {
+          Dialog: dialogStub,
+          Button: {
+            props: ['label', 'disabled'],
+            emits: ['click'],
+            template:
+              '<button :disabled="disabled" @click="$emit(\'click\')">{{ label }}<slot /></button>',
+          },
+          Tabs: { template: '<div><slot /></div>' },
+          TabList: { template: '<div><slot /></div>' },
+          Tab: { template: '<button><slot /></button>' },
+          TabPanels: { template: '<div><slot /></div>' },
+          TabPanel: { template: '<div><slot /></div>' },
+          InputText: inputTextStub,
+        },
+        directives: {
+          tooltip: {},
+        },
+      },
+    })
+
+    expect(wrapper.text()).toContain('正在加载运行历史...')
+  })
+
   it('opens duplicate-name dialog with a default workflow name and confirms duplication', async () => {
     const store = useWorkflowStore()
     store.savedWorkflows = [

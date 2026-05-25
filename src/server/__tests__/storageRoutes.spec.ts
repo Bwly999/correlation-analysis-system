@@ -776,4 +776,91 @@ describe('storage routes', () => {
       }),
     ])
   })
+
+  it('should return compact history summaries and full record detail through separate endpoints', async () => {
+    const handler = createServerHandler()
+
+    await handler(
+      createRequest(
+        'POST',
+        '/api/storage/history',
+        {
+          record: {
+            id: 'exec_summary_1',
+            workflowId: 'wf_1',
+            workflowName: '历史工作流',
+            startTime: 100,
+            duration: 20,
+            status: 'success',
+            nodes: [{ id: 'node_1' }],
+            edges: [{ id: 'edge_1' }],
+          },
+          limit: 20,
+        },
+        { 'x-workflow-user-id': 'history-summary-user' },
+      ),
+      createResponse(),
+    )
+
+    const summaryResponse = createResponse()
+    await handler(
+      createRequest(
+        'GET',
+        '/api/storage/history/summaries',
+        undefined,
+        { 'x-workflow-user-id': 'history-summary-user' },
+      ),
+      summaryResponse,
+    )
+
+    expect(summaryResponse.statusCode).toBe(200)
+    expect(JSON.parse(summaryResponse.body)).toEqual([
+      {
+        id: 'exec_summary_1',
+        workflowId: 'wf_1',
+        workflowName: '历史工作流',
+        startTime: 100,
+        duration: 20,
+        status: 'success',
+      },
+    ])
+
+    const detailResponse = createResponse()
+    await handler(
+      createRequest(
+        'GET',
+        '/api/storage/history/exec_summary_1',
+        undefined,
+        { 'x-workflow-user-id': 'history-summary-user' },
+      ),
+      detailResponse,
+    )
+
+    expect(detailResponse.statusCode).toBe(200)
+    expect(JSON.parse(detailResponse.body)).toEqual(
+      expect.objectContaining({
+        id: 'exec_summary_1',
+        nodes: [{ id: 'node_1' }],
+        edges: [{ id: 'edge_1' }],
+      }),
+    )
+  })
+
+  it('should return 404 when a history record detail does not exist', async () => {
+    const handler = createServerHandler()
+    const response = createResponse()
+
+    await handler(
+      createRequest(
+        'GET',
+        '/api/storage/history/missing',
+        undefined,
+        { 'x-workflow-user-id': 'history-missing-user' },
+      ),
+      response,
+    )
+
+    expect(response.statusCode).toBe(404)
+    expect(JSON.parse(response.body)).toEqual({ message: '未找到运行记录' })
+  })
 })

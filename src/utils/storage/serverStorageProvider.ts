@@ -1,5 +1,6 @@
 import type {
   ExecutionRecord,
+  ExecutionRecordSummary,
   IStorageProvider,
   SavedWorkflow,
   StorageUser,
@@ -91,7 +92,7 @@ export class ServerStorageProvider implements IStorageProvider {
     }, true)
   }
 
-  async saveHistory(record: ExecutionRecord, limit = 20): Promise<ExecutionRecord[]> {
+  async saveHistory(record: ExecutionRecord, limit = 20): Promise<ExecutionRecordSummary[]> {
     console.log('[ServerStorage] Saving execution history...')
     return this.request('/storage/history', {
       method: 'POST',
@@ -99,9 +100,14 @@ export class ServerStorageProvider implements IStorageProvider {
     })
   }
 
-  async getAllHistory(): Promise<ExecutionRecord[]> {
-    console.log('[ServerStorage] Fetching history...')
-    return this.request('/storage/history')
+  async getHistorySummaries(): Promise<ExecutionRecordSummary[]> {
+    console.log('[ServerStorage] Fetching history summaries...')
+    return this.request('/storage/history/summaries')
+  }
+
+  async getHistoryRecord(recordId: string): Promise<ExecutionRecord | null> {
+    console.log(`[ServerStorage] Fetching history record: ${recordId}`)
+    return this.request(`/storage/history/${encodeURIComponent(recordId)}`, undefined, true)
   }
 
   async clearAllHistory(): Promise<void> {

@@ -23,6 +23,15 @@ export interface WorkflowStorageRepository<TWorkflow, TVersion, THistoryRecord> 
   ): Promise<UserWorkflowDocument<TWorkflow, TVersion>>
   deleteWorkflowDocument(userId: string, workflowId: string): Promise<boolean>
   readHistoryDocument(userId: string): Promise<UserHistoryDocument<THistoryRecord>>
+  listHistoryRecordSummaries(userId: string): Promise<Array<{
+    id: string
+    workflowId: string
+    workflowName: string
+    startTime: number
+    duration: number
+    status: string
+  }>>
+  readHistoryRecord(userId: string, recordId: string): Promise<THistoryRecord | null>
   writeHistoryDocument(
     userId: string,
     updater: (
@@ -126,6 +135,23 @@ export class LowDbWorkflowStorageRepository<TWorkflow, TVersion, THistoryRecord>
       records: [],
     })
     return cloneJson(db.data)
+  }
+
+  async listHistoryRecordSummaries(userId: string) {
+    const document = await this.readHistoryDocument(userId)
+    return (document.records as Array<any>).map((record) => ({
+      id: record.id,
+      workflowId: record.workflowId,
+      workflowName: record.workflowName,
+      startTime: record.startTime,
+      duration: record.duration,
+      status: record.status,
+    }))
+  }
+
+  async readHistoryRecord(userId: string, recordId: string): Promise<THistoryRecord | null> {
+    const document = await this.readHistoryDocument(userId)
+    return cloneJson((document.records as Array<any>).find((record) => record.id === recordId) ?? null)
   }
 
   async writeHistoryDocument(

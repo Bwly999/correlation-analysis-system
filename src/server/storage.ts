@@ -1,6 +1,7 @@
 import { createStorageCompositionRoot } from './bootstrap/storageCompositionRoot.js'
 import type {
   ServerExecutionRecord,
+  ServerExecutionRecordSummary,
   ServerSavedWorkflow,
   ServerStorageUser,
   ServerWorkflowVersion,
@@ -16,6 +17,7 @@ export {
 } from './storageService.js'
 export type {
   ServerExecutionRecord,
+  ServerExecutionRecordSummary,
   ServerSavedWorkflow,
   ServerStorageUser,
   ServerWorkflowVersion,
@@ -40,6 +42,8 @@ export interface ServerStorageApi {
     versionId: string,
   ): Promise<{ workflow: ServerSavedWorkflow; version: ServerWorkflowVersion } | null>
   getUserHistory(userId: string): Promise<ServerExecutionRecord[]>
+  getUserHistorySummaries(userId: string): Promise<ServerExecutionRecordSummary[]>
+  getUserHistoryRecord(userId: string, recordId: string): Promise<ServerExecutionRecord | null>
   saveUserHistory(userId: string, record: ServerExecutionRecord, limit?: number): Promise<ServerExecutionRecord[]>
   clearUserHistory(userId: string): Promise<void>
 }
@@ -58,6 +62,8 @@ export const createServerStorageApi = (
   rollbackUserWorkflowVersion: (userId, workflowId, versionId) =>
     storageService.rollbackUserWorkflowVersion(userId, workflowId, versionId),
   getUserHistory: (userId) => storageService.getUserHistory(userId),
+  getUserHistorySummaries: (userId) => storageService.getUserHistorySummaries(userId),
+  getUserHistoryRecord: (userId, recordId) => storageService.getUserHistoryRecord(userId, recordId),
   saveUserHistory: (userId, record, limit = 20) => storageService.saveUserHistory(userId, record, limit),
   clearUserHistory: (userId) => storageService.clearUserHistory(userId),
 })
@@ -119,6 +125,15 @@ export const rollbackUserWorkflowVersion = async (
 
 export const getUserHistory = async (userId: string): Promise<ServerExecutionRecord[]> =>
   getDefaultStorageApi().getUserHistory(userId)
+
+export const getUserHistorySummaries = async (userId: string): Promise<ServerExecutionRecordSummary[]> =>
+  getDefaultStorageApi().getUserHistorySummaries(userId)
+
+export const getUserHistoryRecord = async (
+  userId: string,
+  recordId: string,
+): Promise<ServerExecutionRecord | null> =>
+  getDefaultStorageApi().getUserHistoryRecord(userId, recordId)
 
 export const saveUserHistory = async (
   userId: string,

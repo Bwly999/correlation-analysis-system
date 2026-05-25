@@ -1,5 +1,6 @@
 import type {
   StorageExecutionRecordDto,
+  StorageExecutionRecordSummaryDto,
   StorageUserDto,
   StorageWorkflowDto,
   StorageWorkflowRollbackResultDto,
@@ -19,6 +20,7 @@ export type ServerWorkflowVersionSource = TransportWorkflowVersionSource
 export type ServerWorkflowVersion = StorageWorkflowVersionDto<ServerSavedWorkflow>
 
 export type ServerExecutionRecord = StorageExecutionRecordDto
+export type ServerExecutionRecordSummary = StorageExecutionRecordSummaryDto
 
 export type ServerStorageUser = StorageUserDto & WorkflowRequestUser
 
@@ -50,6 +52,8 @@ export interface ServerStorageService {
     versionId: string,
   ): Promise<StorageWorkflowRollbackResultDto<ServerSavedWorkflow, ServerWorkflowVersion> | null>
   getUserHistory(userId: string): Promise<ServerExecutionRecord[]>
+  getUserHistorySummaries(userId: string): Promise<ServerExecutionRecordSummary[]>
+  getUserHistoryRecord(userId: string, recordId: string): Promise<ServerExecutionRecord | null>
   saveUserHistory(userId: string, record: ServerExecutionRecord, limit?: number): Promise<ServerExecutionRecord[]>
   clearUserHistory(userId: string): Promise<void>
 }
@@ -64,6 +68,15 @@ export interface ServerStorageServiceDependencies {
 const cloneJson = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
 
 const defaultCreateWorkflowVersionId = () => `wfver_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+
+const toHistorySummary = (record: ServerExecutionRecord): ServerExecutionRecordSummary => ({
+  id: record.id,
+  workflowId: record.workflowId,
+  workflowName: record.workflowName,
+  startTime: record.startTime,
+  duration: record.duration,
+  status: record.status,
+})
 
 export const createServerStorageService = (
   dependencies: ServerStorageServiceDependencies,
@@ -168,6 +181,17 @@ export const createServerStorageService = (
       return [...document.records].sort((a, b) => (b.startTime || 0) - (a.startTime || 0))
     },
 
+    async getUserHistorySummaries(userId) {
+      const summaries = await repository.listHistoryRecordSummaries(userId)
+      return summaries
+        .map((summary) => cloneJson(summary as ServerExecutionRecordSummary))
+        .sort((a, b) => (b.startTime || 0) - (a.startTime || 0))
+    },
+
+    async getUserHistoryRecord(userId, recordId) {
+      return cloneJson(await repository.readHistoryRecord(userId, recordId))
+    },
+
     async saveUserHistory(userId, record, limit = 20) {
       const nextDocument = await repository.writeHistoryDocument(userId, (document) => ({
         records: [record, ...document.records.filter((item) => item.id !== record.id)].slice(0, limit),
@@ -183,3 +207,5 @@ export const createServerStorageService = (
     },
   }
 }
+
+export { toHistorySummary }

@@ -103,7 +103,8 @@ describe('ServerStorageProvider', () => {
       nodes: [],
       edges: [],
     })
-    await provider.getAllHistory()
+    await provider.getHistorySummaries()
+    await provider.getHistoryRecord('run_1')
     await provider.clearAllHistory()
 
     for (const [, init] of fetchMock.mock.calls) {
@@ -111,6 +112,80 @@ describe('ServerStorageProvider', () => {
       expect(headers['x-workflow-user-name']).not.toBe('默认用户')
       expect(headers['x-workflow-user-name']).toBe(encodeURIComponent('默认用户'))
     }
+  })
+
+  it('should load history summaries and a single history record through dedicated endpoints', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        text: async () =>
+          JSON.stringify([
+            {
+              id: 'run_1',
+              workflowId: 'wf_1',
+              workflowName: '测试工作流',
+              startTime: 1,
+              duration: 2,
+              status: 'success',
+            },
+          ]),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        text: async () =>
+          JSON.stringify({
+            id: 'run_1',
+            workflowId: 'wf_1',
+            workflowName: '测试工作流',
+            startTime: 1,
+            duration: 2,
+            status: 'success',
+            nodes: [],
+            edges: [],
+          }),
+      })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(provider.getHistorySummaries()).resolves.toEqual([
+      {
+        id: 'run_1',
+        workflowId: 'wf_1',
+        workflowName: '测试工作流',
+        startTime: 1,
+        duration: 2,
+        status: 'success',
+      },
+    ])
+    await expect(provider.getHistoryRecord('run_1')).resolves.toEqual({
+      id: 'run_1',
+      workflowId: 'wf_1',
+      workflowName: '测试工作流',
+      startTime: 1,
+      duration: 2,
+      status: 'success',
+      nodes: [],
+      edges: [],
+    })
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      expect.stringMatching(/\/storage\/history\/summaries$/),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          'Content-Type': 'application/json',
+        }),
+      }),
+    )
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      expect.stringMatching(/\/storage\/history\/run_1$/),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          'Content-Type': 'application/json',
+        }),
+      }),
+    )
   })
 
   it('should attach a bearer token when the auth resolver provides one', async () => {

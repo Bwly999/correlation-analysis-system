@@ -1,5 +1,6 @@
 import type {
   ExecutionRecord,
+  ExecutionRecordSummary,
   IStorageProvider,
   SavedWorkflow,
   WorkflowRollbackResult,
@@ -25,6 +26,17 @@ export class LocalStorageProvider implements IStorageProvider {
 
   private cloneJson<T>(value: T): T {
     return JSON.parse(JSON.stringify(value)) as T
+  }
+
+  private toHistorySummary(record: ExecutionRecord): ExecutionRecordSummary {
+    return {
+      id: record.id,
+      workflowId: record.workflowId,
+      workflowName: record.workflowName,
+      startTime: record.startTime,
+      duration: record.duration,
+      status: record.status,
+    }
   }
 
   private createWorkflowVersionId() {
@@ -295,16 +307,16 @@ export class LocalStorageProvider implements IStorageProvider {
     })
   }
 
-  async saveHistory(record: ExecutionRecord, limit = 20): Promise<ExecutionRecord[]> {
+  async saveHistory(record: ExecutionRecord, limit = 20): Promise<ExecutionRecordSummary[]> {
     if (!this.canUseIndexedDB()) {
       const history = this.getLocalHistory().filter((item) => item.id !== record.id)
       const limitedHistory = [record, ...history].slice(0, limit)
       this.saveLocalHistory(limitedHistory)
-      return limitedHistory
+      return limitedHistory.map((item) => this.toHistorySummary(item))
     }
 
     const db = await this.getDB()
-    const history = await this.getAllHistory()
+    const history = (await this.getAllHistoryRecords()).filter((item) => item.id !== record.id)
 
     history.unshift(record)
     const limitedHistory = history.slice(0, limit)
@@ -327,12 +339,17 @@ export class LocalStorageProvider implements IStorageProvider {
         }
       }
 
-      transaction.oncomplete = () => resolve(limitedHistory)
+      transaction.oncomplete = () => resolve(limitedHistory.map((item) => this.toHistorySummary(item)))
       transaction.onerror = () => reject(transaction.error)
     })
   }
 
-  async getAllHistory(): Promise<ExecutionRecord[]> {
+  async getHistorySummaries(): Promise<ExecutionRecordSummary[]> {
+    const records = await this.getAllHistoryRecords()
+    return records.map((item) => this.toHistorySummary(item))
+  }
+
+  private async getAllHistoryRecords(): Promise<ExecutionRecord[]> {
     if (!this.canUseIndexedDB()) {
       return this.getLocalHistory()
     }
@@ -350,6 +367,22 @@ export class LocalStorageProvider implements IStorageProvider {
         resolve(result)
       }
 
+      request.onerror = () => reject(request.error)
+    })
+  }
+
+  async getHistoryRecord(recordId: string): Promise<ExecutionRecord | null> {
+    if (!this.canUseIndexedDB()) {
+      return this.getLocalHistory().find((item) => item.id === recordId) ?? null
+    }
+
+    const db = await this.getDB()
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction([this.historyStoreName], 'readonly')
+      const store = transaction.objectStore(this.historyStoreName)
+      const request = store.get(recordId)
+
+      request.onsuccess = () => resolve((request.result as ExecutionRecord | null) ?? null)
       request.onerror = () => reject(request.error)
     })
   }

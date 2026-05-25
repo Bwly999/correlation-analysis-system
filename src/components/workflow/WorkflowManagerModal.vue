@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useWorkflowStore } from '@/stores/workflowStore'
-import { type SavedWorkflow, type ExecutionRecord } from '@/utils/storage'
+import { type SavedWorkflow, type ExecutionRecordSummary } from '@/utils/storage'
 import { workflowTemplateDefinitions } from '@/workflow/templates'
 import Dialog from 'primevue/dialog'
 import Button from 'primevue/button'
@@ -33,6 +33,7 @@ import {
   LayoutDashboard,
   ArrowRight,
   Sparkles,
+  LoaderCircle,
 } from 'lucide-vue-next'
 
 const props = defineProps<{
@@ -55,6 +56,7 @@ const activeTab = ref(props.initialTab ?? '0')
 const duplicateDialogVisible = ref(false)
 const duplicateSourceWorkflowId = ref<string | null>(null)
 const duplicateWorkflowName = ref('')
+const restoringHistoryRecordId = ref<string | null>(null)
 
 const showErrorToast = (summary: string, error: unknown, fallbackDetail: string) => {
   toast.add({
@@ -95,8 +97,8 @@ const sortedWorkflows = computed(() => {
 })
 
 // 管理中心统一展示全部工作流的运行历史
-const allWorkflowHistory = computed<ExecutionRecord[]>(
-  () => store.executionHistory as ExecutionRecord[],
+const allWorkflowHistory = computed<ExecutionRecordSummary[]>(
+  () => store.executionHistory as ExecutionRecordSummary[],
 )
 
 const handleLoadWorkflow = async (id: string) => {
@@ -153,9 +155,17 @@ const handleDeleteWorkflow = (id: string) => {
   })
 }
 
-const handleRestoreExecution = (record: ExecutionRecord) => {
-  store.enterHistoryMode(record.id)
-  emit('close')
+const handleRestoreExecution = async (record: ExecutionRecordSummary) => {
+  restoringHistoryRecordId.value = record.id
+  try {
+    await store.enterHistoryMode(record.id)
+    emit('close')
+  } catch (error) {
+    console.error('加载历史详情失败:', error)
+    showErrorToast('加载失败', error, '加载历史详情时发生错误，请稍后重试。')
+  } finally {
+    restoringHistoryRecordId.value = null
+  }
 }
 
 const handleCreateNew = () => {
@@ -528,7 +538,14 @@ const getTemplateVisual = (theme: keyof typeof templateVisualMap) => templateVis
               class="flex flex-col gap-3 py-4 max-h-[420px] overflow-y-auto custom-scrollbar px-1"
             >
               <div
-                v-if="allWorkflowHistory.length === 0"
+                v-if="store.isHistorySummariesLoading"
+                class="flex items-center justify-center gap-2 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-6 text-sm text-slate-500"
+              >
+                <LoaderCircle :size="16" class="animate-spin text-blue-500" />
+                正在加载运行历史...
+              </div>
+              <div
+                v-else-if="allWorkflowHistory.length === 0"
                 class="text-center py-20 text-[#a3acb9] italic"
               >
                 <History :size="48" class="mx-auto mb-4 opacity-10" /> 暂无运行记录。
@@ -574,12 +591,17 @@ const getTemplateVisual = (theme: keyof typeof templateVisualMap) => templateVis
                   </div>
                 </div>
                 <Button
-                  label="查看快照"
+                  :label="restoringHistoryRecordId === record.id ? '加载中...' : '查看快照'"
                   size="small"
                   text
+                  :disabled="restoringHistoryRecordId === record.id"
                   class="font-black text-indigo-600 px-3"
                   @click="handleRestoreExecution(record)"
-                />
+                >
+                  <template v-if="restoringHistoryRecordId === record.id" #icon>
+                    <LoaderCircle :size="14" class="animate-spin" />
+                  </template>
+                </Button>
               </div>
             </div>
           </TabPanel>

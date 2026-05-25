@@ -232,6 +232,53 @@ export const readHistoryDocument = async <TRecord>(
   )
 }
 
+export const listHistoryRecordSummaries = async (
+  db: MysqlStorageDatabase,
+  userId: string,
+) => db
+  .select({
+    id: executionHistoryTable.executionId,
+    workflowId: executionHistoryTable.workflowId,
+    workflowName: executionHistoryTable.workflowName,
+    startTime: executionHistoryTable.startTimeMs,
+    duration: executionHistoryTable.durationMs,
+    status: executionHistoryTable.status,
+  })
+  .from(executionHistoryTable)
+  .where(eq(executionHistoryTable.userId, userId))
+  .orderBy(desc(executionHistoryTable.startTimeMs), desc(executionHistoryTable.executionId))
+
+export const readHistoryRecord = async <TRecord>(
+  db: MysqlStorageDatabase,
+  userId: string,
+  recordId: string,
+  objectStorage?: HistoryRecordObjectStorage,
+): Promise<TRecord | null> => {
+  const rows = await db
+    .select({
+      recordJson: executionHistoryTable.recordJson,
+      recordObjectKey: executionHistoryTable.recordObjectKey,
+    })
+    .from(executionHistoryTable)
+    .where(and(
+      eq(executionHistoryTable.userId, userId),
+      eq(executionHistoryTable.executionId, recordId),
+    ))
+    .limit(1)
+
+  const row = rows[0]
+  if (!row) {
+    return null
+  }
+
+  const document = await deserializeHistoryDocument<TRecord>(
+    [row],
+    objectStorage ? (recordObjectKey) => objectStorage.getObject(recordObjectKey) : undefined,
+  )
+
+  return document.records[0] ?? null
+}
+
 export const writeHistoryDocument = async <TRecord extends ExecutionRecordLike>(
   db: MysqlStorageDatabase,
   userId: string,

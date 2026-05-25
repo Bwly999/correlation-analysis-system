@@ -1738,13 +1738,21 @@ describe('Workflow Store', () => {
     expect(store.executionHistory.length).toBe(1)
     expect(store.executionHistory[0]!.status).toBe('success')
     expect(store.executionHistory[0]!.workflowName).toBe('未命名工作流')
-    expect(store.executionHistory[0]!.edges[0]).toMatchObject({
+    expect(store.executionHistory[0]).toEqual({
+      id: store.executionHistory[0]!.id,
+      workflowId: 'temp',
+      workflowName: '未命名工作流',
+      startTime: store.executionHistory[0]!.startTime,
+      duration: store.executionHistory[0]!.duration,
+      status: 'success',
+    })
+    await store.enterHistoryMode(store.executionHistory[0]!.id)
+
+    expect(store.edges[0]).toMatchObject({
       source: triggerNode.id,
       target: modelNode.id,
     })
-    expect(
-      store.executionHistory[0]!.nodes.find((node) => node.id === triggerNode.id)?.data.output,
-    ).toMatchObject({
+    expect(store.nodes.find((node) => node.id === triggerNode.id)?.data.output).toMatchObject({
       kind: 'table',
     })
   })
@@ -1768,13 +1776,8 @@ describe('Workflow Store', () => {
     await store.runGlobal()
 
     const record = store.executionHistory[0]!
-    const triggerSnapshot = record.nodes.find((node) => node.id === triggerNode.id)
-    const terminalSnapshot = record.nodes.find((node) => node.id === terminalNode.id)
 
-    expect(triggerSnapshot?.data.output).toMatchObject({ kind: 'table' })
-    expect(terminalSnapshot?.data.output).toMatchObject({ kind: 'chart' })
-
-    store.enterHistoryMode(record.id)
+    await store.enterHistoryMode(record.id)
 
     expect(store.isHistoryMode).toBe(true)
     expect(store.nodes.find((node) => node.id === triggerNode.id)?.data.output).toMatchObject({
@@ -1783,6 +1786,19 @@ describe('Workflow Store', () => {
     expect(store.nodes.find((node) => node.id === terminalNode.id)?.data.output).toMatchObject({
       kind: 'chart',
     })
+  })
+
+  it('should reuse cached history detail when entering history mode after a run', async () => {
+    const store = useWorkflowStore()
+    const triggerNode = store.addAndConnectNode('file-import', 'Trigger', { x: 0, y: 0 })!
+    triggerNode.data.config.fileData = new File(['x,y\n1,2'], 'history-cache.csv')
+
+    await store.runGlobal()
+
+    const getHistoryRecordSpy = vi.spyOn(storageProvider, 'getHistoryRecord')
+    await store.enterHistoryMode(store.executionHistory[0]!.id)
+
+    expect(getHistoryRecordSpy).not.toHaveBeenCalled()
   })
 
   it('should preserve full table outputs in history snapshots', async () => {
@@ -1836,21 +1852,14 @@ describe('Workflow Store', () => {
 
       await store.runGlobal()
 
-      const triggerSnapshot = store.executionHistory[0]!.nodes.find(
-        (node) => node.id === triggerNode.id,
-      )!.data.output as any
-
-      expect(triggerSnapshot.kind).toBe('table')
-      expect(triggerSnapshot.payload).toHaveLength(120)
-      expect(triggerSnapshot.meta?.historyTruncated).toBeUndefined()
-      expect(triggerSnapshot.meta?.originalRowCount).toBeUndefined()
-
       const record = store.executionHistory[0]!
-      store.enterHistoryMode(record.id)
+      await store.enterHistoryMode(record.id)
 
       const historicalTriggerOutput = store.nodes.find((node) => node.id === triggerNode.id)?.data.output as any
       expect(historicalTriggerOutput.kind).toBe('table')
       expect(historicalTriggerOutput.payload).toHaveLength(120)
+      expect(historicalTriggerOutput.meta?.historyTruncated).toBeUndefined()
+      expect(historicalTriggerOutput.meta?.originalRowCount).toBeUndefined()
     } finally {
       const triggerIndex = nodeDefinitions.findIndex(
         (definition) => definition.name === 'test-large-history-trigger',
@@ -1940,22 +1949,12 @@ describe('Workflow Store', () => {
 
       await store.runGlobal()
 
-      const reportSnapshot = store.executionHistory[0]!.nodes.find(
-        (node) => node.id === terminalNode.id,
-      )!.data.output as any
-
-      expect(reportSnapshot.kind).toBe('report')
-      expect(reportSnapshot.meta?.historyTruncated).toBeUndefined()
-      expect(reportSnapshot.meta?.sourceData).toHaveLength(180)
-      expect(reportSnapshot.payload.sections[0].items).toHaveLength(120)
-      expect(reportSnapshot.payload.sections[0].allItems).toHaveLength(140)
-      expect(reportSnapshot.payload.sections[0].option.series[0].data).toHaveLength(480)
-
       const record = store.executionHistory[0]!
-      store.enterHistoryMode(record.id)
+      await store.enterHistoryMode(record.id)
 
       const historicalReportOutput = store.nodes.find((node) => node.id === terminalNode.id)?.data.output as any
       expect(historicalReportOutput.kind).toBe('report')
+      expect(historicalReportOutput.meta?.historyTruncated).toBeUndefined()
       expect(historicalReportOutput.meta?.sourceData).toHaveLength(180)
       expect(historicalReportOutput.payload.sections[0].items).toHaveLength(120)
       expect(historicalReportOutput.payload.sections[0].allItems).toHaveLength(140)

@@ -59,6 +59,21 @@ const createInMemoryRepository = <
     async readHistoryDocument(userId) {
       return cloneJson(historyStore.get(userId) ?? { records: [] })
     },
+    async listHistoryRecordSummaries(userId) {
+      const current = historyStore.get(userId) ?? { records: [] }
+      return cloneJson((current.records as Array<any>).map((record) => ({
+        id: record.id,
+        workflowId: record.workflowId,
+        workflowName: record.workflowName,
+        startTime: record.startTime,
+        duration: record.duration,
+        status: record.status,
+      })))
+    },
+    async readHistoryRecord(userId, recordId) {
+      const current = historyStore.get(userId) ?? { records: [] }
+      return cloneJson((current.records as Array<any>).find((record) => record.id === recordId) ?? null)
+    },
     async writeHistoryDocument(userId, updater) {
       const current = historyStore.get(userId) ?? { records: [] }
       const next = cloneJson(await updater(cloneJson(current)))

@@ -2,6 +2,7 @@ import type { Edge } from '@vue-flow/core'
 import type { NodeResult } from '@/nodes/result'
 import type {
   StorageExecutionRecordDto,
+  StorageExecutionRecordSummaryDto,
   StorageUserDto,
   StorageWorkflowDto,
   StorageWorkflowRollbackResultDto,
@@ -92,6 +93,7 @@ export type WorkflowRollbackResult = StorageWorkflowRollbackResultDto<SavedWorkf
  * 执行历史记录
  */
 export type ExecutionRecord = StorageExecutionRecordDto<WorkflowNodeSnapshot, Edge>
+export type ExecutionRecordSummary = StorageExecutionRecordSummaryDto
 
 /**
  * 存储提供者接口定义
@@ -183,7 +185,7 @@ export interface IStorageProvider {
    * - 返回值应是最终持久化后的历史列表，供 store 直接刷新内存状态。
    * - 历史列表同样应遵循当前作用域隔离，例如 server 模式下只返回当前用户历史。
    */
-  saveHistory(record: ExecutionRecord, limit?: number): Promise<ExecutionRecord[]>
+  saveHistory(record: ExecutionRecord, limit?: number): Promise<ExecutionRecordSummary[]>
 
   /**
    * 读取当前存储作用域下的全部执行历史。
@@ -192,7 +194,16 @@ export interface IStorageProvider {
    * - 返回结果应按时间倒序，最新记录排在前面。
    * - 若没有历史记录，应返回空数组。
    */
-  getAllHistory(): Promise<ExecutionRecord[]>
+  getHistorySummaries(): Promise<ExecutionRecordSummary[]>
+
+  /**
+   * 按 id 读取一条完整执行历史。
+   *
+   * 约束：
+   * - 若目标不存在，应返回 `null`。
+   * - 返回内容应为完整快照，供历史模式恢复工作流。
+   */
+  getHistoryRecord(recordId: string): Promise<ExecutionRecord | null>
 
   /**
    * 清空当前存储作用域下的全部执行历史。

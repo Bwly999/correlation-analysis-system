@@ -53,6 +53,15 @@ export interface StorageExecutionRecordDto<TNode = unknown, TEdge = unknown> {
   edges: TEdge[]
 }
 
+export interface StorageExecutionRecordSummaryDto {
+  id: string
+  workflowId: string
+  workflowName: string
+  startTime: number
+  duration: number
+  status: TransportExecutionStatus
+}
+
 export interface StorageWorkflowDocumentDto<
   TWorkflow = StorageWorkflowDto,
   TVersion = StorageWorkflowVersionDto<TWorkflow>,

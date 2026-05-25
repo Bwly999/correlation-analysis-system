@@ -14,7 +14,9 @@ import { createHistoryRecordObjectStorage } from './historyObjectStorage.js'
 import {
   assertMysqlStorageDatabaseExists as assertMysqlStorageDatabaseExistsByPool,
   deleteWorkflowDocument,
+  listHistoryRecordSummaries,
   listWorkflowDocuments,
+  readHistoryRecord,
   readHistoryDocument,
   readWorkflowDocument,
   writeHistoryDocument,
@@ -71,6 +73,16 @@ export class MysqlWorkflowStorageRepository<
   async readHistoryDocument(userId: string): Promise<UserHistoryDocument<THistoryRecord>> {
     await this.ensureSchema()
     return readHistoryDocument<THistoryRecord>(this.db, userId, this.historyObjectStorage)
+  }
+
+  async listHistoryRecordSummaries(userId: string) {
+    await this.ensureSchema()
+    return listHistoryRecordSummaries(this.db, userId)
+  }
+
+  async readHistoryRecord(userId: string, recordId: string): Promise<THistoryRecord | null> {
+    await this.ensureSchema()
+    return readHistoryRecord<THistoryRecord>(this.db, userId, recordId, this.historyObjectStorage)
   }
 
   async writeHistoryDocument(

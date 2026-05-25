@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { LocalStorageProvider } from '../localStorageProvider'
-import { type ExecutionRecord, type SavedWorkflow } from '../types'
+import { type ExecutionRecord, type ExecutionRecordSummary, type SavedWorkflow } from '../types'
 
 describe('LocalStorageProvider', () => {
   let provider: LocalStorageProvider
@@ -49,6 +49,10 @@ describe('LocalStorageProvider', () => {
           return createMockRequest(record)
         }),
         getAll: vi.fn().mockImplementation(() => createMockRequest([...historyRecords])),
+        get: vi.fn().mockImplementation((id: string) => {
+          const record = historyRecords.find((item) => item.id === id) ?? null
+          return createMockRequest(record)
+        }),
         clear: vi.fn().mockImplementation(() => {
           historyRecords = []
           return createMockRequest()
@@ -181,11 +185,41 @@ describe('LocalStorageProvider', () => {
     it('should call saveHistory without crashing', async () => {
       const result = await provider.saveHistory(mockRecord)
       expect(Array.isArray(result)).toBe(true)
+      expect(result[0]).toEqual<ExecutionRecordSummary>({
+        id: 'exec_1',
+        workflowId: 'wf_1',
+        workflowName: 'Test',
+        startTime: mockRecord.startTime,
+        duration: 100,
+        status: 'success',
+      })
     })
 
-    it('should call getAllHistory and return a list', async () => {
-      const history = await provider.getAllHistory()
-      expect(Array.isArray(history)).toBe(true)
+    it('should return compact history summaries without nodes and edges', async () => {
+      await provider.saveHistory(mockRecord)
+
+      const history = await provider.getHistorySummaries()
+
+      expect(history).toEqual([
+        {
+          id: 'exec_1',
+          workflowId: 'wf_1',
+          workflowName: 'Test',
+          startTime: mockRecord.startTime,
+          duration: 100,
+          status: 'success',
+        },
+      ])
+    })
+
+    it('should return a full history record by id', async () => {
+      await provider.saveHistory(mockRecord)
+
+      await expect(provider.getHistoryRecord('exec_1')).resolves.toEqual(mockRecord)
+    })
+
+    it('should return null when the history record does not exist', async () => {
+      await expect(provider.getHistoryRecord('missing')).resolves.toBeNull()
     })
 
     it('should call clearAllHistory', async () => {

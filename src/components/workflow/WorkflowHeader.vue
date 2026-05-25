@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useWorkflowStore } from '@/stores/workflowStore'
-import type { ExecutionRecord } from '@/utils/storage'
+import type { ExecutionRecordSummary } from '@/utils/storage'
 import {
   LayoutGrid,
   ChevronRight,
@@ -17,6 +17,7 @@ import {
   AlertCircle,
   HelpCircle,
   Bot,
+  LoaderCircle,
 } from 'lucide-vue-next'
 import Button from 'primevue/button'
 import Menu from 'primevue/menu'
@@ -40,8 +41,8 @@ const props = defineProps<{
 }>()
 
 // 过滤当前工作流的历史记录
-const filteredHistory = computed<ExecutionRecord[]>(() => {
-  const currentHistory = store.executionHistory as ExecutionRecord[]
+const filteredHistory = computed<ExecutionRecordSummary[]>(() => {
+  const currentHistory = store.executionHistory as ExecutionRecordSummary[]
   if (store.currentWorkflowId) {
     return currentHistory.filter((record) => record.workflowId === store.currentWorkflowId)
   }
@@ -86,11 +87,13 @@ const menuItems = ref([
 ])
 
 const toggleMenu = (event: any) => menu.value.toggle(event)
-const toggleHistory = async (event: any) => {
-  // 必须在异步操作前记录事件或目标，否则 await 后 event 可能会失效导致定位到 (0,0)
+const toggleHistory = (event: any) => {
   const target = event.currentTarget || event.target
-  await store.loadHistory()
   historyPopover.value.toggle({ currentTarget: target })
+  void store.loadHistory().catch((error) => {
+    console.error('加载运行历史失败:', error)
+    showErrorToast('加载失败', error, '加载运行历史时发生错误，请稍后重试。')
+  })
 }
 
 const fileInput = ref<HTMLInputElement | null>(null)
@@ -118,9 +121,14 @@ const handleSave = async () => {
   }
 }
 
-const selectHistory = (record: any) => {
-  store.enterHistoryMode(record.id)
-  historyPopover.value.hide()
+const selectHistory = async (record: ExecutionRecordSummary) => {
+  try {
+    await store.enterHistoryMode(record.id)
+    historyPopover.value.hide()
+  } catch (error) {
+    console.error('加载历史详情失败:', error)
+    showErrorToast('加载失败', error, '加载历史详情时发生错误，请稍后重试。')
+  }
 }
 
 const formatDuration = (ms: number) => {
@@ -189,7 +197,11 @@ const formatDuration = (ms: number) => {
             <Clock :size="14" class="text-slate-400" />
           </div>
           <div class="max-h-[400px] overflow-y-auto scrollbar-thin">
-            <div v-if="filteredHistory.length === 0" class="p-8 text-center">
+            <div v-if="store.isHistorySummariesLoading" class="p-6 text-center text-slate-500">
+              <LoaderCircle :size="18" class="mx-auto mb-2 animate-spin text-blue-500" />
+              <p class="text-[12px]">正在加载运行历史...</p>
+            </div>
+            <div v-else-if="filteredHistory.length === 0" class="p-8 text-center">
               <Activity :size="24" class="mx-auto text-slate-200 mb-2" />
               <p class="text-[12px] text-slate-400">暂无运行记录</p>
             </div>
@@ -197,12 +209,21 @@ const formatDuration = (ms: number) => {
               v-for="record in filteredHistory"
               :key="record.id"
               class="p-3 border-b border-slate-100 hover:bg-indigo-50 cursor-pointer transition-colors group"
+              :class="{
+                'bg-indigo-50/80': store.historyDetailLoadingRecordId === record.id,
+                'pointer-events-none': store.historyDetailLoadingRecordId === record.id,
+              }"
               @click="selectHistory(record)"
             >
               <div class="flex items-center justify-between mb-1">
                 <div class="flex items-center gap-2">
+                  <LoaderCircle
+                    v-if="store.historyDetailLoadingRecordId === record.id"
+                    :size="14"
+                    class="animate-spin text-blue-500"
+                  />
                   <CheckCircle2
-                    v-if="record.status === 'success'"
+                    v-else-if="record.status === 'success'"
                     :size="14"
                     class="text-emerald-500"
                   />
@@ -223,8 +244,13 @@ const formatDuration = (ms: number) => {
               <div class="text-[11px] text-slate-500 flex justify-between items-center">
                 <span>{{ new Date(record.startTime).toLocaleDateString() }}</span>
                 <span
-                  class="opacity-0 group-hover:opacity-100 text-indigo-600 font-semibold transition-opacity"
-                  >查看详情 →</span
+                  class="text-indigo-600 font-semibold transition-opacity"
+                  :class="
+                    store.historyDetailLoadingRecordId === record.id
+                      ? 'opacity-100'
+                      : 'opacity-0 group-hover:opacity-100'
+                  "
+                  >{{ store.historyDetailLoadingRecordId === record.id ? '加载中...' : '查看详情 →' }}</span
                 >
               </div>
             </div>

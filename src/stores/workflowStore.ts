@@ -18,6 +18,7 @@ import {
   type WorkflowNode,
   type SavedWorkflow,
   type ExecutionRecord,
+  type ExecutionRecordSummary,
   type WorkflowRollbackResult,
   type WorkflowVersionDetail,
   type WorkflowVersionMetadata,
@@ -161,7 +162,10 @@ export const useWorkflowStore = defineStore('workflow', () => {
   let globalRuntimeQueueNodeIds: string[] = []
   const lastExecutedTerminalNodeId = ref<string | null>(null)
   const lastRunDashboard = ref<WorkflowRunDashboardState | null>(null)
-  const executionHistory = ref([]) as Ref<ExecutionRecord[]>
+  const executionHistory = ref([]) as Ref<ExecutionRecordSummary[]>
+  const historyRecordCache = shallowRef<Record<string, ExecutionRecord>>({})
+  const isHistorySummariesLoading = ref(false)
+  const historyDetailLoadingRecordId = ref<string | null>(null)
   const savedWorkflows = ref([]) as Ref<SavedWorkflow[]>
   const currentStorageUser = ref<StorageUser | null>(null)
   const workflowVersions = ref([]) as Ref<WorkflowVersionMetadata[]>
@@ -185,7 +189,16 @@ export const useWorkflowStore = defineStore('workflow', () => {
 
   const getCurrentNodes = (): WorkflowNode[] => nodes.value as WorkflowNode[]
   const getCurrentEdges = (): Edge[] => edges.value as Edge[]
-  const getCurrentExecutionHistory = (): ExecutionRecord[] => executionHistory.value as ExecutionRecord[]
+  const getCurrentExecutionHistory = (): ExecutionRecordSummary[] =>
+    executionHistory.value as ExecutionRecordSummary[]
+  const getCachedHistoryRecord = (recordId: string): ExecutionRecord | null =>
+    historyRecordCache.value[recordId] ?? null
+  const cacheHistoryRecord = (record: ExecutionRecord) => {
+    historyRecordCache.value = {
+      ...historyRecordCache.value,
+      [record.id]: record,
+    }
+  }
   const findNodeById = (
     nodeId: string,
     sourceNodes: WorkflowNode[] = getCurrentNodes(),
@@ -1122,10 +1135,28 @@ export const useWorkflowStore = defineStore('workflow', () => {
     reader.readAsText(file)
   }
 
-  const enterHistoryMode = (recordId: string) => {
-    const currentHistory = getCurrentExecutionHistory()
-    const record = currentHistory.find((entry) => entry.id === recordId)
+  const enterHistoryMode = async (recordId: string) => {
+    const historyEntry = getCurrentExecutionHistory().find((entry) => entry.id === recordId) as
+      | (ExecutionRecordSummary & Partial<ExecutionRecord>)
+      | undefined
+    let record = getCachedHistoryRecord(recordId)
+      ?? (
+        historyEntry
+        && Array.isArray(historyEntry.nodes)
+        && Array.isArray(historyEntry.edges)
+          ? (historyEntry as ExecutionRecord)
+          : null
+      )
+    if (!record) {
+      historyDetailLoadingRecordId.value = recordId
+      try {
+        record = await storageProvider.getHistoryRecord(recordId)
+      } finally {
+        historyDetailLoadingRecordId.value = null
+      }
+    }
     if (!record) return
+    cacheHistoryRecord(record)
 
     if (!isHistoryMode.value) {
       const currentNodes = getCurrentNodes()
@@ -2297,13 +2328,14 @@ export const useWorkflowStore = defineStore('workflow', () => {
   const runGlobalAndCollect = async (): Promise<WorkflowExecutionResult> => {
     await runGlobal()
     const latestRecord = executionHistory.value[0] ?? null
+    const latestRecordDetail = latestRecord ? getCachedHistoryRecord(latestRecord.id) : null
     return {
       ok: Boolean(lastRunDashboard.value) && lastRunDashboard.value?.status !== 'error',
       scope: 'global',
       executionId: latestRecord?.id ?? null,
       status: lastRunDashboard.value?.status ?? 'idle',
       dashboardSummary: lastRunDashboard.value ? cloneJsonValue(lastRunDashboard.value) : null,
-      nodeResults: latestRecord ? cloneJsonValue(latestRecord.nodes) : [],
+      nodeResults: latestRecordDetail ? cloneJsonValue(latestRecordDetail.nodes) : [],
     }
   }
 
@@ -2341,27 +2373,41 @@ export const useWorkflowStore = defineStore('workflow', () => {
   }
 
   const saveExecution = async (record: ExecutionRecord) => {
+    cacheHistoryRecord(record)
     try {
       const limitedHistory = await storageProvider.saveHistory(record, 20)
       executionHistory.value = limitedHistory
     } catch (e) {
       console.warn('Failed to save history, falling back to memory:', e)
-      const currentHistory = getCurrentExecutionHistory()
-      const newHistory: ExecutionRecord[] = [record, ...currentHistory].slice(0, 20)
+      const currentHistory = getCurrentExecutionHistory().filter((item) => item.id !== record.id)
+      const newHistory: ExecutionRecordSummary[] = [
+        {
+          id: record.id,
+          workflowId: record.workflowId,
+          workflowName: record.workflowName,
+          startTime: record.startTime,
+          duration: record.duration,
+          status: record.status,
+        },
+        ...currentHistory,
+      ].slice(0, 20)
       executionHistory.value = newHistory
       addLog(`保存历史记录到存储失败，已保存至内存`, 'warn')
     }
   }
 
   const loadHistory = async (options: { suppressErrors?: boolean } = {}) => {
+    isHistorySummariesLoading.value = true
     try {
-      const loadedHistory = (await storageProvider.getAllHistory()) as ExecutionRecord[]
+      const loadedHistory = await storageProvider.getHistorySummaries()
       executionHistory.value = loadedHistory
     } catch (e) {
       console.error('Failed to load history:', e)
       if (!options.suppressErrors) {
         throw e
       }
+    } finally {
+      isHistorySummariesLoading.value = false
     }
   }
 
@@ -2369,6 +2415,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     try {
       await storageProvider.clearAllHistory()
       executionHistory.value = []
+      historyRecordCache.value = {}
       addLog('运行历史记录已清空', 'info')
     } catch (e) {
       addLog(`清空历史记录失败: ${e}`, 'error')
@@ -2409,6 +2456,8 @@ export const useWorkflowStore = defineStore('workflow', () => {
     lastExecutedTerminalNodeId,
     lastRunDashboard,
     executionHistory,
+    isHistorySummariesLoading,
+    historyDetailLoadingRecordId,
     savedWorkflows,
     currentStorageUser,
     workflowVersions,

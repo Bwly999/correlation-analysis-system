@@ -9,6 +9,8 @@ const createRepositoryStub = (kind: string): WorkflowStorageRepository<unknown, 
   writeWorkflowDocument: vi.fn(async () => ({ current: null, versions: [] })),
   deleteWorkflowDocument: vi.fn(async () => false),
   readHistoryDocument: vi.fn(async () => ({ records: [] })),
+  listHistoryRecordSummaries: vi.fn(async () => []),
+  readHistoryRecord: vi.fn(async () => null),
   writeHistoryDocument: vi.fn(async () => ({ records: [] })),
 })
 
