@@ -29,6 +29,7 @@ describe('customFactor storage', () => {
       ...group,
       factors: [
         {
+          uid: 'uid-test-1',
           identityKey: createIdentityKey({
             factorKey: 'TEMP_1',
             factorName: '温度1',
@@ -97,6 +98,7 @@ describe('customFactor storage', () => {
       },
     ], [
       {
+        uid: 'uid-test-2',
         identityKey: createIdentityKey({
           factorKey: 'TEMP_CUSTOM',
           factorName: '自定义温度',
@@ -111,6 +113,7 @@ describe('customFactor storage', () => {
         r2Name: 'R2-CUSTOM',
       },
       {
+        uid: 'uid-test-3',
         identityKey: createIdentityKey({
           factorKey: 'PRESS_CUSTOM',
           factorName: '自定义压力',

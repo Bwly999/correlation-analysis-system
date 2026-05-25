@@ -2,9 +2,7 @@
 import { computed, ref, shallowRef, watch } from 'vue'
 import type { CellValueChangedEvent, ColDef, GridApi, GridReadyEvent, RowSelectionOptions, SelectionChangedEvent } from 'ag-grid-community'
 import { AgGridVue } from 'ag-grid-vue3'
-import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community'
-import 'ag-grid-community/styles/ag-grid.css'
-import 'ag-grid-community/styles/ag-theme-quartz.css'
+import { AllCommunityModule, ModuleRegistry, themeQuartz } from 'ag-grid-community'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
@@ -12,6 +10,7 @@ import Select from 'primevue/select'
 import Textarea from 'primevue/textarea'
 import { Download, FileSpreadsheet, Lock, LockOpen, Plus, Sparkles, Trash2, Upload } from 'lucide-vue-next'
 import { useWorkflowOverlayHost } from '@/components/workflow/workflowOverlayHost'
+import AgGridCommunitySetFilter from '@/components/workflow/common/AgGridCommunitySetFilter.vue'
 import { parseTabularTextFile, type ParsedTabularTextFile } from '../inputs/fileColumnTextImport'
 import { buildCustomFactorsFromColumnMapping, buildCustomFactorsFromDraft } from './importers'
 import {
@@ -25,11 +24,19 @@ import {
 } from './storage'
 import { CUSTOM_FACTOR_FIELDS, type CustomFactorColumnMapping, type CustomFactorDraft, type CustomFactorGroup, type CustomFactorRecord } from './types'
 
-let modulesRegistered = false
-if (!modulesRegistered) {
-  ModuleRegistry.registerModules([AllCommunityModule])
-  modulesRegistered = true
-}
+ModuleRegistry.registerModules([AllCommunityModule])
+
+const myTheme = themeQuartz.withParams({
+  fontSize: 13,
+  fontFamily: '"IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif',
+  headerBackgroundColor: '#fafafa',
+  backgroundColor: '#ffffff',
+  borderColor: 'rgba(24, 29, 31, 0.12)',
+  rowHoverColor: 'rgba(33, 150, 243, 0.08)',
+  selectedRowBackgroundColor: 'rgba(33, 150, 243, 0.12)',
+  oddRowBackgroundColor: 'rgba(248, 250, 252, 0.76)',
+  inputFocusBorderColor: 'rgba(37, 99, 235, 0.55)',
+})
 
 const props = defineProps<{
   visible: boolean
@@ -163,9 +170,9 @@ const gridRowSelection = computed<RowSelectionOptions<CustomFactorRecord>>(() =>
 const columnDefs = computed<ColDef<CustomFactorRecord>[]>(() => [
   { field: 'factorKey', headerName: '因子编码', editable: true, flex: 1.05, minWidth: 140 },
   { field: 'factorName', headerName: '因子名称', editable: true, flex: 1.1, minWidth: 140 },
-  { field: 'materialType', headerName: '物料类型', editable: true, flex: 0.95, minWidth: 120 },
-  { field: 'processName', headerName: '工序', editable: true, flex: 0.95, minWidth: 120 },
-  { field: 'r2Name', headerName: 'R2 名称', editable: true, flex: 1, minWidth: 140 },
+  { field: 'materialType', headerName: '物料类型', filter: 'AgGridCommunitySetFilter', editable: true, flex: 0.95, minWidth: 120 },
+  { field: 'processName', headerName: '工序', filter: 'AgGridCommunitySetFilter', editable: true, flex: 0.95, minWidth: 120 },
+  { field: 'r2Name', headerName: 'R2 名称', filter: 'AgGridCommunitySetFilter', editable: true, flex: 1, minWidth: 140 },
 ])
 
 const ensureNoUnsavedChanges = () => {
@@ -174,7 +181,10 @@ const ensureNoUnsavedChanges = () => {
 }
 
 const syncEditingFactorsFromGroup = (group: CustomFactorGroup | null) => {
-  editingFactors.value = group?.factors.map((factor) => ({ ...factor })) || []
+  editingFactors.value = group?.factors.map((factor) => ({
+    ...factor,
+    uid: factor.uid || crypto.randomUUID(),
+  })) || []
   isDirty.value = false
   errorMessage.value = ''
 }
@@ -342,10 +352,10 @@ const handleSelectionChanged = (event: SelectionChangedEvent<CustomFactorRecord>
 
 const handleCellValueChanged = (event: CellValueChangedEvent<CustomFactorRecord>) => {
   const updatedFactor = event.data
-  if (!updatedFactor?.identityKey) return
+  if (!updatedFactor?.uid) return
 
   editingFactors.value = editingFactors.value.map((factor) =>
-    factor.identityKey === updatedFactor.identityKey
+    factor.uid === updatedFactor.uid
       ? {
           ...updatedFactor,
         }
@@ -357,8 +367,8 @@ const handleCellValueChanged = (event: CellValueChangedEvent<CustomFactorRecord>
 const deleteSelectedRows = () => {
   const selectedRows = gridApi.value?.getSelectedRows() || []
   if (selectedRows.length === 0) return
-  const selectedKeySet = new Set(selectedRows.map((row) => row.identityKey))
-  editingFactors.value = editingFactors.value.filter((row) => !selectedKeySet.has(row.identityKey))
+  const selectedKeySet = new Set(selectedRows.map((row) => row.uid))
+  editingFactors.value = editingFactors.value.filter((row) => !selectedKeySet.has(row.uid))
   selectedRowCount.value = 0
   isDirty.value = true
 }
@@ -599,13 +609,15 @@ const triggerImportFile = () => {
             </div>
           </div>
 
-          <div class="ag-theme-quartz custom-factor-dialog__grid-shell">
+          <div class="custom-factor-dialog__grid-shell">
             <AgGridVue
               class="h-full w-full"
+              :theme="myTheme"
               :row-data="editingFactors"
               :column-defs="columnDefs"
               :default-col-def="gridDefaultColDef"
               :row-selection="gridRowSelection"
+              :components="{ AgGridCommunitySetFilter }"
               :animate-rows="false"
               :row-height="38"
               :header-height="42"
@@ -615,6 +627,7 @@ const triggerImportFile = () => {
               :enable-cell-text-selection="true"
               :ensure-dom-order="true"
               :stop-editing-when-cells-lose-focus="true"
+              :get-row-id="(params) => params.data.uid"
               @grid-ready="handleGridReady"
               @selection-changed="handleSelectionChanged"
               @cell-value-changed="handleCellValueChanged"
@@ -951,17 +964,5 @@ const triggerImportFile = () => {
 
 .custom-factor-dialog__grid-shell :deep(.ag-ltr .ag-cell-focus:not(.ag-cell-range-selected):focus-within) {
   border: 1px solid rgba(37, 99, 235, 0.55);
-}
-
-.custom-factor-dialog__grid-shell {
-  --ag-font-size: 13px;
-  --ag-font-family: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
-  --ag-header-background-color: #fafafa;
-  --ag-background-color: #ffffff;
-  --ag-border-color: rgba(24, 29, 31, 0.12);
-  --ag-row-hover-color: rgba(33, 150, 243, 0.08);
-  --ag-selected-row-background-color: rgba(33, 150, 243, 0.12);
-  --ag-odd-row-background-color: rgba(248, 250, 252, 0.76);
-  --ag-input-focus-border-color: rgba(37, 99, 235, 0.55);
 }
 </style>

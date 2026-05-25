@@ -43,6 +43,7 @@ vi.mock('ag-grid-vue3', () => ({
             onClick: () => {
               selectedRowsRef = [
                 {
+                  uid: 'uid-1',
                   identityKey: 'id-1',
                   factorKey: 'TEMP_1',
                   factorName: '温度一',
@@ -64,6 +65,7 @@ vi.mock('ag-grid-vue3', () => ({
             onClick: () =>
               emit('cellValueChanged', {
                 data: {
+                  uid: 'uid-1',
                   identityKey: 'id-1',
                   factorKey: 'TEMP_1',
                   factorName: '温度一-已修改',
@@ -92,6 +94,7 @@ describe('CustomFactorManagerDialog', () => {
         updatedAt: '2026-05-25T10:00:00.000Z',
         factors: [
           {
+            uid: 'uid-1',
             identityKey: 'id-1',
             factorKey: 'TEMP_1',
             factorName: '温度一',
@@ -100,6 +103,7 @@ describe('CustomFactorManagerDialog', () => {
             r2Name: 'R2-1',
           },
           {
+            uid: 'uid-2',
             identityKey: 'id-2',
             factorKey: 'PRESS_1',
             factorName: '压力一',

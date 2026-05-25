@@ -53,6 +53,7 @@ const resolveTargetRowCount = (draft: CustomFactorDraft) => {
 }
 
 const buildFactorRecord = (values: Record<CustomFactorField, string>): CustomFactorRecord => ({
+  uid: crypto.randomUUID(),
   identityKey: createIdentityKey(values),
   factorKey: values.factorKey,
   factorName: values.factorName,

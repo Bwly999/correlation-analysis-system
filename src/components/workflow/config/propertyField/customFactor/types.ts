@@ -12,6 +12,7 @@ export type CustomFactorField = (typeof CUSTOM_FACTOR_FIELDS)[number]
 
 export interface CustomFactorRecord extends KanbanFactorValue {
   identityKey: string
+  uid: string
 }
 
 export interface CustomFactorGroup {
