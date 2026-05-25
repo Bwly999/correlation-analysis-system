@@ -23,6 +23,32 @@ const treeOptions = [
   },
 ]
 
+const factorTreeOptions = [
+  {
+    key: 'process:涂布',
+    label: '涂布',
+    data: {
+      searchText: '全场景 / 涂布',
+    },
+    children: [
+      {
+        key: 'factor:涂布::TEMP_BASE',
+        label: '基础温度',
+        data: {
+          searchText: '全场景 / 涂布 / 基础温度',
+          value: {
+            factorKey: 'TEMP_BASE',
+            factorName: '基础温度',
+            materialType: '正极',
+            processName: '涂布',
+            r2Name: 'R2-BASE',
+          },
+        },
+      },
+    ],
+  },
+]
+
 const createTreeProp = (overrides: Partial<NodeProperty> = {}): NodeProperty => ({
   name: 'treeField',
   displayName: '树形选择',
@@ -189,6 +215,122 @@ describe('PropertyFieldTreeInput', () => {
     await wrapper.get('[data-testid="tree-collapse-all"]').trigger('click')
 
     expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+  })
+
+  it('为启用自定义因子能力的树渲染入口按钮和浮层面板', async () => {
+    const wrapper = mount(PropertyFieldTreeInput, {
+      props: {
+        modelValue: {},
+        prop: createTreeProp({
+          customFactorFeature: {
+            enabled: true,
+            storageKey: 'workflow.customFactorGroups.v1',
+            enabledFieldName: 'selectedFactorsCustomFactorEnabled',
+            selectedGroupIdFieldName: 'selectedFactorsCustomFactorGroupId',
+          },
+        }),
+        options: factorTreeOptions,
+        isOptionsLoading: false,
+        optionsError: '',
+        configContext: {
+          selectedFactorsCustomFactorEnabled: true,
+          selectedFactorsCustomFactorGroupId: 'group-1',
+        },
+      },
+      global: {
+        stubs: {
+          InputText: createInputTextStub,
+          ElTreeV2: createTreeV2Stub(),
+          CustomFactorManagerDialog: {
+            template: '<div data-testid="custom-factor-dialog-stub"></div>',
+          },
+        },
+      },
+    })
+
+    expect(wrapper.find('[data-testid="custom-factor-trigger"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="custom-factor-panel"]').exists()).toBe(false)
+
+    await wrapper.get('[data-testid="custom-factor-trigger"]').trigger('click')
+
+    expect(wrapper.find('[data-testid="custom-factor-panel"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="custom-factor-enabled-toggle"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="custom-factor-manage-button"]').exists()).toBe(true)
+  })
+
+  it('开启自定义因子生效时把当前配置组因子并入树中', async () => {
+    localStorage.setItem('workflow.customFactorGroups.v1', JSON.stringify([
+      {
+        id: 'group-1',
+        name: '默认组',
+        createdAt: '2026-05-25T10:00:00.000Z',
+        updatedAt: '2026-05-25T10:00:00.000Z',
+        factors: [
+          {
+            identityKey: '涂布__TEMP_CUSTOM__自定义温度__正极__R2-CUSTOM',
+            factorKey: 'TEMP_CUSTOM',
+            factorName: '自定义温度',
+            materialType: '正极',
+            processName: '涂布',
+            r2Name: 'R2-CUSTOM',
+          },
+        ],
+      },
+    ]))
+
+    const wrapper = mount(PropertyFieldTreeInput, {
+      props: {
+        modelValue: {
+          selectedKeys: ['custom-factor:涂布::涂布__TEMP_CUSTOM__自定义温度__正极__R2-CUSTOM'],
+          values: [
+            {
+              factorKey: 'TEMP_CUSTOM',
+              factorName: '自定义温度',
+              materialType: '正极',
+              processName: '涂布',
+              r2Name: 'R2-CUSTOM',
+            },
+          ],
+        },
+        prop: createTreeProp({
+          customFactorFeature: {
+            enabled: true,
+            storageKey: 'workflow.customFactorGroups.v1',
+            enabledFieldName: 'selectedFactorsCustomFactorEnabled',
+            selectedGroupIdFieldName: 'selectedFactorsCustomFactorGroupId',
+          },
+        }),
+        options: factorTreeOptions,
+        isOptionsLoading: false,
+        optionsError: '',
+        configContext: {
+          selectedFactorsCustomFactorEnabled: true,
+          selectedFactorsCustomFactorGroupId: 'group-1',
+        },
+      },
+      global: {
+        stubs: {
+          InputText: createInputTextStub,
+          ElTreeV2: createTreeV2Stub(),
+          CustomFactorManagerDialog: {
+            template: '<div data-testid="custom-factor-dialog-stub"></div>',
+          },
+        },
+      },
+    })
+
+    expect(wrapper.get('[data-testid="tree-value"]').text()).toContain('自定义温度')
+
+    await wrapper.get('[data-testid="custom-factor-trigger"]').trigger('click')
+    await wrapper.get('[data-testid="custom-factor-enabled-toggle"]').trigger('click')
+
+    const configFieldsEmitted = wrapper.emitted('update:configFields') || []
+    expect(configFieldsEmitted[configFieldsEmitted.length - 1]?.[0]).toMatchObject({
+      selectedFactorsCustomFactorEnabled: false,
+    })
+    expect(wrapper.props('modelValue')).toMatchObject({
+      selectedKeys: ['custom-factor:涂布::涂布__TEMP_CUSTOM__自定义温度__正极__R2-CUSTOM'],
+    })
   })
 
   it('组件默认关闭搜索保护，不显示分组摘要提示', async () => {

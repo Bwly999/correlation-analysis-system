@@ -165,6 +165,10 @@ describe('Node Definitions Execution Logic', () => {
     expect(sceneSelection?.treeViewport).toBe('sm')
     expect(selectedFactors?.displayName).toBe('因子全集')
     expect(selectedFactors?.treeViewport).toBeUndefined()
+    expect(selectedFactors?.customFactorFeature).toMatchObject({
+      enabled: true,
+      storageKey: 'workflow.customFactorGroups.v1',
+    })
     expect(
       neighborSystemNode.properties.find((property) => property.name === 'selectedProcesses')
         ?.displayName,
@@ -2136,6 +2140,57 @@ describe('Node Definitions Execution Logic', () => {
       expect(mockFetchKanbanData).toHaveBeenCalledWith(
         expect.objectContaining({
           timeRange: ['2026-03-01T00:00:00.000Z', '2026-03-10T00:00:00.000Z'],
+        }),
+      )
+    })
+
+    it('should keep parsing historical custom-factor selections even after UI toggle is turned off', async () => {
+      mockGetResolvedKanbanAuthToken.mockReturnValue('token-from-host')
+      mockFetchKanbanData.mockResolvedValue({
+        rows: [{ sn: 'SN001', TEMP_CUSTOM: 12.3 }],
+        metadata: {
+          totalSn: 1,
+        },
+      })
+
+      await neighborSystemNode.execute(null, {
+        productName: '试制产品 A1',
+        sceneSelection: {
+          selectedKey: 'sub-scene:scene-pack::sub-pack-a',
+          value: {
+            sceneId: 'scene-pack',
+            sceneLable: 'PACK',
+            subSceneId: 'sub-pack-a',
+            subSceneLable: 'PACK-A',
+          },
+        },
+        fetchMode: 'time',
+        timeRange: [new Date('2026-03-01'), new Date('2026-03-10')],
+        materialType: '正极',
+        selectedFactorsCustomFactorEnabled: false,
+        selectedFactors: {
+          selectedKeys: ['custom-factor:涂布::identity-1'],
+          values: [
+            {
+              factorKey: 'TEMP_CUSTOM',
+              factorName: '自定义温度',
+              materialType: '正极',
+              processName: '涂布',
+              r2Name: 'R2-CUSTOM',
+            },
+          ],
+        },
+        selectedProcesses: ['涂布'],
+      })
+
+      expect(mockFetchKanbanData).toHaveBeenCalledWith(
+        expect.objectContaining({
+          facotrs: [
+            expect.objectContaining({
+              factorKey: 'TEMP_CUSTOM',
+              factorName: '自定义温度',
+            }),
+          ],
         }),
       )
     })

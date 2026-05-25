@@ -1,11 +1,15 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
-import { ChevronDown, ChevronUp, LoaderCircle, Search } from 'lucide-vue-next'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { ChevronDown, ChevronUp, LoaderCircle, Search, SlidersHorizontal } from 'lucide-vue-next'
 import { ElTreeV2 } from 'element-plus'
 import InputText from 'primevue/inputtext'
 import type { TreeSelectionKeys } from 'primevue/tree'
 import type { TreeNode } from 'primevue/treenode'
 import type { NodeProperty } from '@/nodes/types'
+import type { KanbanTreeNode } from '@/services/kanbanIntegration'
+import CustomFactorManagerDialog from '../customFactor/CustomFactorManagerDialog.vue'
+import { mergeCustomFactorsIntoTree } from '../customFactor/merge'
+import { loadCustomFactorGroups } from '../customFactor/storage'
 import {
   normalizePropertyFieldTreeOptions,
   usePropertyFieldTreeSearch,
@@ -18,10 +22,12 @@ const props = defineProps<{
   options: any[]
   isOptionsLoading: boolean
   optionsError: string
+  configContext?: Record<string, unknown>
 }>()
 
 const emit = defineEmits<{
   'update:modelValue': [value: unknown]
+  'update:configFields': [value: Record<string, unknown>]
 }>()
 
 /**
@@ -65,8 +71,53 @@ const configValue = computed({
 
 const isLeafNode = (node: TreeNode) => !Array.isArray(node.children) || node.children.length === 0
 
+const customFactorFeature = computed(() =>
+  props.prop.type === 'tree' && props.prop.customFactorFeature?.enabled
+    ? props.prop.customFactorFeature
+    : null,
+)
+
+const customFactorStorageVersion = ref(0)
+const customFactorPanelOpen = ref(false)
+const customFactorDialogVisible = ref(false)
+const customFactorPanelRef = ref<HTMLElement | null>(null)
+
+const customFactorGroups = computed(() => {
+  customFactorStorageVersion.value
+  const storageKey = customFactorFeature.value?.storageKey
+  return storageKey ? loadCustomFactorGroups(storageKey) : []
+})
+
+const customFactorEnabled = computed(() => {
+  const enabledFieldName = customFactorFeature.value?.enabledFieldName
+  return enabledFieldName ? Boolean(props.configContext?.[enabledFieldName]) : false
+})
+
+const customFactorSelectedGroupId = computed(() => {
+  const selectedGroupIdFieldName = customFactorFeature.value?.selectedGroupIdFieldName
+  return selectedGroupIdFieldName
+    ? String(props.configContext?.[selectedGroupIdFieldName] || '')
+    : ''
+})
+
+const customFactorSelectedGroup = computed(() =>
+  customFactorGroups.value.find((group) => group.id === customFactorSelectedGroupId.value) ?? null,
+)
+
+const treeOptionsWithCustomFactors = computed(() => {
+  if (!customFactorFeature.value || !customFactorEnabled.value) {
+    return props.options as TreeNode[]
+  }
+
+  const factors = customFactorSelectedGroup.value?.factors || []
+  return mergeCustomFactorsIntoTree(
+    props.options as unknown as KanbanTreeNode[],
+    factors,
+  ) as unknown as TreeNode[]
+})
+
 const normalizedTreeOptions = computed(() =>
-  normalizePropertyFieldTreeOptions(props.options as TreeNode[], Boolean(props.prop.singleSelect)),
+  normalizePropertyFieldTreeOptions(treeOptionsWithCustomFactors.value, Boolean(props.prop.singleSelect)),
 )
 
 const collectTreeNodeMap = (nodes: any[]) => {
@@ -376,6 +427,7 @@ const treeSelectionValue = computed<TreeSelectionKeys | undefined>({
 
 const treeSearchMessage = computed(() => searchErrorMessage.value || regexErrorMessage.value)
 const regexToggleTitle = computed(() => (regexEnabled.value ? '已开启正则搜索' : '开启正则搜索'))
+const customFactorGroupName = computed(() => customFactorSelectedGroup.value?.name || '未选择配置组')
 
 const TREE_V2_SCROLL_VIEWPORT_SELECTOR = '.el-vl__window'
 
@@ -456,12 +508,67 @@ const handleTreeBoundaryMouseMove = (event: MouseEvent) => {
   }
 }
 
+const emitCustomFactorFields = (fields: Record<string, unknown>) => {
+  emit('update:configFields', fields)
+}
+
+const toggleCustomFactorPanel = () => {
+  customFactorPanelOpen.value = !customFactorPanelOpen.value
+}
+
+const toggleCustomFactorEnabled = () => {
+  const enabledFieldName = customFactorFeature.value?.enabledFieldName
+  if (!enabledFieldName) return
+
+  emitCustomFactorFields({
+    [enabledFieldName]: !customFactorEnabled.value,
+  })
+}
+
+const openCustomFactorDialog = () => {
+  customFactorDialogVisible.value = true
+}
+
+const handleCustomFactorDialogSaved = () => {
+  customFactorStorageVersion.value += 1
+}
+
+const handleCustomFactorGroupChange = (groupId: string) => {
+  const selectedGroupIdFieldName = customFactorFeature.value?.selectedGroupIdFieldName
+  if (!selectedGroupIdFieldName) return
+
+  emitCustomFactorFields({
+    [selectedGroupIdFieldName]: groupId,
+  })
+  customFactorStorageVersion.value += 1
+}
+
+const closeCustomFactorPanelOnOutsideClick = (event: MouseEvent) => {
+  if (!customFactorPanelOpen.value) return
+  const panel = customFactorPanelRef.value
+  const target = event.target
+  if (!panel || !(target instanceof Node) || panel.contains(target)) return
+  customFactorPanelOpen.value = false
+}
+
+onMounted(() => {
+  if (typeof document !== 'undefined') {
+    document.addEventListener('mousedown', closeCustomFactorPanelOnOutsideClick)
+  }
+})
+
+onBeforeUnmount(() => {
+  if (typeof document !== 'undefined') {
+    document.removeEventListener('mousedown', closeCustomFactorPanelOnOutsideClick)
+  }
+})
+
 </script>
 
 <template>
   <div class="rounded-xl border border-slate-200 bg-white p-0 shadow-sm overflow-hidden">
     <div v-if="prop.filterable" class="border-b border-slate-100 bg-slate-50/50 p-2">
-      <div class="flex items-center gap-2">
+      <div ref="customFactorPanelRef" class="relative flex items-center gap-2">
         <div class="relative min-w-0 flex-1">
           <Search
             :size="14"
@@ -473,6 +580,17 @@ const handleTreeBoundaryMouseMove = (event: MouseEvent) => {
             :placeholder="prop.placeholder || '搜索...'"
           />
         </div>
+        <button
+          v-if="customFactorFeature"
+          type="button"
+          data-testid="custom-factor-trigger"
+          class="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600"
+          title="自定义因子"
+          aria-label="自定义因子"
+          @click="toggleCustomFactorPanel"
+        >
+          <SlidersHorizontal :size="16" />
+        </button>
         <button
           v-if="prop.allowRegexSearch !== false"
           type="button"
@@ -505,6 +623,40 @@ const handleTreeBoundaryMouseMove = (event: MouseEvent) => {
         >
           <ChevronUp :size="16" />
         </button>
+
+        <div
+          v-if="customFactorFeature && customFactorPanelOpen"
+          data-testid="custom-factor-panel"
+          class="absolute right-20 top-11 z-20 w-72 rounded-2xl border border-slate-200 bg-white p-3 shadow-xl"
+        >
+          <p class="text-xs font-bold text-slate-700">
+            {{ customFactorFeature.panelTitle || '自定义因子' }}
+          </p>
+          <p class="mt-1 text-[11px] leading-5 text-slate-500">
+            当前配置组：{{ customFactorGroupName }}
+          </p>
+
+          <label
+            class="mt-3 flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2 text-xs text-slate-700"
+          >
+            <span>是否让自定义因子生效</span>
+            <input
+              data-testid="custom-factor-enabled-toggle"
+              type="checkbox"
+              :checked="customFactorEnabled"
+              @click.stop="toggleCustomFactorEnabled"
+            />
+          </label>
+
+          <button
+            type="button"
+            data-testid="custom-factor-manage-button"
+            class="mt-3 flex w-full items-center justify-center rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-100"
+            @click="openCustomFactorDialog"
+          >
+            因子配置
+          </button>
+        </div>
       </div>
     </div>
 
@@ -579,6 +731,17 @@ const handleTreeBoundaryMouseMove = (event: MouseEvent) => {
       </div>
     </div>
   </div>
+
+  <CustomFactorManagerDialog
+    v-if="customFactorFeature"
+    :visible="customFactorDialogVisible"
+    :storage-key="customFactorFeature.storageKey"
+    :selected-group-id="customFactorSelectedGroupId"
+    :dialog-title="customFactorFeature.dialogTitle"
+    @update:visible="customFactorDialogVisible = $event"
+    @update:selected-group-id="handleCustomFactorGroupChange"
+    @saved="handleCustomFactorDialogSaved"
+  />
 </template>
 
 <style scoped>

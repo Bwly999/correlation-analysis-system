@@ -15,6 +15,7 @@ const props = defineProps<PropertyFieldProps>()
 
 const emit = defineEmits<{
   'update:modelValue': [value: unknown]
+  'update:configFields': [value: Record<string, unknown>]
   save: []
 }>()
 
@@ -189,6 +190,7 @@ const updateSubItem = (index: number, subPropName: string, value: unknown) => {
       v-model="configValue"
       :prop="prop"
       :upstream-factors="upstreamFactors"
+      :config-context="configContext"
       :option-source="optionSource"
       :normalized-option-source="normalizedOptionSource"
       :normalized-multi-options-source="normalizedMultiOptionsSource"
@@ -202,6 +204,7 @@ const updateSubItem = (index: number, subPropName: string, value: unknown) => {
       :agent-error-message="agentErrorMessage"
       :build-js-transform-agent-context="buildJsTransformAgentContext"
       :on-agent-debug-node="onAgentDebugNode"
+      @update:config-fields="emit('update:configFields', $event)"
     />
 
     <div

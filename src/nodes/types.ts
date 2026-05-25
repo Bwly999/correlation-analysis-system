@@ -76,6 +76,14 @@ export interface NodeProperty {
   singleSelect?: boolean
   treeViewport?: 'sm' | 'md' | 'lg'
   allowRegexSearch?: boolean
+  customFactorFeature?: {
+    enabled: boolean
+    storageKey: string
+    panelTitle?: string
+    dialogTitle?: string
+    enabledFieldName: string
+    selectedGroupIdFieldName: string
+  }
   autoSelectAllOnOptionsChange?: boolean
   autoSelectFirstOnOptionsChange?: boolean
   textareaImport?: {

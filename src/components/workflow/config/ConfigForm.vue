@@ -111,6 +111,13 @@ const updateConfig = (propName: string, value: any) => {
     }),
   )
 }
+
+const updateConfigFields = (fields: Record<string, unknown>) => {
+  emit('update:config', {
+    ...props.config,
+    ...fields,
+  })
+}
 </script>
 
 <template>
@@ -134,6 +141,7 @@ const updateConfig = (propName: string, value: any) => {
           :build-js-transform-agent-context="buildJsTransformAgentContext"
           :on-agent-debug-node="onAgentDebugNode"
           @update:model-value="(val) => updateConfig(prop.name, val)"
+          @update:config-fields="updateConfigFields"
           @save="emit('save')"
         />
       </div>
@@ -165,6 +173,7 @@ const updateConfig = (propName: string, value: any) => {
             :build-js-transform-agent-context="buildJsTransformAgentContext"
             :on-agent-debug-node="onAgentDebugNode"
             @update:model-value="(val) => updateConfig(prop.name, val)"
+            @update:config-fields="updateConfigFields"
             @save="emit('save')"
           />
         </div>

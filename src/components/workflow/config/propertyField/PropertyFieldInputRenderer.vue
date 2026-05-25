@@ -32,6 +32,7 @@ interface PropertyFieldInputRendererDefinition {
 const props = defineProps<{
   prop: NodeProperty
   modelValue: unknown
+  configContext?: Record<string, unknown>
   upstreamFactors: PropertyFieldUpstreamFactor[]
   optionSource: any[]
   normalizedOptionSource: any[]
@@ -50,6 +51,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'update:modelValue': [value: unknown]
+  'update:configFields': [value: Record<string, unknown>]
 }>()
 
 const normalizeDateValue = (value: unknown): Date | null => {
@@ -176,6 +178,7 @@ const rendererDefinitions = computed<Record<NonCollectionPropertyType, PropertyF
         options: props.optionSource,
         isOptionsLoading: props.isOptionsLoading,
         optionsError: props.optionsError,
+        configContext: props.configContext,
       }),
     },
     'datetime-range': {
@@ -230,6 +233,7 @@ const resolvedProps = computed(() => {
     v-if="resolvedComponent"
     v-model="modelValueProxy"
     v-bind="resolvedProps"
+    @update:config-fields="emit('update:configFields', $event)"
   />
 </template>
 
