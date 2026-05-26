@@ -11,7 +11,7 @@ import {
 } from '@earendil-works/pi-coding-agent'
 import type { AgentSession } from '@earendil-works/pi-coding-agent'
 import type { WorkflowAiPlanRequest } from '../../ai/types.js'
-import type { WorkflowMcpRuntime } from '../opencode/workflowMcpRuntime.js'
+import type { WorkflowMcpRuntime } from '../workflowMcp/workflowMcpRuntime.js'
 import { buildModelFromProfile, createModelRegistryFromProfile } from './modelAdapter.js'
 import { buildSystemPrompt } from './systemPrompt.js'
 import {

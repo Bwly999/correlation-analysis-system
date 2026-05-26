@@ -3,7 +3,7 @@ import {
   handleWorkflowMcpRequest,
   isWorkflowMcpHealthRequest,
   isWorkflowMcpRequest,
-} from '../opencode/workflowMcpServer.js'
+} from '../workflowMcp/workflowMcpServer.js'
 import type { ServerDependencies } from '../bootstrap/serverDependencies.js'
 import type { HttpDomainHandler } from '../http/types.js'
 

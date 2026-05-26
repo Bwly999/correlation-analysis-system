@@ -4,12 +4,9 @@ import { VueFlow, useVueFlow, type Connection } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
 import { useWorkflowStore } from '@/stores/workflowStore'
-import { useAgentObservabilityStore } from '@/stores/agentObservabilityStore'
 import { usePiAgentStore } from '@/stores/piAgentStore'
 import NodeSidebar from './NodeSidebar.vue'
 import WorkflowHeader from './WorkflowHeader.vue'
-import AgentObservabilityToggle from '../agent/AgentObservabilityToggle.vue'
-import AgentObservabilityDrawer from '../agent/AgentObservabilityDrawer.vue'
 import PiAgentPanel from '../piAgent/PiAgentPanel.vue'
 import BaseNode from './nodes/BaseNode.vue'
 import LogPanel from './LogPanel.vue'
@@ -48,11 +45,9 @@ import Toast from 'primevue/toast'
 import { useToast } from 'primevue/usetoast'
 import UnsavedWorkflowDialog from './UnsavedWorkflowDialog.vue'
 import { getErrorMessage } from '@/utils/requestError'
-import { isAgentObservabilityEnabledInDev } from '@/utils/devtoolsEnvironment'
 
 const { onConnect, addEdges, project, findNode, fitView, getViewport, setViewport } = useVueFlow()
 const store = useWorkflowStore()
-const observabilityStore = useAgentObservabilityStore()
 const piAgentStore = usePiAgentStore()
 const toast = useToast()
 
@@ -62,7 +57,6 @@ const isWorkflowListVisible = ref(false)
 const workflowManagerInitialTab = ref('0')
 const isSidebarVisible = ref(true)
 const isAiPanelVisible = ref(false)
-const isAgentObservabilityVisible = ref(false)
 const isHelpCenterVisible = ref(false)
 const viewportWidth = ref(typeof window === 'undefined' ? 1920 : window.innerWidth)
 const isUnsavedDialogVisible = ref(false)
@@ -133,7 +127,6 @@ const executionRecordBodyStyle = computed(() => ({
   marginRight: `${executionRecordRightInset.value}px`,
 }))
 const isAgentMode = computed(() => isAiPanelVisible.value)
-const isAgentObservabilityEnabled = computed(() => isAgentObservabilityEnabledInDev())
 const runBarState = computed<'idle' | 'running' | 'pending'>(() => {
   if (store.pendingExecution) return 'pending'
   if (store.isRunning) return 'running'
@@ -616,14 +609,6 @@ watch(
 )
 
 watch(
-  () => piAgentStore.sessionId ?? '',
-  (sessionId) => {
-    observabilityStore.setActiveSessionId(sessionId)
-  },
-  { immediate: true },
-)
-
-watch(
   () => viewportWidth.value,
   () => {
     syncPiAgentPanelWidthWithinBounds()
@@ -646,21 +631,6 @@ const toggleSidebar = () => {
 const toggleAiPanel = () => {
   isAiPanelVisible.value = !isAiPanelVisible.value
 }
-
-const toggleAgentObservability = () => {
-  if (!isAgentObservabilityEnabled.value) return
-  isAgentObservabilityVisible.value = !isAgentObservabilityVisible.value
-  observabilityStore.setDrawerVisible(isAgentObservabilityVisible.value)
-}
-
-watch(
-  () => observabilityStore.drawerVisible,
-  (visible) => {
-    if (isAgentObservabilityVisible.value !== visible) {
-      isAgentObservabilityVisible.value = visible
-    }
-  },
-)
 
 watch(isConfigVisible, (visible: boolean) => {
   if (!visible) store.activeConfigNodeId = null
@@ -739,11 +709,6 @@ onBeforeUnmount(() => {
         <section class="execution-workspace">
           <div class="execution-workspace__panel">
             <div ref="canvasViewport" class="execution-canvas-shell">
-              <AgentObservabilityToggle
-                v-if="isAgentObservabilityEnabled"
-                :visible="isAgentObservabilityVisible"
-                @toggle="toggleAgentObservability"
-              />
               <VueFlow
                 v-model:nodes="store.nodes"
                 v-model:edges="store.edges"
@@ -986,10 +951,6 @@ onBeforeUnmount(() => {
       :visible="resultDashboardModal.visible"
       :summary="resultDashboardModal.summary"
       @close="resultDashboardModal.visible = false"
-    />
-    <AgentObservabilityDrawer
-      v-if="isAgentObservabilityEnabled"
-      v-model:visible="isAgentObservabilityVisible"
     />
     <UnsavedWorkflowDialog
       :visible="isUnsavedDialogVisible"

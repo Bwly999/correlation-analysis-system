@@ -2,7 +2,7 @@ import type { WorkflowAiPlanRequest } from '../../../ai/types.js'
 import type { FrontendBridge } from '../frontendBridge.js'
 import { createAtomicWorkflowTools } from './atomicWorkflowTools.js'
 import { createSharedRuntimeTools } from './sharedRuntimeTools.js'
-import type { WorkflowMcpRuntime } from '../../opencode/workflowMcpRuntime.js'
+import type { WorkflowMcpRuntime } from '../../workflowMcp/workflowMcpRuntime.js'
 
 interface BuildToolsOptions {
   request: WorkflowAiPlanRequest

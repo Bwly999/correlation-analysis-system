@@ -4,7 +4,7 @@ import type { AddressInfo } from 'node:net'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { createServerHandler } from '../../app.js'
-import { createAgentSession } from '../gateway.js'
+import { createAgentSession } from '../../piAgent/workflowAgentGateway.js'
 
 const buildAgentRequest = () => ({
   mode: 'create' as const,

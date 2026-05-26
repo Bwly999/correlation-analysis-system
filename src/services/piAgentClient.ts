@@ -1,8 +1,4 @@
 import type {
-  AgentObservabilityDebugFilesResponse,
-  AgentObservabilityDebugHealth,
-  AgentObservabilityDebugReplayResponse,
-  AgentObservabilityDebugTraceResponse,
   AgentSessionCanvasSyncResponse,
   PiAgentSafeToolResult,
   WorkflowAiPlanRequest,
@@ -211,47 +207,3 @@ export const resolvePiAgentToolResult = async (
   return readJsonOrThrow<{ ok: boolean }>(response, '发送 Pi Agent 工具执行结果失败')
 }
 
-export const getPiAgentObservabilityDebugTrace = async (
-  sessionId: string,
-  options: { limit?: number; offset?: number } = {},
-): Promise<AgentObservabilityDebugTraceResponse> => {
-  const search = new URLSearchParams()
-  if (options.limit !== undefined) search.set('limit', String(options.limit))
-  if (options.offset !== undefined) search.set('offset', String(options.offset))
-  const suffix = search.size ? `?${search.toString()}` : ''
-  const response = await httpClient.request({
-    url: `/pi-agent/sessions/${sessionId}/debug-trace${suffix}`,
-    method: 'GET',
-  })
-  return readJsonOrThrow<AgentObservabilityDebugTraceResponse>(response, '读取 Pi Agent 调试 Trace 失败')
-}
-
-export const getPiAgentObservabilityDebugReplay = async (
-  sessionId: string,
-  seq?: number,
-): Promise<AgentObservabilityDebugReplayResponse> => {
-  const suffix = seq === undefined ? '' : `?seq=${encodeURIComponent(String(seq))}`
-  const response = await httpClient.request({
-    url: `/pi-agent/sessions/${sessionId}/debug-trace/replay${suffix}`,
-    method: 'GET',
-  })
-  return readJsonOrThrow<AgentObservabilityDebugReplayResponse>(response, '读取 Pi Agent 调试回放失败')
-}
-
-export const getPiAgentObservabilityDebugFiles = async (
-  sessionId: string,
-): Promise<AgentObservabilityDebugFilesResponse> => {
-  const response = await httpClient.request({
-    url: `/pi-agent/sessions/${sessionId}/debug-trace/files`,
-    method: 'GET',
-  })
-  return readJsonOrThrow<AgentObservabilityDebugFilesResponse>(response, '读取 Pi Agent 调试日志文件失败')
-}
-
-export const getPiAgentObservabilityDebugHealth = async (): Promise<AgentObservabilityDebugHealth> => {
-  const response = await httpClient.request({
-    url: '/pi-agent/debug/health',
-    method: 'GET',
-  })
-  return readJsonOrThrow<AgentObservabilityDebugHealth>(response, '读取 Pi Agent 调试健康状态失败')
-}

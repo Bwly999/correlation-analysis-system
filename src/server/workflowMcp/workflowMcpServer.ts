@@ -10,7 +10,7 @@ import {
   getAgentExecutionRecord,
   getAgentSessionRecord,
   getAgentSessionStoreSnapshot,
-} from './agentSessionStore.js'
+} from '../piAgent/agentSessionStore.js'
 import { getWorkflowAiSessionRecord } from '../workflowAi/orchestrator.js'
 import { executeWorkflowPlanForSession } from './planExecution.js'
 import type { WorkflowMcpRuntime } from './workflowMcpRuntime.js'

@@ -9,7 +9,7 @@ import {
 import {
   createWorkflowMcpRuntime,
   type WorkflowMcpRuntime,
-} from '../opencode/workflowMcpRuntime.js'
+} from '../workflowMcp/workflowMcpRuntime.js'
 
 export type ServerStorageUserResolver = (
   headers: IncomingMessage['headers'],

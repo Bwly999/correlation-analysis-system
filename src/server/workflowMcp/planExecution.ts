@@ -7,7 +7,7 @@ import type {
 } from '../../ai/types.js'
 import { validateWorkflowAiPlanAgainstContext } from '../../ai/planValidation.js'
 import { buildServerWorkflowAiValidationCatalog } from '../workflowAi/nodeCatalog.js'
-import { createAgentExecutionRecord } from './agentSessionStore.js'
+import { createAgentExecutionRecord } from '../piAgent/agentSessionStore.js'
 import { executeNodesForAgent } from '../workflowExecution/nodeExecutor.js'
 
 const cloneValue = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T

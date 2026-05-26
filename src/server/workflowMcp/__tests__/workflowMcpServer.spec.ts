@@ -38,7 +38,7 @@ vi.mock('@modelcontextprotocol/sdk/server/streamableHttp.js', () => ({
   },
 }))
 
-import { createAgentSession } from '../gateway.js'
+import { createAgentSession } from '../../piAgent/workflowAgentGateway.js'
 import { handleWorkflowMcpRequest } from '../workflowMcpServer.js'
 import { createServerDependencies } from '../../bootstrap/serverDependencies.js'
 import { saveUserHistory, saveUserWorkflow } from '../../storage.js'

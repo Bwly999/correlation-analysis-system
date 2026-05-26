@@ -41,7 +41,7 @@ import {
   getAgentSession,
   sendAgentSessionMessage,
   syncAgentCanvas,
-} from '../gateway.js'
+} from '../workflowAgentGateway.js'
 import { getAgentSessionRecord } from '../agentSessionStore.js'
 
 const buildAgentRequest = () => ({

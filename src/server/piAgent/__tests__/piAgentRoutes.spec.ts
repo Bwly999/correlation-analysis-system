@@ -15,10 +15,6 @@ const {
   resolvePiAgentToolResultMock,
   resolveJsTransformAgentToolResultMock,
   syncPiAgentCanvasMock,
-  getAgentObservabilityDebugFilesMock,
-  getAgentObservabilityDebugHealthMock,
-  getAgentObservabilityDebugReplayMock,
-  getAgentObservabilityDebugTraceMock,
 } = vi.hoisted(() => ({
   createPiAgentSessionMock: vi.fn(),
   createJsTransformAgentSessionMock: vi.fn(),
@@ -32,10 +28,6 @@ const {
   resolvePiAgentToolResultMock: vi.fn(),
   resolveJsTransformAgentToolResultMock: vi.fn(),
   syncPiAgentCanvasMock: vi.fn(),
-  getAgentObservabilityDebugFilesMock: vi.fn(),
-  getAgentObservabilityDebugHealthMock: vi.fn(),
-  getAgentObservabilityDebugReplayMock: vi.fn(),
-  getAgentObservabilityDebugTraceMock: vi.fn(),
 }))
 
 vi.mock('../gateway.js', () => ({
@@ -51,13 +43,6 @@ vi.mock('../gateway.js', () => ({
   resolvePiAgentToolResult: resolvePiAgentToolResultMock,
   resolveJsTransformAgentToolResult: resolveJsTransformAgentToolResultMock,
   syncPiAgentCanvas: syncPiAgentCanvasMock,
-}))
-
-vi.mock('../../opencode/gateway.js', () => ({
-  getAgentObservabilityDebugFiles: getAgentObservabilityDebugFilesMock,
-  getAgentObservabilityDebugHealth: getAgentObservabilityDebugHealthMock,
-  getAgentObservabilityDebugReplay: getAgentObservabilityDebugReplayMock,
-  getAgentObservabilityDebugTrace: getAgentObservabilityDebugTraceMock,
 }))
 
 import { createPiAgentRoutes } from '../../modules/piAgentRoutes.js'
@@ -148,10 +133,6 @@ afterEach(() => {
   resolvePiAgentToolResultMock.mockReset()
   resolveJsTransformAgentToolResultMock.mockReset()
   syncPiAgentCanvasMock.mockReset()
-  getAgentObservabilityDebugFilesMock.mockReset()
-  getAgentObservabilityDebugHealthMock.mockReset()
-  getAgentObservabilityDebugReplayMock.mockReset()
-  getAgentObservabilityDebugTraceMock.mockReset()
 })
 
 describe('piAgentRoutes', () => {
@@ -290,85 +271,6 @@ describe('piAgentRoutes', () => {
     expect(JSON.parse(response.body)).toEqual({
       ok: true,
       restoredMessages: ['继续调试', '解释报错'],
-    })
-  })
-
-  it('returns pi agent debug health in development mode', async () => {
-    vi.stubEnv('NODE_ENV', 'development')
-    getAgentObservabilityDebugHealthMock.mockReturnValueOnce({
-      enabled: true,
-      logRootDir: 'C:\\repo\\.workflow-debug\\agent-observability',
-      activeTraceCount: 1,
-      lastWriteAt: 2,
-      writeFailures: 0,
-    })
-
-    const handler = createPiAgentRoutes()
-    const request = createRequest('GET', '/api/pi-agent/debug/health')
-    const response = createResponse()
-
-    const handled = await handler(createContext(request, response) as any)
-
-    expect(handled).toBe(true)
-    expect(response.statusCode).toBe(200)
-    expect(JSON.parse(response.body)).toEqual(
-      expect.objectContaining({
-        enabled: true,
-        activeTraceCount: 1,
-      }),
-    )
-  })
-
-  it('returns pi agent debug trace in development mode', async () => {
-    vi.stubEnv('NODE_ENV', 'development')
-    getPiAgentSessionMock.mockReturnValueOnce({ sessionId: 'session_1' })
-    getAgentObservabilityDebugTraceMock.mockReturnValueOnce({
-      enabled: true,
-      sessionId: 'session_1',
-      traceId: 'trace_session_1',
-      eventCount: 2,
-      projectionSnapshotCount: 0,
-      latestStatus: 'running',
-      files: {
-        rootDir: 'C:\\trace\\session_1',
-        manifestFile: 'C:\\trace\\session_1\\manifest.json',
-        eventsFile: 'C:\\trace\\session_1\\events.ndjson',
-        projectionSnapshotsFile: 'C:\\trace\\session_1\\projection-snapshots.ndjson',
-        rawMessagesFile: 'C:\\trace\\session_1\\raw-messages.ndjson',
-        sessionFile: 'C:\\trace\\session_1\\session.json',
-        summaryFile: 'C:\\trace\\session_1\\summary.json',
-        failureFile: null,
-      },
-      summary: {
-        sessionId: 'session_1',
-        traceId: 'trace_session_1',
-        startedAt: 1,
-        lastUpdatedAt: 2,
-        eventCount: 2,
-        projectionSnapshotCount: 0,
-        rawMessageCount: 0,
-        parseFailureCount: 0,
-        failed: false,
-        latestStatus: 'running',
-        latestError: null,
-      },
-      events: [],
-      projectionSnapshots: [],
-      rawMessages: [],
-      parseFailures: [],
-    })
-
-    const handler = createPiAgentRoutes()
-    const request = createRequest('GET', '/api/pi-agent/sessions/session_1/debug-trace')
-    const response = createResponse()
-
-    const handled = await handler(createContext(request, response) as any)
-
-    expect(handled).toBe(true)
-    expect(response.statusCode).toBe(200)
-    expect(getAgentObservabilityDebugTraceMock).toHaveBeenCalledWith('session_1', {
-      limit: undefined,
-      offset: undefined,
     })
   })
 

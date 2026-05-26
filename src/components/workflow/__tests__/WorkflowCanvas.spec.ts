@@ -7,9 +7,6 @@ import WorkflowCanvas from '../WorkflowCanvas.vue'
 import { useWorkflowStore } from '@/stores/workflowStore'
 
 vi.mock('../MonacoEditor.vue', () => ({ default: { template: '<div />' } }))
-vi.mock('@/utils/devtoolsEnvironment', () => ({
-  isAgentObservabilityEnabledInDev: vi.fn(() => false),
-}))
 
 const addEdges = vi.fn()
 const findNode = vi.fn()
@@ -1834,70 +1831,6 @@ describe('WorkflowCanvas', () => {
     expect(toasts[0]?.attributes('data-position')).toBe('top-right')
     expect(toasts[1]?.attributes('data-group')).toBe('node-config')
     expect(toasts[1]?.attributes('data-position')).toBe('bottom-left')
-  })
-
-  it('renders the agent devtools toggle in development mode and opens the drawer shell', async () => {
-    const { isAgentObservabilityEnabledInDev } = await import('@/utils/devtoolsEnvironment')
-    vi.mocked(isAgentObservabilityEnabledInDev).mockReturnValue(true)
-
-    const workflowHeaderStub = defineComponent({
-      name: 'WorkflowHeader',
-      emits: ['toggle-ai'],
-      template:
-        '<button data-testid="workflow-header-ai-toggle" @click="$emit(\'toggle-ai\')">分析代理</button>',
-    })
-    const agentObservabilityToggleStub = defineComponent({
-      name: 'AgentObservabilityToggle',
-      props: {
-        visible: Boolean,
-      },
-      emits: ['toggle'],
-      template:
-        '<button data-testid="agent-observability-toggle" :data-visible="String(visible)" @click="$emit(\'toggle\')">Agent Devtools</button>',
-    })
-    const agentObservabilityDrawerStub = defineComponent({
-      name: 'AgentObservabilityDrawer',
-      props: {
-        visible: Boolean,
-      },
-      template:
-        '<div data-testid="agent-observability-drawer" :data-visible="String(visible)">drawer</div>',
-    })
-
-    const wrapper = mount(WorkflowCanvas, {
-      global: {
-        stubs: {
-          Background: { template: '<div />' },
-          Controls: { template: '<div />' },
-          NodeSidebar: { template: '<div />' },
-          WorkflowHeader: workflowHeaderStub,
-          AgentObservabilityToggle: agentObservabilityToggleStub,
-          AgentObservabilityDrawer: agentObservabilityDrawerStub,
-          BaseNode: { template: '<div />' },
-          LogPanel: { template: '<div />' },
-          NodeConfigModal: { template: '<div />' },
-          RuntimeInputModal: runtimeInputModalStub,
-          WorkflowResultDashboardModal: workflowResultDashboardModalStub,
-          WorkflowManagerModal: workflowManagerModalStub,
-          UnsavedWorkflowDialog: { template: '<div />' },
-          HelpCenterModal: { template: '<div />' },
-          ConfirmDialog: { template: '<div />' },
-          Toast: { template: '<div />' },
-          Button: { template: '<button><slot /></button>' },
-          N8nEdge: { template: '<div />' },
-        },
-        directives: {
-          tooltip: () => undefined,
-        },
-      },
-    })
-
-    expect(wrapper.find('[data-testid="agent-observability-toggle"]').exists()).toBe(true)
-    expect(wrapper.get('[data-testid="agent-observability-drawer"]').attributes('data-visible')).toBe('false')
-
-    await wrapper.get('[data-testid="agent-observability-toggle"]').trigger('click')
-
-    expect(wrapper.get('[data-testid="agent-observability-drawer"]').attributes('data-visible')).toBe('true')
   })
 
   it('defers unsaved recalculation during dragging and refreshes it after drag stop', async () => {
