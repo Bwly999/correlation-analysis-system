@@ -140,8 +140,8 @@ onBeforeUnmount(() => {
   <div class="relative">
     <div class="mb-3 flex items-center justify-end">
       <button
-        ref="toggleButtonRef"
         v-if="isAgentFeatureEnabled"
+        ref="toggleButtonRef"
         v-tooltip.top="'打开 AI 助手'"
         type="button"
         data-testid="js-transform-agent-toggle"

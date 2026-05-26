@@ -806,8 +806,8 @@ onBeforeUnmount(() => {
                 >
                   <button
                     v-if="isShortcutHintsCollapsed"
-                    data-testid="canvas-shortcuts-toggle"
                     v-tooltip.left="'展开画布快捷键'"
+                    data-testid="canvas-shortcuts-toggle"
                     class="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200/90 bg-white/92 text-slate-500 shadow-[0_18px_38px_-28px_rgba(15,23,42,0.45)] backdrop-blur transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600"
                     @click="isShortcutHintsCollapsed = false"
                   >
@@ -824,8 +824,8 @@ onBeforeUnmount(() => {
                         画布快捷键
                       </div>
                       <button
-                        data-testid="canvas-shortcuts-collapse"
                         v-tooltip.left="'折叠快捷键说明'"
+                        data-testid="canvas-shortcuts-collapse"
                         class="flex h-7 w-7 items-center justify-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
                         @click="isShortcutHintsCollapsed = true"
                       >

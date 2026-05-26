@@ -40,7 +40,8 @@ const expanded = ref(false)
       </span>
       <div class="min-w-0 flex-1">
         <div class="truncate font-semibold text-slate-800">{{ toolCall.displayName }}</div>
-        <div class="mt-0.5 flex items-center gap-1.5 text-[11px]" :class="{
+        <div
+class="mt-0.5 flex items-center gap-1.5 text-[11px]" :class="{
           'text-amber-700': toolCall.status === 'running',
           'text-emerald-700': toolCall.status === 'success',
           'text-rose-700': toolCall.status === 'failed',

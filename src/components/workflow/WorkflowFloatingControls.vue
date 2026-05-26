@@ -45,8 +45,8 @@ const emit = defineEmits<{
           </button>
           <button
             v-if="props.isRunning || props.hasPendingExecution"
-            type="button"
             v-tooltip.top="'停止执行'"
+            type="button"
             class="workflow-run-stop animate-in fade-in zoom-in-75 duration-300"
             @click="emit('stop')"
           >

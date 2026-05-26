@@ -266,8 +266,8 @@ const exportData = () => {
         class="flex-1 flex flex-col min-w-0 bg-white rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden"
       >
         <component
-          v-if="activeViewer"
           :is="activeViewer"
+          v-if="activeViewer"
           :key="String(viewerKey ?? viewLabel)"
           :data="props.data"
           :storage-scope-key="props.storageScopeKey"

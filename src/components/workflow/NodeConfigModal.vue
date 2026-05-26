@@ -849,10 +849,10 @@ onBeforeUnmount(() => {
   <Dialog
     :visible="visible"
     modal
-    blockScroll
+    block-scroll
     class="ndv-dialog"
-    contentClass="ndv-dialog-content"
-    :contentStyle="{ padding: '0' }"
+    content-class="ndv-dialog-content"
+    :content-style="{ padding: '0' }"
     :style="{ width: '92vw', maxWidth: '1600px', height: '88vh' }"
     :draggable="false"
     :closable="false"
@@ -1074,8 +1074,8 @@ onBeforeUnmount(() => {
                 </div>
                 <div
                   v-if="correlationSetupGuide"
-                  data-testid="correlation-setup-guide"
                   v-tooltip.bottom="correlationSetupGuide.items.join('\n')"
+                  data-testid="correlation-setup-guide"
                   class="flex items-center justify-between gap-3 rounded-2xl border border-blue-200 bg-blue-50/70 px-4 py-3"
                 >
                   <div class="min-w-0">

@@ -159,9 +159,8 @@ const handleConfirm = () => {
 <template>
   <Dialog
     :visible="visible"
-    @update:visible="emit('close')"
     modal
-    dismissableMask
+    dismissable-mask
     :style="{ width: '560px' }"
     :pt="{
       mask: {
@@ -170,6 +169,7 @@ const handleConfirm = () => {
     }"
     :closable="true"
     class="runtime-input-dialog"
+    @update:visible="emit('close')"
   >
     <template #header>
       <div class="flex items-center gap-2">

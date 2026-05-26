@@ -211,7 +211,7 @@ const goBack = () => {
                   >
                     <div class="flex items-center justify-between mb-2">
                       <div class="text-sm font-black text-slate-900 leading-tight">{{ tip.title }}</div>
-                      <span class="rounded bg-slate-900 px-1.5 py-0.5 text-[8px] font-black text-white uppercase tracking-tighter" v-if="tip.tag">{{ tip.tag }}</span>
+                      <span v-if="tip.tag" class="rounded bg-slate-900 px-1.5 py-0.5 text-[8px] font-black text-white uppercase tracking-tighter">{{ tip.tag }}</span>
                     </div>
                     <p class="text-xs font-medium leading-relaxed text-slate-500">{{ tip.content }}</p>
                   </div>

@@ -12,8 +12,8 @@ const model = defineModel<boolean>({ required: true })
       :class="{ 'chart-checkbox-label--active': model }"
     >
       <input
-        data-test="chart-skip-invalid-checkbox"
         v-model="model"
+        data-test="chart-skip-invalid-checkbox"
         type="checkbox"
         class="chart-checkbox-input"
       />
