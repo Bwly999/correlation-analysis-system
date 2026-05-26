@@ -3,6 +3,7 @@ import { AgGridVue } from 'ag-grid-vue3'
 import {
   AllCommunityModule,
   ModuleRegistry,
+  themeQuartz,
   type ColDef,
   type ColumnMovedEvent,
   type ColumnResizedEvent,
@@ -11,18 +12,12 @@ import {
   type SortChangedEvent,
 } from 'ag-grid-community'
 import { nextTick, onBeforeUnmount, onMounted, onUpdated, useTemplateRef } from 'vue'
-import 'ag-grid-community/styles/ag-grid.css'
-import 'ag-grid-community/styles/ag-theme-quartz.css'
 
 type TableRow = Record<string, unknown>
 
-let modulesRegistered = false
-if (!modulesRegistered) {
-  ModuleRegistry.registerModules([AllCommunityModule])
-  modulesRegistered = true
-}
+ModuleRegistry.registerModules([AllCommunityModule])
 
-const props = defineProps<{
+const _props = defineProps<{
   rowData: TableRow[]
   columnDefs: ColDef<TableRow>[]
   defaultColDef: ColDef<TableRow>
@@ -31,6 +26,8 @@ const props = defineProps<{
   rowHeight: number
   headerHeight: number
 }>()
+
+import AgGridCommunitySetFilter from '@/components/workflow/common/AgGridCommunitySetFilter.vue'
 
 const emit = defineEmits<{
   columnResized: [event: ColumnResizedEvent<TableRow>]
@@ -132,14 +129,14 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div ref="shell" data-test="table-grid-shell" class="ag-theme-quartz table-grid-shell h-full w-full">
+  <div ref="shell" data-test="table-grid-shell" class="table-grid-shell h-full w-full">
     <AgGridVue
       class="h-full w-full"
-      theme="legacy"
+      :theme="themeQuartz"
       :row-data="rowData"
       :column-defs="columnDefs"
       :default-col-def="defaultColDef"
-      :components="components"
+      :components="{ ...components, AgGridCommunitySetFilter }"
       :quick-filter-text="quickFilterText"
       :row-height="rowHeight"
       :header-height="headerHeight"

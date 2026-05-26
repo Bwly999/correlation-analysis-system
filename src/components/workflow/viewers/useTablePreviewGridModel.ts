@@ -140,7 +140,7 @@ export const useTablePreviewGridModel = ({
       hide: hiddenFields.value.includes(field),
       pinned: pinnedFields.value[field],
       suppressMovable: false,
-      filter: fieldTypeMap.value[field] === 'number' ? 'agNumberColumnFilter' : true,
+      filter: fieldTypeMap.value[field] === 'number' ? 'agNumberColumnFilter' : 'AgGridCommunitySetFilter',
       valueFormatter: (params: ValueFormatterParams<TableRow>) => formatCellValue(params.value),
       tooltipValueGetter,
       headerTooltip: field,
