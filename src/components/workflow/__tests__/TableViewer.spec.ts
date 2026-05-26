@@ -17,9 +17,9 @@ const exportCalls = vi.hoisted(() => ({
 vi.mock('primevue/button', () => ({
   default: defineComponent({
     name: 'PrimeButtonStub',
+    inheritAttrs: false,
     props: ['label', 'disabled', 'severity', 'outlined', 'size', 'rounded', 'text'],
     emits: ['click'],
-    inheritAttrs: false,
     setup(props, { attrs, emit, slots }) {
       return () =>
         h(
@@ -57,9 +57,9 @@ vi.mock('primevue/dialog', () => ({
 vi.mock('primevue/inputtext', () => ({
   default: defineComponent({
     name: 'PrimeInputTextStub',
+    inheritAttrs: false,
     props: ['modelValue', 'placeholder'],
     emits: ['update:modelValue'],
-    inheritAttrs: false,
     setup(props, { attrs, emit }) {
       return () =>
         h('input', {
@@ -76,9 +76,9 @@ vi.mock('primevue/inputtext', () => ({
 vi.mock('primevue/select', () => ({
   default: defineComponent({
     name: 'PrimeSelectStub',
+    inheritAttrs: false,
     props: ['modelValue', 'options', 'optionLabel', 'optionValue', 'placeholder'],
     emits: ['update:modelValue'],
-    inheritAttrs: false,
     setup(props, { attrs, emit }) {
       const resolveValue = (option: any) =>
         props.optionValue ? option?.[props.optionValue] : option?.value ?? option
@@ -105,9 +105,9 @@ vi.mock('primevue/select', () => ({
 vi.mock('primevue/inputnumber', () => ({
   default: defineComponent({
     name: 'PrimeInputNumberStub',
+    inheritAttrs: false,
     props: ['modelValue', 'inputId', 'min', 'step'],
     emits: ['update:modelValue'],
-    inheritAttrs: false,
     setup(props, { attrs, emit }) {
       return () =>
         h('input', {
@@ -129,9 +129,9 @@ vi.mock('primevue/inputnumber', () => ({
 vi.mock('primevue/multiselect', () => ({
   default: defineComponent({
     name: 'PrimeMultiSelectStub',
+    inheritAttrs: false,
     props: ['modelValue', 'options', 'optionLabel', 'optionValue', 'appendTo'],
     emits: ['update:modelValue'],
-    inheritAttrs: false,
     setup(props, { attrs, emit }) {
       const resolveValue = (option: any) =>
         props.optionValue ? option?.[props.optionValue] : option?.value ?? option

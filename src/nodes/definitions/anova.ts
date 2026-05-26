@@ -60,7 +60,7 @@ const logGamma = (value: number): number => {
     return Math.log(Math.PI) - Math.log(Math.sin(Math.PI * value)) - logGamma(1 - value)
   }
 
-  let nextValue = value - 1
+  const nextValue = value - 1
   let accumulator = 0.9999999999998099
   coefficients.forEach((coefficient, index) => {
     accumulator += coefficient / (nextValue + index + 1)
@@ -80,9 +80,9 @@ const betaContinuedFraction = (x: number, a: number, b: number): number => {
   const epsilon = 3e-7
   const fpMin = 1e-30
 
-  let qab = a + b
-  let qap = a + 1
-  let qam = a - 1
+  const qab = a + b
+  const qap = a + 1
+  const qam = a - 1
   let c = 1
   let d = 1 - (qab * x) / qap
   if (Math.abs(d) < fpMin) d = fpMin

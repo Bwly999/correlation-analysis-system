@@ -62,9 +62,9 @@ beforeEach(() => {
 vi.mock('primevue/select', () => ({
   default: defineComponent({
     name: 'PrimeSelectStub',
+    inheritAttrs: false,
     props: ['modelValue', 'options', 'optionLabel', 'optionValue', 'disabled', 'appendTo'],
     emits: ['update:modelValue'],
-    inheritAttrs: false,
     setup(props, { emit, attrs }) {
       return () =>
         h(
