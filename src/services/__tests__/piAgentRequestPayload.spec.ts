@@ -5,35 +5,45 @@ import {
 } from '@/stores/piAgentSanitize'
 import { createPiAgentSession, syncPiAgentCanvas } from '../piAgentClient'
 
-const fetchMock = vi.fn()
+const { requestMock, requestStreamMock } = vi.hoisted(() => ({
+  requestMock: vi.fn(),
+  requestStreamMock: vi.fn(),
+}))
+
+vi.mock('@/services/httpClient', () => ({
+  httpClient: {
+    request: requestMock,
+  },
+  requestStream: requestStreamMock,
+}))
 
 describe('piAgent request payload interception', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
+    requestMock.mockReset()
+    requestStreamMock.mockReset()
     localStorage.clear()
-    vi.stubGlobal('fetch', fetchMock)
 
-    fetchMock.mockImplementation(async (url: string) => {
-      if (url === '/api/pi-agent/sessions') {
+    requestMock.mockImplementation(async ({ url }: { url: string }) => {
+      if (url === '/pi-agent/sessions') {
         return {
-          ok: true,
-          json: async () => ({
+          status: 200,
+          data: {
             sessionId: 'pi_session_1',
             status: 'idle',
             mode: 'edit',
             prompt: '分析当前数据',
-          }),
-        } satisfies Partial<Response>
+          },
+        }
       }
 
-      if (url === '/api/pi-agent/sessions/pi_session_1/canvas-sync') {
+      if (url === '/pi-agent/sessions/pi_session_1/canvas-sync') {
         return {
-          ok: true,
-          json: async () => ({
+          status: 200,
+          data: {
             projection: {},
             syncSummary: '已同步当前画布，共 1 个节点、0 条连线',
-          }),
-        } satisfies Partial<Response>
+          },
+        }
       }
 
       throw new Error(`unexpected url: ${url}`)
@@ -120,14 +130,14 @@ describe('piAgent request payload interception', () => {
       edges: [],
     })
 
-    const createCall = fetchMock.mock.calls.find(([url]) => url === '/api/pi-agent/sessions')
-    const syncCall = fetchMock.mock.calls.find(([url]) => url === '/api/pi-agent/sessions/pi_session_1/canvas-sync')
+    const createCall = requestMock.mock.calls.find(([config]) => config.url === '/pi-agent/sessions')
+    const syncCall = requestMock.mock.calls.find(([config]) => config.url === '/pi-agent/sessions/pi_session_1/canvas-sync')
 
     expect(createCall).toBeTruthy()
     expect(syncCall).toBeTruthy()
 
-    const createBody = JSON.parse(String(createCall?.[1]?.body ?? '{}'))
-    const syncBody = JSON.parse(String(syncCall?.[1]?.body ?? '{}'))
+    const createBody = createCall?.[0]?.data ?? {}
+    const syncBody = syncCall?.[0]?.data ?? {}
 
     const createNode = createBody.workflowSnapshot.nodes[0]
     const syncNode = syncBody.workflowSnapshot.nodes[0]

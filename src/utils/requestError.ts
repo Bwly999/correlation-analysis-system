@@ -3,6 +3,11 @@ type RequestErrorOptions = {
   networkErrorMessage?: string
 }
 
+type ResponseDataLike = {
+  status: number
+  data?: unknown
+}
+
 export class RequestError extends Error {
   statusCode?: number
   cause?: unknown
@@ -29,28 +34,53 @@ const extractMessageFromPayload = (payload: unknown): string | null => {
   return null
 }
 
-export const buildRequestErrorFromResponse = async (
-  response: Response,
+const extractMessageFromResponseData = (payload: unknown): string | null => {
+  if (typeof payload === 'string' && payload.trim()) {
+    return payload.trim()
+  }
+
+  return extractMessageFromPayload(payload)
+}
+
+export const buildRequestErrorFromResponseData = (
+  response: ResponseDataLike,
   options: RequestErrorOptions,
 ) => {
-  let message: string | null = null
-
-  try {
-    const rawText = await response.text()
-    if (rawText.trim()) {
-      try {
-        message = extractMessageFromPayload(JSON.parse(rawText))
-      } catch {
-        message = rawText.trim()
-      }
-    }
-  } catch {
-    message = null
-  }
+  const message = extractMessageFromResponseData(response.data)
 
   return new RequestError(message || options.fallbackMessage, {
     statusCode: response.status,
   })
+}
+
+export const buildRequestErrorFromResponse = async (
+  response: Response,
+  options: RequestErrorOptions,
+) => {
+  try {
+    const rawText = await response.text()
+    const data = rawText.trim()
+      ? (() => {
+          try {
+            return JSON.parse(rawText)
+          } catch {
+            return rawText.trim()
+          }
+        })()
+      : ''
+
+    return buildRequestErrorFromResponseData(
+      {
+        status: response.status,
+        data,
+      },
+      options,
+    )
+  } catch {
+    return new RequestError(options.fallbackMessage, {
+      statusCode: response.status,
+    })
+  }
 }
 
 export const buildRequestErrorFromUnknown = (

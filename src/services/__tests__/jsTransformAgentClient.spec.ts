@@ -1,32 +1,42 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createJsTransformAgentSession, resolveJsTransformAgentToolResult } from '../jsTransformAgentClient'
 
-const fetchMock = vi.fn()
+const { requestMock, requestStreamMock } = vi.hoisted(() => ({
+  requestMock: vi.fn(),
+  requestStreamMock: vi.fn(),
+}))
+
+vi.mock('@/services/httpClient', () => ({
+  httpClient: {
+    request: requestMock,
+  },
+  requestStream: requestStreamMock,
+}))
 
 describe('jsTransformAgentClient', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
+    requestMock.mockReset()
+    requestStreamMock.mockReset()
     localStorage.clear()
-    vi.stubGlobal('fetch', fetchMock)
 
-    fetchMock.mockImplementation(async (url: string) => {
-      if (url === '/api/pi-agent/js-transform/sessions') {
+    requestMock.mockImplementation(async ({ url }: { url: string }) => {
+      if (url === '/pi-agent/js-transform/sessions') {
         return {
-          ok: true,
-          json: async () => ({
+          status: 200,
+          data: {
             sessionId: 'js_session_1',
             status: 'idle',
             mode: 'agent',
             prompt: '把字符串日期转成月份字段',
-          }),
-        } satisfies Partial<Response>
+          },
+        }
       }
 
-      if (url === '/api/pi-agent/js-transform/sessions/js_session_1/tool-result') {
+      if (url === '/pi-agent/js-transform/sessions/js_session_1/tool-result') {
         return {
-          ok: true,
-          json: async () => ({ ok: true }),
-        } satisfies Partial<Response>
+          status: 200,
+          data: { ok: true },
+        }
       }
 
       throw new Error(`unexpected url: ${url}`)
@@ -81,9 +91,9 @@ describe('jsTransformAgentClient', () => {
       },
     })
 
-    const createCall = fetchMock.mock.calls.find(([url]) => url === '/api/pi-agent/js-transform/sessions')
+    const createCall = requestMock.mock.calls.find(([config]) => config.url === '/pi-agent/js-transform/sessions')
     expect(createCall).toBeTruthy()
-    const body = JSON.parse(String(createCall?.[1]?.body ?? '{}'))
+    const body = createCall?.[0]?.data ?? {}
     expect(body.nodeId).toBe('node_js_1')
     expect(body.mode).toBe('agent')
     expect(body.nodeContext.inputContext.sampleRows).toHaveLength(1)
@@ -101,9 +111,11 @@ describe('jsTransformAgentClient', () => {
       },
     })
 
-    const call = fetchMock.mock.calls.find(([url]) => url === '/api/pi-agent/js-transform/sessions/js_session_1/tool-result')
+    const call = requestMock.mock.calls.find(
+      ([config]) => config.url === '/pi-agent/js-transform/sessions/js_session_1/tool-result',
+    )
     expect(call).toBeTruthy()
-    const body = JSON.parse(String(call?.[1]?.body ?? '{}'))
+    const body = call?.[0]?.data ?? {}
     expect(body.toolCallId).toBe('tool_1')
     expect(body.result.details.outputSample).toHaveLength(1)
   })

@@ -1,6 +1,6 @@
-import { createWorkflowApiAuthHeaders } from '@/services/apiAuth'
+import { httpClient } from '@/services/httpClient'
 import {
-  buildRequestErrorFromResponse,
+  buildRequestErrorFromResponseData,
   buildRequestErrorFromUnknown,
 } from '@/utils/requestError'
 
@@ -10,18 +10,16 @@ type AnalysisRequestBody = {
   config: Record<string, unknown>
 }
 
-const ANALYSIS_API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
-
 const postAnalysis = async <T>(path: string, body: AnalysisRequestBody): Promise<T> => {
-  let response: Response
+  let response: { status: number; data: unknown }
   try {
-    response = await fetch(`${ANALYSIS_API_BASE_URL}${path}`, {
+    response = await httpClient.request({
+      url: path,
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...createWorkflowApiAuthHeaders(),
       },
-      body: JSON.stringify(body),
+      data: body,
     })
   } catch (error) {
     throw buildRequestErrorFromUnknown(error, {
@@ -30,13 +28,13 @@ const postAnalysis = async <T>(path: string, body: AnalysisRequestBody): Promise
     })
   }
 
-  if (!response.ok) {
-    throw await buildRequestErrorFromResponse(response, {
+  if (response.status < 200 || response.status >= 300) {
+    throw buildRequestErrorFromResponseData(response, {
       fallbackMessage: '后端服务响应异常',
     })
   }
 
-  return response.json() as Promise<T>
+  return response.data as T
 }
 
 export const requestLassoAnalysis = <T>(body: AnalysisRequestBody) =>

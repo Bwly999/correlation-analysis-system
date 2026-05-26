@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createWorkflowRequestHeaders,
-  fetchWithWorkflowContext,
   resolveWorkflowRequestUser,
 } from '../workflowRequestContext'
 
@@ -69,27 +68,15 @@ describe('workflowRequestContext', () => {
     expect(storage.getItem('workflow-storage-user-name')).toBe('默认用户')
   })
 
-  it('attaches workflow headers through the shared fetch helper', async () => {
+  it('merges caller-provided headers when creating workflow request headers', () => {
     vi.stubEnv('VITE_WORKFLOW_USER_ID', 'user_fetch')
     vi.stubEnv('VITE_WORKFLOW_USER_NAME', '抓取用户')
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ ok: true }),
-    })
-    vi.stubGlobal('fetch', fetchMock)
-
-    await fetchWithWorkflowContext('/api/pi-agent/sessions/pi_session_1/events', {
-      headers: {
-        Accept: 'application/x-ndjson',
-      },
-    })
-
-    expect(fetchMock).toHaveBeenCalledWith('/api/pi-agent/sessions/pi_session_1/events', {
-      headers: {
-        'x-workflow-user-id': 'user_fetch',
-        'x-workflow-user-name': encodeURIComponent('抓取用户'),
-        Accept: 'application/x-ndjson',
-      },
+    expect(createWorkflowRequestHeaders({
+      Accept: 'application/x-ndjson',
+    })).toEqual({
+      'x-workflow-user-id': 'user_fetch',
+      'x-workflow-user-name': encodeURIComponent('抓取用户'),
+      Accept: 'application/x-ndjson',
     })
   })
 })

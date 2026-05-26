@@ -1,5 +1,5 @@
 import { buildWorkflowAiNodeCatalog } from '@/ai/catalog'
-import { fetchWithWorkflowContext } from '@/services/workflowRequestContext'
+import { httpClient, requestStream } from '@/services/httpClient'
 import type {
   AgentObservabilityDebugFilesResponse,
   AgentObservabilityDebugHealth,
@@ -28,11 +28,6 @@ import type {
   WorkflowAiStreamEvent,
 } from '@/ai/types'
 
-const WORKFLOW_AI_API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
-
-const fetchWorkflowApi = (url: string, init?: RequestInit) =>
-  fetchWithWorkflowContext(url, init)
-
 type WorkflowAiErrorPayload = {
   message?: string
   diagnostics?: WorkflowAiGenerationDiagnostics
@@ -58,12 +53,44 @@ export class WorkflowAiRequestError extends Error {
   }
 }
 
-const readResponsePayload = async (response: Response): Promise<WorkflowAiErrorPayload> => {
-  try {
-    return (await response.json()) as WorkflowAiErrorPayload
-  } catch {
-    return {}
+const isSuccessStatus = (status: number) => status >= 200 && status < 300
+
+const readResponsePayload = <T>(response: { data: unknown }): T => (response.data ?? {}) as T
+
+const decodeStreamChunk = (decoder: TextDecoder, value: unknown) => {
+  if (value instanceof ArrayBuffer) {
+    return decoder.decode(new Uint8Array(value), { stream: true })
   }
+  if (ArrayBuffer.isView(value)) {
+    return decoder.decode(value, { stream: true })
+  }
+
+  return String(value)
+}
+
+const readStreamText = async (stream: ReadableStream<unknown> | null): Promise<string> => {
+  if (!stream) return ''
+
+  const reader = stream.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  while (true) {
+    const { value, done } = await reader.read()
+    if (done) break
+    buffer += decodeStreamChunk(decoder, value)
+  }
+
+  buffer += decoder.decode()
+  return buffer
+}
+
+const readStreamPayload = async <T>(stream: ReadableStream<unknown> | null): Promise<T> => {
+  const buffer = await readStreamText(stream)
+  const text = buffer.trim()
+  if (!text) return {} as T
+
+  return JSON.parse(text) as T
 }
 
 const parseNdjsonLine = (line: string): WorkflowAiStreamEvent | null => {
@@ -83,20 +110,21 @@ export const requestWorkflowAiPlan = async (request: WorkflowAiPlanRequest) => {
     throw new Error('当前模型配置不可用，请先检查模型设置')
   }
 
-  const response = await fetchWorkflowApi(`${WORKFLOW_AI_API_BASE_URL}/workflow-ai/plan`, {
+  const response = await httpClient.request({
+    url: '/workflow-ai/plan',
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
+    data: {
       ...request,
       nodeCatalog: request.nodeCatalog?.length ? request.nodeCatalog : buildWorkflowAiNodeCatalog(),
-    }),
+    },
   })
 
-  const payload = (await readResponsePayload(response)) as WorkflowAiPlanResponse & WorkflowAiErrorPayload
+  const payload = readResponsePayload<WorkflowAiPlanResponse & WorkflowAiErrorPayload>(response)
 
-  if (!response.ok) {
+  if (!isSuccessStatus(response.status)) {
     throw new WorkflowAiRequestError(
       payload.message || '生成 AI 计划失败',
       payload.diagnostics,
@@ -115,19 +143,20 @@ export const streamWorkflowAiPlan = async (
     throw new Error('当前模型配置不可用，请先检查模型设置')
   }
 
-  const response = await fetchWorkflowApi(`${WORKFLOW_AI_API_BASE_URL}/workflow-ai/plan/stream`, {
+  const response = await requestStream({
+    url: '/workflow-ai/plan/stream',
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
+    data: {
       ...request,
       nodeCatalog: request.nodeCatalog?.length ? request.nodeCatalog : buildWorkflowAiNodeCatalog(),
-    }),
+    },
   })
 
-  if (!response.ok) {
-    const payload = await readResponsePayload(response)
+  if (!isSuccessStatus(response.status)) {
+    const payload = await readStreamPayload<WorkflowAiErrorPayload>(response.data)
     throw new WorkflowAiRequestError(
       payload.message || '生成 AI 计划失败',
       payload.diagnostics,
@@ -135,11 +164,12 @@ export const streamWorkflowAiPlan = async (
     )
   }
 
-  if (!response.body) {
+  if (!response.data) {
     throw new Error('AI 流式响应不可用')
   }
 
-  const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()
+  const reader = response.data.getReader()
+  const decoder = new TextDecoder()
   let buffer = ''
   let completedPayload: WorkflowAiPlanResponse | null = null
   let failedPayload: { message: string; diagnostics?: WorkflowAiGenerationDiagnostics } | null = null
@@ -148,7 +178,7 @@ export const streamWorkflowAiPlan = async (
     const { value, done } = await reader.read()
     if (done) break
 
-    buffer += value
+    buffer += decodeStreamChunk(decoder, value)
     const lines = buffer.split('\n')
     buffer = lines.pop() ?? ''
 
@@ -173,6 +203,7 @@ export const streamWorkflowAiPlan = async (
     }
   }
 
+  buffer += decoder.decode()
   const lastEvent = parseNdjsonLine(buffer)
   if (lastEvent) {
     options.onEvent?.(lastEvent)
@@ -204,19 +235,20 @@ export const streamWorkflowAiPlan = async (
 export const startWorkflowAiSession = async (
   request: WorkflowAiPlanRequest,
 ): Promise<WorkflowAiSessionStartResponse> => {
-  const response = await fetchWorkflowApi(`${WORKFLOW_AI_API_BASE_URL}/workflow-ai/session/start`, {
+  const response = await httpClient.request({
+    url: '/workflow-ai/session/start',
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
+    data: {
       ...request,
       nodeCatalog: request.nodeCatalog?.length ? request.nodeCatalog : buildWorkflowAiNodeCatalog(),
-    }),
+    },
   })
 
-  const payload = (await readResponsePayload(response)) as WorkflowAiSessionStartResponse & WorkflowAiErrorPayload
-  if (!response.ok) {
+  const payload = readResponsePayload<WorkflowAiSessionStartResponse & WorkflowAiErrorPayload>(response)
+  if (!isSuccessStatus(response.status)) {
     throw new WorkflowAiRequestError(
       payload.message || '启动 AI 编排会话失败',
       payload.diagnostics,
@@ -230,19 +262,20 @@ export const startWorkflowAiSession = async (
 export const createAgentSession = async (
   request: WorkflowAiPlanRequest,
 ): Promise<AgentSessionStartResponse> => {
-  const response = await fetchWorkflowApi(`${WORKFLOW_AI_API_BASE_URL}/agent/sessions`, {
+  const response = await httpClient.request({
+    url: '/agent/sessions',
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
+    data: {
       ...request,
       nodeCatalog: request.nodeCatalog?.length ? request.nodeCatalog : buildWorkflowAiNodeCatalog(),
-    }),
+    },
   })
 
-  const payload = (await readResponsePayload(response)) as AgentSessionStartResponse & WorkflowAiErrorPayload
-  if (!response.ok) {
+  const payload = readResponsePayload<AgentSessionStartResponse & WorkflowAiErrorPayload>(response)
+  if (!isSuccessStatus(response.status)) {
     throw new WorkflowAiRequestError(
       payload.message || '创建 Agent 会话失败',
       payload.diagnostics,
@@ -257,16 +290,17 @@ export const sendAgentSessionMessage = async (
   sessionId: string,
   request: AgentSessionMessageRequest,
 ): Promise<AgentSessionMessageResponse> => {
-  const response = await fetchWorkflowApi(`${WORKFLOW_AI_API_BASE_URL}/agent/sessions/${sessionId}/messages`, {
+  const response = await httpClient.request({
+    url: `/agent/sessions/${sessionId}/messages`,
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(request),
+    data: request,
   })
 
-  const payload = (await readResponsePayload(response)) as AgentSessionMessageResponse & WorkflowAiErrorPayload
-  if (!response.ok) {
+  const payload = readResponsePayload<AgentSessionMessageResponse & WorkflowAiErrorPayload>(response)
+  if (!isSuccessStatus(response.status)) {
     throw new WorkflowAiRequestError(
       payload.message || '发送 Agent 消息失败',
       payload.diagnostics,
@@ -281,9 +315,12 @@ export const streamAgentSessionEvents = async (
   sessionId: string,
   options: AgentSessionStreamOptions = {},
 ) => {
-  const response = await fetchWorkflowApi(`${WORKFLOW_AI_API_BASE_URL}/agent/sessions/${sessionId}/events`)
-  if (!response.ok) {
-    const payload = await readResponsePayload(response)
+  const response = await requestStream({
+    url: `/agent/sessions/${sessionId}/events`,
+    method: 'GET',
+  })
+  if (!isSuccessStatus(response.status)) {
+    const payload = await readStreamPayload<WorkflowAiErrorPayload>(response.data)
     throw new WorkflowAiRequestError(
       payload.message || '读取 Agent 事件流失败',
       payload.diagnostics,
@@ -291,18 +328,19 @@ export const streamAgentSessionEvents = async (
     )
   }
 
-  if (!response.body) {
+  if (!response.data) {
     throw new Error('Agent 事件流不可用')
   }
 
-  const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()
+  const reader = response.data.getReader()
+  const decoder = new TextDecoder()
   let buffer = ''
 
   while (true) {
     const { value, done } = await reader.read()
     if (done) break
 
-    buffer += value
+    buffer += decodeStreamChunk(decoder, value)
     const lines = buffer.split('\n')
     buffer = lines.pop() ?? ''
 
@@ -313,6 +351,7 @@ export const streamAgentSessionEvents = async (
     }
   }
 
+  buffer += decoder.decode()
   const lastEvent = parseAgentNdjsonLine(buffer)
   if (lastEvent) {
     options.onEvent?.(lastEvent)
@@ -322,10 +361,13 @@ export const streamAgentSessionEvents = async (
 export const getAgentSession = async (
   sessionId: string,
 ): Promise<AgentSessionGetResponse> => {
-  const response = await fetchWorkflowApi(`${WORKFLOW_AI_API_BASE_URL}/agent/sessions/${sessionId}`)
-  const payload = (await readResponsePayload(response)) as AgentSessionGetResponse & WorkflowAiErrorPayload
+  const response = await httpClient.request({
+    url: `/agent/sessions/${sessionId}`,
+    method: 'GET',
+  })
+  const payload = readResponsePayload<AgentSessionGetResponse & WorkflowAiErrorPayload>(response)
 
-  if (!response.ok) {
+  if (!isSuccessStatus(response.status)) {
     throw new WorkflowAiRequestError(
       payload.message || '读取 Agent 会话失败',
       payload.diagnostics,
@@ -337,10 +379,13 @@ export const getAgentSession = async (
 }
 
 export const getAgentProjection = async (sessionId: string): Promise<AgentProjectionSnapshot> => {
-  const response = await fetchWorkflowApi(`${WORKFLOW_AI_API_BASE_URL}/agent/sessions/${sessionId}/projection`)
-  const payload = (await readResponsePayload(response)) as { projection: AgentProjectionSnapshot } & WorkflowAiErrorPayload
+  const response = await httpClient.request({
+    url: `/agent/sessions/${sessionId}/projection`,
+    method: 'GET',
+  })
+  const payload = readResponsePayload<{ projection: AgentProjectionSnapshot } & WorkflowAiErrorPayload>(response)
 
-  if (!response.ok) {
+  if (!isSuccessStatus(response.status)) {
     throw new WorkflowAiRequestError(
       payload.message || '读取 Agent 投影失败',
       payload.diagnostics,
@@ -359,10 +404,13 @@ export const getAgentObservabilityDebugTrace = async (
   if (options.limit !== undefined) search.set('limit', String(options.limit))
   if (options.offset !== undefined) search.set('offset', String(options.offset))
   const suffix = search.size ? `?${search.toString()}` : ''
-  const response = await fetchWorkflowApi(`${WORKFLOW_AI_API_BASE_URL}/agent/sessions/${sessionId}/debug-trace${suffix}`)
-  const payload = (await readResponsePayload(response)) as AgentObservabilityDebugTraceResponse & WorkflowAiErrorPayload
+  const response = await httpClient.request({
+    url: `/agent/sessions/${sessionId}/debug-trace${suffix}`,
+    method: 'GET',
+  })
+  const payload = readResponsePayload<AgentObservabilityDebugTraceResponse & WorkflowAiErrorPayload>(response)
 
-  if (!response.ok) {
+  if (!isSuccessStatus(response.status)) {
     throw new WorkflowAiRequestError(
       payload.message || '读取 Agent 调试 Trace 失败',
       payload.diagnostics,
@@ -378,10 +426,13 @@ export const getAgentObservabilityDebugReplay = async (
   seq?: number,
 ): Promise<AgentObservabilityDebugReplayResponse> => {
   const suffix = seq !== undefined ? `?seq=${encodeURIComponent(String(seq))}` : ''
-  const response = await fetchWorkflowApi(`${WORKFLOW_AI_API_BASE_URL}/agent/sessions/${sessionId}/debug-trace/replay${suffix}`)
-  const payload = (await readResponsePayload(response)) as AgentObservabilityDebugReplayResponse & WorkflowAiErrorPayload
+  const response = await httpClient.request({
+    url: `/agent/sessions/${sessionId}/debug-trace/replay${suffix}`,
+    method: 'GET',
+  })
+  const payload = readResponsePayload<AgentObservabilityDebugReplayResponse & WorkflowAiErrorPayload>(response)
 
-  if (!response.ok) {
+  if (!isSuccessStatus(response.status)) {
     throw new WorkflowAiRequestError(
       payload.message || '读取 Agent 调试回放失败',
       payload.diagnostics,
@@ -395,10 +446,13 @@ export const getAgentObservabilityDebugReplay = async (
 export const getAgentObservabilityDebugFiles = async (
   sessionId: string,
 ): Promise<AgentObservabilityDebugFilesResponse> => {
-  const response = await fetchWorkflowApi(`${WORKFLOW_AI_API_BASE_URL}/agent/sessions/${sessionId}/debug-trace/files`)
-  const payload = (await readResponsePayload(response)) as AgentObservabilityDebugFilesResponse & WorkflowAiErrorPayload
+  const response = await httpClient.request({
+    url: `/agent/sessions/${sessionId}/debug-trace/files`,
+    method: 'GET',
+  })
+  const payload = readResponsePayload<AgentObservabilityDebugFilesResponse & WorkflowAiErrorPayload>(response)
 
-  if (!response.ok) {
+  if (!isSuccessStatus(response.status)) {
     throw new WorkflowAiRequestError(
       payload.message || '读取 Agent 调试日志文件失败',
       payload.diagnostics,
@@ -410,10 +464,13 @@ export const getAgentObservabilityDebugFiles = async (
 }
 
 export const getAgentObservabilityDebugHealth = async (): Promise<AgentObservabilityDebugHealth> => {
-  const response = await fetchWorkflowApi(`${WORKFLOW_AI_API_BASE_URL}/agent/debug/health`)
-  const payload = (await readResponsePayload(response)) as AgentObservabilityDebugHealth & WorkflowAiErrorPayload
+  const response = await httpClient.request({
+    url: '/agent/debug/health',
+    method: 'GET',
+  })
+  const payload = readResponsePayload<AgentObservabilityDebugHealth & WorkflowAiErrorPayload>(response)
 
-  if (!response.ok) {
+  if (!isSuccessStatus(response.status)) {
     throw new WorkflowAiRequestError(
       payload.message || '读取 Agent 调试健康状态失败',
       payload.diagnostics,
@@ -428,16 +485,17 @@ export const syncAgentCanvas = async (
   sessionId: string,
   request: AgentSessionCanvasSyncRequest,
 ): Promise<AgentSessionCanvasSyncResponse> => {
-  const response = await fetchWorkflowApi(`${WORKFLOW_AI_API_BASE_URL}/agent/sessions/${sessionId}/canvas-sync`, {
+  const response = await httpClient.request({
+    url: `/agent/sessions/${sessionId}/canvas-sync`,
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(request),
+    data: request,
   })
-  const payload = (await readResponsePayload(response)) as AgentSessionCanvasSyncResponse & WorkflowAiErrorPayload
+  const payload = readResponsePayload<AgentSessionCanvasSyncResponse & WorkflowAiErrorPayload>(response)
 
-  if (!response.ok) {
+  if (!isSuccessStatus(response.status)) {
     throw new WorkflowAiRequestError(
       payload.message || '同步 Agent 画布失败',
       payload.diagnostics,
@@ -452,12 +510,13 @@ export const runWorkflowAiSession = async (
   sessionId: string,
   options: StreamWorkflowAiPlanOptions = {},
 ): Promise<WorkflowAiSessionRunResponse> => {
-  const response = await fetchWorkflowApi(`${WORKFLOW_AI_API_BASE_URL}/workflow-ai/session/${sessionId}/run`, {
+  const response = await requestStream({
+    url: `/workflow-ai/session/${sessionId}/run`,
     method: 'POST',
   })
 
-  if (!response.ok) {
-    const payload = await readResponsePayload(response)
+  if (!isSuccessStatus(response.status)) {
+    const payload = await readStreamPayload<WorkflowAiErrorPayload>(response.data)
     throw new WorkflowAiRequestError(
       payload.message || '运行 AI 编排会话失败',
       payload.diagnostics,
@@ -465,11 +524,12 @@ export const runWorkflowAiSession = async (
     )
   }
 
-  if (!response.body) {
+  if (!response.data) {
     throw new Error('AI 会话流式响应不可用')
   }
 
-  const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()
+  const reader = response.data.getReader()
+  const decoder = new TextDecoder()
   let buffer = ''
   let completedPayload: WorkflowAiSessionRunResponse | null = null
   let failedPayload: { message: string; diagnostics?: WorkflowAiGenerationDiagnostics } | null = null
@@ -478,7 +538,7 @@ export const runWorkflowAiSession = async (
     const { value, done } = await reader.read()
     if (done) break
 
-    buffer += value
+    buffer += decodeStreamChunk(decoder, value)
     const lines = buffer.split('\n')
     buffer = lines.pop() ?? ''
 
@@ -504,6 +564,7 @@ export const runWorkflowAiSession = async (
     }
   }
 
+  buffer += decoder.decode()
   const lastEvent = parseNdjsonLine(buffer)
   if (lastEvent) {
     options.onEvent?.(lastEvent)
@@ -536,10 +597,13 @@ export const runWorkflowAiSession = async (
 export const getWorkflowAiSession = async (
   sessionId: string,
 ): Promise<WorkflowAiSessionGetResponse> => {
-  const response = await fetchWorkflowApi(`${WORKFLOW_AI_API_BASE_URL}/workflow-ai/session/${sessionId}`)
-  const payload = (await readResponsePayload(response)) as WorkflowAiSessionGetResponse & WorkflowAiErrorPayload
+  const response = await httpClient.request({
+    url: `/workflow-ai/session/${sessionId}`,
+    method: 'GET',
+  })
+  const payload = readResponsePayload<WorkflowAiSessionGetResponse & WorkflowAiErrorPayload>(response)
 
-  if (!response.ok) {
+  if (!isSuccessStatus(response.status)) {
     throw new WorkflowAiRequestError(
       payload.message || '读取 AI 编排会话失败',
       payload.diagnostics,
@@ -554,16 +618,17 @@ export const submitWorkflowAiSessionInput = async (
   sessionId: string,
   request: WorkflowAiSessionInputRequest,
 ): Promise<WorkflowAiSessionInputResponse> => {
-  const response = await fetchWorkflowApi(`${WORKFLOW_AI_API_BASE_URL}/workflow-ai/session/${sessionId}/input`, {
+  const response = await httpClient.request({
+    url: `/workflow-ai/session/${sessionId}/input`,
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(request),
+    data: request,
   })
-  const payload = (await readResponsePayload(response)) as WorkflowAiSessionInputResponse & WorkflowAiErrorPayload
+  const payload = readResponsePayload<WorkflowAiSessionInputResponse & WorkflowAiErrorPayload>(response)
 
-  if (!response.ok) {
+  if (!isSuccessStatus(response.status)) {
     throw new WorkflowAiRequestError(
       payload.message || '提交 AI 编排补充信息失败',
       payload.diagnostics,
@@ -575,9 +640,12 @@ export const submitWorkflowAiSessionInput = async (
 }
 
 export const fetchSystemModelProfiles = async (): Promise<WorkflowAiModelProfile[]> => {
-  const response = await fetchWorkflowApi(`${WORKFLOW_AI_API_BASE_URL}/workflow-ai/model-profiles`)
-  const payload = await readResponsePayload(response)
-  if (!response.ok) {
+  const response = await httpClient.request({
+    url: '/workflow-ai/model-profiles',
+    method: 'GET',
+  })
+  const payload = readResponsePayload<{ profiles?: WorkflowAiModelProfile[] } & WorkflowAiErrorPayload>(response)
+  if (!isSuccessStatus(response.status)) {
     throw new Error(payload.message || '加载系统模型配置失败')
   }
   const data = payload as { profiles?: WorkflowAiModelProfile[] }
@@ -587,16 +655,17 @@ export const fetchSystemModelProfiles = async (): Promise<WorkflowAiModelProfile
 export const testWorkflowAiModelProfile = async (
   profile: WorkflowAiModelProfile,
 ): Promise<WorkflowAiModelTestResult> => {
-  const response = await fetchWorkflowApi(`${WORKFLOW_AI_API_BASE_URL}/workflow-ai/model-profiles/test`, {
+  const response = await httpClient.request({
+    url: '/workflow-ai/model-profiles/test',
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ profile }),
+    data: { profile },
   })
 
-  const data = (await response.json()) as WorkflowAiModelTestResult & { message?: string }
-  if (!response.ok) {
+  const data = readResponsePayload<WorkflowAiModelTestResult & { message?: string }>(response)
+  if (!isSuccessStatus(response.status)) {
     throw new Error(data.message || '模型配置测试失败')
   }
 

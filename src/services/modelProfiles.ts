@@ -1,11 +1,9 @@
 import type { WorkflowAiModelProfile, WorkflowAiModelTestResult } from '@/ai/types'
-import { fetchWithWorkflowContext } from '@/services/workflowRequestContext'
+import { httpClient } from '@/services/httpClient'
 
-const WORKFLOW_API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
-
-const readJsonOrThrow = async <T>(response: Response, fallbackMessage: string): Promise<T> => {
-  const payload = await response.json().catch(() => ({}))
-  if (!response.ok) {
+const readJsonOrThrow = <T>(response: { status: number; data: unknown }, fallbackMessage: string): T => {
+  const payload = response.data
+  if (response.status < 200 || response.status >= 300) {
     const message =
       typeof payload === 'object' && payload && 'message' in payload && typeof payload.message === 'string'
         ? payload.message
@@ -16,21 +14,25 @@ const readJsonOrThrow = async <T>(response: Response, fallbackMessage: string): 
 }
 
 export const fetchSystemModelProfiles = async (): Promise<WorkflowAiModelProfile[]> => {
-  const response = await fetchWithWorkflowContext(`${WORKFLOW_API_BASE_URL}/workflow-ai/model-profiles`)
-  const payload = await readJsonOrThrow<{ profiles?: WorkflowAiModelProfile[] }>(response, '加载系统模型配置失败')
+  const response = await httpClient.request({
+    url: '/workflow-ai/model-profiles',
+    method: 'GET',
+  })
+  const payload = readJsonOrThrow<{ profiles?: WorkflowAiModelProfile[] }>(response, '加载系统模型配置失败')
   return payload.profiles ?? []
 }
 
 export const testWorkflowAiModelProfile = async (
   profile: WorkflowAiModelProfile,
 ): Promise<WorkflowAiModelTestResult> => {
-  const response = await fetchWithWorkflowContext(`${WORKFLOW_API_BASE_URL}/workflow-ai/model-profiles/test`, {
+  const response = await httpClient.request({
+    url: '/workflow-ai/model-profiles/test',
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ profile }),
+    data: { profile },
   })
 
-  return await readJsonOrThrow<WorkflowAiModelTestResult>(response, '模型配置测试失败')
+  return readJsonOrThrow<WorkflowAiModelTestResult>(response, '模型配置测试失败')
 }

@@ -21,6 +21,7 @@ This file provides guidance to LLM when working with code in this repository.
 - **数据库**: MySQL (production via Drizzle ORM), LowDB/localStorage (dev)
 - **AI Agent 核心**: @earendil-works/pi-coding-agent (Pi Agent SDK)
 - **工作流 AI 辅助**: @ai-sdk/openai-compatible + ai (Vercel AI SDK)
+- **前端请求层**: axios 统一实例（`src/services/httpClient.ts`）
 
 ## 常用命令
 
@@ -106,6 +107,13 @@ pnpm test:unit -- <test-pattern>
 必要时查阅 `docs/design-doc/Agent系统.md`
 
 ## 关键约束
+
+### 前端 API 请求
+- 前端所有后端 API 请求必须使用统一封装的 axios 实例：`src/services/httpClient.ts`
+- 禁止在业务模块直接使用 `fetch` 调用后端接口
+- 禁止在业务模块手动拼接 `import.meta.env.VITE_API_BASE_URL`
+- 流式接口同样必须复用统一请求层提供的流式入口，禁止自行构造裸 URL
+- `src/services/workflowRequestContext.ts` 仅负责生成工作流请求头，不负责发送 HTTP 请求
 
 ### UI/UX
 - 所有用户可见文案必须使用中文

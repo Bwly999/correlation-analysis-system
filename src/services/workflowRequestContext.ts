@@ -71,13 +71,3 @@ export const createWorkflowRequestHeaders = (
     ...extraHeaders,
   }
 }
-
-export const withWorkflowRequestContext = (init: RequestInit = {}): RequestInit => ({
-  ...init,
-  headers: createWorkflowRequestHeaders({
-    ...((init.headers as Record<string, string> | undefined) ?? {}),
-  }),
-})
-
-export const fetchWithWorkflowContext = (url: string, init?: RequestInit) =>
-  fetch(url, withWorkflowRequestContext(init ?? {}))
