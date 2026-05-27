@@ -1,4 +1,4 @@
-export type PiWorkflowToolTarget = 'frontend_canvas' | 'server_runtime'
+export type PiWorkflowToolTarget = 'frontend_canvas' | 'frontend_bridge' | 'server_runtime'
 
 export type PiWorkflowToolRiskLevel = 'low' | 'medium' | 'high'
 
@@ -47,7 +47,7 @@ export const PI_WORKFLOW_TOOL_SPECS: PiWorkflowToolSpec[] = [
   },
   {
     name: 'workflow_get_node_catalog',
-    target: 'server_runtime',
+    target: 'frontend_bridge',
     riskLevel: 'low',
     executorKey: 'getNodeCatalog',
     description: '读取当前工作流节点目录。',
@@ -58,7 +58,7 @@ export const PI_WORKFLOW_TOOL_SPECS: PiWorkflowToolSpec[] = [
   },
   {
     name: 'workflow_get_node',
-    target: 'server_runtime',
+    target: 'frontend_bridge',
     riskLevel: 'low',
     executorKey: 'getNode',
     description: '按模式读取单个节点详情。',

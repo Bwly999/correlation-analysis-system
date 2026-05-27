@@ -1,6 +1,7 @@
 import type { WorkflowAiPlanRequest } from '../../../ai/types.js'
 import type { FrontendBridge } from '../frontendBridge.js'
 import { createAtomicWorkflowTools } from './atomicWorkflowTools.js'
+import { createFrontendBridgeTools } from './frontendBridgeTools.js'
 import { createSharedRuntimeTools } from './sharedRuntimeTools.js'
 
 interface BuildToolsOptions {
@@ -13,6 +14,7 @@ export function buildAllTools(options: BuildToolsOptions) {
 
   const tools = [
     ...(bridge ? createAtomicWorkflowTools(bridge) : []),
+    ...(bridge ? createFrontendBridgeTools(bridge) : []),
     ...createSharedRuntimeTools({ request }),
   ]
 

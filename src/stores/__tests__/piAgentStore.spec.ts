@@ -239,6 +239,63 @@ describe('piAgentStore', () => {
     expect(workflowStore.nodes[0]?.position).toEqual({ x: 100, y: 100 })
   })
 
+  it('resolves workflow_get_node_catalog with frontend local node query results without syncing canvas', async () => {
+    const store = usePiAgentStore()
+    store.sessionId = 'pi_session_1'
+
+    await store['handleEvent']?.({
+      type: 'tool.execute',
+      sessionId: 'pi_session_1',
+      toolCallId: 'tool_catalog',
+      toolName: 'workflow_get_node_catalog',
+      params: { limit: 1, offset: 0 },
+    })
+
+    await vi.waitFor(() => {
+      expect(resolvePiAgentToolResultMock).toHaveBeenCalledTimes(1)
+    })
+
+    expect(syncPiAgentCanvasMock).not.toHaveBeenCalled()
+    const payload = resolvePiAgentToolResultMock.mock.calls[0]?.[2]
+    expect(payload.isError).toBeUndefined()
+    expect(payload.details.ok).toBe(true)
+    expect(payload.details.status).toBe('success')
+    expect(payload.details.summary).toContain('已读取节点目录')
+    expect(payload.content[0].text).toContain('"items"')
+  })
+
+  it('resolves workflow_get_node runtime requirements with frontend local node query results without syncing canvas', async () => {
+    const store = usePiAgentStore()
+    store.sessionId = 'pi_session_1'
+
+    await store['handleEvent']?.({
+      type: 'tool.execute',
+      sessionId: 'pi_session_1',
+      toolCallId: 'tool_node',
+      toolName: 'workflow_get_node',
+      params: {
+        nodeType: 'manual-json-import',
+        mode: 'runtime_requirements',
+        config: {
+          jsonData: '[{"sales": 1}]',
+        },
+      },
+    })
+
+    await vi.waitFor(() => {
+      expect(resolvePiAgentToolResultMock).toHaveBeenCalledTimes(1)
+    })
+
+    expect(syncPiAgentCanvasMock).not.toHaveBeenCalled()
+    const payload = resolvePiAgentToolResultMock.mock.calls[0]?.[2]
+    expect(payload.isError).toBeUndefined()
+    expect(payload.details.ok).toBe(true)
+    expect(payload.details.status).toBe('success')
+    expect(payload.details.summary).toContain('已读取节点运行要求')
+    expect(payload.content[0].text).toContain('"runtimeRequirements"')
+    expect(payload.content[0].text).toContain('"jsonData"')
+  })
+
   it('applies streamed assistant events into message list and status', async () => {
     const store = usePiAgentStore()
 

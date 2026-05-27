@@ -10,6 +10,7 @@ import type { WorkflowExecutionOptions } from '@/api/workflowApi'
 import { getPiWorkflowToolSpecsByTarget } from '@/shared/piWorkflowTools'
 import { buildPiAgentSafeToolResult } from './piAgentSafeToolResult'
 import type { PiAgentSafeToolResult } from '@/ai/types'
+import { queryPiAgentNode, queryPiAgentNodeCatalog } from '@/services/piAgentNodeQuery'
 import type { WorkflowExecutionResult, WorkflowNodeDebugResult } from './workflowStore'
 import {
   createPiAgentSession,
@@ -50,6 +51,10 @@ export interface PiAgentToolCall {
 type SessionStatus = 'idle' | 'connecting' | 'running' | 'completed' | 'failed' | 'interrupted'
 type StopReason = 'normal' | 'read_only_observation_end' | 'interrupted' | 'failed'
 type RawExecutionResult = WorkflowExecutionResult | WorkflowNodeDebugResult
+type LocalToolStructuredResult = {
+  content: Array<{ type: 'text'; text: string }>
+  details: Record<string, unknown>
+}
 
 const isWorkflowExecutionResult = (value: unknown): value is WorkflowExecutionResult =>
   Boolean(value)
@@ -64,6 +69,15 @@ const isWorkflowNodeDebugResult = (value: unknown): value is WorkflowNodeDebugRe
   && 'scope' in (value as Record<string, unknown>)
   && (value as Record<string, unknown>).scope === 'single'
   && 'output' in (value as Record<string, unknown>)
+
+const isLocalToolStructuredResult = (value: unknown): value is LocalToolStructuredResult =>
+  Boolean(value)
+  && typeof value === 'object'
+  && 'content' in (value as Record<string, unknown>)
+  && Array.isArray((value as { content?: unknown }).content)
+  && 'details' in (value as Record<string, unknown>)
+  && Boolean((value as { details?: unknown }).details)
+  && typeof (value as { details?: unknown }).details === 'object'
 
 export const usePiAgentStore = defineStore('piAgent', () => {
   // --- State ---
@@ -496,16 +510,6 @@ export const usePiAgentStore = defineStore('piAgent', () => {
         break
       }
 
-      case 'workflow.apply': {
-        try {
-          const workflowStore = useWorkflowStore()
-          workflowStore.applyWorkflowAiPlan(event.plan)
-        } catch (err: any) {
-          console.warn('[PiAgent] 应用工作流计划失败:', err?.message || err)
-        }
-        break
-      }
-
       case 'error': {
         status.value = 'failed'
         lastStopReason.value = 'failed'
@@ -546,13 +550,42 @@ export const usePiAgentStore = defineStore('piAgent', () => {
 
       return WorkflowApi.executeWorkflow(executionOptions)
     },
+    getNodeCatalog: (p) =>
+      queryPiAgentNodeCatalog({
+        limit: typeof p.limit === 'number' ? p.limit : undefined,
+        offset: typeof p.offset === 'number' ? p.offset : undefined,
+      }),
+    getNode: (p) =>
+      queryPiAgentNode({
+        nodeType: String(p.nodeType ?? ''),
+        mode:
+          p.mode === 'info'
+          || p.mode === 'docs'
+          || p.mode === 'search_properties'
+          || p.mode === 'runtime_requirements'
+            ? p.mode
+            : undefined,
+        propertyQuery: typeof p.propertyQuery === 'string' ? p.propertyQuery : undefined,
+        config:
+          p.config && typeof p.config === 'object' && !Array.isArray(p.config)
+            ? (p.config as Record<string, unknown>)
+            : undefined,
+      }),
   }
 
-  const TOOL_EXECUTORS = Object.fromEntries(
-    getPiWorkflowToolSpecsByTarget('frontend_canvas')
-      .map((spec) => [spec.name, executorImplementations[spec.executorKey]])
-      .filter((entry) => typeof entry[1] === 'function'),
-  ) as Record<string, (params: Record<string, unknown>) => unknown | Promise<unknown>>
+  const registerToolExecutors = (target: 'frontend_canvas' | 'frontend_bridge') =>
+    getPiWorkflowToolSpecsByTarget(target).map((spec) => {
+      const executor = executorImplementations[spec.executorKey]
+      if (typeof executor !== 'function') {
+        throw new Error(`未注册 ${target} tool executor: ${spec.executorKey}`)
+      }
+      return [spec.name, executor] as const
+    })
+
+  const TOOL_EXECUTORS = Object.fromEntries([
+    ...registerToolExecutors('frontend_canvas'),
+    ...registerToolExecutors('frontend_bridge'),
+  ]) as Record<string, (params: Record<string, unknown>) => unknown | Promise<unknown>>
 
   /**
    * 处理 tool.execute 事件：
@@ -588,13 +621,16 @@ export const usePiAgentStore = defineStore('piAgent', () => {
     try {
       const result = await executor(event.params)
       const safeResult = toSafeToolResult(event.toolName, event.toolCallId, result)
+      const toolContent = isLocalToolStructuredResult(result)
+        ? result.content
+        : [{ type: 'text' as const, text: safeResult.summary }]
 
       if (STRUCTURE_SYNC_TOOL_NAMES.has(event.toolName)) {
         await syncCanvasSnapshotIfNeeded()
       }
 
       await sendToolResult(event.sessionId, event.toolCallId, {
-        content: [{ type: 'text', text: safeResult.summary }],
+        content: toolContent,
         details: safeResult,
       })
     } catch (err: any) {
@@ -683,12 +719,36 @@ export const usePiAgentStore = defineStore('piAgent', () => {
       })
     }
 
+    if (isLocalToolStructuredResult(result)) {
+      const details = (result as {
+        details: {
+          summary?: unknown
+        }
+      }).details
+
+      return {
+        ok: true,
+        scope: 'global',
+        executionId: null,
+        status: 'success',
+        summary: typeof details.summary === 'string' ? details.summary : '操作已完成',
+        nodes: [],
+        artifacts: [],
+        warnings: [],
+      }
+    }
+
     return {
       ok: true,
       scope: 'global',
       executionId: null,
       status: 'success',
-      summary: typeof result === 'string' ? result : '操作已完成',
+      summary:
+        typeof result === 'string'
+          ? result
+          : result && typeof result === 'object' && 'details' in result
+            ? ((result as { details?: { summary?: unknown } }).details?.summary as string | undefined) ?? '操作已完成'
+            : '操作已完成',
       nodes: [],
       artifacts: [],
       warnings: [],

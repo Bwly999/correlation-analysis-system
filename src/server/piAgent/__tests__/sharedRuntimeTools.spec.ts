@@ -20,10 +20,10 @@ describe('sharedRuntimeTools', () => {
     },
     contextHints: {
       schemaSummaries: [],
-      },
-      dataSources: [],
-      nodeCatalog: [],
-    })
+    },
+    dataSources: [],
+    nodeCatalog: [],
+  })
 
   it('returns workflow snapshot as summary semantics in session context tool', async () => {
     const tools = createSharedRuntimeTools({
@@ -98,96 +98,7 @@ describe('sharedRuntimeTools', () => {
       request: createRequest(),
     })
 
-    expect(tools.map((item) => item.name)).toEqual([
-      'workflow_get_session_context',
-      'workflow_get_node_catalog',
-      'workflow_get_node',
-    ])
+    expect(tools.map((item) => item.name)).toEqual(['workflow_get_session_context'])
     expect(tools.find((item) => item.name === 'workflow_workflow_versions')).toBeUndefined()
-  })
-
-  it('returns compact node catalog entries and leaves details to workflow_get_node', async () => {
-    const tools = createSharedRuntimeTools({
-      request: createRequest(),
-    })
-
-    const tool = tools.find((item) => item.name === 'workflow_get_node_catalog')
-    if (!tool) throw new Error('缺少 workflow_get_node_catalog 工具')
-
-    const result = await tool.execute(
-      'call_catalog',
-      { limit: 1 },
-      undefined as never,
-      undefined as never,
-      undefined as never,
-    )
-    const payload = JSON.parse((result.content[0] as any).text) as {
-      items: Array<Record<string, unknown>>
-    }
-    const firstItem = payload.items[0]
-
-    expect(firstItem).toEqual(expect.objectContaining({
-      name: expect.any(String),
-      displayName: expect.any(String),
-      category: expect.any(String),
-      description: expect.any(String),
-      inputMode: expect.any(String),
-      minInputs: expect.any(Number),
-    }))
-    expect(firstItem).not.toHaveProperty('properties')
-    expect(firstItem).not.toHaveProperty('help')
-    expect(firstItem).not.toHaveProperty('assistantHints')
-    expect(firstItem).toHaveProperty('matchedUseCases')
-    expect(firstItem).toHaveProperty('recommendedFollowUp')
-  })
-
-  it('adds stronger continuation guidance to node catalog and node detail tools', () => {
-    const tools = createSharedRuntimeTools({
-      request: createRequest(),
-    })
-
-    const catalogTool = tools.find((item) => item.name === 'workflow_get_node_catalog')
-    const nodeTool = tools.find((item) => item.name === 'workflow_get_node')
-    if (!catalogTool || !nodeTool) throw new Error('缺少节点读取工具')
-
-    expect(catalogTool.promptGuidelines).toEqual(
-      expect.arrayContaining([
-        expect.stringContaining('不要结束本轮'),
-      ]),
-    )
-    expect(nodeTool.promptGuidelines).toEqual(
-      expect.arrayContaining([
-        expect.stringContaining('多个节点'),
-        expect.stringContaining('统一回答'),
-        expect.stringContaining('不能在读完第一个节点后结束'),
-      ]),
-    )
-  })
-
-  it('returns actionable next-step hints in workflow_get_node info mode', async () => {
-    const tools = createSharedRuntimeTools({
-      request: createRequest(),
-    })
-
-    const tool = tools.find((item) => item.name === 'workflow_get_node')
-    if (!tool) throw new Error('缺少 workflow_get_node 工具')
-
-    const result = await tool.execute(
-      'call_node',
-      { nodeType: 'manual-json-import' },
-      undefined as never,
-      undefined as never,
-      undefined as never,
-    )
-    const payload = JSON.parse((result.content[0] as any).text) as Record<string, any>
-
-    expect(payload).toEqual(expect.objectContaining({
-      recommendedNextStep: expect.any(String),
-      exampleQuestionsThisNodeCanAnswer: expect.any(Array),
-      keyProperties: expect.arrayContaining([
-        expect.objectContaining({ name: 'jsonData', required: true }),
-      ]),
-      requiredInputs: expect.arrayContaining(['jsonData']),
-    }))
   })
 })

@@ -1,31 +1,10 @@
 ﻿import type { Edge } from '@vue-flow/core'
-import { creatableNodeDefinitions } from '@/nodes/registry'
-import { CONNECTION_RULES } from '@/workflow/connectionRules'
 import type { WorkflowNode } from '@/utils/storage'
 import type { WorkflowAiNodeCatalogItem, WorkflowAiPlanMode } from './types'
+import { buildWorkflowAiNodeCatalog as buildPiAgentWorkflowAiNodeCatalog } from '@/services/piAgentNodeQuery'
 
 export const buildWorkflowAiNodeCatalog = (): WorkflowAiNodeCatalogItem[] =>
-  creatableNodeDefinitions.map((definition) => ({
-    name: definition.name,
-    displayName: definition.displayName,
-    category: definition.category,
-    description: definition.description,
-    inputMode: definition.inputMode ?? 'single',
-    minInputs: definition.minInputs ?? 0,
-    maxInputs: definition.maxInputs ?? (definition.inputMode === 'multiple' ? null : 1),
-    allowedNextCategories: CONNECTION_RULES[definition.category] ?? [],
-    properties: definition.properties.map((property) => ({
-      name: property.name,
-      displayName: property.displayName,
-      type: property.type,
-      required: property.required ?? false,
-      isRuntimeInput: property.isRuntimeInput ?? false,
-      defaultValue: property.default ?? null,
-      description: property.description ?? '',
-    })),
-    help: definition.help ?? null,
-    assistantHints: definition.assistantHints ?? null,
-  }))
+  buildPiAgentWorkflowAiNodeCatalog()
 
 export const buildWorkflowAiSnapshot = (nodes: WorkflowNode[], edges: Edge[]) => ({
   nodes: nodes.map((node) => ({
