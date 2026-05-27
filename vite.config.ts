@@ -37,7 +37,22 @@ const workflowServerDevMiddleware = (): Plugin => {
       const getHandler = async () =>
         server
           .ssrLoadModule('/src/server/app.ts')
-          .then(({ createServerHandler }) => createServerHandler())
+          .then(async ({ createServerApp }) => {
+            const app = createServerApp()
+            await app.ready()
+
+            return (request: NodeJS.ReadableStream, response: NodeJS.WritableStream & NodeJS.EventEmitter) => {
+              const cleanup = () => {
+                response.off('close', cleanup)
+                response.off('finish', cleanup)
+                void app.close()
+              }
+
+              response.once('close', cleanup)
+              response.once('finish', cleanup)
+              app.server.emit('request', request, response)
+            }
+          })
 
       server.middlewares.use((request, response, next) => {
         if (!request.url?.startsWith('/api/')) {

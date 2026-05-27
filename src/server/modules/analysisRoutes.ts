@@ -1,6 +1,6 @@
 import type { AnalysisRouteKey } from '../analysisProxy.js'
-import type { ServerDependencies } from '../bootstrap/serverDependencies.js'
-import type { HttpDomainHandler } from '../http/types.js'
+import type { FastifyPluginAsync } from 'fastify'
+import { createAnalysisProxyReply } from '../http/fastify.js'
 
 const ANALYSIS_ROUTE_BY_PATH: Record<string, AnalysisRouteKey> = {
   '/api/analysis/lasso': 'lasso',
@@ -10,11 +10,16 @@ const ANALYSIS_ROUTE_BY_PATH: Record<string, AnalysisRouteKey> = {
   '/api/analysis/xgboost-shap': 'xgboost-shap',
 }
 
-export const createAnalysisRoutes = (): HttpDomainHandler<ServerDependencies> => async (context) => {
-  if (context.method !== 'POST') return false
-  const route = ANALYSIS_ROUTE_BY_PATH[context.pathname]
-  if (!route) return false
-
-  await context.dependencies.proxyAnalysisRequest(context, route)
-  return true
+export const createAnalysisRoutes = (): FastifyPluginAsync => async (app) => {
+  for (const [path, route] of Object.entries(ANALYSIS_ROUTE_BY_PATH)) {
+    app.post(path, async (request, reply) => {
+      await app.serverDependencies.proxyAnalysisRequest(
+        {
+          body: request.body,
+          reply: createAnalysisProxyReply(reply),
+        },
+        route,
+      )
+    })
+  }
 }

@@ -1,47 +1,34 @@
 // @vitest-environment node
 
+import type { FastifyInstance } from 'fastify'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createHmac } from 'node:crypto'
-import { Readable } from 'node:stream'
 import { mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import type { IncomingMessage, ServerResponse } from 'node:http'
-import { createServerHandler } from '../app.js'
+import { createServerApp } from '../app.js'
 import { createStorageCompositionRoot } from '../bootstrap/storageCompositionRoot.js'
 
-type MockResponse = ServerResponse & {
-  body: string
-  headersMap: Record<string, string>
+const apps: FastifyInstance[] = []
+
+const createTestApp = (options?: Parameters<typeof createServerApp>[0]) => {
+  const app = createServerApp(options)
+  apps.push(app)
+  return app
 }
 
-const createRequest = (method: string, url: string, body?: unknown, headers?: Record<string, string>) => {
-  const payload = body === undefined ? '' : JSON.stringify(body)
-  const stream = Readable.from(payload ? [payload] : []) as IncomingMessage
-  stream.method = method
-  stream.url = url
-  stream.headers = headers ?? {}
-  return stream
-}
+const request = (
+  app: FastifyInstance,
+  method: string,
+  url: string,
+  payload?: unknown,
+  headers?: Record<string, string>,
+) => app.inject({ method, url, payload, headers: headers ?? {} })
 
-const createResponse = () => {
-  const headersMap: Record<string, string> = {}
-  const response = {
-    statusCode: 200,
-    body: '',
-    headersMap,
-    setHeader(name: string, value: string) {
-      headersMap[name] = value
-      return this
-    },
-    end(chunk?: string) {
-      this.body = chunk ?? ''
-      return this
-    },
-  } as MockResponse
-
-  return response
-}
+const workflowHeaders = (userId: string, userName = '服务端用户') => ({
+  'x-workflow-user-id': userId,
+  'x-workflow-user-name': userName,
+})
 
 const base64UrlEncode = (value: unknown) =>
   Buffer.from(typeof value === 'string' ? value : JSON.stringify(value)).toString('base64url')
@@ -53,15 +40,22 @@ const createJwtToken = (payload: Record<string, unknown>, secret = 'route-secret
   return `${header}.${body}.${signature}`
 }
 
-const loadHandlerFresh = async () => {
+const loadAppFresh = async () => {
   vi.resetModules()
   const appModule = await import('../app.js')
-  return appModule.createServerHandler()
+  const app = appModule.createServerApp()
+  apps.push(app)
+  return app
 }
 
-afterEach(() => {
+afterEach(async () => {
   vi.unstubAllEnvs()
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
+
+  while (apps.length > 0) {
+    await apps.pop()!.close()
+  }
 })
 
 beforeEach(() => {
@@ -69,138 +63,119 @@ beforeEach(() => {
 })
 
 describe('storage routes', () => {
-  it('should allow explicit dependency injection for storage user resolution', async () => {
+  it('allows explicit dependency injection for storage user resolution', async () => {
     const root = createStorageCompositionRoot()
-    const handler = createServerHandler({
+    const app = createTestApp({
       storageService: root.storageService,
       resolveStorageUser: () => ({
         id: 'injected-user',
         name: '注入用户',
       }),
     })
-    const response = createResponse()
 
-    await handler(createRequest('GET', '/api/storage/me'), response)
+    const response = await request(app, 'GET', '/api/storage/me')
 
     expect(response.statusCode).toBe(200)
-    expect(JSON.parse(response.body)).toEqual({
+    expect(response.json()).toEqual({
       id: 'injected-user',
       name: '注入用户',
     })
   })
 
-  it('should expose the current storage user', async () => {
-    const handler = createServerHandler()
-    const request = createRequest('GET', '/api/storage/me', undefined, {
-      'x-workflow-user-id': 'server-user-1',
-      'x-workflow-user-name': '服务端用户',
-    })
-    const response = createResponse()
+  it('exposes the current storage user', async () => {
+    const app = createTestApp()
 
-    await handler(request, response)
+    const response = await request(app, 'GET', '/api/storage/me', undefined, workflowHeaders('server-user-1'))
 
     expect(response.statusCode).toBe(200)
-    expect(JSON.parse(response.body)).toEqual({
+    expect(response.json()).toEqual({
       id: 'server-user-1',
       name: '服务端用户',
     })
   })
 
-  it('should resolve the current user from a valid JWT when auth is enabled', async () => {
+  it('resolves the current user from a valid JWT when auth is enabled', async () => {
     vi.stubEnv('WORKFLOW_JWT_SECRET', 'route-secret')
-    const handler = createServerHandler()
+    const app = createTestApp()
     const token = createJwtToken({
       w3Account: 'jwt-user-1',
       cnName: 'JWT 用户',
       exp: Math.floor(Date.now() / 1000) + 60,
     })
-    const response = createResponse()
 
-    await handler(
-      createRequest('GET', '/api/storage/me', undefined, {
-        authorization: `Bearer ${token}`,
-        'x-workflow-user-id': 'spoofed-user',
-      }),
-      response,
-    )
+    const response = await request(app, 'GET', '/api/storage/me', undefined, {
+      authorization: `Bearer ${token}`,
+      'x-workflow-user-id': 'spoofed-user',
+    })
 
     expect(response.statusCode).toBe(200)
-    expect(JSON.parse(response.body)).toEqual({
+    expect(response.json()).toEqual({
       id: 'jwt-user-1',
       name: 'JWT 用户',
     })
   })
 
-  it('should fallback to default storage user when request headers do not provide workflow user', async () => {
-    const handler = createServerHandler({
+  it('falls back to default storage user when request headers do not provide workflow user', async () => {
+    const app = createTestApp({
       defaultStorageUser: {
         id: 'default-user-1',
         name: '默认注入用户',
       },
     })
-    const response = createResponse()
 
-    await handler(createRequest('GET', '/api/storage/me'), response)
+    const response = await request(app, 'GET', '/api/storage/me')
 
     expect(response.statusCode).toBe(200)
-    expect(JSON.parse(response.body)).toEqual({
+    expect(response.json()).toEqual({
       id: 'default-user-1',
       name: '默认注入用户',
     })
   })
 
-  it('should reject node api requests without JWT when auth is enabled', async () => {
+  it('rejects node api requests without JWT when auth is enabled', async () => {
     vi.stubEnv('WORKFLOW_JWT_SECRET', 'route-secret')
-    const handler = createServerHandler()
-    const response = createResponse()
+    const app = createTestApp()
 
-    await handler(createRequest('GET', '/api/pi-agent/model-profiles'), response)
+    const response = await request(app, 'GET', '/api/pi-agent/model-profiles')
 
     expect(response.statusCode).toBe(401)
-    expect(JSON.parse(response.body)).toEqual({
+    expect(response.json()).toEqual({
       message: '缺少 Authorization Bearer token',
     })
   })
 
-  it('should keep CORS preflight requests public when auth is enabled', async () => {
+  it('keeps CORS preflight requests public when auth is enabled', async () => {
     vi.stubEnv('WORKFLOW_JWT_SECRET', 'route-secret')
-    const handler = createServerHandler()
-    const response = createResponse()
+    const app = createTestApp()
 
-    await handler(createRequest('OPTIONS', '/api/storage/me'), response)
+    const response = await request(app, 'OPTIONS', '/api/storage/me')
 
     expect(response.statusCode).toBe(204)
     expect(response.body).toBe('')
   })
 
-  it('should isolate workflows by current user', async () => {
-    const handler = createServerHandler()
+  it('isolates workflows by current user', async () => {
+    const app = createTestApp()
 
-    await handler(
-      createRequest(
-        'POST',
-        '/api/storage/workflows',
-        { id: 'wf_user_a', name: '用户A工作流', updatedAt: 1, nodes: [], edges: [] },
-        { 'x-workflow-user-id': 'user-a' },
-      ),
-      createResponse(),
+    await request(
+      app,
+      'POST',
+      '/api/storage/workflows',
+      { id: 'wf_user_a', name: '用户A工作流', updatedAt: 1, nodes: [], edges: [] },
+      workflowHeaders('user-a', '用户A'),
+    )
+    await request(
+      app,
+      'POST',
+      '/api/storage/workflows',
+      { id: 'wf_user_b', name: '用户B工作流', updatedAt: 2, nodes: [], edges: [] },
+      workflowHeaders('user-b', '用户B'),
     )
 
-    await handler(
-      createRequest(
-        'POST',
-        '/api/storage/workflows',
-        { id: 'wf_user_b', name: '用户B工作流', updatedAt: 2, nodes: [], edges: [] },
-        { 'x-workflow-user-id': 'user-b' },
-      ),
-      createResponse(),
-    )
-
-    const response = createResponse()
-    await handler(createRequest('GET', '/api/storage/workflows', undefined, { 'x-workflow-user-id': 'user-a' }), response)
+    const response = await request(app, 'GET', '/api/storage/workflows', undefined, workflowHeaders('user-a', '用户A'))
 
     expect(response.statusCode).toBe(200)
-    expect(JSON.parse(response.body)).toEqual([
+    expect(response.json()).toEqual([
       expect.objectContaining({
         id: 'wf_user_a',
         name: '用户A工作流',
@@ -208,54 +183,47 @@ describe('storage routes', () => {
     ])
   })
 
-  it('should list workflow versions in reverse chronological order', async () => {
-    const handler = createServerHandler()
+  it('lists workflow versions in reverse chronological order and supports version detail plus rollback', async () => {
+    const app = createTestApp()
 
-    await handler(
-      createRequest(
-        'POST',
-        '/api/storage/workflows',
-        {
-          id: 'wf_versions',
-          name: '版本工作流',
-          updatedAt: 10,
-          nodes: [{ id: 'node_v1' }],
-          edges: [],
-        },
-        { 'x-workflow-user-id': 'version-user' },
-      ),
-      createResponse(),
+    await request(
+      app,
+      'POST',
+      '/api/storage/workflows',
+      {
+        id: 'wf_versions',
+        name: '版本工作流',
+        updatedAt: 10,
+        nodes: [{ id: 'node_v1' }],
+        edges: [],
+      },
+      workflowHeaders('version-user', '版本用户'),
+    )
+    await request(
+      app,
+      'POST',
+      '/api/storage/workflows',
+      {
+        id: 'wf_versions',
+        name: '版本工作流',
+        updatedAt: 20,
+        nodes: [{ id: 'node_v2' }],
+        edges: [],
+      },
+      workflowHeaders('version-user', '版本用户'),
     )
 
-    await handler(
-      createRequest(
-        'POST',
-        '/api/storage/workflows',
-        {
-          id: 'wf_versions',
-          name: '版本工作流',
-          updatedAt: 20,
-          nodes: [{ id: 'node_v2' }],
-          edges: [],
-        },
-        { 'x-workflow-user-id': 'version-user' },
-      ),
-      createResponse(),
+    const versionsResponse = await request(
+      app,
+      'GET',
+      '/api/storage/workflows/wf_versions/versions',
+      undefined,
+      workflowHeaders('version-user', '版本用户'),
     )
 
-    const response = createResponse()
-    await handler(
-      createRequest(
-        'GET',
-        '/api/storage/workflows/wf_versions/versions',
-        undefined,
-        { 'x-workflow-user-id': 'version-user' },
-      ),
-      response,
-    )
-
-    expect(response.statusCode).toBe(200)
-    expect(JSON.parse(response.body)).toEqual([
+    expect(versionsResponse.statusCode).toBe(200)
+    const versions = versionsResponse.json()
+    expect(versions).toEqual([
       expect.objectContaining({
         workflowId: 'wf_versions',
         workflowName: '版本工作流',
@@ -267,554 +235,98 @@ describe('storage routes', () => {
         source: 'save',
       }),
     ])
-    const [latestVersion, firstVersion] = JSON.parse(response.body)
-    expect(latestVersion.createdAt).toBeGreaterThanOrEqual(firstVersion.createdAt)
-    expect(latestVersion.workflowUpdatedAt).toBe(20)
-    expect(firstVersion.workflowUpdatedAt).toBe(10)
-  })
+    expect(versions[0].createdAt).toBeGreaterThanOrEqual(versions[1].createdAt)
+    expect(versions[0].workflowUpdatedAt).toBe(20)
+    expect(versions[1].workflowUpdatedAt).toBe(10)
 
-  it('should return a workflow version snapshot by version id', async () => {
-    const handler = createServerHandler()
-
-    await handler(
-      createRequest(
-        'POST',
-        '/api/storage/workflows',
-        {
-          id: 'wf_version_detail',
-          name: '版本详情工作流',
-          updatedAt: 30,
-          nodes: [{ id: 'node_detail_v1' }],
-          edges: [],
-        },
-        { 'x-workflow-user-id': 'version-detail-user' },
-      ),
-      createResponse(),
+    const versionDetailResponse = await request(
+      app,
+      'GET',
+      `/api/storage/workflows/wf_versions/versions/${encodeURIComponent(versions[1].id)}`,
+      undefined,
+      workflowHeaders('version-user', '版本用户'),
     )
 
-    await handler(
-      createRequest(
-        'POST',
-        '/api/storage/workflows',
-        {
-          id: 'wf_version_detail',
-          name: '版本详情工作流',
-          updatedAt: 40,
-          nodes: [{ id: 'node_detail_v2' }],
-          edges: [],
-        },
-        { 'x-workflow-user-id': 'version-detail-user' },
-      ),
-      createResponse(),
-    )
-
-    const listResponse = createResponse()
-    await handler(
-      createRequest(
-        'GET',
-        '/api/storage/workflows/wf_version_detail/versions',
-        undefined,
-        { 'x-workflow-user-id': 'version-detail-user' },
-      ),
-      listResponse,
-    )
-
-    const versions = JSON.parse(listResponse.body)
-    const targetVersionId = versions[1].id as string
-
-    const response = createResponse()
-    await handler(
-      createRequest(
-        'GET',
-        `/api/storage/workflows/wf_version_detail/versions/${encodeURIComponent(targetVersionId)}`,
-        undefined,
-        { 'x-workflow-user-id': 'version-detail-user' },
-      ),
-      response,
-    )
-
-    expect(response.statusCode).toBe(200)
-    expect(JSON.parse(response.body)).toEqual(
+    expect(versionDetailResponse.statusCode).toBe(200)
+    expect(versionDetailResponse.json()).toEqual(
       expect.objectContaining({
-        id: targetVersionId,
-        workflowId: 'wf_version_detail',
-        workflowName: '版本详情工作流',
-        source: 'save',
+        id: versions[1].id,
+        workflowId: 'wf_versions',
         workflow: expect.objectContaining({
-          id: 'wf_version_detail',
-          updatedAt: 30,
-          nodes: [{ id: 'node_detail_v1' }],
-          edges: [],
+          updatedAt: 10,
+          nodes: [{ id: 'node_v1' }],
         }),
       }),
     )
-  })
 
-  it('should rollback workflow to a historical version and create a rollback version record', async () => {
-    const handler = createServerHandler()
-
-    await handler(
-      createRequest(
-        'POST',
-        '/api/storage/workflows',
-        {
-          id: 'wf_rollback',
-          name: '回滚工作流',
-          updatedAt: 100,
-          nodes: [{ id: 'node_rb_v1' }],
-          edges: [],
-        },
-        { 'x-workflow-user-id': 'rollback-user' },
-      ),
-      createResponse(),
-    )
-
-    await handler(
-      createRequest(
-        'POST',
-        '/api/storage/workflows',
-        {
-          id: 'wf_rollback',
-          name: '回滚工作流',
-          updatedAt: 200,
-          nodes: [{ id: 'node_rb_v2' }],
-          edges: [],
-        },
-        { 'x-workflow-user-id': 'rollback-user' },
-      ),
-      createResponse(),
-    )
-
-    const listResponse = createResponse()
-    await handler(
-      createRequest(
-        'GET',
-        '/api/storage/workflows/wf_rollback/versions',
-        undefined,
-        { 'x-workflow-user-id': 'rollback-user' },
-      ),
-      listResponse,
-    )
-
-    const versions = JSON.parse(listResponse.body)
-    const targetVersionId = versions[1].id as string
-
-    const rollbackResponse = createResponse()
-    await handler(
-      createRequest(
-        'POST',
-        `/api/storage/workflows/wf_rollback/versions/${encodeURIComponent(targetVersionId)}/rollback`,
-        undefined,
-        { 'x-workflow-user-id': 'rollback-user' },
-      ),
-      rollbackResponse,
+    const rollbackResponse = await request(
+      app,
+      'POST',
+      `/api/storage/workflows/wf_versions/versions/${encodeURIComponent(versions[1].id)}/rollback`,
+      undefined,
+      workflowHeaders('version-user', '版本用户'),
     )
 
     expect(rollbackResponse.statusCode).toBe(200)
-    expect(JSON.parse(rollbackResponse.body)).toEqual({
+    expect(rollbackResponse.json()).toEqual({
       workflow: expect.objectContaining({
-        id: 'wf_rollback',
-        name: '回滚工作流',
-        nodes: [{ id: 'node_rb_v1' }],
-        edges: [],
+        id: 'wf_versions',
+        nodes: [{ id: 'node_v1' }],
       }),
       version: expect.objectContaining({
-        workflowId: 'wf_rollback',
-        workflowName: '回滚工作流',
+        workflowId: 'wf_versions',
         source: 'rollback',
       }),
     })
 
-    const currentWorkflowResponse = createResponse()
-    await handler(
-      createRequest('GET', '/api/storage/workflows/wf_rollback', undefined, { 'x-workflow-user-id': 'rollback-user' }),
-      currentWorkflowResponse,
+    const currentWorkflowResponse = await request(
+      app,
+      'GET',
+      '/api/storage/workflows/wf_versions',
+      undefined,
+      workflowHeaders('version-user', '版本用户'),
     )
-    expect(JSON.parse(currentWorkflowResponse.body)).toEqual(
+    expect(currentWorkflowResponse.json()).toEqual(
       expect.objectContaining({
-        id: 'wf_rollback',
-        nodes: [{ id: 'node_rb_v1' }],
+        id: 'wf_versions',
+        nodes: [{ id: 'node_v1' }],
       }),
     )
-
-    const postRollbackVersionsResponse = createResponse()
-    await handler(
-      createRequest(
-        'GET',
-        '/api/storage/workflows/wf_rollback/versions',
-        undefined,
-        { 'x-workflow-user-id': 'rollback-user' },
-      ),
-      postRollbackVersionsResponse,
-    )
-    const postRollbackVersions = JSON.parse(postRollbackVersionsResponse.body)
-    expect(postRollbackVersions).toHaveLength(3)
-    expect(postRollbackVersions[0].source).toBe('rollback')
   })
 
-  it('should proxy lasso analysis requests to the python backend', async () => {
-    vi.stubEnv('PYTHON_ANALYSIS_API_BASE_URL', 'http://127.0.0.1:9000')
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      text: async () => JSON.stringify({ status: 'success', results: { summary: { ok: true } } }),
-    })
-    vi.stubGlobal('fetch', fetchMock)
+  it('returns compact history summaries and full record detail through separate endpoints', async () => {
+    const app = createTestApp()
 
-    const handler = createServerHandler()
-    const response = createResponse()
-
-    await handler(
-      createRequest('POST', '/api/analysis/lasso', {
-        data: [{ target: 1, f1: 2 }],
-        target: 'target',
-        config: { alpha: 0.1 },
-      }),
-      response,
-    )
-
-    expect(fetchMock).toHaveBeenCalledWith('http://127.0.0.1:9000/analyze/lasso', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        data: [{ target: 1, f1: 2 }],
-        target: 'target',
-        config: { alpha: 0.1 },
-      }),
-    })
-    expect(response.statusCode).toBe(200)
-    expect(JSON.parse(response.body)).toEqual({
-      status: 'success',
-      results: { summary: { ok: true } },
-    })
-  })
-
-  it('should proxy multiple linear regression analysis requests to the python backend', async () => {
-    vi.stubEnv('PYTHON_ANALYSIS_API_BASE_URL', 'http://127.0.0.1:9000')
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      text: async () => JSON.stringify({ status: 'success', results: { summary: { ok: true } } }),
-    })
-    vi.stubGlobal('fetch', fetchMock)
-
-    const handler = createServerHandler()
-    const response = createResponse()
-
-    await handler(
-      createRequest('POST', '/api/analysis/multiple-linear-regression', {
-        data: [{ target: 1, f1: 2 }],
-        target: 'target',
-        config: { factorNames: ['f1'] },
-      }),
-      response,
-    )
-
-    expect(fetchMock).toHaveBeenCalledWith(
-      'http://127.0.0.1:9000/analyze/multiple-linear-regression',
+    await request(
+      app,
+      'POST',
+      '/api/storage/history',
       {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+        record: {
+          id: 'exec_summary_1',
+          workflowId: 'wf_1',
+          workflowName: '历史工作流',
+          startTime: 100,
+          duration: 20,
+          status: 'success',
+          nodes: [{ id: 'node_1' }],
+          edges: [{ id: 'edge_1' }],
         },
-        body: JSON.stringify({
-          data: [{ target: 1, f1: 2 }],
-          target: 'target',
-          config: { factorNames: ['f1'] },
-        }),
+        limit: 20,
       },
-    )
-    expect(response.statusCode).toBe(200)
-    expect(JSON.parse(response.body)).toEqual({
-      status: 'success',
-      results: { summary: { ok: true } },
-    })
-  })
-
-  it('should proxy random forest feature importance analysis requests to the python backend', async () => {
-    vi.stubEnv('PYTHON_ANALYSIS_API_BASE_URL', 'http://127.0.0.1:9000')
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      text: async () => JSON.stringify({ status: 'success', results: { summary: { ok: true } } }),
-    })
-    vi.stubGlobal('fetch', fetchMock)
-
-    const handler = createServerHandler()
-    const response = createResponse()
-
-    await handler(
-      createRequest('POST', '/api/analysis/random-forest-feature-importance', {
-        data: [{ target: 1, f1: 2 }],
-        target: 'target',
-        config: { factorNames: ['f1'], nEstimators: 200 },
-      }),
-      response,
+      workflowHeaders('history-summary-user', '历史摘要用户'),
     )
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      'http://127.0.0.1:9000/analyze/random-forest-feature-importance',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          data: [{ target: 1, f1: 2 }],
-          target: 'target',
-          config: { factorNames: ['f1'], nEstimators: 200 },
-        }),
-      },
-    )
-    expect(response.statusCode).toBe(200)
-    expect(JSON.parse(response.body)).toEqual({
-      status: 'success',
-      results: { summary: { ok: true } },
-    })
-  })
-
-  it('should proxy logistic regression classification analysis requests to the python backend', async () => {
-    vi.stubEnv('PYTHON_ANALYSIS_API_BASE_URL', 'http://127.0.0.1:9000')
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      text: async () => JSON.stringify({ status: 'success', results: { summary: { ok: true } } }),
-    })
-    vi.stubGlobal('fetch', fetchMock)
-
-    const handler = createServerHandler()
-    const response = createResponse()
-
-    await handler(
-      createRequest('POST', '/api/analysis/logistic-regression-classification', {
-        data: [{ label: 'A', f1: 2 }],
-        target: 'label',
-        config: { factorNames: ['f1'] },
-      }),
-      response,
-    )
-
-    expect(fetchMock).toHaveBeenCalledWith(
-      'http://127.0.0.1:9000/analyze/logistic-regression-classification',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          data: [{ label: 'A', f1: 2 }],
-          target: 'label',
-          config: { factorNames: ['f1'] },
-        }),
-      },
-    )
-    expect(response.statusCode).toBe(200)
-    expect(JSON.parse(response.body)).toEqual({
-      status: 'success',
-      results: { summary: { ok: true } },
-    })
-  })
-
-  it('should return python backend errors for analysis requests', async () => {
-    vi.stubEnv('PYTHON_ANALYSIS_API_BASE_URL', 'http://127.0.0.1:9000')
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: false,
-      status: 400,
-      text: async () => JSON.stringify({ detail: '目标字段不存在' }),
-    })
-    vi.stubGlobal('fetch', fetchMock)
-
-    const handler = createServerHandler()
-    const response = createResponse()
-
-    await handler(
-      createRequest('POST', '/api/analysis/xgboost-shap', {
-        data: [{ target: 1, f1: 2 }],
-        target: 'missing_target',
-        config: {},
-      }),
-      response,
-    )
-
-    expect(response.statusCode).toBe(400)
-    expect(JSON.parse(response.body)).toEqual({ detail: '目标字段不存在' })
-  })
-
-  it('should surface a clear error when the python analysis backend is unreachable', async () => {
-    vi.stubEnv('PYTHON_ANALYSIS_API_BASE_URL', 'http://127.0.0.1:9000')
-    const fetchMock = vi.fn().mockRejectedValue(new TypeError('fetch failed'))
-    vi.stubGlobal('fetch', fetchMock)
-
-    const handler = createServerHandler()
-    const response = createResponse()
-
-    await handler(
-      createRequest('POST', '/api/analysis/lasso', {
-        data: [{ target: 1, f1: 2 }],
-        target: 'target',
-        config: { alpha: 0.1 },
-      }),
-      response,
-    )
-
-    expect(response.statusCode).toBe(502)
-    expect(JSON.parse(response.body)).toEqual({
-      message: 'Python 分析服务不可用，请确认算法后端已启动',
-      diagnostics: {
-        targetUrl: 'http://127.0.0.1:9000/analyze/lasso',
-        cause: 'fetch failed',
-      },
-    })
-  })
-
-  it('should persist workflows and versions after reloading the server module', async () => {
-    const storageDir = mkdtempSync(join(tmpdir(), 'cas-storage-routes-'))
-    vi.stubEnv('WORKFLOW_STORAGE_DATA_DIR', storageDir)
-
-    const initialHandler = await loadHandlerFresh()
-    await initialHandler(
-      createRequest(
-        'POST',
-        '/api/storage/workflows',
-        {
-          id: 'wf_persisted',
-          name: '持久化工作流',
-          updatedAt: 50,
-          nodes: [{ id: 'node_persisted_v1' }],
-          edges: [],
-        },
-        { 'x-workflow-user-id': 'persist-user' },
-      ),
-      createResponse(),
-    )
-
-    const reloadedHandler = await loadHandlerFresh()
-    const workflowResponse = createResponse()
-    await reloadedHandler(
-      createRequest(
-        'GET',
-        '/api/storage/workflows/wf_persisted',
-        undefined,
-        { 'x-workflow-user-id': 'persist-user' },
-      ),
-      workflowResponse,
-    )
-
-    expect(workflowResponse.statusCode).toBe(200)
-    expect(JSON.parse(workflowResponse.body)).toEqual(
-      expect.objectContaining({
-        id: 'wf_persisted',
-        name: '持久化工作流',
-      }),
-    )
-
-    const versionsResponse = createResponse()
-    await reloadedHandler(
-      createRequest(
-        'GET',
-        '/api/storage/workflows/wf_persisted/versions',
-        undefined,
-        { 'x-workflow-user-id': 'persist-user' },
-      ),
-      versionsResponse,
-    )
-
-    expect(JSON.parse(versionsResponse.body)).toEqual([
-      expect.objectContaining({
-        workflowId: 'wf_persisted',
-        source: 'save',
-      }),
-    ])
-  })
-
-  it('should persist history after reloading the server module', async () => {
-    const storageDir = mkdtempSync(join(tmpdir(), 'cas-storage-history-'))
-    vi.stubEnv('WORKFLOW_STORAGE_DATA_DIR', storageDir)
-
-    const initialHandler = await loadHandlerFresh()
-    await initialHandler(
-      createRequest(
-        'POST',
-        '/api/storage/history',
-        {
-          record: {
-            id: 'exec_1',
-            workflowId: 'wf_1',
-            workflowName: '历史工作流',
-            startTime: 100,
-            duration: 20,
-            status: 'success',
-            nodes: [],
-            edges: [],
-          },
-          limit: 20,
-        },
-        { 'x-workflow-user-id': 'history-user' },
-      ),
-      createResponse(),
-    )
-
-    const reloadedHandler = await loadHandlerFresh()
-    const response = createResponse()
-    await reloadedHandler(
-      createRequest(
-        'GET',
-        '/api/storage/history',
-        undefined,
-        { 'x-workflow-user-id': 'history-user' },
-      ),
-      response,
-    )
-
-    expect(response.statusCode).toBe(200)
-    expect(JSON.parse(response.body)).toEqual([
-      expect.objectContaining({
-        id: 'exec_1',
-        workflowName: '历史工作流',
-      }),
-    ])
-  })
-
-  it('should return compact history summaries and full record detail through separate endpoints', async () => {
-    const handler = createServerHandler()
-
-    await handler(
-      createRequest(
-        'POST',
-        '/api/storage/history',
-        {
-          record: {
-            id: 'exec_summary_1',
-            workflowId: 'wf_1',
-            workflowName: '历史工作流',
-            startTime: 100,
-            duration: 20,
-            status: 'success',
-            nodes: [{ id: 'node_1' }],
-            edges: [{ id: 'edge_1' }],
-          },
-          limit: 20,
-        },
-        { 'x-workflow-user-id': 'history-summary-user' },
-      ),
-      createResponse(),
-    )
-
-    const summaryResponse = createResponse()
-    await handler(
-      createRequest(
-        'GET',
-        '/api/storage/history/summaries',
-        undefined,
-        { 'x-workflow-user-id': 'history-summary-user' },
-      ),
-      summaryResponse,
+    const summaryResponse = await request(
+      app,
+      'GET',
+      '/api/storage/history/summaries',
+      undefined,
+      workflowHeaders('history-summary-user', '历史摘要用户'),
     )
 
     expect(summaryResponse.statusCode).toBe(200)
-    expect(JSON.parse(summaryResponse.body)).toEqual([
+    expect(summaryResponse.json()).toEqual([
       {
         id: 'exec_summary_1',
         workflowId: 'wf_1',
@@ -825,19 +337,16 @@ describe('storage routes', () => {
       },
     ])
 
-    const detailResponse = createResponse()
-    await handler(
-      createRequest(
-        'GET',
-        '/api/storage/history/exec_summary_1',
-        undefined,
-        { 'x-workflow-user-id': 'history-summary-user' },
-      ),
-      detailResponse,
+    const detailResponse = await request(
+      app,
+      'GET',
+      '/api/storage/history/exec_summary_1',
+      undefined,
+      workflowHeaders('history-summary-user', '历史摘要用户'),
     )
 
     expect(detailResponse.statusCode).toBe(200)
-    expect(JSON.parse(detailResponse.body)).toEqual(
+    expect(detailResponse.json()).toEqual(
       expect.objectContaining({
         id: 'exec_summary_1',
         nodes: [{ id: 'node_1' }],
@@ -846,21 +355,210 @@ describe('storage routes', () => {
     )
   })
 
-  it('should return 404 when a history record detail does not exist', async () => {
-    const handler = createServerHandler()
-    const response = createResponse()
+  it('returns 404 when a history record detail does not exist', async () => {
+    const app = createTestApp()
 
-    await handler(
-      createRequest(
-        'GET',
-        '/api/storage/history/missing',
-        undefined,
-        { 'x-workflow-user-id': 'history-missing-user' },
-      ),
-      response,
+    const response = await request(
+      app,
+      'GET',
+      '/api/storage/history/missing',
+      undefined,
+      workflowHeaders('history-missing-user', '历史缺失用户'),
     )
 
     expect(response.statusCode).toBe(404)
-    expect(JSON.parse(response.body)).toEqual({ message: '未找到运行记录' })
+    expect(response.json()).toEqual({ message: '未找到运行记录' })
+  })
+
+  it('proxies analysis requests to the python backend and preserves upstream errors', async () => {
+    vi.stubEnv('PYTHON_ANALYSIS_API_BASE_URL', 'http://127.0.0.1:9000')
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json; charset=utf-8' },
+        text: async () => JSON.stringify({ status: 'success', results: { summary: { ok: true } } }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json; charset=utf-8' },
+        text: async () => JSON.stringify({ status: 'success', results: { summary: { ok: true } } }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json; charset=utf-8' },
+        text: async () => JSON.stringify({ status: 'success', results: { summary: { ok: true } } }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json; charset=utf-8' },
+        text: async () => JSON.stringify({ status: 'success', results: { summary: { ok: true } } }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        headers: { get: () => 'application/json; charset=utf-8' },
+        text: async () => JSON.stringify({ detail: '目标字段不存在' }),
+      })
+    vi.stubGlobal('fetch', fetchMock)
+    const app = createTestApp()
+
+    const cases = [
+      [
+        '/api/analysis/lasso',
+        { data: [{ target: 1, f1: 2 }], target: 'target', config: { alpha: 0.1 } },
+        'http://127.0.0.1:9000/analyze/lasso',
+      ],
+      [
+        '/api/analysis/multiple-linear-regression',
+        { data: [{ target: 1, f1: 2 }], target: 'target', config: { factorNames: ['f1'] } },
+        'http://127.0.0.1:9000/analyze/multiple-linear-regression',
+      ],
+      [
+        '/api/analysis/random-forest-feature-importance',
+        { data: [{ target: 1, f1: 2 }], target: 'target', config: { factorNames: ['f1'], nEstimators: 200 } },
+        'http://127.0.0.1:9000/analyze/random-forest-feature-importance',
+      ],
+      [
+        '/api/analysis/logistic-regression-classification',
+        { data: [{ label: 'A', f1: 2 }], target: 'label', config: { factorNames: ['f1'] } },
+        'http://127.0.0.1:9000/analyze/logistic-regression-classification',
+      ],
+    ] as const
+
+    for (const [url, payload, targetUrl] of cases) {
+      const response = await request(app, 'POST', url, payload)
+      expect(response.statusCode).toBe(200)
+      expect(response.json()).toEqual({
+        status: 'success',
+        results: { summary: { ok: true } },
+      })
+      expect(fetchMock).toHaveBeenCalledWith(targetUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      })
+    }
+
+    const errorResponse = await request(
+      app,
+      'POST',
+      '/api/analysis/xgboost-shap',
+      { data: [{ target: 1, f1: 2 }], target: 'missing_target', config: {} },
+    )
+    expect(errorResponse.statusCode).toBe(400)
+    expect(errorResponse.json()).toEqual({ detail: '目标字段不存在' })
+  })
+
+  it('surfaces a clear error when the python analysis backend is unreachable', async () => {
+    vi.stubEnv('PYTHON_ANALYSIS_API_BASE_URL', 'http://127.0.0.1:9000')
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('fetch failed')))
+    const app = createTestApp()
+
+    const response = await request(
+      app,
+      'POST',
+      '/api/analysis/lasso',
+      { data: [{ target: 1, f1: 2 }], target: 'target', config: { alpha: 0.1 } },
+    )
+
+    expect(response.statusCode).toBe(502)
+    expect(response.json()).toEqual({
+      message: 'Python 分析服务不可用，请确认算法后端已启动',
+      diagnostics: {
+        targetUrl: 'http://127.0.0.1:9000/analyze/lasso',
+        cause: 'fetch failed',
+      },
+    })
+  })
+
+  it('persists workflows and history after reloading the server module', async () => {
+    const storageDir = mkdtempSync(join(tmpdir(), 'cas-storage-routes-'))
+    vi.stubEnv('WORKFLOW_STORAGE_DATA_DIR', storageDir)
+
+    const initialApp = await loadAppFresh()
+    await request(
+      initialApp,
+      'POST',
+      '/api/storage/workflows',
+      {
+        id: 'wf_persisted',
+        name: '持久化工作流',
+        updatedAt: 50,
+        nodes: [{ id: 'node_persisted_v1' }],
+        edges: [],
+      },
+      workflowHeaders('persist-user', '持久化用户'),
+    )
+    await request(
+      initialApp,
+      'POST',
+      '/api/storage/history',
+      {
+        record: {
+          id: 'exec_1',
+          workflowId: 'wf_1',
+          workflowName: '历史工作流',
+          startTime: 100,
+          duration: 20,
+          status: 'success',
+          nodes: [],
+          edges: [],
+        },
+        limit: 20,
+      },
+      workflowHeaders('persist-user', '持久化用户'),
+    )
+
+    const reloadedApp = await loadAppFresh()
+    const workflowResponse = await request(
+      reloadedApp,
+      'GET',
+      '/api/storage/workflows/wf_persisted',
+      undefined,
+      workflowHeaders('persist-user', '持久化用户'),
+    )
+    expect(workflowResponse.statusCode).toBe(200)
+    expect(workflowResponse.json()).toEqual(
+      expect.objectContaining({
+        id: 'wf_persisted',
+        name: '持久化工作流',
+      }),
+    )
+
+    const versionsResponse = await request(
+      reloadedApp,
+      'GET',
+      '/api/storage/workflows/wf_persisted/versions',
+      undefined,
+      workflowHeaders('persist-user', '持久化用户'),
+    )
+    expect(versionsResponse.json()).toEqual([
+      expect.objectContaining({
+        workflowId: 'wf_persisted',
+        source: 'save',
+      }),
+    ])
+
+    const historyResponse = await request(
+      reloadedApp,
+      'GET',
+      '/api/storage/history',
+      undefined,
+      workflowHeaders('persist-user', '持久化用户'),
+    )
+    expect(historyResponse.statusCode).toBe(200)
+    expect(historyResponse.json()).toEqual([
+      expect.objectContaining({
+        id: 'exec_1',
+        workflowName: '历史工作流',
+      }),
+    ])
   })
 })

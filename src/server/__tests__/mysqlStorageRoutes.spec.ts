@@ -1,7 +1,6 @@
+import type { FastifyInstance } from 'fastify'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { Readable } from 'node:stream'
 import { readFile } from 'node:fs/promises'
-import type { IncomingMessage, ServerResponse } from 'node:http'
 import { createPool } from 'mysql2/promise'
 import { resolveMysqlIntegrationTestConfig } from './mysqlStorageTestConfig.js'
 
@@ -11,46 +10,24 @@ vi.setConfig({
   testTimeout: 15000,
 })
 
-type MockResponse = ServerResponse & {
-  body: string
-  headersMap: Record<string, string>
-}
-
+const apps: FastifyInstance[] = []
 const mysqlConfig = resolveMysqlIntegrationTestConfig(process.env)
 
-const createRequest = (method: string, url: string, body?: unknown, headers?: Record<string, string>) => {
-  const payload = body === undefined ? '' : JSON.stringify(body)
-  const stream = Readable.from(payload ? [payload] : []) as IncomingMessage
-  stream.method = method
-  stream.url = url
-  stream.headers = headers ?? {}
-  return stream
-}
-
-const createResponse = () => {
-  const headersMap: Record<string, string> = {}
-  const response = {
-    statusCode: 200,
-    body: '',
-    headersMap,
-    setHeader(name: string, value: string) {
-      headersMap[name] = value
-      return this
-    },
-    end(chunk?: string) {
-      this.body = chunk ?? ''
-      return this
-    },
-  } as MockResponse
-
-  return response
-}
-
-const loadHandlerFresh = async () => {
+const loadAppFresh = async () => {
   vi.resetModules()
   const module = await import('../app.js')
-  return module.createServerHandler()
+  const app = module.createServerApp()
+  apps.push(app)
+  return app
 }
+
+const request = (
+  app: FastifyInstance,
+  method: string,
+  url: string,
+  payload?: unknown,
+  headers?: Record<string, string>,
+) => app.inject({ method, url, payload, headers: headers ?? {} })
 
 const adminPool = createPool({
   host: mysqlConfig.host,
@@ -103,59 +80,54 @@ describe.runIf(mysqlEnabled)('mysql storage routes', () => {
 
   afterAll(async () => {
     vi.unstubAllEnvs()
+    while (apps.length > 0) {
+      await apps.pop()!.close()
+    }
     await adminPool.end()
   })
 
   it('persists workflow versions after reloading the server module', async () => {
-    const initialHandler = await loadHandlerFresh()
-    await initialHandler(
-      createRequest(
-        'POST',
-        '/api/storage/workflows',
-        {
-          id: 'wf_mysql_persisted',
-          name: 'MySQL 持久化工作流',
-          updatedAt: 50,
-          nodes: [{ id: 'node_mysql_v1' }],
-          edges: [],
-        },
-        { 'x-workflow-user-id': 'mysql-user' },
-      ),
-      createResponse(),
+    const initialApp = await loadAppFresh()
+    await request(
+      initialApp,
+      'POST',
+      '/api/storage/workflows',
+      {
+        id: 'wf_mysql_persisted',
+        name: 'MySQL 持久化工作流',
+        updatedAt: 50,
+        nodes: [{ id: 'node_mysql_v1' }],
+        edges: [],
+      },
+      { 'x-workflow-user-id': 'mysql-user' },
     )
 
-    const reloadedHandler = await loadHandlerFresh()
-    const workflowResponse = createResponse()
-    await reloadedHandler(
-      createRequest(
-        'GET',
-        '/api/storage/workflows/wf_mysql_persisted',
-        undefined,
-        { 'x-workflow-user-id': 'mysql-user' },
-      ),
-      workflowResponse,
+    const reloadedApp = await loadAppFresh()
+    const workflowResponse = await request(
+      reloadedApp,
+      'GET',
+      '/api/storage/workflows/wf_mysql_persisted',
+      undefined,
+      { 'x-workflow-user-id': 'mysql-user' },
     )
 
     expect(workflowResponse.statusCode).toBe(200)
-    expect(JSON.parse(workflowResponse.body)).toEqual(
+    expect(workflowResponse.json()).toEqual(
       expect.objectContaining({
         id: 'wf_mysql_persisted',
         name: 'MySQL 持久化工作流',
       }),
     )
 
-    const versionsResponse = createResponse()
-    await reloadedHandler(
-      createRequest(
-        'GET',
-        '/api/storage/workflows/wf_mysql_persisted/versions',
-        undefined,
-        { 'x-workflow-user-id': 'mysql-user' },
-      ),
-      versionsResponse,
+    const versionsResponse = await request(
+      reloadedApp,
+      'GET',
+      '/api/storage/workflows/wf_mysql_persisted/versions',
+      undefined,
+      { 'x-workflow-user-id': 'mysql-user' },
     )
 
-    expect(JSON.parse(versionsResponse.body)).toEqual([
+    expect(versionsResponse.json()).toEqual([
       expect.objectContaining({
         workflowId: 'wf_mysql_persisted',
         source: 'save',
@@ -164,43 +136,38 @@ describe.runIf(mysqlEnabled)('mysql storage routes', () => {
   })
 
   it('persists history after reloading the server module', async () => {
-    const initialHandler = await loadHandlerFresh()
-    await initialHandler(
-      createRequest(
-        'POST',
-        '/api/storage/history',
-        {
-          record: {
-            id: 'exec_mysql_1',
-            workflowId: 'wf_mysql_1',
-            workflowName: 'MySQL 历史工作流',
-            startTime: 100,
-            duration: 20,
-            status: 'success',
-            nodes: [],
-            edges: [],
-          },
-          limit: 20,
+    const initialApp = await loadAppFresh()
+    await request(
+      initialApp,
+      'POST',
+      '/api/storage/history',
+      {
+        record: {
+          id: 'exec_mysql_1',
+          workflowId: 'wf_mysql_1',
+          workflowName: 'MySQL 历史工作流',
+          startTime: 100,
+          duration: 20,
+          status: 'success',
+          nodes: [],
+          edges: [],
         },
-        { 'x-workflow-user-id': 'mysql-history-user' },
-      ),
-      createResponse(),
+        limit: 20,
+      },
+      { 'x-workflow-user-id': 'mysql-history-user' },
     )
 
-    const reloadedHandler = await loadHandlerFresh()
-    const response = createResponse()
-    await reloadedHandler(
-      createRequest(
-        'GET',
-        '/api/storage/history',
-        undefined,
-        { 'x-workflow-user-id': 'mysql-history-user' },
-      ),
-      response,
+    const reloadedApp = await loadAppFresh()
+    const response = await request(
+      reloadedApp,
+      'GET',
+      '/api/storage/history',
+      undefined,
+      { 'x-workflow-user-id': 'mysql-history-user' },
     )
 
     expect(response.statusCode).toBe(200)
-    expect(JSON.parse(response.body)).toEqual([
+    expect(response.json()).toEqual([
       expect.objectContaining({
         id: 'exec_mysql_1',
         workflowName: 'MySQL 历史工作流',

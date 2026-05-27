@@ -51,9 +51,31 @@ export const createWorkflowUserResolver = (
 
 export const requireWorkflowUser = <
   TContext extends {
-    request: { headers: WorkflowRequestHeaders }
-    dependencies: { resolveStorageUser: (headers: WorkflowRequestHeaders) => WorkflowRequestUser }
+    workflowUser?: WorkflowRequestUser
+    headers?: WorkflowRequestHeaders
+    request?: { headers: WorkflowRequestHeaders }
+    server?: {
+      serverDependencies?: {
+        resolveStorageUser: (headers: WorkflowRequestHeaders) => WorkflowRequestUser
+      }
+    }
+    dependencies?: { resolveStorageUser: (headers: WorkflowRequestHeaders) => WorkflowRequestUser }
   },
 >(
   context: TContext,
-): WorkflowRequestUser => context.dependencies.resolveStorageUser(context.request.headers)
+): WorkflowRequestUser => {
+  if (context.workflowUser) {
+    return context.workflowUser
+  }
+
+  const headers = context.headers ?? context.request?.headers
+  const resolver =
+    context.server?.serverDependencies?.resolveStorageUser
+    ?? context.dependencies?.resolveStorageUser
+
+  if (!headers || !resolver) {
+    throw buildMissingWorkflowUserError()
+  }
+
+  return resolver(headers)
+}

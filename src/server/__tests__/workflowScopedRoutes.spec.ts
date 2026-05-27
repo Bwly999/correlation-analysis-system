@@ -1,54 +1,10 @@
 // @vitest-environment node
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { Readable } from 'node:stream'
 import { mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import type { IncomingMessage, ServerResponse } from 'node:http'
-import { createServerHandler } from '../app.js'
-
-type MockResponse = ServerResponse & {
-  body: string
-  headersMap: Record<string, string>
-}
-
-const createRequest = (
-  method: string,
-  url: string,
-  body?: unknown,
-  headers?: Record<string, string>,
-) => {
-  const payload = body === undefined ? '' : JSON.stringify(body)
-  const stream = Readable.from(payload ? [payload] : []) as IncomingMessage
-  stream.method = method
-  stream.url = url
-  stream.headers = headers ?? {}
-  return stream
-}
-
-const createResponse = () => {
-  const headersMap: Record<string, string> = {}
-  const response = {
-    statusCode: 200,
-    body: '',
-    headersMap,
-    setHeader(name: string, value: string) {
-      headersMap[name] = value
-      return this
-    },
-    write(chunk: string) {
-      this.body += chunk ?? ''
-      return true
-    },
-    end(chunk?: string) {
-      this.body += chunk ?? ''
-      return this
-    },
-  } as MockResponse
-
-  return response
-}
+import { createServerApp } from '../app.js'
 
 describe('workflow-scoped route contract', () => {
   beforeEach(() => {
@@ -62,36 +18,43 @@ describe('workflow-scoped route contract', () => {
   })
 
   it('returns the same missing-user error across workflow-scoped routes', async () => {
-    const handler = createServerHandler()
+    const app = createServerApp()
     const expectedMessage = '缺少用户标识，请通过 x-workflow-user-id 请求头或 defaultUser 依赖注入提供用户'
     const workflowRequests = [
       {
         name: 'storage',
-        request: createRequest('GET', '/api/storage/me'),
-        assertBody: (body: string) => {
-          expect(JSON.parse(body)).toEqual({ message: expectedMessage })
+        request: {
+          method: 'GET',
+          url: '/api/storage/me',
+        },
+        assertBody: (body: unknown) => {
+          expect(body).toEqual({ message: expectedMessage })
         },
       },
       {
         name: 'pi-agent',
-        request: createRequest('POST', '/api/pi-agent/sessions', {
-          mode: 'edit',
-          prompt: '帮我分析当前画布',
-          profile: { id: 'custom', name: '测试模型', baseUrl: 'http://example.com', model: 'glm-4.7', enabled: true, source: 'custom' },
-          nodeCatalog: [],
-        }),
-        assertBody: (body: string) => {
-          expect(JSON.parse(body)).toEqual({ message: expectedMessage })
+        request: {
+          method: 'POST',
+          url: '/api/pi-agent/sessions',
+          payload: {
+            mode: 'edit',
+            prompt: '帮我分析当前画布',
+            profile: { id: 'custom', name: '测试模型', baseUrl: 'http://example.com', model: 'glm-4.7', enabled: true, source: 'custom' },
+            nodeCatalog: [],
+          },
+        },
+        assertBody: (body: unknown) => {
+          expect(body).toEqual({ message: expectedMessage })
         },
       },
     ]
 
     for (const candidate of workflowRequests) {
-      const response = createResponse()
-      await handler(candidate.request, response)
+      const response = await app.inject(candidate.request)
       expect(response.statusCode, candidate.name).toBe(400)
-      candidate.assertBody(response.body)
+      candidate.assertBody(response.json())
     }
+    await app.close()
   })
 
   it('keeps analysis proxy routes outside the workflow-user requirement', async () => {
@@ -103,22 +66,22 @@ describe('workflow-scoped route contract', () => {
       headers: { 'Content-Type': 'application/json' },
     }))
     vi.stubGlobal('fetch', fetchMock)
-    const handler = createServerHandler()
-    const response = createResponse()
-
-    await handler(
-      createRequest('POST', '/api/analysis/lasso', {
+    const app = createServerApp()
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/analysis/lasso',
+      payload: {
         data: [{ target: 1, f1: 2 }],
         target: 'target',
         config: {},
-      }),
-      response,
-    )
+      },
+    })
 
     expect(response.statusCode).toBe(200)
-    expect(JSON.parse(response.body)).toEqual({
+    expect(response.json()).toEqual({
       status: 'success',
       results: { summary: { ok: true } },
     })
+    await app.close()
   })
 })

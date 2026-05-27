@@ -1,6 +1,7 @@
 // @vitest-environment node
 
 import { readFileSync } from 'node:fs'
+import { EventEmitter } from 'node:events'
 import { fileURLToPath } from 'node:url'
 
 import { describe, expect, it, vi } from 'vitest'
@@ -17,7 +18,7 @@ vi.mock('vite-plugin-monaco-editor', () => ({
 
 type MiddlewareHandler = (
   request: { url?: string },
-  response: Record<string, never>,
+  response: EventEmitter,
   next: (error?: unknown) => void,
 ) => void
 
@@ -68,8 +69,14 @@ describe('server dev middleware', () => {
     expect(plugin).toHaveProperty('configureServer')
 
     let middleware: MiddlewareHandler | null = null
+    const ready = vi.fn(async () => undefined)
+    const emit = vi.fn()
     const ssrLoadModule = vi.fn(async () => ({
-      createServerHandler: () => vi.fn(async () => undefined),
+      createServerApp: () => ({
+        ready,
+        close: vi.fn(async () => undefined),
+        server: { emit },
+      }),
     }))
     const next = vi.fn()
 
@@ -84,12 +91,14 @@ describe('server dev middleware', () => {
 
     expect(middleware).toBeTypeOf('function')
 
-    middleware!({ url: '/api/pi-agent/model-profiles' }, {}, next)
-    await Promise.resolve()
-    await Promise.resolve()
+    middleware!({ url: '/api/pi-agent/model-profiles' }, new EventEmitter(), next)
 
-    expect(ssrLoadModule).toHaveBeenCalledWith('/src/server/app.ts')
-    expect(next).not.toHaveBeenCalled()
+    await vi.waitFor(() => {
+      expect(ssrLoadModule).toHaveBeenCalledWith('/src/server/app.ts')
+      expect(ready).toHaveBeenCalledTimes(1)
+      expect(emit).toHaveBeenCalledTimes(1)
+      expect(next).not.toHaveBeenCalled()
+    })
   })
 
   it('reloads the server handler for later api requests so new routes can take effect without restarting vite', async () => {
@@ -102,12 +111,26 @@ describe('server dev middleware', () => {
     expect(plugin).toBeTruthy()
 
     let middleware: MiddlewareHandler | null = null
-    const firstHandler = vi.fn(async () => undefined)
-    const secondHandler = vi.fn(async () => undefined)
+    const firstReady = vi.fn(async () => undefined)
+    const secondReady = vi.fn(async () => undefined)
+    const firstEmit = vi.fn()
+    const secondEmit = vi.fn()
     const ssrLoadModule = vi
       .fn()
-      .mockResolvedValueOnce({ createServerHandler: () => firstHandler })
-      .mockResolvedValueOnce({ createServerHandler: () => secondHandler })
+      .mockResolvedValueOnce({
+        createServerApp: () => ({
+          ready: firstReady,
+          close: vi.fn(async () => undefined),
+          server: { emit: firstEmit },
+        }),
+      })
+      .mockResolvedValueOnce({
+        createServerApp: () => ({
+          ready: secondReady,
+          close: vi.fn(async () => undefined),
+          server: { emit: secondEmit },
+        }),
+      })
     const next = vi.fn()
 
     plugin?.configureServer?.({
@@ -121,18 +144,20 @@ describe('server dev middleware', () => {
 
     expect(middleware).toBeTypeOf('function')
 
-    middleware!({ url: '/api/analysis/lasso' }, {}, next)
+    middleware!({ url: '/api/analysis/lasso' }, new EventEmitter(), next)
     await Promise.resolve()
     await Promise.resolve()
 
-    middleware!({ url: '/api/analysis/logistic-regression-classification' }, {}, next)
+    middleware!({ url: '/api/analysis/logistic-regression-classification' }, new EventEmitter(), next)
     await Promise.resolve()
     await Promise.resolve()
 
     await vi.waitFor(() => {
       expect(ssrLoadModule).toHaveBeenCalledTimes(2)
-      expect(firstHandler).toHaveBeenCalledTimes(1)
-      expect(secondHandler).toHaveBeenCalledTimes(1)
+      expect(firstReady).toHaveBeenCalledTimes(1)
+      expect(secondReady).toHaveBeenCalledTimes(1)
+      expect(firstEmit).toHaveBeenCalledTimes(1)
+      expect(secondEmit).toHaveBeenCalledTimes(1)
       expect(next).not.toHaveBeenCalled()
     })
   })

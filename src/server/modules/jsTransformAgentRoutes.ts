@@ -2,8 +2,8 @@ import type {
   JsTransformAgentSafeDebugResult,
   JsTransformAgentSessionRequest,
 } from '../../ai/types.js'
-import type { ServerDependencies } from '../bootstrap/serverDependencies.js'
-import type { HttpDomainHandler } from '../http/types.js'
+import type { FastifyPluginAsync } from 'fastify'
+import { startNdjsonStream } from '../http/ndjson.js'
 import { requireWorkflowUser } from '../http/workflowUser.js'
 import { createServerLogger } from '../logging/serverLogger.js'
 import {
@@ -16,105 +16,87 @@ import {
   updateJsTransformAgentMode,
 } from '../piAgent/jsTransformAgentGateway.js'
 
-export const createJsTransformAgentRoutes = (): HttpDomainHandler<ServerDependencies> => async (context) => {
-  const { pathname, method } = context
-  const logger = createServerLogger({
-    module: 'js-transform-agent.routes',
-    requestId: context.requestId,
-    userId: context.userId,
-    method: context.method,
-    pathname: context.pathname,
-  })
+const createRouteLogger = (request: {
+  id: string
+  workflowUser?: { id: string }
+  method: string
+  url: string
+}) => createServerLogger({
+  module: 'js-transform-agent.routes',
+  requestId: request.id,
+  userId: request.workflowUser?.id,
+  method: request.method,
+  pathname: new URL(request.url, 'http://127.0.0.1').pathname,
+})
 
-  if (method === 'POST' && pathname === '/api/js-transform-agent/sessions') {
-    const user = requireWorkflowUser(context)
-    const body = await context.readJsonBody<JsTransformAgentSessionRequest>()
+export const createJsTransformAgentRoutes = (): FastifyPluginAsync => async (app) => {
+  app.post('/api/js-transform-agent/sessions', async (request) => {
+    const logger = createRouteLogger(request)
+    const user = requireWorkflowUser(request)
+    const body = request.body as JsTransformAgentSessionRequest
     const result = await createJsTransformAgentSession(body, user.id)
     logger.info('创建 JS Transform Agent 会话', { sessionId: result.sessionId, userId: user.id })
-    context.sendJson(200, result)
-    return true
-  }
+    return result
+  })
 
-  const messagesMatch = pathname.match(/^\/api\/js-transform-agent\/sessions\/([^/]+)\/messages$/)
-  if (method === 'POST' && messagesMatch) {
-    const sessionId = decodeURIComponent(messagesMatch[1] ?? '')
-    const body = await context.readJsonBody<{ content: string }>()
-    const result = await sendJsTransformAgentMessage(sessionId, body.content)
-    context.sendJson(200, result)
-    return true
-  }
+  app.post('/api/js-transform-agent/sessions/:sessionId/messages', async (request) => {
+    const { sessionId } = request.params as { sessionId: string }
+    const body = request.body as { content: string }
+    return sendJsTransformAgentMessage(sessionId, body.content)
+  })
 
-  const modeMatch = pathname.match(/^\/api\/js-transform-agent\/sessions\/([^/]+)\/mode$/)
-  if (method === 'POST' && modeMatch) {
-    const sessionId = decodeURIComponent(modeMatch[1] ?? '')
-    const body = await context.readJsonBody<{ mode: 'ask' | 'agent' }>()
+  app.post('/api/js-transform-agent/sessions/:sessionId/mode', async (request, reply) => {
+    const { sessionId } = request.params as { sessionId: string }
+    const body = request.body as { mode: 'ask' | 'agent' }
     const result = await updateJsTransformAgentMode(sessionId, body.mode)
-    context.sendJson(result.ok ? 200 : 404, result)
-    return true
-  }
+    reply.code(result.ok ? 200 : 404)
+    return result
+  })
 
-  const abortMatch = pathname.match(/^\/api\/js-transform-agent\/sessions\/([^/]+)\/abort$/)
-  if (method === 'POST' && abortMatch) {
-    const sessionId = decodeURIComponent(abortMatch[1] ?? '')
+  app.post('/api/js-transform-agent/sessions/:sessionId/abort', async (request, reply) => {
+    const { sessionId } = request.params as { sessionId: string }
     const result = await abortJsTransformAgentRun(sessionId)
-    context.sendJson(result.ok ? 200 : 404, result)
-    return true
-  }
+    reply.code(result.ok ? 200 : 404)
+    return result
+  })
 
-  const eventsMatch = pathname.match(/^\/api\/js-transform-agent\/sessions\/([^/]+)\/events$/)
-  if (method === 'GET' && eventsMatch) {
-    const sessionId = decodeURIComponent(eventsMatch[1] ?? '')
+  app.get('/api/js-transform-agent/sessions/:sessionId/events', async (request, reply) => {
+    const { sessionId } = request.params as { sessionId: string }
     const session = getJsTransformAgentSession(sessionId)
     if (!session) {
-      context.sendJson(404, { message: '未找到 JS Transform Agent 会话' })
-      return true
+      reply.code(404)
+      return { message: '未找到 JS Transform Agent 会话' }
     }
 
-    context.startNdjson(200)
-    const unsubscribe = subscribeJsTransformAgentEvents(sessionId, (event) => {
-      context.writeNdjson(event)
-    })
+    reply.hijack()
+    startNdjsonStream(reply.raw, (write) => subscribeJsTransformAgentEvents(sessionId, write))
+    return reply
+  })
 
-    if (!unsubscribe) {
-      context.response.end()
-      return true
-    }
-
-    context.request.on('close', () => {
-      unsubscribe()
-      context.response.end()
-    })
-    return true
-  }
-
-  const toolResultMatch = pathname.match(/^\/api\/js-transform-agent\/sessions\/([^/]+)\/tool-result$/)
-  if (method === 'POST' && toolResultMatch) {
-    const sessionId = decodeURIComponent(toolResultMatch[1] ?? '')
-    const body = await context.readJsonBody<{
+  app.post('/api/js-transform-agent/sessions/:sessionId/tool-result', async (request, reply) => {
+    const { sessionId } = request.params as { sessionId: string }
+    const body = request.body as {
       toolCallId: string
       result: {
         content: Array<{ type: 'text'; text: string }>
         details: JsTransformAgentSafeDebugResult
         isError?: boolean
       }
-    }>()
+    }
     const ok = resolveJsTransformAgentToolResult(sessionId, body.toolCallId, body.result)
-    context.sendJson(ok ? 200 : 404, { ok })
-    return true
-  }
+    reply.code(ok ? 200 : 404)
+    return { ok }
+  })
 
-  const sessionDetailMatch = pathname.match(/^\/api\/js-transform-agent\/sessions\/([^/]+)$/)
-  if (method === 'GET' && sessionDetailMatch) {
-    const sessionId = decodeURIComponent(sessionDetailMatch[1] ?? '')
+  app.get('/api/js-transform-agent/sessions/:sessionId', async (request, reply) => {
+    const logger = createRouteLogger(request)
+    const { sessionId } = request.params as { sessionId: string }
     const session = getJsTransformAgentSession(sessionId)
     if (!session) {
-      context.sendJson(404, { message: '未找到 JS Transform Agent 会话' })
-      return true
+      reply.code(404)
+      return { message: '未找到 JS Transform Agent 会话' }
     }
     logger.info('读取 JS Transform Agent 会话', { sessionId })
-    context.sendJson(200, session)
-    return true
-  }
-
-  return false
+    return session
+  })
 }

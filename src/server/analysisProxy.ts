@@ -1,5 +1,3 @@
-import type { HttpRequestContext } from './http/types.js'
-
 const DEFAULT_PYTHON_ANALYSIS_API_BASE_URL = 'http://127.0.0.1:8000'
 
 const ANALYSIS_ROUTE_MAP = {
@@ -15,13 +13,17 @@ export type AnalysisRouteKey = keyof typeof ANALYSIS_ROUTE_MAP
 const resolvePythonAnalysisApiBaseUrl = () =>
   (process.env.PYTHON_ANALYSIS_API_BASE_URL || DEFAULT_PYTHON_ANALYSIS_API_BASE_URL).replace(/\/$/, '')
 
-export type AnalysisProxyContext = Pick<HttpRequestContext, 'readJsonBody' | 'sendRaw'>
+export interface AnalysisProxyContext {
+  body: unknown
+  reply: {
+    sendRaw(statusCode: number, body: string, contentType?: string): void
+  }
+}
 
 export const proxyAnalysisRequest = async (
   context: AnalysisProxyContext,
   route: AnalysisRouteKey,
 ) => {
-  const body = await context.readJsonBody<unknown>()
   const targetUrl = `${resolvePythonAnalysisApiBaseUrl()}${ANALYSIS_ROUTE_MAP[route]}`
 
   let upstreamResponse: Response
@@ -31,7 +33,7 @@ export const proxyAnalysisRequest = async (
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify(context.body),
     })
   } catch (error) {
     const proxyError = new Error('Python 分析服务不可用，请确认算法后端已启动') as Error & {
@@ -52,5 +54,5 @@ export const proxyAnalysisRequest = async (
       ? upstreamResponse.headers.get('content-type')
       : null
 
-  context.sendRaw(upstreamResponse.status, rawText, contentType || 'application/json; charset=utf-8')
+  context.reply.sendRaw(upstreamResponse.status, rawText, contentType || 'application/json; charset=utf-8')
 }
