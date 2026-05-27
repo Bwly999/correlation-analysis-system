@@ -1,6 +1,4 @@
-import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
-import { generateText } from 'ai'
-import type { WorkflowAiModelProfile, WorkflowAiModelTestResult } from '../../ai/types.js'
+import type { WorkflowAiModelProfile } from '../../ai/types.js'
 
 const DEFAULT_BASE_URL = 'https://open.bigmodel.cn/api/coding/paas/v4'
 const DEFAULT_MODEL = 'glm-4.7'
@@ -52,37 +50,5 @@ export const resolveModelProfile = (profile: WorkflowAiModelProfile): WorkflowAi
     model: profile.model || systemProfile.model,
     baseUrl: profile.baseUrl || systemProfile.baseUrl,
     enabled: profile.enabled,
-  }
-}
-
-export const createProvider = (profile: WorkflowAiModelProfile) =>
-  createOpenAICompatible({
-    name: 'pi-agent',
-    baseURL: profile.baseUrl,
-    apiKey: profile.apiKey,
-  })
-
-export const testWorkflowAiModelProfile = async (
-  profile: WorkflowAiModelProfile,
-): Promise<WorkflowAiModelTestResult> => {
-  const resolvedProfile = resolveModelProfile(profile)
-
-  if (!resolvedProfile.baseUrl || !resolvedProfile.apiKey || !resolvedProfile.model) {
-    throw new Error('模型配置不完整，无法测试连通性')
-  }
-
-  const provider = createProvider(resolvedProfile)
-  const startedAt = Date.now()
-  await generateText({
-    model: provider.chatModel(resolvedProfile.model),
-    prompt: '请只回复 ok',
-    temperature: 0,
-    maxOutputTokens: 8,
-  })
-
-  return {
-    success: true,
-    message: '模型配置可用',
-    latencyMs: Date.now() - startedAt,
   }
 }

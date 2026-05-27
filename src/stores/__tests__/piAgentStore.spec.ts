@@ -261,6 +261,7 @@ describe('piAgentStore', () => {
     expect(payload.details.ok).toBe(true)
     expect(payload.details.status).toBe('success')
     expect(payload.details.summary).toContain('已读取节点目录')
+    expect(payload.content[0].text).toContain('"total"')
     expect(payload.content[0].text).toContain('"items"')
   })
 

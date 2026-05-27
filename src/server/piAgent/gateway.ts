@@ -13,6 +13,7 @@ import type { AgentSession } from '@earendil-works/pi-coding-agent'
 import type { WorkflowAiPlanRequest } from '../../ai/types.js'
 import type { PiAgentCanvasSyncResponse } from '../../ai/types.js'
 import { buildModelFromProfile, createModelRegistryFromProfile } from './modelAdapter.js'
+import { createPiAgentResourceLoader } from './runtimeFactory.js'
 import { buildSystemPrompt } from './systemPrompt.js'
 import {
   createSessionRecord,
@@ -22,12 +23,24 @@ import {
   appendMessage,
   type PiAgentSessionRecord,
 } from './sessionStore.js'
-import { bridgePiEvent, tryExtractWorkflowPlan, type PiAgentSseEvent } from './eventBridge.js'
+import { bridgePiEvent, type PiAgentSseEvent } from './eventBridge.js'
 import { buildAllTools } from './tools/index.js'
 import { FrontendBridge } from './frontendBridge.js'
 import { assertPiAgentSafeRequest } from './safePayload.js'
 import { archivePiAgentSessionFile } from '../logging/sessionArchive.js'
 import { createServerLogger } from '../logging/serverLogger.js'
+import {
+  resetTurnTracking,
+  syncPendingFollowUps,
+  syncRuntimeStatus,
+  syncTurnState,
+  type PiAgentRuntimeStateCarrier,
+} from './gatewayState.js'
+import {
+  buildStopDiagnosisEvents,
+  interruptRuntime,
+  isResumableContinueMessage,
+} from './gatewayStopDiagnosis.js'
 
 // --- Runtime 管理 ---
 
@@ -98,147 +111,6 @@ const emitRuntimeEvent = (runtime: PiAgentRuntime, event: PiAgentSseEvent) => {
   }
 }
 
-const READ_ONLY_TOOL_NAMES = new Set([
-  'workflow_get_session_context',
-  'workflow_get_node_catalog',
-  'workflow_get_node',
-])
-
-const TRANSITIONAL_ASSISTANT_TEXT_PATTERN = /(我来看看|我先看看|我来查看|我先查看|我先读|我来读|我先读取|我来读取|好的，我来看看|好的，我先看看)/
-const RESUMABLE_CONTINUE_MESSAGES = new Set([
-  '继续',
-  '继续哦',
-  '继续o',
-  '继续噢',
-  '还在不',
-  '还在吗',
-  '?',
-  '？',
-])
-
-const normalizeContinueMessage = (message: string) => message.replace(/[\s，。！？!?,、~～…]/g, '').trim().toLowerCase()
-
-const isResumableContinueMessage = (message: string) => RESUMABLE_CONTINUE_MESSAGES.has(normalizeContinueMessage(message))
-
-const isEmptyToolResultStop = (runtime: PiAgentRuntime) =>
-  runtime.record.endedWithToolResult
-  && !runtime.lastAssistantMessageText.trim()
-  && runtime.currentTurnToolNames.length > 0
-
-const syncRuntimeStatus = (
-  runtime: PiAgentRuntime,
-  status: PiAgentSessionRecord['status'],
-  nextRunState: PiAgentRuntime['runState'],
-) => {
-  runtime.runState = nextRunState
-  updateSessionRecord(runtime.sessionId, {
-    status,
-    activeTurnState: runtime.activeTurnState,
-    lastTurnEndedEarly: runtime.record.lastTurnEndedEarly,
-    lastStopReason: runtime.record.lastStopReason,
-    lastMessageRole: runtime.record.lastMessageRole,
-    endedWithToolResult: runtime.record.endedWithToolResult,
-    lastResumeTrigger: runtime.record.lastResumeTrigger,
-    lastObservedToolName: runtime.record.lastObservedToolName,
-    lastAssistantMessageText: runtime.record.lastAssistantMessageText,
-    pendingFollowUps: [...runtime.pendingFollowUps],
-  })
-}
-
-const syncTurnState = (
-  runtime: PiAgentRuntime,
-  nextTurnState: PiAgentRuntime['activeTurnState'],
-) => {
-  runtime.activeTurnState = nextTurnState
-  updateSessionRecord(runtime.sessionId, {
-    activeTurnState: nextTurnState,
-    pendingFollowUps: [...runtime.pendingFollowUps],
-    lastTurnEndedEarly: runtime.record.lastTurnEndedEarly,
-    lastStopReason: runtime.record.lastStopReason,
-    lastMessageRole: runtime.record.lastMessageRole,
-    endedWithToolResult: runtime.record.endedWithToolResult,
-    lastResumeTrigger: runtime.record.lastResumeTrigger,
-    lastObservedToolName: runtime.record.lastObservedToolName,
-    lastAssistantMessageText: runtime.record.lastAssistantMessageText,
-  })
-}
-
-const syncPendingFollowUps = (runtime: PiAgentRuntime) => {
-  updateSessionRecord(runtime.sessionId, {
-    pendingFollowUps: [...runtime.pendingFollowUps],
-    activeTurnState: runtime.activeTurnState,
-    lastTurnEndedEarly: runtime.record.lastTurnEndedEarly,
-    lastStopReason: runtime.record.lastStopReason,
-    lastMessageRole: runtime.record.lastMessageRole,
-    endedWithToolResult: runtime.record.endedWithToolResult,
-    lastResumeTrigger: runtime.record.lastResumeTrigger,
-    lastObservedToolName: runtime.record.lastObservedToolName,
-    lastAssistantMessageText: runtime.record.lastAssistantMessageText,
-  })
-}
-
-const resetTurnTracking = (runtime: PiAgentRuntime) => {
-  runtime.currentTurnToolNames = []
-  runtime.lastAssistantMessageText = ''
-  runtime.lastObservedToolName = undefined
-  runtime.record.lastTurnEndedEarly = false
-  runtime.record.lastStopReason = 'normal'
-  runtime.record.endedWithToolResult = false
-  runtime.record.lastObservedToolName = undefined
-  runtime.record.lastAssistantMessageText = ''
-  updateSessionRecord(runtime.sessionId, {
-    lastTurnEndedEarly: false,
-    lastStopReason: 'normal',
-    endedWithToolResult: false,
-    lastObservedToolName: undefined,
-    lastAssistantMessageText: '',
-  })
-}
-
-const isEarlyEndedTurn = (runtime: PiAgentRuntime) => {
-  if (!runtime.lastAssistantMessageText.trim()) return false
-  if (!TRANSITIONAL_ASSISTANT_TEXT_PATTERN.test(runtime.lastAssistantMessageText)) return false
-  if (runtime.currentTurnToolNames.length === 0) return false
-  return runtime.currentTurnToolNames.every((toolName) => READ_ONLY_TOOL_NAMES.has(toolName))
-}
-
-const interruptRuntime = (
-  runtime: PiAgentRuntime,
-  message: string,
-  options?: { status?: 'interrupted' | 'failed' },
-) => {
-  const status = options?.status ?? 'interrupted'
-  runtime.record.lastTurnEndedEarly = false
-  runtime.record.lastStopReason = status
-  runtime.record.endedWithToolResult = false
-  runtime.record.lastObservedToolName = runtime.lastObservedToolName
-  runtime.record.lastAssistantMessageText = runtime.lastAssistantMessageText
-  runtime.pendingFollowUps = []
-  runtime.activeTurnState = status
-  syncRuntimeStatus(runtime, status, status)
-  emitRuntimeEvent(runtime, {
-    type: 'session.stop_diagnosis',
-    sessionId: runtime.sessionId,
-    stopReason: status,
-    message,
-    endedWithToolResult: runtime.record.endedWithToolResult,
-    ...(runtime.lastObservedToolName ? { lastObservedToolName: runtime.lastObservedToolName } : {}),
-    ...(runtime.lastAssistantMessageText ? { lastAssistantMessageText: runtime.lastAssistantMessageText } : {}),
-  })
-  emitRuntimeEvent(runtime, {
-    type: 'session.interrupted',
-    sessionId: runtime.sessionId,
-    message,
-  })
-  if (status === 'failed') {
-    emitRuntimeEvent(runtime, {
-      type: 'error',
-      sessionId: runtime.sessionId,
-      message,
-    })
-  }
-}
-
 export async function createPiAgentSession(
   request: WorkflowAiPlanRequest,
   userId: string,
@@ -279,11 +151,7 @@ export async function createPiAgentSession(
   // 5. 创建 Pi Agent session
   const { authStorage, modelRegistry } = createModelRegistryFromProfile(request.profile)
   const model = buildModelFromProfile(request.profile)
-  const resourceLoader = new DefaultResourceLoader({
-    cwd: process.cwd(),
-    agentDir: process.cwd(),
-    systemPromptOverride: () => buildSystemPrompt(request),
-  })
+  const resourceLoader = createPiAgentResourceLoader(() => buildSystemPrompt(request))
   await resourceLoader.reload()
 
   const sessionManager = SessionManager.create(process.cwd(), resolvePiAgentSessionRootDir())
@@ -334,86 +202,37 @@ export async function createPiAgentSession(
           queueLength: runtime.pendingFollowUps.length,
         })
       }
-      resetTurnTracking(runtime)
+      resetTurnTracking(runtime as PiAgentRuntimeStateCarrier)
       runtime.activeTurnState = 'responding'
-      syncRuntimeStatus(runtime, 'running', 'running')
+      syncRuntimeStatus(runtime as PiAgentRuntimeStateCarrier, 'running', 'running')
       logger.info('Pi Agent 开始运行', { sessionId: record.sessionId })
     } else if (event.type === 'agent_end') {
-      const endedEarly = isEarlyEndedTurn(runtime)
-      const endedWithToolResult = runtime.record.lastMessageRole === 'toolResult'
-      const emptyToolResultStop = isEmptyToolResultStop(runtime)
-      runtime.record.lastTurnEndedEarly = endedEarly
-      runtime.record.endedWithToolResult = endedWithToolResult
-      runtime.record.lastStopReason = emptyToolResultStop
-        ? 'failed'
-        : endedEarly
-          ? 'read_only_observation_end'
-          : 'normal'
-      runtime.record.lastObservedToolName = runtime.lastObservedToolName
-      runtime.record.lastAssistantMessageText = runtime.lastAssistantMessageText
-      runtime.activeTurnState = emptyToolResultStop ? 'failed' : 'idle'
-      syncRuntimeStatus(
-        runtime,
-        emptyToolResultStop ? 'failed' : 'completed',
-        emptyToolResultStop ? 'failed' : 'completed',
+      buildStopDiagnosisEvents(
+        runtime as PiAgentRuntimeStateCarrier,
+        (diagnosisEvent) => emitRuntimeEvent(runtime, diagnosisEvent),
       )
-      emitRuntimeEvent(runtime, {
-        type: 'session.stop_diagnosis',
-        sessionId: record.sessionId,
-        stopReason: runtime.record.lastStopReason,
-        message: emptyToolResultStop
-          ? '本轮未产生回复，可重试继续分析'
-          : endedEarly
-            ? '本轮在读取信息后已停止，可继续追问或继续分析'
-            : '本轮已正常结束',
-        endedWithToolResult,
-        ...(runtime.lastObservedToolName ? { lastObservedToolName: runtime.lastObservedToolName } : {}),
-        ...(runtime.lastAssistantMessageText ? { lastAssistantMessageText: runtime.lastAssistantMessageText } : {}),
-      })
-      if (endedEarly) {
-        emitRuntimeEvent(runtime, {
-          type: 'session.ended_early',
-          sessionId: record.sessionId,
-          message: '本轮在读取信息后已停止，可继续追问或继续分析',
-        })
-      } else if (emptyToolResultStop) {
-        emitRuntimeEvent(runtime, {
-          type: 'error',
-          sessionId: runtime.sessionId,
-          message: '本轮未产生回复，可重试继续分析',
-        })
-      }
       logger.info('Pi Agent 结束运行', { sessionId: record.sessionId })
     }
 
     // 桥接事件
     const sseEvents = bridgePiEvent(event, record, runtime.currentMessageId)
 
-    // 检测 workflow 工具执行完成 → 发射 workflow.apply 事件
-    if (event.type === 'tool_execution_end' && !event.isError) {
-      const resultText = extractToolResultTextForApply(event.result)
-      const plan = tryExtractWorkflowPlan(event.toolName, resultText)
-      if (plan) {
-        sseEvents.push({ type: 'workflow.apply', sessionId: record.sessionId, plan })
-      }
-    }
-
     for (const sseEvent of sseEvents) {
       if (sseEvent.type === 'message.start') {
-        syncTurnState(runtime, 'responding')
+        syncTurnState(runtime as PiAgentRuntimeStateCarrier, 'responding')
       } else if (sseEvent.type === 'message.completed') {
         runtime.lastAssistantMessageText = sseEvent.content
         runtime.record.lastAssistantMessageText = sseEvent.content
         runtime.record.lastMessageRole = 'assistant'
         runtime.record.endedWithToolResult = false
         if (runtime.runState === 'running') {
-          syncTurnState(runtime, 'tooling')
+          syncTurnState(runtime as PiAgentRuntimeStateCarrier, 'tooling')
         }
       } else if (sseEvent.type === 'tool.start') {
         runtime.currentTurnToolNames.push(sseEvent.toolCall.toolName)
         runtime.lastObservedToolName = sseEvent.toolCall.toolName
         runtime.record.lastObservedToolName = sseEvent.toolCall.toolName
-        syncTurnState(runtime, 'tooling')
+        syncTurnState(runtime as PiAgentRuntimeStateCarrier, 'tooling')
       } else if (sseEvent.type === 'tool.end') {
         runtime.record.lastMessageRole = 'toolResult'
         runtime.record.endedWithToolResult = true
@@ -469,7 +288,7 @@ export async function sendPiAgentMessage(
         runtime.record.lastResumeTrigger = 'followUp'
         runtime.record.lastMessageRole = 'user'
         runtime.pendingFollowUps.push(message)
-        syncPendingFollowUps(runtime)
+        syncPendingFollowUps(runtime as PiAgentRuntimeStateCarrier)
         emitRuntimeEvent(runtime, {
           type: 'follow_up_queued',
           sessionId: runtime.sessionId,
@@ -481,22 +300,26 @@ export async function sendPiAgentMessage(
         logger.info('发送 continue 到 Pi Agent')
         runtime.record.lastResumeTrigger = 'continue'
         runtime.record.lastMessageRole = 'user'
-        resetTurnTracking(runtime)
+        resetTurnTracking(runtime as PiAgentRuntimeStateCarrier)
         runtime.activeTurnState = 'responding'
-        syncRuntimeStatus(runtime, 'idle', 'idle')
+        syncRuntimeStatus(runtime as PiAgentRuntimeStateCarrier, 'idle', 'idle')
         await (runtime.session as PiAgentContinueCapableSession).agent.continue()
       } else {
         logger.info('发送 prompt 到 Pi Agent')
         runtime.record.lastResumeTrigger = 'prompt'
         runtime.record.lastMessageRole = 'user'
-        resetTurnTracking(runtime)
+        resetTurnTracking(runtime as PiAgentRuntimeStateCarrier)
         runtime.activeTurnState = 'responding'
-        syncRuntimeStatus(runtime, 'idle', 'idle')
+        syncRuntimeStatus(runtime as PiAgentRuntimeStateCarrier, 'idle', 'idle')
         await runtime.session.prompt(message)
       }
     } catch (err: any) {
       logger.error('Pi Agent 发送消息失败', { error: err })
-      interruptRuntime(runtime, err?.message || '未知错误')
+      interruptRuntime(
+        runtime as PiAgentRuntimeStateCarrier,
+        err?.message || '未知错误',
+        (event) => emitRuntimeEvent(runtime, event),
+      )
     }
   })()
 
@@ -623,7 +446,11 @@ export function disposePiAgentSession(sessionId: string): void {
 
   createServerLogger({ module: 'pi-agent', sessionId, userId: runtime.record.userId }).info('释放 Pi Agent 会话')
   if (runtime.runState === 'running') {
-    interruptRuntime(runtime, '当前会话已中断，可继续发送下一条消息。')
+    interruptRuntime(
+      runtime as PiAgentRuntimeStateCarrier,
+      '当前会话已中断，可继续发送下一条消息。',
+      (event) => emitRuntimeEvent(runtime, event),
+    )
   }
   runtime.bridge.dispose()
   runtime.unsubscribe?.()
@@ -656,18 +483,3 @@ export function resolvePiAgentToolResult(
   return runtime.bridge.resolveResult(toolCallId, result)
 }
 
-/**
- * 从 Pi SDK 工具结果中提取文本内容
- * Pi SDK 返回 { content: [{ type: 'text', text: '...' }], details: {} }
- */
-function extractToolResultTextForApply(result: any): string {
-  if (!result) return ''
-  if (typeof result === 'string') return result
-  if (result.content && Array.isArray(result.content)) {
-    return result.content
-      .filter((block: any) => block.type === 'text')
-      .map((block: any) => block.text || '')
-      .join('')
-  }
-  return ''
-}

@@ -14,7 +14,7 @@ import {
   sendJsTransformAgentMessage,
   subscribeJsTransformAgentEvents,
   updateJsTransformAgentMode,
-} from '../jsTransformAgent/gateway.js'
+} from '../piAgent/jsTransformAgentGateway.js'
 
 export const createJsTransformAgentRoutes = (): HttpDomainHandler<ServerDependencies> => async (context) => {
   const { pathname, method } = context

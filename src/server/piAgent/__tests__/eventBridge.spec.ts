@@ -133,6 +133,47 @@ describe('piAgent eventBridge', () => {
     expect(record.messages[0]?.content).toBe('先执行工作流，再回读结果。')
   })
 
+  it('does not emit workflow.apply even when workflow mutation tools return plan-shaped payloads', () => {
+    const record = createRecord()
+    const currentMessageId = { value: '' }
+
+    const events = bridgePiEvent(
+      {
+        type: 'tool_execution_end',
+        toolCallId: 'tool_apply_1',
+        toolName: 'workflow_update_partial_workflow',
+        result: {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                success: true,
+                plan: {
+                  summary: '增量更新',
+                  assumptions: [],
+                  warnings: [],
+                  questions: [],
+                  operations: [],
+                },
+              }),
+            },
+          ],
+        },
+        isError: false,
+      },
+      record,
+      currentMessageId,
+    )
+
+    expect(events).toEqual([
+      expect.objectContaining({
+        type: 'tool.end',
+        toolCallId: 'tool_apply_1',
+      }),
+    ])
+    expect(events.some((event) => event.type === 'workflow.apply')).toBe(false)
+  })
+
   it('ignores user message lifecycle events so user input will not appear again as assistant content', () => {
     const record = createRecord()
     const currentMessageId = { value: '' }

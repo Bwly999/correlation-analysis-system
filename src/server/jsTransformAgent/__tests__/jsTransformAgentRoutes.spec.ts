@@ -20,7 +20,7 @@ const {
   resolveJsTransformAgentToolResultMock: vi.fn(),
 }))
 
-vi.mock('../gateway.js', () => ({
+vi.mock('../../piAgent/jsTransformAgentGateway.js', () => ({
   createJsTransformAgentSession: createJsTransformAgentSessionMock,
   sendJsTransformAgentMessage: sendJsTransformAgentMessageMock,
   updateJsTransformAgentMode: updateJsTransformAgentModeMock,
@@ -31,6 +31,7 @@ vi.mock('../gateway.js', () => ({
 }))
 
 import { createJsTransformAgentRoutes } from '../../modules/jsTransformAgentRoutes.js'
+import * as jsTransformGatewayModule from '../../piAgent/jsTransformAgentGateway.js'
 
 type MockResponse = ServerResponse & {
   body: string
@@ -204,5 +205,9 @@ describe('jsTransformAgentRoutes', () => {
       ok: true,
       restoredMessages: ['继续调试', '解释报错'],
     })
+  })
+
+  it('routes directly to the piAgent jsTransform gateway implementation module', () => {
+    expect(jsTransformGatewayModule).toBeTruthy()
   })
 })

@@ -2,7 +2,6 @@
  * Pi Agent 事件桥接：将 Pi SDK 原生事件转换为前端可消费的 SSE 事件
  */
 import { randomUUID } from 'node:crypto'
-import type { WorkflowAiPlan } from '../../ai/types.js'
 import type { PiAgentSessionRecord, PiAgentToolCall } from './sessionStore.js'
 import {
   appendMessage,
@@ -47,7 +46,6 @@ export type PiAgentSseEvent =
   | { type: 'tool.start'; sessionId: string; toolCall: PiAgentToolCall }
   | { type: 'tool.end'; sessionId: string; toolCallId: string; result: string; isError: boolean }
   | { type: 'tool.execute'; sessionId: string; toolCallId: string; toolName: string; params: Record<string, unknown> }
-  | { type: 'workflow.apply'; sessionId: string; plan: WorkflowAiPlan }
   | { type: 'error'; sessionId: string; message: string }
 
 const TOOL_DISPLAY_NAMES: Record<string, string> = {
@@ -56,27 +54,6 @@ const TOOL_DISPLAY_NAMES: Record<string, string> = {
   workflow_get_node: '读取节点信息',
   workflow_update_partial_workflow: '增量修改画布',
   wf_executeWorkflow: '执行工作流/调试节点',
-}
-
-const WORKFLOW_MUTATION_TOOLS = new Set([
-  'workflow_update_partial_workflow',
-])
-
-/**
- * 从 workflow 工具的成功结果中提取 WorkflowAiPlan
- * 返回 null 表示无法提取（工具失败或非 workflow 工具）
- */
-export function tryExtractWorkflowPlan(toolName: string, resultText: string): WorkflowAiPlan | null {
-  if (!WORKFLOW_MUTATION_TOOLS.has(toolName)) return null
-  if (!resultText) return null
-
-  try {
-    const parsed = JSON.parse(resultText)
-    if (!parsed.success || !parsed.plan?.operations?.length) return null
-    return parsed.plan as WorkflowAiPlan
-  } catch {
-    return null
-  }
 }
 
 /**

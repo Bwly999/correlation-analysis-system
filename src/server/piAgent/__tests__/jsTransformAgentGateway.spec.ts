@@ -46,6 +46,18 @@ vi.mock('../modelAdapter.js', () => ({
   createModelRegistryFromProfile: createModelRegistryFromProfileMock,
 }))
 
+vi.mock('../runtimeFactory.js', () => ({
+  createPiAgentResourceLoader: vi.fn((systemPromptOverride: () => string) => ({
+    options: {
+      cwd: process.cwd(),
+      agentDir: process.cwd(),
+      systemPromptOverride,
+      extensionFactories: [],
+    },
+    reload: loaderReloadMock,
+  })),
+}))
+
 import {
   abortJsTransformAgentRun,
   createJsTransformAgentSession,

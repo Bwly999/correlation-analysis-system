@@ -33,8 +33,12 @@ vi.mock('../gateway.js', () => ({
 
 vi.mock('../modelProfiles.js', () => ({
   getSystemModelProfiles: getSystemModelProfilesMock,
-  testWorkflowAiModelProfile: testWorkflowAiModelProfileMock,
+  resolveModelProfile: vi.fn((profile) => profile),
   toPublicModelProfile: vi.fn((profile) => profile),
+}))
+
+vi.mock('../runtimeFactory.js', () => ({
+  testPiAgentRuntimeProfile: testWorkflowAiModelProfileMock,
 }))
 
 import { createPiAgentRoutes } from '../../modules/piAgentRoutes.js'
@@ -180,10 +184,13 @@ describe('piAgentRoutes', () => {
 
     expect(handled).toBe(true)
     expect(response.statusCode).toBe(200)
-    expect(testWorkflowAiModelProfileMock).toHaveBeenCalledWith(expect.objectContaining({
-      id: 'profile_1',
-      model: 'glm-4.7',
-    }))
+    expect(testWorkflowAiModelProfileMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'profile_1',
+        model: 'glm-4.7',
+      }),
+      expect.any(Function),
+    )
     expect(JSON.parse(response.body)).toEqual({
       success: true,
       message: '连接成功',

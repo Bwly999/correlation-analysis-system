@@ -9,7 +9,7 @@ import { useWorkflowStore } from '@/stores/workflowStore'
 import type { WorkflowNode } from '@/utils/storage'
 import type { Edge } from '@vue-flow/core'
 import type { WorkflowExecutionResult, WorkflowNodeDebugResult } from '@/stores/workflowStore'
-import type { WorkflowAiOperation, WorkflowAiPlan } from '@/ai/types'
+import type { WorkflowAiOperation } from '@/ai/types'
 
 const getStore = () => useWorkflowStore()
 
@@ -155,11 +155,5 @@ export const WorkflowApi = {
       questions: [],
       operations: input.operations,
     })
-  },
-
-  async executePlanOnCanvas(plan: WorkflowAiPlan): Promise<WorkflowExecutionResult> {
-    const store = getStore()
-    store.applyWorkflowAiPlan(plan)
-    return store.runGlobalAndCollect()
   },
 }

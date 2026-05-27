@@ -18,9 +18,11 @@ import {
 } from '../piAgent/gateway.js'
 import {
   getSystemModelProfiles,
-  testWorkflowAiModelProfile,
+  resolveModelProfile,
   toPublicModelProfile,
 } from '../piAgent/modelProfiles.js'
+import { testPiAgentRuntimeProfile } from '../piAgent/runtimeFactory.js'
+import { buildSystemPrompt } from '../piAgent/systemPrompt.js'
 import type { PiAgentSafeToolResult } from '../../ai/types.js'
 import { PI_AGENT_RAW_ROWS_ERROR_MESSAGE, assertPiAgentSafeRequest } from '../piAgent/safePayload.js'
 
@@ -45,7 +47,7 @@ export const createPiAgentRoutes = (): HttpDomainHandler<ServerDependencies> => 
       return true
     }
 
-    const result = await testWorkflowAiModelProfile(body.profile)
+    const result = await testPiAgentRuntimeProfile(resolveModelProfile(body.profile), buildSystemPrompt)
     context.sendJson(200, result)
     return true
   }
