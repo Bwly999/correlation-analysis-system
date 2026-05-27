@@ -1,6 +1,6 @@
 import type {
-  AgentSessionCanvasSyncResponse,
   PiAgentSafeToolResult,
+  PiAgentCanvasSyncResponse,
   WorkflowAiPlanRequest,
 } from '@/ai/types'
 import { httpClient, requestStream } from '@/services/httpClient'
@@ -22,7 +22,48 @@ type PiAgentSendMessageResponse = {
   error?: string
 }
 
-type PiAgentSessionDetailResponse = Record<string, unknown> | null
+export type PiAgentSessionToolCallDto = {
+  id: string
+  toolName: string
+  displayName: string
+  args: unknown
+  status: 'running' | 'success' | 'failed'
+  result?: string
+  isError?: boolean
+}
+
+export type PiAgentSessionMessageDto = {
+  id: string
+  role: 'user' | 'assistant'
+  visibility: 'user' | 'assistant_visible' | 'assistant_debug'
+  content: string
+  rawContent?: string
+  thinking?: string
+  status: 'streaming' | 'completed'
+  createdAt: number
+  toolCalls?: PiAgentSessionToolCallDto[]
+}
+
+export type PiAgentSessionDetailResponse = {
+  sessionId: string
+  status: 'idle' | 'running' | 'completed' | 'failed' | 'interrupted'
+  activeTurnState: 'responding' | 'tooling' | 'idle' | 'interrupted' | 'failed'
+  lastTurnEndedEarly: boolean
+  lastStopReason: 'normal' | 'read_only_observation_end' | 'interrupted' | 'failed'
+  lastMessageRole: 'assistant' | 'toolResult' | 'user' | 'unknown'
+  endedWithToolResult: boolean
+  lastResumeTrigger: 'prompt' | 'continue' | 'followUp' | 'steer' | 'none'
+  lastObservedToolName?: string
+  lastAssistantMessageText?: string
+  pendingFollowUps: string[]
+  mode: string
+  prompt: string
+  messages: PiAgentSessionMessageDto[]
+  toolCalls: PiAgentSessionToolCallDto[]
+  updatedAt: number
+  createdAt: number
+  sessionFile?: string
+} | null
 
 const isSuccessStatus = (status: number) => status >= 200 && status < 300
 
@@ -116,7 +157,7 @@ export const syncPiAgentCanvas = async (
     nodes: unknown[]
     edges: unknown[]
   },
-): Promise<AgentSessionCanvasSyncResponse> => {
+): Promise<PiAgentCanvasSyncResponse> => {
   const response = await httpClient.request({
     url: `/pi-agent/sessions/${sessionId}/canvas-sync`,
     method: 'POST',
@@ -126,16 +167,17 @@ export const syncPiAgentCanvas = async (
     data: { workflowSnapshot },
   })
 
-  return readJsonOrThrow<AgentSessionCanvasSyncResponse>(response, '同步 Pi Agent 画布失败')
+  return readJsonOrThrow<PiAgentCanvasSyncResponse>(response, '同步 Pi Agent 画布失败')
 }
 
 export const streamPiAgentEvents = async (
   sessionId: string,
-  options: { onEvent?: (event: any) => void } = {},
+  options: { onEvent?: (event: any) => void; signal?: AbortSignal } = {},
 ) => {
   const response = await requestStream({
     url: `/pi-agent/sessions/${sessionId}/events`,
     method: 'GET',
+    signal: options.signal,
   })
   if (!isSuccessStatus(response.status)) {
     const payload = await readStreamPayload(response.data)

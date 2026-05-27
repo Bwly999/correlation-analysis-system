@@ -40,8 +40,7 @@
 每个后端 tool 的名称自动映射到前端的统一工作流操作函数。**禁止写 switch-case 手动映射**。
 
 ```
-后端 tool name: wf_addNode        → 前端: WorkflowApi.addNode()
-后端 tool name: wf_connectNodes   → 前端: WorkflowApi.connectNodes()
+后端 tool name: workflow_update_partial_workflow → 前端: WorkflowApi.applyPartialWorkflowUpdate()
 后端 tool name: wf_executeWorkflow → 前端: WorkflowApi.executeWorkflow()
 ```
 
@@ -52,7 +51,7 @@
 - `wf_executeWorkflow` 是前端画布层的**统一执行入口**
 - `scope=workflow` — 整条工作流执行
 - `scope=node` — 单节点调试
-- upstream trace 不由该统一入口返回；如需则继续调用 MCP 服务端 `workflow_debug_node`
+- 当前 Pi Agent 主链不再暴露 MCP 风格工作流调试服务端入口
 
 ### 原则四：用户级完全隔离
 
@@ -121,7 +120,7 @@ Agent 的 tool 封装使用 `@earendil-works/pi-coding-agent` SDK 的 tool 机�
 | 服务端 Gateway | `src/server/piAgent/gateway.ts` | Session 生命周期管理、消息路由 |
 | 工具系统 | `src/server/piAgent/tools/` | 各分类 tool 实现 |
 | 模型适配 | `src/server/piAgent/modelAdapter.ts` | 多 provider 支持 |
-| 工作流底座 | `src/server/opencode/workflowMcpRuntime.ts` | 工作流读写/执行能力 |
+| JS Transform 子域 | `src/server/jsTransformAgent/` | JS 执行节点专属 Agent 路由与网关转发 |
 
 ---
 
@@ -130,7 +129,7 @@ Agent 的 tool 封装使用 `@earendil-works/pi-coding-agent` SDK 的 tool 机�
 ### 6.1 新增 tool 的步骤
 
 1. 在 `src/server/piAgent/tools/` 下添加 tool 定义
-2. tool name 以 `wf_` 前缀开头
+2. tool name 需与共享注册表 `src/shared/piWorkflowTools.ts` 对齐
 3. 在前端 `WorkflowApi` 中添加对应方法
 4. 在路由层注册 tool name → 前端方法的映射
 5. 添加对应测试

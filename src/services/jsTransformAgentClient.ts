@@ -85,7 +85,7 @@ export const createJsTransformAgentSession = async (
   request: JsTransformAgentSessionRequest,
 ): Promise<JsTransformAgentSessionCreateResponse> => {
   const response = await httpClient.request({
-    url: '/pi-agent/js-transform/sessions',
+    url: '/js-transform-agent/sessions',
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -101,7 +101,7 @@ export const sendJsTransformAgentMessage = async (
   content: string,
 ): Promise<JsTransformAgentSendMessageResponse> => {
   const response = await httpClient.request({
-    url: `/pi-agent/js-transform/sessions/${sessionId}/messages`,
+    url: `/js-transform-agent/sessions/${sessionId}/messages`,
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -117,7 +117,7 @@ export const updateJsTransformAgentMode = async (
   mode: 'ask' | 'agent',
 ) => {
   const response = await httpClient.request({
-    url: `/pi-agent/js-transform/sessions/${sessionId}/mode`,
+    url: `/js-transform-agent/sessions/${sessionId}/mode`,
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -132,7 +132,7 @@ export const abortJsTransformAgentRun = async (
   sessionId: string,
 ): Promise<JsTransformAgentAbortResponse> => {
   const response = await httpClient.request({
-    url: `/pi-agent/js-transform/sessions/${sessionId}/abort`,
+    url: `/js-transform-agent/sessions/${sessionId}/abort`,
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -147,7 +147,7 @@ export const streamJsTransformAgentEvents = async (
   options: { onEvent?: (event: any) => void } = {},
 ) => {
   const response = await requestStream({
-    url: `/pi-agent/js-transform/sessions/${sessionId}/events`,
+    url: `/js-transform-agent/sessions/${sessionId}/events`,
     method: 'GET',
   })
   if (!isSuccessStatus(response.status)) {
@@ -199,7 +199,7 @@ export const resolveJsTransformAgentToolResult = async (
   },
 ) => {
   const response = await httpClient.request({
-    url: `/pi-agent/js-transform/sessions/${sessionId}/tool-result`,
+    url: `/js-transform-agent/sessions/${sessionId}/tool-result`,
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

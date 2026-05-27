@@ -115,7 +115,21 @@ watch(
     </div>
 
     <div
-      v-if="store.errorMessage"
+      v-if="store.status === 'interrupted'"
+      class="rounded-2xl border border-orange-200 bg-orange-50 px-4 py-3 text-[12px] leading-6 text-orange-700"
+    >
+      当前回复已中断，你可以直接继续发送下一条消息。
+    </div>
+
+    <div
+      v-else-if="store.errorMessage && (store.errorMessage.includes('本轮已停止') || store.errorMessage.includes('继续处理队列'))"
+      class="rounded-2xl border border-orange-200 bg-orange-50 px-4 py-3 text-[12px] leading-6 text-orange-700"
+    >
+      {{ store.errorMessage }}
+    </div>
+
+    <div
+      v-else-if="store.errorMessage"
       class="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-[12px] leading-6 text-rose-700"
     >
       {{ store.errorMessage }}

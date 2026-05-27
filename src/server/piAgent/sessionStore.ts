@@ -8,7 +8,16 @@ import { sanitizePiAgentDataSources } from './safePayload.js'
 export interface PiAgentSessionRecord {
   sessionId: string
   userId: string
-  status: 'idle' | 'running' | 'completed' | 'failed'
+  status: 'idle' | 'running' | 'completed' | 'failed' | 'interrupted'
+  activeTurnState: 'responding' | 'tooling' | 'idle' | 'interrupted' | 'failed'
+  lastTurnEndedEarly: boolean
+  lastStopReason: 'normal' | 'read_only_observation_end' | 'interrupted' | 'failed'
+  lastMessageRole: 'assistant' | 'toolResult' | 'user' | 'unknown'
+  endedWithToolResult: boolean
+  lastResumeTrigger: 'prompt' | 'continue' | 'followUp' | 'steer' | 'none'
+  lastObservedToolName?: string
+  lastAssistantMessageText?: string
+  pendingFollowUps: string[]
   mode: 'create' | 'edit'
   prompt: string
   profile: Pick<WorkflowAiModelProfile, 'id' | 'name' | 'model'>
@@ -61,6 +70,13 @@ export function createSessionRecord(
     sessionId: randomUUID(),
     userId,
     status: 'idle',
+    activeTurnState: 'idle',
+    lastTurnEndedEarly: false,
+    lastStopReason: 'normal',
+    lastMessageRole: 'unknown',
+    endedWithToolResult: false,
+    lastResumeTrigger: 'none',
+    pendingFollowUps: [],
     mode: sanitizedRequest.mode,
     prompt: sanitizedRequest.prompt,
     profile: {
@@ -91,7 +107,21 @@ export function setSessionFile(sessionId: string, sessionFile: string): void {
 
 export function updateSessionRecord(
   sessionId: string,
-  update: Partial<Pick<PiAgentSessionRecord, 'status' | 'updatedAt' | 'request'>>,
+  update: Partial<Pick<
+    PiAgentSessionRecord,
+    | 'status'
+    | 'updatedAt'
+    | 'request'
+    | 'activeTurnState'
+    | 'lastTurnEndedEarly'
+    | 'lastStopReason'
+    | 'lastMessageRole'
+    | 'endedWithToolResult'
+    | 'lastResumeTrigger'
+    | 'lastObservedToolName'
+    | 'lastAssistantMessageText'
+    | 'pendingFollowUps'
+  >>,
 ): void {
   const record = sessions.get(sessionId)
   if (!record) return

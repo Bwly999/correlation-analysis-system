@@ -11,6 +11,7 @@ import {
 } from '@earendil-works/pi-coding-agent'
 import type { AgentSession } from '@earendil-works/pi-coding-agent'
 import type { WorkflowAiPlanRequest } from '../../ai/types.js'
+import type { PiAgentCanvasSyncResponse } from '../../ai/types.js'
 import { buildModelFromProfile, createModelRegistryFromProfile } from './modelAdapter.js'
 import { buildSystemPrompt } from './systemPrompt.js'
 import {
@@ -25,19 +26,8 @@ import { bridgePiEvent, tryExtractWorkflowPlan, type PiAgentSseEvent } from './e
 import { buildAllTools } from './tools/index.js'
 import { FrontendBridge } from './frontendBridge.js'
 import { assertPiAgentSafeRequest } from './safePayload.js'
-import type { AgentSessionCanvasSyncResponse } from '../../ai/types.js'
 import { archivePiAgentSessionFile } from '../logging/sessionArchive.js'
 import { createServerLogger } from '../logging/serverLogger.js'
-export {
-  abortJsTransformAgentRun,
-  createJsTransformAgentSession,
-  disposeAllJsTransformAgentSessions,
-  getJsTransformAgentSession,
-  resolveJsTransformAgentToolResult,
-  updateJsTransformAgentMode,
-  sendJsTransformAgentMessage,
-  subscribeJsTransformAgentEvents,
-} from './jsTransformAgentGateway.js'
 
 // --- Runtime 管理 ---
 
@@ -565,7 +555,7 @@ export async function syncPiAgentCanvas(input: {
     nodes: unknown[]
     edges: unknown[]
   }
-}): Promise<AgentSessionCanvasSyncResponse> {
+}): Promise<PiAgentCanvasSyncResponse> {
   const runtime = runtimes.get(input.sessionId)
   if (!runtime) {
     throw new Error('未找到 Pi Agent 会话')

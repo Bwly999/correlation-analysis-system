@@ -30,19 +30,19 @@ describe('FrontendBridge', () => {
 
   describe('request', () => {
     it('调用 request 时应通过回调向发送工具执行事件到前端', () => {
-      bridge.request('call_001', 'wf_addNode', { nodeType: 'manual-input', label: '测试节点' })
+      bridge.request('call_001', 'workflow_update_partial_workflow', { operations: [] })
 
       expect(sendToFrontend).toHaveBeenCalledTimes(1)
       expect(sendToFrontend).toHaveBeenCalledWith({
         type: 'tool.execute',
         toolCallId: 'call_001',
-        toolName: 'wf_addNode',
-        params: { nodeType: 'manual-input', label: '测试节点' },
+        toolName: 'workflow_update_partial_workflow',
+        params: { operations: [] },
       })
     })
 
     it('request 应返回一个 Promise', () => {
-      const result = bridge.request('call_001', 'wf_addNode', { nodeType: 'test' })
+      const result = bridge.request('call_001', 'workflow_update_partial_workflow', { operations: [] })
 
       expect(result).toBeInstanceOf(Promise)
     })
@@ -53,7 +53,7 @@ describe('FrontendBridge', () => {
         details: details('节点创建成功'),
       }
 
-      const promise = bridge.request('call_001', 'wf_addNode', { nodeType: 'test' })
+      const promise = bridge.request('call_001', 'workflow_update_partial_workflow', { operations: [] })
       const resolved = bridge.resolveResult('call_001', expectedResult)
 
       expect(resolved).toBe(true)
@@ -71,7 +71,7 @@ describe('FrontendBridge', () => {
     })
 
     it('对已知 toolCallId 调用 resolveResult 应返回 true', () => {
-      bridge.request('call_001', 'wf_addNode', { nodeType: 'test' })
+      bridge.request('call_001', 'workflow_update_partial_workflow', { operations: [] })
       const result: ToolResult = {
         content: [{ type: 'text', text: 'ok' }],
         details: details(),
@@ -84,7 +84,7 @@ describe('FrontendBridge', () => {
     it('调用 rejectResult 应 reject 对应的 Promise', async () => {
       const error = new Error('前端执行失败：节点类型不存在')
 
-      const promise = bridge.request('call_001', 'wf_addNode', { nodeType: 'invalid' })
+      const promise = bridge.request('call_001', 'workflow_update_partial_workflow', { operations: [] })
       const rejected = bridge.rejectResult('call_001', error)
 
       expect(rejected).toBe(true)
@@ -96,9 +96,9 @@ describe('FrontendBridge', () => {
       const result2: ToolResult = { content: [{ type: 'text', text: '结果2' }], details: details('结果2') }
       const result3: ToolResult = { content: [{ type: 'text', text: '结果3' }], details: details('结果3') }
 
-      const p1 = bridge.request('call_001', 'wf_addNode', { nodeType: 'a' })
-      const p2 = bridge.request('call_002', 'wf_addNode', { nodeType: 'b' })
-      const p3 = bridge.request('call_003', 'wf_addNode', { nodeType: 'c' })
+      const p1 = bridge.request('call_001', 'workflow_update_partial_workflow', { operations: [] })
+      const p2 = bridge.request('call_002', 'workflow_update_partial_workflow', { operations: [] })
+      const p3 = bridge.request('call_003', 'workflow_update_partial_workflow', { operations: [] })
 
       // 按不同顺序解析
       bridge.resolveResult('call_002', result2)
@@ -113,8 +113,8 @@ describe('FrontendBridge', () => {
     it('pendingCount 应正确反映待处理请求数', () => {
       expect(bridge.pendingCount).toBe(0)
 
-      bridge.request('call_001', 'wf_addNode', { nodeType: 'a' })
-      bridge.request('call_002', 'wf_connectNodes', { sourceId: 'a', targetId: 'b' })
+      bridge.request('call_001', 'workflow_update_partial_workflow', { operations: [] })
+      bridge.request('call_002', 'wf_executeWorkflow', { scope: 'workflow' })
 
       expect(bridge.pendingCount).toBe(2)
 
@@ -126,8 +126,8 @@ describe('FrontendBridge', () => {
     })
 
     it('dispose 应 reject 所有待处理请求', async () => {
-      const p1 = bridge.request('call_001', 'wf_addNode', { nodeType: 'a' })
-      const p2 = bridge.request('call_002', 'wf_addNode', { nodeType: 'b' })
+      const p1 = bridge.request('call_001', 'workflow_update_partial_workflow', { operations: [] })
+      const p2 = bridge.request('call_002', 'workflow_update_partial_workflow', { operations: [] })
 
       bridge.dispose()
 
@@ -137,8 +137,8 @@ describe('FrontendBridge', () => {
     })
 
     it('cancelPendingRequests 应 reject 所有待处理请求但保留 bridge 可继续使用', async () => {
-      const p1 = bridge.request('call_001', 'wf_addNode', { nodeType: 'a' })
-      const p2 = bridge.request('call_002', 'wf_addNode', { nodeType: 'b' })
+      const p1 = bridge.request('call_001', 'workflow_update_partial_workflow', { operations: [] })
+      const p2 = bridge.request('call_002', 'workflow_update_partial_workflow', { operations: [] })
 
       bridge.cancelPendingRequests('当前轮已取消')
 
@@ -146,7 +146,7 @@ describe('FrontendBridge', () => {
       await expect(p2).rejects.toThrow('当前轮已取消')
       expect(bridge.pendingCount).toBe(0)
 
-      const p3 = bridge.request('call_003', 'wf_addNode', { nodeType: 'c' })
+      const p3 = bridge.request('call_003', 'workflow_update_partial_workflow', { operations: [] })
       bridge.resolveResult('call_003', { content: [{ type: 'text', text: 'ok' }], details: details() })
       await expect(p3).resolves.toEqual({
         content: [{ type: 'text', text: 'ok' }],
@@ -161,7 +161,7 @@ describe('FrontendBridge', () => {
 
       const bridgeWithTimeout = new FrontendBridge(sendToFrontend as unknown as SendToFrontendFn, { timeoutMs: 5000 })
 
-      const promise = bridgeWithTimeout.request('call_001', 'wf_addNode', { nodeType: 'test' })
+      const promise = bridgeWithTimeout.request('call_001', 'workflow_update_partial_workflow', { operations: [] })
 
       // 快进 5 秒
       vi.advanceTimersByTime(5000)
@@ -181,7 +181,7 @@ describe('FrontendBridge', () => {
         details: details('及时返回'),
       }
 
-      const promise = bridgeWithTimeout.request('call_001', 'wf_addNode', { nodeType: 'test' })
+      const promise = bridgeWithTimeout.request('call_001', 'workflow_update_partial_workflow', { operations: [] })
 
       // 在超时前解析
       vi.advanceTimersByTime(2000)

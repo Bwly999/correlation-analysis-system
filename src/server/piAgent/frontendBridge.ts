@@ -62,7 +62,7 @@ export class FrontendBridge {
    * 向发送工具执行请求并等待前端结果
    *
    * @param toolCallId - Pi SDK 分配的工具调用唯一标识
-   * @param toolName - 工具名称（如 wf_addNode）
+   * @param toolName - 工具名称（如 workflow_update_partial_workflow）
    * @param params - 工具参数
    * @returns Promise，前端返回结果时 resolve
    */

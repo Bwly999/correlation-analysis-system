@@ -50,4 +50,27 @@ describe('piAgentClient streams', () => {
       { type: 'done', content: '第二条' },
     ])
   })
+
+  it('passes through an abort signal for stream cancellation', async () => {
+    const controller = new AbortController()
+    requestStreamMock.mockResolvedValue({
+      status: 200,
+      data: new ReadableStream<Uint8Array>({
+        start(streamController) {
+          streamController.close()
+        },
+      }),
+      headers: {},
+    })
+
+    await streamPiAgentEvents('pi_session_1', {
+      signal: controller.signal,
+    })
+
+    expect(requestStreamMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        signal: controller.signal,
+      }),
+    )
+  })
 })

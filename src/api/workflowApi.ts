@@ -9,7 +9,7 @@ import { useWorkflowStore } from '@/stores/workflowStore'
 import type { WorkflowNode } from '@/utils/storage'
 import type { Edge } from '@vue-flow/core'
 import type { WorkflowExecutionResult, WorkflowNodeDebugResult } from '@/stores/workflowStore'
-import type { WorkflowAiPlan } from '@/ai/types'
+import type { WorkflowAiOperation, WorkflowAiPlan } from '@/ai/types'
 
 const getStore = () => useWorkflowStore()
 
@@ -140,6 +140,21 @@ export const WorkflowApi = {
     }
 
     return this.runWorkflow()
+  },
+
+  applyPartialWorkflowUpdate(input: {
+    operations: WorkflowAiOperation[]
+    summary?: string
+    validateAfterApply?: boolean
+  }) {
+    const store = getStore()
+    return store.applyWorkflowAiPlan({
+      summary: input.summary?.trim() || '增量修改工作流',
+      assumptions: [],
+      warnings: [],
+      questions: [],
+      operations: input.operations,
+    })
   },
 
   async executePlanOnCanvas(plan: WorkflowAiPlan): Promise<WorkflowExecutionResult> {

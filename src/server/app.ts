@@ -2,6 +2,7 @@ import { createServerDependencies, type CreateServerDependenciesOptions } from '
 import { createJwtAuthGuard, type JwtAuthGuard } from './auth/jwtAuth.js'
 import { createHttpHandler } from './http/handler.js'
 import { createAnalysisRoutes } from './modules/analysisRoutes.js'
+import { createJsTransformAgentRoutes } from './modules/jsTransformAgentRoutes.js'
 import { createStorageRoutes } from './modules/storageRoutes.js'
 import { createPiAgentRoutes } from './modules/piAgentRoutes.js'
 
@@ -22,6 +23,7 @@ export const createServerHandler = (
     resolveRequestUser: dependencies.resolveStorageUser,
     authGuard: authGuard ?? createJwtAuthGuard(),
     domains: [
+      createJsTransformAgentRoutes(),
       createPiAgentRoutes(),
       createStorageRoutes(),
       createAnalysisRoutes(),

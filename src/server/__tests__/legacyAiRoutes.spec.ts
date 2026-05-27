@@ -80,4 +80,16 @@ describe('legacy ai routes', () => {
     expect(response.statusCode).toBe(404)
     expect(JSON.parse(response.body)).toEqual({ message: '未找到接口' })
   })
+
+  it('returns 404 for removed pi-agent js-transform routes', async () => {
+    const handler = createServerHandler()
+    const response = createResponse()
+
+    await handler(createRequest('POST', '/api/pi-agent/js-transform/sessions', {
+      nodeId: 'node_js_1',
+    }), response)
+
+    expect(response.statusCode).toBe(404)
+    expect(JSON.parse(response.body)).toEqual({ message: '未找到接口' })
+  })
 })

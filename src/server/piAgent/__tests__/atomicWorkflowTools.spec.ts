@@ -3,7 +3,6 @@ import { createAtomicWorkflowTools } from '../tools/atomicWorkflowTools.js'
 import type { FrontendBridge, ToolResult } from '../frontendBridge.js'
 import type { PiAgentSafeToolResult } from '../../../ai/types.js'
 
-/** 创建一个模拟的 FrontendBridge，允许测试控制 resolve/reject */
 function createMockBridge() {
   const pending = new Map<string, { resolve: (r: ToolResult) => void; reject: (e: Error) => void }>()
 
@@ -24,7 +23,6 @@ function createMockBridge() {
 
   return {
     bridge: mockBridge,
-    /** 模拟前端成功返回结果 */
     resolve: (toolCallId: string, result: ToolResult) => {
       const entry = pending.get(toolCallId)
       if (entry) {
@@ -32,7 +30,6 @@ function createMockBridge() {
         pending.delete(toolCallId)
       }
     },
-    /** 模拟前端返回错误 */
     reject: (toolCallId: string, error: Error) => {
       const entry = pending.get(toolCallId)
       if (entry) {
@@ -43,7 +40,6 @@ function createMockBridge() {
   }
 }
 
-/** 成功结果工厂 */
 const successDetails = (summary: string): PiAgentSafeToolResult => ({
   ok: true,
   scope: 'global',
@@ -70,240 +66,133 @@ describe('原子工作流工具 (atomicWorkflowTools)', () => {
     vi.useRealTimers()
   })
 
-  describe('wf_addNode', () => {
-    it('应将 addNode 调用转发到 FrontendBridge 并返回前端结果', async () => {
-      const tool = tools.find((t) => t.name === 'wf_addNode')!
-      expect(tool).toBeDefined()
-      expect(tool.name).toBe('wf_addNode')
+  it('仅暴露合并后的画布修改工具和执行工具', () => {
+    const names = tools.map((tool) => tool.name)
 
-      const resultPromise = tool.execute(
-        'call_001',
-        { nodeType: 'manual-json-import', label: '测试', position: { x: 100, y: 200 } },
-        undefined as any,
-        undefined as any,
-        undefined as any,
-      )
-
-      expect(mock.bridge.request).toHaveBeenCalledWith(
-        'call_001',
-        'wf_addNode',
-        { nodeType: 'manual-json-import', label: '测试', position: { x: 100, y: 200 } },
-      )
-
-      mock.resolve('call_001', successResult('节点创建成功'))
-      const result = await resultPromise
-
-      expect((result as any).content[0]?.text).toBe('节点创建成功')
-      expect((result as any).details.summary).toBe('节点创建成功')
-    })
+    expect(names).toEqual([
+      'workflow_update_partial_workflow',
+      'wf_executeWorkflow',
+    ])
+    expect(names).not.toContain('wf_addNode')
+    expect(names).not.toContain('wf_connectNodes')
   })
 
-  describe('wf_connectNodes', () => {
-    it('应将 connectNodes 调用转发到 FrontendBridge', async () => {
-      const tool = tools.find((t) => t.name === 'wf_connectNodes')!
-      expect(tool).toBeDefined()
+  it('将 workflow_update_partial_workflow 转发到 FrontendBridge 并返回前端结果', async () => {
+    const onUpdate = vi.fn()
+    const tool = tools.find((item) => item.name === 'workflow_update_partial_workflow')!
 
-      const resultPromise = tool.execute(
-        'call_002',
-        { sourceId: 'node_a', targetId: 'node_b' },
-        undefined as any,
-        undefined as any,
-        undefined as any,
-      )
+    const resultPromise = tool.execute(
+      'call_update',
+      {
+        operations: [
+          {
+            id: 'node_manual_1',
+            type: 'createNode',
+            nodeType: 'manual-json-import',
+            nodeLabel: '手动输入数据',
+          },
+          {
+            id: 'move_1',
+            type: 'moveNode',
+            nodeRef: 'node_manual_1',
+            position: { x: 100, y: 200 },
+          },
+        ],
+        summary: '添加并移动节点',
+      },
+      undefined as any,
+      onUpdate,
+      undefined as any,
+    )
 
-      expect(mock.bridge.request).toHaveBeenCalledWith('call_002', 'wf_connectNodes', {
-        sourceId: 'node_a',
-        targetId: 'node_b',
-      })
-
-      mock.resolve('call_002', successResult('连线创建成功'))
-      const result = await resultPromise
-
-      expect((result as any).details.summary).toBe('连线创建成功')
+    expect(onUpdate).toHaveBeenCalledWith({
+      content: [{ type: 'text', text: '正在等待前端画布应用增量修改...' }],
+      details: { status: 'waiting_frontend_canvas' },
     })
+    expect(mock.bridge.request).toHaveBeenCalledWith('call_update', 'workflow_update_partial_workflow', {
+      operations: [
+        {
+          id: 'node_manual_1',
+          type: 'createNode',
+          nodeType: 'manual-json-import',
+          nodeLabel: '手动输入数据',
+        },
+        {
+          id: 'move_1',
+          type: 'moveNode',
+          nodeRef: 'node_manual_1',
+          position: { x: 100, y: 200 },
+        },
+      ],
+      summary: '添加并移动节点',
+    })
+
+    mock.resolve('call_update', successResult('画布修改成功'))
+    const result = await resultPromise
+
+    expect((result as any).content[0]?.text).toBe('画布修改成功')
+    expect((result as any).details.summary).toBe('画布修改成功')
   })
 
-  describe('wf_updateNodeConfig', () => {
-    it('应将 updateNodeConfig 调用转发到 FrontendBridge', async () => {
-      const tool = tools.find((t) => t.name === 'wf_updateNodeConfig')!
+  it('拒绝缺少必要字段的增量操作', async () => {
+    const tool = tools.find((item) => item.name === 'workflow_update_partial_workflow')!
 
-      const resultPromise = tool.execute(
-        'call_003',
-        { nodeId: 'node_a', config: { param1: 'value1' } },
-        undefined as any,
-        undefined as any,
-        undefined as any,
-      )
-
-      expect(mock.bridge.request).toHaveBeenCalledWith('call_003', 'wf_updateNodeConfig', {
-        nodeId: 'node_a',
-        config: { param1: 'value1' },
-      })
-
-      mock.resolve('call_003', successResult('配置已更新'))
-      await resultPromise
-    })
+    await expect(tool.execute(
+      'call_invalid',
+      {
+        operations: [
+          {
+            id: 'bad_1',
+            type: 'connectNodes',
+            sourceRef: 'node_a',
+          },
+        ],
+      },
+      undefined as any,
+      undefined as any,
+      undefined as any,
+    )).rejects.toThrow('缺少 sourceRef 或 targetRef')
+    expect(mock.bridge.request).not.toHaveBeenCalled()
   })
 
-  describe('wf_renameNode', () => {
-    it('应将 renameNode 调用转发到 FrontendBridge', async () => {
-      const tool = tools.find((t) => t.name === 'wf_renameNode')!
+  it('将 wf_executeWorkflow 执行参数转发到 FrontendBridge', async () => {
+    const onUpdate = vi.fn()
+    const tool = tools.find((item) => item.name === 'wf_executeWorkflow')!
 
-      const resultPromise = tool.execute(
-        'call_004',
-        { nodeId: 'node_a', label: '新名称' },
-        undefined as any,
-        undefined as any,
-        undefined as any,
-      )
+    const resultPromise = tool.execute(
+      'call_execute',
+      { scope: 'node', nodeId: 'node_debug_1', mode: 'rerun_upstream' },
+      undefined as any,
+      onUpdate,
+      undefined as any,
+    )
 
-      expect(mock.bridge.request).toHaveBeenCalledWith('call_004', 'wf_renameNode', {
-        nodeId: 'node_a',
-        label: '新名称',
-      })
-
-      mock.resolve('call_004', successResult('节点已重命名'))
-      await resultPromise
+    expect(onUpdate).toHaveBeenCalledWith({
+      content: [{ type: 'text', text: '正在等待前端画布执行工作流...' }],
+      details: { status: 'waiting_frontend_canvas' },
     })
+    expect(mock.bridge.request).toHaveBeenCalledWith('call_execute', 'wf_executeWorkflow', {
+      scope: 'node',
+      nodeId: 'node_debug_1',
+      mode: 'rerun_upstream',
+    })
+
+    mock.resolve('call_execute', successResult('节点调试完成'))
+    await resultPromise
   })
 
-  describe('wf_removeNode', () => {
-    it('应将 removeNode 调用转发到 FrontendBridge', async () => {
-      const tool = tools.find((t) => t.name === 'wf_removeNode')!
+  it('前端桥接失败时向上抛出错误，交由 Pi SDK 标记 isError', async () => {
+    const tool = tools.find((item) => item.name === 'wf_executeWorkflow')!
 
-      const resultPromise = tool.execute(
-        'call_005',
-        { nodeId: 'node_a' },
-        undefined as any,
-        undefined as any,
-        undefined as any,
-      )
+    const resultPromise = tool.execute(
+      'call_err',
+      { scope: 'workflow' },
+      undefined as any,
+      undefined as any,
+      undefined as any,
+    )
 
-      expect(mock.bridge.request).toHaveBeenCalledWith('call_005', 'wf_removeNode', {
-        nodeId: 'node_a',
-      })
-
-      mock.resolve('call_005', successResult('节点已删除'))
-      await resultPromise
-    })
-  })
-
-  describe('wf_disconnectEdge', () => {
-    it('应将 disconnectEdge 调用转发到 FrontendBridge', async () => {
-      const tool = tools.find((t) => t.name === 'wf_disconnectEdge')!
-
-      const resultPromise = tool.execute(
-        'call_006',
-        { edgeId: 'edge_001' },
-        undefined as any,
-        undefined as any,
-        undefined as any,
-      )
-
-      expect(mock.bridge.request).toHaveBeenCalledWith('call_006', 'wf_disconnectEdge', {
-        edgeId: 'edge_001',
-      })
-
-      mock.resolve('call_006', successResult('连线已断开'))
-      await resultPromise
-    })
-  })
-
-  describe('wf_moveNode', () => {
-    it('应将 moveNode 调用转发到 FrontendBridge', async () => {
-      const tool = tools.find((t) => t.name === 'wf_moveNode')!
-
-      const resultPromise = tool.execute(
-        'call_007',
-        { nodeId: 'node_a', position: { x: 500, y: 300 } },
-        undefined as any,
-        undefined as any,
-        undefined as any,
-      )
-
-      expect(mock.bridge.request).toHaveBeenCalledWith('call_007', 'wf_moveNode', {
-        nodeId: 'node_a',
-        position: { x: 500, y: 300 },
-      })
-
-      mock.resolve('call_007', successResult('节点已移动'))
-      await resultPromise
-    })
-  })
-
-  describe('wf_executeWorkflow', () => {
-    it('应将全局执行参数转发到 FrontendBridge', async () => {
-      const tool = tools.find((t) => t.name === 'wf_executeWorkflow')!
-
-      const resultPromise = tool.execute(
-        'call_008',
-        { scope: 'workflow' },
-        undefined as any,
-        undefined as any,
-        undefined as any,
-      )
-
-      expect(mock.bridge.request).toHaveBeenCalledWith('call_008', 'wf_executeWorkflow', {
-        scope: 'workflow',
-      })
-
-      mock.resolve('call_008', successResult('工作流执行完成'))
-      await resultPromise
-    })
-
-    it('应将单节点调试参数转发到 FrontendBridge', async () => {
-      const tool = tools.find((t) => t.name === 'wf_executeWorkflow')!
-      expect(tool).toBeDefined()
-
-      const resultPromise = tool.execute(
-        'call_009',
-        { scope: 'node', nodeId: 'node_debug_1', mode: 'rerun_upstream' },
-        undefined as any,
-        undefined as any,
-        undefined as any,
-      )
-
-      expect(mock.bridge.request).toHaveBeenCalledWith('call_009', 'wf_executeWorkflow', {
-        scope: 'node',
-        nodeId: 'node_debug_1',
-        mode: 'rerun_upstream',
-      })
-
-      mock.resolve('call_009', successResult('节点调试完成'))
-      await resultPromise
-    })
-  })
-
-  describe('所有工具应覆盖所有操作类型', () => {
-    it('应包含 8 个原子操作工具', () => {
-      const names = tools.map((t) => t.name)
-      expect(names).toContain('wf_addNode')
-      expect(names).toContain('wf_connectNodes')
-      expect(names).toContain('wf_updateNodeConfig')
-      expect(names).toContain('wf_renameNode')
-      expect(names).toContain('wf_removeNode')
-      expect(names).toContain('wf_disconnectEdge')
-      expect(names).toContain('wf_moveNode')
-      expect(names).toContain('wf_executeWorkflow')
-      expect(names).not.toContain('workflow_debug_node')
-      expect(tools).toHaveLength(8)
-    })
-
-    it('每个工具执行错误时应返回错误结果', async () => {
-      const tool = tools.find((t) => t.name === 'wf_addNode')!
-
-      const resultPromise = tool.execute(
-        'call_err',
-        { nodeType: 'unknown' },
-        undefined as any,
-        undefined as any,
-        undefined as any,
-      )
-
-      mock.reject('call_err', new Error('未找到节点定义: unknown'))
-      const result = await resultPromise
-
-      expect((result as any).content[0]?.text).toContain('未找到节点定义')
-    })
+    mock.reject('call_err', new Error('前端执行失败'))
+    await expect(resultPromise).rejects.toThrow('前端执行失败')
   })
 })

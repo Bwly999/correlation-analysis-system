@@ -1,21 +1,15 @@
 const TOOL_SUMMARY_PREFIXES = [
   '可用节点一览',
   '节点目录',
-  '数据源列表',
-  '数据源信息',
   '读取分析上下文',
   '读取节点定义',
-  '读取字段摘要',
-  '搜索节点结果',
 ]
 
 const TOOL_SUMMARY_KEYWORDS = [
   'workflow_get_session_context',
   'workflow_get_node_catalog',
-  'workflow_list_data_sources',
-  'workflow_get_data_source_schema',
-  'workflow_search_nodes',
   'workflow_get_node_definition',
+  'workflow_get_node',
 ]
 
 const SYSTEM_PROMPT_MARKERS = [

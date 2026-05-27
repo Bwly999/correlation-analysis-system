@@ -1,205 +1,148 @@
 /**
- * 原子工作流操作工具 — 每个工具映射到一个前端 WorkflowApi 函数
- *
- * 与旧版粗粒度 workflowTools.ts 的区别：
- * - 每个工具是原子的（一个工具 = 一个操作）
- * - 执行通过 FrontendBridge 转发到前端，而非后端本地执行
- * - LLM 可以逐步操作画布，实时看到每一步的结果
- *
- * 原则：后端不碰执行，前端不碰推理。
+ * 前端画布工具：后端只调度，真实工作流操作由前端 WorkflowApi 执行。
  */
 import { defineTool } from '@earendil-works/pi-coding-agent'
 import { Type } from 'typebox'
 import type { FrontendBridge } from '../frontendBridge.js'
-import type { PiAgentSafeToolResult } from '../../../ai/types.js'
+
+const stringEnum = <T extends readonly string[]>(
+  values: T,
+  options?: Record<string, unknown>,
+) =>
+  Type.Unsafe<T[number]>({
+    type: 'string',
+    enum: [...values],
+    ...options,
+  } as any)
 
 const POSITION_SCHEMA = Type.Object({
   x: Type.Number({ description: 'X 坐标' }),
   y: Type.Number({ description: 'Y 坐标' }),
 })
 
-const EXECUTION_SCOPE_SCHEMA = Type.Union([
-  Type.Literal('workflow'),
-  Type.Literal('node'),
-], { description: '执行范围：整条工作流或单节点调试' })
+const WORKFLOW_OPERATION_TYPE_SCHEMA = stringEnum(
+  [
+    'createNode',
+    'updateNodeConfig',
+    'renameNode',
+    'removeNode',
+    'connectNodes',
+    'disconnectEdge',
+    'moveNode',
+  ] as const,
+  { description: '增量操作类型' },
+)
 
-const DEBUG_MODE_SCHEMA = Type.Union([
-  Type.Literal('reuse_cached_upstream'),
-  Type.Literal('rerun_upstream'),
-], { description: '单节点调试模式' })
-
-const buildFallbackDetails = (scope: 'global' | 'single', message: string): PiAgentSafeToolResult => ({
-  ok: false,
-  scope,
-  executionId: null,
-  status: 'failed',
-  summary: message,
-  nodes: [],
-  artifacts: [],
-  warnings: [message],
+const WORKFLOW_OPERATION_SCHEMA = Type.Object({
+  id: Type.String({ description: '操作唯一标识，用于同批次内引用新建节点' }),
+  type: WORKFLOW_OPERATION_TYPE_SCHEMA,
+  nodeType: Type.Optional(Type.String({ description: 'createNode 使用的节点类型名称' })),
+  nodeLabel: Type.Optional(Type.String({ description: 'createNode 使用的节点显示名称' })),
+  config: Type.Optional(Type.Record(Type.String(), Type.Unknown(), { description: '节点配置' })),
+  sourceRef: Type.Optional(Type.String({ description: 'connectNodes 使用的源节点 ID 或同批次操作 ID' })),
+  targetRef: Type.Optional(Type.String({ description: 'connectNodes 使用的目标节点 ID 或同批次操作 ID' })),
+  sourceHandle: Type.Optional(Type.String({ description: '源节点输出端口' })),
+  targetHandle: Type.Optional(Type.String({ description: '目标节点输入端口' })),
+  nodeRef: Type.Optional(Type.String({ description: 'update/rename/remove/move 使用的节点 ID 或同批次操作 ID' })),
+  edgeRef: Type.Optional(Type.String({ description: 'disconnectEdge 使用的连线 ID' })),
+  label: Type.Optional(Type.String({ description: 'renameNode 使用的新节点名称' })),
+  position: Type.Optional(POSITION_SCHEMA),
 })
 
-const errorResult = (message: string) => ({
-  content: [{ type: 'text' as const, text: message }],
-  details: buildFallbackDetails('global', message),
-  isError: true,
+const EXECUTION_SCOPE_SCHEMA = stringEnum(['workflow', 'node'] as const, {
+  description: '执行范围：workflow 表示整条工作流，node 表示单节点调试',
 })
+
+const DEBUG_MODE_SCHEMA = stringEnum(['reuse_cached_upstream', 'rerun_upstream'] as const, {
+  description: '单节点调试模式',
+})
+
+const WORKFLOW_UPDATE_PARAMETERS = Type.Object({
+  workflowId: Type.Optional(Type.String({ description: '可选工作流 ID；前端画布会以当前画布为准' })),
+  operations: Type.Array(WORKFLOW_OPERATION_SCHEMA, { description: '按顺序应用到当前画布的增量操作列表' }),
+  summary: Type.Optional(Type.String({ description: '本次修改摘要' })),
+  validateAfterApply: Type.Optional(Type.Boolean({ description: '应用前是否校验操作，默认 true' })),
+})
+
+type WorkflowUpdateParams = {
+  operations: Array<{
+    id: string
+    type: 'createNode' | 'updateNodeConfig' | 'renameNode' | 'removeNode' | 'connectNodes' | 'disconnectEdge' | 'moveNode'
+    nodeType?: string
+    nodeRef?: string
+    sourceRef?: string
+    targetRef?: string
+    edgeRef?: string
+    config?: Record<string, unknown>
+    label?: string
+    position?: { x: number; y: number }
+  }>
+}
+
+const EXECUTE_WORKFLOW_PARAMETERS = Type.Object({
+  scope: EXECUTION_SCOPE_SCHEMA,
+  nodeId: Type.Optional(Type.String({ description: 'scope=node 时要调试的节点 ID' })),
+  mode: Type.Optional(DEBUG_MODE_SCHEMA),
+})
+
+const assertWorkflowUpdateParams = (params: WorkflowUpdateParams) => {
+  if (!params.operations.length) {
+    throw new Error('operations 不能为空')
+  }
+
+  params.operations.forEach((operation, index) => {
+    const prefix = `第 ${index + 1} 个操作(${operation.type})`
+    if (operation.type === 'createNode' && !operation.nodeType) {
+      throw new Error(`${prefix} 缺少 nodeType`)
+    }
+    if (operation.type === 'updateNodeConfig' && (!operation.nodeRef || !operation.config)) {
+      throw new Error(`${prefix} 缺少 nodeRef 或 config`)
+    }
+    if (operation.type === 'renameNode' && (!operation.nodeRef || !operation.label)) {
+      throw new Error(`${prefix} 缺少 nodeRef 或 label`)
+    }
+    if (operation.type === 'removeNode' && !operation.nodeRef) {
+      throw new Error(`${prefix} 缺少 nodeRef`)
+    }
+    if (operation.type === 'connectNodes' && (!operation.sourceRef || !operation.targetRef)) {
+      throw new Error(`${prefix} 缺少 sourceRef 或 targetRef`)
+    }
+    if (operation.type === 'disconnectEdge' && !operation.edgeRef) {
+      throw new Error(`${prefix} 缺少 edgeRef`)
+    }
+    if (operation.type === 'moveNode' && (!operation.nodeRef || !operation.position)) {
+      throw new Error(`${prefix} 缺少 nodeRef 或 position`)
+    }
+  })
+}
 
 /**
- * 创建原子工作流操作工具集
- *
- * @param bridge - 前端桥接实例（每个用户会话独立）
- * @returns Pi SDK defineTool 定义的工具数组
+ * 创建前端画布工具集。
  */
 export function createAtomicWorkflowTools(bridge: FrontendBridge) {
-  const addNode = defineTool({
-    name: 'wf_addNode',
-    label: '添加节点',
-    description: `在画布上添加一个新节点。
+  const updatePartialWorkflow = defineTool({
+    name: 'workflow_update_partial_workflow',
+    label: '增量修改画布',
+    description: `按操作列表渐进式修改当前前端工作流画布。
 
-参数说明：
-- nodeType: 节点类型名称（如 manual-json-import、js-transform、pearson-correlation 等）
-- label: 节点显示标签
-- position: 节点在画布上的坐标位置 { x, y }
-- config: 节点初始配置参数`,
-    parameters: Type.Object({
-      nodeType: Type.String({ description: '节点类型名称' }),
-      label: Type.Optional(Type.String({ description: '节点显示标签' })),
-      position: Type.Optional(POSITION_SCHEMA),
-      config: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
-    }),
-    async execute(callId, params, _signal, _onUpdate, _ctx) {
-      try {
-        return await bridge.request(callId, 'wf_addNode', params as Record<string, unknown>)
-      } catch (err: any) {
-        return errorResult(err?.message || '添加节点失败')
-      }
-    },
-  })
-
-  const connectNodes = defineTool({
-    name: 'wf_connectNodes',
-    label: '连接节点',
-    description: `连接两个节点。注意连接规则：trigger → action → terminal，同一类别间通常不能互连。
-
-参数说明：
-- sourceId: 源节点 ID
-- targetId: 目标节点 ID
-- sourceHandle: 源节点的输出端口（可选）
-- targetHandle: 目标节点的输入端口（可选）`,
-    parameters: Type.Object({
-      sourceId: Type.String({ description: '源节点 ID' }),
-      targetId: Type.String({ description: '目标节点 ID' }),
-      sourceHandle: Type.Optional(Type.String({ description: '源节点输出端口' })),
-      targetHandle: Type.Optional(Type.String({ description: '目标节点输入端口' })),
-    }),
-    async execute(callId, params, _signal, _onUpdate, _ctx) {
-      try {
-        return await bridge.request(callId, 'wf_connectNodes', params as Record<string, unknown>)
-      } catch (err: any) {
-        return errorResult(err?.message || '连接节点失败')
-      }
-    },
-  })
-
-  const updateNodeConfig = defineTool({
-    name: 'wf_updateNodeConfig',
-    label: '更新节点配置',
-    description: `更新指定节点的配置参数。传入的 config 对象会与现有配置合并。
-
-参数说明：
-- nodeId: 要更新的节点 ID
-- config: 要合并的配置键值对`,
-    parameters: Type.Object({
-      nodeId: Type.String({ description: '节点 ID' }),
-      config: Type.Record(Type.String(), Type.Unknown(), { description: '配置键值对' }),
-    }),
-    async execute(callId, params, _signal, _onUpdate, _ctx) {
-      try {
-        return await bridge.request(callId, 'wf_updateNodeConfig', params as Record<string, unknown>)
-      } catch (err: any) {
-        return errorResult(err?.message || '更新配置失败')
-      }
-    },
-  })
-
-  const renameNode = defineTool({
-    name: 'wf_renameNode',
-    label: '重命名节点',
-    description: `修改节点的显示标签。
-
-参数说明：
-- nodeId: 节点 ID
-- label: 新的显示标签`,
-    parameters: Type.Object({
-      nodeId: Type.String({ description: '节点 ID' }),
-      label: Type.String({ description: '新的显示标签' }),
-    }),
-    async execute(callId, params, _signal, _onUpdate, _ctx) {
-      try {
-        return await bridge.request(callId, 'wf_renameNode', params as Record<string, unknown>)
-      } catch (err: any) {
-        return errorResult(err?.message || '重命名失败')
-      }
-    },
-  })
-
-  const removeNode = defineTool({
-    name: 'wf_removeNode',
-    label: '删除节点',
-    description: `删除指定节点及其关联的连线。高风险操作，请先确认。
-
-参数说明：
-- nodeId: 要删除的节点 ID`,
-    parameters: Type.Object({
-      nodeId: Type.String({ description: '节点 ID' }),
-    }),
-    async execute(callId, params, _signal, _onUpdate, _ctx) {
-      try {
-        return await bridge.request(callId, 'wf_removeNode', params as Record<string, unknown>)
-      } catch (err: any) {
-        return errorResult(err?.message || '删除节点失败')
-      }
-    },
-  })
-
-  const disconnectEdge = defineTool({
-    name: 'wf_disconnectEdge',
-    label: '断开连线',
-    description: `删除两个节点之间的连线。
-
-参数说明：
-- edgeId: 连线 ID`,
-    parameters: Type.Object({
-      edgeId: Type.String({ description: '连线 ID' }),
-    }),
-    async execute(callId, params, _signal, _onUpdate, _ctx) {
-      try {
-        return await bridge.request(callId, 'wf_disconnectEdge', params as Record<string, unknown>)
-      } catch (err: any) {
-        return errorResult(err?.message || '断开连线失败')
-      }
-    },
-  })
-
-  const moveNode = defineTool({
-    name: 'wf_moveNode',
-    label: '移动节点',
-    description: `将节点移动到画布上的新位置。
-
-参数说明：
-- nodeId: 节点 ID
-- position: 新的坐标位置 { x, y }`,
-    parameters: Type.Object({
-      nodeId: Type.String({ description: '节点 ID' }),
-      position: POSITION_SCHEMA,
-    }),
-    async execute(callId, params, _signal, _onUpdate, _ctx) {
-      try {
-        return await bridge.request(callId, 'wf_moveNode', params as Record<string, unknown>)
-      } catch (err: any) {
-        return errorResult(err?.message || '移动节点失败')
-      }
+用法：
+- 适合添加节点、连接节点、改配置、重命名、删除、断线和移动节点
+- 同一批 operations 中，新建节点可用 createNode 操作的 id 被后续操作引用
+- 高风险删除/断线操作应先向用户确认`,
+    promptSnippet: '用 workflow_update_partial_workflow 渐进式修改当前前端画布',
+    promptGuidelines: [
+      '修改工作流结构时优先使用 workflow_update_partial_workflow，不要调用旧的 wf_addNode/wf_connectNodes 等原子工具。',
+      '每次只提交完成当前意图所需的最小 operations，并给出简短 summary。',
+      '删除节点或断开连线前必须先确认用户意图。',
+    ],
+    parameters: WORKFLOW_UPDATE_PARAMETERS,
+    async execute(toolCallId, params, _signal, onUpdate) {
+      assertWorkflowUpdateParams(params)
+      onUpdate?.({
+        content: [{ type: 'text', text: '正在等待前端画布应用增量修改...' }],
+        details: { status: 'waiting_frontend_canvas' },
+      })
+      return await bridge.request(toolCallId, 'workflow_update_partial_workflow', params as Record<string, unknown>)
     },
   })
 
@@ -212,28 +155,23 @@ export function createAtomicWorkflowTools(bridge: FrontendBridge) {
 - scope: workflow 表示整条工作流，node 表示单节点调试
 - nodeId: 当 scope=node 时，要调试的节点 ID
 - mode: 单节点调试模式，rerun_upstream 表示强制重跑上游`,
-    parameters: Type.Object({
-      scope: EXECUTION_SCOPE_SCHEMA,
-      nodeId: Type.Optional(Type.String({ description: '单节点调试时的节点 ID' })),
-      mode: Type.Optional(DEBUG_MODE_SCHEMA),
-    }),
-    async execute(callId, params, _signal, _onUpdate, _ctx) {
-      try {
-        return await bridge.request(callId, 'wf_executeWorkflow', params as Record<string, unknown>)
-      } catch (err: any) {
-        return errorResult(err?.message || '执行工作流失败')
-      }
+    promptSnippet: '用 wf_executeWorkflow 执行整条画布或调试单个节点',
+    promptGuidelines: [
+      '需要运行或验证结果时使用 wf_executeWorkflow，确保与用户点击执行按钮走同一条前端链路。',
+      '调试单节点时设置 scope=node 并提供 nodeId；需要强制重跑上游时设置 mode=rerun_upstream。',
+    ],
+    parameters: EXECUTE_WORKFLOW_PARAMETERS,
+    async execute(toolCallId, params, _signal, onUpdate) {
+      onUpdate?.({
+        content: [{ type: 'text', text: '正在等待前端画布执行工作流...' }],
+        details: { status: 'waiting_frontend_canvas' },
+      })
+      return await bridge.request(toolCallId, 'wf_executeWorkflow', params as Record<string, unknown>)
     },
   })
 
   return [
-    addNode,
-    connectNodes,
-    updateNodeConfig,
-    renameNode,
-    removeNode,
-    disconnectEdge,
-    moveNode,
+    updatePartialWorkflow,
     executeWorkflow,
   ]
 }

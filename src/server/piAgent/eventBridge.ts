@@ -14,6 +14,19 @@ import {
 /** 前端 SSE 事件类型 */
 export type PiAgentSseEvent =
   | { type: 'session.status'; sessionId: string; status: string }
+  | { type: 'session.interrupted'; sessionId: string; message: string }
+  | { type: 'session.ended_early'; sessionId: string; message: string }
+  | {
+      type: 'session.stop_diagnosis'
+      sessionId: string
+      stopReason: 'normal' | 'read_only_observation_end' | 'interrupted' | 'failed'
+      message: string
+      endedWithToolResult?: boolean
+      lastObservedToolName?: string
+      lastAssistantMessageText?: string
+    }
+  | { type: 'follow_up_queued'; sessionId: string; message: string; queueLength: number }
+  | { type: 'follow_up_drained'; sessionId: string; message: string; queueLength: number }
   | {
       type: 'message.start'
       sessionId: string
@@ -40,37 +53,12 @@ export type PiAgentSseEvent =
 const TOOL_DISPLAY_NAMES: Record<string, string> = {
   workflow_get_session_context: '读取分析上下文',
   workflow_get_node_catalog: '读取节点目录',
-  workflow_list_data_sources: '列出数据源',
-  workflow_get_data_source_schema: '读取字段摘要',
-  workflow_search_nodes: '搜索节点',
   workflow_get_node: '读取节点信息',
-  workflow_get_node_options: '读取节点候选项',
-  workflow_profile_data_source: '数据源画像',
-  workflow_recommend_methods: '推荐分析方法',
-  workflow_create_workflow: '创建工作流',
-  workflow_get_workflow: '读取工作流',
-  workflow_update_partial_workflow: '增量修改工作流',
-  workflow_update_full_workflow: '整包更新工作流',
-  workflow_validate_workflow: '校验工作流结构',
-  workflow_executions: '读取执行历史',
-  workflow_list_workflow_versions: '读取版本列表',
-  workflow_get_workflow_version: '读取版本详情',
-  workflow_rollback_workflow_version: '回滚工作流版本',
-  workflow_get_execution_result: '读取执行结果',
-  workflow_extract_result_evidence: '抽取结果证据',
-  // 原子工作流操作工具
-  wf_addNode: '添加节点',
-  wf_connectNodes: '连接节点',
-  wf_updateNodeConfig: '更新节点配置',
-  wf_renameNode: '重命名节点',
-  wf_removeNode: '删除节点',
-  wf_disconnectEdge: '断开连线',
-  wf_moveNode: '移动节点',
+  workflow_update_partial_workflow: '增量修改画布',
   wf_executeWorkflow: '执行工作流/调试节点',
 }
 
 const WORKFLOW_MUTATION_TOOLS = new Set([
-  'workflow_create_workflow',
   'workflow_update_partial_workflow',
 ])
 
@@ -110,13 +98,16 @@ export function bridgePiEvent(
     }
 
     case 'agent_end': {
-      updateSessionRecord(sessionId, { status: 'completed' })
-      events.push({ type: 'session.status', sessionId, status: 'completed' })
+      events.push({ type: 'session.status', sessionId, status: record.status })
       break
     }
 
     case 'message_start': {
       if (!isAssistantMessage(piEvent.message)) break
+      updateSessionRecord(sessionId, {
+        lastMessageRole: 'assistant',
+        endedWithToolResult: false,
+      })
       const msgId = randomUUID()
       currentMessageId.value = msgId
       appendMessage(sessionId, {
@@ -205,6 +196,10 @@ export function bridgePiEvent(
         result: resultText,
         isError,
         finishedAt: Date.now(),
+      })
+      updateSessionRecord(sessionId, {
+        lastMessageRole: 'toolResult',
+        endedWithToolResult: !isError,
       })
       events.push({ type: 'tool.end', sessionId, toolCallId, result: resultText, isError })
       break

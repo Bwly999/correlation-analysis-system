@@ -13,12 +13,17 @@ import type { PiAgentSafeToolResult } from '@/ai/types'
 import type { WorkflowExecutionResult, WorkflowNodeDebugResult } from './workflowStore'
 import {
   createPiAgentSession,
+  getPiAgentSession,
+  type PiAgentSessionDetailResponse,
+  type PiAgentSessionMessageDto,
+  type PiAgentSessionToolCallDto,
   resolvePiAgentToolResult,
   sendPiAgentMessage,
   syncPiAgentCanvas,
   streamPiAgentEvents,
 } from '@/services/piAgentClient'
 import { buildSanitizedWorkflowSnapshot } from './piAgentSanitize'
+import type { WorkflowAiOperation } from '@/ai/types'
 
 export interface PiAgentMessage {
   id: string
@@ -42,7 +47,8 @@ export interface PiAgentToolCall {
   isError?: boolean
 }
 
-type SessionStatus = 'idle' | 'connecting' | 'running' | 'completed' | 'failed'
+type SessionStatus = 'idle' | 'connecting' | 'running' | 'completed' | 'failed' | 'interrupted'
+type StopReason = 'normal' | 'read_only_observation_end' | 'interrupted' | 'failed'
 type RawExecutionResult = WorkflowExecutionResult | WorkflowNodeDebugResult
 
 const isWorkflowExecutionResult = (value: unknown): value is WorkflowExecutionResult =>
@@ -63,28 +69,141 @@ export const usePiAgentStore = defineStore('piAgent', () => {
   // --- State ---
   const sessionId = ref<string | null>(null)
   const status = ref<SessionStatus>('idle')
+  const lastStopReason = ref<StopReason>('normal')
   const messages = ref<PiAgentMessage[]>([])
   const errorMessage = ref('')
   const inputText = ref('')
   const localExecutionCache = new Map<string, RawExecutionResult>()
   const STRUCTURE_SYNC_TOOL_NAMES = new Set([
-    'wf_addNode',
-    'wf_connectNodes',
-    'wf_updateNodeConfig',
-    'wf_renameNode',
-    'wf_removeNode',
-    'wf_disconnectEdge',
+    'workflow_update_partial_workflow',
   ])
 
   // SSE 连接
   let eventSource: AbortController | null = null
-  let ndjsonReader: ReadableStreamDefaultReader<Uint8Array> | null = null
+  let eventStreamTask: Promise<void> | null = null
+  const isEventStreamConnected = ref(false)
+  const isRecoveringSession = ref(false)
 
   // --- Computed ---
   const isStreaming = computed(() => status.value === 'running')
   const canSend = computed(
     () => inputText.value.trim().length > 0 && status.value !== 'connecting',
   )
+
+  const stopHintMessage = (stopReason: StopReason, fallbackMessage?: string) => {
+    if (stopReason === 'read_only_observation_end') {
+      return fallbackMessage || '本轮在读取信息后已停止，可继续追问或继续分析'
+    }
+    if (stopReason === 'interrupted') {
+      return fallbackMessage || '本轮已中断，可继续发送下一条消息'
+    }
+    if (stopReason === 'failed') {
+      return fallbackMessage || '当前处理失败，请重试'
+    }
+    return fallbackMessage || ''
+  }
+
+  const buildToolCall = (toolCall: PiAgentSessionToolCallDto): PiAgentToolCall => ({
+    id: toolCall.id,
+    toolName: toolCall.toolName,
+    displayName: toolCall.displayName,
+    args: toolCall.args,
+    status: toolCall.status,
+    ...(toolCall.result ? { result: toolCall.result } : {}),
+    ...(toolCall.isError !== undefined ? { isError: toolCall.isError } : {}),
+  })
+
+  const buildMessage = (
+    message: PiAgentSessionMessageDto,
+    fallbackToolCalls: PiAgentToolCall[] = [],
+  ): PiAgentMessage => ({
+    id: message.id,
+    role: message.role,
+    visibility: message.visibility,
+    content: message.content,
+    rawContent: message.rawContent,
+    thinking: message.thinking ?? '',
+    status: message.status,
+    toolCalls: (message.toolCalls?.map(buildToolCall) ?? fallbackToolCalls).map((toolCall) => ({ ...toolCall })),
+    createdAt: message.createdAt,
+  })
+
+  const applySessionSnapshot = (detail: PiAgentSessionDetailResponse) => {
+    if (!detail) return
+    const pendingFollowUps = detail.pendingFollowUps ?? []
+    const lastTurnEndedEarly = detail.lastTurnEndedEarly ?? false
+    const stopReason = detail.lastStopReason ?? (lastTurnEndedEarly ? 'read_only_observation_end' : 'normal')
+    lastStopReason.value = stopReason
+
+    const fallbackToolCalls = detail.toolCalls.map(buildToolCall)
+    let assignedToolCalls = false
+
+    messages.value = detail.messages.map((message) => {
+      if (message.role !== 'assistant' || assignedToolCalls || message.toolCalls?.length) {
+        return buildMessage(message)
+      }
+
+      assignedToolCalls = fallbackToolCalls.length > 0
+      return buildMessage(message, fallbackToolCalls)
+    })
+    status.value = detail.status
+    if (stopReason === 'read_only_observation_end' || lastTurnEndedEarly) {
+      errorMessage.value = stopHintMessage('read_only_observation_end')
+    } else if (stopReason === 'failed' && detail.endedWithToolResult && !detail.lastAssistantMessageText?.trim()) {
+      status.value = 'failed'
+      errorMessage.value = '本轮未产生回复，可重试继续分析'
+    } else if (pendingFollowUps.length > 0) {
+      errorMessage.value = `已加入继续处理队列，前面还有 ${pendingFollowUps.length} 条待处理消息`
+    } else if (stopReason === 'interrupted') {
+      errorMessage.value = stopHintMessage('interrupted')
+    } else if (stopReason === 'failed') {
+      status.value = 'failed'
+      errorMessage.value = stopHintMessage('failed')
+    } else {
+      errorMessage.value = ''
+    }
+  }
+
+  const recoverSessionState = async (sid: string, reason: string) => {
+    if (isRecoveringSession.value) return
+    isRecoveringSession.value = true
+
+    try {
+      const detail = await getPiAgentSession(sid)
+      if (!detail) {
+        status.value = 'failed'
+        errorMessage.value = reason
+        return
+      }
+
+      applySessionSnapshot(detail)
+      if (detail.status === 'running') {
+        status.value = 'interrupted'
+      }
+      if (detail.status === 'interrupted' || detail.status === 'running') {
+        lastStopReason.value = 'interrupted'
+        errorMessage.value = stopHintMessage('interrupted')
+      } else if ((detail.lastStopReason ?? 'normal') === 'read_only_observation_end' || (detail.lastTurnEndedEarly ?? false)) {
+        lastStopReason.value = 'read_only_observation_end'
+        errorMessage.value = stopHintMessage('read_only_observation_end')
+      } else if ((detail.lastStopReason ?? 'normal') === 'failed' && detail.endedWithToolResult && !detail.lastAssistantMessageText?.trim()) {
+        lastStopReason.value = 'failed'
+        status.value = 'failed'
+        errorMessage.value = '本轮未产生回复，可重试继续分析'
+      } else if ((detail.pendingFollowUps ?? []).length > 0) {
+        errorMessage.value = `已加入继续处理队列，前面还有 ${(detail.pendingFollowUps ?? []).length} 条待处理消息`
+      } else if (detail.status === 'failed') {
+        lastStopReason.value = 'failed'
+        status.value = 'failed'
+        errorMessage.value = reason
+      }
+    } catch (err: any) {
+      status.value = 'failed'
+      errorMessage.value = err?.message || reason
+    } finally {
+      isRecoveringSession.value = false
+    }
+  }
 
   // --- Actions ---
 
@@ -142,7 +261,7 @@ export const usePiAgentStore = defineStore('piAgent', () => {
       status.value = 'idle'
 
       // 连接事件流
-      connectEventStream(data.sessionId)
+      void connectEventStream(data.sessionId)
       return true
     } catch (err: any) {
       status.value = 'failed'
@@ -156,11 +275,15 @@ export const usePiAgentStore = defineStore('piAgent', () => {
     if (!content) return
 
     inputText.value = ''
+    errorMessage.value = ''
+    lastStopReason.value = 'normal'
 
     // 如果没有 session，先创建
     if (!sessionId.value) {
       const ok = await ensureSession(content)
       if (!ok) return
+    } else if (!isEventStreamConnected.value) {
+      void connectEventStream(sessionId.value)
     }
 
     try {
@@ -197,21 +320,45 @@ export const usePiAgentStore = defineStore('piAgent', () => {
     }
   }
 
-  function connectEventStream(sid: string) {
+  async function connectEventStream(sid: string) {
+    if (eventSource && !eventSource.signal.aborted) {
+      return eventStreamTask ?? Promise.resolve()
+    }
+
     const controller = new AbortController()
     eventSource = controller
+    isEventStreamConnected.value = false
 
-    streamPiAgentEvents(sid, {
+    eventStreamTask = streamPiAgentEvents(sid, {
       onEvent: (event) => {
+        isEventStreamConnected.value = true
         handleEvent(event)
       },
+      signal: controller.signal,
     })
-      .then((res) => {
-        return res
+      .then(async () => {
+        if (eventSource !== controller || controller.signal.aborted) return
+        isEventStreamConnected.value = false
+        eventSource = null
+        await recoverSessionState(sid, '本轮已中断，可继续发送下一条消息')
       })
-      .catch(() => {
-        // connection closed
+      .catch(async (err: any) => {
+        if (controller.signal.aborted) {
+          isEventStreamConnected.value = false
+          if (eventSource === controller) {
+            eventSource = null
+          }
+          return
+        }
+
+        isEventStreamConnected.value = false
+        if (eventSource === controller) {
+          eventSource = null
+        }
+        await recoverSessionState(sid, err?.message || '本轮已中断，可继续发送下一条消息')
       })
+
+    return eventStreamTask
   }
 
   function handleEvent(event: any) {
@@ -223,7 +370,56 @@ export const usePiAgentStore = defineStore('piAgent', () => {
           status.value = 'completed'
         } else if (event.status === 'failed') {
           status.value = 'failed'
+        } else if (event.status === 'interrupted') {
+          status.value = 'interrupted'
         }
+        break
+      }
+
+      case 'session.interrupted': {
+        status.value = 'interrupted'
+        lastStopReason.value = 'interrupted'
+        errorMessage.value = stopHintMessage('interrupted', event.message)
+        break
+      }
+
+      case 'session.ended_early': {
+        status.value = 'completed'
+        lastStopReason.value = 'read_only_observation_end'
+        errorMessage.value = stopHintMessage('read_only_observation_end', event.message)
+        break
+      }
+
+      case 'session.stop_diagnosis': {
+        lastStopReason.value = event.stopReason ?? 'normal'
+        if (event.stopReason === 'read_only_observation_end') {
+          status.value = 'completed'
+          errorMessage.value = stopHintMessage('read_only_observation_end', event.message)
+        } else if (event.stopReason === 'interrupted') {
+          status.value = 'interrupted'
+          errorMessage.value = stopHintMessage('interrupted', event.message)
+        } else if (event.stopReason === 'failed') {
+          status.value = 'failed'
+          errorMessage.value = event.endedWithToolResult
+            ? '本轮未产生回复，可重试继续分析'
+            : stopHintMessage('failed', event.message)
+        }
+        break
+      }
+
+      case 'follow_up_queued': {
+        status.value = 'completed'
+        lastStopReason.value = 'normal'
+        errorMessage.value = event.queueLength > 1
+          ? `已加入继续处理队列，前面还有 ${event.queueLength} 条待处理消息`
+          : '已加入继续处理队列，当前分析结束后会自动继续'
+        break
+      }
+
+      case 'follow_up_drained': {
+        status.value = 'running'
+        lastStopReason.value = 'normal'
+        errorMessage.value = ''
         break
       }
 
@@ -312,6 +508,7 @@ export const usePiAgentStore = defineStore('piAgent', () => {
 
       case 'error': {
         status.value = 'failed'
+        lastStopReason.value = 'failed'
         errorMessage.value = event.message
         break
       }
@@ -323,31 +520,12 @@ export const usePiAgentStore = defineStore('piAgent', () => {
    * 遵循"不做 switch-case，用映射表"的原则
    */
   const executorImplementations: Record<string, (params: Record<string, unknown>) => unknown | Promise<unknown>> = {
-    addNode: (p) =>
-      WorkflowApi.addNode(
-        p.nodeType as string,
-        p.label as string | undefined,
-        p.position as { x: number; y: number } | undefined,
-        p.config as Record<string, unknown> | undefined,
-      ),
-    connectNodes: (p) =>
-      WorkflowApi.connectNodes(
-        p.sourceId as string,
-        p.targetId as string,
-        p.sourceHandle || p.targetHandle
-          ? { sourceHandle: p.sourceHandle as string, targetHandle: p.targetHandle as string }
-          : undefined,
-      ),
-    updateNodeConfig: (p) =>
-      WorkflowApi.updateNodeConfig(p.nodeId as string, p.config as Record<string, unknown>),
-    renameNode: (p) =>
-      WorkflowApi.renameNode(p.nodeId as string, p.label as string),
-    removeNode: (p) =>
-      WorkflowApi.removeNode(p.nodeId as string),
-    disconnectEdge: (p) =>
-      WorkflowApi.disconnectEdge(p.edgeId as string),
-    moveNode: (p) =>
-      WorkflowApi.moveNode(p.nodeId as string, p.position as { x: number; y: number }),
+    updatePartialWorkflow: (p) =>
+      WorkflowApi.applyPartialWorkflowUpdate({
+        operations: p.operations as WorkflowAiOperation[],
+        summary: p.summary as string | undefined,
+        validateAfterApply: p.validateAfterApply as boolean | undefined,
+      }),
     runWorkflow: async (p) => {
       const mode =
         p.mode === 'reuse_cached_upstream' || p.mode === 'rerun_upstream'
@@ -466,7 +644,8 @@ export const usePiAgentStore = defineStore('piAgent', () => {
   function disconnect() {
     eventSource?.abort()
     eventSource = null
-    ndjsonReader = null
+    eventStreamTask = null
+    isEventStreamConnected.value = false
     localExecutionCache.clear()
   }
 
@@ -474,6 +653,7 @@ export const usePiAgentStore = defineStore('piAgent', () => {
     disconnect()
     sessionId.value = null
     status.value = 'idle'
+    lastStopReason.value = 'normal'
     messages.value = []
     errorMessage.value = ''
     inputText.value = ''
@@ -519,6 +699,7 @@ export const usePiAgentStore = defineStore('piAgent', () => {
     // State
     sessionId,
     status,
+    lastStopReason,
     messages,
     errorMessage,
     inputText,

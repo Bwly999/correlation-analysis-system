@@ -64,11 +64,12 @@ function handleKeydown(e: KeyboardEvent) {
           'border-slate-200 bg-slate-100 text-slate-600': store.status === 'idle',
           'border-amber-200 bg-amber-50 text-amber-700': store.status === 'connecting',
           'border-blue-200 bg-blue-50 text-blue-700': store.status === 'running',
-          'border-emerald-200 bg-emerald-50 text-emerald-700': store.status === 'completed',
+          'border-emerald-200 bg-emerald-50 text-emerald-700': store.status === 'completed' && store.lastStopReason !== 'read_only_observation_end',
+          'border-orange-200 bg-orange-50 text-orange-700': store.status === 'interrupted' || (store.status === 'completed' && store.lastStopReason === 'read_only_observation_end'),
           'border-rose-200 bg-rose-50 text-rose-700': store.status === 'failed',
         }"
       >
-        {{ store.status === 'idle' ? '就绪' : store.status === 'running' ? '处理中...' : store.status === 'completed' ? '完成' : store.status === 'failed' ? '失败' : '连接中...' }}
+        {{ store.status === 'idle' ? '就绪' : store.status === 'running' ? '处理中...' : store.status === 'completed' ? (store.lastStopReason === 'read_only_observation_end' ? '已停止' : '完成') : store.status === 'interrupted' ? '已中断' : store.status === 'failed' ? '失败' : '连接中...' }}
       </span>
     </div>
 

@@ -20,7 +20,7 @@ describe('jsTransformAgentClient', () => {
     localStorage.clear()
 
     requestMock.mockImplementation(async ({ url }: { url: string }) => {
-      if (url === '/pi-agent/js-transform/sessions') {
+      if (url === '/js-transform-agent/sessions') {
         return {
           status: 200,
           data: {
@@ -32,7 +32,7 @@ describe('jsTransformAgentClient', () => {
         }
       }
 
-      if (url === '/pi-agent/js-transform/sessions/js_session_1/tool-result') {
+      if (url === '/js-transform-agent/sessions/js_session_1/tool-result') {
         return {
           status: 200,
           data: { ok: true },
@@ -91,7 +91,7 @@ describe('jsTransformAgentClient', () => {
       },
     })
 
-    const createCall = requestMock.mock.calls.find(([config]) => config.url === '/pi-agent/js-transform/sessions')
+    const createCall = requestMock.mock.calls.find(([config]) => config.url === '/js-transform-agent/sessions')
     expect(createCall).toBeTruthy()
     const body = createCall?.[0]?.data ?? {}
     expect(body.nodeId).toBe('node_js_1')
@@ -112,7 +112,7 @@ describe('jsTransformAgentClient', () => {
     })
 
     const call = requestMock.mock.calls.find(
-      ([config]) => config.url === '/pi-agent/js-transform/sessions/js_session_1/tool-result',
+      ([config]) => config.url === '/js-transform-agent/sessions/js_session_1/tool-result',
     )
     expect(call).toBeTruthy()
     const body = call?.[0]?.data ?? {}
