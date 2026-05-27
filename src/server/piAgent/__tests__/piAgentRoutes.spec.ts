@@ -15,6 +15,8 @@ const {
   resolvePiAgentToolResultMock,
   resolveJsTransformAgentToolResultMock,
   syncPiAgentCanvasMock,
+  getSystemModelProfilesMock,
+  testWorkflowAiModelProfileMock,
 } = vi.hoisted(() => ({
   createPiAgentSessionMock: vi.fn(),
   createJsTransformAgentSessionMock: vi.fn(),
@@ -28,6 +30,8 @@ const {
   resolvePiAgentToolResultMock: vi.fn(),
   resolveJsTransformAgentToolResultMock: vi.fn(),
   syncPiAgentCanvasMock: vi.fn(),
+  getSystemModelProfilesMock: vi.fn(),
+  testWorkflowAiModelProfileMock: vi.fn(),
 }))
 
 vi.mock('../gateway.js', () => ({
@@ -43,6 +47,12 @@ vi.mock('../gateway.js', () => ({
   resolvePiAgentToolResult: resolvePiAgentToolResultMock,
   resolveJsTransformAgentToolResult: resolveJsTransformAgentToolResultMock,
   syncPiAgentCanvas: syncPiAgentCanvasMock,
+}))
+
+vi.mock('../modelProfiles.js', () => ({
+  getSystemModelProfiles: getSystemModelProfilesMock,
+  testWorkflowAiModelProfile: testWorkflowAiModelProfileMock,
+  toPublicModelProfile: vi.fn((profile) => profile),
 }))
 
 import { createPiAgentRoutes } from '../../modules/piAgentRoutes.js'
@@ -102,7 +112,6 @@ const createContext = (request: IncomingMessage, response: MockResponse) => {
     request,
     response,
     dependencies: {
-      workflowMcpRuntime: {},
       resolveStorageUser: () => ({
         id: 'pi-agent-route-user',
         name: 'Pi Agent 路由测试用户',
@@ -133,9 +142,79 @@ afterEach(() => {
   resolvePiAgentToolResultMock.mockReset()
   resolveJsTransformAgentToolResultMock.mockReset()
   syncPiAgentCanvasMock.mockReset()
+  getSystemModelProfilesMock.mockReset()
+  testWorkflowAiModelProfileMock.mockReset()
 })
 
 describe('piAgentRoutes', () => {
+  it('returns system model profiles from the pi-agent namespace', async () => {
+    getSystemModelProfilesMock.mockReturnValueOnce([
+      {
+        id: 'profile_1',
+        name: '测试模型',
+        baseUrl: 'http://example.com',
+        model: 'glm-4.7',
+        enabled: true,
+        source: 'system',
+      },
+    ])
+
+    const handler = createPiAgentRoutes()
+    const response = createResponse()
+
+    const handled = await handler(createContext(createRequest('GET', '/api/pi-agent/model-profiles'), response) as any)
+
+    expect(handled).toBe(true)
+    expect(response.statusCode).toBe(200)
+    expect(JSON.parse(response.body)).toEqual({
+      profiles: [
+        {
+          id: 'profile_1',
+          name: '测试模型',
+          baseUrl: 'http://example.com',
+          model: 'glm-4.7',
+          enabled: true,
+          source: 'system',
+        },
+      ],
+    })
+  })
+
+  it('tests model profiles from the pi-agent namespace', async () => {
+    testWorkflowAiModelProfileMock.mockResolvedValueOnce({
+      success: true,
+      message: '连接成功',
+      latencyMs: 120,
+    })
+
+    const handler = createPiAgentRoutes()
+    const request = createRequest('POST', '/api/pi-agent/model-profiles/test', {
+      profile: {
+        id: 'profile_1',
+        name: '测试模型',
+        baseUrl: 'http://example.com',
+        model: 'glm-4.7',
+        enabled: true,
+        source: 'custom',
+      },
+    })
+    const response = createResponse()
+
+    const handled = await handler(createContext(request, response) as any)
+
+    expect(handled).toBe(true)
+    expect(response.statusCode).toBe(200)
+    expect(testWorkflowAiModelProfileMock).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'profile_1',
+      model: 'glm-4.7',
+    }))
+    expect(JSON.parse(response.body)).toEqual({
+      success: true,
+      message: '连接成功',
+      latencyMs: 120,
+    })
+  })
+
   it('creates js transform agent sessions through the dedicated route', async () => {
     createJsTransformAgentSessionMock.mockResolvedValueOnce({
       sessionId: 'js_agent_session_1',

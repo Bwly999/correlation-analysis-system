@@ -35,7 +35,7 @@ const myTheme = themeQuartz.withParams({
   rowHoverColor: 'rgba(33, 150, 243, 0.08)',
   selectedRowBackgroundColor: 'rgba(33, 150, 243, 0.12)',
   oddRowBackgroundColor: 'rgba(248, 250, 252, 0.76)',
-  inputFocusBorderColor: 'rgba(37, 99, 235, 0.55)',
+  inputFocusBorder: '1px solid rgba(37, 99, 235, 0.55)',
 })
 
 const props = defineProps<{

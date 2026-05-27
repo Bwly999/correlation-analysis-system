@@ -15,8 +15,6 @@ Object.entries(devEnv).forEach(([key, value]) => {
   }
 })
 
-const workflowAiServerTarget = process.env.WORKFLOW_AI_SERVER_TARGET || 'http://127.0.0.1:8787'
-
 const isVueRuntimeModule = (id: string) =>
   id.includes('node_modules/@vue/')
   || id.includes('node_modules/.pnpm/@vue+')
@@ -31,9 +29,9 @@ const isVueEcosystemModule = (id: string) =>
   || id.includes('node_modules/.pnpm/@vueuse+')
   || id.includes('vue-draggable-plus')
 
-const workflowAiDevMiddleware = (): Plugin => {
+const workflowServerDevMiddleware = (): Plugin => {
   return {
-    name: 'workflow-ai-dev-middleware',
+    name: 'workflow-server-dev-middleware',
     apply: 'serve',
     configureServer(server) {
       const getHandler = async () =>
@@ -57,14 +55,6 @@ const workflowAiDevMiddleware = (): Plugin => {
 
 // https://vite.dev/config/
 export default defineConfig({
-  server: {
-    proxy: {
-      '/api/workflow-ai': {
-        target: workflowAiServerTarget,
-        changeOrigin: true,
-      },
-    },
-  },
   build: {
     rollupOptions: {
       output: {
@@ -133,7 +123,7 @@ export default defineConfig({
         enabled: true,
       },
     }),
-    workflowAiDevMiddleware(),
+    workflowServerDevMiddleware(),
   ],
   resolve: {
     alias: {

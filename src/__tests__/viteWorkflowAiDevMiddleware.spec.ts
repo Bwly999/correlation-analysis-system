@@ -28,7 +28,7 @@ const parseTsConfigPaths = (relativePath: string) => {
   return parsed.config?.compilerOptions?.paths ?? {}
 }
 
-describe('workflow ai dev middleware', () => {
+describe('server dev middleware', () => {
   it('loads non-VITE env vars from .env into process.env for the dev server middleware', async () => {
     const previousBackend = process.env.WORKFLOW_STORAGE_BACKEND
     const previousStorageDir = process.env.WORKFLOW_STORAGE_DATA_DIR
@@ -61,7 +61,7 @@ describe('workflow ai dev middleware', () => {
     vi.resetModules()
     const { default: viteConfig } = await import('../../vite.config.ts')
     const plugin = viteConfig.plugins?.find(
-      (candidate) => candidate && typeof candidate === 'object' && 'name' in candidate && candidate.name === 'workflow-ai-dev-middleware',
+      (candidate) => candidate && typeof candidate === 'object' && 'name' in candidate && candidate.name === 'workflow-server-dev-middleware',
     ) as { configureServer?: (server: any) => void } | undefined
 
     expect(plugin).toBeTruthy()
@@ -84,7 +84,7 @@ describe('workflow ai dev middleware', () => {
 
     expect(middleware).toBeTypeOf('function')
 
-    middleware!({ url: '/api/workflow-ai/model-profiles' }, {}, next)
+    middleware!({ url: '/api/pi-agent/model-profiles' }, {}, next)
     await Promise.resolve()
     await Promise.resolve()
 
@@ -96,7 +96,7 @@ describe('workflow ai dev middleware', () => {
     vi.resetModules()
     const { default: viteConfig } = await import('../../vite.config.ts')
     const plugin = viteConfig.plugins?.find(
-      (candidate) => candidate && typeof candidate === 'object' && 'name' in candidate && candidate.name === 'workflow-ai-dev-middleware',
+      (candidate) => candidate && typeof candidate === 'object' && 'name' in candidate && candidate.name === 'workflow-server-dev-middleware',
     ) as { configureServer?: (server: any) => void } | undefined
 
     expect(plugin).toBeTruthy()

@@ -25,6 +25,11 @@ import {
   resolveJsTransformAgentToolResult,
   syncPiAgentCanvas,
 } from '../piAgent/gateway.js'
+import {
+  getSystemModelProfiles,
+  testWorkflowAiModelProfile,
+  toPublicModelProfile,
+} from '../piAgent/modelProfiles.js'
 import type { PiAgentSafeToolResult } from '../../ai/types.js'
 import { PI_AGENT_RAW_ROWS_ERROR_MESSAGE, assertPiAgentSafeRequest } from '../piAgent/safePayload.js'
 
@@ -37,6 +42,23 @@ export const createPiAgentRoutes = (): HttpDomainHandler<ServerDependencies> => 
     method: context.method,
     pathname: context.pathname,
   })
+  if (method === 'GET' && pathname === '/api/pi-agent/model-profiles') {
+    context.sendJson(200, { profiles: getSystemModelProfiles().map(toPublicModelProfile) })
+    return true
+  }
+
+  if (method === 'POST' && pathname === '/api/pi-agent/model-profiles/test') {
+    const body = await context.readJsonBody<{ profile?: WorkflowAiPlanRequest['profile'] }>()
+    if (!body.profile) {
+      context.sendJson(400, { message: '缺少模型配置' })
+      return true
+    }
+
+    const result = await testWorkflowAiModelProfile(body.profile)
+    context.sendJson(200, result)
+    return true
+  }
+
   if (method === 'POST' && pathname === '/api/pi-agent/js-transform/sessions') {
     const user = requireWorkflowUser(context)
     const body = await context.readJsonBody<JsTransformAgentSessionRequest>()
@@ -52,7 +74,7 @@ export const createPiAgentRoutes = (): HttpDomainHandler<ServerDependencies> => 
       const user = requireWorkflowUser(context)
       const body = await context.readJsonBody<WorkflowAiPlanRequest>()
       assertPiAgentSafeRequest(body)
-      const result = await createPiAgentSession(body, user.id, context.dependencies.workflowMcpRuntime)
+      const result = await createPiAgentSession(body, user.id)
       logger.info('创建 Pi Agent 会话', { sessionId: result.sessionId, userId: user.id })
       context.sendJson(200, result)
     } catch (error) {

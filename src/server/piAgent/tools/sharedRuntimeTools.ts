@@ -1,11 +1,22 @@
 import { defineTool } from '@earendil-works/pi-coding-agent'
 import { Type } from 'typebox'
-import type { WorkflowAiPlan } from '../../../ai/types.js'
-import type { WorkflowAiPlanRequest } from '../../../ai/types.js'
-import type { WorkflowMcpRuntime } from '../../workflowMcp/workflowMcpRuntime.js'
+import type { WorkflowAiNodeCatalogItem, WorkflowAiPlanRequest } from '../../../ai/types.js'
 import { getPiWorkflowToolSpecsByTarget } from '../../../shared/piWorkflowTools.js'
-import { buildServerWorkflowAiNodeCatalog, getServerNodeCatalogItem } from '../../workflowAi/nodeCatalog.js'
+import {
+  buildServerWorkflowAiNodeCatalog,
+  getServerNodeCatalogItem,
+} from '../nodeCatalog.js'
 import { sanitizePiAgentDataSources } from '../safePayload.js'
+
+const stringEnum = <T extends readonly string[]>(
+  values: T,
+  options?: Record<string, unknown>,
+) =>
+  Type.Unsafe<T[number]>({
+    type: 'string',
+    enum: [...values],
+    ...options,
+  } as any)
 
 const paginate = <T>(items: T[], input: { limit?: number; offset?: number } = {}) => {
   const limit = Math.min(Math.max(Math.floor(input.limit ?? 20), 1), 100)
@@ -23,63 +34,88 @@ const paginate = <T>(items: T[], input: { limit?: number; offset?: number } = {}
   }
 }
 
+const toCompactNodeCatalogItem = (item: WorkflowAiNodeCatalogItem) => ({
+  name: item.name,
+  displayName: item.displayName,
+  category: item.category,
+  description: item.description,
+  inputMode: item.inputMode,
+  minInputs: item.minInputs,
+  maxInputs: item.maxInputs,
+  allowedNextCategories: item.allowedNextCategories,
+  matchedUseCases: extractMatchedUseCases(item),
+  recommendedFollowUp: `如果这个节点和当前问题相关，下一步用 workflow_get_node 查看 ${item.name} 的配置字段和运行要求。`,
+})
+
+const buildCompactNodeCatalog = () =>
+  buildServerWorkflowAiNodeCatalog().map(toCompactNodeCatalogItem)
+
 const buildResult = (structuredContent: Record<string, unknown>, isError = false) => ({
   content: [{ type: 'text' as const, text: JSON.stringify(structuredContent, null, 2) }],
   details: structuredContent,
   ...(isError ? { isError: true } : {}),
 })
 
-type CompactPersistedExecution = {
-  id: string
-  nodes?: Array<{
-    nodeId: string
-    nodeLabel?: string
-    nodeType?: string
-    status?: string
-    error?: string
-    resultKind?: string
-    preview?: {
-      sampleRows?: unknown[]
-    }
-  }>
+const extractMatchedUseCases = (item: WorkflowAiNodeCatalogItem) => {
+  const assistantHints = item.assistantHints as { useCases?: string[]; keywords?: string[] } | null | undefined
+  return [...(assistantHints?.useCases ?? []), ...(assistantHints?.keywords ?? [])].slice(0, 4)
 }
 
-const buildPersistedExecutionEvidence = (execution: CompactPersistedExecution) => {
-  const evidence = (execution.nodes ?? [])
-    .filter((node) => node.status === 'success')
-    .map((node) => {
-      const rows = Array.isArray(node.preview?.sampleRows) ? node.preview.sampleRows.slice(0, 5) : undefined
+const buildNodeRecommendedNextStep = (item: WorkflowAiNodeCatalogItem) => {
+  const requiredInputs = item.properties
+    .filter((property) => property.required)
+    .map((property) => property.displayName || property.name)
+  const requiredText = requiredInputs.length > 0 ? `重点确认 ${requiredInputs.join('、')}。` : '重点确认可选配置和输入约束。'
+  return `如果用户还没有得到最终答案，继续围绕 ${item.displayName} 的配置与适用场景补充说明；${requiredText}`
+}
 
-      return {
-        evidenceId: `${execution.id}:${node.nodeId}`,
-        executionId: execution.id,
-        nodeId: node.nodeId,
-        nodeLabel: node.nodeLabel,
-        nodeType: node.nodeType,
-        statement: node.error || `${node.nodeLabel ?? node.nodeId} 已生成可引用执行证据`,
-        resultKind: node.resultKind ?? 'unknown',
-        metrics: {
-          status: node.status,
-        },
-        ...(rows ? { previewRows: rows } : {}),
-      }
-    })
+const buildNodeQuestionExamples = (item: WorkflowAiNodeCatalogItem) => {
+  const useCases = extractMatchedUseCases(item)
+  if (useCases.length > 0) {
+    return useCases.map((useCase) => `${item.displayName} 是否适合${useCase}？`)
+  }
+
+  return [
+    `${item.displayName} 需要配置哪些关键字段？`,
+    `${item.displayName} 适合放在当前分析链路的哪个位置？`,
+  ]
+}
+
+const enrichNodeInfoResult = (result: Record<string, unknown>) => {
+  const item = result.item as WorkflowAiNodeCatalogItem | undefined
+  if (!item || !Array.isArray(item.properties)) {
+    return result
+  }
+
+  const keyProperties = item.properties
+    .filter((property) => property.required || Boolean(property.description))
+    .slice(0, 5)
+    .map((property) => ({
+      name: property.name,
+      displayName: property.displayName,
+      required: property.required,
+      type: property.type,
+      description: property.description,
+    }))
+  const requiredInputs = item.properties
+    .filter((property) => property.required)
+    .map((property) => property.name)
 
   return {
-    found: evidence.length > 0,
-    executionId: execution.id,
-    evidence,
+    ...result,
+    keyProperties,
+    requiredInputs,
+    recommendedNextStep: buildNodeRecommendedNextStep(item),
+    exampleQuestionsThisNodeCanAnswer: buildNodeQuestionExamples(item),
   }
 }
 
 export interface CreateSharedRuntimeToolsOptions {
   request: WorkflowAiPlanRequest
-  runtime: WorkflowMcpRuntime
-  userId: string
 }
 
 export function createSharedRuntimeTools(options: CreateSharedRuntimeToolsOptions) {
-  const { request, runtime, userId } = options
+  const { request } = options
   const specs = getPiWorkflowToolSpecsByTarget('server_runtime')
   const safeDataSources = sanitizePiAgentDataSources(request.dataSources)
 
@@ -90,6 +126,11 @@ export function createSharedRuntimeTools(options: CreateSharedRuntimeToolsOption
           name: spec.name,
           label: '读取分析上下文',
           description: spec.description,
+          promptSnippet: '读取当前工作流、数据源摘要和用户需求上下文',
+          promptGuidelines: [
+            '开始规划前先读取 workflow_get_session_context，确认当前画布、数据源摘要和用户目标。',
+            '数据源信息已包含在 session context 中，不要再寻找独立的数据源列表工具。',
+          ],
           parameters: Type.Object({}),
           async execute() {
             return buildResult({
@@ -106,55 +147,19 @@ export function createSharedRuntimeTools(options: CreateSharedRuntimeToolsOption
           name: spec.name,
           label: '读取节点目录',
           description: spec.description,
+          promptSnippet: '读取可用节点目录的简单介绍',
+          promptGuidelines: [
+            '需要选择节点类型时先读取 workflow_get_node_catalog，目录只包含节点简单介绍。',
+            '需要配置字段、帮助文档或运行时要求时，再调用 workflow_get_node 读取单个节点详情。',
+            '节点目录较长时使用 limit/offset 分页，避免一次读取过多上下文。',
+            '目录只用于选型；读完目录后要继续 workflow_get_node 或继续回答用户问题，不要结束本轮。',
+          ],
           parameters: Type.Object({
-            limit: Type.Optional(Type.Number()),
-            offset: Type.Optional(Type.Number()),
+            limit: Type.Optional(Type.Number({ description: '单页返回数量，默认 20，最大 100' })),
+            offset: Type.Optional(Type.Number({ description: '从第几条开始返回，默认 0' })),
           }),
           async execute(_callId, params) {
-            return buildResult(paginate(buildServerWorkflowAiNodeCatalog(), params))
-          },
-        })
-      case 'workflow_list_data_sources':
-        return defineTool({
-          name: spec.name,
-          label: '列出数据源',
-          description: spec.description,
-          parameters: Type.Object({
-            limit: Type.Optional(Type.Number()),
-            offset: Type.Optional(Type.Number()),
-          }),
-          async execute(_callId, params) {
-            return buildResult(paginate(safeDataSources, params))
-          },
-        })
-      case 'workflow_get_data_source_schema':
-        return defineTool({
-          name: spec.name,
-          label: '读取字段摘要',
-          description: spec.description,
-          parameters: Type.Object({
-            dataSourceId: Type.String(),
-          }),
-          async execute(_callId, params) {
-            const item = safeDataSources.find((source) => source.id === params.dataSourceId)
-            return buildResult(item
-              ? { found: true, item }
-              : { found: false, message: `未找到数据源: ${params.dataSourceId}` })
-          },
-        })
-      case 'workflow_search_nodes':
-        return defineTool({
-          name: spec.name,
-          label: '搜索节点',
-          description: spec.description,
-          parameters: Type.Object({
-            query: Type.Optional(Type.String()),
-            limit: Type.Optional(Type.Number()),
-            offset: Type.Optional(Type.Number()),
-          }),
-          async execute(_callId, params) {
-            const result = runtime.searchNodes(params.query ?? '')
-            return buildResult(paginate(result.items, params))
+            return buildResult(paginate(buildCompactNodeCatalog(), params))
           },
         })
       case 'workflow_get_node':
@@ -162,264 +167,85 @@ export function createSharedRuntimeTools(options: CreateSharedRuntimeToolsOption
           name: spec.name,
           label: '读取节点信息',
           description: spec.description,
+          promptSnippet: '读取单个节点详情、文档、属性或运行时要求',
+          promptGuidelines: [
+            '确定节点类型后，用 workflow_get_node 查看配置字段和运行时要求。',
+            '需要查属性时使用 mode=search_properties 并提供 propertyQuery。',
+            '如果用户提到了多个节点、要比较差异或要求给实例，需要连续读取所有相关节点后再统一回答。',
+            '不能在读完第一个节点后结束；若用户问题还没回答完，继续补充下一步读取或直接给结论。',
+          ],
           parameters: Type.Object({
-            nodeType: Type.String(),
-            mode: Type.Optional(Type.Union([
-              Type.Literal('info'),
-              Type.Literal('docs'),
-              Type.Literal('search_properties'),
-              Type.Literal('runtime_requirements'),
-            ])),
-            propertyQuery: Type.Optional(Type.String()),
-            config: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
-          }),
-          async execute(_callId, params) {
-            return buildResult(runtime.getNode(params.nodeType, params.mode, params.propertyQuery, params.config))
-          },
-        })
-      case 'workflow_get_node_options':
-        return defineTool({
-          name: spec.name,
-          label: '读取节点候选项',
-          description: spec.description,
-          parameters: Type.Object({
-            nodeType: Type.String(),
-            propertyName: Type.String(),
-            config: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
-            upstreamSample: Type.Optional(Type.Unknown()),
-          }),
-          async execute(_callId, params) {
-            return buildResult(await runtime.getNodeOptions(
-              params.nodeType,
-              params.propertyName,
-              params.config,
-              params.upstreamSample,
-            ))
-          },
-        })
-      case 'workflow_profile_data_source':
-        return defineTool({
-          name: spec.name,
-          label: '数据源画像',
-          description: spec.description,
-          parameters: Type.Object({
-            dataSourceId: Type.String(),
-          }),
-          async execute(_callId, params) {
-            return buildResult(runtime.profileDataSource(request, params.dataSourceId))
-          },
-        })
-      case 'workflow_recommend_methods':
-        return defineTool({
-          name: spec.name,
-          label: '推荐方法',
-          description: spec.description,
-          parameters: Type.Object({
-            dataSourceId: Type.String(),
-          }),
-          async execute(_callId, params) {
-            return buildResult(runtime.recommendMethods(request, params.dataSourceId))
-          },
-        })
-      case 'workflow_create_workflow':
-        return defineTool({
-          name: spec.name,
-          label: '创建工作流',
-          description: spec.description,
-          parameters: Type.Object({
-            workflowId: Type.Optional(Type.String()),
-            name: Type.Optional(Type.String()),
-          }),
-          async execute(_callId, params) {
-            return buildResult({
-              ok: true,
-              workflow: await runtime.createWorkflow(userId, params),
-            })
-          },
-        })
-      case 'workflow_get_workflow':
-        return defineTool({
-          name: spec.name,
-          label: '读取工作流',
-          description: spec.description,
-          parameters: Type.Object({
-            workflowId: Type.String(),
-            mode: Type.Optional(Type.Union([
-              Type.Literal('full'),
-              Type.Literal('structure'),
-              Type.Literal('minimal'),
-            ])),
-          }),
-          async execute(_callId, params) {
-            return buildResult(await runtime.getWorkflow(userId, params.workflowId, params.mode))
-          },
-        })
-      case 'workflow_update_partial_workflow':
-        return defineTool({
-          name: spec.name,
-          label: '增量更新工作流',
-          description: spec.description,
-          parameters: Type.Object({
-            workflowId: Type.String(),
-            operations: Type.Array(Type.Any()),
-            summary: Type.Optional(Type.String()),
-            validateAfterApply: Type.Optional(Type.Boolean()),
-          }),
-          async execute(_callId, params) {
-            return buildResult(await runtime.updatePartialWorkflow(
-              userId,
-              params.workflowId,
-              params.operations as WorkflowAiPlan['operations'],
-              params.summary,
-              params.validateAfterApply,
-            ))
-          },
-        })
-      case 'workflow_update_full_workflow':
-        return defineTool({
-          name: spec.name,
-          label: '整包更新工作流',
-          description: spec.description,
-          parameters: Type.Object({
-            workflow: Type.Object({
-              id: Type.String(),
-              name: Type.String(),
-              updatedAt: Type.Optional(Type.Number()),
-              nodes: Type.Array(Type.Record(Type.String(), Type.Unknown())),
-              edges: Type.Array(Type.Record(Type.String(), Type.Unknown())),
-            }),
-          }),
-          async execute(_callId, params) {
-            return buildResult(await runtime.updateFullWorkflow(userId, {
-              ...params.workflow,
-              updatedAt: params.workflow.updatedAt ?? Date.now(),
-            }))
-          },
-        })
-      case 'workflow_validate_workflow':
-        return defineTool({
-          name: spec.name,
-          label: '校验工作流',
-          description: spec.description,
-          parameters: Type.Object({
-            workflowId: Type.Optional(Type.String()),
-            workflowSnapshot: Type.Optional(Type.Object({
-              name: Type.String(),
-              nodes: Type.Array(Type.Record(Type.String(), Type.Unknown())),
-              edges: Type.Array(Type.Record(Type.String(), Type.Unknown())),
+            nodeType: Type.String({ description: '节点类型名称' }),
+            mode: Type.Optional(stringEnum(['info', 'docs', 'search_properties', 'runtime_requirements'] as const, {
+              description: '读取模式',
             })),
+            propertyQuery: Type.Optional(Type.String({ description: '属性搜索关键词' })),
+            config: Type.Optional(Type.Record(Type.String(), Type.Unknown(), { description: '当前节点配置' })),
           }),
           async execute(_callId, params) {
-            return buildResult(await runtime.validateWorkflow(userId, params))
-          },
-        })
-      case 'workflow_executions':
-        return defineTool({
-          name: spec.name,
-          label: '读取执行历史',
-          description: spec.description,
-          parameters: Type.Object({
-            mode: Type.Optional(Type.Union([
-              Type.Literal('list'),
-              Type.Literal('get'),
-              Type.Literal('node_result'),
-              Type.Literal('artifacts'),
-            ])),
-            executionId: Type.Optional(Type.String()),
-            nodeId: Type.Optional(Type.String()),
-            detailLevel: Type.Optional(Type.Union([Type.Literal('summary'), Type.Literal('sample')])),
-            sampleSize: Type.Optional(Type.Number()),
-            limit: Type.Optional(Type.Number()),
-            offset: Type.Optional(Type.Number()),
-          }),
-          async execute(_callId, params) {
-            return buildResult(await runtime.executions(userId, params))
-          },
-        })
-      case 'workflow_list_workflow_versions':
-        return defineTool({
-          name: spec.name,
-          label: '读取版本列表',
-          description: spec.description,
-          parameters: Type.Object({
-            workflowId: Type.String(),
-            limit: Type.Optional(Type.Number()),
-            offset: Type.Optional(Type.Number()),
-          }),
-          async execute(_callId, params) {
-            return buildResult(await runtime.listWorkflowVersions(userId, params))
-          },
-        })
-      case 'workflow_get_workflow_version':
-        return defineTool({
-          name: spec.name,
-          label: '读取版本详情',
-          description: spec.description,
-          parameters: Type.Object({
-            workflowId: Type.String(),
-            versionId: Type.String(),
-          }),
-          async execute(_callId, params) {
-            return buildResult(await runtime.getWorkflowVersion(userId, params))
-          },
-        })
-      case 'workflow_rollback_workflow_version':
-        return defineTool({
-          name: spec.name,
-          label: '回滚工作流版本',
-          description: spec.description,
-          parameters: Type.Object({
-            workflowId: Type.String(),
-            versionId: Type.String(),
-          }),
-          async execute(_callId, params) {
-            return buildResult(await runtime.rollbackWorkflowVersion(userId, params))
-          },
-        })
-      case 'workflow_get_execution_result':
-        return defineTool({
-          name: spec.name,
-          label: '读取执行结果',
-          description: spec.description,
-          parameters: Type.Object({
-            executionId: Type.String(),
-          }),
-          async execute(_callId, params) {
-            const persisted = await runtime.executions(userId, {
-              mode: 'get',
-              executionId: params.executionId,
-              detailLevel: 'sample',
-            })
-            return buildResult({
-              found: 'execution' in persisted && Boolean(persisted.execution),
-              execution: 'execution' in persisted ? persisted.execution : null,
-              ...(persisted && typeof persisted === 'object' ? persisted : {}),
-            })
-          },
-        })
-      case 'workflow_extract_result_evidence':
-        return defineTool({
-          name: spec.name,
-          label: '抽取结果证据',
-          description: spec.description,
-          parameters: Type.Object({
-            executionId: Type.String(),
-          }),
-          async execute(_callId, params) {
-            const persisted = await runtime.executions(userId, {
-              mode: 'get',
-              executionId: params.executionId,
-              detailLevel: 'sample',
-            })
-            if (!('execution' in persisted) || !persisted.execution) {
+            const item = getServerNodeCatalogItem(params.nodeType)
+            const mode = params.mode ?? 'info'
+
+            if (!item) {
               return buildResult({
                 found: false,
-                executionId: params.executionId,
-                message: `未找到执行记录 ${params.executionId}`,
-                evidence: [],
+                message: `未找到节点定义: ${params.nodeType}`,
+              }, true)
+            }
+
+            if (mode === 'docs') {
+              return buildResult({
+                found: true,
+                item,
+                docs: [
+                  `# ${item.displayName}`,
+                  '',
+                  item.description,
+                  '',
+                  ...item.properties.map((property) =>
+                    `- ${property.displayName}（${property.name}）: ${property.description ?? '无说明'}`),
+                ].join('\n'),
               })
             }
-            return buildResult(buildPersistedExecutionEvidence(persisted.execution as CompactPersistedExecution))
+
+            if (mode === 'search_properties') {
+              const query = typeof params.propertyQuery === 'string' ? params.propertyQuery.trim().toLowerCase() : ''
+              const properties = item.properties.filter((property) =>
+                `${property.name} ${property.displayName} ${property.description ?? ''}`.toLowerCase().includes(query))
+              return buildResult({
+                found: true,
+                item,
+                properties,
+              })
+            }
+
+            if (mode === 'runtime_requirements') {
+              const config = params.config ?? {}
+              const runtimeRequirements = item.properties.map((property) => ({
+                name: property.name,
+                displayName: property.displayName,
+                required: property.required ?? false,
+                isRuntimeInput: property.isRuntimeInput ?? false,
+                visible: !property.visibleWhen || property.visibleWhen(config),
+                dependsOn: property.dependsOn ?? [],
+                type: property.type,
+                description: property.description ?? '',
+              }))
+              return buildResult({
+                found: true,
+                item,
+                runtimeRequirements,
+              })
+            }
+
+            const result = {
+              found: true,
+              item,
+            }
+            const structuredResult = (!params.mode || params.mode === 'info')
+              ? enrichNodeInfoResult(result)
+              : result
+            return buildResult(structuredResult)
           },
         })
       default:

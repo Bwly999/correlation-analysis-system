@@ -15,7 +15,7 @@ const readJsonOrThrow = <T>(response: { status: number; data: unknown }, fallbac
 
 export const fetchSystemModelProfiles = async (): Promise<WorkflowAiModelProfile[]> => {
   const response = await httpClient.request({
-    url: '/workflow-ai/model-profiles',
+    url: '/pi-agent/model-profiles',
     method: 'GET',
   })
   const payload = readJsonOrThrow<{ profiles?: WorkflowAiModelProfile[] }>(response, '加载系统模型配置失败')
@@ -26,7 +26,7 @@ export const testWorkflowAiModelProfile = async (
   profile: WorkflowAiModelProfile,
 ): Promise<WorkflowAiModelTestResult> => {
   const response = await httpClient.request({
-    url: '/workflow-ai/model-profiles/test',
+    url: '/pi-agent/model-profiles/test',
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

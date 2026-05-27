@@ -6,10 +6,6 @@ import type { ServerStorageService, ServerStorageUser } from '../storageService.
 import {
   createWorkflowUserResolver,
 } from '../http/workflowUser.js'
-import {
-  createWorkflowMcpRuntime,
-  type WorkflowMcpRuntime,
-} from '../workflowMcp/workflowMcpRuntime.js'
 
 export type ServerStorageUserResolver = (
   headers: IncomingMessage['headers'],
@@ -20,14 +16,12 @@ export type AnalysisProxyHandler = (context: AnalysisProxyContext, route: Analys
 export interface ServerDependencies {
   storageService: ServerStorageService
   resolveStorageUser: ServerStorageUserResolver
-  workflowMcpRuntime: WorkflowMcpRuntime
   proxyAnalysisRequest: AnalysisProxyHandler
 }
 
 export interface CreateServerDependenciesOptions {
   storageService?: ServerStorageService
   resolveStorageUser?: ServerStorageUserResolver
-  workflowMcpRuntime?: WorkflowMcpRuntime
   proxyAnalysisRequest?: AnalysisProxyHandler
   defaultStorageUser?: ServerStorageUser
   storageCompositionRoot?: StorageCompositionRoot
@@ -49,24 +43,10 @@ export const createServerDependencies = (
     )
   const storageService = options.storageService ?? storageCompositionRoot.storageService
   const resolveStorageUser = options.resolveStorageUser ?? storageService.resolveStorageUser.bind(storageService)
-  const workflowMcpRuntime = options.workflowMcpRuntime ?? createWorkflowMcpRuntime({
-    storage: {
-      getUserWorkflowById: (userId, workflowId) => storageService.getUserWorkflowById(userId, workflowId),
-      saveUserWorkflow: (userId, workflow) => storageService.saveUserWorkflow(userId, workflow),
-      getUserHistory: (userId) => storageService.getUserHistory(userId),
-      saveUserHistory: (userId, record, limit) => storageService.saveUserHistory(userId, record, limit),
-      getUserWorkflowVersions: (userId, workflowId) => storageService.getUserWorkflowVersions(userId, workflowId),
-      getUserWorkflowVersion: (userId, workflowId, versionId) =>
-        storageService.getUserWorkflowVersion(userId, workflowId, versionId),
-      rollbackUserWorkflowVersion: (userId, workflowId, versionId) =>
-        storageService.rollbackUserWorkflowVersion(userId, workflowId, versionId),
-    },
-  })
 
   return {
     storageService,
     resolveStorageUser,
-    workflowMcpRuntime,
     proxyAnalysisRequest: options.proxyAnalysisRequest ?? proxyAnalysisRequest,
   }
 }

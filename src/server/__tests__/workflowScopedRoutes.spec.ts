@@ -84,22 +84,6 @@ describe('workflow-scoped route contract', () => {
           expect(JSON.parse(body)).toEqual({ message: expectedMessage })
         },
       },
-      {
-        name: 'workflow-mcp',
-        request: createRequest('POST', '/api/opencode/workflow-mcp', undefined, {
-          'x-workflow-session-id': 'session_contract',
-        }),
-        assertBody: (body: string) => {
-          expect(JSON.parse(body)).toEqual({
-            jsonrpc: '2.0',
-            error: {
-              code: -32603,
-              message: expectedMessage,
-            },
-            id: null,
-          })
-        },
-      },
     ]
 
     for (const candidate of workflowRequests) {

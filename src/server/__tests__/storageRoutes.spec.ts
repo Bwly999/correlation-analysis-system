@@ -154,7 +154,7 @@ describe('storage routes', () => {
     const handler = createServerHandler()
     const response = createResponse()
 
-    await handler(createRequest('GET', '/api/workflow-ai/model-profiles'), response)
+    await handler(createRequest('GET', '/api/pi-agent/model-profiles'), response)
 
     expect(response.statusCode).toBe(401)
     expect(JSON.parse(response.body)).toEqual({

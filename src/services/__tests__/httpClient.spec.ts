@@ -18,13 +18,13 @@ describe('httpClient', () => {
     let capturedConfig: {
       baseURL?: string
       headers?: { toJSON?: () => Record<string, string> } | Record<string, string>
-    } | null = null
+    } | undefined
 
     await httpClient.request({
       url: '/pi-agent/debug/health',
       method: 'GET',
       adapter: async (config) => {
-        capturedConfig = config as typeof capturedConfig
+        capturedConfig = config as NonNullable<typeof capturedConfig>
         return {
           data: { ok: true },
           status: 200,
