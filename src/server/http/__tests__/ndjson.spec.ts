@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { startNdjsonStream } from '../ndjson.js'
 
 const createResponse = () => {
@@ -41,6 +41,10 @@ const createResponse = () => {
 }
 
 describe('startNdjsonStream', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('writes ndjson events and cleans up when the response closes', () => {
     const response = createResponse()
     const unsubscribe = vi.fn()
@@ -52,7 +56,9 @@ describe('startNdjsonStream', () => {
 
     expect(response.getHeader('Content-Type')).toBe('application/x-ndjson; charset=utf-8')
     expect(response.getHeader('Cache-Control')).toBe('no-cache, no-transform')
-    expect(response.getBody()).toBe('{"type":"message","content":"hello"}\n')
+    expect(response.getBody()).toBe(
+      '{"type":"stream.ready"}\n{"type":"message","content":"hello"}\n',
+    )
 
     response.emit('close')
 
@@ -66,5 +72,99 @@ describe('startNdjsonStream', () => {
     startNdjsonStream(response as any, () => vi.fn())
 
     expect(response.flushHeadersSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('writes a ready event immediately when the stream opens', () => {
+    const response = createResponse()
+
+    startNdjsonStream(response as any, () => vi.fn())
+
+    expect(response.getBody()).toBe('{"type":"stream.ready"}\n')
+  })
+
+  it('writes heartbeat events while the stream stays idle', () => {
+    vi.useFakeTimers()
+    const response = createResponse()
+
+    startNdjsonStream(response as any, () => vi.fn())
+
+    vi.advanceTimersByTime(15000)
+
+    expect(response.getBody()).toBe(
+      '{"type":"stream.ready"}\n{"type":"stream.heartbeat"}\n',
+    )
+  })
+
+  it('emits lifecycle diagnostics when a logger is provided', () => {
+    vi.useFakeTimers()
+    const response = createResponse()
+    const logger = {
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+      child: vi.fn(),
+      getLogFilePath: vi.fn(),
+    }
+
+    startNdjsonStream(
+      response as any,
+      (write) => {
+        write({ type: 'message', content: 'hello' })
+        return vi.fn()
+      },
+      200,
+      {
+        logger: logger as any,
+        streamLabel: 'js-transform-agent.events',
+        streamContext: { sessionId: 'session_1', requestId: 'req_1' },
+      },
+    )
+
+    vi.advanceTimersByTime(15000)
+    response.emit('close')
+
+    expect(logger.info).toHaveBeenCalledWith(
+      'NDJSON 流已建立',
+      expect.objectContaining({
+        sessionId: 'session_1',
+        requestId: 'req_1',
+        streamLabel: 'js-transform-agent.events',
+      }),
+    )
+    expect(logger.info).toHaveBeenCalledWith(
+      'NDJSON 流已发送事件',
+      expect.objectContaining({
+        eventType: 'stream.ready',
+        eventCount: 1,
+      }),
+    )
+    expect(logger.info).toHaveBeenCalledWith(
+      'NDJSON 流已发送事件',
+      expect.objectContaining({
+        eventType: 'message',
+        eventCount: 2,
+      }),
+    )
+    expect(logger.info).toHaveBeenCalledWith(
+      'NDJSON 流已发送事件',
+      expect.objectContaining({
+        eventType: 'stream.heartbeat',
+        eventCount: 3,
+      }),
+    )
+    expect(logger.info).toHaveBeenCalledWith(
+      'NDJSON 流连接关闭',
+      expect.objectContaining({
+        durationMs: 15000,
+        eventCount: 3,
+      }),
+    )
+    expect(logger.info).toHaveBeenCalledWith(
+      'NDJSON 流已结束',
+      expect.objectContaining({
+        durationMs: 15000,
+        eventCount: 3,
+      }),
+    )
   })
 })

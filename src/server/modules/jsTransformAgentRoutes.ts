@@ -79,17 +79,36 @@ export const createJsTransformAgentRoutes = (): FastifyPluginAsync => async (app
   })
 
   app.get('/api/js-transform-agent/sessions/:sessionId/events', async (request, reply) => {
+    const logger = createRouteLogger(request)
     const user = requireWorkflowUser(request)
     const { sessionId } = request.params as { sessionId: string }
+    logger.info('收到 JS Transform Agent 事件流订阅请求', { sessionId, userId: user.id })
     requireOwnedJsTransformSession(sessionId, user.id)
     const session = getJsTransformAgentSession(sessionId)
     if (!session) {
+      logger.warn('JS Transform Agent 事件流订阅失败，会话不存在', { sessionId, userId: user.id })
       reply.code(404)
       return { message: '未找到 JS Transform Agent 会话' }
     }
 
     reply.hijack()
-    startNdjsonStream(reply.raw, (write) => subscribeJsTransformAgentEvents(sessionId, write))
+    logger.info('开始建立 JS Transform Agent 事件流', { sessionId, userId: user.id })
+    startNdjsonStream(
+      reply.raw,
+      (write) => subscribeJsTransformAgentEvents(sessionId, write),
+      200,
+      {
+        logger,
+        streamLabel: 'js-transform-agent.events',
+        streamContext: {
+          sessionId,
+          requestId: request.id,
+          userId: user.id,
+          method: request.method,
+          pathname: new URL(request.url, 'http://127.0.0.1').pathname,
+        },
+      },
+    )
     return reply
   })
 

@@ -235,7 +235,7 @@ describe('piAgentRoutes', () => {
 
     expect(response.statusCode).toBe(200)
     expect(response.headers['content-type']).toContain('application/x-ndjson')
-    expect(response.body).toBe('{"type":"message","content":"hello"}\n')
+    expect(response.body).toBe('{"type":"stream.ready"}\n{"type":"message","content":"hello"}\n')
   })
 
   it('rejects cross-user pi-agent session access across session-scoped routes', async () => {

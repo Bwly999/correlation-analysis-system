@@ -168,7 +168,7 @@ describe('jsTransformAgentRoutes', () => {
 
     expect(response.statusCode).toBe(200)
     expect(response.headers['content-type']).toContain('application/x-ndjson')
-    expect(response.body).toBe('{"type":"message","content":"hello"}\n')
+    expect(response.body).toBe('{"type":"stream.ready"}\n{"type":"message","content":"hello"}\n')
   })
 
   it('aborts a js transform run through the dedicated namespace', async () => {

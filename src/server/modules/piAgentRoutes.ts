@@ -103,13 +103,29 @@ export const createPiAgentRoutes = (): FastifyPluginAsync => async (app) => {
     requireOwnedPiAgentSession(sessionId, user.id)
     const session = getPiAgentSession(sessionId)
     if (!session) {
+      logger.warn('Pi Agent 事件流订阅失败，会话不存在', { sessionId, userId: user.id })
       reply.code(404)
       return { message: '未找到 Pi Agent 会话' }
     }
 
     reply.hijack()
     logger.info('订阅 Pi Agent 事件流', { sessionId })
-    startNdjsonStream(reply.raw, (write) => subscribePiAgentEvents(sessionId, write))
+    startNdjsonStream(
+      reply.raw,
+      (write) => subscribePiAgentEvents(sessionId, write),
+      200,
+      {
+        logger,
+        streamLabel: 'pi-agent.events',
+        streamContext: {
+          sessionId,
+          requestId: request.id,
+          userId: user.id,
+          method: request.method,
+          pathname: new URL(request.url, 'http://127.0.0.1').pathname,
+        },
+      },
+    )
     return reply
   })
 
