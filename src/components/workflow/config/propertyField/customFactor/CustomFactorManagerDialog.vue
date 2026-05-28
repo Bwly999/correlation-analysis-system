@@ -67,6 +67,7 @@ const selectedRowCount = shallowRef(0)
 const createGroupDialogVisible = shallowRef(false)
 const deleteGroupDialogVisible = shallowRef(false)
 const pendingGroupName = shallowRef('')
+const isExcelUploadDragging = shallowRef(false)
 
 const createEmptyDraft = (): CustomFactorDraft => ({
   factorKey: { value: '', locked: false },
@@ -97,6 +98,18 @@ const resetDrafts = () => {
   parsedExcelFile.value = null
   selectedExcelFileName.value = ''
   errorMessage.value = ''
+}
+
+const selectedGroupStorageKey = computed(() => `${props.storageKey}:selectedGroupId`)
+
+const loadPersistedSelectedGroupId = () => localStorage.getItem(selectedGroupStorageKey.value) || ''
+
+const persistSelectedGroupId = (groupId: string) => {
+  if (!groupId) {
+    localStorage.removeItem(selectedGroupStorageKey.value)
+    return
+  }
+  localStorage.setItem(selectedGroupStorageKey.value, groupId)
 }
 
 const reloadGroups = () => {
@@ -180,6 +193,16 @@ const ensureNoUnsavedChanges = () => {
   return window.confirm('当前配置组有未保存改动，确定继续吗？')
 }
 
+const resolveInitialSelectedGroupId = (preferredGroupId: string) => {
+  const availableGroupIds = new Set(groups.value.map((group) => group.id))
+  if (preferredGroupId && availableGroupIds.has(preferredGroupId)) return preferredGroupId
+
+  const persistedGroupId = loadPersistedSelectedGroupId()
+  if (persistedGroupId && availableGroupIds.has(persistedGroupId)) return persistedGroupId
+
+  return groups.value[0]?.id || ''
+}
+
 const syncEditingFactorsFromGroup = (group: CustomFactorGroup | null) => {
   editingFactors.value = group?.factors.map((factor) => ({
     ...factor,
@@ -193,6 +216,7 @@ const selectGroup = (groupId: string) => {
   if (groupId === selectedGroupIdLocal.value) return
   if (!ensureNoUnsavedChanges()) return
   selectedGroupIdLocal.value = groupId
+  persistSelectedGroupId(groupId)
   emit('update:selectedGroupId', groupId)
 }
 
@@ -201,9 +225,14 @@ watch(
   (visible) => {
     if (!visible) return
     reloadGroups()
-    selectedGroupIdLocal.value = props.selectedGroupId
+    const nextSelectedGroupId = resolveInitialSelectedGroupId(props.selectedGroupId)
+    selectedGroupIdLocal.value = nextSelectedGroupId
+    persistSelectedGroupId(nextSelectedGroupId)
+    if (nextSelectedGroupId !== props.selectedGroupId) {
+      emit('update:selectedGroupId', nextSelectedGroupId)
+    }
     syncEditingFactorsFromGroup(
-      loadCustomFactorGroups(props.storageKey).find((group) => group.id === props.selectedGroupId) ?? null,
+      groups.value.find((group) => group.id === nextSelectedGroupId) ?? null,
     )
     resetDrafts()
   },
@@ -228,6 +257,7 @@ const createGroup = () => {
   const created = saveCustomFactorGroup(createCustomFactorGroup(name), props.storageKey)
   reloadGroups()
   selectedGroupIdLocal.value = created.id
+  persistSelectedGroupId(created.id)
   emit('update:selectedGroupId', created.id)
   emit('saved')
   pendingGroupName.value = ''
@@ -240,6 +270,7 @@ const duplicateGroup = () => {
   if (!duplicated) return
   reloadGroups()
   selectedGroupIdLocal.value = duplicated.id
+  persistSelectedGroupId(duplicated.id)
   emit('update:selectedGroupId', duplicated.id)
   emit('saved')
 }
@@ -250,6 +281,7 @@ const removeGroup = () => {
   reloadGroups()
   const fallbackGroupId = groups.value[0]?.id || ''
   selectedGroupIdLocal.value = fallbackGroupId
+  persistSelectedGroupId(fallbackGroupId)
   emit('update:selectedGroupId', fallbackGroupId)
   emit('saved')
   deleteGroupDialogVisible.value = false
@@ -313,10 +345,7 @@ const parseExcelSourceFile = async (file: File) => {
   })
 }
 
-const handleExcelFileSelect = async (event: Event) => {
-  const target = event.target as HTMLInputElement
-  const file = target.files?.[0]
-  target.value = ''
+const handleExcelSourceFile = async (file: File | null | undefined) => {
   if (!file) return
   try {
     await parseExcelSourceFile(file)
@@ -324,6 +353,37 @@ const handleExcelFileSelect = async (event: Event) => {
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'Excel 解析失败'
   }
+}
+
+const handleExcelFileSelect = async (event: Event) => {
+  const target = event.target as HTMLInputElement
+  const file = target.files?.[0]
+  target.value = ''
+  await handleExcelSourceFile(file)
+}
+
+const handleExcelDragEnter = (event: DragEvent) => {
+  event.preventDefault()
+  isExcelUploadDragging.value = true
+}
+
+const handleExcelDragOver = (event: DragEvent) => {
+  event.preventDefault()
+  isExcelUploadDragging.value = true
+}
+
+const handleExcelDragLeave = (event: DragEvent) => {
+  event.preventDefault()
+  const currentTarget = event.currentTarget as HTMLElement | null
+  const relatedTarget = event.relatedTarget as Node | null
+  if (currentTarget?.contains(relatedTarget)) return
+  isExcelUploadDragging.value = false
+}
+
+const handleExcelDrop = async (event: DragEvent) => {
+  event.preventDefault()
+  isExcelUploadDragging.value = false
+  await handleExcelSourceFile(event.dataTransfer?.files?.[0])
 }
 
 const importExcelFactors = () => {
@@ -425,41 +485,70 @@ const triggerImportFile = () => {
     <div class="custom-factor-dialog">
       <section class="custom-factor-dialog__toolbar">
         <div class="custom-factor-dialog__group-select">
-          <div class="custom-factor-dialog__section-kicker">
-            <Sparkles :size="14" />
-            配置组管理
+          <div class="custom-factor-dialog__group-meta">
+            <div class="custom-factor-dialog__section-kicker">
+              <Sparkles :size="14" />
+              配置组管理
+            </div>
+            <p class="custom-factor-dialog__section-title">{{ currentGroupSummary }}</p>
           </div>
-          <p class="custom-factor-dialog__section-title">{{ currentGroupSummary }}</p>
-          <Select
-            :model-value="selectedGroupIdLocal"
-            :options="groupOptions"
-            option-label="name"
-            option-value="value"
-            placeholder="请选择配置组"
-            class="w-full custom-factor-dialog__select"
-            @update:model-value="selectGroup"
-          />
-        </div>
+          <div class="custom-factor-dialog__toolbar-row">
+            <Select
+              :model-value="selectedGroupIdLocal"
+              :options="groupOptions"
+              option-label="name"
+              option-value="value"
+              placeholder="请选择配置组"
+              class="custom-factor-dialog__select"
+              @update:model-value="selectGroup"
+            />
 
-        <div class="custom-factor-dialog__toolbar-actions">
-          <Button label="创建配置" severity="contrast" class="custom-factor-dialog__toolbar-button custom-factor-dialog__toolbar-button--primary" @click="openCreateGroupDialog">
-            <template #icon>
-              <Plus :size="14" />
-            </template>
-          </Button>
-          <Button label="复制配置" outlined class="custom-factor-dialog__toolbar-button" :disabled="!selectedGroupIdLocal" @click="duplicateGroup" />
-          <Button label="删除配置" outlined severity="danger" class="custom-factor-dialog__toolbar-button" :disabled="!selectedGroupIdLocal" @click="openDeleteGroupDialog" />
-          <Button label="导入配置" text class="custom-factor-dialog__toolbar-button custom-factor-dialog__toolbar-button--text" @click="triggerImportFile">
-            <template #icon>
-              <Upload :size="14" />
-            </template>
-          </Button>
-          <input id="custom-factor-group-import-input" type="file" accept=".json" class="hidden" @change="importGroupsFromFile" />
-          <Button label="导出配置" text class="custom-factor-dialog__toolbar-button custom-factor-dialog__toolbar-button--text" @click="exportGroupsToFile">
-            <template #icon>
-              <Download :size="14" />
-            </template>
-          </Button>
+            <div class="custom-factor-dialog__toolbar-actions">
+              <Button
+                v-tooltip.bottom="'创建配置'"
+                aria-label="创建配置"
+                class="custom-factor-dialog__icon-button custom-factor-dialog__icon-button--primary"
+                @click="openCreateGroupDialog"
+              >
+                <Plus :size="16" />
+              </Button>
+              <Button
+                v-tooltip.bottom="'复制配置'"
+                aria-label="复制配置"
+                class="custom-factor-dialog__icon-button custom-factor-dialog__icon-button--neutral"
+                :disabled="!selectedGroupIdLocal"
+                @click="duplicateGroup"
+              >
+                <FileSpreadsheet :size="16" />
+              </Button>
+              <Button
+                v-tooltip.bottom="'删除配置'"
+                aria-label="删除配置"
+                class="custom-factor-dialog__icon-button custom-factor-dialog__icon-button--danger"
+                :disabled="!selectedGroupIdLocal"
+                @click="openDeleteGroupDialog"
+              >
+                <Trash2 :size="16" />
+              </Button>
+              <Button
+                v-tooltip.bottom="'导入配置'"
+                aria-label="导入配置"
+                class="custom-factor-dialog__icon-button custom-factor-dialog__icon-button--ghost"
+                @click="triggerImportFile"
+              >
+                <Upload :size="16" />
+              </Button>
+              <input id="custom-factor-group-import-input" type="file" accept=".json" class="hidden" @change="importGroupsFromFile" />
+              <Button
+                v-tooltip.bottom="'导出配置'"
+                aria-label="导出配置"
+                class="custom-factor-dialog__icon-button custom-factor-dialog__icon-button--ghost"
+                @click="exportGroupsToFile"
+              >
+                <Download :size="16" />
+              </Button>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -543,11 +632,18 @@ const triggerImportFile = () => {
           </div>
 
           <div v-else class="space-y-3">
-            <label class="custom-factor-dialog__upload-box">
+            <label
+              class="custom-factor-dialog__upload-box"
+              :class="{ 'custom-factor-dialog__upload-box--dragging': isExcelUploadDragging }"
+              @dragenter="handleExcelDragEnter"
+              @dragover="handleExcelDragOver"
+              @dragleave="handleExcelDragLeave"
+              @drop="handleExcelDrop"
+            >
               <FileSpreadsheet :size="18" class="text-blue-600" />
               <div>
                 <strong>{{ selectedExcelFileName || '上传 CSV / Excel 文件' }}</strong>
-                <p class="custom-factor-dialog__hint">支持 `.csv`、`.xls`、`.xlsx`，默认读取首个工作表</p>
+                <p class="custom-factor-dialog__hint">支持拖拽或点击上传 `.csv`、`.xls`、`.xlsx`，默认读取首个工作表</p>
               </div>
               <input type="file" accept=".csv,.xls,.xlsx" class="hidden" @change="handleExcelFileSelect" />
             </label>
@@ -700,8 +796,26 @@ const triggerImportFile = () => {
 }
 
 .custom-factor-dialog__group-select {
-  min-width: 280px;
+  min-width: min(100%, 640px);
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.custom-factor-dialog__group-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.custom-factor-dialog__toolbar-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .custom-factor-dialog__toolbar-actions {
@@ -859,6 +973,14 @@ const triggerImportFile = () => {
   border-radius: 18px;
   background:
     linear-gradient(135deg, rgba(248, 251, 255, 1), rgba(255, 255, 255, 0.98));
+  transition: all 0.18s ease;
+}
+
+.custom-factor-dialog__upload-box--dragging {
+  border-color: rgba(37, 99, 235, 0.82);
+  background:
+    linear-gradient(135deg, rgba(239, 246, 255, 1), rgba(219, 234, 254, 0.78));
+  box-shadow: 0 12px 30px rgba(37, 99, 235, 0.12);
 }
 
 .custom-factor-dialog__upload-box strong {
@@ -889,7 +1011,7 @@ const triggerImportFile = () => {
 }
 
 .custom-factor-dialog__section-title {
-  margin: 8px 0 10px;
+  margin: 0;
   color: #0f172a;
   font-size: 15px;
   font-weight: 700;
@@ -906,17 +1028,53 @@ const triggerImportFile = () => {
   font-weight: 800;
 }
 
-.custom-factor-dialog__toolbar-button {
-  min-height: 38px;
-  border-radius: 12px;
+.custom-factor-dialog__select {
+  min-width: min(100%, 320px);
+  flex: 1 1 260px;
 }
 
-.custom-factor-dialog__toolbar-button--primary {
-  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.12);
-}
-
-.custom-factor-dialog__toolbar-button--text {
+.custom-factor-dialog__icon-button {
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(255, 255, 255, 0.92);
   color: #334155;
+  transition: all 0.18s ease;
+}
+
+.custom-factor-dialog__icon-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+}
+
+.custom-factor-dialog__icon-button:disabled {
+  opacity: 0.5;
+  box-shadow: none;
+}
+
+.custom-factor-dialog__icon-button--primary {
+  border-color: rgba(37, 99, 235, 0.22);
+  background: linear-gradient(180deg, #2563eb, #1d4ed8);
+  color: #fff;
+  box-shadow: 0 12px 24px rgba(37, 99, 235, 0.2);
+}
+
+.custom-factor-dialog__icon-button--neutral {
+  border-color: rgba(148, 163, 184, 0.28);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.96));
+}
+
+.custom-factor-dialog__icon-button--danger {
+  border-color: rgba(251, 113, 133, 0.26);
+  background: linear-gradient(180deg, rgba(255, 241, 242, 1), rgba(255, 228, 230, 0.96));
+  color: #be123c;
+}
+
+.custom-factor-dialog__icon-button--ghost {
+  border-color: rgba(148, 163, 184, 0.18);
+  background: rgba(248, 250, 252, 0.9);
 }
 
 .custom-factor-dialog__subdialog-body {
