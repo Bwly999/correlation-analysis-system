@@ -1,0 +1,12 @@
+node_modules
+dist
+dist-server
+.workflow-debug
+.workflow-storage
+.git
+.gitignore
+*.local
+.env.local
+docker
+scripts
+test

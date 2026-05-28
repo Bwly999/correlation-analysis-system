@@ -152,9 +152,16 @@ export async function createPiAgentSession(
   const { authStorage, modelRegistry } = createModelRegistryFromProfile(request.profile)
   const model = buildModelFromProfile(request.profile)
   const resourceLoader = createPiAgentResourceLoader(() => buildSystemPrompt(request))
+  const reloadStart = Date.now()
   await resourceLoader.reload()
+  logger.info('资源加载器就绪', { sessionId: record.sessionId })
+  console.log(`[diag] 资源加载器就绪 session=${record.sessionId} duration=${Date.now() - reloadStart}ms`)
 
   const sessionManager = SessionManager.create(process.cwd(), resolvePiAgentSessionRootDir())
+
+  const createSessionStart = Date.now()
+  console.log(`[diag] 开始创建 Pi Agent SDK session session=${record.sessionId} model=${model.id} baseUrl=${model.baseUrl?.replace(/\/?(api\/?)?$/, '/***')} hasApiKey=${!!model.headers?.Authorization}`)
+  logger.info('正在创建 Pi Agent SDK session', { sessionId: record.sessionId })
 
   const { session } = await createAgentSession({
     sessionManager,
@@ -167,6 +174,8 @@ export async function createPiAgentSession(
     resourceLoader,
     noTools: 'builtin', // 禁用内置的 read/bash/edit/write 工具
   })
+  logger.info('Pi Agent SDK session 创建完成', { sessionId: record.sessionId })
+  console.log(`[diag] Pi Agent SDK session 创建完成 session=${record.sessionId} duration=${Date.now() - createSessionStart}ms`)
   if (session.sessionFile) {
     setSessionFile(record.sessionId, session.sessionFile)
     archivePiAgentSessionFile(record.sessionId, session.sessionFile)
@@ -277,8 +286,10 @@ export async function sendPiAgentMessage(
   logger.info('收到 Pi Agent 用户消息')
 
   // 异步发送（不阻塞响应）
+  const sendStartTime = Date.now()
   const sendPromise = (async () => {
     try {
+      console.log(`[diag] 开始发送消息到 Pi Agent session=${sessionId} activeTurnState=${runtime.activeTurnState}`)
       if (runtime.activeTurnState === 'responding') {
         logger.info('发送 followUp 到 Pi Agent')
         runtime.record.lastResumeTrigger = 'followUp'

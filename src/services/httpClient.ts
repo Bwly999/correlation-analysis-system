@@ -18,6 +18,19 @@ httpClient.interceptors.request.use((config) => {
   return config
 })
 
+httpClient.interceptors.response.use(
+  (response) => {
+    if (response.status >= 400) {
+      console.warn(`[httpClient] ${response.config?.method?.toUpperCase()} ${response.config?.url} -> ${response.status}`, response.data)
+    }
+    return response
+  },
+  (error) => {
+    console.error(`[httpClient] request failed: ${error.config?.method?.toUpperCase()} ${error.config?.url}`, error.message)
+    return Promise.reject(error)
+  },
+)
+
 export type StreamRequestResponse = {
   status: number
   statusText: string

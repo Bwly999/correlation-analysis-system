@@ -174,34 +174,53 @@ export const streamPiAgentEvents = async (
   sessionId: string,
   options: { onOpen?: () => void; onEvent?: (event: any) => void; signal?: AbortSignal } = {},
 ) => {
+  const startTime = Date.now()
+  console.log(`[piAgentClient] streamPiAgentEvents start session=${sessionId} at ${new Date().toISOString()}`)
   const response = await requestStream({
     url: `/pi-agent/sessions/${sessionId}/events`,
     method: 'GET',
     signal: options.signal,
   })
+  console.log(`[piAgentClient] stream response status=${response.status} headers=${JSON.stringify(response.headers)}`)
+
   if (!isSuccessStatus(response.status)) {
     const payload = await readStreamPayload(response.data)
     const message =
       typeof payload === 'object' && payload && 'message' in payload && typeof payload.message === 'string'
         ? payload.message
         : '读取 Pi Agent 事件流失败'
+    console.error(`[piAgentClient] stream error status=${response.status} message=${message} payload=${JSON.stringify(payload)}`)
     throw new Error(message)
   }
 
   if (!response.data) {
+    console.error(`[piAgentClient] stream data is null after ${Date.now() - startTime}ms`)
     throw new Error('Pi Agent 事件流不可用')
   }
 
   options.onOpen?.()
+  console.log(`[piAgentClient] stream opened after ${Date.now() - startTime}ms, reader type=${response.data.constructor?.name}`)
 
   const reader = response.data.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
+  let chunkCount = 0
 
   while (true) {
-    const { value, done } = await reader.read()
-    if (done) break
+    let result: ReadableStreamReadResult<unknown>
+    try {
+      result = await reader.read()
+    } catch (err: any) {
+      console.error(`[piAgentClient] stream read error after ${Date.now() - startTime}ms:`, err.message)
+      throw err
+    }
+    const { value, done } = result
+    if (done) {
+      console.log(`[piAgentClient] stream reader done after ${Date.now() - startTime}ms, totalChunks=${chunkCount}`)
+      break
+    }
 
+    chunkCount++
     buffer += decodeStreamChunk(decoder, value)
     const lines = buffer.split('\n')
     buffer = lines.pop() ?? ''
@@ -218,6 +237,7 @@ export const streamPiAgentEvents = async (
   if (trailing) {
     options.onEvent?.(JSON.parse(trailing))
   }
+  console.log(`[piAgentClient] streamPiAgentEvents complete session=${sessionId} duration=${Date.now() - startTime}ms`)
 }
 
 export const getPiAgentSession = async (

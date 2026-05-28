@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8787:8787"
+    environment:
+      # 服务端绑定
+      WORKFLOW_AI_SERVER_HOST: 0.0.0.0
+      WORKFLOW_AI_SERVER_PORT: 8787
+
+      # LLM API 配置（从宿主 .env.local 读取，或在此处直接设置）
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_COMPAT_BASE_URL: ${OPENAI_COMPAT_BASE_URL:-https://api.deepseek.com}
+      WORKFLOW_AI_DEFAULT_MODEL: ${WORKFLOW_AI_DEFAULT_MODEL:-deepseek-v4-flash}
+
+      # 存储后端
+      WORKFLOW_STORAGE_BACKEND: ${WORKFLOW_STORAGE_BACKEND:-lowdb}
+      WORKFLOW_STORAGE_DATA_DIR: /data/.workflow-storage
+
+      # 默认用户
+      WORKFLOW_STORAGE_DEFAULT_USER_ID: ${WORKFLOW_STORAGE_DEFAULT_USER_ID:-docker-test-user}
+      WORKFLOW_STORAGE_DEFAULT_USER_NAME: Docker测试用户
+
+      # Pi Agent 会话存储
+      PI_AGENT_SESSION_DIR: /data/pi-agent-sessions
+
+      # 清理代理环境变量，防止 proxy-agent 干扰
+      HTTP_PROXY: ""
+      HTTPS_PROXY: ""
+      http_proxy: ""
+      https_proxy: ""
+      NO_PROXY: "*"
+      no_proxy: "*"
+
+    volumes:
+      # 持久化工作流存储
+      - workflow_data:/data
+
+volumes:
+  workflow_data:
