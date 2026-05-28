@@ -4,6 +4,7 @@ import type { WorkflowStorageRepository } from '../storageRepository.js'
 
 const createRepositoryStub = (kind: string): WorkflowStorageRepository<unknown, unknown, unknown> & { kind: string } => ({
   kind,
+  listWorkflowCurrents: vi.fn(async () => []),
   listWorkflowDocuments: vi.fn(async () => []),
   readWorkflowDocument: vi.fn(async () => ({ current: null, versions: [] })),
   writeWorkflowDocument: vi.fn(async () => ({ current: null, versions: [] })),

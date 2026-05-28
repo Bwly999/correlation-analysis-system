@@ -13,6 +13,7 @@ import { ensureMysqlStorageSchemaReady } from './storageDb/mysql/migrator.js'
 import { createHistoryRecordObjectStorage } from './historyObjectStorage.js'
 import {
   assertMysqlStorageDatabaseExists as assertMysqlStorageDatabaseExistsByPool,
+  listWorkflowCurrents,
   deleteWorkflowDocument,
   listHistoryRecordSummaries,
   listWorkflowDocuments,
@@ -47,6 +48,11 @@ export class MysqlWorkflowStorageRepository<
   async listWorkflowDocuments(userId: string): Promise<Array<UserWorkflowDocument<TWorkflow, TVersion>>> {
     await this.ensureSchema()
     return listWorkflowDocuments<TWorkflow, TVersion>(this.db, userId)
+  }
+
+  async listWorkflowCurrents(userId: string): Promise<TWorkflow[]> {
+    await this.ensureSchema()
+    return listWorkflowCurrents<TWorkflow>(this.db, userId)
   }
 
   async readWorkflowDocument(userId: string, workflowId: string): Promise<UserWorkflowDocument<TWorkflow, TVersion>> {

@@ -32,6 +32,11 @@ const createInMemoryRepository = <
   }
 
   return {
+    async listWorkflowCurrents(userId) {
+      return [...getUserWorkflowStore(userId).values()]
+        .map((document) => cloneJson(document.current))
+        .filter((workflow): workflow is TWorkflow => Boolean(workflow))
+    },
     async listWorkflowDocuments(userId) {
       return [...getUserWorkflowStore(userId).values()].map((document) => cloneJson(document))
     },
@@ -221,5 +226,66 @@ describe('server storage service composition', () => {
     await expect(storageApi.getUserWorkflows('user_configured')).resolves.toEqual([
       expect.objectContaining({ id: 'workflow_configured' }),
     ])
+  })
+
+  it('uses current-only repository listing for workflow list queries', async () => {
+    const currentA: StorageWorkflowDto = {
+      id: 'workflow_a',
+      name: 'workflow a',
+      updatedAt: 100,
+      nodes: [],
+      edges: [],
+    }
+    const currentB: StorageWorkflowDto = {
+      id: 'workflow_b',
+      name: 'workflow b',
+      updatedAt: 300,
+      nodes: [],
+      edges: [],
+    }
+
+    let currentListCalls = 0
+    let documentListCalls = 0
+
+    const repository: WorkflowStorageRepository<
+      StorageWorkflowDto,
+      StorageWorkflowVersionDto<StorageWorkflowDto>,
+      StorageExecutionRecordDto
+    > = {
+      async listWorkflowCurrents() {
+        currentListCalls += 1
+        return [cloneJson(currentA), cloneJson(currentB)]
+      },
+      async listWorkflowDocuments() {
+        documentListCalls += 1
+        throw new Error('workflow list should not require loading full documents')
+      },
+      async readWorkflowDocument() {
+        return { current: null, versions: [] }
+      },
+      async writeWorkflowDocument(_userId, _workflowId, updater) {
+        return updater({ current: null, versions: [] })
+      },
+      async deleteWorkflowDocument() {
+        return false
+      },
+      async readHistoryDocument() {
+        return { records: [] }
+      },
+      async listHistoryRecordSummaries() {
+        return []
+      },
+      async readHistoryRecord() {
+        return null
+      },
+      async writeHistoryDocument(_userId, updater) {
+        return updater({ records: [] })
+      },
+    }
+
+    const service = createServerStorageService({ repository })
+    await expect(service.getUserWorkflows('user_current_only')).resolves.toEqual([currentB, currentA])
+    expect(currentListCalls).toBe(1)
+    expect(documentListCalls).toBe(0)
   })
 })

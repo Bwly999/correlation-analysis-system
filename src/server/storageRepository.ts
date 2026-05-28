@@ -12,6 +12,7 @@ export type UserHistoryDocument<TRecord> = StorageHistoryDocumentDto<TRecord>
 export type UserWorkflowDocument<TWorkflow, TVersion> = StorageWorkflowDocumentDto<TWorkflow, TVersion>
 
 export interface WorkflowStorageRepository<TWorkflow, TVersion, THistoryRecord> {
+  listWorkflowCurrents(userId: string): Promise<TWorkflow[]>
   listWorkflowDocuments(userId: string): Promise<Array<UserWorkflowDocument<TWorkflow, TVersion>>>
   readWorkflowDocument(userId: string, workflowId: string): Promise<UserWorkflowDocument<TWorkflow, TVersion>>
   writeWorkflowDocument(
@@ -97,6 +98,13 @@ export class LowDbWorkflowStorageRepository<TWorkflow, TVersion, THistoryRecord>
     )
 
     return documents
+  }
+
+  async listWorkflowCurrents(userId: string): Promise<TWorkflow[]> {
+    const documents = await this.listWorkflowDocuments(userId)
+    return documents
+      .map((document) => document.current)
+      .filter((workflow): workflow is TWorkflow => Boolean(workflow))
   }
 
   async readWorkflowDocument(userId: string, workflowId: string): Promise<UserWorkflowDocument<TWorkflow, TVersion>> {

@@ -121,10 +121,8 @@ export const createServerStorageService = (
     },
 
     async getUserWorkflows(userId) {
-      const documents = await repository.listWorkflowDocuments(userId)
-      return documents
-        .map((document) => document.current)
-        .filter((workflow): workflow is ServerSavedWorkflow => Boolean(workflow))
+      const workflows = await repository.listWorkflowCurrents(userId)
+      return workflows
         .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
     },
 
