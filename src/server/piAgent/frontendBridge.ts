@@ -36,13 +36,32 @@ export interface FrontendBridgeOptions {
   timeoutMs: number
 }
 
+export interface FrontendBridgeRequestOptions {
+  timeoutMs?: number
+}
+
 const DEFAULT_TIMEOUT_MS = 30000
+
+export class FrontendBridgeTimeoutError extends Error {
+  readonly code = 'FRONTEND_BRIDGE_TIMEOUT'
+  readonly toolName: string
+  readonly timeoutMs: number
+
+  constructor(toolName: string, timeoutMs: number) {
+    super('等待前端执行超时')
+    this.name = 'FrontendBridgeTimeoutError'
+    this.toolName = toolName
+    this.timeoutMs = timeoutMs
+  }
+}
 
 /** 挂起的请求记录 */
 interface PendingRequest {
+  toolName: string
   resolve: (result: ToolResult) => void
   reject: (error: Error) => void
   timer: ReturnType<typeof setTimeout>
+  timeoutMs: number
 }
 
 export class FrontendBridge {
@@ -70,18 +89,22 @@ export class FrontendBridge {
     toolCallId: string,
     toolName: string,
     params: Record<string, unknown>,
+    options?: FrontendBridgeRequestOptions,
   ): Promise<ToolResult> {
     if (this.disposed) {
       return Promise.reject(new Error('会话已关闭'))
     }
 
     return new Promise<ToolResult>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.pendingRequests.delete(toolCallId)
-        reject(new Error('工具执行超时'))
-      }, this.options.timeoutMs)
-
-      this.pendingRequests.set(toolCallId, { resolve, reject, timer })
+      const pending: PendingRequest = {
+        toolName,
+        resolve,
+        reject,
+        timer: setTimeout(() => undefined, 0),
+        timeoutMs: options?.timeoutMs ?? this.options.timeoutMs,
+      }
+      pending.timer = this.createTimeoutTimer(toolCallId, pending)
+      this.pendingRequests.set(toolCallId, pending)
 
       // 发送事件到前端
       this.sendToFrontend({
@@ -127,6 +150,15 @@ export class FrontendBridge {
     return true
   }
 
+  touchRequest(toolCallId: string): boolean {
+    const pending = this.pendingRequests.get(toolCallId)
+    if (!pending) return false
+
+    clearTimeout(pending.timer)
+    pending.timer = this.createTimeoutTimer(toolCallId, pending)
+    return true
+  }
+
   cancelPendingRequests(reason = '当前轮已取消'): void {
     for (const [toolCallId, pending] of this.pendingRequests) {
       clearTimeout(pending.timer)
@@ -147,5 +179,12 @@ export class FrontendBridge {
   dispose(): void {
     this.disposed = true
     this.cancelPendingRequests('会话已关闭')
+  }
+
+  private createTimeoutTimer(toolCallId: string, pending: PendingRequest) {
+    return setTimeout(() => {
+      this.pendingRequests.delete(toolCallId)
+      pending.reject(new FrontendBridgeTimeoutError(pending.toolName, pending.timeoutMs))
+    }, pending.timeoutMs)
   }
 }

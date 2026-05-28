@@ -8,6 +8,7 @@ const {
   getPiAgentSessionMock,
   getPiAgentSessionOwnerMock,
   resolvePiAgentToolResultMock,
+  reportPiAgentToolProgressMock,
   syncPiAgentCanvasMock,
   getSystemModelProfilesMock,
   testWorkflowAiModelProfileMock,
@@ -18,6 +19,7 @@ const {
   getPiAgentSessionMock: vi.fn(),
   getPiAgentSessionOwnerMock: vi.fn(),
   resolvePiAgentToolResultMock: vi.fn(),
+  reportPiAgentToolProgressMock: vi.fn(),
   syncPiAgentCanvasMock: vi.fn(),
   getSystemModelProfilesMock: vi.fn(),
   testWorkflowAiModelProfileMock: vi.fn(),
@@ -30,6 +32,7 @@ vi.mock('../gateway.js', () => ({
   getPiAgentSession: getPiAgentSessionMock,
   getPiAgentSessionOwner: getPiAgentSessionOwnerMock,
   resolvePiAgentToolResult: resolvePiAgentToolResultMock,
+  reportPiAgentToolProgress: reportPiAgentToolProgressMock,
   syncPiAgentCanvas: syncPiAgentCanvasMock,
 }))
 
@@ -71,6 +74,7 @@ afterEach(async () => {
   getPiAgentSessionMock.mockReset()
   getPiAgentSessionOwnerMock.mockReset()
   resolvePiAgentToolResultMock.mockReset()
+  reportPiAgentToolProgressMock.mockReset()
   syncPiAgentCanvasMock.mockReset()
   getSystemModelProfilesMock.mockReset()
   testWorkflowAiModelProfileMock.mockReset()
@@ -287,6 +291,14 @@ describe('piAgentRoutes', () => {
       }),
       app.inject({
         method: 'POST',
+        url: '/api/pi-agent/sessions/session_1/tool-progress',
+        headers,
+        payload: {
+          toolCallId: 'tool_1',
+        },
+      }),
+      app.inject({
+        method: 'POST',
         url: '/api/pi-agent/sessions/session_1/canvas-sync',
         headers,
         payload: {
@@ -307,7 +319,30 @@ describe('piAgentRoutes', () => {
     })
     expect(sendPiAgentMessageMock).not.toHaveBeenCalled()
     expect(resolvePiAgentToolResultMock).not.toHaveBeenCalled()
+    expect(reportPiAgentToolProgressMock).not.toHaveBeenCalled()
     expect(syncPiAgentCanvasMock).not.toHaveBeenCalled()
+  })
+
+  it('accepts tool progress heartbeats for in-flight pi-agent tools', async () => {
+    getPiAgentSessionOwnerMock.mockReturnValueOnce('pi-agent-route-user')
+    reportPiAgentToolProgressMock.mockReturnValueOnce(true)
+
+    const app = await createTestApp()
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/pi-agent/sessions/session_1/tool-progress',
+      payload: {
+        toolCallId: 'tool_1',
+      },
+      headers: {
+        'x-workflow-user-id': 'pi-agent-route-user',
+        'x-workflow-user-name': 'Pi Agent 路由测试用户',
+      },
+    })
+
+    expect(response.statusCode).toBe(200)
+    expect(response.json()).toEqual({ ok: true })
+    expect(reportPiAgentToolProgressMock).toHaveBeenCalledWith('session_1', 'tool_1')
   })
 
   it('forwards canvas sync requests to the pi agent gateway', async () => {

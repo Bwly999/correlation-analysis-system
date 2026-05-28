@@ -166,7 +166,7 @@ describe('FrontendBridge', () => {
       // 快进 5 秒
       vi.advanceTimersByTime(5000)
 
-      await expect(promise).rejects.toThrow('工具执行超时')
+      await expect(promise).rejects.toThrow('等待前端执行超时')
 
       bridgeWithTimeout.dispose()
       vi.useRealTimers()
@@ -188,6 +188,25 @@ describe('FrontendBridge', () => {
       bridgeWithTimeout.resolveResult('call_001', expectedResult)
 
       await expect(promise).resolves.toEqual(expectedResult)
+
+      bridgeWithTimeout.dispose()
+      vi.useRealTimers()
+    })
+
+    it('收到工具进度心跳后应续期超时计时器', async () => {
+      vi.useFakeTimers()
+
+      const bridgeWithTimeout = new FrontendBridge(sendToFrontend as unknown as SendToFrontendFn, { timeoutMs: 5000 })
+      const promise = bridgeWithTimeout.request('call_001', 'wf_executeWorkflow', { scope: 'workflow' })
+
+      vi.advanceTimersByTime(4000)
+      expect(bridgeWithTimeout.touchRequest('call_001')).toBe(true)
+
+      vi.advanceTimersByTime(4000)
+      expect(bridgeWithTimeout.pendingCount).toBe(1)
+
+      vi.advanceTimersByTime(1000)
+      await expect(promise).rejects.toThrow('等待前端执行超时')
 
       bridgeWithTimeout.dispose()
       vi.useRealTimers()

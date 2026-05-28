@@ -5,6 +5,9 @@ import { defineTool } from '@earendil-works/pi-coding-agent'
 import { Type } from 'typebox'
 import type { FrontendBridge } from '../frontendBridge.js'
 
+const WORKFLOW_UPDATE_TIMEOUT_MS = 90_000
+const EXECUTE_WORKFLOW_TIMEOUT_MS = 600_000
+
 const stringEnum = <T extends readonly string[]>(
   values: T,
   options?: Record<string, unknown>,
@@ -142,7 +145,12 @@ export function createAtomicWorkflowTools(bridge: FrontendBridge) {
         content: [{ type: 'text', text: '正在等待前端画布应用增量修改...' }],
         details: { status: 'waiting_frontend_canvas' },
       })
-      return await bridge.request(toolCallId, 'workflow_update_partial_workflow', params as Record<string, unknown>)
+      return await bridge.request(
+        toolCallId,
+        'workflow_update_partial_workflow',
+        params as Record<string, unknown>,
+        { timeoutMs: WORKFLOW_UPDATE_TIMEOUT_MS },
+      )
     },
   })
 
@@ -166,7 +174,12 @@ export function createAtomicWorkflowTools(bridge: FrontendBridge) {
         content: [{ type: 'text', text: '正在等待前端画布执行工作流...' }],
         details: { status: 'waiting_frontend_canvas' },
       })
-      return await bridge.request(toolCallId, 'wf_executeWorkflow', params as Record<string, unknown>)
+      return await bridge.request(
+        toolCallId,
+        'wf_executeWorkflow',
+        params as Record<string, unknown>,
+        { timeoutMs: EXECUTE_WORKFLOW_TIMEOUT_MS },
+      )
     },
   })
 

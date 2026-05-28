@@ -73,4 +73,27 @@ describe('piAgentClient streams', () => {
       }),
     )
   })
+
+  it('marks the stream as opened before consuming NDJSON events', async () => {
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('{"type":"message","content":"ready"}\n'))
+        controller.close()
+      },
+    })
+    const callbacks: string[] = []
+
+    requestStreamMock.mockResolvedValue({
+      status: 200,
+      data: stream,
+      headers: {},
+    })
+
+    await streamPiAgentEvents('pi_session_1', {
+      onOpen: () => callbacks.push('open'),
+      onEvent: () => callbacks.push('event'),
+    })
+
+    expect(callbacks).toEqual(['open', 'event'])
+  })
 })

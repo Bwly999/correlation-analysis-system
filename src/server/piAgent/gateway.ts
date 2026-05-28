@@ -25,7 +25,7 @@ import {
 } from './sessionStore.js'
 import { bridgePiEvent, type PiAgentSseEvent } from './eventBridge.js'
 import { buildAllTools } from './tools/index.js'
-import { FrontendBridge } from './frontendBridge.js'
+import { FrontendBridge, FrontendBridgeTimeoutError } from './frontendBridge.js'
 import { assertPiAgentSafeRequest } from './safePayload.js'
 import { archivePiAgentSessionFile } from '../logging/sessionArchive.js'
 import { createServerLogger } from '../logging/serverLogger.js'
@@ -315,6 +315,14 @@ export async function sendPiAgentMessage(
       }
     } catch (err: any) {
       logger.error('Pi Agent 发送消息失败', { error: err })
+      if (err instanceof FrontendBridgeTimeoutError) {
+        interruptRuntime(
+          runtime as PiAgentRuntimeStateCarrier,
+          '前端执行超时，可重试继续分析',
+          (event) => emitRuntimeEvent(runtime, event),
+        )
+        return
+      }
       interruptRuntime(
         runtime as PiAgentRuntimeStateCarrier,
         err?.message || '未知错误',
@@ -373,6 +381,13 @@ export function getPiAgentSession(sessionId: string): PiAgentSessionDetail | nul
 
 export function getPiAgentSessionOwner(sessionId: string): string | null {
   return getSessionRecord(sessionId)?.userId ?? null
+}
+
+export function reportPiAgentToolProgress(sessionId: string, toolCallId: string): boolean {
+  const runtime = runtimes.get(sessionId)
+  if (!runtime) return false
+
+  return runtime.bridge.touchRequest(toolCallId)
 }
 
 export async function syncPiAgentCanvas(input: {

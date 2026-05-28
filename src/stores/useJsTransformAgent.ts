@@ -7,6 +7,7 @@ import type {
 import {
   abortJsTransformAgentRun,
   createJsTransformAgentSession,
+  reportJsTransformAgentToolProgress,
   resolveJsTransformAgentToolResult,
   sendJsTransformAgentMessage,
   updateJsTransformAgentMode,
@@ -36,6 +37,7 @@ export interface JsTransformAgentMessage {
 }
 
 export function useJsTransformAgent() {
+  const TOOL_PROGRESS_HEARTBEAT_MS = 10_000
   const sessionId = ref<string | null>(null)
   const status = ref<'idle' | 'connecting' | 'running' | 'completed' | 'failed' | 'cancelled'>('idle')
   const mode = ref<JsTransformAgentMode>('ask')
@@ -49,6 +51,9 @@ export function useJsTransformAgent() {
   const currentProfile = ref<WorkflowAiModelProfile | null>(null)
   const latestDebugResult = ref<JsTransformAgentSafeDebugResult | null>(null)
   const externalEventHandler = ref<((event: any) => Promise<boolean> | boolean) | null>(null)
+  const isEventStreamConnected = ref(false)
+  let eventStreamTask: Promise<void> | null = null
+  let eventStreamReadyTask: Promise<void> | null = null
 
   const canSend = computed(() => inputText.value.trim().length > 0 && status.value !== 'connecting')
 
@@ -148,12 +153,8 @@ export function useJsTransformAgent() {
         nodeContext: input.context,
       })
       sessionId.value = created.sessionId
+      await connectEventStream(created.sessionId)
       status.value = 'idle'
-      void streamJsTransformAgentEvents(created.sessionId, {
-        onEvent: (event) => {
-          void handleEvent(event)
-        },
-      })
       return true
     } catch (error: any) {
       status.value = 'failed'
@@ -182,6 +183,18 @@ export function useJsTransformAgent() {
       profile: input.profile,
     })
     if (!ok || !sessionId.value) return false
+
+    if (!isEventStreamConnected.value) {
+      status.value = 'connecting'
+      try {
+        await connectEventStream(sessionId.value)
+        status.value = 'idle'
+      } catch (error: any) {
+        status.value = 'failed'
+        errorMessage.value = error?.message || '连接 JS 节点 AI 事件流失败'
+        return false
+      }
+    }
 
     messages.value.push({
       id: `user_${Date.now()}`,
@@ -222,6 +235,72 @@ export function useJsTransformAgent() {
     if (!sessionId.value) return
     latestDebugResult.value = input.result.details
     await resolveJsTransformAgentToolResult(sessionId.value, input.toolCallId, input.result)
+  }
+
+  const createToolProgressHeartbeat = (toolCallId: string) => {
+    if (!sessionId.value) {
+      return () => undefined
+    }
+
+    const timer = window.setInterval(() => {
+      void reportJsTransformAgentToolProgress(sessionId.value!, toolCallId).catch(() => undefined)
+    }, TOOL_PROGRESS_HEARTBEAT_MS)
+
+    return () => {
+      window.clearInterval(timer)
+    }
+  }
+
+  const connectEventStream = async (sid: string) => {
+    if (eventStreamTask) {
+      if (isEventStreamConnected.value) {
+        return Promise.resolve()
+      }
+      return eventStreamReadyTask ?? Promise.resolve()
+    }
+
+    let markReady!: () => void
+    let markReadyFailed!: (error: Error) => void
+    let readySettled = false
+
+    eventStreamReadyTask = new Promise<void>((resolve, reject) => {
+      markReady = () => {
+        if (readySettled) return
+        readySettled = true
+        resolve()
+      }
+      markReadyFailed = (error: Error) => {
+        if (readySettled) return
+        readySettled = true
+        reject(error)
+      }
+    })
+
+    eventStreamTask = streamJsTransformAgentEvents(sid, {
+      onOpen: () => {
+        isEventStreamConnected.value = true
+        markReady()
+      },
+      onEvent: (event) => {
+        void handleEvent(event)
+      },
+    })
+      .then(() => {
+        isEventStreamConnected.value = false
+        eventStreamTask = null
+        eventStreamReadyTask = null
+        markReadyFailed(new Error('JS 节点 AI 事件流已结束'))
+      })
+      .catch((error: any) => {
+        isEventStreamConnected.value = false
+        eventStreamTask = null
+        eventStreamReadyTask = null
+        markReadyFailed(error instanceof Error ? error : new Error('连接 JS 节点 AI 事件流失败'))
+        status.value = 'failed'
+        errorMessage.value = error?.message || 'JS 节点 AI 事件流已断开'
+      })
+
+    return eventStreamReadyTask
   }
 
   const handleEvent = async (event: any) => {
@@ -340,6 +419,7 @@ export function useJsTransformAgent() {
     currentProfile,
     latestDebugResult,
     externalEventHandler,
+    createToolProgressHeartbeat,
     pushInputHistory,
     recallPreviousInput,
     recallNextInput,

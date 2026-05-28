@@ -11,6 +11,7 @@ import {
   createJsTransformAgentSession,
   getJsTransformAgentSession,
   getJsTransformAgentSessionOwner,
+  reportJsTransformAgentToolProgress,
   resolveJsTransformAgentToolResult,
   sendJsTransformAgentMessage,
   subscribeJsTransformAgentEvents,
@@ -105,6 +106,18 @@ export const createJsTransformAgentRoutes = (): FastifyPluginAsync => async (app
       }
     }
     const ok = resolveJsTransformAgentToolResult(sessionId, body.toolCallId, body.result)
+    reply.code(ok ? 200 : 404)
+    return { ok }
+  })
+
+  app.post('/api/js-transform-agent/sessions/:sessionId/tool-progress', async (request, reply) => {
+    const user = requireWorkflowUser(request)
+    const { sessionId } = request.params as { sessionId: string }
+    requireOwnedJsTransformSession(sessionId, user.id)
+    const body = request.body as {
+      toolCallId: string
+    }
+    const ok = reportJsTransformAgentToolProgress(sessionId, body.toolCallId)
     reply.code(ok ? 200 : 404)
     return { ok }
   })

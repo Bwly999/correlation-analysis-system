@@ -58,6 +58,7 @@ import {
   sendPiAgentMessage,
 } from '../gateway.js'
 import { buildSystemPrompt } from '../systemPrompt.js'
+import { FrontendBridgeTimeoutError } from '../frontendBridge.js'
 
 const createRequest = (): WorkflowAiPlanRequest => ({
   mode: 'create',
@@ -242,6 +243,36 @@ describe('piAgent gateway', () => {
       expect(sessionPromptMock).toHaveBeenCalledWith('继续')
     })
     expect(sessionFollowUpMock).not.toHaveBeenCalledWith('继续')
+  })
+
+  it('marks frontend tool heartbeat timeouts as interrupted instead of failed', async () => {
+    const request = createRequest()
+    const created = await createPiAgentSession(request, 'user_1')
+    const events: Array<Record<string, unknown>> = []
+    const unsubscribe = subscribePiAgentEvents(created.sessionId, (event) => {
+      events.push(event as Record<string, unknown>)
+    })
+    if (!unsubscribe) throw new Error('缺少事件订阅')
+
+    sessionPromptMock.mockRejectedValueOnce(
+      new FrontendBridgeTimeoutError('wf_executeWorkflow', 600_000),
+    )
+
+    const result = await sendPiAgentMessage(created.sessionId, '执行当前工作流')
+
+    expect(result).toEqual({ ok: true })
+    await vi.waitFor(() => {
+      expect(getPiAgentSession(created.sessionId)?.status).toBe('interrupted')
+    })
+    expect(getPiAgentSession(created.sessionId)?.lastStopReason).toBe('interrupted')
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'session.interrupted',
+          message: '前端执行超时，可重试继续分析',
+        }),
+      ]),
+    )
   })
 
   it('marks a read-only turn as ended early when it stops after a transitional assistant message', async () => {

@@ -157,6 +157,8 @@ const handleMessagesScroll = () => {
 }
 
 const handleToolExecute = async (event: any) => {
+  const stopHeartbeat = agent.createToolProgressHeartbeat(event.toolCallId)
+
   try {
     if (event.toolName === 'js_update_code') {
       const nextCode = typeof event.params?.code === 'string' ? event.params.code : ''
@@ -205,6 +207,8 @@ const handleToolExecute = async (event: any) => {
         isError: true,
       },
     })
+  } finally {
+    stopHeartbeat()
   }
 }
 

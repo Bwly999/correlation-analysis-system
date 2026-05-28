@@ -109,23 +109,28 @@ describe('原子工作流工具 (atomicWorkflowTools)', () => {
       content: [{ type: 'text', text: '正在等待前端画布应用增量修改...' }],
       details: { status: 'waiting_frontend_canvas' },
     })
-    expect(mock.bridge.request).toHaveBeenCalledWith('call_update', 'workflow_update_partial_workflow', {
-      operations: [
-        {
-          id: 'node_manual_1',
-          type: 'createNode',
-          nodeType: 'manual-json-import',
-          nodeLabel: '手动输入数据',
-        },
-        {
-          id: 'move_1',
-          type: 'moveNode',
-          nodeRef: 'node_manual_1',
-          position: { x: 100, y: 200 },
-        },
-      ],
-      summary: '添加并移动节点',
-    })
+    expect(mock.bridge.request).toHaveBeenCalledWith(
+      'call_update',
+      'workflow_update_partial_workflow',
+      {
+        operations: [
+          {
+            id: 'node_manual_1',
+            type: 'createNode',
+            nodeType: 'manual-json-import',
+            nodeLabel: '手动输入数据',
+          },
+          {
+            id: 'move_1',
+            type: 'moveNode',
+            nodeRef: 'node_manual_1',
+            position: { x: 100, y: 200 },
+          },
+        ],
+        summary: '添加并移动节点',
+      },
+      { timeoutMs: 90_000 },
+    )
 
     mock.resolve('call_update', successResult('画布修改成功'))
     const result = await resultPromise
@@ -171,11 +176,16 @@ describe('原子工作流工具 (atomicWorkflowTools)', () => {
       content: [{ type: 'text', text: '正在等待前端画布执行工作流...' }],
       details: { status: 'waiting_frontend_canvas' },
     })
-    expect(mock.bridge.request).toHaveBeenCalledWith('call_execute', 'wf_executeWorkflow', {
-      scope: 'node',
-      nodeId: 'node_debug_1',
-      mode: 'rerun_upstream',
-    })
+    expect(mock.bridge.request).toHaveBeenCalledWith(
+      'call_execute',
+      'wf_executeWorkflow',
+      {
+        scope: 'node',
+        nodeId: 'node_debug_1',
+        mode: 'rerun_upstream',
+      },
+      { timeoutMs: 600_000 },
+    )
 
     mock.resolve('call_execute', successResult('节点调试完成'))
     await resultPromise

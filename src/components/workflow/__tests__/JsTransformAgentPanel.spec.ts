@@ -11,6 +11,7 @@ const useJsTransformAgentMock = vi.hoisted(() => ({
     inputText: { value: '' },
     canSend: { value: false },
     externalEventHandler: { value: null },
+    createToolProgressHeartbeat: vi.fn(() => vi.fn()),
     recallPreviousInput: vi.fn(),
     recallNextInput: vi.fn(),
     cancelCurrentRun: vi.fn(),

@@ -3,6 +3,8 @@ import { Type } from 'typebox'
 import { getPiWorkflowToolSpecsByTarget } from '../../../shared/piWorkflowTools.js'
 import type { FrontendBridge } from '../frontendBridge.js'
 
+const FRONTEND_READ_TIMEOUT_MS = 60_000
+
 const stringEnum = <T extends readonly string[]>(
   values: T,
   options?: Record<string, unknown>,
@@ -38,7 +40,9 @@ export function createFrontendBridgeTools(bridge: FrontendBridge) {
             content: [{ type: 'text', text: '正在等待前端读取节点目录...' }],
             details: { status: 'waiting_frontend_bridge' },
           })
-          return bridge.request(toolCallId, spec.name, params as Record<string, unknown>)
+          return bridge.request(toolCallId, spec.name, params as Record<string, unknown>, {
+            timeoutMs: FRONTEND_READ_TIMEOUT_MS,
+          })
         },
       })
     }
@@ -68,7 +72,9 @@ export function createFrontendBridgeTools(bridge: FrontendBridge) {
             content: [{ type: 'text', text: '正在等待前端读取节点信息...' }],
             details: { status: 'waiting_frontend_bridge' },
           })
-          return bridge.request(toolCallId, spec.name, params as Record<string, unknown>)
+          return bridge.request(toolCallId, spec.name, params as Record<string, unknown>, {
+            timeoutMs: FRONTEND_READ_TIMEOUT_MS,
+          })
         },
       })
     }

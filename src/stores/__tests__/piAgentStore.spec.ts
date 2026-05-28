@@ -7,6 +7,7 @@ import { useWorkflowStore } from '../workflowStore'
 const {
   createPiAgentSessionMock,
   getPiAgentSessionMock,
+  reportPiAgentToolProgressMock,
   resolvePiAgentToolResultMock,
   sendPiAgentMessageMock,
   syncPiAgentCanvasMock,
@@ -15,6 +16,7 @@ const {
 } = vi.hoisted(() => ({
   createPiAgentSessionMock: vi.fn(),
   getPiAgentSessionMock: vi.fn(),
+  reportPiAgentToolProgressMock: vi.fn(),
   resolvePiAgentToolResultMock: vi.fn(),
   sendPiAgentMessageMock: vi.fn(),
   syncPiAgentCanvasMock: vi.fn(),
@@ -25,6 +27,7 @@ const {
 vi.mock('@/services/piAgentClient', () => ({
   createPiAgentSession: createPiAgentSessionMock,
   getPiAgentSession: getPiAgentSessionMock,
+  reportPiAgentToolProgress: reportPiAgentToolProgressMock,
   resolvePiAgentToolResult: resolvePiAgentToolResultMock,
   sendPiAgentMessage: sendPiAgentMessageMock,
   syncPiAgentCanvas: syncPiAgentCanvasMock,
@@ -41,6 +44,11 @@ describe('piAgentStore', () => {
     setActivePinia(createPinia())
     localStorage.clear()
     vi.clearAllMocks()
+    streamPiAgentEventsMock.mockImplementation(async (_sessionId: string, options?: { onOpen?: () => void }) => {
+      options?.onOpen?.()
+      return new Promise<void>(() => {})
+    })
+    reportPiAgentToolProgressMock.mockResolvedValue({ ok: true })
     syncPiAgentCanvasMock.mockResolvedValue({
       projection: {} as any,
       syncSummary: '已同步当前画布，共 0 个节点、0 条连线',
@@ -77,8 +85,6 @@ describe('piAgentStore', () => {
       prompt: '帮我分析销量',
     })
     sendPiAgentMessageMock.mockResolvedValueOnce({ ok: true })
-    streamPiAgentEventsMock.mockResolvedValueOnce(undefined)
-
     const configStore = usePiAgentConfigStore()
     const store = usePiAgentStore()
     const workflowStore = useWorkflowStore()
@@ -172,8 +178,6 @@ describe('piAgentStore', () => {
       prompt: '帮我分析销量',
     })
     syncPiAgentCanvasMock.mockRejectedValueOnce(new Error('同步当前画布失败'))
-    streamPiAgentEventsMock.mockResolvedValueOnce(undefined)
-
     const configStore = usePiAgentConfigStore()
     const store = usePiAgentStore()
     const workflowStore = useWorkflowStore()
@@ -374,6 +378,57 @@ describe('piAgentStore', () => {
     expect(store.status).toBe('completed')
   })
 
+  it('waits until the event stream is opened before sending the first message', async () => {
+    fetchSystemModelProfilesMock.mockResolvedValueOnce([
+      {
+        id: 'profile_1',
+        name: '默认模型',
+        baseUrl: 'http://example.com',
+        model: 'glm-4.7',
+        enabled: true,
+        source: 'system' as const,
+      },
+    ])
+    createPiAgentSessionMock.mockResolvedValueOnce({
+      sessionId: 'pi_session_1',
+      status: 'idle',
+      mode: 'edit',
+      prompt: '帮我分析销量',
+    })
+    sendPiAgentMessageMock.mockResolvedValueOnce({ ok: true })
+
+    let openStream: (() => void) | null = null
+    streamPiAgentEventsMock.mockImplementationOnce(
+      async (_sessionId: string, options?: { onOpen?: () => void }) =>
+        new Promise<void>((resolve) => {
+          openStream = () => {
+            options?.onOpen?.()
+            resolve()
+          }
+        }),
+    )
+
+    const configStore = usePiAgentConfigStore()
+    const store = usePiAgentStore()
+    await configStore.loadProfiles()
+
+    const pendingSend = store.sendMessage('帮我分析销量')
+    await vi.waitFor(() => {
+      expect(openStream).toBeTypeOf('function')
+    })
+
+    expect(sendPiAgentMessageMock).not.toHaveBeenCalled()
+
+    const resolveStream = openStream
+    if (!resolveStream) {
+      throw new Error('缺少事件流打开回调')
+    }
+    resolveStream()
+    await pendingSend
+
+    expect(sendPiAgentMessageMock).toHaveBeenCalledWith('pi_session_1', '帮我分析销量')
+  })
+
   it('recovers from a broken event stream by syncing the latest session snapshot', async () => {
     fetchSystemModelProfilesMock.mockResolvedValueOnce([
       {
@@ -393,8 +448,9 @@ describe('piAgentStore', () => {
     })
     sendPiAgentMessageMock.mockResolvedValueOnce({ ok: true })
     streamPiAgentEventsMock.mockImplementationOnce(
-      async () =>
+      async (_sessionId: string, options?: { onOpen?: () => void }) =>
         new Promise<void>((_resolve, reject) => {
+          options?.onOpen?.()
           setTimeout(() => reject(new Error('事件流已断开')), 0)
         }),
     )
@@ -501,8 +557,9 @@ describe('piAgentStore', () => {
       prompt: '帮我分析销量',
     })
     sendPiAgentMessageMock.mockResolvedValue({ ok: true })
-    streamPiAgentEventsMock.mockImplementation(async (_sessionId: string, options?: { onEvent?: (event: unknown) => void }) =>
+    streamPiAgentEventsMock.mockImplementation(async (_sessionId: string, options?: { onOpen?: () => void; onEvent?: (event: unknown) => void }) =>
       new Promise<void>(() => {
+        options?.onOpen?.()
         options?.onEvent?.({
           type: 'session.stop_diagnosis',
           sessionId: 'pi_session_1',
@@ -609,8 +666,9 @@ describe('piAgentStore', () => {
     })
     sendPiAgentMessageMock.mockResolvedValueOnce({ ok: true })
     streamPiAgentEventsMock.mockImplementationOnce(
-      async () =>
+      async (_sessionId: string, options?: { onOpen?: () => void }) =>
         new Promise<void>((_resolve, reject) => {
+          options?.onOpen?.()
           setTimeout(() => reject(new Error('事件流已断开')), 0)
         }),
     )
@@ -712,8 +770,9 @@ describe('piAgentStore', () => {
     })
     sendPiAgentMessageMock.mockResolvedValueOnce({ ok: true })
     streamPiAgentEventsMock.mockImplementationOnce(
-      async () =>
+      async (_sessionId: string, options?: { onOpen?: () => void }) =>
         new Promise<void>((_resolve, reject) => {
+          options?.onOpen?.()
           setTimeout(() => reject(new Error('事件流已断开')), 0)
         }),
     )

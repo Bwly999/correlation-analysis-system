@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createJsTransformAgentSession, resolveJsTransformAgentToolResult } from '../jsTransformAgentClient'
+import {
+  createJsTransformAgentSession,
+  reportJsTransformAgentToolProgress,
+  resolveJsTransformAgentToolResult,
+  streamJsTransformAgentEvents,
+} from '../jsTransformAgentClient'
 
 const { requestMock, requestStreamMock } = vi.hoisted(() => ({
   requestMock: vi.fn(),
@@ -33,6 +38,13 @@ describe('jsTransformAgentClient', () => {
       }
 
       if (url === '/js-transform-agent/sessions/js_session_1/tool-result') {
+        return {
+          status: 200,
+          data: { ok: true },
+        }
+      }
+
+      if (url === '/js-transform-agent/sessions/js_session_1/tool-progress') {
         return {
           status: 200,
           data: { ok: true },
@@ -118,5 +130,36 @@ describe('jsTransformAgentClient', () => {
     const body = call?.[0]?.data ?? {}
     expect(body.toolCallId).toBe('tool_1')
     expect(body.result.details.outputSample).toHaveLength(1)
+  })
+
+  it('marks the js transform event stream as opened before consuming events', async () => {
+    requestStreamMock.mockResolvedValue({
+      status: 200,
+      data: new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('{"type":"message","content":"ready"}\n'))
+          controller.close()
+        },
+      }),
+      headers: {},
+    })
+
+    const callbacks: string[] = []
+    await streamJsTransformAgentEvents('js_session_1', {
+      onOpen: () => callbacks.push('open'),
+      onEvent: () => callbacks.push('event'),
+    })
+
+    expect(callbacks).toEqual(['open', 'event'])
+  })
+
+  it('posts js transform tool progress heartbeats back to the dedicated route', async () => {
+    await reportJsTransformAgentToolProgress('js_session_1', 'tool_1')
+
+    const call = requestMock.mock.calls.find(
+      ([config]) => config.url === '/js-transform-agent/sessions/js_session_1/tool-progress',
+    )
+    expect(call).toBeTruthy()
+    expect(call?.[0]?.data).toEqual({ toolCallId: 'tool_1' })
   })
 })

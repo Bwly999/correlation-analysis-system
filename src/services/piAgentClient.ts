@@ -172,7 +172,7 @@ export const syncPiAgentCanvas = async (
 
 export const streamPiAgentEvents = async (
   sessionId: string,
-  options: { onEvent?: (event: any) => void; signal?: AbortSignal } = {},
+  options: { onOpen?: () => void; onEvent?: (event: any) => void; signal?: AbortSignal } = {},
 ) => {
   const response = await requestStream({
     url: `/pi-agent/sessions/${sessionId}/events`,
@@ -191,6 +191,8 @@ export const streamPiAgentEvents = async (
   if (!response.data) {
     throw new Error('Pi Agent 事件流不可用')
   }
+
+  options.onOpen?.()
 
   const reader = response.data.getReader()
   const decoder = new TextDecoder()
@@ -226,6 +228,22 @@ export const getPiAgentSession = async (
     method: 'GET',
   })
   return readJsonOrThrow<PiAgentSessionDetailResponse>(response, '读取 Pi Agent 会话失败')
+}
+
+export const reportPiAgentToolProgress = async (
+  sessionId: string,
+  toolCallId: string,
+) => {
+  const response = await httpClient.request({
+    url: `/pi-agent/sessions/${sessionId}/tool-progress`,
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    data: { toolCallId },
+  })
+
+  return readJsonOrThrow<{ ok: boolean }>(response, '续期 Pi Agent 工具执行失败')
 }
 
 export const resolvePiAgentToolResult = async (

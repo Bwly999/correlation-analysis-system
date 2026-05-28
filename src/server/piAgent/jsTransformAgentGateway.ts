@@ -18,6 +18,10 @@ import { createJsTransformAgentModeController } from './jsTransformAgentModeExte
 import type { PiAgentSseEvent } from './eventBridge.js'
 import { bridgePiEvent } from './eventBridge.js'
 import { createSessionRecord, getSessionRecord, updateSessionRecord, appendMessage, type PiAgentSessionRecord } from './sessionStore.js'
+import { FrontendBridgeTimeoutError } from './frontendBridge.js'
+
+const JS_UPDATE_CODE_TIMEOUT_MS = 60_000
+const JS_DEBUG_NODE_TIMEOUT_MS = 600_000
 
 interface JsTransformAgentRuntime {
   request: JsTransformAgentSessionRequest
@@ -96,7 +100,12 @@ const createJsTransformAgentTools = (runtime: {
       }),
       async execute(callId, params) {
         try {
-          return await runtime.bridge.request(callId, 'js_update_code', params as Record<string, unknown>)
+          return await runtime.bridge.request(
+            callId,
+            'js_update_code',
+            params as Record<string, unknown>,
+            { timeoutMs: JS_UPDATE_CODE_TIMEOUT_MS },
+          )
         } catch (error: any) {
           return errorToolResult(error?.message || '更新当前代码失败')
         }
@@ -116,7 +125,12 @@ const createJsTransformAgentTools = (runtime: {
       }),
       async execute(callId, params) {
         try {
-          const result = await runtime.bridge.request(callId, 'js_debug_node', params as Record<string, unknown>)
+          const result = await runtime.bridge.request(
+            callId,
+            'js_debug_node',
+            params as Record<string, unknown>,
+            { timeoutMs: JS_DEBUG_NODE_TIMEOUT_MS },
+          )
           const details = result.details as unknown as JsTransformAgentSafeDebugResult
           runtime.state.lastDebugResult = details
           return result
@@ -306,8 +320,10 @@ export async function sendJsTransformAgentMessage(
       } else {
         await runtime.session.prompt(message)
       }
-    } catch {
-      updateSessionRecord(sessionId, { status: 'failed' })
+    } catch (error: any) {
+      updateSessionRecord(sessionId, {
+        status: error instanceof FrontendBridgeTimeoutError ? 'interrupted' : 'failed',
+      })
     }
   })()
 
@@ -372,6 +388,13 @@ export function getJsTransformAgentSession(sessionId: string) {
 
 export function getJsTransformAgentSessionOwner(sessionId: string): string | null {
   return getSessionRecord(sessionId)?.userId ?? null
+}
+
+export function reportJsTransformAgentToolProgress(sessionId: string, toolCallId: string): boolean {
+  const runtime = runtimes.get(sessionId)
+  if (!runtime) return false
+
+  return runtime.bridge.touchRequest(toolCallId)
 }
 
 export function resolveJsTransformAgentToolResult(

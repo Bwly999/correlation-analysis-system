@@ -16,6 +16,7 @@ import {
   getPiAgentSession,
   getPiAgentSessionOwner,
   resolvePiAgentToolResult,
+  reportPiAgentToolProgress,
   syncPiAgentCanvas,
 } from '../piAgent/gateway.js'
 import {
@@ -123,6 +124,20 @@ export const createPiAgentRoutes = (): FastifyPluginAsync => async (app) => {
     }
     const ok = resolvePiAgentToolResult(sessionId, body.toolCallId, body.result)
     logger.info('处理 Pi Agent 工具结果', { sessionId, requestId: request.id })
+    reply.code(ok ? 200 : 404)
+    return { ok }
+  })
+
+  app.post('/api/pi-agent/sessions/:sessionId/tool-progress', async (request, reply) => {
+    const logger = createRouteLogger(request)
+    const user = requireWorkflowUser(request)
+    const { sessionId } = request.params as { sessionId: string }
+    requireOwnedPiAgentSession(sessionId, user.id)
+    const body = request.body as {
+      toolCallId: string
+    }
+    const ok = reportPiAgentToolProgress(sessionId, body.toolCallId)
+    logger.info('续期 Pi Agent 工具执行', { sessionId, requestId: request.id })
     reply.code(ok ? 200 : 404)
     return { ok }
   })

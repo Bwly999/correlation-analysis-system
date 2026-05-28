@@ -19,6 +19,7 @@ import {
   type PiAgentSessionMessageDto,
   type PiAgentSessionToolCallDto,
   resolvePiAgentToolResult,
+  reportPiAgentToolProgress,
   sendPiAgentMessage,
   syncPiAgentCanvas,
   streamPiAgentEvents,
@@ -88,6 +89,7 @@ export const usePiAgentStore = defineStore('piAgent', () => {
   const errorMessage = ref('')
   const inputText = ref('')
   const localExecutionCache = new Map<string, RawExecutionResult>()
+  const TOOL_PROGRESS_HEARTBEAT_MS = 10_000
   const STRUCTURE_SYNC_TOOL_NAMES = new Set([
     'workflow_update_partial_workflow',
   ])
@@ -95,6 +97,7 @@ export const usePiAgentStore = defineStore('piAgent', () => {
   // SSE 连接
   let eventSource: AbortController | null = null
   let eventStreamTask: Promise<void> | null = null
+  let eventStreamReadyTask: Promise<void> | null = null
   const isEventStreamConnected = ref(false)
   const isRecoveringSession = ref(false)
 
@@ -272,10 +275,8 @@ export const usePiAgentStore = defineStore('piAgent', () => {
     try {
       const data = await createPiAgentSession(request)
       sessionId.value = data.sessionId
+      await connectEventStream(data.sessionId)
       status.value = 'idle'
-
-      // 连接事件流
-      void connectEventStream(data.sessionId)
       return true
     } catch (err: any) {
       status.value = 'failed'
@@ -297,7 +298,15 @@ export const usePiAgentStore = defineStore('piAgent', () => {
       const ok = await ensureSession(content)
       if (!ok) return
     } else if (!isEventStreamConnected.value) {
-      void connectEventStream(sessionId.value)
+      status.value = 'connecting'
+      try {
+        await connectEventStream(sessionId.value)
+        status.value = 'idle'
+      } catch (err: any) {
+        status.value = 'failed'
+        errorMessage.value = err?.message || '连接 Pi Agent 事件流失败'
+        return
+      }
     }
 
     try {
@@ -336,16 +345,38 @@ export const usePiAgentStore = defineStore('piAgent', () => {
 
   async function connectEventStream(sid: string) {
     if (eventSource && !eventSource.signal.aborted) {
-      return eventStreamTask ?? Promise.resolve()
+      if (isEventStreamConnected.value) {
+        return Promise.resolve()
+      }
+      return eventStreamReadyTask ?? Promise.resolve()
     }
 
     const controller = new AbortController()
     eventSource = controller
     isEventStreamConnected.value = false
+    let markReady!: () => void
+    let markReadyFailed!: (error: Error) => void
+    let readySettled = false
+
+    eventStreamReadyTask = new Promise<void>((resolve, reject) => {
+      markReady = () => {
+        if (readySettled) return
+        readySettled = true
+        resolve()
+      }
+      markReadyFailed = (error: Error) => {
+        if (readySettled) return
+        readySettled = true
+        reject(error)
+      }
+    })
 
     eventStreamTask = streamPiAgentEvents(sid, {
-      onEvent: (event) => {
+      onOpen: () => {
         isEventStreamConnected.value = true
+        markReady()
+      },
+      onEvent: (event) => {
         handleEvent(event)
       },
       signal: controller.signal,
@@ -354,6 +385,9 @@ export const usePiAgentStore = defineStore('piAgent', () => {
         if (eventSource !== controller || controller.signal.aborted) return
         isEventStreamConnected.value = false
         eventSource = null
+        eventStreamTask = null
+        eventStreamReadyTask = null
+        markReadyFailed(new Error('Pi Agent 事件流已结束'))
         await recoverSessionState(sid, '本轮已中断，可继续发送下一条消息')
       })
       .catch(async (err: any) => {
@@ -362,6 +396,9 @@ export const usePiAgentStore = defineStore('piAgent', () => {
           if (eventSource === controller) {
             eventSource = null
           }
+          eventStreamTask = null
+          eventStreamReadyTask = null
+          markReadyFailed(err instanceof Error ? err : new Error('Pi Agent 事件流已取消'))
           return
         }
 
@@ -369,10 +406,13 @@ export const usePiAgentStore = defineStore('piAgent', () => {
         if (eventSource === controller) {
           eventSource = null
         }
+        eventStreamTask = null
+        eventStreamReadyTask = null
+        markReadyFailed(err instanceof Error ? err : new Error('连接 Pi Agent 事件流失败'))
         await recoverSessionState(sid, err?.message || '本轮已中断，可继续发送下一条消息')
       })
 
-    return eventStreamTask
+    return eventStreamReadyTask
   }
 
   function handleEvent(event: any) {
@@ -618,6 +658,7 @@ export const usePiAgentStore = defineStore('piAgent', () => {
       return
     }
 
+    const stopHeartbeat = createToolProgressHeartbeat(event.sessionId, event.toolCallId)
     try {
       const result = await executor(event.params)
       const safeResult = toSafeToolResult(event.toolName, event.toolCallId, result)
@@ -632,7 +673,7 @@ export const usePiAgentStore = defineStore('piAgent', () => {
       await sendToolResult(event.sessionId, event.toolCallId, {
         content: toolContent,
         details: safeResult,
-      })
+        })
     } catch (err: any) {
       await sendToolResult(event.sessionId, event.toolCallId, {
         content: [{ type: 'text', text: err?.message || '执行失败' }],
@@ -648,6 +689,20 @@ export const usePiAgentStore = defineStore('piAgent', () => {
         },
         isError: true,
       })
+    } finally {
+      stopHeartbeat()
+    }
+  }
+
+  const createToolProgressHeartbeat = (sid: string, toolCallId: string) => {
+    const timer = window.setInterval(() => {
+      void reportPiAgentToolProgress(sid, toolCallId).catch(() => {
+        console.warn('[PiAgent] 续期工具执行失败')
+      })
+    }, TOOL_PROGRESS_HEARTBEAT_MS)
+
+    return () => {
+      window.clearInterval(timer)
     }
   }
 
@@ -681,6 +736,7 @@ export const usePiAgentStore = defineStore('piAgent', () => {
     eventSource?.abort()
     eventSource = null
     eventStreamTask = null
+    eventStreamReadyTask = null
     isEventStreamConnected.value = false
     localExecutionCache.clear()
   }

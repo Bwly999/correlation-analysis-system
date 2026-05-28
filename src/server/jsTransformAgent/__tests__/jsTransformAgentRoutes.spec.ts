@@ -9,6 +9,7 @@ const {
   subscribeJsTransformAgentEventsMock,
   getJsTransformAgentSessionMock,
   getJsTransformAgentSessionOwnerMock,
+  reportJsTransformAgentToolProgressMock,
   resolveJsTransformAgentToolResultMock,
 } = vi.hoisted(() => ({
   createJsTransformAgentSessionMock: vi.fn(),
@@ -18,6 +19,7 @@ const {
   subscribeJsTransformAgentEventsMock: vi.fn(),
   getJsTransformAgentSessionMock: vi.fn(),
   getJsTransformAgentSessionOwnerMock: vi.fn(),
+  reportJsTransformAgentToolProgressMock: vi.fn(),
   resolveJsTransformAgentToolResultMock: vi.fn(),
 }))
 
@@ -29,6 +31,7 @@ vi.mock('../../piAgent/jsTransformAgentGateway.js', () => ({
   subscribeJsTransformAgentEvents: subscribeJsTransformAgentEventsMock,
   getJsTransformAgentSession: getJsTransformAgentSessionMock,
   getJsTransformAgentSessionOwner: getJsTransformAgentSessionOwnerMock,
+  reportJsTransformAgentToolProgress: reportJsTransformAgentToolProgressMock,
   resolveJsTransformAgentToolResult: resolveJsTransformAgentToolResultMock,
 }))
 
@@ -62,6 +65,7 @@ afterEach(async () => {
   subscribeJsTransformAgentEventsMock.mockReset()
   getJsTransformAgentSessionMock.mockReset()
   getJsTransformAgentSessionOwnerMock.mockReset()
+  reportJsTransformAgentToolProgressMock.mockReset()
   resolveJsTransformAgentToolResultMock.mockReset()
 
   while (apps.length > 0) {
@@ -246,6 +250,14 @@ describe('jsTransformAgentRoutes', () => {
           },
         },
       }),
+      app.inject({
+        method: 'POST',
+        url: '/api/js-transform-agent/sessions/js_session_1/tool-progress',
+        headers,
+        payload: {
+          toolCallId: 'tool_1',
+        },
+      }),
     ])
 
     responses.forEach((response) => {
@@ -256,6 +268,29 @@ describe('jsTransformAgentRoutes', () => {
     expect(updateJsTransformAgentModeMock).not.toHaveBeenCalled()
     expect(abortJsTransformAgentRunMock).not.toHaveBeenCalled()
     expect(resolveJsTransformAgentToolResultMock).not.toHaveBeenCalled()
+    expect(reportJsTransformAgentToolProgressMock).not.toHaveBeenCalled()
+  })
+
+  it('accepts tool progress heartbeats for in-flight js transform tools', async () => {
+    getJsTransformAgentSessionOwnerMock.mockReturnValueOnce('js-transform-route-user')
+    reportJsTransformAgentToolProgressMock.mockReturnValueOnce(true)
+
+    const app = await createTestApp()
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/js-transform-agent/sessions/js_session_1/tool-progress',
+      headers: {
+        'x-workflow-user-id': 'js-transform-route-user',
+        'x-workflow-user-name': 'JS Transform 路由测试用户',
+      },
+      payload: {
+        toolCallId: 'tool_1',
+      },
+    })
+
+    expect(response.statusCode).toBe(200)
+    expect(response.json()).toEqual({ ok: true })
+    expect(reportJsTransformAgentToolProgressMock).toHaveBeenCalledWith('js_session_1', 'tool_1')
   })
 
   it('routes directly to the piAgent jsTransform gateway implementation module', () => {

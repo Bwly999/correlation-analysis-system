@@ -3,6 +3,7 @@ import { useJsTransformAgent } from '../useJsTransformAgent'
 
 const {
   createJsTransformAgentSessionMock,
+  reportJsTransformAgentToolProgressMock,
   sendJsTransformAgentMessageMock,
   streamJsTransformAgentEventsMock,
   resolveJsTransformAgentToolResultMock,
@@ -10,6 +11,7 @@ const {
   abortJsTransformAgentRunMock,
 } = vi.hoisted(() => ({
   createJsTransformAgentSessionMock: vi.fn(),
+  reportJsTransformAgentToolProgressMock: vi.fn(),
   sendJsTransformAgentMessageMock: vi.fn(),
   streamJsTransformAgentEventsMock: vi.fn(),
   resolveJsTransformAgentToolResultMock: vi.fn(),
@@ -19,6 +21,7 @@ const {
 
 vi.mock('@/services/jsTransformAgentClient', () => ({
   createJsTransformAgentSession: createJsTransformAgentSessionMock,
+  reportJsTransformAgentToolProgress: reportJsTransformAgentToolProgressMock,
   sendJsTransformAgentMessage: sendJsTransformAgentMessageMock,
   streamJsTransformAgentEvents: streamJsTransformAgentEventsMock,
   resolveJsTransformAgentToolResult: resolveJsTransformAgentToolResultMock,
@@ -29,6 +32,11 @@ vi.mock('@/services/jsTransformAgentClient', () => ({
 describe('useJsTransformAgent', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    streamJsTransformAgentEventsMock.mockImplementation(async (_sessionId: string, options?: { onOpen?: () => void }) => {
+      options?.onOpen?.()
+      return new Promise<void>(() => {})
+    })
+    reportJsTransformAgentToolProgressMock.mockResolvedValue({ ok: true })
   })
 
   it('creates a node-scoped session and sends the first message', async () => {
@@ -39,8 +47,6 @@ describe('useJsTransformAgent', () => {
       prompt: '把字符串日期转成月份字段',
     })
     sendJsTransformAgentMessageMock.mockResolvedValueOnce({ ok: true })
-    streamJsTransformAgentEventsMock.mockResolvedValueOnce(undefined)
-
     const store = useJsTransformAgent()
     store.inputText.value = '把字符串日期转成月份字段'
 
@@ -139,7 +145,6 @@ describe('useJsTransformAgent', () => {
       prompt: '先进入 agent',
     })
     sendJsTransformAgentMessageMock.mockResolvedValue({ ok: true })
-    streamJsTransformAgentEventsMock.mockResolvedValue(undefined)
     updateJsTransformAgentModeMock.mockResolvedValue({ ok: true })
 
     const store = useJsTransformAgent()
@@ -218,8 +223,6 @@ describe('useJsTransformAgent', () => {
       prompt: '把字符串日期转成月份字段',
     })
     sendJsTransformAgentMessageMock.mockResolvedValue({ ok: true })
-    streamJsTransformAgentEventsMock.mockResolvedValue(undefined)
-
     const store = useJsTransformAgent()
     const input = {
       mode: 'agent' as const,

@@ -144,11 +144,12 @@ export const abortJsTransformAgentRun = async (
 
 export const streamJsTransformAgentEvents = async (
   sessionId: string,
-  options: { onEvent?: (event: any) => void } = {},
+  options: { onOpen?: () => void; onEvent?: (event: any) => void; signal?: AbortSignal } = {},
 ) => {
   const response = await requestStream({
     url: `/js-transform-agent/sessions/${sessionId}/events`,
     method: 'GET',
+    signal: options.signal,
   })
   if (!isSuccessStatus(response.status)) {
     const payload = await readStreamPayload(response.data)
@@ -162,6 +163,8 @@ export const streamJsTransformAgentEvents = async (
   if (!response.data) {
     throw new Error('JS 节点 AI 事件流不可用')
   }
+
+  options.onOpen?.()
 
   const reader = response.data.getReader()
   const decoder = new TextDecoder()
@@ -187,6 +190,22 @@ export const streamJsTransformAgentEvents = async (
   if (trailing) {
     options.onEvent?.(JSON.parse(trailing))
   }
+}
+
+export const reportJsTransformAgentToolProgress = async (
+  sessionId: string,
+  toolCallId: string,
+) => {
+  const response = await httpClient.request({
+    url: `/js-transform-agent/sessions/${sessionId}/tool-progress`,
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    data: { toolCallId },
+  })
+
+  return readJsonOrThrow<{ ok: boolean }>(response, '续期 JS 节点 AI 工具执行失败')
 }
 
 export const resolveJsTransformAgentToolResult = async (
