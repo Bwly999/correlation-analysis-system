@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1920">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --text-main: #f8fafc;
+    --text-dim: #94a3b8;
+    --border: rgba(255, 255, 255, 0.08);
+    --blue: #38bdf8;
+    --indigo: #6366f1;
+    --teal: #22d3ee;
+    --emerald: #34d399;
+    --slate-bg: #0b0f19;
+  }
+  body {
+    margin: 0; padding: 0;
+    width: 1920px; height: 1080px;
+    overflow: hidden;
+    background: var(--slate-bg);
+    background-image: 
+      radial-gradient(circle at 10% 20%, rgba(56, 189, 248, 0.07) 0%, transparent 40%),
+      radial-gradient(circle at 90% 80%, rgba(99, 102, 241, 0.07) 0%, transparent 40%);
+    font-family: 'Plus Jakarta Sans', -apple-system, "PingFang SC", sans-serif;
+    color: var(--text-main);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Header */
+  .header {
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 90px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 80px;
+    border-bottom: 1px solid var(--border);
+  }
+  .header .slide-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 15px; font-weight: 500;
+    color: var(--text-dim);
+    letter-spacing: 0.05em;
+  }
+  .header .title {
+    font-size: 13px; font-weight: 600;
+    color: var(--text-dim);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .header .label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; font-weight: 500;
+    color: var(--blue);
+    letter-spacing: 0.08em;
+    padding: 4px 14px;
+    border: 1px solid rgba(56, 189, 248, 0.3);
+    border-radius: 100px;
+    background: rgba(56, 189, 248, 0.05);
+  }
+
+  /* Main Content */
+  .main {
+    position: absolute;
+    top: 90px; left: 0; right: 0; bottom: 80px;
+    display: flex;
+    padding: 60px 80px;
+    gap: 60px;
+  }
+
+  /* Split columns */
+  .col {
+    width: 50%;
+    display: flex;
+    flex-direction: column;
+  }
+  .col.divider {
+    border-left: 1px solid var(--border);
+    padding-left: 60px;
+  }
+
+  .section-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; font-weight: 700;
+    color: var(--blue);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+  h2 {
+    font-size: 40px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: #fff;
+    line-height: 1.25;
+    margin-bottom: 32px;
+  }
+
+  /* Plan Box Quote */
+  .quote-box {
+    background: rgba(99, 102, 241, 0.04);
+    border-left: 4px solid var(--indigo);
+    border-radius: 0 8px 8px 0;
+    padding: 16px 20px;
+    margin-bottom: 24px;
+    font-size: 14.5px;
+    line-height: 1.6;
+    color: #e2e8f0;
+  }
+  .quote-author {
+    display: block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--blue);
+    margin-top: 8px;
+    text-align: right;
+  }
+
+  /* Grid lists */
+  .card-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .card-item {
+    background: rgba(255, 255, 255, 0.01);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+    position: relative;
+    overflow: hidden;
+  }
+  .card-item::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; bottom: 0;
+    width: 4px;
+  }
+  .card-item.emerald::before { background: var(--emerald); }
+  .card-item.blue::before { background: var(--blue); }
+
+  .card-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+  .card-title {
+    font-size: 15.5px;
+    font-weight: 700;
+    color: #fff;
+  }
+  .card-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.05em;
+  }
+  .card-text {
+    font-size: 13px;
+    color: var(--text-dim);
+    line-height: 1.5;
+  }
+
+  /* Footer */
+  .footer {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 80px;
+    border-top: 1px solid var(--border);
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+  .footer .brand { font-weight: 600; font-family: 'JetBrains Mono', monospace; color: var(--text-main); }
+  .footer .label-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    color: var(--text-dim);
+    opacity: 0.7;
+  }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <span class="slide-num">07 / 07</span>
+  <span class="title">Engineer Role Shift &amp; Roadmap</span>
+  <span class="label">SUMMARY</span>
+</div>
+
+<!-- Main Content -->
+<div class="main">
+  <!-- Left Column: Outcomes -->
+  <div class="col">
+    <div class="section-label">// 范式跃迁 / PARADIGM SHIFT</div>
+    <h2>从“编写代码”到“设计环境”</h2>
+    
+    <div class="quote-box">
+      “永远不要让 Agent 在你审查和批准书面计划之前写代码。这种规划与执行的分离是我做的最重要的一件事。”
+      <span class="quote-author">—— Boris Tane (Cloudflare)</span>
+    </div>
+
+    <div class="card-list">
+      <div class="card-item emerald">
+        <div class="card-head">
+          <span class="card-title">零回归引入 (Store &amp; Node Refactoring)</span>
+          <span class="card-tag">STABILITY</span>
+        </div>
+        <div class="card-text">
+          在 30 余个节点的输入输出标准化改造以及 Pinia 核心状态库 <code>workflowStore</code> 重构中，100% 通过反馈断言网拦截，避免了任何存量功能损毁。
+        </div>
+      </div>
+
+      <div class="card-item emerald">
+        <div class="card-head">
+          <span class="card-title">规范自动收敛 (100% Code Cleanliness)</span>
+          <span class="card-tag">ALIGNMENT</span>
+        </div>
+        <div class="card-text">
+          全局 API 接口强制使用 Axios 统一实例 <code>httpClient.ts</code>，前端 CSS 编码强制执行 Slate-900 强调色 Slate/Blue 规则，清除了所有孤立 import 与悬空变量。
+        </div>
+      </div>
+
+      <div class="card-item emerald">
+        <div class="card-head">
+          <span class="card-title">自愈反馈提效 (60% Debug Reduction)</span>
+          <span class="card-tag">EFFICIENCY</span>
+        </div>
+        <div class="card-text">
+          测试自动召回与教学报错反馈构成了极速纠错机制，减少了约 60% 的人工终端输入与环境搭建时间，模型能够自主处理简单的 Linter 冲突。
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right Column: Future Roadmap -->
+  <div class="col divider">
+    <div class="section-label">// 规划与演进 / EVOLUTION ROADMAP</div>
+    <h2>Harness 平台演进规划</h2>
+    
+    <div class="card-list">
+      <div class="card-item blue">
+        <div class="card-head">
+          <span class="card-title">Playwright 交互沙箱 (Browser Automation)</span>
+          <span class="card-tag">UI TESTING</span>
+        </div>
+        <div class="card-text">
+          集成 Playwright 浏览器自动化 MCP 插件，使 Harness 具备在沙箱浏览器中测试 Vue Flow 画布、节点拖拽操作与连线拓扑的交互正确性的反馈闭环。
+        </div>
+      </div>
+
+      <div class="card-item blue">
+        <div class="card-head">
+          <span class="card-title">视觉批评模型 (LLM-as-a-Judge UI Checker)</span>
+          <span class="card-tag">CRITIQUE MODEL</span>
+        </div>
+        <div class="card-text">
+          在后馈门禁中引入多模态视觉模型审查层。Agent 改动界面后，系统自动截图投喂给视觉 Judge，分析 Slate-900 面板、ECharts 柱状图是否存在折叠与错位。
+        </div>
+      </div>
+
+      <div class="card-item blue">
+        <div class="card-head">
+          <span class="card-title">Drizzle DB 迁移隔离演练 (DB Sandbox)</span>
+          <span class="card-tag">DATABASE GUARD</span>
+        </div>
+        <div class="card-text">
+          构建隔离的测试型 MySQL 容器沙箱。在 Agent 执行 schema 更改前，自动执行 Dry-run 模拟迁移，保障 LowDB 本地开发与 production Drizzle SQL 变更的完全兼容。
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Footer -->
+<div class="footer">
+  <span class="brand">相关性分析系统 &middot; 2026</span>
+  <span class="label-tag">AGENT ENGINEERING HARNESS PLATFORM</span>
+</div>
+
+</body>
+</html>

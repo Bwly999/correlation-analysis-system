@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1920">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --text-main: #f8fafc;
+    --text-dim: #94a3b8;
+    --border: rgba(255, 255, 255, 0.08);
+    --blue: #38bdf8;
+    --indigo: #6366f1;
+    --teal: #22d3ee;
+    --slate-bg: #0b0f19;
+  }
+  body {
+    margin: 0; padding: 0;
+    width: 1920px; height: 1080px;
+    overflow: hidden;
+    background: var(--slate-bg);
+    background-image: 
+      radial-gradient(circle at 10% 20%, rgba(56, 189, 248, 0.07) 0%, transparent 40%),
+      radial-gradient(circle at 90% 80%, rgba(99, 102, 241, 0.07) 0%, transparent 40%);
+    font-family: 'Plus Jakarta Sans', -apple-system, "PingFang SC", sans-serif;
+    color: var(--text-main);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Header */
+  .header {
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 90px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 80px;
+    border-bottom: 1px solid var(--border);
+  }
+  .header .slide-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 15px; font-weight: 500;
+    color: var(--text-dim);
+    letter-spacing: 0.05em;
+  }
+  .header .title {
+    font-size: 13px; font-weight: 600;
+    color: var(--text-dim);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .header .label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; font-weight: 500;
+    color: var(--blue);
+    letter-spacing: 0.08em;
+    padding: 4px 14px;
+    border: 1px solid rgba(56, 189, 248, 0.3);
+    border-radius: 100px;
+    background: rgba(56, 189, 248, 0.05);
+  }
+
+  /* Main Content */
+  .main {
+    position: absolute;
+    top: 90px; left: 0; right: 0; bottom: 80px;
+    display: flex;
+    padding: 50px 80px;
+    gap: 50px;
+  }
+
+  /* Left Column */
+  .left {
+    width: 48%;
+    display: flex;
+    flex-direction: column;
+  }
+  .section-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; font-weight: 700;
+    color: var(--teal);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+  h2 {
+    font-size: 38px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: #fff;
+    line-height: 1.25;
+    margin-bottom: 24px;
+  }
+  .desc {
+    font-size: 15px;
+    color: var(--text-dim);
+    line-height: 1.6;
+    margin-bottom: 30px;
+  }
+
+  /* Context Tier Box */
+  .tiers-box {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .tier-row {
+    background: rgba(255,255,255,0.01);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    display: flex;
+    gap: 20px;
+    align-items: center;
+  }
+  .tier-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px; font-weight: 700;
+    color: var(--teal);
+    background: rgba(34, 211, 238, 0.08);
+    width: 60px; height: 48px;
+    border-radius: 6px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .tier-num span { font-size: 9px; opacity: 0.6; font-weight: normal; }
+  .tier-body { flex: 1; }
+  .tier-title {
+    font-size: 14.5px;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 4px;
+  }
+  .tier-text {
+    font-size: 12.5px;
+    color: var(--text-dim);
+    line-height: 1.45;
+  }
+  .tier-text code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: #fff;
+    background: rgba(255,255,255,0.06);
+    padding: 1px 4px;
+    border-radius: 4px;
+  }
+
+  /* Right Column: specialized visualization */
+  .right {
+    width: 52%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    background: rgba(15, 23, 42, 0.3);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 40px;
+    position: relative;
+    overflow: hidden;
+  }
+  .right::before {
+    content: "DYNAMIC_ROUTING_SmartZone_0_40%";
+    position: absolute;
+    top: 20px; right: 20px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: var(--teal);
+    opacity: 0.5;
+    letter-spacing: 0.1em;
+  }
+
+  /* Specialization pipeline */
+  .spec-flow {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  .spec-step {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 14px 18px;
+    background: rgba(15, 23, 42, 0.85);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    position: relative;
+  }
+  .spec-step:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    bottom: -22px; left: 40px;
+    width: 1px; height: 22px;
+    border-left: 1px dashed rgba(56, 189, 248, 0.4);
+  }
+  .spec-icon {
+    width: 44px; height: 44px;
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px; font-weight: 700;
+    flex-shrink: 0;
+  }
+  .spec-step.blue .spec-icon { background: rgba(56, 189, 248, 0.1); color: var(--blue); border: 1px solid rgba(56, 189, 248, 0.25); }
+  .spec-step.indigo .spec-icon { background: rgba(99, 102, 241, 0.1); color: var(--indigo); border: 1px solid rgba(99, 102, 241, 0.25); }
+  .spec-step.teal .spec-icon { background: rgba(34, 211, 238, 0.1); color: var(--teal); border: 1px solid rgba(34, 211, 238, 0.25); }
+
+  .spec-body { flex: 1; }
+  .spec-title-text { font-size: 14px; font-weight: 700; color: #fff; margin-bottom: 2px; }
+  .spec-desc-text { font-size: 11.5px; color: var(--text-dim); line-height: 1.4; }
+  .spec-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    padding: 3px 8px;
+    border-radius: 100px;
+  }
+  .spec-step.blue .spec-tag { color: var(--blue); background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.15); }
+  .spec-step.indigo .spec-tag { color: var(--indigo); background: rgba(99, 102, 241, 0.08); border: 1px solid rgba(99, 102, 241, 0.15); }
+  .spec-step.teal .spec-tag { color: var(--teal); background: rgba(34, 211, 238, 0.08); border: 1px solid rgba(34, 211, 238, 0.15); }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <span class="slide-num">03 / 07</span>
+  <span class="title">Context Architecture &amp; Specialization</span>
+  <span class="label">PILLARS 1 &amp; 2</span>
+</div>
+
+<!-- Main Content -->
+<div class="main">
+  <div class="left">
+    <div class="section-label">// 支柱一 &amp; 支柱二 / CONTEXT &amp; SPECIALIZATION</div>
+    <h2>上下文分层与 Agent 角色特化</h2>
+    <p class="desc">为防范上下文过载（Dumb Zone），项目在多因子分析系统的开发中实践了<b>渐进式披露上下文</b>与<b>角色职责特化</b>，使 Agent 始终工作在前 40% 的 Smart Zone 内。</p>
+    
+    <div class="tiers-box">
+      <div class="tier-row">
+        <div class="tier-num">Tier 1<span>常驻层</span></div>
+        <div class="tier-body">
+          <div class="tier-title">全局规约: AGENTS.md / GEMINI.md</div>
+          <div class="tier-text">每次会话自动挂载。包含项目目录、开发命令与强制的架构分层顺序约束：<code>Types &rarr; Config &rarr; Repo &rarr; Service &rarr; Runtime &rarr; UI</code>。</div>
+        </div>
+      </div>
+
+      <div class="tier-row">
+        <div class="tier-num">Tier 2<span>按需层</span></div>
+        <div class="tier-body">
+          <div class="tier-title">技能路由与角色包: SKILL.md</div>
+          <div class="tier-text">当存在 1% 意图相关时触发路由。如 <code>huashu-design</code> 引入 Slate-900 暗色 SaaS 调色盘、组件 hover 动效及无占位图约束，接管默认提示词。</div>
+        </div>
+      </div>
+
+      <div class="tier-row">
+        <div class="tier-num">Tier 3<span>冷记忆</span></div>
+        <div class="tier-body">
+          <div class="tier-title">外部事实源与知识库 (Cold Memory)</div>
+          <div class="tier-text">针对复杂的 Vue Flow 拓扑编排、Pinia 架构与 Drizzle ORM，Agent 通过 <code>grep_search</code> 和 <code>read_file</code> 进行渐进式深度读取。</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="right">
+    <div class="spec-flow">
+      <!-- Research Role -->
+      <div class="spec-step blue">
+        <div class="spec-icon">RE</div>
+        <div class="spec-body">
+          <div class="spec-title-text">研究 Agent (Research Role)</div>
+          <div class="spec-desc-text">探索代码库、分析实现细节。例如分析 <code>src/nodes/registry.ts</code> 节点注册及 API 路由。拥有只读工具权限，防止文件篡改。</div>
+        </div>
+        <span class="spec-tag">READ ONLY</span>
+      </div>
+
+      <!-- Execute Role -->
+      <div class="spec-step indigo">
+        <div class="spec-icon">EX</div>
+        <div class="spec-body">
+          <div class="spec-title-text">执行 Agent (Execute Role)</div>
+          <div class="spec-desc-text">限定仅能修改与目标任务强关联的模块，如修改 <code>src/components/workflow/config/</code> 以支持特定节点属性配置。</div>
+        </div>
+        <span class="spec-tag">CONTAINED WRITE</span>
+      </div>
+
+      <!-- Review & Clean Role -->
+      <div class="spec-step teal">
+        <div class="spec-icon">RV</div>
+        <div class="spec-body">
+          <div class="spec-title-text">审查与垃圾回收 (Review &amp; Clean Role)</div>
+          <div class="spec-desc-text">审查代码，运行 custom linter。在前端移除因修改而失效的悬空 import 和未使用的 Pinia mutations，对抗项目熵增。</div>
+        </div>
+        <span class="spec-tag">REFRACTOR &amp; GC</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Footer -->
+<div class="footer">
+  <span class="brand">相关性分析系统 &middot; 2026</span>
+  <span class="label-tag">AGENT ENGINEERING HARNESS PLATFORM</span>
+</div>
+
+</body>
+</html>

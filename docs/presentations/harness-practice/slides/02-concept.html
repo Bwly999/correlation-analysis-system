@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1920">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --text-main: #f8fafc;
+    --text-dim: #94a3b8;
+    --border: rgba(255, 255, 255, 0.08);
+    --blue: #38bdf8;
+    --indigo: #6366f1;
+    --teal: #22d3ee;
+    --emerald: #34d399;
+    --slate-bg: #0b0f19;
+  }
+  body {
+    margin: 0; padding: 0;
+    width: 1920px; height: 1080px;
+    overflow: hidden;
+    background: var(--slate-bg);
+    background-image: 
+      radial-gradient(circle at 10% 20%, rgba(56, 189, 248, 0.07) 0%, transparent 40%),
+      radial-gradient(circle at 90% 80%, rgba(99, 102, 241, 0.07) 0%, transparent 40%);
+    font-family: 'Plus Jakarta Sans', -apple-system, "PingFang SC", sans-serif;
+    color: var(--text-main);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Header */
+  .header {
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 90px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 80px;
+    border-bottom: 1px solid var(--border);
+  }
+  .header .slide-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 15px; font-weight: 500;
+    color: var(--text-dim);
+    letter-spacing: 0.05em;
+  }
+  .header .title {
+    font-size: 13px; font-weight: 600;
+    color: var(--text-dim);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .header .label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; font-weight: 500;
+    color: var(--blue);
+    letter-spacing: 0.08em;
+    padding: 4px 14px;
+    border: 1px solid rgba(56, 189, 248, 0.3);
+    border-radius: 100px;
+    background: rgba(56, 189, 248, 0.05);
+  }
+
+  /* Main Content */
+  .main {
+    position: absolute;
+    top: 90px; left: 0; right: 0; bottom: 80px;
+    display: flex;
+    padding: 50px 80px;
+    gap: 60px;
+  }
+
+  /* Left Column */
+  .left {
+    width: 46%;
+    display: flex;
+    flex-direction: column;
+  }
+  .section-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; font-weight: 700;
+    color: var(--blue);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+  h2 {
+    font-size: 38px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: #fff;
+    line-height: 1.25;
+    margin-bottom: 20px;
+  }
+  .desc {
+    font-size: 15px;
+    color: var(--text-dim);
+    line-height: 1.65;
+    margin-bottom: 30px;
+  }
+
+  /* Formula box */
+  .formula-box {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-top: auto;
+  }
+  .formula-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .formula-part {
+    text-align: center;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    font-size: 18px;
+  }
+  .formula-part.agent { background: linear-gradient(135deg, var(--blue), var(--indigo)); color: #fff; }
+  .formula-part.model { border: 1px solid rgba(255,255,255,0.15); color: var(--text-dim); }
+  .formula-part.harness { border: 1px solid var(--teal); color: var(--teal); background: rgba(34, 211, 238, 0.05); }
+  .formula-sign { font-size: 20px; font-weight: 300; color: var(--text-dim); }
+
+  .formula-desc {
+    font-size: 13px;
+    color: var(--text-dim);
+    line-height: 1.5;
+  }
+
+  /* Right Column */
+  .right {
+    width: 54%;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 20px;
+  }
+  .metric-card {
+    background: rgba(15, 23, 42, 0.45);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    transition: all 0.3s;
+  }
+  .metric-card:hover {
+    border-color: rgba(99, 102, 241, 0.25);
+    background: rgba(15, 23, 42, 0.6);
+  }
+  .metric-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--blue);
+    background: rgba(56, 189, 248, 0.08);
+    border: 1px solid rgba(56, 189, 248, 0.2);
+    width: 90px; height: 90px;
+    border-radius: 12px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    line-height: 1.1;
+  }
+  .metric-badge span {
+    font-size: 10px;
+    color: var(--text-dim);
+    font-weight: 500;
+  }
+  .metric-body {
+    flex: 1;
+  }
+  .metric-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 6px;
+  }
+  .metric-text {
+    font-size: 13px;
+    color: var(--text-dim);
+    line-height: 1.5;
+  }
+
+  /* Footer */
+  .footer {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 80px;
+    border-top: 1px solid var(--border);
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+  .footer .brand { font-weight: 600; font-family: 'JetBrains Mono', monospace; color: var(--text-main); }
+  .footer .label-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    color: var(--text-dim);
+    opacity: 0.7;
+  }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <span class="slide-num">02 / 07</span>
+  <span class="title">Theory &amp; Context Sweet Spot</span>
+  <span class="label">HARNESS BASICS</span>
+</div>
+
+<!-- Main Content -->
+<div class="main">
+  <div class="left">
+    <div class="section-label">// 1. 什么是 HARNESS ENGINEERING</div>
+    <h2>马具与操作系统：模型能力并非瓶颈</h2>
+    <p class="desc">"Harness"本意是马具（缰绳与鞍具）。LLM 就像蛮力十足但方向感弱的野马，Harness Engineering 则是约束、反馈与可测量的控制体系。
+    <br><br>
+    业界实验（Can.ac 与 LangChain）验证了核心论断：<b>瓶颈在于基础设施，而非智能水平。</b>在纠结模型权重前，优化 Harness 往往能带来数倍的投资回报率。
+    </p>
+    
+    <div class="formula-box">
+      <div class="formula-row">
+        <div class="formula-part agent">Agent</div>
+        <div class="formula-sign">=</div>
+        <div class="formula-part model">Model (CPU)</div>
+        <div class="formula-sign">+</div>
+        <div class="formula-part harness">Harness (OS)</div>
+      </div>
+      <div class="formula-desc">
+        模型提供原始代码生成蛮力；Harness 包含上下文过滤、架构约束、本地运行沙箱及单元测试网，避免野马脱缰，提供确定性的工程闭环。
+      </div>
+    </div>
+  </div>
+
+  <div class="right">
+    <div class="metric-card">
+      <div class="metric-badge">68%<span>vs 6.7%</span></div>
+      <div class="metric-body">
+        <div class="metric-title">Can.ac 实验: 工具格式改动引发质变</div>
+        <div class="metric-text">
+          在完全不修改模型权重的前提下，仅将 Harness 暴露的编辑工具格式与返回形式做标准化优化，同一模型（Grok Code Fast 1）的基准分数便从 6.7% 提升至 68.3%。
+        </div>
+      </div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-badge">Top5<span>vs Top30</span></div>
+      <div class="metric-body">
+        <div class="metric-title">LangChain 实验: 终端基准跃升</div>
+        <div class="metric-text">
+          在 Terminal Bench 2.0 评测中，仅通过改进 Agent Harness 的运行与约束机制，在模型未变的前提下得分拉升 13.7 分，排名从第 30 名跃升至第 5 名。
+        </div>
+      </div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-badge">40%<span>Sweet Spot</span></div>
+      <div class="metric-body">
+        <div class="metric-title">上下文甜蜜区 (Smart Zone vs Dumb Zone)</div>
+        <div class="metric-text">
+          以 168K 上下文为例，前 40% 是高推理的 Smart Zone；一旦塞入过多元数据与历史，填满度超 40% 即跌入 Dumb Zone，引发幻觉、死循环和低质工具调用。
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Footer -->
+<div class="footer">
+  <span class="brand">相关性分析系统 &middot; 2026</span>
+  <span class="label-tag">AGENT ENGINEERING HARNESS PLATFORM</span>
+</div>
+
+</body>
+</html>

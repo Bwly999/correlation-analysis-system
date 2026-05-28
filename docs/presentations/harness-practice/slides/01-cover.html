@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1920">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --text-main: #f8fafc;
+    --text-dim: #94a3b8;
+    --border: rgba(255, 255, 255, 0.08);
+    --blue: #38bdf8;
+    --indigo: #6366f1;
+    --teal: #22d3ee;
+    --slate-bg: #0b0f19;
+  }
+  body {
+    margin: 0; padding: 0;
+    width: 1920px; height: 1080px;
+    overflow: hidden;
+    background: var(--slate-bg);
+    background-image: 
+      radial-gradient(circle at 15% 25%, rgba(56, 189, 248, 0.08) 0%, transparent 40%),
+      radial-gradient(circle at 85% 75%, rgba(99, 102, 241, 0.08) 0%, transparent 40%);
+    font-family: 'Plus Jakarta Sans', -apple-system, "PingFang SC", sans-serif;
+    color: var(--text-main);
+    -webkit-font-smoothing: antialiased;
+    position: relative;
+  }
+
+  /* Grid lines overlay */
+  .grid-overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-image: 
+      linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+    background-size: 50px 50px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Header */
+  .header {
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 90px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 80px;
+    border-bottom: 1px solid var(--border);
+    z-index: 10;
+  }
+  .header .slide-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 15px; font-weight: 500;
+    color: var(--text-dim);
+    letter-spacing: 0.05em;
+  }
+  .header .title {
+    font-size: 13px; font-weight: 600;
+    color: var(--text-dim);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .header .label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; font-weight: 500;
+    color: var(--blue);
+    letter-spacing: 0.08em;
+    padding: 4px 14px;
+    border: 1px solid rgba(56, 189, 248, 0.3);
+    border-radius: 100px;
+    background: rgba(56, 189, 248, 0.05);
+  }
+
+  /* Main Container */
+  .main {
+    position: absolute;
+    top: 90px; left: 0; right: 0; bottom: 80px;
+    display: flex;
+    padding: 0 80px;
+    align-items: center;
+    z-index: 5;
+  }
+
+  /* Left: Description */
+  .left {
+    width: 53%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding-right: 40px;
+  }
+  .kicker {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--blue);
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .kicker::before {
+    content: '';
+    display: inline-block;
+    width: 24px; height: 1px;
+    background: var(--blue);
+  }
+  h1 {
+    font-size: 60px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+    background: linear-gradient(135deg, #ffffff 40%, #94a3b8 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 24px;
+  }
+  .subtitle {
+    font-size: 20px;
+    color: var(--text-dim);
+    line-height: 1.6;
+    margin-bottom: 56px;
+    max-width: 760px;
+    font-weight: 300;
+  }
+
+  .pillars {
+    display: flex;
+    gap: 20px;
+  }
+  .pillar-card {
+    flex: 1;
+    background: rgba(15, 23, 42, 0.45);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    position: relative;
+    overflow: hidden;
+  }
+  .pillar-card:hover {
+    border-color: rgba(56, 189, 248, 0.3);
+    background: rgba(15, 23, 42, 0.6);
+    transform: translateY(-5px);
+  }
+  .pillar-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; height: 3px;
+    background: linear-gradient(90deg, var(--indigo), var(--blue));
+    opacity: 0.7;
+  }
+  .pillar-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 6px;
+  }
+  .pillar-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--blue);
+    letter-spacing: 0.05em;
+  }
+
+  /* Right Side: Visual Graphic */
+  .right {
+    width: 47%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .visual-container {
+    width: 100%;
+    max-width: 680px;
+    position: relative;
+  }
+
+  /* Footer */
+  .footer {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 80px;
+    border-top: 1px solid var(--border);
+    font-size: 13px;
+    color: var(--text-dim);
+    z-index: 10;
+  }
+  .footer .brand { font-weight: 600; font-family: 'JetBrains Mono', monospace; color: var(--text-main); }
+  .footer .label-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    color: var(--text-dim);
+    opacity: 0.7;
+  }
+</style>
+</head>
+<body>
+
+<div class="grid-overlay"></div>
+
+<!-- Header -->
+<div class="header">
+  <span class="slide-num">01 / 07</span>
+  <span class="title">AI Agent Engineering Spec</span>
+  <span class="label">HARNESS PRACTICE</span>
+</div>
+
+<!-- Main Content -->
+<div class="main">
+  <div class="left">
+    <div class="kicker">多因子相关性分析系统 / CASE STUDY</div>
+    <h1>从“概率决策”到“确定交付”:<br>项目的 Harness 工程实践</h1>
+    <p class="subtitle">在复杂的 Vue Flow 拓扑编排、MySQL/LowDB 数据存储与多算法分析网关研发中，通过构建三层上下文、文件级状态记忆与红绿测试网，将大模型蛮力收敛为高确定性工程产出。</p>
+    
+    <div class="pillars">
+      <div class="pillar-card">
+        <div class="pillar-title">3层上下文 (Tiered Context)</div>
+        <div class="pillar-tag">AGENTS.md &amp; SKILL.md</div>
+      </div>
+      <div class="pillar-card">
+        <div class="pillar-title">持久化记忆 (Memory)</div>
+        <div class="pillar-tag">Progress Files &amp; Git Log</div>
+      </div>
+      <div class="pillar-card">
+        <div class="pillar-title">结构执行 (Execution Gate)</div>
+        <div class="pillar-tag">Vitest &amp; Planning Mode</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="right">
+    <div class="visual-container">
+      <svg viewBox="0 0 600 500" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="300" cy="250" r="165" fill="url(#radialGlow)" opacity="0.35" />
+        
+        <!-- Rotating ring 1 -->
+        <circle cx="300" cy="250" r="190" stroke="var(--blue)" stroke-width="1" stroke-dasharray="20,40" opacity="0.3">
+          <animateTransform attributeName="transform" type="rotate" from="0 300 250" to="360 300 250" dur="25s" repeatCount="indefinite"/>
+        </circle>
+        
+        <!-- Rotating ring 2 -->
+        <circle cx="300" cy="250" r="150" stroke="var(--indigo)" stroke-width="1.5" stroke-dasharray="70,100,30,50" opacity="0.5">
+          <animateTransform attributeName="transform" type="rotate" from="360 300 250" to="0 300 250" dur="18s" repeatCount="indefinite"/>
+        </circle>
+
+        <!-- Inner circle -->
+        <circle cx="300" cy="250" r="105" fill="rgba(15, 23, 42, 0.85)" stroke="rgba(255,255,255,0.08)" stroke-width="2"/>
+        
+        <!-- Center Core: LLM Agent -->
+        <circle cx="300" cy="250" r="45" fill="rgba(56, 189, 248, 0.1)" stroke="var(--blue)" stroke-width="2" />
+        <text x="300" y="244" text-anchor="middle" fill="#fff" font-size="11" font-family="JetBrains Mono, monospace" font-weight="700" letter-spacing="0.05em">MODEL</text>
+        <text x="300" y="260" text-anchor="middle" fill="var(--blue)" font-size="13" font-family="JetBrains Mono, monospace" font-weight="800">GEMINI / CLAUDE</text>
+        
+        <!-- Outer Harness nodes (Project specific) -->
+        <!-- Node 1: Context Architecture -->
+        <g transform="translate(300, 65)">
+          <rect x="-85" y="-18" width="170" height="36" rx="6" fill="rgba(15, 23, 42, 0.95)" stroke="var(--teal)" stroke-width="1.5" />
+          <text x="0" y="5" text-anchor="middle" fill="#fff" font-size="11.5" font-weight="700">3-Tier Context</text>
+          <circle cx="0" cy="-18" r="3.5" fill="var(--teal)" />
+          <line x1="0" y1="18" x2="0" y2="80" stroke="var(--teal)" stroke-width="1" stroke-dasharray="3,3" />
+        </g>
+
+        <!-- Node 2: Persistent State -->
+        <g transform="translate(100, 315)">
+          <rect x="-85" y="-18" width="170" height="36" rx="6" fill="rgba(15, 23, 42, 0.95)" stroke="var(--indigo)" stroke-width="1.5" />
+          <text x="0" y="5" text-anchor="middle" fill="#fff" font-size="11.5" font-weight="700">Persistent State</text>
+          <circle cx="-85" cy="0" r="3.5" fill="var(--indigo)" />
+          <line x1="85" y1="0" x2="148" y2="-43" stroke="var(--indigo)" stroke-width="1" stroke-dasharray="3,3" />
+        </g>
+
+        <!-- Node 3: Vitest Feedback -->
+        <g transform="translate(500, 315)">
+          <rect x="-85" y="-18" width="170" height="36" rx="6" fill="rgba(15, 23, 42, 0.95)" stroke="var(--blue)" stroke-width="1.5" />
+          <text x="0" y="5" text-anchor="middle" fill="#fff" font-size="11.5" font-weight="700">Feedback Gate</text>
+          <circle cx="85" cy="0" r="3.5" fill="var(--blue)" />
+          <line x1="-85" y1="0" x2="-148" y2="-43" stroke="var(--blue)" stroke-width="1" stroke-dasharray="3,3" />
+        </g>
+
+        <path id="curve" d="M 120 250 A 180 180 0 0 1 480 250" fill="none" />
+        <text font-family="JetBrains Mono" font-size="10.5" fill="var(--text-dim)" letter-spacing="3.5px" opacity="0.65">
+          <textPath href="#curve" startOffset="20%">FACTOR CORRELATION SYSTEM HARNESS</textPath>
+        </text>
+
+        <defs>
+          <radialGradient id="radialGlow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="var(--blue)" />
+            <stop offset="100%" stop-color="transparent" />
+          </radialGradient>
+        </defs>
+      </svg>
+    </div>
+  </div>
+</div>
+
+<!-- Footer -->
+<div class="footer">
+  <span class="brand">相关性分析系统 &middot; 2026</span>
+  <span class="label-tag">AGENT ENGINEERING HARNESS PLATFORM</span>
+</div>
+
+</body>
+</html>

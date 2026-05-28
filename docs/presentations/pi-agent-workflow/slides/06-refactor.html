@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1920">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Outfit:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg-page: #08080a;
+    --text-main: #ffffff;
+    --text-dim: #71717a;
+    --border: rgba(255, 255, 255, 0.08);
+    --accent: #3b82f6;
+    --phosphor-blue: #60a5fa;
+    --phosphor-mint: #4ade80;
+    --phosphor-amber: #fbbf24;
+    --phosphor-rose: #fb7185;
+    --glass: rgba(18, 18, 22, 0.8);
+  }
+  
+  body {
+    margin: 0; padding: 0; width: 1920px; height: 1080px; overflow: hidden; background: var(--bg-page);
+    font-family: 'Plus Jakarta Sans', sans-serif; color: var(--text-main); -webkit-font-smoothing: antialiased; position: relative;
+  }
+
+  body::after {
+    content: ''; position: absolute; inset: 0; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3%3Ffilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+    opacity: 0.04; pointer-events: none; z-index: 100;
+  }
+
+  .bg-decor { position: absolute; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
+  .bg-grid {
+    position: absolute; inset: 0; background-image: linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 60px 60px; opacity: 0.15; mask-image: radial-gradient(circle at 50% 50%, black, transparent 90%);
+  }
+
+  .header {
+    position: absolute; top: 0; left: 0; right: 0; height: 100px; display: flex; align-items: center; justify-content: space-between; padding: 0 80px; z-index: 10;
+  }
+  .header .slide-num {
+    font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 700; color: var(--accent);
+    background: rgba(59, 130, 246, 0.1); padding: 4px 12px; border-radius: 4px; border: 1px solid rgba(59, 130, 246, 0.2);
+  }
+  .header .title { font-family: 'Outfit', sans-serif; font-size: 16px; font-weight: 800; color: var(--text-main); letter-spacing: 0.2em; text-transform: uppercase; }
+
+  .main {
+    position: absolute; top: 100px; left: 80px; right: 80px; bottom: 80px; display: flex; flex-direction: column; gap: 40px; z-index: 5;
+  }
+
+  .split-view { display: flex; gap: 32px; flex: 1; }
+  .side { flex: 1; display: flex; flex-direction: column; gap: 20px; }
+  
+  .side-tag { font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 700; display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+  .side-tag::after { content: ''; height: 1px; flex: 1; background: var(--border); }
+  .side.ai .side-tag { color: var(--phosphor-amber); }
+  .side.human .side-tag { color: var(--phosphor-mint); }
+
+  .p-card {
+    background: var(--glass); border: 1.5px solid var(--border); padding: 32px; backdrop-filter: blur(20px); transition: all 0.4s ease; position: relative;
+  }
+  .p-card:hover { transform: translateY(-4px); background: rgba(24, 24, 27, 0.9); border-color: rgba(255, 255, 255, 0.15); }
+  
+  .pc-title { font-family: 'Outfit', sans-serif; font-size: 20px; font-weight: 800; margin-bottom: 12px; }
+  .pc-desc { font-size: 14px; color: var(--text-dim); line-height: 1.6; }
+
+  .git-history {
+    background: #000; border: 1.5px solid var(--border); border-radius: 4px; padding: 32px; display: flex; flex-direction: column; gap: 20px;
+  }
+  .gh-header { display: flex; justify-content: space-between; align-items: center; }
+  .gh-title { font-family: 'Outfit', sans-serif; font-size: 14px; font-weight: 800; color: var(--accent); text-transform: uppercase; letter-spacing: 0.1em; }
+  .gh-list { display: flex; flex-direction: column; gap: 12px; }
+  .gh-item { font-family: 'JetBrains Mono', monospace; font-size: 13px; display: flex; align-items: center; gap: 20px; padding: 12px 16px; background: rgba(255,255,255,0.02); border: 1px solid var(--border); }
+  .gh-item:hover { border-color: var(--accent); background: rgba(59, 130, 246, 0.05); }
+  .gh-hash { color: #52525b; }
+  .gh-tag { color: var(--phosphor-rose); font-weight: 700; }
+  .gh-msg { color: var(--text-main); flex: 1; }
+  .gh-impact { color: var(--phosphor-amber); font-size: 11px; font-weight: 700; }
+
+  .footer {
+    position: absolute; bottom: 0; left: 0; right: 0; height: 80px; display: flex; align-items: center; justify-content: space-between; padding: 0 80px;
+    border-top: 1px solid var(--border); background: rgba(8, 8, 10, 0.8); backdrop-filter: blur(10px);
+  }
+  .footer .brand { font-family: 'Outfit', sans-serif; font-size: 14px; font-weight: 700; color: var(--text-dim); }
+</style>
+</head>
+<body>
+
+<div class="bg-decor">
+  <div class="bg-grid"></div>
+</div>
+
+<div class="header">
+  <span class="slide-num">MOD-06</span>
+  <span class="title">Architecture Entropy</span>
+</div>
+
+<div class="main">
+  <div class="split-view">
+    <!-- AI 侧 -->
+    <div class="side ai">
+      <div class="side-tag">AI 原生行为: 增量偏差</div>
+      <div class="p-card">
+        <div class="pc-title" style="color: var(--phosphor-amber)">代码堆叠偏好</div>
+        <p class="pc-desc">AI 倾向于追加代码（Append）而非重构（Refactor）。为了满足单次指令，它常会新增局部变量或辅助函数，导致逻辑碎片化。</p>
+      </div>
+      <div class="p-card">
+        <div class="pc-title" style="color: var(--phosphor-amber)">局部最优陷阱</div>
+        <p class="pc-desc">AI 擅长解决局部问题，但受限于上下文窗口，很难意识到新增逻辑与 50 个文件外的既有模式存在架构冲突。</p>
+      </div>
+    </div>
+
+    <!-- 人类侧 -->
+    <div class="side human">
+      <div class="side-tag">人类核心职责: 架构收口</div>
+      <div class="p-card">
+        <div class="pc-title" style="color: var(--phosphor-mint)">全局审视与修剪</div>
+        <p class="pc-desc">人类开发者必须定期进行全域扫描，识别并移除那些 AI 永远不敢主动删除的“僵尸模块”与冗余抽象。</p>
+      </div>
+      <div class="p-card">
+        <div class="pc-title" style="color: var(--phosphor-mint)">人机协作呼吸感</div>
+        <p class="pc-desc">AI 负责快速铺设功能（扩张），人类负责周期性梳理与收束（收口）。这种“一呼一吸”是高质量工程的核心特质。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Git 记录 -->
+  <div class="git-history">
+    <div class="gh-header">
+      <div class="gh-title">人工架构收口实录 // REFACTOR_LOG</div>
+      <div style="font-size: 10px; color: var(--text-dim); font-family: 'JetBrains Mono', monospace;">REAL_HISTORY_ANALYSIS</div>
+    </div>
+    <div class="gh-list">
+      <div class="gh-item">
+        <span class="gh-hash">b6b2c34</span>
+        <span class="gh-tag">[REF]</span>
+        <span class="gh-msg">收口 Pi Agent 链路并移除旧 AI 架构</span>
+        <span class="gh-impact">架构大扫除</span>
+      </div>
+      <div class="gh-item">
+        <span class="gh-hash">83b7460</span>
+        <span class="gh-tag">[REF]</span>
+        <span class="gh-msg">移除 opencode 无用代码与调试链路计划</span>
+        <span class="gh-impact">死代码修剪</span>
+      </div>
+      <div class="gh-item">
+        <span class="gh-hash">c14cf08</span>
+        <span class="gh-tag">[REF]</span>
+        <span class="gh-msg">重构 HTTP 服务底层架构 (Fastify 迁移)</span>
+        <span class="gh-impact">基础设施升级</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="footer">
+  <span class="brand">相关性分析系统 // Blueprints v2.0</span>
+</div>
+
+</body>
+</html>

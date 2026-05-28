@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1920">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Outfit:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg-page: #08080a;
+    --text-main: #ffffff;
+    --text-dim: #71717a;
+    --border: rgba(255, 255, 255, 0.08);
+    --accent: #3b82f6;
+    --phosphor-blue: #60a5fa;
+    --phosphor-mint: #4ade80;
+    --phosphor-rose: #fb7185;
+    --phosphor-amber: #fbbf24;
+    --glass: rgba(18, 18, 22, 0.8);
+  }
+
+  body {
+    margin: 0; padding: 0;
+    width: 1920px; height: 1080px;
+    overflow: hidden;
+    background: var(--bg-page);
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    color: var(--text-main);
+    -webkit-font-smoothing: antialiased;
+    position: relative;
+  }
+
+  /* 噪点纹理叠加 */
+  body::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3%3Ffilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+    opacity: 0.04;
+    pointer-events: none;
+    z-index: 100;
+  }
+
+  /* 背景装饰 */
+  .bg-decor {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    overflow: hidden;
+  }
+  .bg-grid {
+    position: absolute;
+    inset: 0;
+    background-image: linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 60px 60px;
+    opacity: 0.2;
+    mask-image: radial-gradient(circle at 50% 50%, black, transparent 80%);
+  }
+  .bg-glow {
+    position: absolute;
+    top: -20%; right: -10%;
+    width: 60%; height: 80%;
+    background: radial-gradient(circle, rgba(59, 130, 246, 0.08) 0%, transparent 70%);
+    filter: blur(100px);
+  }
+
+  /* 页眉 */
+  .header {
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 100px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 80px;
+    z-index: 10;
+  }
+  .header .slide-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px; font-weight: 700;
+    color: var(--accent);
+    background: rgba(59, 130, 246, 0.1);
+    padding: 4px 12px;
+    border-radius: 4px;
+    border: 1px solid rgba(59, 130, 246, 0.2);
+  }
+  .header .title-group {
+    display: flex; flex-direction: column; align-items: flex-end;
+  }
+  .header .title {
+    font-family: 'Outfit', sans-serif;
+    font-size: 16px; font-weight: 800;
+    color: var(--text-main);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+  .header .subtitle {
+    font-size: 12px; color: var(--text-dim);
+    letter-spacing: 0.1em;
+    margin-top: 4px;
+  }
+
+  /* 布局容器 */
+  .container {
+    position: absolute;
+    top: 100px; left: 80px; right: 80px; bottom: 80px;
+    display: grid;
+    grid-template-columns: 1fr 480px;
+    gap: 60px;
+    z-index: 5;
+  }
+
+  /* 技能区域 */
+  .skills-wall {
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+  }
+  .section-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; font-weight: 700;
+    color: var(--accent);
+    display: flex; align-items: center; gap: 12px;
+  }
+  .section-tag::after {
+    content: ''; height: 1px; flex: 1; background: var(--border);
+  }
+
+  .skills-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(2, 1fr);
+    gap: 20px;
+    flex: 1;
+  }
+
+  /* 精准工业风卡片 */
+  .p-card {
+    background: var(--glass);
+    border: 1.5px solid var(--border);
+    position: relative;
+    padding: 32px;
+    display: flex;
+    flex-direction: column;
+    transition: all 0.4s cubic-bezier(0.2, 1, 0.2, 1);
+    backdrop-filter: blur(20px);
+    overflow: hidden;
+  }
+
+  /* 技术切口与边角 */
+  .p-card::before {
+    content: '';
+    position: absolute;
+    top: -1px; left: -1px;
+    width: 20px; height: 20px;
+    border-top: 2px solid var(--accent);
+    border-left: 2px solid var(--accent);
+    opacity: 0;
+    transition: all 0.3s ease;
+  }
+  .p-card:hover {
+    border-color: rgba(255, 255, 255, 0.15);
+    background: rgba(24, 24, 27, 0.9);
+    transform: translateY(-8px) scale(1.02);
+    box-shadow: 0 30px 60px -12px rgba(0, 0, 0, 0.8), 0 0 40px rgba(59, 130, 246, 0.1);
+  }
+  .p-card:hover::before {
+    opacity: 1;
+  }
+
+  /* 元数据标签 */
+  .p-meta {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; font-weight: 700;
+    color: var(--text-dim);
+    margin-bottom: 24px;
+    display: flex; justify-content: space-between;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+  .p-meta .id { color: var(--accent); }
+
+  .p-title {
+    font-family: 'Outfit', sans-serif;
+    font-size: 24px; font-weight: 800;
+    margin-bottom: 12px;
+    color: var(--text-main);
+    line-height: 1.1;
+  }
+  .p-desc {
+    font-size: 14px;
+    color: var(--text-dim);
+    line-height: 1.6;
+    margin-bottom: 24px;
+  }
+
+  .p-footer {
+    margin-top: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .p-chip {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; font-weight: 700;
+    padding: 4px 10px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border);
+    color: var(--text-main);
+    text-transform: uppercase;
+  }
+
+  /* 卡片变体 */
+  .p-card.blue .p-title { color: var(--phosphor-blue); }
+  .p-card.mint .p-title { color: var(--phosphor-mint); }
+  .p-card.rose .p-title { color: var(--phosphor-rose); }
+  .p-card.amber .p-title { color: var(--phosphor-amber); }
+
+  /* 侧边面板 */
+  .side-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 40px;
+  }
+
+  .flow-module {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border);
+    padding: 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  .module-title {
+    font-family: 'Outfit', sans-serif;
+    font-size: 14px; font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-main);
+    border-left: 3px solid var(--accent);
+    padding-left: 12px;
+  }
+
+  .step-item {
+    display: flex; gap: 20px;
+    position: relative;
+    padding-bottom: 20px;
+  }
+  .step-item:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    left: 14px; top: 30px; bottom: 0;
+    width: 1px;
+    background: var(--border);
+  }
+  .step-num {
+    width: 30px; height: 30px;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; font-weight: 700;
+    background: rgba(59, 130, 246, 0.05);
+    flex-shrink: 0;
+    z-index: 1;
+  }
+  .step-content .s-head {
+    font-size: 14px; font-weight: 700; color: var(--text-main);
+  }
+  .step-content .s-body {
+    font-size: 12px; color: var(--text-dim); margin-top: 4px; line-height: 1.5;
+  }
+
+  .rules-module {
+    flex: 1;
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.05), transparent);
+    border: 1px solid var(--border);
+    padding: 32px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 20px;
+  }
+  .rule-row {
+    display: flex; align-items: center; gap: 16px;
+  }
+  .rule-bullet {
+    width: 4px; height: 4px; background: var(--accent);
+    box-shadow: 0 0 10px var(--accent);
+  }
+  .rule-text {
+    font-size: 13px; color: var(--text-main); line-height: 1.6;
+  }
+  .rule-text code {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--phosphor-mint);
+    background: rgba(0,0,0,0.3);
+    padding: 2px 6px;
+    border: 1px solid var(--border);
+  }
+
+  /* 页脚栏 */
+  .footer {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    height: 80px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 80px;
+    border-top: 1px solid var(--border);
+    background: rgba(8, 8, 10, 0.8);
+    backdrop-filter: blur(10px);
+  }
+  .footer .brand {
+    font-family: 'Outfit', sans-serif;
+    font-size: 14px; font-weight: 700;
+    color: var(--text-dim);
+  }
+  .footer .status {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; color: var(--phosphor-mint);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .footer .status::before {
+    content: ''; width: 6px; height: 6px; background: var(--phosphor-mint); border-radius: 50%;
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(1.5); }
+    100% { opacity: 1; transform: scale(1); }
+  }
+</style>
+</head>
+<body>
+
+<div class="bg-decor">
+  <div class="bg-grid"></div>
+  <div class="bg-glow"></div>
+</div>
+
+<!-- 页眉 -->
+<div class="header">
+  <span class="slide-num">MOD-03</span>
+  <div class="title-group">
+    <span class="title">Skill 技能架构</span>
+    <span class="subtitle">针对 OPENCODE Agent 的精准指令集</span>
+  </div>
+</div>
+
+<!-- 主内容 -->
+<div class="container">
+  <div class="skills-wall">
+    <div class="section-tag">核心能力注册表</div>
+    <div class="skills-grid">
+      <!-- 卡片 1 -->
+      <div class="p-card rose">
+        <div class="p-meta">
+          <span>AESTHETIC_ENGINE</span>
+          <span class="id">SKL-01</span>
+        </div>
+        <div class="p-title">huashu-design</div>
+        <div class="p-desc">高保真 HTML 编排。专精于交互式幻灯片、动态原型及数据可视化呈现。</div>
+        <div class="p-footer">
+          <span class="p-chip">视觉</span>
+          <span class="p-chip">原型</span>
+        </div>
+      </div>
+
+      <!-- 卡片 2 -->
+      <div class="p-card mint">
+        <div class="p-meta">
+          <span>FRAMEWORK_SPEC</span>
+          <span class="id">SKL-02</span>
+        </div>
+        <div class="p-title">vue-best-practices</div>
+        <div class="p-desc">深厚 Vue 3 Composition API 功底。确保类型安全的状态管理与整洁的组件架构。</div>
+        <div class="p-footer">
+          <span class="p-chip">架构</span>
+          <span class="p-chip">VUE3</span>
+        </div>
+      </div>
+
+      <!-- 卡片 3 -->
+      <div class="p-card blue">
+        <div class="p-meta">
+          <span>UI_AUTHENTICITY</span>
+          <span class="id">SKL-03</span>
+        </div>
+        <div class="p-title">frontend-design</div>
+        <div class="p-desc">拒绝平庸 AI 审美的良方。以极致细节打造极具辨识度、生产级的前端界面。</div>
+        <div class="p-footer">
+          <span class="p-chip">高端</span>
+          <span class="p-chip">UI/UX</span>
+        </div>
+      </div>
+
+      <!-- 卡片 4 -->
+      <div class="p-card amber">
+        <div class="p-meta">
+          <span>STRATEGIC_DESIGN</span>
+          <span class="id">SKL-04</span>
+        </div>
+        <div class="p-title">brainstorming</div>
+        <div class="p-desc">实现前的架构映射。定义系统基调、数据库 Schema 及 UX 设计哲学。</div>
+        <div class="p-footer">
+          <span class="p-chip">规划</span>
+          <span class="p-chip">设计</span>
+        </div>
+      </div>
+
+      <!-- 卡片 5 -->
+      <div class="p-card">
+        <div class="p-meta">
+          <span>STABILITY_PROTO</span>
+          <span class="id">SKL-05</span>
+        </div>
+        <div class="p-title">tdd-quality</div>
+        <div class="p-desc">测试驱动的系统完整性。执行红-绿-重构循环，维持系统零退化。</div>
+        <div class="p-footer">
+          <span class="p-chip">QA</span>
+          <span class="p-chip">测试</span>
+        </div>
+      </div>
+
+      <!-- 卡片 6 -->
+      <div class="p-card">
+        <div class="p-meta">
+          <span>LOGIC_FORENSICS</span>
+          <span class="id">SKL-06</span>
+        </div>
+        <div class="p-title">systematic-debug</div>
+        <div class="p-desc">证据导向的问题解决。通过复现、假设并执行精准修复来处理复杂逻辑缺陷。</div>
+        <div class="p-footer">
+          <span class="p-chip">调试</span>
+          <span class="p-chip">分析</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="side-panel">
+    <div class="flow-module">
+      <div class="module-title">执行生命周期</div>
+      <div class="step-item">
+        <div class="step-num">01</div>
+        <div class="step-content">
+          <div class="s-head">意图捕获</div>
+          <div class="s-body">将自然语言需求解析为结构化开发意图。</div>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-num">02</div>
+        <div class="step-content">
+          <div class="s-head">技能激活</div>
+          <div class="s-body">OpenCode 路由将意图匹配至特定技术技能。</div>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-num">03</div>
+        <div class="step-content">
+          <div class="s-head">上下文注入</div>
+          <div class="s-body">`SKILL.md` 指令覆写默认 LLM 行为。</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="rules-module">
+      <div class="module-title">操作准则</div>
+      <div class="rule-row">
+        <div class="rule-bullet"></div>
+        <div class="rule-text">优先级：<code>用户</code> > <code>Skill</code> > <code>默认</code>。</div>
+      </div>
+      <div class="rule-row">
+        <div class="rule-bullet"></div>
+        <div class="rule-text">技能强制执行本地化、特化约束。</div>
+      </div>
+      <div class="rule-row">
+        <div class="rule-bullet"></div>
+        <div class="rule-text">故障安全路由确保系统稳定演进。</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 页脚 -->
+<div class="footer">
+  <span class="brand">相关性分析系统 // Blueprints v2.0</span>
+  <div class="status">系统状态: 正常 // Agent 运行中</div>
+</div>
+
+</body>
+</html>

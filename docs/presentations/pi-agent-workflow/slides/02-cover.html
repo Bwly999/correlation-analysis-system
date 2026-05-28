@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1920">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Outfit:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg-page: #08080a;
+    --text-main: #ffffff;
+    --text-dim: #71717a;
+    --border: rgba(255, 255, 255, 0.08);
+    --accent: #3b82f6;
+    --phosphor-blue: #60a5fa;
+    --phosphor-mint: #4ade80;
+    --phosphor-amber: #fbbf24;
+    --phosphor-violet: #a78bfa;
+    --glass: rgba(18, 18, 22, 0.8);
+  }
+  
+  body {
+    margin: 0; padding: 0; width: 1920px; height: 1080px; overflow: hidden; background: var(--bg-page);
+    font-family: 'Plus Jakarta Sans', sans-serif; color: var(--text-main); -webkit-font-smoothing: antialiased; position: relative;
+  }
+
+  body::after {
+    content: ''; position: absolute; inset: 0; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3%3Ffilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+    opacity: 0.04; pointer-events: none; z-index: 100;
+  }
+
+  .bg-decor { position: absolute; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
+  .bg-grid {
+    position: absolute; inset: 0; background-image: linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 60px 60px; opacity: 0.15; mask-image: radial-gradient(circle at 50% 50%, black, transparent 90%);
+  }
+
+  .header {
+    position: absolute; top: 0; left: 0; right: 0; height: 100px; display: flex; align-items: center; justify-content: space-between; padding: 0 80px; z-index: 10;
+  }
+  .header .slide-num {
+    font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 700; color: var(--accent);
+    background: rgba(59, 130, 246, 0.1); padding: 4px 12px; border-radius: 4px; border: 1px solid rgba(59, 130, 246, 0.2);
+  }
+  .header .title { font-family: 'Outfit', sans-serif; font-size: 16px; font-weight: 800; color: var(--text-main); letter-spacing: 0.2em; text-transform: uppercase; }
+
+  .main {
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; padding: 0 120px; z-index: 5;
+  }
+
+  .content-hero { width: 42%; display: flex; flex-direction: column; }
+  .hero-tag { font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 700; color: var(--phosphor-mint); margin-bottom: 24px; letter-spacing: 0.1em; }
+  .hero-title { font-family: 'Outfit', sans-serif; font-size: 72px; font-weight: 900; line-height: 1.1; margin-bottom: 32px; color: var(--text-main); letter-spacing: -0.04em; }
+  .hero-title span { background: linear-gradient(135deg, var(--accent) 0%, var(--phosphor-mint) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .hero-desc { font-size: 18px; color: var(--text-dim); line-height: 1.6; max-width: 600px; margin-bottom: 64px; }
+
+  .topic-row { display: flex; flex-direction: column; gap: 12px; }
+  .topic-card {
+    background: var(--glass); border: 1.5px solid var(--border); padding: 16px 24px; backdrop-filter: blur(20px); transition: all 0.4s ease; display: flex; align-items: center; gap: 20px;
+  }
+  .topic-card:hover { transform: translateX(12px); border-color: var(--accent); background: rgba(59, 130, 246, 0.05); }
+  .tc-num { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; color: var(--accent); }
+  .tc-name { font-size: 15px; font-weight: 800; color: var(--text-main); }
+
+  .right-visual { flex: 1; display: flex; justify-content: center; position: relative; padding-left: 60px; }
+  .diagram-container {
+    width: 840px; height: 620px; background: rgba(0,0,0,0.4); border: 1.5px solid var(--border); border-radius: 8px; padding: 40px; position: relative;
+    box-shadow: 0 40px 100px -20px rgba(0,0,0,0.9);
+  }
+  
+  .diagram-container svg { width: 100%; height: 100%; display: block; }
+
+  .footer {
+    position: absolute; bottom: 0; left: 0; right: 0; height: 80px; display: flex; align-items: center; justify-content: space-between; padding: 0 80px;
+    border-top: 1px solid var(--border); background: rgba(8, 8, 10, 0.8); backdrop-filter: blur(10px);
+  }
+  .footer .brand { font-family: 'Outfit', sans-serif; font-size: 14px; font-weight: 700; color: var(--text-dim); }
+</style>
+</head>
+<body>
+
+<div class="bg-decor">
+  <div class="bg-grid"></div>
+</div>
+
+<div class="header">
+  <span class="slide-num">MOD-02</span>
+  <span class="title">OpenCode Engineering Workflow</span>
+</div>
+
+<div class="main">
+  <div class="content-hero">
+    <div class="hero-tag">ENGINEERING_PRACTICE</div>
+    <h1 class="hero-title"><span>OpenCode</span> 驱动开发<br>工程实践体系</h1>
+    <p class="hero-desc">基于 OpenCode SDK 构建与演进系统的确定性工作流，消除 AI 生成的不确定性。</p>
+    
+    <div class="topic-row">
+      <div class="topic-card">
+        <span class="tc-num">01</span>
+        <div class="tc-name">Skill 技能体系</div>
+      </div>
+      <div class="topic-card">
+        <span class="tc-num">02</span>
+        <div class="tc-name">MCP 工具集成</div>
+      </div>
+      <div class="topic-card">
+        <span class="tc-num">03</span>
+        <div class="tc-name">契约与行为指导</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="right-visual">
+    <div class="diagram-container">
+      <svg viewBox="0 0 760 480" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <!-- Developer node -->
+        <rect x="10" y="20" width="180" height="64" rx="4" fill="#000" stroke="var(--phosphor-blue)" stroke-width="1.5"/>
+        <circle cx="42" cy="52" r="14" fill="rgba(59,130,246,0.1)"/>
+        <text x="42" y="56" text-anchor="middle" fill="var(--phosphor-blue)" font-size="13" font-family="JetBrains Mono, monospace" font-weight="700">D</text>
+        <text x="115" y="47" text-anchor="middle" fill="#fff" font-size="14" font-family="Outfit, sans-serif" font-weight="800">Developer</text>
+        <text x="115" y="64" text-anchor="middle" fill="#71717a" font-size="11" font-family="Plus Jakarta Sans, sans-serif">人类开发者</text>
+
+        <!-- Arrow: Developer -> OpenCode -->
+        <line x1="190" y1="52" x2="250" y2="52" stroke="var(--border)" stroke-width="1.5" stroke-dasharray="3,3"/>
+        <path d="M244,47 L254,52 L244,57 Z" fill="var(--phosphor-blue)"/>
+
+        <!-- OpenCode Core node -->
+        <rect x="260" y="10" width="220" height="84" rx="4" fill="#000" stroke="var(--phosphor-mint)" stroke-width="2"/>
+        <circle cx="295" cy="52" r="16" fill="rgba(74,222,128,0.1)"/>
+        <text x="295" y="57" text-anchor="middle" fill="var(--phosphor-mint)" font-size="14" font-family="JetBrains Mono, monospace" font-weight="700">OC</text>
+        <text x="385" y="46" text-anchor="middle" fill="#fff" font-size="15" font-family="Outfit, sans-serif" font-weight="900">OpenCode SDK</text>
+        <text x="385" y="65" text-anchor="middle" fill="#71717a" font-size="11" font-family="Plus Jakarta Sans, sans-serif">AI 编码中枢核心</text>
+
+        <!-- Arrow: OpenCode -> Capabilities -->
+        <line x1="480" y1="52" x2="540" y2="52" stroke="var(--border)" stroke-width="1.5" stroke-dasharray="3,3"/>
+        <path d="M534,47 L544,52 L534,57 Z" fill="var(--phosphor-blue)"/>
+
+        <!-- Capability group box -->
+        <rect x="550" y="0" width="180" height="114" rx="4" fill="rgba(255,255,255,0.02)" stroke="var(--border)" stroke-width="1.5" stroke-dasharray="4,3"/>
+        <text x="640" y="24" text-anchor="middle" fill="#71717a" font-size="9" font-family="JetBrains Mono, monospace" font-weight="700" letter-spacing="0.08em">CAPABILITIES</text>
+
+        <!-- Skills pill -->
+        <rect x="575" y="36" width="130" height="20" rx="10px" fill="rgba(59,130,246,0.05)" stroke="rgba(59,130,246,0.3)" stroke-width="1"/>
+        <text x="640" y="49" text-anchor="middle" fill="var(--phosphor-blue)" font-size="10" font-family="JetBrains Mono, monospace" font-weight="700">Skills 技能体系</text>
+
+        <!-- MCP pill -->
+        <rect x="575" y="60" width="130" height="20" rx="10px" fill="rgba(74,222,128,0.05)" stroke="rgba(74,222,128,0.3)" stroke-width="1"/>
+        <text x="640" y="73" text-anchor="middle" fill="var(--phosphor-mint)" font-size="10" font-family="JetBrains Mono, monospace" font-weight="700">MCP 工具集</text>
+
+        <!-- AGENTS.md pill -->
+        <rect x="575" y="84" width="130" height="20" rx="10px" fill="rgba(251,191,36,0.05)" stroke="rgba(251,191,36,0.3)" stroke-width="1"/>
+        <text x="640" y="97" text-anchor="middle" fill="var(--phosphor-amber)" font-size="10" font-family="JetBrains Mono, monospace" font-weight="700">AGENTS.md 契约</text>
+
+        <!-- Arrow down from OpenCode -->
+        <line x1="370" y1="94" x2="370" y2="134" stroke="var(--border)" stroke-width="1.5"/>
+        <path d="M365,130 L370,140 L375,130 Z" fill="var(--phosphor-blue)"/>
+
+        <!-- Process nodes row -->
+        <!-- Skill Routing -->
+        <rect x="40" y="146" width="180" height="56" rx="4" fill="#000" stroke="var(--border)" stroke-width="1"/>
+        <text x="140" y="168" text-anchor="middle" fill="#fff" font-size="13" font-family="Outfit, sans-serif" font-weight="800">Skill 路由</text>
+        <text x="140" y="184" text-anchor="middle" fill="#71717a" font-size="10" font-family="Plus Jakarta Sans, sans-serif">精准匹配特定领域技能</text>
+
+        <!-- Context -->
+        <rect x="280" y="146" width="180" height="56" rx="4" fill="#000" stroke="var(--border)" stroke-width="1"/>
+        <text x="380" y="168" text-anchor="middle" fill="#fff" font-size="13" font-family="Outfit, sans-serif" font-weight="800">MCP 环境整合</text>
+        <text x="380" y="184" text-anchor="middle" fill="#71717a" font-size="10" font-family="Plus Jakarta Sans, sans-serif">扩展外部系统能力边界</text>
+
+        <!-- Constraints -->
+        <rect x="520" y="146" width="180" height="56" rx="4" fill="#000" stroke="var(--border)" stroke-width="1"/>
+        <text x="620" y="168" text-anchor="middle" fill="#fff" font-size="13" font-family="Outfit, sans-serif" font-weight="800">AGENTS 行为契约</text>
+        <text x="620" y="184" text-anchor="middle" fill="#71717a" font-size="10" font-family="Plus Jakarta Sans, sans-serif">坚守零失误的开发法则</text>
+
+        <!-- Horizontal connector lines -->
+        <line x1="220" y1="174" x2="280" y2="174" stroke="var(--border)" stroke-width="1.2" stroke-dasharray="2,2"/>
+        <line x1="460" y1="174" x2="520" y2="174" stroke="var(--border)" stroke-width="1.2" stroke-dasharray="2,2"/>
+
+        <!-- Arrow down from process row -->
+        <line x1="370" y1="202" x2="370" y2="242" stroke="var(--border)" stroke-width="1.5"/>
+        <path d="M365,238 L370,248 L375,238 Z" fill="var(--phosphor-blue)"/>
+
+        <!-- Quality gate -->
+        <rect x="180" y="254" width="380" height="66" rx="4" fill="#000" stroke="var(--phosphor-rose)" stroke-width="1.5"/>
+        <text x="370" y="286" text-anchor="middle" fill="#fff" font-size="15" font-family="Outfit, sans-serif" font-weight="900">Quality Gate 质量测试闸</text>
+        <text x="370" y="306" text-anchor="middle" fill="#71717a" font-size="11" font-family="Plus Jakarta Sans, sans-serif">类型安全检查 + 单元测试覆盖 + 格式化</text>
+
+        <!-- Bottom outcome boxes -->
+        <line x1="370" y1="320" x2="370" y2="352" stroke="var(--border)" stroke-width="1.5"/>
+        <path d="M365,348 L370,358 L375,348 Z" fill="var(--phosphor-blue)"/>
+
+        <rect x="30" y="362" width="200" height="48" rx="4" fill="rgba(96,165,250,0.05)" stroke="var(--phosphor-blue)" stroke-width="1.5"/>
+        <text x="130" y="391" text-anchor="middle" fill="var(--phosphor-blue)" font-size="13" font-family="Outfit, sans-serif" font-weight="800">高确定性产出</text>
+
+        <rect x="280" y="362" width="200" height="48" rx="4" fill="rgba(74,222,128,0.05)" stroke="var(--phosphor-mint)" stroke-width="1.5"/>
+        <text x="380" y="391" text-anchor="middle" fill="var(--phosphor-mint)" font-size="13" font-family="Outfit, sans-serif" font-weight="800">高可维护性系统</text>
+
+        <rect x="530" y="362" width="200" height="48" rx="4" fill="rgba(251,191,36,0.05)" stroke="var(--phosphor-amber)" stroke-width="1.5"/>
+        <text x="630" y="391" text-anchor="middle" fill="var(--phosphor-amber)" font-size="13" font-family="Outfit, sans-serif" font-weight="800">无阻碍持续演进</text>
+      </svg>
+    </div>
+  </div>
+</div>
+
+<div class="footer">
+  <span class="brand">相关性分析系统 // Blueprints v2.1</span>
+</div>
+
+</body>
+</html>

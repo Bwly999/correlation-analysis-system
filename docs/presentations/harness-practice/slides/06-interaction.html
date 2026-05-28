@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1920">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --text-main: #f8fafc;
+    --text-dim: #94a3b8;
+    --border: rgba(255, 255, 255, 0.08);
+    --blue: #38bdf8;
+    --indigo: #6366f1;
+    --teal: #22d3ee;
+    --amber: #fbbf24;
+    --rose: #f43f5e;
+    --slate-bg: #0b0f19;
+  }
+  body {
+    margin: 0; padding: 0;
+    width: 1920px; height: 1080px;
+    overflow: hidden;
+    background: var(--slate-bg);
+    background-image: 
+      radial-gradient(circle at 10% 20%, rgba(56, 189, 248, 0.07) 0%, transparent 40%),
+      radial-gradient(circle at 90% 80%, rgba(99, 102, 241, 0.07) 0%, transparent 40%);
+    font-family: 'Plus Jakarta Sans', -apple-system, "PingFang SC", sans-serif;
+    color: var(--text-main);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Header */
+  .header {
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 90px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 80px;
+    border-bottom: 1px solid var(--border);
+  }
+  .header .slide-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 15px; font-weight: 500;
+    color: var(--text-dim);
+    letter-spacing: 0.05em;
+  }
+  .header .title {
+    font-size: 13px; font-weight: 600;
+    color: var(--text-dim);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .header .label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; font-weight: 500;
+    color: var(--blue);
+    letter-spacing: 0.08em;
+    padding: 4px 14px;
+    border: 1px solid rgba(56, 189, 248, 0.3);
+    border-radius: 100px;
+    background: rgba(56, 189, 248, 0.05);
+  }
+
+  /* Main Content */
+  .main {
+    position: absolute;
+    top: 90px; left: 0; right: 0; bottom: 80px;
+    display: flex;
+    padding: 50px 80px;
+    gap: 60px;
+  }
+
+  /* Left Column */
+  .left {
+    width: 48%;
+    display: flex;
+    flex-direction: column;
+  }
+  .section-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; font-weight: 700;
+    color: var(--blue);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+  h2 {
+    font-size: 38px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: #fff;
+    line-height: 1.25;
+    margin-bottom: 24px;
+  }
+  .desc {
+    font-size: 15px;
+    color: var(--text-dim);
+    line-height: 1.6;
+    margin-bottom: 30px;
+  }
+
+  .sandbox-points {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .sb-point {
+    background: rgba(255,255,255,0.01);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+  }
+  .sb-title {
+    font-size: 14.5px;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 4px;
+  }
+  .sb-desc {
+    font-size: 12.5px;
+    color: var(--text-dim);
+    line-height: 1.5;
+  }
+  .sb-desc code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 1px 4px;
+    border-radius: 3px;
+    color: #fff;
+  }
+
+  /* Right Column: Visual layers SVG */
+  .right {
+    width: 52%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(15, 23, 42, 0.3);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 40px;
+  }
+  .right svg {
+    width: 100%;
+    max-width: 600px;
+  }
+
+  /* Footer */
+  .footer {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 80px;
+    border-top: 1px solid var(--border);
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+  .footer .brand { font-weight: 600; font-family: 'JetBrains Mono', monospace; color: var(--text-main); }
+  .footer .label-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    color: var(--text-dim);
+    opacity: 0.7;
+  }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <span class="slide-num">06 / 07</span>
+  <span class="title">Active Feedback &amp; Security Shield</span>
+  <span class="label">HARNESS COMPONENTS</span>
+</div>
+
+<!-- Main Content -->
+<div class="main">
+  <div class="left">
+    <div class="section-label">// 核心组件 / HARNESS COMPONENTS</div>
+    <h2>受控工具、活文档与可观测性集成</h2>
+    <p class="desc">Agent 具备编写与运行代码的强大工具，但绝不能失去边界。我们通过将<b>文档活化、代码硬限与环境感知可观测化</b>，建立坚不可摧的物理防御阻尼层。</p>
+    
+    <div class="sandbox-points">
+      <div class="sb-point">
+        <div class="sb-title">AGENTS.md 作为活的反馈回路 (Hashimoto 模式)</div>
+        <div class="sb-desc"><code>AGENTS.md</code> 严禁作为静态文档遗忘。<b>每次 Agent 犯错，均被沉淀为该文档中的一行硬约束。</b>这意味着，大模型发生的每一例异常，均通过更新活文档沉淀为 Harness 层的硬约束规则。</div>
+      </div>
+      <div class="sb-point">
+        <div class="sb-title">请求接口的机械化强硬防御 (Axios HttpClient Guard)</div>
+        <div class="sb-desc">前端严禁使用裸 <code>fetch</code> 或自主拼接 API URL。所有接口请求必须收口至 <code>src/services/httpClient.ts</code>。一旦违反，自定义 Linter 会在提价阶段直接阻断，实现<b>机械化方向性约束</b>。</div>
+      </div>
+      <div class="sb-point">
+        <div class="sb-title">浏览器可观测性集成 (Chrome DevTools MCP)</div>
+        <div class="sb-desc">集成 <code>chrome-devtools-plugin</code>，Agent 具备直接调用 Puppeteer 抓取 canvas 渲染 DOM 树与截图的能力，可直接感知 Vue Flow 节点的渲染位置。</div>
+      </div>
+      <div class="sb-point">
+        <div class="sb-title">技术债的“垃圾回收”机制 (Entropy GC)</div>
+        <div class="sb-desc">AI 生成代码的“熵增”积累方式异于人类。项目定期运行清理 Agent，对项目文档不一致、冗余导入或低质代码段执行“垃圾回收”（GC），确保系统清洁。</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="right">
+    <svg viewBox="0 0 500 460" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="170" y="20" width="160" height="60" rx="8" fill="rgba(99, 102, 241, 0.1)" stroke="var(--indigo)" stroke-width="1.5" />
+      <text x="250" y="46" text-anchor="middle" fill="#fff" font-size="13" font-family="JetBrains Mono, monospace" font-weight="700">LLM CORE (DECISION)</text>
+      <text x="250" y="66" text-anchor="middle" fill="var(--indigo)" font-size="10" font-family="Plus Jakarta Sans">Agent 决策大脑</text>
+
+      <line x1="250" y1="80" x2="250" y2="130" stroke="var(--border)" stroke-width="1.5" stroke-dasharray="4,4" />
+      <polygon points="245,124 250,134 255,124" fill="var(--border)" />
+
+      <!-- MCP Gateway container -->
+      <rect x="130" y="130" width="240" height="70" rx="10" fill="rgba(34, 211, 238, 0.05)" stroke="var(--teal)" stroke-width="2" />
+      <text x="250" y="160" text-anchor="middle" fill="#fff" font-size="14" font-family="JetBrains Mono, monospace" font-weight="700">MCP GATEWAY (HARNESS)</text>
+      <text x="250" y="180" text-anchor="middle" fill="var(--teal)" font-size="11" font-family="Plus Jakarta Sans">双向显示授权与工具执行沙箱</text>
+
+      <path d="M 250 200 L 250 250 L 90 250 L 90 290" fill="none" stroke="var(--border)" stroke-width="1.5" stroke-dasharray="2,2" />
+      <path d="M 250 200 L 250 290" fill="none" stroke="var(--border)" stroke-width="1.5" stroke-dasharray="2,2" />
+      <path d="M 250 200 L 250 250 L 410 250 L 410 290" fill="none" stroke="var(--border)" stroke-width="1.5" stroke-dasharray="2,2" />
+
+      <polygon points="86,286 90,294 94,286" fill="var(--border)" />
+      <polygon points="246,286 250,294 254,286" fill="var(--border)" />
+      <polygon points="406,286 410,294 414,286" fill="var(--border)" />
+
+      <!-- Sandboxed FS -->
+      <rect x="10" y="295" width="160" height="75" rx="8" fill="rgba(15, 23, 42, 0.95)" stroke="var(--teal)" stroke-width="1.5" />
+      <text x="90" y="324" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">可观测性调试集</text>
+      <text x="90" y="342" text-anchor="middle" fill="var(--text-dim)" font-size="9" font-family="JetBrains Mono, monospace">Chrome DevTools MCP</text>
+      <text x="90" y="356" text-anchor="middle" fill="var(--text-dim)" font-size="9" font-family="JetBrains Mono, monospace">Telemetry Logger / metrics</text>
+
+      <!-- Command Guard -->
+      <rect x="170" y="295" width="160" height="75" rx="8" fill="rgba(15, 23, 42, 0.95)" stroke="var(--blue)" stroke-width="1.5" />
+      <text x="250" y="324" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">机械化强硬架构约束</text>
+      <text x="250" y="342" text-anchor="middle" fill="var(--text-dim)" font-size="9.5" font-family="JetBrains Mono, monospace">Types&rarr;Repo&rarr;Service&rarr;UI</text>
+      <text x="250" y="356" text-anchor="middle" fill="var(--rose)" font-size="9.5" font-family="JetBrains Mono, monospace">Strict Custom Linter</text>
+
+      <!-- HttpClient standard -->
+      <rect x="330" y="295" width="160" height="75" rx="8" fill="rgba(15, 23, 42, 0.95)" stroke="var(--indigo)" stroke-width="1.5" />
+      <text x="410" y="324" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">AGENTS.md 活文档</text>
+      <text x="410" y="342" text-anchor="middle" fill="var(--text-dim)" font-size="9.5" font-family="JetBrains Mono, monospace">Error-triggered rewrite</text>
+      <text x="410" y="356" text-anchor="middle" fill="var(--indigo)" font-size="9.5" font-family="JetBrains Mono, monospace">Live feedback loop</text>
+
+      <rect x="0" y="270" width="500" height="120" rx="12" stroke="rgba(34, 211, 238, 0.2)" stroke-width="1.5" stroke-dasharray="10,5" pointer-events="none" />
+      <text x="20" y="285" fill="rgba(34, 211, 238, 0.5)" font-size="8" font-family="JetBrains Mono, monospace" letter-spacing="0.1em">PHYSICAL_BOUNDARY_SHIELD</text>
+    </svg>
+  </div>
+</div>
+
+<!-- Footer -->
+<div class="footer">
+  <span class="brand">相关性分析系统 &middot; 2026</span>
+  <span class="label-tag">AGENT ENGINEERING HARNESS PLATFORM</span>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1920">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Outfit:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg-page: #08080a;
+    --text-main: #ffffff;
+    --text-dim: #71717a;
+    --border: rgba(255, 255, 255, 0.08);
+    --accent: #3b82f6;
+    --phosphor-blue: #60a5fa;
+    --phosphor-mint: #4ade80;
+    --phosphor-rose: #fb7185;
+    --glass: rgba(18, 18, 22, 0.8);
+  }
+  
+  body {
+    margin: 0; padding: 0; width: 1920px; height: 1080px; overflow: hidden; background: var(--bg-page);
+    font-family: 'Plus Jakarta Sans', sans-serif; color: var(--text-main); -webkit-font-smoothing: antialiased; position: relative;
+  }
+
+  body::after {
+    content: ''; position: absolute; inset: 0; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3%3Ffilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+    opacity: 0.04; pointer-events: none; z-index: 100;
+  }
+
+  .bg-decor { position: absolute; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
+  .bg-grid {
+    position: absolute; inset: 0; background-image: linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 60px 60px; opacity: 0.15; mask-image: radial-gradient(circle at 50% 50%, black, transparent 90%);
+  }
+
+  .header {
+    position: absolute; top: 0; left: 0; right: 0; height: 100px; display: flex; align-items: center; justify-content: space-between; padding: 0 80px; z-index: 10;
+  }
+  .header .slide-num {
+    font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 700; color: var(--accent);
+    background: rgba(59, 130, 246, 0.1); padding: 4px 12px; border-radius: 4px; border: 1px solid rgba(59, 130, 246, 0.2);
+  }
+  .header .title-group { display: flex; flex-direction: column; align-items: flex-end; }
+  .header .title {
+    font-family: 'Outfit', sans-serif; font-size: 16px; font-weight: 800; color: var(--text-main);
+    letter-spacing: 0.2em; text-transform: uppercase;
+  }
+
+  .main {
+    position: absolute; top: 100px; left: 80px; right: 80px; bottom: 80px; display: flex; flex-direction: column; gap: 40px; z-index: 5;
+  }
+
+  .doc-chain { display: flex; align-items: stretch; gap: 20px; }
+  .chain-card {
+    flex: 1; background: var(--glass); border: 1.5px solid var(--border); padding: 28px;
+    backdrop-filter: blur(20px); transition: all 0.4s ease; cursor: pointer; position: relative;
+  }
+  .chain-card::before {
+    content: ''; position: absolute; top: -1px; left: -1px; width: 20px; height: 20px;
+    border-top: 2px solid transparent; border-left: 2px solid transparent; transition: all 0.3s ease;
+  }
+  .chain-card:hover { transform: translateY(-4px); background: rgba(24, 24, 27, 0.9); border-color: rgba(255, 255, 255, 0.15); }
+  .chain-card.active { border-color: var(--accent); background: rgba(59, 130, 246, 0.05); }
+  .chain-card.active::before { border-color: var(--accent); }
+
+  .cc-meta { font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700; color: var(--text-dim); margin-bottom: 12px; display: flex; justify-content: space-between; }
+  .cc-title { font-family: 'Outfit', sans-serif; font-size: 18px; font-weight: 800; margin-bottom: 4px; }
+  .cc-desc { font-size: 12px; color: var(--text-dim); line-height: 1.4; }
+
+  .content-panels { display: flex; gap: 32px; flex: 1; min-height: 0; }
+  .hidden { display: none !important; }
+
+  .outline-list {
+    width: 380px; background: rgba(255, 255, 255, 0.02); border: 1.5px solid var(--border);
+    padding: 32px; display: flex; flex-direction: column; gap: 20px; overflow-y: auto;
+  }
+  .ol-header { font-family: 'Outfit', sans-serif; font-size: 12px; font-weight: 900; letter-spacing: 0.1em; color: var(--accent); text-transform: uppercase; border-bottom: 1px solid var(--border); padding-bottom: 12px; margin-bottom: 8px; }
+  .ol-item { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-dim); line-height: 1.8; cursor: pointer; transition: all 0.2s ease; display: flex; align-items: center; gap: 8px; }
+  .ol-item:hover { color: var(--text-main); padding-left: 4px; }
+  .ol-item.active { color: var(--phosphor-mint); font-weight: 700; }
+  .ol-item .dot { width: 4px; height: 4px; border-radius: 50%; background: currentColor; }
+  .ol-indent { padding-left: 16px; border-left: 1px solid var(--border); margin-left: 4px; }
+
+  .details-grid { flex: 1; display: grid; grid-template-rows: repeat(5, 1fr); gap: 12px; }
+  .detail-row {
+    background: var(--glass); border: 1.5px solid var(--border); padding: 0 24px;
+    display: flex; align-items: center; gap: 24px; position: relative; transition: all 0.3s ease;
+  }
+  .detail-row::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--border); transition: all 0.3s ease; }
+  .detail-row:hover { background: rgba(24, 24, 27, 0.9); transform: translateX(8px); }
+  .detail-row:hover::before { background: var(--accent); }
+
+  .dr-num { font-family: 'JetBrains Mono', monospace; font-size: 20px; font-weight: 700; color: rgba(255, 255, 255, 0.05); }
+  .dr-title { font-size: 15px; font-weight: 800; min-width: 140px; color: var(--text-main); }
+  .dr-text { font-size: 13.5px; color: var(--text-dim); line-height: 1.5; }
+  .dr-text code { font-family: 'JetBrains Mono', monospace; color: var(--phosphor-mint); background: rgba(0,0,0,0.3); padding: 2px 6px; border: 1px solid var(--border); }
+
+  .preview-box {
+    flex: 1; background: #000; border: 1.5px solid var(--border); display: flex; flex-direction: column; overflow: hidden;
+  }
+  .pb-head { height: 40px; background: #18181b; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 16px; }
+  .pb-tab { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--phosphor-mint); font-weight: 700; text-transform: uppercase; }
+  .pb-body { flex: 1; padding: 24px; font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.7; color: #a1a1aa; overflow-y: auto; }
+
+  .footer {
+    position: absolute; bottom: 0; left: 0; right: 0; height: 80px;
+    display: flex; align-items: center; justify-content: space-between; padding: 0 80px;
+    border-top: 1px solid var(--border); background: rgba(8, 8, 10, 0.8); backdrop-filter: blur(10px);
+  }
+  .footer .brand { font-family: 'Outfit', sans-serif; font-size: 14px; font-weight: 700; color: var(--text-dim); }
+</style>
+</head>
+<body>
+
+<div class="bg-decor">
+  <div class="bg-grid"></div>
+</div>
+
+<div class="header">
+  <span class="slide-num">MOD-05</span>
+  <div class="title-group">
+    <span class="title">Contract Architecture</span>
+  </div>
+</div>
+
+<div class="main">
+  <!-- 契约三级跳 -->
+  <div class="doc-chain">
+    <div class="chain-card active" id="card-agents" onclick="switchView('agents')">
+      <div class="cc-meta"><span>L1_GLOBAL_CONTRACT</span><span>01</span></div>
+      <div class="cc-title">AGENTS.md</div>
+      <p class="cc-desc">全域协同守则。锁定 Agent 意图、技术栈及开发行为底线。</p>
+    </div>
+    <div class="chain-card" id="card-design" onclick="switchView('design')">
+      <div class="cc-meta"><span>L2_SPECIFICATION</span><span>02</span></div>
+      <div class="cc-title">design-doc/</div>
+      <p class="cc-desc">深层架构规约。涵盖执行引擎、节点协议、结果载荷及连线规则。</p>
+    </div>
+    <div class="chain-card" id="card-code" onclick="switchView('code')">
+      <div class="cc-meta"><span>L3_IMPLEMENTATION</span><span>03</span></div>
+      <div class="cc-title">落地实现层</div>
+      <p class="cc-desc">基于 Schema 约束与 TDD 验证的工业级代码产出。</p>
+    </div>
+  </div>
+
+  <!-- AGENTS.md 视图 (增加内容密度) -->
+  <div class="content-panels" id="view-agents">
+    <div class="outline-list">
+      <div class="ol-header">AGENTS.md 完整骨架</div>
+      <div class="ol-item active"><span class="dot"></span># 项目概述</div>
+      <div class="ol-indent">
+        <div class="ol-item">├── 业务核心: 相关性分析系统</div>
+        <div class="ol-item">└── 核心模式: n8n 风格工作流</div>
+      </div>
+      <div class="ol-item"><span class="dot"></span># 技术栈 (Tech Stack)</div>
+      <div class="ol-indent">
+        <div class="ol-item">├── Vue 3 + TS + Pinia</div>
+        <div class="ol-item">├── Vue Flow + PrimeVue v4</div>
+        <div class="ol-item">└── Drizzle ORM + MySQL</div>
+      </div>
+      <div class="ol-item"><span class="dot"></span># 项目架构 (Project Arch)</div>
+      <div class="ol-indent">
+        <div class="ol-item">├── 目录结构规范</div>
+        <div class="ol-item">└── 工作流系统协议路径</div>
+      </div>
+      <div class="ol-item"><span class="dot"></span># 关键约束 (Hard Rules)</div>
+      <div class="ol-indent">
+        <div class="ol-item">├── 全中文文案适配</div>
+        <div class="ol-item">└── API 请求统一入口</div>
+      </div>
+      <div class="ol-item"><span class="dot"></span># 开发行为指导 (Guidelines)</div>
+      <div class="ol-indent">
+        <div class="ol-item">├── 至简至上原则</div>
+        <div class="ol-item">└── 验证闭环准则</div>
+      </div>
+    </div>
+    <div class="details-grid">
+      <div class="detail-row"><span class="dr-num">01</span><div class="dr-title">防止漂移</div><p class="dr-text">明确 <code>分析代理</code> 与 <code>工作流引擎</code> 为核心，防止 Agent 推荐无关库。</p></div>
+      <div class="detail-row"><span class="dr-num">02</span><div class="dr-title">风格锁定</div><p class="dr-text">强制要求 <code>Tailwind v4</code> 与 <code>Composition API</code>，拒绝 Options API 代码。</p></div>
+      <div class="detail-row"><span class="dr-num">03</span><div class="dr-title">路径导航</div><p class="dr-text">告知 Agent 必须查阅 <code>docs/design-doc/</code> 以获取最新的节点实现协议。</p></div>
+      <div class="detail-row"><span class="dr-num">04</span><div class="dr-title">质量红线</div><p class="dr-text">锁定 <code>Slate-900</code> 品牌色，要求 Commit 信息必须以中文书写并保持原子化。</p></div>
+      <div class="detail-row"><span class="dr-num">05</span><div class="dr-title">思考前置</div><p class="dr-text">要求 Agent 在 Act 之前输出 <code>Implementation Plan</code> 并核对假设。</p></div>
+    </div>
+  </div>
+
+  <!-- Design-Doc 视图 (修正文件树与实际一致) -->
+  <div class="content-panels hidden" id="view-design">
+    <div class="outline-list">
+      <div class="ol-header">design-doc/ 实时文件树</div>
+      <div class="ol-item"><span class="dot"></span>📄 Agent系统.md</div>
+      <div class="ol-item"><span class="dot"></span>📂 workflow-system/</div>
+      <div class="ol-indent">
+        <div class="ol-item">📄 index.md / docs.json</div>
+        <div class="ol-item">📄 执行引擎.md</div>
+        <div class="ol-item">📄 结果协议.md / 展示链路.md</div>
+        <div class="ol-item">📄 连接规则.md / 多输入协议.md</div>
+        <div class="ol-item">📄 持久化与历史快照.md</div>
+      </div>
+      <div class="ol-item"><span class="dot"></span>📂 workflow-nodes/</div>
+      <div class="ol-indent">
+        <div class="ol-item">📄 index.md / docs.json</div>
+        <div class="ol-item">📄 节点清单.md</div>
+        <div class="ol-item">📄 节点定义与属性.md</div>
+        <div class="ol-item">📄 创建新节点.md</div>
+      </div>
+    </div>
+    <div style="flex: 1; display: flex; flex-direction: column; gap: 20px;">
+      <div style="background: rgba(59, 130, 246, 0.05); border: 1px solid var(--border); padding: 24px; border-radius: 4px;">
+        <div style="font-size: 14px; font-weight: 800; color: var(--accent); margin-bottom: 8px;">降噪与精密规约</div>
+        <p style="font-size: 13px; color: var(--text-dim); line-height: 1.6;">通过 <code>workflow-system</code> 锁定执行核心逻辑，通过 <code>workflow-nodes</code> 规约原子组件形态。Agent 无需理解全栈 4.2万行代码，仅凭 180行 契约即可输出完美代码。</p>
+      </div>
+      <div class="preview-box">
+        <div class="pb-head"><span class="pb-tab">NodeDefinition Spec</span></div>
+        <div class="pb-body">
+          <span style="color: var(--phosphor-blue)">// docs/design-doc/workflow-system/节点定义协议.md</span><br>
+          <span style="color: var(--phosphor-mint)">interface NodeDefinition {</span><br>
+          &nbsp;&nbsp;type: string; <span style="color: #4b5563">// 唯一标识</span><br>
+          &nbsp;&nbsp;properties: Schema; <span style="color: #4b5563">// 配置 Schema</span><br>
+          &nbsp;&nbsp;execute: (ctx: Context) => Promise&lt;NodeResult&gt;;<br>
+          <span style="color: var(--phosphor-mint)">}</span><br>
+          <span style="color: var(--phosphor-rose)">// 严格限制：禁止在 execute 中进行 DOM 操作</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 实现层视图 -->
+  <div class="content-panels hidden" id="view-code">
+    <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 24px;">
+      <div style="width: 64px; height: 64px; border: 2px solid var(--phosphor-mint); border-radius: 4px; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 40px rgba(74, 222, 128, 0.15); transform: rotate(45deg);">
+        <div style="width: 20px; height: 20px; background: var(--phosphor-mint); transform: rotate(-45deg);"></div>
+      </div>
+      <h3 style="font-family: 'Outfit', sans-serif; font-size: 28px; font-weight: 900;">代码交付确定性</h3>
+      <p style="max-width: 700px; font-size: 16px; color: var(--text-dim); line-height: 1.8;">
+        在 <code>AGENTS.md</code> 和 <code>design-doc</code> 的双重引力下，AI Agent 的每一行代码都处于“受控演进”状态。配合 <strong>Vitest</strong> 与 <strong>vue-tsc</strong>，达成工业级代码的自动化交付。
+      </p>
+      <div style="font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--phosphor-mint); display: flex; gap: 40px; background: rgba(0,0,0,0.4); padding: 12px 32px; border: 1.5px solid var(--border);">
+        <span>✓ SCHEMA_DRIVEN</span>
+        <span>✓ TDD_PROTECTED</span>
+        <span>✓ ZERO_SIDE_EFFECT</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="footer">
+  <span class="brand">相关性分析系统 // Blueprints v2.1</span>
+</div>
+
+<script>
+function switchView(name) {
+  document.querySelectorAll('.chain-card').forEach(c => c.classList.remove('active'));
+  document.querySelectorAll('.content-panels').forEach(p => p.classList.add('hidden'));
+  document.getElementById('card-' + name).classList.add('active');
+  document.getElementById('view-' + name).classList.remove('hidden');
+}
+</script>
+</body>
+</html>

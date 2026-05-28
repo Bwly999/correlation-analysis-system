@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1920">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --text-main: #f8fafc;
+    --text-dim: #94a3b8;
+    --border: rgba(255, 255, 255, 0.08);
+    --blue: #38bdf8;
+    --indigo: #6366f1;
+    --teal: #22d3ee;
+    --rose: #f43f5e;
+    --amber: #fbbf24;
+    --slate-bg: #0b0f19;
+  }
+  body {
+    margin: 0; padding: 0;
+    width: 1920px; height: 1080px;
+    overflow: hidden;
+    background: var(--slate-bg);
+    background-image: 
+      radial-gradient(circle at 10% 20%, rgba(56, 189, 248, 0.07) 0%, transparent 40%),
+      radial-gradient(circle at 90% 80%, rgba(99, 102, 241, 0.07) 0%, transparent 40%);
+    font-family: 'Plus Jakarta Sans', -apple-system, "PingFang SC", sans-serif;
+    color: var(--text-main);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Header */
+  .header {
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 90px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 80px;
+    border-bottom: 1px solid var(--border);
+  }
+  .header .slide-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 15px; font-weight: 500;
+    color: var(--text-dim);
+    letter-spacing: 0.05em;
+  }
+  .header .title {
+    font-size: 13px; font-weight: 600;
+    color: var(--text-dim);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .header .label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; font-weight: 500;
+    color: var(--blue);
+    letter-spacing: 0.08em;
+    padding: 4px 14px;
+    border: 1px solid rgba(56, 189, 248, 0.3);
+    border-radius: 100px;
+    background: rgba(56, 189, 248, 0.05);
+  }
+
+  /* Main Content */
+  .main {
+    position: absolute;
+    top: 90px; left: 0; right: 0; bottom: 80px;
+    display: flex;
+    padding: 50px 80px;
+    gap: 60px;
+  }
+
+  /* Left Column */
+  .left {
+    width: 48%;
+    display: flex;
+    flex-direction: column;
+  }
+  .section-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; font-weight: 700;
+    color: var(--indigo);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+  h2 {
+    font-size: 38px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: #fff;
+    line-height: 1.25;
+    margin-bottom: 20px;
+  }
+  .desc {
+    font-size: 15px;
+    color: var(--text-dim);
+    line-height: 1.6;
+    margin-bottom: 30px;
+  }
+
+  .failures {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .fail-item {
+    background: rgba(244, 63, 94, 0.03);
+    border: 1px solid rgba(244, 63, 94, 0.12);
+    border-radius: 8px;
+    padding: 14px 18px;
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+  }
+  .fail-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; font-weight: 700;
+    color: var(--rose);
+    background: rgba(244, 63, 94, 0.1);
+    padding: 2px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    flex-shrink: 0;
+  }
+  .fail-body {}
+  .fail-title { font-size: 14px; font-weight: 700; color: #fff; margin-bottom: 3px; }
+  .fail-text { font-size: 12px; color: var(--text-dim); line-height: 1.4; }
+
+  /* Right Column: Loop */
+  .right {
+    width: 52%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    background: rgba(15, 23, 42, 0.3);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 40px;
+  }
+  .loop-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--indigo);
+    letter-spacing: 0.1em;
+    margin-bottom: 24px;
+  }
+
+  .steps-timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .step-node {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+  }
+  .step-circle {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px; font-weight: 700;
+    color: var(--indigo);
+    background: rgba(99, 102, 241, 0.1);
+    border: 1.5px solid var(--indigo);
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    z-index: 2;
+    position: relative;
+  }
+  .step-node:not(:last-child) .step-circle::after {
+    content: '';
+    position: absolute;
+    bottom: -22px; left: 16px;
+    width: 2px; height: 22px;
+    background: rgba(99, 102, 241, 0.2);
+  }
+  .step-info {
+    background: rgba(255, 255, 255, 0.01);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 20px;
+    flex: 1;
+  }
+  .step-head { font-size: 13.5px; font-weight: 700; color: #fff; margin-bottom: 2px; }
+  .step-subtext { font-size: 11.5px; color: var(--text-dim); line-height: 1.4; }
+  .step-subtext code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 1px 4px;
+    border-radius: 3px;
+    color: #fff;
+  }
+
+  /* Footer */
+  .footer {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 80px;
+    border-top: 1px solid var(--border);
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+  .footer .brand { font-weight: 600; font-family: 'JetBrains Mono', monospace; color: var(--text-main); }
+  .footer .label-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    color: var(--text-dim);
+    opacity: 0.7;
+  }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <span class="slide-num">04 / 07</span>
+  <span class="title">Persistent Memory &amp; Session Lifecycles</span>
+  <span class="label">PILLAR 3</span>
+</div>
+
+<!-- Main Content -->
+<div class="main">
+  <div class="left">
+    <div class="section-label">// 支柱三 / PERSISTENT MEMORY</div>
+    <h2>持久化记忆与防翻车机制</h2>
+    <p class="desc">在长链路、跨越数小时的编码任务中，Agent 会话往往频繁断开重启。Harness 将进度持久化在<b>本地文件系统（制品介质）</b>中，而非纯上下文窗口内，从而消灭 Agent 常见的翻车模式。</p>
+    
+    <div class="failures">
+      <div class="fail-item">
+        <span class="fail-badge">mode 1</span>
+        <div class="fail-body">
+          <div class="fail-title">一步到位（One-shotting）导致爆仓</div>
+          <div class="fail-text">Agent 倾向一次做完所有事，导致上下文窗口在行至一半时耗尽。重启会话时面对没有文档的半成品，只能耗费大量 Token 瞎猜历史。</div>
+        </div>
+      </div>
+
+      <div class="fail-item">
+        <span class="fail-badge">mode 2</span>
+        <div class="fail-body">
+          <div class="fail-title">过早宣布胜利（Premature Done）</div>
+          <div class="fail-text">在项目后期，当部分节点实现后，Agent 会看到已有进展直接单方面宣布任务完成——即使很多复杂功能和单元测试并未真正交付。</div>
+        </div>
+      </div>
+
+      <div class="fail-item">
+        <span class="fail-badge">mode 3</span>
+        <div class="fail-body">
+          <div class="fail-title">环境启动困难（Env Hardship）</div>
+          <div class="fail-text">每次新会话启动，Agent 都需要耗费数千 Token 盲目猜测如何启动开发服务器与测试套，而非立刻将智能投入在多因子系统的核心代码开发中。</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="right">
+    <div class="loop-title">// 跨会话环境重启与自检流（PROJECT REBOOT PROTOCOL）</div>
+    
+    <div class="steps-timeline">
+      <div class="step-node">
+        <div class="step-circle">01</div>
+        <div class="step-info">
+          <div class="step-head">定位与感知</div>
+          <div class="step-subtext">运行 <code>pwd</code> 绝对路径并扫描文件，确认本地开发环境。</div>
+        </div>
+      </div>
+
+      <div class="step-node">
+        <div class="step-circle">02</div>
+        <div class="step-info">
+          <div class="step-head">Git 与进度快照重组</div>
+          <div class="step-subtext">读取 <code>git log -n 5</code> 和进度描述，建立最近改动的精确心智模型。</div>
+        </div>
+      </div>
+
+      <div class="step-node">
+        <div class="step-circle">03</div>
+        <div class="step-info">
+          <div class="step-head">持久化任务跟踪 (JSON Formatted)</div>
+          <div class="step-subtext">读取 <code>task.md</code> 或 JSON 文件，自动装载优先级最高且未完成的特性。使用 JSON 可以防止 Markdown 格式被 Agent 意外篡改。</div>
+        </div>
+      </div>
+
+      <div class="step-node">
+        <div class="step-circle">04</div>
+        <div class="step-info">
+          <div class="step-head">本地服务器与测试拉起</div>
+          <div class="step-subtext">触发 <code>npm run dev</code> 并执行一次 Vitest 单元测试，确认基础环境正常，规避带病工作。</div>
+        </div>
+      </div>
+
+      <div class="step-node">
+        <div class="step-circle">05</div>
+        <div class="step-info">
+          <div class="step-head">增量演进</div>
+          <div class="step-subtext">正式开始新功能实现，每次提交时持久化一份结构化进展快照。</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Footer -->
+<div class="footer">
+  <span class="brand">相关性分析系统 &middot; 2026</span>
+  <span class="label-tag">AGENT ENGINEERING HARNESS PLATFORM</span>
+</div>
+
+</body>
+</html>

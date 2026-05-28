@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1920">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --text-main: #f8fafc;
+    --text-dim: #94a3b8;
+    --border: rgba(255, 255, 255, 0.08);
+    --blue: #38bdf8;
+    --indigo: #6366f1;
+    --teal: #22d3ee;
+    --emerald: #34d399;
+    --rose: #f43f5e;
+    --slate-bg: #0b0f19;
+  }
+  body {
+    margin: 0; padding: 0;
+    width: 1920px; height: 1080px;
+    overflow: hidden;
+    background: var(--slate-bg);
+    background-image: 
+      radial-gradient(circle at 10% 20%, rgba(56, 189, 248, 0.07) 0%, transparent 40%),
+      radial-gradient(circle at 90% 80%, rgba(99, 102, 241, 0.07) 0%, transparent 40%);
+    font-family: 'Plus Jakarta Sans', -apple-system, "PingFang SC", sans-serif;
+    color: var(--text-main);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Header */
+  .header {
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 90px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 80px;
+    border-bottom: 1px solid var(--border);
+  }
+  .header .slide-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 15px; font-weight: 500;
+    color: var(--text-dim);
+    letter-spacing: 0.05em;
+  }
+  .header .title {
+    font-size: 13px; font-weight: 600;
+    color: var(--text-dim);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .header .label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; font-weight: 500;
+    color: var(--blue);
+    letter-spacing: 0.08em;
+    padding: 4px 14px;
+    border: 1px solid rgba(56, 189, 248, 0.3);
+    border-radius: 100px;
+    background: rgba(56, 189, 248, 0.05);
+  }
+
+  /* Main Content */
+  .main {
+    position: absolute;
+    top: 90px; left: 0; right: 0; bottom: 80px;
+    display: flex;
+    padding: 50px 80px;
+    gap: 60px;
+  }
+
+  /* Left Column */
+  .left {
+    width: 48%;
+    display: flex;
+    flex-direction: column;
+  }
+  .section-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; font-weight: 700;
+    color: var(--emerald);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+  h2 {
+    font-size: 38px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: #fff;
+    line-height: 1.25;
+    margin-bottom: 20px;
+  }
+  .desc {
+    font-size: 15px;
+    color: var(--text-dim);
+    line-height: 1.6;
+    margin-bottom: 30px;
+  }
+
+  .exec-details {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    flex: 1;
+  }
+  .ex-card {
+    background: rgba(255,255,255,0.01);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+  }
+  .ex-title {
+    font-size: 14.5px;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .ex-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--emerald); }
+  .ex-text { font-size: 12px; color: var(--text-dim); line-height: 1.5; }
+  .ex-text code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 1px 4px;
+    border-radius: 3px;
+    color: #fff;
+  }
+
+  /* Right Column: Execution loop SVG */
+  .right {
+    width: 52%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(15, 23, 42, 0.3);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 40px;
+  }
+  .right svg {
+    width: 100%;
+    max-width: 600px;
+  }
+
+  /* Footer */
+  .footer {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 80px;
+    border-top: 1px solid var(--border);
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+  .footer .brand { font-weight: 600; font-family: 'JetBrains Mono', monospace; color: var(--text-main); }
+  .footer .label-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    color: var(--text-dim);
+    opacity: 0.7;
+  }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <span class="slide-num">05 / 07</span>
+  <span class="title">Structured Execution &amp; Feedback Gates</span>
+  <span class="label">PILLAR 4</span>
+</div>
+
+<!-- Main Content -->
+<div class="main">
+  <div class="left">
+    <div class="section-label">// 支柱四 / STRUCTURED EXECUTION</div>
+    <h2>结构化执行与反馈机制断言</h2>
+    <p class="desc">结构化执行要求将<b>思考规划与代码修改彻底分离</b>。所有决策必须落在规格层面，执行成果必须接受基于本地编译器、Linter 和单元测试套的自动化断言验证。</p>
+    
+    <div class="exec-details">
+      <div class="ex-card">
+        <div class="ex-title"><span class="ex-dot"></span>研究与计划先行 (PEV)</div>
+        <div class="ex-text">刻意施加 <code>理解 &rarr; 规划 &rarr; 执行 &rarr; 验证</code> 交互步幅。在方案设计阶段写明实现路径与潜在影响，经人类批准方可开始改码，杜绝低效修补。</div>
+      </div>
+
+      <div class="ex-card">
+        <div class="ex-title"><span class="ex-dot"></span>增量自动测试校验</div>
+        <div class="ex-text">集成测试环境。利用 Vitest 在本地拉起单元测试，通过 <code>pnpm test:unit -- &lt;pattern&gt;</code>（如 `workflowStore`）进行关键业务状态层的高频断言。</div>
+      </div>
+
+      <div class="ex-card">
+        <div class="ex-title"><span class="ex-dot"></span>自定义 Linter 教学式报错</div>
+        <div class="ex-text">借鉴 OpenAI 最佳实践。Linter 报错信息不仅拦截违规，还直接在输出日志中包含<b>“修复教学方案”</b>，使 Agent 无需二次探索即可精准自愈。</div>
+      </div>
+
+      <div class="ex-card">
+        <div class="ex-title"><span class="ex-dot"></span>基于编译异常的自愈循环</div>
+        <div class="ex-text">将编译器/测试 stderr 日志以反馈回路形式重定向，注入 Agent 的交互上下文中，促使模型执行 <code>报错感知 &rarr; 更新假设 &rarr; 再次修复</code> 直至全绿。</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="right">
+    <svg viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M 250 50 A 200 200 0 0 1 450 250" fill="none" stroke="var(--border)" stroke-width="2" stroke-dasharray="6,6" />
+      <path d="M 450 250 A 200 200 0 0 1 250 450" fill="none" stroke="var(--border)" stroke-width="2" stroke-dasharray="6,6" />
+      <path d="M 250 450 A 200 200 0 0 1 50 250" fill="none" stroke="var(--border)" stroke-width="2" stroke-dasharray="6,6" />
+      <path d="M 50 250 A 200 200 0 0 1 250 50" fill="none" stroke="var(--border)" stroke-width="2" stroke-dasharray="6,6" />
+
+      <!-- Step 1: Write Code -->
+      <g transform="translate(250, 50)">
+        <circle cx="0" cy="0" r="36" fill="rgba(99, 102, 241, 0.12)" stroke="var(--indigo)" stroke-width="2" />
+        <text x="0" y="4" text-anchor="middle" fill="#fff" font-size="12" font-family="JetBrains Mono, monospace" font-weight="700">CODE</text>
+        <text x="0" y="56" text-anchor="middle" fill="var(--text-dim)" font-size="11">1. 代码写入</text>
+      </g>
+
+      <!-- Arrow 1 -> 2 -->
+      <path d="M 300 70 C 370 110, 410 160, 430 210" fill="none" stroke="var(--indigo)" stroke-width="1.5">
+        <animate attributeName="stroke-dasharray" values="0,300;300,0" dur="2s" repeatCount="indefinite" />
+      </path>
+
+      <!-- Step 2: Compile & Lint Check -->
+      <g transform="translate(450, 250)">
+        <circle cx="0" cy="0" r="36" fill="rgba(34, 211, 238, 0.12)" stroke="var(--teal)" stroke-width="2" />
+        <text x="0" y="4" text-anchor="middle" fill="#fff" font-size="12" font-family="JetBrains Mono, monospace" font-weight="700">LINT</text>
+        <text x="0" y="56" text-anchor="middle" fill="var(--text-dim)" font-size="11">2. 教学式 Linter 检查</text>
+      </g>
+
+      <!-- Arrow 2 -> 3 -->
+      <path d="M 430 290 C 410 340, 370 390, 300 430" fill="none" stroke="var(--teal)" stroke-width="1.5" />
+
+      <!-- Step 3: Run Unit Test -->
+      <g transform="translate(250, 450)">
+        <circle cx="0" cy="0" r="36" fill="rgba(56, 189, 248, 0.12)" stroke="var(--blue)" stroke-width="2" />
+        <text x="0" y="4" text-anchor="middle" fill="#fff" font-size="12" font-family="JetBrains Mono, monospace" font-weight="700">TEST</text>
+        <text x="0" y="56" text-anchor="middle" fill="var(--text-dim)" font-size="11">3. Vitest 单元断言</text>
+      </g>
+
+      <!-- Arrow 3 -> 4 -->
+      <path d="M 200 430 C 130 390, 90 340, 70 290" fill="none" stroke="var(--blue)" stroke-width="1.5" />
+
+      <!-- Step 4: Verify or Auto-Heal -->
+      <g transform="translate(50, 250)">
+        <circle cx="0" cy="0" r="36" fill="rgba(52, 211, 153, 0.12)" stroke="var(--emerald)" stroke-width="2" />
+        <text x="0" y="4" text-anchor="middle" fill="var(--emerald)" font-size="12" font-family="JetBrains Mono, monospace" font-weight="800">PASS</text>
+        <text x="0" y="56" text-anchor="middle" fill="var(--text-dim)" font-size="11">4. 反馈自愈 / 全绿通过</text>
+      </g>
+
+      <!-- Fail path loop (back to code) -->
+      <path d="M 70 210 C 90 160, 130 110, 200 70" fill="none" stroke="var(--rose)" stroke-width="1.5" stroke-dasharray="4,4" />
+      <path d="M 196 66 L 206 70 L 200 78" fill="none" stroke="var(--rose)" stroke-width="1.5" />
+      <text x="95" y="115" fill="var(--rose)" font-size="10" font-family="JetBrains Mono, monospace" transform="rotate(-35, 100, 120)">[FAIL] AUTO-HEAL LOOP</text>
+
+      <!-- Center Core: Harness断言引擎 -->
+      <circle cx="250" cy="250" r="50" fill="rgba(15, 23, 42, 0.95)" stroke="rgba(255,255,255,0.08)" stroke-width="2" />
+      <text x="250" y="246" text-anchor="middle" fill="#fff" font-size="11" font-family="JetBrains Mono, monospace" font-weight="700">HARNESS</text>
+      <text x="250" y="260" text-anchor="middle" fill="var(--emerald)" font-size="11" font-family="JetBrains Mono, monospace" font-weight="700">ASSERT GATES</text>
+
+      <line x1="250" y1="200" x2="250" y2="86" stroke="rgba(255,255,255,0.1)" stroke-width="1" />
+      <line x1="300" y1="250" x2="414" y2="250" stroke="rgba(255,255,255,0.1)" stroke-width="1" />
+      <line x1="250" y1="300" x2="250" y2="414" stroke="rgba(255,255,255,0.1)" stroke-width="1" />
+      <line x1="200" y1="250" x2="86" y2="250" stroke="rgba(255,255,255,0.1)" stroke-width="1" />
+    </svg>
+  </div>
+</div>
+
+<!-- Footer -->
+<div class="footer">
+  <span class="brand">相关性分析系统 &middot; 2026</span>
+  <span class="label-tag">AGENT ENGINEERING HARNESS PLATFORM</span>
+</div>
+
+</body>
+</html>
