@@ -38,6 +38,7 @@ export const startNdjsonStream = (
   response.statusCode = statusCode
   response.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8')
   response.setHeader('Cache-Control', 'no-cache, no-transform')
+  response.setHeader('X-Accel-Buffering', 'no')
   response.setHeader('Access-Control-Allow-Origin', '*')
 
   console.log(`[ndjson] stream starting at ${new Date().toISOString()}`)

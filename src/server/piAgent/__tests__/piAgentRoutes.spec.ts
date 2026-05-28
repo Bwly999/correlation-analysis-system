@@ -235,6 +235,7 @@ describe('piAgentRoutes', () => {
 
     expect(response.statusCode).toBe(200)
     expect(response.headers['content-type']).toContain('application/x-ndjson')
+    expect(response.headers['x-accel-buffering']).toBe('no')
     expect(response.body).toBe('{"type":"stream.ready"}\n{"type":"message","content":"hello"}\n')
   })
 
