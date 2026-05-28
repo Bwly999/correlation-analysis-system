@@ -84,4 +84,25 @@ describe('workflow-scoped route contract', () => {
     })
     await app.close()
   })
+
+  it('returns the full workflow request header allowlist for CORS preflight', async () => {
+    const app = createServerApp()
+    const response = await app.inject({
+      method: 'OPTIONS',
+      url: '/api/pi-agent/sessions/session_1/messages',
+      headers: {
+        origin: 'http://localhost:5173',
+        'access-control-request-method': 'POST',
+        'access-control-request-headers': 'authorization,x-workflow-user-id,x-workflow-user-name,content-type',
+      },
+    })
+
+    expect(response.statusCode).toBe(204)
+    expect(response.headers['access-control-allow-origin']).toBe('*')
+    expect(response.headers['access-control-allow-methods']).toBe('GET,POST,OPTIONS')
+    expect(response.headers['access-control-allow-headers']).toBe(
+      'Content-Type, Authorization, x-workflow-user-id, x-workflow-user-name',
+    )
+    await app.close()
+  })
 })

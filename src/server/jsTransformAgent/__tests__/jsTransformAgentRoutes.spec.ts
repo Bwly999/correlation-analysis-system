@@ -8,6 +8,7 @@ const {
   abortJsTransformAgentRunMock,
   subscribeJsTransformAgentEventsMock,
   getJsTransformAgentSessionMock,
+  getJsTransformAgentSessionOwnerMock,
   resolveJsTransformAgentToolResultMock,
 } = vi.hoisted(() => ({
   createJsTransformAgentSessionMock: vi.fn(),
@@ -16,6 +17,7 @@ const {
   abortJsTransformAgentRunMock: vi.fn(),
   subscribeJsTransformAgentEventsMock: vi.fn(),
   getJsTransformAgentSessionMock: vi.fn(),
+  getJsTransformAgentSessionOwnerMock: vi.fn(),
   resolveJsTransformAgentToolResultMock: vi.fn(),
 }))
 
@@ -26,6 +28,7 @@ vi.mock('../../piAgent/jsTransformAgentGateway.js', () => ({
   abortJsTransformAgentRun: abortJsTransformAgentRunMock,
   subscribeJsTransformAgentEvents: subscribeJsTransformAgentEventsMock,
   getJsTransformAgentSession: getJsTransformAgentSessionMock,
+  getJsTransformAgentSessionOwner: getJsTransformAgentSessionOwnerMock,
   resolveJsTransformAgentToolResult: resolveJsTransformAgentToolResultMock,
 }))
 
@@ -58,6 +61,7 @@ afterEach(async () => {
   abortJsTransformAgentRunMock.mockReset()
   subscribeJsTransformAgentEventsMock.mockReset()
   getJsTransformAgentSessionMock.mockReset()
+  getJsTransformAgentSessionOwnerMock.mockReset()
   resolveJsTransformAgentToolResultMock.mockReset()
 
   while (apps.length > 0) {
@@ -141,6 +145,7 @@ describe('jsTransformAgentRoutes', () => {
   })
 
   it('streams ndjson events from the js transform namespace', async () => {
+    getJsTransformAgentSessionOwnerMock.mockReturnValueOnce('js-transform-route-user')
     getJsTransformAgentSessionMock.mockReturnValueOnce({ sessionId: 'js_session_1' })
     subscribeJsTransformAgentEventsMock.mockImplementationOnce((_sessionId, write) => {
       write({ type: 'message', content: 'hello' })
@@ -163,6 +168,7 @@ describe('jsTransformAgentRoutes', () => {
   })
 
   it('aborts a js transform run through the dedicated namespace', async () => {
+    getJsTransformAgentSessionOwnerMock.mockReturnValueOnce('js-transform-route-user')
     abortJsTransformAgentRunMock.mockResolvedValueOnce({
       ok: true,
       restoredMessages: ['继续调试', '解释报错'],
@@ -184,6 +190,72 @@ describe('jsTransformAgentRoutes', () => {
       ok: true,
       restoredMessages: ['继续调试', '解释报错'],
     })
+  })
+
+  it('rejects cross-user js transform session access across session-scoped routes', async () => {
+    getJsTransformAgentSessionOwnerMock.mockReturnValue('owner_user')
+    getJsTransformAgentSessionMock.mockReturnValue({ sessionId: 'js_session_1' })
+    sendJsTransformAgentMessageMock.mockResolvedValue({ ok: true })
+    updateJsTransformAgentModeMock.mockResolvedValue({ ok: true })
+    abortJsTransformAgentRunMock.mockResolvedValue({ ok: true, restoredMessages: [] })
+    resolveJsTransformAgentToolResultMock.mockReturnValue(true)
+
+    const app = await createTestApp()
+    const headers = {
+      'x-workflow-user-id': 'another_user',
+      'x-workflow-user-name': '另一个用户',
+    }
+
+    const responses = await Promise.all([
+      app.inject({
+        method: 'GET',
+        url: '/api/js-transform-agent/sessions/js_session_1',
+        headers,
+      }),
+      app.inject({
+        method: 'GET',
+        url: '/api/js-transform-agent/sessions/js_session_1/events',
+        headers,
+      }),
+      app.inject({
+        method: 'POST',
+        url: '/api/js-transform-agent/sessions/js_session_1/messages',
+        headers,
+        payload: { content: '继续' },
+      }),
+      app.inject({
+        method: 'POST',
+        url: '/api/js-transform-agent/sessions/js_session_1/mode',
+        headers,
+        payload: { mode: 'agent' },
+      }),
+      app.inject({
+        method: 'POST',
+        url: '/api/js-transform-agent/sessions/js_session_1/abort',
+        headers,
+      }),
+      app.inject({
+        method: 'POST',
+        url: '/api/js-transform-agent/sessions/js_session_1/tool-result',
+        headers,
+        payload: {
+          toolCallId: 'tool_1',
+          result: {
+            content: [{ type: 'text', text: 'ok' }],
+            details: { ok: true, status: 'success', summary: 'ok', outputSample: [], errorMessage: '' },
+          },
+        },
+      }),
+    ])
+
+    responses.forEach((response) => {
+      expect(response.statusCode).toBe(403)
+      expect(response.json()).toMatchObject({ message: '无权访问该 JS Transform Agent 会话' })
+    })
+    expect(sendJsTransformAgentMessageMock).not.toHaveBeenCalled()
+    expect(updateJsTransformAgentModeMock).not.toHaveBeenCalled()
+    expect(abortJsTransformAgentRunMock).not.toHaveBeenCalled()
+    expect(resolveJsTransformAgentToolResultMock).not.toHaveBeenCalled()
   })
 
   it('routes directly to the piAgent jsTransform gateway implementation module', () => {

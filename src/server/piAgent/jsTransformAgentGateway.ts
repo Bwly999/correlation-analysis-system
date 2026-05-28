@@ -370,6 +370,10 @@ export function getJsTransformAgentSession(sessionId: string) {
   return getSessionRecord(sessionId) || null
 }
 
+export function getJsTransformAgentSessionOwner(sessionId: string): string | null {
+  return getSessionRecord(sessionId)?.userId ?? null
+}
+
 export function resolveJsTransformAgentToolResult(
   sessionId: string,
   toolCallId: string,

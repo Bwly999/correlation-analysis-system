@@ -6,6 +6,7 @@ const {
   sendPiAgentMessageMock,
   subscribePiAgentEventsMock,
   getPiAgentSessionMock,
+  getPiAgentSessionOwnerMock,
   resolvePiAgentToolResultMock,
   syncPiAgentCanvasMock,
   getSystemModelProfilesMock,
@@ -15,6 +16,7 @@ const {
   sendPiAgentMessageMock: vi.fn(),
   subscribePiAgentEventsMock: vi.fn(),
   getPiAgentSessionMock: vi.fn(),
+  getPiAgentSessionOwnerMock: vi.fn(),
   resolvePiAgentToolResultMock: vi.fn(),
   syncPiAgentCanvasMock: vi.fn(),
   getSystemModelProfilesMock: vi.fn(),
@@ -26,6 +28,7 @@ vi.mock('../gateway.js', () => ({
   sendPiAgentMessage: sendPiAgentMessageMock,
   subscribePiAgentEvents: subscribePiAgentEventsMock,
   getPiAgentSession: getPiAgentSessionMock,
+  getPiAgentSessionOwner: getPiAgentSessionOwnerMock,
   resolvePiAgentToolResult: resolvePiAgentToolResultMock,
   syncPiAgentCanvas: syncPiAgentCanvasMock,
 }))
@@ -66,6 +69,7 @@ afterEach(async () => {
   sendPiAgentMessageMock.mockReset()
   subscribePiAgentEventsMock.mockReset()
   getPiAgentSessionMock.mockReset()
+  getPiAgentSessionOwnerMock.mockReset()
   resolvePiAgentToolResultMock.mockReset()
   syncPiAgentCanvasMock.mockReset()
   getSystemModelProfilesMock.mockReset()
@@ -208,6 +212,7 @@ describe('piAgentRoutes', () => {
   })
 
   it('streams ndjson events from the pi agent namespace', async () => {
+    getPiAgentSessionOwnerMock.mockReturnValueOnce('pi-agent-route-user')
     getPiAgentSessionMock.mockReturnValueOnce({ sessionId: 'session_1' })
     subscribePiAgentEventsMock.mockImplementationOnce((_sessionId, write) => {
       write({ type: 'message', content: 'hello' })
@@ -229,7 +234,84 @@ describe('piAgentRoutes', () => {
     expect(response.body).toBe('{"type":"message","content":"hello"}\n')
   })
 
+  it('rejects cross-user pi-agent session access across session-scoped routes', async () => {
+    getPiAgentSessionOwnerMock.mockReturnValue('owner_user')
+    getPiAgentSessionMock.mockReturnValue({ sessionId: 'session_1' })
+    sendPiAgentMessageMock.mockResolvedValue({ ok: true })
+    resolvePiAgentToolResultMock.mockReturnValue(true)
+    syncPiAgentCanvasMock.mockResolvedValue({
+      projection: {
+        workflow: {
+          workflowName: '当前画布',
+          draftNodeCount: 0,
+          draftEdgeCount: 0,
+        },
+      },
+      syncSummary: '已同步',
+    })
+
+    const app = await createTestApp()
+    const headers = {
+      'x-workflow-user-id': 'another_user',
+      'x-workflow-user-name': '另一个用户',
+    }
+
+    const requests = [
+      app.inject({
+        method: 'GET',
+        url: '/api/pi-agent/sessions/session_1',
+        headers,
+      }),
+      app.inject({
+        method: 'GET',
+        url: '/api/pi-agent/sessions/session_1/events',
+        headers,
+      }),
+      app.inject({
+        method: 'POST',
+        url: '/api/pi-agent/sessions/session_1/messages',
+        headers,
+        payload: { content: '继续' },
+      }),
+      app.inject({
+        method: 'POST',
+        url: '/api/pi-agent/sessions/session_1/tool-result',
+        headers,
+        payload: {
+          toolCallId: 'tool_1',
+          result: {
+            content: [{ type: 'text', text: 'ok' }],
+            details: { ok: true },
+          },
+        },
+      }),
+      app.inject({
+        method: 'POST',
+        url: '/api/pi-agent/sessions/session_1/canvas-sync',
+        headers,
+        payload: {
+          workflowSnapshot: {
+            name: '当前画布',
+            nodes: [],
+            edges: [],
+          },
+        },
+      }),
+    ]
+
+    const responses = await Promise.all(requests)
+
+    responses.forEach((response) => {
+      expect(response.statusCode).toBe(403)
+      expect(response.json()).toMatchObject({ message: '无权访问该 Pi Agent 会话' })
+    })
+    expect(sendPiAgentMessageMock).not.toHaveBeenCalled()
+    expect(resolvePiAgentToolResultMock).not.toHaveBeenCalled()
+    expect(syncPiAgentCanvasMock).not.toHaveBeenCalled()
+  })
+
   it('forwards canvas sync requests to the pi agent gateway', async () => {
+    getPiAgentSessionOwnerMock.mockReturnValueOnce('pi-agent-route-user')
     syncPiAgentCanvasMock.mockResolvedValueOnce({
       projection: {
         workflow: {
@@ -270,7 +352,7 @@ describe('piAgentRoutes', () => {
   })
 
   it('returns 404 when canvas sync target session does not exist', async () => {
-    syncPiAgentCanvasMock.mockRejectedValueOnce(new Error('未找到 Pi Agent 会话'))
+    getPiAgentSessionOwnerMock.mockReturnValueOnce(null)
 
     const app = await createTestApp()
     const response = await app.inject({

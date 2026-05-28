@@ -10,11 +10,13 @@ import {
   abortJsTransformAgentRun,
   createJsTransformAgentSession,
   getJsTransformAgentSession,
+  getJsTransformAgentSessionOwner,
   resolveJsTransformAgentToolResult,
   sendJsTransformAgentMessage,
   subscribeJsTransformAgentEvents,
   updateJsTransformAgentMode,
 } from '../piAgent/jsTransformAgentGateway.js'
+import { assertSessionOwner } from '../piAgent/sessionAccess.js'
 
 const createRouteLogger = (request: {
   id: string
@@ -30,6 +32,15 @@ const createRouteLogger = (request: {
 })
 
 export const createJsTransformAgentRoutes = (): FastifyPluginAsync => async (app) => {
+  const requireOwnedJsTransformSession = (sessionId: string, userId: string) =>
+    assertSessionOwner({
+      sessionId,
+      currentUserId: userId,
+      resolveOwnerId: getJsTransformAgentSessionOwner,
+      missingMessage: '未找到 JS Transform Agent 会话',
+      forbiddenMessage: '无权访问该 JS Transform Agent 会话',
+    })
+
   app.post('/api/js-transform-agent/sessions', async (request) => {
     const logger = createRouteLogger(request)
     const user = requireWorkflowUser(request)
@@ -40,13 +51,17 @@ export const createJsTransformAgentRoutes = (): FastifyPluginAsync => async (app
   })
 
   app.post('/api/js-transform-agent/sessions/:sessionId/messages', async (request) => {
+    const user = requireWorkflowUser(request)
     const { sessionId } = request.params as { sessionId: string }
+    requireOwnedJsTransformSession(sessionId, user.id)
     const body = request.body as { content: string }
     return sendJsTransformAgentMessage(sessionId, body.content)
   })
 
   app.post('/api/js-transform-agent/sessions/:sessionId/mode', async (request, reply) => {
+    const user = requireWorkflowUser(request)
     const { sessionId } = request.params as { sessionId: string }
+    requireOwnedJsTransformSession(sessionId, user.id)
     const body = request.body as { mode: 'ask' | 'agent' }
     const result = await updateJsTransformAgentMode(sessionId, body.mode)
     reply.code(result.ok ? 200 : 404)
@@ -54,14 +69,18 @@ export const createJsTransformAgentRoutes = (): FastifyPluginAsync => async (app
   })
 
   app.post('/api/js-transform-agent/sessions/:sessionId/abort', async (request, reply) => {
+    const user = requireWorkflowUser(request)
     const { sessionId } = request.params as { sessionId: string }
+    requireOwnedJsTransformSession(sessionId, user.id)
     const result = await abortJsTransformAgentRun(sessionId)
     reply.code(result.ok ? 200 : 404)
     return result
   })
 
   app.get('/api/js-transform-agent/sessions/:sessionId/events', async (request, reply) => {
+    const user = requireWorkflowUser(request)
     const { sessionId } = request.params as { sessionId: string }
+    requireOwnedJsTransformSession(sessionId, user.id)
     const session = getJsTransformAgentSession(sessionId)
     if (!session) {
       reply.code(404)
@@ -74,7 +93,9 @@ export const createJsTransformAgentRoutes = (): FastifyPluginAsync => async (app
   })
 
   app.post('/api/js-transform-agent/sessions/:sessionId/tool-result', async (request, reply) => {
+    const user = requireWorkflowUser(request)
     const { sessionId } = request.params as { sessionId: string }
+    requireOwnedJsTransformSession(sessionId, user.id)
     const body = request.body as {
       toolCallId: string
       result: {
@@ -90,7 +111,9 @@ export const createJsTransformAgentRoutes = (): FastifyPluginAsync => async (app
 
   app.get('/api/js-transform-agent/sessions/:sessionId', async (request, reply) => {
     const logger = createRouteLogger(request)
+    const user = requireWorkflowUser(request)
     const { sessionId } = request.params as { sessionId: string }
+    requireOwnedJsTransformSession(sessionId, user.id)
     const session = getJsTransformAgentSession(sessionId)
     if (!session) {
       reply.code(404)

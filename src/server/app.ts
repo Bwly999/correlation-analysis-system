@@ -10,6 +10,9 @@ import { createAnalysisRoutes } from './modules/analysisRoutes.js'
 import { createJsTransformAgentRoutes } from './modules/jsTransformAgentRoutes.js'
 import { createStorageRoutes } from './modules/storageRoutes.js'
 import { createPiAgentRoutes } from './modules/piAgentRoutes.js'
+import { WORKFLOW_USER_ID_HEADER, WORKFLOW_USER_NAME_HEADER } from './http/workflowHeaders.js'
+import { disposeAllPiAgentSessions } from './piAgent/gateway.js'
+import { disposeAllJsTransformAgentSessions } from './piAgent/jsTransformAgentGateway.js'
 
 export type { ServerDependencies } from './bootstrap/serverDependencies.js'
 export { createServerDependencies } from './bootstrap/serverDependencies.js'
@@ -28,6 +31,9 @@ const resolveErrorDiagnostics = (error: unknown): unknown =>
 
 const resolveErrorMessage = (error: unknown): string => (error instanceof Error ? error.message : '服务处理失败')
 
+const CORS_ALLOWED_HEADERS = ['Content-Type', 'Authorization', WORKFLOW_USER_ID_HEADER, WORKFLOW_USER_NAME_HEADER]
+const CORS_ALLOWED_METHODS = 'GET,POST,OPTIONS'
+
 export const createServerApp = (
   options: CreateServerAppOptions = {},
 ) => {
@@ -45,7 +51,7 @@ export const createServerApp = (
 
   void app.register(cors, {
     origin: '*',
-    allowedHeaders: ['Content-Type'],
+    allowedHeaders: CORS_ALLOWED_HEADERS,
     methods: ['GET', 'POST', 'OPTIONS'],
     preflight: false,
   })
@@ -56,8 +62,8 @@ export const createServerApp = (
     }
 
     reply.header('Access-Control-Allow-Origin', '*')
-    reply.header('Access-Control-Allow-Headers', 'Content-Type')
-    reply.header('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+    reply.header('Access-Control-Allow-Headers', CORS_ALLOWED_HEADERS.join(', '))
+    reply.header('Access-Control-Allow-Methods', CORS_ALLOWED_METHODS)
     reply.code(204).send()
   })
 
@@ -102,6 +108,11 @@ export const createServerApp = (
             message: resolveErrorMessage(error),
           },
     )
+  })
+
+  app.addHook('onClose', async () => {
+    disposeAllPiAgentSessions()
+    disposeAllJsTransformAgentSessions()
   })
 
   void app.register(createJsTransformAgentRoutes())

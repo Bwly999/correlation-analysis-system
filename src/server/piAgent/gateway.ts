@@ -371,6 +371,10 @@ export function getPiAgentSession(sessionId: string): PiAgentSessionDetail | nul
   }
 }
 
+export function getPiAgentSessionOwner(sessionId: string): string | null {
+  return getSessionRecord(sessionId)?.userId ?? null
+}
+
 export async function syncPiAgentCanvas(input: {
   sessionId: string
   workflowSnapshot: {
