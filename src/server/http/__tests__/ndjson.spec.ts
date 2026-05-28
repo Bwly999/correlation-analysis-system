@@ -7,10 +7,12 @@ const createResponse = () => {
   const headers = new Map<string, string>()
   let body = ''
   let ended = false
+  const flushHeaders = vi.fn()
 
   return Object.assign(emitter, {
     statusCode: 200,
     writableEnded: false,
+    flushHeaders,
     setHeader(name: string, value: string) {
       headers.set(name, value)
     },
@@ -34,6 +36,7 @@ const createResponse = () => {
     isEnded() {
       return ended
     },
+    flushHeadersSpy: flushHeaders,
   })
 }
 
@@ -55,5 +58,13 @@ describe('startNdjsonStream', () => {
 
     expect(unsubscribe).toHaveBeenCalledTimes(1)
     expect(response.isEnded()).toBe(true)
+  })
+
+  it('flushes headers immediately after the stream is set up', () => {
+    const response = createResponse()
+
+    startNdjsonStream(response as any, () => vi.fn())
+
+    expect(response.flushHeadersSpy).toHaveBeenCalledTimes(1)
   })
 })

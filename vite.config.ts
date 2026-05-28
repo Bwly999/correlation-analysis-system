@@ -6,6 +6,7 @@ import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
 import tailwindcss from '@tailwindcss/vite'
 import AutoImport from 'unplugin-auto-import/vite'
+import { createReusableDevApiHandler } from './src/server/dev/reusableDevApiHandler.js'
 
 const devEnv = loadEnv(process.env.NODE_ENV || 'development', process.cwd(), '')
 
@@ -29,30 +30,31 @@ const isVueEcosystemModule = (id: string) =>
   || id.includes('node_modules/.pnpm/@vueuse+')
   || id.includes('vue-draggable-plus')
 
+const isServerSourceFile = (file: string) =>
+  file.replaceAll('\\', '/').includes('/src/server/')
+
 const workflowServerDevMiddleware = (): Plugin => {
   return {
     name: 'workflow-server-dev-middleware',
     apply: 'serve',
     configureServer(server) {
-      const getHandler = async () =>
+      const apiHandler = createReusableDevApiHandler(() =>
         server
           .ssrLoadModule('/src/server/app.ts')
-          .then(async ({ createServerApp }) => {
-            const app = createServerApp()
-            await app.ready()
+          .then(({ createServerApp }) => createServerApp()),
+      )
 
-            return (request: NodeJS.ReadableStream, response: NodeJS.WritableStream & NodeJS.EventEmitter) => {
-              const cleanup = () => {
-                response.off('close', cleanup)
-                response.off('finish', cleanup)
-                void app.close()
-              }
+      server.watcher.on('all', (_event, file) => {
+        if (!isServerSourceFile(file)) {
+          return
+        }
 
-              response.once('close', cleanup)
-              response.once('finish', cleanup)
-              app.server.emit('request', request, response)
-            }
-          })
+        void apiHandler.dispose()
+      })
+
+      server.httpServer?.once('close', () => {
+        void apiHandler.dispose()
+      })
 
       server.middlewares.use((request, response, next) => {
         if (!request.url?.startsWith('/api/')) {
@@ -60,8 +62,8 @@ const workflowServerDevMiddleware = (): Plugin => {
           return
         }
 
-        void getHandler()
-          .then((handler) => handler(request, response))
+        void apiHandler.handle(request, response)
+          .then(() => undefined)
           .catch(next)
       })
     },

@@ -18,6 +18,8 @@ export const startNdjsonStream = (
     writeNdjsonEvent(response, event)
   })
 
+  response.flushHeaders?.()
+
   const cleanup = () => {
     if (cleanedUp) return
     cleanedUp = true
