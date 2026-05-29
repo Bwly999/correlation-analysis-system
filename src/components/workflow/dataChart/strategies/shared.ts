@@ -464,7 +464,7 @@ const createNormalDistributionSeriesData = (values: number[]) => {
     return [x, density * normalScale] as [number, number]
   })
 
-  return { histogram, curve, min, max }
+  return { histogram, curve, min, max, rawMean, rawMin, rawMax, rawStd }
 }
 
 export const createNormalDistributionOption = (rows: ChartRow[], keys: string[], xAxisName: string): EChartsOption => {
@@ -508,14 +508,38 @@ export const createNormalDistributionOption = (rows: ChartRow[], keys: string[],
       icon: 'roundRect',
       textStyle: { color: '#64748b', fontSize: 11, fontWeight: 600 },
     },
+    title: keys.map((key, index) => {
+      const columnIndex = index % NORMAL_DISTRIBUTION_COLUMNS
+      const rowIndex = Math.floor(index / NORMAL_DISTRIBUTION_COLUMNS)
+      const values = rows.map((row) => row[key]).filter(isFiniteNumber)
+      const { rawMean, rawMin, rawMax, rawStd } = createNormalDistributionSeriesData(values)
+
+      return {
+        text: `${key} 正态分布`,
+        subtext: `均值: ${formatBoxValue(rawMean)} | 最小值: ${formatBoxValue(rawMin)} | 最大值: ${formatBoxValue(rawMax)} | 标准差: ${formatBoxValue(rawStd)}`,
+        left: columnIndex === 0 ? '25%' : '75%',
+        textAlign: 'center',
+        top: `${8 + rowHeight * rowIndex}%`,
+        textStyle: {
+          color: '#0f172a',
+          fontSize: 12,
+          fontWeight: 700,
+        },
+        subtextStyle: {
+          color: '#64748b',
+          fontSize: 10,
+          fontWeight: 500,
+        },
+      }
+    }),
     grid: keys.map((_, index) => {
       const columnIndex = index % NORMAL_DISTRIBUTION_COLUMNS
       const rowIndex = Math.floor(index / NORMAL_DISTRIBUTION_COLUMNS)
       return {
         left: columnIndex === 0 ? '6%' : '56%',
         width: '38%',
-        top: `${10 + rowHeight * rowIndex}%`,
-        height: `${Math.max(10, rowHeight - 15)}%`,
+        top: `${16 + rowHeight * rowIndex}%`,
+        height: `${Math.max(10, rowHeight - 22)}%`,
         containLabel: true,
       }
     }),
