@@ -418,6 +418,8 @@ export const createBoxplotBaseOption = (keys: string[], whiskerModeLabel: string
     axisLabel: { color: '#64748b', fontSize: 11 },
     splitLine: { lineStyle: { color: '#e2e8f0', type: 'dashed' } },
   },
+  barCategoryGap: '20%',
+  barGap: '30%',
   series: [] as Array<Record<string, unknown>>,
 })
 

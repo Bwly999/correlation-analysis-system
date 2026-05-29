@@ -3,7 +3,7 @@ import { computed, markRaw, shallowRef, watch } from 'vue'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
-import { BarChart, BoxplotChart, LineChart, ScatterChart } from 'echarts/charts'
+import { BarChart, BoxplotChart, CustomChart, LineChart, ScatterChart } from 'echarts/charts'
 import {
   DataZoomComponent,
   DatasetComponent,
@@ -41,6 +41,7 @@ use([
   BarChart,
   BoxplotChart,
   ScatterChart,
+  CustomChart,
   GridComponent,
   TooltipComponent,
   LegendComponent,

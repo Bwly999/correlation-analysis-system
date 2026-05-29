@@ -33,6 +33,8 @@ export const boxplotChartStrategy: ChartStrategy = {
         return {
           name: group.name,
           type: 'boxplot',
+          barGap: '30%',
+          barCategoryGap: '20%',
           data: model.keys.map((key) => buildBoxStatsByKey(group.data || [], [key], context.state.boxplotWhiskerMode.value)[0]!.boxValues),
           itemStyle: {
             color: toRgba(color, 0.2),
@@ -50,24 +52,46 @@ export const boxplotChartStrategy: ChartStrategy = {
 
       const outlierSeries = activeGroups.flatMap((group, index, groups) => {
         const color = BOX_PLOT_COLORS[index % BOX_PLOT_COLORS.length]!
-        const scatterData = model.keys.flatMap((key, keyIndex) =>
+        const outlierData = model.keys.flatMap((key, keyIndex) =>
           buildBoxStatsByKey(group.data || [], [key], context.state.boxplotWhiskerMode.value)[0]!.outliers.map((value) => ({
             value: [keyIndex, value] as [number, number],
             factorName: key,
             groupName: group.name,
           })),
         )
-        if (scatterData.length === 0) return []
+        if (outlierData.length === 0) return []
         return [
           {
             name: `${group.name}-离群点`,
-            type: 'scatter',
-            data: scatterData,
-            symbolSize: 8,
-            symbolOffset: buildGroupedScatterOffset(index, groups.length),
+            type: 'custom',
+            data: outlierData,
+            renderItem: (params: any, api: any) => {
+              const categoryIndex = api.value(0)
+              const pointValue = api.value(1)
+              const coord = api.coord([categoryIndex, pointValue])
+
+              const barLayout = api.barLayout({
+                barGap: '30%',
+                barCategoryGap: '20%',
+                count: groups.length,
+              })
+
+              return {
+                type: 'circle',
+                shape: {
+                  cx: coord[0] + barLayout[index].offset + barLayout[index].width / 2,
+                  cy: coord[1],
+                  r: 4,
+                },
+                style: {
+                  fill: color,
+                  stroke: '#ffffff',
+                  lineWidth: 1.2,
+                },
+              }
+            },
             z: 4,
             legendHoverLink: false,
-            itemStyle: { color, borderColor: '#ffffff', borderWidth: 1.2 },
             tooltip: { trigger: 'item', formatter: createBoxplotOutlierTooltipFormatter(whiskerModeLabel) },
           },
         ]
