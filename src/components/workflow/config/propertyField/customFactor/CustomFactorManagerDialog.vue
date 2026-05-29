@@ -178,6 +178,7 @@ const gridRowSelection = computed<RowSelectionOptions<CustomFactorRecord>>(() =>
   checkboxes: true,
   headerCheckbox: true,
   enableClickSelection: true,
+  selectAll: 'filtered',
 }))
 
 const columnDefs = computed<ColDef<CustomFactorRecord>[]>(() => [
