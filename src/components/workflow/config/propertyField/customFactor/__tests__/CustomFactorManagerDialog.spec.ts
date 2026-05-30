@@ -6,11 +6,17 @@ import CustomFactorManagerDialog from '../CustomFactorManagerDialog.vue'
 let gridReadyPayload: Record<string, unknown> | null = null
 let selectedRowsRef: Array<Record<string, unknown>> = []
 
+vi.mock('primevue/usetoast', () => ({
+  useToast: () => ({
+    add: vi.fn(),
+  }),
+}))
+
 vi.mock('../../inputs/fileColumnTextImport', () => ({
   parseTabularTextFile: vi.fn(),
 }))
 
-const { parseTabularTextFile: parseTabularTextFileMock } = await import('../../inputs/fileColumnTextImport')
+const { parseTabularTextFile: parseTabularTextFileMock } = await import('../../inputs/fileColumnTextImport') as any
 
 vi.mock('ag-grid-vue3', () => ({
   AgGridVue: defineComponent({
@@ -251,6 +257,12 @@ describe('CustomFactorManagerDialog', () => {
     const deleteButton = wrapper.findAll('button').find((button) => button.text().includes('删除选中'))
     expect(deleteButton).toBeTruthy()
     await deleteButton!.trigger('click')
+
+    // Now it should show the confirmation dialog
+    const confirmDeleteButton = wrapper.findAll('button').find((button) => button.text().includes('确认删除'))
+    expect(confirmDeleteButton).toBeTruthy()
+    await confirmDeleteButton!.trigger('click')
+
     expect(wrapper.get('[data-testid="ag-grid-row-summary"]').text()).not.toContain('温度一-已修改')
   })
 
@@ -291,7 +303,8 @@ describe('CustomFactorManagerDialog', () => {
     await wrapper.get('button[aria-label="确认删除"]').trigger('click')
 
     expect(localStorage.getItem('workflow.customFactorGroups.v1:selectedGroupId')).toBe('group-1')
-    expect(wrapper.emitted('update:selectedGroupId')?.at(-1)).toEqual(['group-1'])
+    const emitted = wrapper.emitted('update:selectedGroupId')
+    expect(emitted?.[emitted.length - 1]).toEqual(['group-1'])
   })
 
   it('renders icon toolbar actions and keeps action entry points usable', async () => {

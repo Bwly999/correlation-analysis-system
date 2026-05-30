@@ -8,6 +8,7 @@ import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
 import Textarea from 'primevue/textarea'
+import { useToast } from 'primevue/usetoast'
 import { Download, FileSpreadsheet, Lock, LockOpen, Plus, Sparkles, Trash2, Upload } from 'lucide-vue-next'
 import { useWorkflowOverlayHost } from '@/components/workflow/workflowOverlayHost'
 import AgGridCommunitySetFilter from '@/components/workflow/common/AgGridCommunitySetFilter.vue'
@@ -52,6 +53,7 @@ const emit = defineEmits<{
 }>()
 
 const { overlayAppendTo } = useWorkflowOverlayHost()
+const toast = useToast()
 
 const groups = shallowRef<CustomFactorGroup[]>([])
 const currentMode = shallowRef<'batch' | 'excel'>('batch')
@@ -66,6 +68,7 @@ const gridApi = shallowRef<GridApi<CustomFactorRecord> | null>(null)
 const selectedRowCount = shallowRef(0)
 const createGroupDialogVisible = shallowRef(false)
 const deleteGroupDialogVisible = shallowRef(false)
+const deleteRowsDialogVisible = shallowRef(false)
 const pendingGroupName = shallowRef('')
 const isExcelUploadDragging = shallowRef(false)
 
@@ -428,10 +431,18 @@ const handleCellValueChanged = (event: CellValueChangedEvent<CustomFactorRecord>
 const deleteSelectedRows = () => {
   const selectedRows = gridApi.value?.getSelectedRows() || []
   if (selectedRows.length === 0) return
+  const deletedCount = selectedRows.length
   const selectedKeySet = new Set(selectedRows.map((row) => row.uid))
   editingFactors.value = editingFactors.value.filter((row) => !selectedKeySet.has(row.uid))
   selectedRowCount.value = 0
   isDirty.value = true
+  deleteRowsDialogVisible.value = false
+  toast.add({
+    severity: 'success',
+    summary: '删除成功',
+    detail: `成功删除了 ${deletedCount} 个因子`,
+    life: 3000,
+  })
 }
 
 const saveCurrentGroup = () => {
@@ -448,6 +459,12 @@ const saveCurrentGroup = () => {
   syncEditingFactorsFromGroup(
     loadCustomFactorGroups(props.storageKey).find((group) => group.id === selectedGroup.value?.id) ?? null,
   )
+  toast.add({
+    severity: 'success',
+    summary: '保存成功',
+    detail: '因子配置已保存',
+    life: 3000,
+  })
   emit('saved')
 }
 
@@ -697,7 +714,7 @@ const triggerImportFile = () => {
               <div class="custom-factor-dialog__grid-meta">
                 已选 {{ selectedRowCount }} 行
               </div>
-              <Button label="删除选中" severity="danger" outlined :disabled="!canDeleteSelectedRows" @click="deleteSelectedRows">
+              <Button label="删除选中" severity="danger" outlined :disabled="!canDeleteSelectedRows" @click="deleteRowsDialogVisible = true">
                 <template #icon>
                   <Trash2 :size="14" />
                 </template>
@@ -770,6 +787,26 @@ const triggerImportFile = () => {
       <template #footer>
         <Button label="取消" severity="secondary" outlined @click="deleteGroupDialogVisible = false" />
         <Button label="确认删除" severity="danger" @click="removeGroup" />
+      </template>
+    </Dialog>
+
+    <Dialog
+      :visible="deleteRowsDialogVisible"
+      modal
+      header="确认删除"
+      :style="{ width: '420px' }"
+      :append-to="overlayAppendTo"
+      @update:visible="deleteRowsDialogVisible = $event"
+    >
+      <div class="custom-factor-dialog__subdialog-body">
+        <p class="custom-factor-dialog__danger-title">确定要删除选中的 {{ selectedRowCount }} 条因子吗？</p>
+        <p class="custom-factor-dialog__hint">
+          此操作将从当前配置组中移除这些因子，保存后生效。
+        </p>
+      </div>
+      <template #footer>
+        <Button label="取消" severity="secondary" outlined @click="deleteRowsDialogVisible = false" />
+        <Button label="确认删除" severity="danger" @click="deleteSelectedRows" />
       </template>
     </Dialog>
   </Dialog>
