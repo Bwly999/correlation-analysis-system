@@ -1881,6 +1881,32 @@ describe('Node Definitions Execution Logic', () => {
       ).rejects.toThrow('所选字段缺少足够的有效样本，无法完成相关性分析')
     })
 
+    it('should skip invalid rows for pearson correlation and explain the filtering', async () => {
+      const input = createTableResult([
+        { target: 1, f1: 1, f2: 10 },
+        { target: 2, f1: 2, f2: 8 },
+        { target: '', f1: 3, f2: 6 },
+        { target: 4, f1: 'bad', f2: 4 },
+        { target: 5, f1: 5, f2: 2 },
+      ])
+
+      const result = await pearsonNode.execute(input, {
+        xFields: ['f1', 'f2'],
+        yFields: ['target'],
+        topN: 5,
+      })
+
+      const legacy = asLegacy(result)
+      const summarySection = legacy.report.sections[0]
+      const detail = legacy.meta?.pairDetails?.find(
+        (item: any) => item.xField === 'f1' && item.yField === 'target',
+      )
+
+      expect(detail?.sampleSize).toBe(3)
+      expect(summarySection.content).toContain('已自动过滤缺失或非数值行')
+      expect(summarySection.content).toContain('不同字段对的样本量可能不同')
+    })
+
     it('should flag high collinearity between x fields when they are strongly correlated', async () => {
       const input = createTableResult([
         { target: 10, f1: 1, f2: 2, f3: 8 },
@@ -1956,6 +1982,30 @@ describe('Node Definitions Execution Logic', () => {
         ).rejects.toThrow('所选字段缺少足够的有效样本，无法完成相关性分析')
       })
 
+      it('spearman skips invalid rows instead of throwing', async () => {
+        const input = createTableResult([
+          { target: 1, f1: 1 },
+          { target: 2, f1: 2 },
+          { target: 'N/A', f1: 3 },
+          { target: 4, f1: 'bad' },
+          { target: 5, f1: 5 },
+        ])
+
+        const result = await spearmanNode.execute(input, {
+          xFields: ['f1'],
+          yFields: ['target'],
+          topN: 5,
+        })
+
+        const legacy = asLegacy(result)
+        const detail = legacy.meta?.pairDetails?.find(
+          (item: any) => item.xField === 'f1' && item.yField === 'target',
+        )
+
+        expect(detail?.sampleSize).toBe(3)
+        expect(legacy.report.sections[0].content).toContain('已自动过滤缺失或非数值行')
+      })
+
       it('kendall rejects non-numeric selected fields', async () => {
         const input = createTableResult([
           { target: 1, f1: 1, category: 'A' },
@@ -2002,6 +2052,30 @@ describe('Node Definitions Execution Logic', () => {
             topN: 5,
           }),
         ).rejects.toThrow('所选字段缺少足够的有效样本，无法完成相关性分析')
+      })
+
+      it('kendall skips invalid rows instead of throwing', async () => {
+        const input = createTableResult([
+          { target: 1, f1: 1 },
+          { target: 2, f1: 2 },
+          { target: 'N/A', f1: 3 },
+          { target: 4, f1: 'bad' },
+          { target: 5, f1: 5 },
+        ])
+
+        const result = await kendallNode.execute(input, {
+          xFields: ['f1'],
+          yFields: ['target'],
+          topN: 5,
+        })
+
+        const legacy = asLegacy(result)
+        const detail = legacy.meta?.pairDetails?.find(
+          (item: any) => item.xField === 'f1' && item.yField === 'target',
+        )
+
+        expect(detail?.sampleSize).toBe(3)
+        expect(legacy.report.sections[0].content).toContain('已自动过滤缺失或非数值行')
       })
     })
   })

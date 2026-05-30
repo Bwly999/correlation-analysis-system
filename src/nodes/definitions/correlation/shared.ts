@@ -402,7 +402,7 @@ const createSummaryLines = (
   const lines = [
     `本次共识别 ${numericKeys.length} 个数值字段，基于 ${rowCount} 行样本计算 X × Y 交叉相关矩阵。`,
     `本次纳入 ${xFields.length} 个 X 字段、${yFields.length} 个 Y 字段；显著相关（近似 p < 0.05）的字段对共 ${significantRelationCount} 个，强相关（|r| >= 0.60）的字段对共 ${strongRelationCount} 个。`,
-    `数值字段缺失单元格共 ${incompleteFieldCount} 个；相关分析采用成对可用样本计算，不同字段对的样本量可能不同。`,
+    `数值字段缺失或非数值单元格共 ${incompleteFieldCount} 个；相关分析已自动过滤缺失或非数值行，并采用成对可用样本计算，不同字段对的样本量可能不同。`,
   ]
 
   strongestByY.forEach(({ yField, detail }) => {
