@@ -928,6 +928,7 @@ onBeforeUnmount(() => {
           <RuntimeInputs
             v-model:config="config"
             :properties="runtimeProperties"
+            :node-type="node?.data.type"
             :reset-properties="nodeDefinition?.properties"
             :upstream-factors="upstreamFactors"
             :node-id="node?.id"
@@ -1100,6 +1101,7 @@ onBeforeUnmount(() => {
                 <ConfigForm
                   v-model:config="config"
                   :properties="staticProperties"
+                  :node-type="node?.data.type"
                   :reset-properties="nodeDefinition?.properties"
                   :upstream-factors="upstreamFactors"
                   :node-id="node?.id"

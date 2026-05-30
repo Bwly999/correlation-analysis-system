@@ -1,10 +1,12 @@
 import type { NodeProperty } from '@/nodes/types'
+import { extractProcessNamesFromFactorSelection } from '@/nodes/definitions/neighborSystemSelection'
 
 interface ApplyDependencyResetParams {
   properties: NodeProperty[]
   previousConfig: Record<string, any>
   propName: string
   value: unknown
+  nodeType?: string
 }
 
 const getDefaultValue = (property: NodeProperty) => {
@@ -14,16 +16,33 @@ const getDefaultValue = (property: NodeProperty) => {
   return null
 }
 
+const syncNeighborSystemProcesses = (
+  nextConfig: Record<string, any>,
+  propName: string,
+  value: unknown,
+  nodeType?: string,
+) => {
+  if (nodeType !== 'neighbor-system' || propName !== 'selectedFactors') {
+    return nextConfig
+  }
+
+  return {
+    ...nextConfig,
+    selectedProcesses: extractProcessNamesFromFactorSelection(value),
+  }
+}
+
 export const applyDependencyReset = ({
   properties,
   previousConfig,
   propName,
   value,
+  nodeType,
 }: ApplyDependencyResetParams) => {
   const nextConfig = { ...previousConfig, [propName]: value }
 
   if (Object.is(previousConfig[propName], value)) {
-    return nextConfig
+    return syncNeighborSystemProcesses(nextConfig, propName, value, nodeType)
   }
 
   const queue = [propName]
@@ -41,5 +60,5 @@ export const applyDependencyReset = ({
     })
   }
 
-  return nextConfig
+  return syncNeighborSystemProcesses(nextConfig, propName, value, nodeType)
 }

@@ -83,4 +83,12 @@ describe('neighbor-system mock options', () => {
     expect(processOptions?.length).toBeGreaterThanOrEqual(8)
     expect(processOptionsWithoutProduct?.length).toBeGreaterThanOrEqual(8)
   })
+
+  it('syncs process options dependency to selected factors', () => {
+    const selectedProcessesProperty = neighborSystemNode.properties.find(
+      (property) => property.name === 'selectedProcesses',
+    )
+
+    expect(selectedProcessesProperty?.dependencies).toEqual(['productName', 'selectedFactors'])
+  })
 })

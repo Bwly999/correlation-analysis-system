@@ -145,6 +145,7 @@ const updateConfig = (propName: string, value: any) => {
     previousConfig: config.value,
     propName,
     value,
+    nodeType: props.node?.data.type,
   })
 }
 

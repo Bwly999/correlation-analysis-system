@@ -5,7 +5,6 @@ import {
   getSceneTree,
   getResolvedKanbanAuthToken,
   getSchemeTree,
-  type KanbanFactorValue,
   type KanbanSceneValue,
   listAuthorizedProducts,
   listMaterialTypes,
@@ -13,11 +12,8 @@ import {
   listTaskOrderTypes,
 } from '@/services/kanbanIntegration'
 import { createTableResult } from '../result'
-
-const FACTOR_KEY_PREFIX = 'factor:'
+import { parseFactorSelections, getSelectedKeys } from './neighborSystemSelection'
 const SCHEME_KEY_PREFIX = 'scheme:'
-
-type LegacyTreeSelectionState = Record<string, { checked?: boolean }>
 
 interface TreeModelValue {
   selectedKeys?: string[]
@@ -29,68 +25,6 @@ const parseDelimitedList = (value: string) =>
     .split(/[\n,\uff0c]/)
     .map((item) => item.trim())
     .filter(Boolean)
-
-const extractCheckedLeafKeys = (
-  selection: Record<string, { checked?: boolean }> | undefined,
-  prefix: string,
-) =>
-  Object.entries(selection || {})
-    .filter(([key, state]) => Boolean(state?.checked) && key.startsWith(prefix))
-    .map(([key]) => key)
-
-const isLegacyTreeSelectionState = (value: unknown): value is LegacyTreeSelectionState => {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
-  return Object.values(value).some((item) => item && typeof item === 'object' && 'checked' in item)
-}
-
-const getSelectedKeys = (selection: unknown) => {
-  if (isLegacyTreeSelectionState(selection)) {
-    return extractCheckedLeafKeys(selection, '')
-  }
-
-  const selectedKeys = (selection as TreeModelValue | undefined)?.selectedKeys
-  return Array.isArray(selectedKeys) ? selectedKeys.filter((item): item is string => Boolean(item)) : []
-}
-
-const parseFactorSelections = (selection: unknown) => {
-  const wrappedValues = (selection as { values?: KanbanFactorValue[] } | undefined)?.values
-  if (Array.isArray(wrappedValues) && wrappedValues.length > 0) {
-    const factorValues = wrappedValues.filter((item) => Boolean(item?.factorKey))
-
-    return {
-      factorKeys: factorValues.map((item) => item.factorKey),
-      factorValues,
-    }
-  }
-
-  const factorSelections = getSelectedKeys(selection).filter((key) => key.startsWith(FACTOR_KEY_PREFIX))
-
-  return {
-    factorKeys: factorSelections
-      .map((key) => {
-        const segments = key.slice(FACTOR_KEY_PREFIX.length).split('::')
-        return segments[segments.length - 1]
-      })
-      .filter((value): value is string => Boolean(value)),
-    factorValues: factorSelections
-      .map((key) => {
-        const segments = key.slice(FACTOR_KEY_PREFIX.length).split('::')
-        const processName = segments[0] || ''
-        const factorKey = segments[segments.length - 1] || ''
-
-        if (!factorKey) return null
-
-        return {
-          factorKey,
-          factorName: factorKey,
-          materialType: '',
-          processName,
-          r2Name: '',
-        } satisfies KanbanFactorValue
-      })
-      .filter((value): value is KanbanFactorValue => Boolean(value)),
-  }
-}
 
 const parseSceneSelection = (selection: unknown): KanbanSceneValue | undefined => {
   const wrappedValues = (selection as TreeModelValue | undefined)?.values
@@ -305,7 +239,7 @@ export const neighborSystemNode: NodeDefinition = {
       isRuntimeInput: true,
       placeholder: '请选择工序',
       autoSelectAllOnOptionsChange: true,
-      dependencies: ['productName'],
+      dependencies: ['productName', 'selectedFactors'],
       description: '四种启动方式都会按这里选择的工序范围查询 SN 与因子数据。',
       resolveOptions: async ({ config }) => {
         return listProcessOptions(ensureToken(), config.productName || '')

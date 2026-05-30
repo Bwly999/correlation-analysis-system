@@ -20,6 +20,7 @@ const props = defineProps<{
   properties: NodeProperty[]
   resetProperties?: NodeProperty[]
   config: any
+  nodeType?: string
   upstreamFactors: UpstreamFactorOption[]
   nodeId?: string | null
   inputData?: unknown
@@ -108,6 +109,7 @@ const updateConfig = (propName: string, value: any) => {
       previousConfig: props.config,
       propName,
       value,
+      nodeType: props.nodeType,
     }),
   )
 }

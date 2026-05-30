@@ -97,4 +97,93 @@ describe('applyDependencyReset', () => {
       selectedProcesses: ['涂布'],
     })
   })
+
+  it('syncs neighbor-system processes from selected factors when factor selection changes', () => {
+    const nextConfig = applyDependencyReset({
+      properties: [
+        ...properties.map((property) =>
+          property.name === 'selectedProcesses'
+            ? { ...property, dependencies: ['productName', 'selectedFactors'] }
+            : property,
+        ),
+      ],
+      previousConfig: {
+        productName: '试制产品 A1',
+        selectedFactors: {
+          selectedKeys: ['factor:涂布::F_TEMP'],
+          values: [
+            {
+              factorKey: 'F_TEMP',
+              factorName: '温度',
+              processName: '涂布',
+            },
+          ],
+        },
+        selectedProcesses: ['手动工序'],
+      },
+      propName: 'selectedFactors',
+      value: {
+        selectedKeys: ['factor:涂布::F_TEMP', 'factor:装配::F_PRESS'],
+        values: [
+          {
+            factorKey: 'F_TEMP',
+            factorName: '温度',
+            processName: '涂布',
+          },
+          {
+            factorKey: 'F_PRESS',
+            factorName: '压力',
+            processName: '装配',
+          },
+        ],
+      },
+      nodeType: 'neighbor-system',
+    })
+
+    expect(nextConfig.selectedProcesses).toEqual(['涂布', '装配'])
+  })
+
+  it('clears neighbor-system processes when factor selection becomes empty', () => {
+    const nextConfig = applyDependencyReset({
+      properties: [
+        ...properties.map((property) =>
+          property.name === 'selectedProcesses'
+            ? { ...property, dependencies: ['productName', 'selectedFactors'] }
+            : property,
+        ),
+      ],
+      previousConfig: {
+        productName: '试制产品 A1',
+        selectedFactors: {
+          selectedKeys: ['factor:涂布::F_TEMP'],
+        },
+        selectedProcesses: ['涂布'],
+      },
+      propName: 'selectedFactors',
+      value: {},
+      nodeType: 'neighbor-system',
+    })
+
+    expect(nextConfig.selectedProcesses).toEqual([])
+  })
+
+  it('does not apply factor-driven process sync to other node types', () => {
+    const nextConfig = applyDependencyReset({
+      properties,
+      previousConfig: {
+        productName: '试制产品 A1',
+        selectedFactors: {
+          selectedKeys: ['factor:涂布::F_TEMP'],
+        },
+        selectedProcesses: ['保留工序'],
+      },
+      propName: 'selectedFactors',
+      value: {
+        selectedKeys: ['factor:装配::F_PRESS'],
+      },
+      nodeType: 'custom-node',
+    })
+
+    expect(nextConfig.selectedProcesses).toEqual(['保留工序'])
+  })
 })

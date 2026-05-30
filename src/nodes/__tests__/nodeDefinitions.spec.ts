@@ -2269,6 +2269,104 @@ describe('Node Definitions Execution Logic', () => {
       )
     })
 
+    it('should derive process list from factor values with deduplication when config is synchronized', async () => {
+      mockGetResolvedKanbanAuthToken.mockReturnValue('token-from-host')
+      mockFetchKanbanData.mockResolvedValue({
+        rows: [{ sn: 'SN001', F_TEMP: 12.3, F_PRESS: 45.6 }],
+        metadata: {
+          totalSn: 1,
+        },
+      })
+
+      await neighborSystemNode.execute(null, {
+        productName: '试制产品 A1',
+        sceneSelection: {
+          selectedKey: 'sub-scene:scene-pack::sub-pack-a',
+          value: {
+            sceneId: 'scene-pack',
+            sceneLable: 'PACK',
+            subSceneId: 'sub-pack-a',
+            subSceneLable: 'PACK-A',
+          },
+        },
+        fetchMode: 'sn',
+        snList: 'SN001',
+        selectedFactors: {
+          selectedKeys: ['factor:涂布::F_TEMP', 'factor:涂布::F_PRESS', 'factor:装配::F_FLOW'],
+          values: [
+            {
+              factorKey: 'F_TEMP',
+              factorName: '温度',
+              materialType: '正极',
+              processName: '涂布',
+              r2Name: 'R2-TEMP',
+            },
+            {
+              factorKey: 'F_PRESS',
+              factorName: '压力',
+              materialType: '正极',
+              processName: '涂布',
+              r2Name: 'R2-PRESS',
+            },
+            {
+              factorKey: 'F_FLOW',
+              factorName: '流量',
+              materialType: '正极',
+              processName: '装配',
+              r2Name: 'R2-FLOW',
+            },
+          ],
+        },
+        selectedProcesses: ['涂布', '装配'],
+      })
+
+      expect(mockFetchKanbanData).toHaveBeenCalledWith(
+        expect.objectContaining({
+          processList: ['涂布', '装配'],
+        }),
+      )
+    })
+
+    it('should keep parsing process names from legacy factor keys when selected factor values are unavailable', async () => {
+      mockGetResolvedKanbanAuthToken.mockReturnValue('token-from-host')
+      mockFetchKanbanData.mockResolvedValue({
+        rows: [{ sn: 'SN001', F_TEMP: 12.3 }],
+        metadata: {
+          totalSn: 1,
+        },
+      })
+
+      await neighborSystemNode.execute(null, {
+        productName: '试制产品 A1',
+        sceneSelection: {
+          selectedKey: 'sub-scene:scene-pack::sub-pack-a',
+          value: {
+            sceneId: 'scene-pack',
+            sceneLable: 'PACK',
+            subSceneId: 'sub-pack-a',
+            subSceneLable: 'PACK-A',
+          },
+        },
+        fetchMode: 'sn',
+        snList: 'SN001',
+        selectedFactors: {
+          selectedKeys: ['factor:辊压::F_TEMP'],
+        },
+        selectedProcesses: ['辊压'],
+      })
+
+      expect(mockFetchKanbanData).toHaveBeenCalledWith(
+        expect.objectContaining({
+          facotrs: [
+            expect.objectContaining({
+              factorKey: 'F_TEMP',
+              processName: '辊压',
+            }),
+          ],
+        }),
+      )
+    })
+
     it('should throw error if no factors are selected', async () => {
       mockGetResolvedKanbanAuthToken.mockReturnValue('token-from-host')
       const config = {
