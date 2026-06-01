@@ -330,16 +330,85 @@ describe('BaseNode', () => {
           useManualInput: false,
           manualInput: '',
           isPinned: false,
-          output: {
-            kind: 'report',
-            payload: {
-              summary: '分析完成',
-              sections: [],
-            },
-          },
         },
       } as any,
     ]
+    store.setNodeRuntime('pearson-node', {
+      output: {
+        kind: 'report',
+        payload: {
+          summary: '分析完成',
+          sections: [],
+        },
+      } as any,
+    })
+
+    const wrapper = mount(BaseNode, {
+      props: {
+        id: 'pearson-node',
+        type: 'custom',
+        selected: false,
+        dragging: false,
+        connectable: true,
+        resizing: false,
+        position: { x: 0, y: 0 },
+        dimensions: { width: 110, height: 110 },
+        isValidTargetPos: () => true,
+        isValidSourcePos: () => true,
+        zIndex: 1,
+        targetPosition: Position.Left,
+        sourcePosition: Position.Right,
+        data: store.nodes[0]!.data,
+        events: {} as any,
+      } as any,
+      global: {
+        plugins: [PrimeVue],
+        directives: { tooltip: () => undefined },
+        stubs: {
+          Handle: { template: '<div />' },
+          NodeToolbar: { template: '<div><slot /></div>' },
+          NodeIcon: { template: '<div>ICON</div>' },
+        },
+      },
+    })
+
+    wrapper.vm.$el.dispatchEvent(new MouseEvent('mouseenter'))
+
+    await wrapper.get('[data-testid="preview-node-button"]').trigger('click')
+
+    expect(store.activePreviewNodeId).toBe('pearson-node')
+  })
+
+  it('opens result preview when runtime output exists outside canvas node data', async () => {
+    const store = useWorkflowStore()
+    store.nodes = [
+      {
+        id: 'pearson-node',
+        type: 'custom',
+        position: { x: 0, y: 0 },
+        label: 'Pearson 分析',
+        data: {
+          label: 'Pearson 分析',
+          type: 'pearson',
+          category: 'terminal',
+          status: 'success',
+          config: {},
+          logs: [],
+          useManualInput: false,
+          manualInput: '',
+          isPinned: false,
+        },
+      } as any,
+    ]
+    ;(store as any).setNodeRuntime('pearson-node', {
+      output: {
+        kind: 'report',
+        payload: {
+          summary: '分析完成',
+          sections: [],
+        },
+      },
+    })
 
     const wrapper = mount(BaseNode, {
       props: {
@@ -422,7 +491,7 @@ describe('BaseNode', () => {
     })
 
     expect(wrapper.text()).toContain('仅来自 props 的节点')
-    expect(wrapper.find('[data-testid="preview-node-button"]').attributes('disabled')).toBeUndefined()
+    expect(wrapper.find('[data-testid="preview-node-button"]').attributes('disabled')).toBe('')
     expect(wrapper.html()).toContain('amber-100')
   })
 

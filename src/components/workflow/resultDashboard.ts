@@ -4,6 +4,7 @@ import {
   normalizeWorkflowResult,
 } from './resultView'
 import type { WorkflowNode } from '@/utils/storage'
+import type { WorkflowNodeOutput } from '@/utils/storage'
 
 export type ResultDashboardNode = {
   nodeId: string
@@ -18,7 +19,7 @@ export type ResultDashboardNode = {
   resultKindLabel: string
   summary: string
   error?: string
-  output: WorkflowNode['data']['output']
+  output: WorkflowNodeOutput | null
 }
 
 export type WorkflowResultDashboardSummary = {
@@ -46,8 +47,10 @@ const sortDashboardNodes = (nodes: ResultDashboardNode[]) =>
 export const toResultDashboardNode = (
   node: WorkflowNode,
   executionTargetIds: string[],
+  runtimeOutput: WorkflowNodeOutput | null,
+  runtimeError?: string,
 ): ResultDashboardNode => {
-  const normalized = node.data.output ? normalizeWorkflowResult(node.data.output) : null
+  const normalized = runtimeOutput ? normalizeWorkflowResult(runtimeOutput) : null
 
   return {
     nodeId: node.id,
@@ -60,9 +63,9 @@ export const toResultDashboardNode = (
     isTerminal: node.data.category === 'terminal',
     resultKind: normalized?.kind ?? null,
     resultKindLabel: normalized ? getResultKindLabel(normalized) : '暂无结果',
-    summary: normalized ? getResultPreviewSummary(normalized) : node.data.error || '本次运行未产出结果',
-    error: node.data.error,
-    output: node.data.output ?? null,
+    summary: normalized ? getResultPreviewSummary(normalized) : runtimeError || '本次运行未产出结果',
+    error: runtimeError,
+    output: runtimeOutput,
   }
 }
 
@@ -89,6 +92,8 @@ export const buildResultDashboardSummary = ({
   duration,
   executionTargetIds,
   nodes,
+  getNodeOutput,
+  getNodeError,
 }: {
   workflowName: string
   status: 'success' | 'error' | 'stopped'
@@ -97,9 +102,18 @@ export const buildResultDashboardSummary = ({
   executionTargetIds: string[]
   terminalNodeIds: string[]
   nodes: WorkflowNode[]
+  getNodeOutput: (nodeId: string) => WorkflowNodeOutput | null
+  getNodeError: (nodeId: string) => string | undefined
 }): WorkflowResultDashboardSummary => {
   const dashboardNodes = sortDashboardNodes(
-    nodes.map((node) => toResultDashboardNode(node, executionTargetIds)),
+    nodes.map((node) =>
+      toResultDashboardNode(
+        node,
+        executionTargetIds,
+        getNodeOutput(node.id),
+        getNodeError(node.id),
+      ),
+    ),
   )
   const selectedDefaultNodeIds = getDefaultSelectedNodeIds(dashboardNodes)
 

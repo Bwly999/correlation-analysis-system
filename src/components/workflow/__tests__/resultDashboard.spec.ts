@@ -34,6 +34,10 @@ const createNode = (overrides: WorkflowNodeOverride): WorkflowNode => {
 
 describe('resultDashboard helpers', () => {
   it('defaults to terminal nodes with outputs and groups nodes by result state', () => {
+    const runtimeById = {
+      terminal_1: createReportResult({ title: '报告', sections: [] }),
+      action_1: createTableResult([{ a: 1 }]),
+    } as const
     const terminal = createNode({
       id: 'terminal_1',
       data: {
@@ -41,7 +45,6 @@ describe('resultDashboard helpers', () => {
         type: 'pearson',
         category: 'terminal',
         status: 'success',
-        output: createReportResult({ title: '报告', sections: [] }),
       },
     })
     const action = createNode({
@@ -51,7 +54,6 @@ describe('resultDashboard helpers', () => {
         type: 'field-selection',
         category: 'action',
         status: 'success',
-        output: createTableResult([{ a: 1 }]),
       },
     })
     const failed = createNode({
@@ -61,8 +63,6 @@ describe('resultDashboard helpers', () => {
         type: 'chart-display',
         category: 'terminal',
         status: 'error',
-        output: null,
-        error: '执行失败',
       },
     })
 
@@ -74,6 +74,8 @@ describe('resultDashboard helpers', () => {
       executionTargetIds: ['terminal_1', 'action_2'],
       terminalNodeIds: ['terminal_1', 'action_2'],
       nodes: [terminal, action, failed],
+      getNodeOutput: (nodeId) => runtimeById[nodeId as keyof typeof runtimeById] ?? null,
+      getNodeError: (nodeId) => (nodeId === 'action_2' ? '执行失败' : undefined),
     })
 
     expect(getDefaultSelectedNodeIds(summary.nodes)).toEqual(['terminal_1'])
@@ -85,6 +87,10 @@ describe('resultDashboard helpers', () => {
   })
 
   it('falls back to executed leaf result nodes when there is no terminal output', () => {
+    const runtimeById = {
+      leaf_1: createChartResult({ title: { text: '图表' } }),
+      upstream_1: createTableResult([{ factor: 1 }]),
+    } as const
     const leaf = createNode({
       id: 'leaf_1',
       data: {
@@ -92,7 +98,6 @@ describe('resultDashboard helpers', () => {
         type: 'data-profiling',
         category: 'action',
         status: 'success',
-        output: createChartResult({ title: { text: '图表' } }),
       },
     })
     const upstream = createNode({
@@ -102,7 +107,6 @@ describe('resultDashboard helpers', () => {
         type: 'manual-json-import',
         category: 'trigger',
         status: 'success',
-        output: createTableResult([{ factor: 1 }]),
       },
     })
 
@@ -114,6 +118,8 @@ describe('resultDashboard helpers', () => {
       executionTargetIds: ['leaf_1'],
       terminalNodeIds: [],
       nodes: [leaf, upstream],
+      getNodeOutput: (nodeId) => runtimeById[nodeId as keyof typeof runtimeById] ?? null,
+      getNodeError: () => undefined,
     })
 
     expect(getDefaultSelectedNodeIds(summary.nodes)).toEqual(['leaf_1'])

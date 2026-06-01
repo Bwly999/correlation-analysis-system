@@ -162,6 +162,45 @@ describe('Workflow Store', () => {
     expect(restoredNode.data.config.jsonData).toBe('')
   })
 
+  it('should store node runtime output outside canvas node data', () => {
+    const store = useWorkflowStore()
+    const node = store.addAndConnectNode('manual-json-import', '手动输入', { x: 0, y: 0 })!
+    const output = createTableResult([{ foo: 'bar' }])
+
+    store.setNodeRuntime(node.id, {
+      output,
+      logs: ['runtime log'],
+      error: 'runtime error',
+    })
+
+    expect(store.getNodeRuntime(node.id)).toMatchObject({
+      output,
+      logs: ['runtime log'],
+      error: 'runtime error',
+    })
+    expect(store.nodes[0]?.data.output).toBeUndefined()
+    expect(store.nodes[0]?.data.logs).toEqual([])
+    expect(store.nodes[0]?.data.error).toBeUndefined()
+  })
+
+  it('should clear separated node runtime state without mutating canvas node fields', () => {
+    const store = useWorkflowStore()
+    const node = store.addAndConnectNode('manual-json-import', '手动输入', { x: 0, y: 0 })!
+
+    store.setNodeRuntime(node.id, {
+      output: createJsonResult({ rows: 3 }),
+      logs: ['runtime log'],
+      error: 'runtime error',
+    })
+
+    store.clearNodeRuntime(node.id)
+
+    expect(store.getNodeRuntime(node.id)).toBeNull()
+    expect(store.nodes[0]?.data.output).toBeUndefined()
+    expect(store.nodes[0]?.data.logs).toEqual([])
+    expect(store.nodes[0]?.data.error).toBeUndefined()
+  })
+
   it('should reset canvas history when creating a new workflow', () => {
     const store = useWorkflowStore()
 
@@ -212,7 +251,7 @@ describe('Workflow Store', () => {
       'pearson',
     ])
     expect(correlationTemplate?.workflow.edges).toHaveLength(2)
-    expect(correlationTemplate?.workflow.nodes.every((node) => node.data.output === null)).toBe(true)
+    expect(correlationTemplate?.workflow.nodes.every((node) => node.data.output == null)).toBe(true)
   })
 
   it('should create a correlation template that can run immediately with manual json input', async () => {
@@ -228,7 +267,7 @@ describe('Workflow Store', () => {
     expect(sourceNode?.data.type).toBe('manual-json-import')
     expect(sourceNode?.data.config.jsonData).toContain('"target"')
     expect(terminalNode?.data.status).toBe('success')
-    expect((terminalNode?.data.output as any)?.kind).toBe('report')
+    expect((store.getNodeOutput(terminalNode!.id) as any)?.kind).toBe('report')
   })
 
   it('should allow adding multiple trigger nodes', () => {
@@ -476,7 +515,7 @@ describe('Workflow Store', () => {
 
     await store.runGlobal()
 
-    const mergeOutput = mergeNode.data.output as any
+    const mergeOutput = store.getNodeOutput(mergeNode.id) as any
 
     expect(mergeOutput?.kind).toBe('table')
     expect(mergeOutput?.meta?.stats?.inputCount).toBe(2)
@@ -540,7 +579,7 @@ describe('Workflow Store', () => {
 
     await store.runGlobal()
 
-    const mergeOutput = mergeNode.data.output as any
+    const mergeOutput = store.getNodeOutput(mergeNode.id) as any
 
     expect(mergeOutput?.kind).toBe('tableCollection')
     expect(mergeOutput?.payload).toEqual([
@@ -1221,7 +1260,7 @@ describe('Workflow Store', () => {
       trigger.data.config.token = 'cached-token'
       const triggerResult = await store.resumePendingExecution()
       expect(triggerResult?.kind).toBe('table')
-      expect(trigger.data.output).toEqual(triggerResult)
+      expect(store.getNodeOutput(trigger.id)).toEqual(triggerResult)
 
       trigger.data.config.token = ''
 
@@ -1300,7 +1339,7 @@ describe('Workflow Store', () => {
 
       trigger.data.config.token = 'cached-token'
       await store.resumePendingExecution()
-      expect((trigger.data.output as any)?.payload?.[0]?.token).toBe('cached-token')
+      expect((store.getNodeOutput(trigger.id) as any)?.payload?.[0]?.token).toBe('cached-token')
 
       trigger.data.config.token = 'fresh-token'
 
@@ -1313,7 +1352,7 @@ describe('Workflow Store', () => {
         kind: 'table',
         token: 'fresh-token',
       })
-      expect((trigger.data.output as any)?.payload?.[0]?.token).toBe('fresh-token')
+      expect((store.getNodeOutput(trigger.id) as any)?.payload?.[0]?.token).toBe('fresh-token')
       expect(
         store.logs.some((log) => log.message.includes('调试策略: 强制重跑上游后执行节点')),
       ).toBe(true)
@@ -1393,7 +1432,7 @@ describe('Workflow Store', () => {
         token: 'runtime-token',
         autoResumed: true,
       })
-      expect(action.data.output).toEqual(resumedResult)
+      expect(store.getNodeOutput(action.id)).toEqual(resumedResult)
       expect(action.data.status).toBe('success')
       expect(trigger.data.status).toBe('success')
       expect(store.pendingExecution).toBeNull()
@@ -1447,7 +1486,7 @@ describe('Workflow Store', () => {
       await expect(store.executeNode(node.id, true)).rejects.toThrow(
         '当前节点没有可分析输入，请先检查上游输出或左侧模拟输入',
       )
-      expect(node.data.error).toBe('当前节点没有可分析输入，请先检查上游输出或左侧模拟输入')
+      expect(store.getNodeError(node.id)).toBe('当前节点没有可分析输入，请先检查上游输出或左侧模拟输入')
       expect(
         store.logs.some((log) =>
           log.message.includes('执行失败: 当前节点没有可分析输入，请先检查上游输出或左侧模拟输入'),
@@ -1752,7 +1791,7 @@ describe('Workflow Store', () => {
       source: triggerNode.id,
       target: modelNode.id,
     })
-    expect(store.nodes.find((node) => node.id === triggerNode.id)?.data.output).toMatchObject({
+    expect(store.getNodeOutput(triggerNode.id)).toMatchObject({
       kind: 'table',
     })
   })
@@ -1780,10 +1819,10 @@ describe('Workflow Store', () => {
     await store.enterHistoryMode(record.id)
 
     expect(store.isHistoryMode).toBe(true)
-    expect(store.nodes.find((node) => node.id === triggerNode.id)?.data.output).toMatchObject({
+    expect(store.getNodeOutput(triggerNode.id)).toMatchObject({
       kind: 'table',
     })
-    expect(store.nodes.find((node) => node.id === terminalNode.id)?.data.output).toMatchObject({
+    expect(store.getNodeOutput(terminalNode.id)).toMatchObject({
       kind: 'chart',
     })
   })
@@ -1855,7 +1894,7 @@ describe('Workflow Store', () => {
       const record = store.executionHistory[0]!
       await store.enterHistoryMode(record.id)
 
-      const historicalTriggerOutput = store.nodes.find((node) => node.id === triggerNode.id)?.data.output as any
+      const historicalTriggerOutput = store.getNodeOutput(triggerNode.id) as any
       expect(historicalTriggerOutput.kind).toBe('table')
       expect(historicalTriggerOutput.payload).toHaveLength(120)
       expect(historicalTriggerOutput.meta?.historyTruncated).toBeUndefined()
@@ -1952,7 +1991,7 @@ describe('Workflow Store', () => {
       const record = store.executionHistory[0]!
       await store.enterHistoryMode(record.id)
 
-      const historicalReportOutput = store.nodes.find((node) => node.id === terminalNode.id)?.data.output as any
+      const historicalReportOutput = store.getNodeOutput(terminalNode.id) as any
       expect(historicalReportOutput.kind).toBe('report')
       expect(historicalReportOutput.meta?.historyTruncated).toBeUndefined()
       expect(historicalReportOutput.meta?.sourceData).toHaveLength(180)
@@ -2141,7 +2180,8 @@ describe('Workflow Store', () => {
     expect(duplicated.position).toEqual({ x: 140, y: 140 })
     expect(duplicated.data.config.someProp).toBe('someValue')
     expect(duplicated.data.status).toBe('idle')
-    expect(duplicated.data.output).toBeNull()
+    expect(duplicated.data.output).toBeUndefined()
+    expect(store.getNodeOutput(duplicated.id)).toBeNull()
   })
 
   it('should serialize selected nodes with only internal edges and runtime state that follows persistence rules', () => {
@@ -2156,8 +2196,10 @@ describe('Workflow Store', () => {
     trigger.selected = true
     action.selected = true
     trigger.data.status = 'success'
-    trigger.data.output = createJsonResult({ rows: 3 })
-    trigger.data.logs = ['运行日志']
+    store.setNodeRuntime(trigger.id, {
+      output: createJsonResult({ rows: 3 }),
+      logs: ['运行日志'],
+    })
     trigger.data.config.productName = '产品A'
     trigger.data.config.fetchMode = 'time'
     trigger.data.config.timeRange = [new Date('2026-04-01T00:00:00.000Z'), new Date('2026-04-02T00:00:00.000Z')]

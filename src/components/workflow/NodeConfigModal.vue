@@ -75,6 +75,12 @@ const findWorkflowNode = (
 const node = computed<WorkflowNode | null>(() =>
   findWorkflowNode(props.nodeId),
 );
+const currentNodeRuntimeOutput = computed(() =>
+  node.value ? store.getNodeOutput(node.value.id) : null,
+);
+const currentNodeRuntimeError = computed(() =>
+  node.value ? store.getNodeError(node.value.id) ?? "" : "",
+);
 
 // 状态管理
 const config = ref<any>({});
@@ -212,7 +218,7 @@ const inputData = computed(() => {
     return {
       inputs: incomingEdges.map((edge, index) => {
         const sourceNode = currentNodes.find((item) => item.id === edge.source);
-        const payload = sourceNode?.data.output ?? null;
+        const payload = sourceNode ? store.getNodeOutput(sourceNode.id) : null;
         const normalized = normalizeWorkflowResult(payload);
         const rows = getResultRows(payload);
         const schemaFields = getResultSchemaFields(payload);
@@ -486,7 +492,7 @@ const upstreamFactors = computed(() => {
   let data = localUseManualInput.value
     ? localManualInput.value
     : inputData.value;
-  if (!data && node.value?.data.output) data = node.value.data.output;
+  if (!data && currentNodeRuntimeOutput.value) data = currentNodeRuntimeOutput.value;
   if (!data) return [];
   if (typeof data === "string") {
     try {
@@ -549,8 +555,8 @@ const debugActionGuideText = computed(
     "调试节点只重新执行当前节点，默认复用上游缓存；重跑上游后调试会沿当前链路重新执行上游节点，更适合校验最新输入。",
 );
 const currentNodeError = computed(() =>
-  node.value?.data.status === "error" && node.value.data.error
-    ? node.value.data.error
+  node.value?.data.status === "error" && currentNodeRuntimeError.value
+    ? currentNodeRuntimeError.value
     : "",
 );
 const isJsTransformNode = computed(
@@ -574,7 +580,7 @@ const jsTransformAgentContextBuilder = computed(() => {
       currentCode: String(config.value.code ?? ""),
       declarations: jsTransformDeclarations.value,
       inputData: inputData.value,
-      outputData: currentNode.data.output,
+      outputData: currentNodeRuntimeOutput.value,
       errorMessage: currentNodeError.value,
       status:
         currentNode.data.status === "error"
@@ -1107,7 +1113,7 @@ onBeforeUnmount(() => {
                   :node-id="node?.id"
                   :input-data="inputData"
                   :agent-profile="piAgentConfigStore.selectedProfile"
-                  :agent-output-data="node?.data.output"
+                  :agent-output-data="currentNodeRuntimeOutput"
                   :agent-error-message="currentNodeError"
                   :build-js-transform-agent-context="jsTransformAgentContextBuilder"
                   :on-agent-debug-node="debugNodeForAgent"
@@ -1165,10 +1171,10 @@ onBeforeUnmount(() => {
             />
             <DataDisplayPanel
               title="节点输出 (OUTPUT)"
-              :data="node.data.output"
+              :data="currentNodeRuntimeOutput"
               type="output"
               :is-pinned="node.data.isPinned"
-              @open-detail="openAnalysis('输出数据', node.data.output)"
+              @open-detail="openAnalysis('输出数据', currentNodeRuntimeOutput)"
             />
           </div>
         </div>

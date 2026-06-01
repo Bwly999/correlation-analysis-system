@@ -58,6 +58,7 @@ type OriginalWorkflowState = {
   name: string
   id: string | null
   lastRunDashboard: WorkflowRunDashboardState | null
+  runtimeStateById: Record<string, WorkflowNodeRuntimeState>
 }
 
 export type WorkflowRunDashboardState = {
@@ -86,6 +87,13 @@ export type WorkflowNodeDebugResult = {
   nodeId: string
   status: 'success' | 'error' | 'stopped' | 'waiting_input'
   output: unknown
+}
+
+export type WorkflowNodeRuntimeState = {
+  output: WorkflowNodeOutput | null
+  logs: string[]
+  error?: string
+  version: number
 }
 
 type DebugExecutionOptions = {
@@ -164,6 +172,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
   const lastRunDashboard = ref<WorkflowRunDashboardState | null>(null)
   const executionHistory = ref([]) as Ref<ExecutionRecordSummary[]>
   const historyRecordCache = shallowRef<Record<string, ExecutionRecord>>({})
+  const nodeRuntimeStateById = shallowRef<Record<string, WorkflowNodeRuntimeState>>({})
   const isHistorySummariesLoading = ref(false)
   const historyDetailLoadingRecordId = ref<string | null>(null)
   const savedWorkflows = ref([]) as Ref<SavedWorkflow[]>
@@ -317,6 +326,134 @@ export const useWorkflowStore = defineStore('workflow', () => {
   const cloneWorkflowNodes = (sourceNodes: WorkflowNode[]): WorkflowNode[] =>
     cloneJsonValue(sourceNodes)
 
+  const toStoredOutput = (value: any) => {
+    if (!isNodeResult(value)) return value
+    return normalizeNodeResult(value)
+  }
+
+  const cloneRuntimeStateRecord = (
+    source: Record<string, WorkflowNodeRuntimeState>,
+  ): Record<string, WorkflowNodeRuntimeState> =>
+    Object.fromEntries(
+      Object.entries(source).map(([nodeId, runtime]) => [
+        nodeId,
+        {
+          output: cloneOptionalJsonValue(runtime.output),
+          logs: cloneJsonValue(runtime.logs),
+          error: runtime.error,
+          version: runtime.version,
+        },
+      ]),
+    )
+
+  const buildNodeRuntimeState = (
+    nodeData: WorkflowNode['data'],
+    previousVersion = 0,
+  ): WorkflowNodeRuntimeState | null => {
+    const output = nodeData.output == null ? null : markRaw(toStoredOutput(nodeData.output))
+    const logs = cloneJsonValue(nodeData.logs ?? [])
+    const error = nodeData.error
+
+    if (output == null && logs.length === 0 && !error) {
+      return null
+    }
+
+    return {
+      output,
+      logs,
+      error,
+      version: previousVersion + 1,
+    }
+  }
+
+  const stripRuntimeFieldsFromNodeData = (nodeData: WorkflowNode['data']): WorkflowNode['data'] => ({
+    ...nodeData,
+    output: undefined,
+    logs: [],
+    error: undefined,
+  })
+
+  const hydrateCanvasNodesFromSnapshots = (
+    sourceNodes: Array<WorkflowNode | WorkflowNodeSnapshot>,
+  ): WorkflowNode[] => {
+    const nextRuntimeState: Record<string, WorkflowNodeRuntimeState> = {}
+    const nextNodes = sourceNodes.map((sourceNode) => {
+      const normalizedNode = normalizeNodeConfigWithDefaults(sourceNode as WorkflowNode)
+      const runtimeState = buildNodeRuntimeState(normalizedNode.data)
+
+      if (runtimeState) {
+        nextRuntimeState[normalizedNode.id] = runtimeState
+      }
+
+      return {
+        ...normalizedNode,
+        data: stripRuntimeFieldsFromNodeData(normalizedNode.data),
+      }
+    })
+
+    nodeRuntimeStateById.value = nextRuntimeState
+    return nextNodes
+  }
+
+  const getNodeRuntime = (nodeId: string): WorkflowNodeRuntimeState | null =>
+    nodeRuntimeStateById.value[nodeId] ?? null
+
+  const setNodeRuntime = (
+    nodeId: string,
+    patch: Partial<Omit<WorkflowNodeRuntimeState, 'version'>>,
+  ): WorkflowNodeRuntimeState => {
+    const previous = getNodeRuntime(nodeId)
+    const nextRuntime: WorkflowNodeRuntimeState = {
+      output:
+        Object.prototype.hasOwnProperty.call(patch, 'output')
+          ? patch.output == null
+            ? null
+            : markRaw(toStoredOutput(patch.output))
+          : previous?.output ?? null,
+      logs:
+        Object.prototype.hasOwnProperty.call(patch, 'logs')
+          ? cloneJsonValue(patch.logs ?? [])
+          : cloneJsonValue(previous?.logs ?? []),
+      error:
+        Object.prototype.hasOwnProperty.call(patch, 'error')
+          ? patch.error
+          : previous?.error,
+      version: (previous?.version ?? 0) + 1,
+    }
+
+    if (nextRuntime.output == null && nextRuntime.logs.length === 0 && !nextRuntime.error) {
+      const nextState = { ...nodeRuntimeStateById.value }
+      delete nextState[nodeId]
+      nodeRuntimeStateById.value = nextState
+      return {
+        output: null,
+        logs: [],
+        version: nextRuntime.version,
+      }
+    }
+
+    nodeRuntimeStateById.value = {
+      ...nodeRuntimeStateById.value,
+      [nodeId]: nextRuntime,
+    }
+
+    return nextRuntime
+  }
+
+  const clearNodeRuntime = (nodeId: string) => {
+    if (!(nodeId in nodeRuntimeStateById.value)) return false
+
+    const nextState = { ...nodeRuntimeStateById.value }
+    delete nextState[nodeId]
+    nodeRuntimeStateById.value = nextState
+    return true
+  }
+
+  const getNodeOutput = (nodeId: string): WorkflowNodeOutput | null => getNodeRuntime(nodeId)?.output ?? null
+  const getNodeLogs = (nodeId: string): string[] => getNodeRuntime(nodeId)?.logs ?? []
+  const getNodeError = (nodeId: string): string | undefined => getNodeRuntime(nodeId)?.error
+  const getNodeRuntimeVersion = (nodeId: string): number => getNodeRuntime(nodeId)?.version ?? 0
+
   const serializeWorkflowEdges = (sourceEdges: Edge[]): Edge[] =>
     sourceEdges.map((edge) =>
       cloneJsonValue({
@@ -398,13 +535,14 @@ export const useWorkflowStore = defineStore('workflow', () => {
   ): WorkflowNodeSnapshot[] =>
     sourceNodes.map((node) => {
       const normalizedNode = normalizeNodeConfigWithDefaults(node)
+      const runtimeState = getNodeRuntime(normalizedNode.id)
       return cloneJsonValue({
         id: normalizedNode.id,
         type: normalizedNode.type,
         position: normalizedNode.position,
         label: normalizedNode.label,
         data: {
-          ...normalizedNode.data,
+          ...stripRuntimeFieldsFromNodeData(normalizedNode.data),
           config: serializeNodeConfigForPersistence({
             nodeType: normalizedNode.data.type,
             config: normalizedNode.data.config,
@@ -413,7 +551,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
           persistRuntimeInputs: normalizedNode.data.persistRuntimeInputs ?? true,
           status: 'idle' as const,
           output:
-            options.includePinnedOutput && normalizedNode.data.isPinned ? normalizedNode.data.output : null,
+            options.includePinnedOutput && normalizedNode.data.isPinned ? runtimeState?.output ?? null : null,
         },
       })
     })
@@ -424,12 +562,13 @@ export const useWorkflowStore = defineStore('workflow', () => {
   ) =>
     sourceNodes.map((node) => {
       const normalizedNode = normalizeNodeConfigWithDefaults(node)
+      const runtimeState = getNodeRuntime(normalizedNode.id)
       return cloneJsonValue({
         id: normalizedNode.id,
         type: normalizedNode.type,
         label: normalizedNode.label,
         data: {
-          ...normalizedNode.data,
+          ...stripRuntimeFieldsFromNodeData(normalizedNode.data),
           config: serializeNodeConfigForPersistence({
             nodeType: normalizedNode.data.type,
             config: normalizedNode.data.config,
@@ -438,7 +577,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
           persistRuntimeInputs: normalizedNode.data.persistRuntimeInputs ?? true,
           status: 'idle' as const,
           output:
-            options.includePinnedOutput && normalizedNode.data.isPinned ? normalizedNode.data.output : null,
+            options.includePinnedOutput && normalizedNode.data.isPinned ? runtimeState?.output ?? null : null,
         },
       })
     })
@@ -760,6 +899,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     try {
       nodes.value = restoreCanvasHistoryNodes(snapshot.nodes)
       edges.value = cloneWorkflowEdges(snapshot.edges)
+      nodeRuntimeStateById.value = {}
       refreshUnsavedChanges()
       lastCanvasHistorySignature.value = getCanvasHistorySnapshotSignature(snapshot)
     } finally {
@@ -868,25 +1008,25 @@ export const useWorkflowStore = defineStore('workflow', () => {
   }
 
   const resetWorkflowNodeRuntimeState = (sourceNodes: Array<WorkflowNode | WorkflowNodeSnapshot>): WorkflowNode[] =>
-    sourceNodes.map((node) =>
-      normalizeNodeConfigWithDefaults({
+    hydrateCanvasNodesFromSnapshots(
+      sourceNodes.map((node) => ({
         ...(node as WorkflowNode),
         data: {
           ...node.data,
           status: 'idle' as const,
           output: node.data?.isPinned ? node.data.output : null,
         },
-      }),
+      })),
     )
 
   const restoreHistoricalWorkflowNodes = (
     sourceNodes: Array<WorkflowNode | WorkflowNodeSnapshot>,
-  ): WorkflowNode[] =>
-    sourceNodes.map((node) => normalizeNodeConfigWithDefaults(cloneJsonValue(node as WorkflowNode)))
+  ): WorkflowNode[] => hydrateCanvasNodesFromSnapshots(cloneJsonValue(sourceNodes as WorkflowNode[]))
 
   const createNewWorkflow = () => {
     nodes.value = []
     edges.value = []
+    nodeRuntimeStateById.value = {}
     logs.value = []
     workflowName.value = '未命名工作流'
     currentWorkflowId.value = null
@@ -928,12 +1068,10 @@ export const useWorkflowStore = defineStore('workflow', () => {
           persistRuntimeInputs: templateNode.data?.persistRuntimeInputs ?? true,
           reuseLastRuntimeInputs: templateNode.data?.reuseLastRuntimeInputs ?? false,
           status: 'idle',
-          output: null,
           manualInput: templateNode.data?.manualInput ?? '',
           useManualInput: templateNode.data?.useManualInput ?? false,
           isPinned: templateNode.data?.isPinned ?? false,
-          logs: cloneJsonValue(templateNode.data?.logs ?? []),
-          error: undefined,
+          logs: [],
         },
       })
     })
@@ -978,6 +1116,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
 
     nodes.value = instantiated.nodes
     edges.value = instantiated.edges
+    nodeRuntimeStateById.value = {}
     logs.value = []
     workflowName.value = instantiated.workflowName
     currentWorkflowId.value = null
@@ -1167,6 +1306,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
         name: workflowName.value,
         id: currentWorkflowId.value,
         lastRunDashboard: cloneOptionalJsonValue(lastRunDashboard.value),
+        runtimeStateById: cloneRuntimeStateRecord(nodeRuntimeStateById.value),
       }
     }
 
@@ -1198,6 +1338,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
 
     nodes.value = originalWorkflowState.value.nodes
     edges.value = originalWorkflowState.value.edges
+    nodeRuntimeStateById.value = cloneRuntimeStateRecord(originalWorkflowState.value.runtimeStateById)
     workflowName.value = originalWorkflowState.value.name
     currentWorkflowId.value = originalWorkflowState.value.id
     lastRunDashboard.value = originalWorkflowState.value.lastRunDashboard
@@ -1655,7 +1796,9 @@ export const useWorkflowStore = defineStore('workflow', () => {
     const snapshot = editableSnapshots.value.find((entry) => entry.id === snapshotId)
     if (!snapshot) return false
 
-    nodes.value = cloneJsonValue(snapshot.nodes) as WorkflowNode[]
+    nodes.value = resetWorkflowNodeRuntimeState(
+      snapshot.nodes as Array<WorkflowNode | WorkflowNodeSnapshot>,
+    )
     edges.value = cloneJsonValue(snapshot.edges) as Edge[]
     workflowName.value = snapshot.workflowName
     currentWorkflowId.value = snapshot.workflowId
@@ -1767,7 +1910,6 @@ export const useWorkflowStore = defineStore('workflow', () => {
       persistRuntimeInputs: newNode.data.persistRuntimeInputs ?? true,
     })
     newNode.data.status = 'idle'
-    newNode.data.output = null
     newNode.data.logs = []
 
     nodes.value = [...currentNodes, newNode]
@@ -1790,6 +1932,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
 
     nodes.value = nextNodes
     edges.value = nextEdges
+    clearNodeRuntime(nodeId)
     addLog(`已删除节点: ${removedNode.data.label}`, 'warn')
     refreshUnsavedChanges()
     pushCanvasHistorySnapshot()
@@ -1807,6 +1950,9 @@ export const useWorkflowStore = defineStore('workflow', () => {
     edges.value = currentEdges.filter(
       (edge) => !selectedIds.has(edge.source) && !selectedIds.has(edge.target),
     )
+    selectedIds.forEach((nodeId) => {
+      clearNodeRuntime(nodeId)
+    })
     addLog(`已批量删除 ${selectedNodes.length} 个节点`, 'warn')
     refreshUnsavedChanges()
     pushCanvasHistorySnapshot()
@@ -1846,11 +1992,6 @@ export const useWorkflowStore = defineStore('workflow', () => {
     return true
   }
 
-  const toStoredOutput = (value: any) => {
-    if (!isNodeResult(value)) return value
-    return normalizeNodeResult(value)
-  }
-
   const toExecutionInputValue = (value: any) => {
     if (!isNodeResult(value)) return value
     return normalizeNodeResult(value)
@@ -1885,6 +2026,25 @@ export const useWorkflowStore = defineStore('workflow', () => {
 
   const createExecutionSnapshotNodes = (sourceNodes: WorkflowNode[]): WorkflowNodeSnapshot[] =>
     sourceNodes.map((node) => ({
+      ...(nodeRuntimeStateById.value[node.id]
+        ? {
+            data: {
+              label: node.data.label,
+              type: node.data.type,
+              category: node.data.category,
+              config: cloneJsonValue(node.data.config ?? {}),
+              persistRuntimeInputs: node.data.persistRuntimeInputs ?? true,
+              reuseLastRuntimeInputs: node.data.reuseLastRuntimeInputs,
+              status: node.data.status,
+              output: cloneOutputForHistory(getNodeOutput(node.id)),
+              manualInput: node.data.manualInput,
+              useManualInput: node.data.useManualInput,
+              isPinned: node.data.isPinned,
+              logs: cloneJsonValue(getNodeLogs(node.id)),
+              error: getNodeError(node.id),
+            },
+          }
+        : {}),
       id: node.id,
       type: node.type,
       position: cloneJsonValue(node.position),
@@ -1899,12 +2059,12 @@ export const useWorkflowStore = defineStore('workflow', () => {
         persistRuntimeInputs: node.data.persistRuntimeInputs ?? true,
         reuseLastRuntimeInputs: node.data.reuseLastRuntimeInputs,
         status: node.data.status,
-        output: cloneOutputForHistory(node.data.output ?? null),
+        output: cloneOutputForHistory(getNodeOutput(node.id)),
         manualInput: node.data.manualInput,
         useManualInput: node.data.useManualInput,
         isPinned: node.data.isPinned,
-        logs: cloneJsonValue(node.data.logs ?? []),
-        error: node.data.error,
+        logs: cloneJsonValue(getNodeLogs(node.id)),
+        error: getNodeError(node.id),
       },
     }))
 
@@ -1934,10 +2094,12 @@ export const useWorkflowStore = defineStore('workflow', () => {
     try {
       if (isStopping.value) throw new Error('User Aborted')
 
-      if (node.data.isPinned && node.data.output) {
+      const cachedOutput = getNodeOutput(nodeId)
+
+      if (node.data.isPinned && cachedOutput) {
         addLog(`节点 ${node.data.label} 已冻结，使用历史输出数据`, 'info', nodeId)
         node.data.status = 'success'
-        return node.data.output
+        return cachedOutput
       }
 
       const resolvedNode = applyNodeConfigDefaults(node)
@@ -1948,7 +2110,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
       }
       const definition = resolvedNode.definition
 
-      if (!forceUpdate && node.data.output) return node.data.output
+      if (!forceUpdate && cachedOutput) return cachedOutput
 
       if (executionScope === 'single' && forceUpdate && !isNestedDebugExecution) {
         addLog(
@@ -1987,7 +2149,9 @@ export const useWorkflowStore = defineStore('workflow', () => {
       }
 
       node.data.status = 'running'
-      node.data.error = undefined
+      setNodeRuntime(node.id, {
+        error: undefined,
+      })
       await yieldExecutionForUiPaint()
 
       if (isStopping.value) throw new Error('User Aborted')
@@ -2003,10 +2167,12 @@ export const useWorkflowStore = defineStore('workflow', () => {
           }
         }
         const result = await definition.execute(parsedInput, resolvedConfig)
-        node.data.output = markRaw(toStoredOutput(result))
+        setNodeRuntime(node.id, {
+          output: toStoredOutput(result),
+          error: undefined,
+        })
         node.data.status = 'success'
-        node.data.error = undefined
-        return node.data.output
+        return getNodeOutput(node.id)
       }
 
       if (node.data.type === 'file-import') {
@@ -2050,12 +2216,14 @@ export const useWorkflowStore = defineStore('workflow', () => {
 
         if (isStopping.value) throw new Error('User Aborted')
 
-        node.data.output = markRaw(toStoredOutput(result))
+        setNodeRuntime(node.id, {
+          output: toStoredOutput(result),
+          error: undefined,
+        })
         node.data.status = 'success'
-        node.data.error = undefined
         resetRuntimeInputValues(node)
         addLog(`执行成功: ${node.data.label}`, 'info', nodeId)
-        return node.data.output
+        return getNodeOutput(node.id)
       }
 
       const currentEdges = getCurrentEdges()
@@ -2115,20 +2283,24 @@ export const useWorkflowStore = defineStore('workflow', () => {
       const result = await definition.execute(executionInput, resolvedConfig)
       if (isStopping.value) throw new Error('User Aborted')
 
-      node.data.output = markRaw(toStoredOutput(result))
+      setNodeRuntime(node.id, {
+        output: toStoredOutput(result),
+        error: undefined,
+      })
       node.data.status = 'success'
-      node.data.error = undefined
       if (definition.category === 'trigger') {
         resetRuntimeInputValues(node)
       }
       addLog(`执行成功: ${node.data.label}`, 'info', nodeId)
-      return node.data.output
+      return getNodeOutput(node.id)
     } catch (error: any) {
       const rawMessage = error?.message ?? '节点执行失败'
       const readableMessage = formatExecutionErrorMessage(rawMessage)
       if (node) {
         node.data.status = rawMessage === 'User Aborted' ? 'idle' : 'error'
-        node.data.error = rawMessage === 'User Aborted' ? undefined : readableMessage
+        setNodeRuntime(node.id, {
+          error: rawMessage === 'User Aborted' ? undefined : readableMessage,
+        })
       }
       if (rawMessage !== 'User Aborted') {
         addLog(`执行失败: ${readableMessage}`, 'error', nodeId)
@@ -2234,8 +2406,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     currentNodes.forEach((node) => {
       if (!node.data.isPinned) {
         node.data.status = 'idle'
-        node.data.output = null
-        node.data.error = undefined
+        clearNodeRuntime(node.id)
       }
     })
 
@@ -2524,6 +2695,13 @@ export const useWorkflowStore = defineStore('workflow', () => {
     handleNodeChangesForUnsavedState,
     handleEdgeChangesForUnsavedState,
     handleNodeDragStopForUnsavedState,
+    getNodeRuntime,
+    setNodeRuntime,
+    clearNodeRuntime,
+    getNodeOutput,
+    getNodeLogs,
+    getNodeError,
+    getNodeRuntimeVersion,
     createEditableSnapshot,
     restoreEditableSnapshot,
     resetNodeRuntimeInputs,

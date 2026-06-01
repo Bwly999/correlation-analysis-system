@@ -581,6 +581,8 @@ watch(
         executionTargetIds: dashboard.executionTargetIds,
         terminalNodeIds: dashboard.terminalNodeIds,
         nodes: scopedNodes,
+        getNodeOutput: store.getNodeOutput,
+        getNodeError: store.getNodeError,
       }),
     }
   },
@@ -937,7 +939,7 @@ onBeforeUnmount(() => {
     <DataAnalysisModal
       :visible="!!activePreviewNode"
       :title="activePreviewTitle"
-      :data="activePreviewNode?.data.output ?? null"
+      :data="activePreviewNode ? store.getNodeOutput(activePreviewNode.id) : null"
       :storage-scope-key="activePreviewNode?.id"
       @close="store.setActivePreviewNodeId(null)"
     />

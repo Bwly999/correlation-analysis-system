@@ -161,6 +161,100 @@ describe("NodeConfigModal", () => {
     ).toBe(true);
   });
 
+  it("reads upstream runtime output summaries even when canvas nodes no longer carry output fields", () => {
+    const store = useWorkflowStore();
+    store.nodes = [
+      {
+        id: "source-1",
+        type: "custom",
+        position: { x: 0, y: 0 },
+        label: "来源一",
+        data: {
+          label: "来源一",
+          type: "manual-json-import",
+          category: "trigger",
+          status: "success",
+          config: {},
+          logs: [],
+          useManualInput: false,
+          manualInput: "",
+          isPinned: false,
+        },
+      } as any,
+      {
+        id: "data-merge-node",
+        type: "custom",
+        position: { x: 300, y: 0 },
+        label: "数据合并",
+        data: {
+          label: "数据合并",
+          type: "data-merge",
+          category: "action",
+          status: "idle",
+          config: { mergeMode: "append" },
+          logs: [],
+          useManualInput: false,
+          manualInput: "",
+          isPinned: false,
+        },
+      } as any,
+    ];
+    (store as any).setNodeRuntime("source-1", {
+      output: {
+        kind: "table",
+        payload: [{ id: 1, city: "上海" }],
+        schema: {
+          fields: [
+            { name: "id", type: "number", nullable: false },
+            { name: "city", type: "string", nullable: false },
+          ],
+        },
+      },
+    });
+    store.edges = [
+      {
+        id: "e1",
+        source: "source-1",
+        target: "data-merge-node",
+        type: "n8n",
+        animated: true,
+      },
+    ] as any;
+
+    const wrapper = mount(NodeConfigModal, {
+      props: { visible: true, nodeId: "data-merge-node" },
+      global: {
+        stubs: {
+          Dialog: dialogStub,
+          DataDisplayPanel: {
+            props: ["title", "data"],
+            template:
+              '<div class="data-display-panel">{{ title }}::{{ JSON.stringify(data) }}</div>',
+          },
+          DataAnalysisModal: true,
+          ConfigHeader: {
+            template: "<div />",
+            props: ["nodeLabel", "isPinned", "nodeType"],
+          },
+          ConfigFooter: { template: "<div />" },
+          ConfigForm: {
+            template: "<div />",
+            props: ["config", "properties", "upstreamFactors"],
+          },
+          RuntimeInputs: {
+            template: "<div />",
+            props: ["config", "properties", "upstreamFactors"],
+          },
+        },
+      },
+    });
+
+    const inputPanel = wrapper.findAll(".data-display-panel")[0]!;
+    expect(inputPanel.text()).toContain("来源一");
+    expect(inputPanel.text()).toContain('"kind":"table"');
+    expect(inputPanel.text()).toContain('"fields":["id","city"]');
+  });
+
   it("exposes upstream factor schema metadata for analysis field hints", () => {
     const store = useWorkflowStore();
     store.nodes = [
@@ -1123,16 +1217,17 @@ describe("NodeConfigModal", () => {
           type: "pearson",
           category: "terminal",
           status: "error",
-          error: "字段 target 不存在，请先检查输入字段映射",
           config: { xFields: [], yFields: [] },
           logs: [],
           useManualInput: false,
           manualInput: "",
           isPinned: false,
-          output: null,
         },
       } as any,
     ];
+    store.setNodeRuntime("pearson-node", {
+      error: "字段 target 不存在，请先检查输入字段映射",
+    });
 
     const wrapper = mount(NodeConfigModal, {
       props: { visible: true, nodeId: "pearson-node" },
@@ -1186,16 +1281,17 @@ describe("NodeConfigModal", () => {
           type: "pearson",
           category: "terminal",
           status: "error",
-          error: "字段 target 不存在，请先检查输入字段映射",
           config: { xFields: [], yFields: [] },
           logs: [],
           useManualInput: false,
           manualInput: "",
           isPinned: false,
-          output: null,
         },
       } as any,
     ];
+    store.setNodeRuntime("pearson-node", {
+      error: "字段 target 不存在，请先检查输入字段映射",
+    });
 
     const dispatchEventSpy = vi.spyOn(window, "dispatchEvent");
 

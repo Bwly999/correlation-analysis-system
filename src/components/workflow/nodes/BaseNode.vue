@@ -36,6 +36,8 @@ const isPendingConnectionSource = computed(() => pendingConnection.value?.source
 
 const currentLabel = computed(() => props.data.label)
 const isPinned = computed(() => Boolean(props.data.isPinned))
+const runtimeOutput = computed(() => store.getNodeOutput(props.id))
+const runtimeError = computed(() => store.getNodeError(props.id))
 
 const onMouseEnter = () => {
   if (hoverTimeout) clearTimeout(hoverTimeout)
@@ -93,7 +95,7 @@ const openConfig = () => {
 }
 
 const openPreview = () => {
-  if (!props.data.output) return
+  if (!runtimeOutput.value) return
   store.setActivePreviewNodeId(props.id)
   store.addLog(`打开结果预览: ${currentLabel.value}`, 'info', props.id)
 }
@@ -147,7 +149,7 @@ const isCurrentNodeDebugRunning = computed(
     && store.activeExecutionNodeId === props.id,
 )
 
-const hasPreviewResult = computed(() => props.data.output != null)
+const hasPreviewResult = computed(() => runtimeOutput.value != null)
 const selectionRing = computed(() =>
   props.selected ? 'ring-2 ring-blue-200/90 shadow-lg shadow-blue-100/70' : '',
 )
@@ -201,7 +203,7 @@ const selectionRing = computed(() =>
         />
         <AlertTriangle
           v-else-if="props.data.status === 'error'"
-          v-tooltip.bottom="props.data.error || '执行失败'"
+          v-tooltip.bottom="runtimeError || '执行失败'"
           :size="18"
           class="text-rose-500"
         />
