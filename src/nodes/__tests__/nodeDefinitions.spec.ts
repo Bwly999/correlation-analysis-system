@@ -1,4 +1,4 @@
-﻿import { describe, it, expect, vi } from 'vitest'
+﻿import { describe, it, expect, vi, beforeEach } from 'vitest'
 import * as fs from 'fs'
 import * as path from 'path'
 
@@ -13,6 +13,7 @@ const {
   mockListMaterialTypes,
   mockListProcessOptions,
   mockListTaskOrderTypes,
+  mockHttpClientRequest,
 } = vi.hoisted(() => ({
   mockFetchKanbanData: vi.fn(),
   mockGetKanbanAuthToken: vi.fn(),
@@ -24,6 +25,7 @@ const {
   mockListMaterialTypes: vi.fn(),
   mockListProcessOptions: vi.fn(),
   mockListTaskOrderTypes: vi.fn(),
+  mockHttpClientRequest: vi.fn(),
 }))
 
 vi.mock('@/services/kanbanIntegration', () => ({
@@ -37,6 +39,12 @@ vi.mock('@/services/kanbanIntegration', () => ({
   listMaterialTypes: mockListMaterialTypes,
   listProcessOptions: mockListProcessOptions,
   listTaskOrderTypes: mockListTaskOrderTypes,
+}))
+
+vi.mock('@/services/httpClient', () => ({
+  httpClient: {
+    request: mockHttpClientRequest,
+  },
 }))
 
 import { fileImportNode } from '../definitions/fileImport'
@@ -193,12 +201,10 @@ describe('Node Definitions Execution Logic', () => {
     expect(runtimePropertyNames[runtimePropertyNames.length - 1]).toBe('selectedProcesses')
   })
 
-  it('should use multi-options for analysis factorNames fields', () => {
+  it('should use multi-options for analysis factorNames fields and require explicit selection', () => {
     const analysisNodes = [
       multipleLinearRegressionNode,
-      pcaNode,
       randomForestFeatureImportanceNode,
-      vifNode,
       xgboostShapNode,
     ]
 
@@ -211,7 +217,15 @@ describe('Node Definitions Execution Logic', () => {
         editable: true,
         forceInput: true,
       })
+      expect(factorNamesProperty?.description).toContain('请先显式选择字段')
+      expect(factorNamesProperty?.description).not.toContain('留空时默认使用')
     })
+
+    const logisticFactorNames = logisticRegressionClassificationNode.properties.find(
+      (property) => property.name === 'factorNames',
+    )
+    expect(logisticFactorNames?.description).toContain('请先显式选择字段')
+    expect(logisticFactorNames?.description).not.toContain('留空时默认使用')
   })
 
   it('should expose a configurable dependence plot limit for xgboost-shap', () => {
@@ -1246,16 +1260,20 @@ describe('Node Definitions Execution Logic', () => {
   })
 
   describe('algorithms', () => {
+    beforeEach(() => {
+      mockHttpClientRequest.mockReset()
+    })
+
     it('should build shap report with summary, all features, and supplement assets', async () => {
       const input = createTableResult([
         { target: 1, f1: 2, f2: 3, f3: 4 },
         { target: 2, f1: 3, f2: 4, f3: 5 },
       ])
-      const config = { targetField: 'target' }
+      const config = { targetField: 'target', factorNames: ['f1', 'f2', 'f3'] }
 
-      global.fetch = vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({
+      mockHttpClientRequest.mockResolvedValue({
+        status: 200,
+        data: {
           results: {
             summary: {
               targetField: 'target',
@@ -1280,8 +1298,8 @@ describe('Node Definitions Execution Logic', () => {
               fullReportImage: 'base64_full',
             },
           },
-        }),
-      }) as any
+        },
+      })
 
       const result = await xgboostShapNode.execute(input, config)
 
@@ -1306,7 +1324,12 @@ describe('Node Definitions Execution Logic', () => {
       ).toHaveLength(3)
       expect(legacy.report.supplements.fullReportImage).toBe('data:image/png;base64,base64_full')
       expect(legacy.report.supplements.beeswarmImage).toBe('data:image/png;base64,base64_beeswarm')
-      expect(global.fetch).toHaveBeenCalledWith('/api/analysis/xgboost-shap', expect.any(Object))
+      expect(mockHttpClientRequest).toHaveBeenCalledWith({
+        url: '/analysis/xgboost-shap',
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        data: expect.any(Object),
+      })
     })
 
     it('should pass xgboost-shap outlier cleaning config to backend', async () => {
@@ -1325,9 +1348,9 @@ describe('Node Definitions Execution Logic', () => {
         outlierMaxSamples: 'all',
       }
 
-      global.fetch = vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({
+      mockHttpClientRequest.mockResolvedValue({
+        status: 200,
+        data: {
           results: {
             summary: {
               targetField: 'target',
@@ -1340,16 +1363,15 @@ describe('Node Definitions Execution Logic', () => {
             dependence: [{ feature: 'f1', x: [1, 2], shap: [0.1, 0.2] }],
             assets: {},
           },
-        }),
-      }) as any
+        },
+      })
 
       await xgboostShapNode.execute(input, config)
 
-      const firstCall = vi.mocked(global.fetch).mock.calls[0]
-      expect(firstCall).toBeDefined()
-      const [, requestInit] = firstCall!
-      const body = JSON.parse(String(requestInit?.body))
-      expect(body.config).toMatchObject(config)
+      const requestCall = mockHttpClientRequest.mock.calls[0]
+      expect(requestCall).toBeDefined()
+      const requestBody = requestCall![0].data
+      expect(requestBody.config).toMatchObject(config)
     })
 
     it('should pass xgboost-shap advanced model config to backend', async () => {
@@ -1373,9 +1395,9 @@ describe('Node Definitions Execution Logic', () => {
         tuningCv: 4,
       }
 
-      global.fetch = vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({
+      mockHttpClientRequest.mockResolvedValue({
+        status: 200,
+        data: {
           results: {
             summary: {
               targetField: 'target',
@@ -1388,14 +1410,14 @@ describe('Node Definitions Execution Logic', () => {
             dependence: [{ feature: 'f1', x: [1, 2], shap: [0.1, 0.2] }],
             assets: {},
           },
-        }),
-      }) as any
+        },
+      })
 
       await xgboostShapNode.execute(input, config)
 
-      const [, requestInit] = vi.mocked(global.fetch).mock.calls[0]!
-      const body = JSON.parse(String(requestInit?.body))
-      expect(body.config).toMatchObject(config)
+      const requestCall = mockHttpClientRequest.mock.calls[0]
+      const requestBody = requestCall![0].data
+      expect(requestBody.config).toMatchObject(config)
     })
 
     it('should normalize real lasso backend results', async () => {
@@ -1405,9 +1427,9 @@ describe('Node Definitions Execution Logic', () => {
       ])
       const config = { targetField: 'target' }
 
-      global.fetch = vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({
+      mockHttpClientRequest.mockResolvedValue({
+        status: 200,
+        data: {
           results: {
             summary: {
               targetField: 'target',
@@ -1443,8 +1465,8 @@ describe('Node Definitions Execution Logic', () => {
               ],
             },
           },
-        }),
-      }) as any
+        },
+      })
 
       const result = await lassoNode.execute(input, config)
 
@@ -1457,7 +1479,12 @@ describe('Node Definitions Execution Logic', () => {
       expect(legacy.report.sections[0].type).toBe('summary')
       expect(legacy.report.sections[1].title).toBe('特征系数排序')
       expect(legacy.report.sections[2].title).toBe('正则路径')
-      expect(global.fetch).toHaveBeenCalledWith('/api/analysis/lasso', expect.any(Object))
+      expect(mockHttpClientRequest).toHaveBeenCalledWith({
+        url: '/analysis/lasso',
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        data: expect.any(Object),
+      })
     })
 
     it('should normalize multiple linear regression backend results', async () => {
@@ -1468,9 +1495,9 @@ describe('Node Definitions Execution Logic', () => {
       ])
       const config = { targetField: 'target', factorNames: ['f1', 'f2'] }
 
-      global.fetch = vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({
+      mockHttpClientRequest.mockResolvedValue({
+        status: 200,
+        data: {
           results: {
             summary: {
               targetField: 'target',
@@ -1494,8 +1521,8 @@ describe('Node Definitions Execution Logic', () => {
               residuals: [-0.2, 0.2, -0.1],
             },
           },
-        }),
-      }) as any
+        },
+      })
 
       const result = await multipleLinearRegressionNode.execute(input, config)
 
@@ -1514,10 +1541,12 @@ describe('Node Definitions Execution Logic', () => {
       expect(legacy.report.sections[2].option.series[0].type).toBe('scatter')
       expect(legacy.report.sections[2].option.series[1].name).toBe('理想拟合线')
       expect(legacy.report.sections[2].option.series[1].lineStyle.type).toBe('dashed')
-      expect(global.fetch).toHaveBeenCalledWith(
-        '/api/analysis/multiple-linear-regression',
-        expect.any(Object),
-      )
+      expect(mockHttpClientRequest).toHaveBeenCalledWith({
+        url: '/analysis/multiple-linear-regression',
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        data: expect.any(Object),
+      })
     })
 
     it('should normalize random forest feature importance backend results', async () => {
@@ -1528,9 +1557,9 @@ describe('Node Definitions Execution Logic', () => {
       ])
       const config = { targetField: 'target', factorNames: ['f1', 'f2', 'f3'] }
 
-      global.fetch = vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({
+      mockHttpClientRequest.mockResolvedValue({
+        status: 200,
+        data: {
           results: {
             summary: {
               targetField: 'target',
@@ -1564,8 +1593,8 @@ describe('Node Definitions Execution Logic', () => {
               },
             ],
           },
-        }),
-      }) as any
+        },
+      })
 
       const result = await randomForestFeatureImportanceNode.execute(input, config)
 
@@ -1587,10 +1616,90 @@ describe('Node Definitions Execution Logic', () => {
       expect(legacy.report.sections[3].option.series[0].type).toBe('scatter')
       expect(legacy.report.sections[3].option.series[1].name).toBe('理想拟合线')
       expect(legacy.report.sections[3].option.series[1].lineStyle.type).toBe('dashed')
-      expect(global.fetch).toHaveBeenCalledWith(
-        '/api/analysis/random-forest-feature-importance',
-        expect.any(Object),
-      )
+      expect(mockHttpClientRequest).toHaveBeenCalledWith({
+        url: '/analysis/random-forest-feature-importance',
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        data: expect.any(Object),
+      })
+    })
+
+    describe('analysis payload trimming', () => {
+      const analysisNodes = [
+        { node: xgboostShapNode, name: 'xgboost-shap' },
+        { node: randomForestFeatureImportanceNode, name: 'random-forest-feature-importance' },
+        { node: multipleLinearRegressionNode, name: 'multiple-linear-regression' },
+        { node: logisticRegressionClassificationNode, name: 'logistic-regression-classification' },
+      ]
+
+      for (const { node, name } of analysisNodes) {
+        it(`should send only targetField and factorNames columns for ${name}`, async () => {
+          const input = createTableResult([
+            { target: 1, f1: 10, f2: 20, f3: 30, id: 'A1', city: '上海' },
+            { target: 2, f1: 11, f2: 21, f3: 31, id: 'A2', city: '北京' },
+          ])
+          const config = { targetField: 'target', factorNames: ['f1', 'f2'] }
+
+          mockHttpClientRequest.mockResolvedValue({
+            status: 200,
+            data: {
+              results: { summary: { targetField: 'target', sampleCount: 2, featureCount: 2, r2: 0.85, mae: 0.1 }, importance: [{ name: 'f1', value: 0.5, rank: 1 }], dependence: [{ feature: 'f1', x: [1], shap: [0.1] }], assets: {} },
+            },
+          })
+
+          await node.execute(input, config)
+
+          const requestCall = mockHttpClientRequest.mock.calls[0]
+          const requestBody = requestCall![0].data
+          expect(requestBody.data[0]).not.toHaveProperty('f3')
+          expect(requestBody.data[0]).not.toHaveProperty('id')
+          expect(requestBody.data[0]).not.toHaveProperty('city')
+          expect(Object.keys(requestBody.data[0]).sort()).toEqual(['f1', 'f2', 'target'])
+        })
+
+        it(`should reject empty factorNames for ${name}`, async () => {
+          const input = createTableResult([
+            { target: 1, f1: 10, f2: 20 },
+            { target: 2, f1: 11, f2: 21 },
+          ])
+          const config = { targetField: 'target', factorNames: [] }
+
+          await expect(node.execute(input, config)).rejects.toThrow('请先选择参与分析的字段')
+        })
+
+        it(`should deduplicate factorNames overlapping with targetField for ${name}`, async () => {
+          const input = createTableResult([
+            { target: 1, f1: 10, f2: 20, f3: 30 },
+            { target: 2, f1: 11, f2: 21, f3: 31 },
+          ])
+          const config = { targetField: 'target', factorNames: ['target', 'f1'] }
+
+          mockHttpClientRequest.mockResolvedValue({
+            status: 200,
+            data: {
+              results: { summary: { targetField: 'target', sampleCount: 2, featureCount: 1, r2: 0.85, mae: 0.1 }, importance: [{ name: 'f1', value: 0.5, rank: 1 }], dependence: [{ feature: 'f1', x: [1], shap: [0.1] }], assets: {} },
+            },
+          })
+
+          await node.execute(input, config)
+
+          const requestCall = mockHttpClientRequest.mock.calls[0]
+          const requestBody = requestCall![0].data
+          expect(requestBody.data[0]).not.toHaveProperty('f2')
+          expect(requestBody.data[0]).not.toHaveProperty('f3')
+          expect(Object.keys(requestBody.data[0]).sort()).toEqual(['f1', 'target'])
+        })
+
+        it(`should reject config with all factorNames equal to targetField for ${name}`, async () => {
+          const input = createTableResult([
+            { target: 1, f1: 10 },
+            { target: 2, f1: 11 },
+          ])
+          const config = { targetField: 'target', factorNames: ['target'] }
+
+          await expect(node.execute(input, config)).rejects.toThrow('请先选择参与分析的字段')
+        })
+      }
     })
 
     it('should calculate pearson correlations from numeric data', async () => {

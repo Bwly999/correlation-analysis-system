@@ -456,6 +456,40 @@ describe('storage routes', () => {
     expect(errorResponse.json()).toEqual({ detail: '目标字段不存在' })
   })
 
+  it('accepts larger analysis payloads within the raised 20MB body limit', async () => {
+    vi.stubEnv('PYTHON_ANALYSIS_API_BASE_URL', 'http://127.0.0.1:9000')
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: { get: () => 'application/json; charset=utf-8' },
+      text: async () => JSON.stringify({ status: 'success', results: { summary: { ok: true } } }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const app = createTestApp()
+
+    expect(app.initialConfig.bodyLimit).toBe(20 * 1024 * 1024)
+
+    const oversizedByOldLimit = 'x'.repeat(1024 * 1024 + 2048)
+    const payload = {
+      data: Array.from({ length: 2 }, (_, index) => ({
+        target: index + 1,
+        f1: index + 2,
+        comment: oversizedByOldLimit,
+      })),
+      target: 'target',
+      config: { factorNames: ['f1'] },
+    }
+
+    const response = await request(app, 'POST', '/api/analysis/xgboost-shap', payload)
+
+    expect(response.statusCode).toBe(200)
+    expect(response.json()).toEqual({
+      status: 'success',
+      results: { summary: { ok: true } },
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
   it('surfaces a clear error when the python analysis backend is unreachable', async () => {
     vi.stubEnv('PYTHON_ANALYSIS_API_BASE_URL', 'http://127.0.0.1:9000')
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('fetch failed')))

@@ -1,5 +1,6 @@
 import type { NodeDefinition } from '../types'
 import { createReportResult, extractTableRows } from '../result'
+import { trimAnalysisPayload } from '../analysisTrim'
 import { requestLogisticRegressionClassificationAnalysis } from '@/services/analysis'
 
 type LogisticRegressionClassificationConfig = {
@@ -240,7 +241,7 @@ export const logisticRegressionClassificationNode: NodeDefinition<
       useUpstreamFactors: true,
       editable: true,
       forceInput: true,
-      description: '选择参与逻辑回归分类分析的多个因子。',
+      description: '选择参与逻辑回归分类分析的多个因子；请先显式选择字段，留空将无法执行分析。',
     },
     {
       name: 'testSize',
@@ -272,10 +273,16 @@ export const logisticRegressionClassificationNode: NodeDefinition<
       throw new Error('无输入数据')
     }
 
+    const trimmedData = trimAnalysisPayload({
+      rows,
+      targetField: config.targetField || 'target',
+      factorNames: config.factorNames ?? [],
+    })
+
     const result = await requestLogisticRegressionClassificationAnalysis<{
       results?: Partial<LogisticRegressionClassificationResults>
     }>({
-      data: rows,
+      data: trimmedData,
       target: config.targetField || 'target',
       config,
     })

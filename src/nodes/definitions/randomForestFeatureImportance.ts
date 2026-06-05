@@ -1,5 +1,6 @@
 import type { NodeDefinition } from '../types'
 import { createReportResult, extractTableRows } from '../result'
+import { trimAnalysisPayload } from '../analysisTrim'
 import { requestRandomForestFeatureImportanceAnalysis } from '@/services/analysis'
 import { buildRegressionFitChartOption } from './regressionFitChart'
 
@@ -207,7 +208,7 @@ export const randomForestFeatureImportanceNode: NodeDefinition = {
       useUpstreamFactors: true,
       editable: true,
       forceInput: true,
-      description: '选择参与建模的因子列表；留空时默认使用除目标变量外的全部数值字段。',
+      description: '选择参与建模的因子列表；请先显式选择字段，留空将无法执行分析。',
     },
     {
       name: 'nEstimators',
@@ -230,10 +231,16 @@ export const randomForestFeatureImportanceNode: NodeDefinition = {
       throw new Error('无输入数据')
     }
 
+    const trimmedData = trimAnalysisPayload({
+      rows,
+      targetField: config.targetField || 'target',
+      factorNames: config.factorNames ?? [],
+    })
+
     const result = await requestRandomForestFeatureImportanceAnalysis<{
       results?: Partial<RandomForestResults>
     }>({
-      data: rows,
+      data: trimmedData,
       target: config.targetField || 'target',
       config,
     })

@@ -1,5 +1,6 @@
 import type { NodeDefinition } from '../types'
 import { createReportResult, extractTableRows } from '../result'
+import { trimAnalysisPayload } from '../analysisTrim'
 import { requestXgboostShapAnalysis } from '@/services/analysis'
 
 type ShapSummary = {
@@ -146,7 +147,7 @@ export const xgboostShapNode: NodeDefinition = {
       useUpstreamFactors: true,
       editable: true,
       forceInput: true,
-      description: '选择参与分析的因子列表；留空时默认使用除目标变量外的全部数值字段。',
+      description: '选择参与分析的因子列表；请先显式选择字段，留空将无法执行分析。',
     },
     {
       name: 'maxDependencePlots',
@@ -295,8 +296,14 @@ export const xgboostShapNode: NodeDefinition = {
       throw new Error('无输入数据')
     }
 
+    const trimmedData = trimAnalysisPayload({
+      rows,
+      targetField: config.targetField || 'target',
+      factorNames: config.factorNames ?? [],
+    })
+
     const result = await requestXgboostShapAnalysis<{ results?: Record<string, any> }>({
-      data: rows,
+      data: trimmedData,
       target: config.targetField || 'target',
       config,
     })

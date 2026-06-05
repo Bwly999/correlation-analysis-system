@@ -42,6 +42,7 @@ export const createServerApp = (
   const guard = authGuard ?? createJwtAuthGuard()
   const app = Fastify({
     logger: false,
+    bodyLimit: 20 * 1024 * 1024,
     genReqId: (request) =>
       typeof request.headers['x-request-id'] === 'string' ? request.headers['x-request-id'] : randomUUID(),
   })

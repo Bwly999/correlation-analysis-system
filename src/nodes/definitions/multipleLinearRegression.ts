@@ -1,5 +1,6 @@
 import type { NodeDefinition } from '../types'
 import { createReportResult, extractTableRows } from '../result'
+import { trimAnalysisPayload } from '../analysisTrim'
 import { requestMultipleLinearRegressionAnalysis } from '@/services/analysis'
 import { buildRegressionFitChartOption } from './regressionFitChart'
 
@@ -187,7 +188,7 @@ export const multipleLinearRegressionNode: NodeDefinition = {
       useUpstreamFactors: true,
       editable: true,
       forceInput: true,
-      description: '选择参与回归建模的因子列表；留空时默认使用除目标变量外的全部数值字段。',
+      description: '选择参与回归建模的因子列表；请先显式选择字段，留空将无法执行分析。',
     },
   ],
   execute: async (input, config) => {
@@ -196,8 +197,14 @@ export const multipleLinearRegressionNode: NodeDefinition = {
       throw new Error('无输入数据')
     }
 
+    const trimmedData = trimAnalysisPayload({
+      rows,
+      targetField: config.targetField || 'target',
+      factorNames: config.factorNames ?? [],
+    })
+
     const result = await requestMultipleLinearRegressionAnalysis<{ results?: Partial<RegressionResults> }>({
-      data: rows,
+      data: trimmedData,
       target: config.targetField || 'target',
       config,
     })
