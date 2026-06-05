@@ -248,6 +248,9 @@ export const usePiAgentStore = defineStore('piAgent', () => {
           name: workflowStore.workflowName || '未命名工作流',
           nodes: workflowStore.nodes as any[],
           edges: workflowStore.edges as any[],
+          getNodeOutput: workflowStore.getNodeOutput,
+          getNodeError: workflowStore.getNodeError,
+          getNodeLogs: workflowStore.getNodeLogs,
         })
       : undefined
 
@@ -714,6 +717,9 @@ export const usePiAgentStore = defineStore('piAgent', () => {
       name: snapshot.name,
       nodes: snapshot.nodes as any[],
       edges: snapshot.edges as any[],
+      getNodeOutput: workflowStore.getNodeOutput,
+      getNodeError: workflowStore.getNodeError,
+      getNodeLogs: workflowStore.getNodeLogs,
     }))
   }
 

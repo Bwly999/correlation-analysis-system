@@ -68,6 +68,12 @@ export interface SanitizedWorkflowSnapshot {
   edges: SanitizedWorkflowEdge[]
 }
 
+type WorkflowRuntimeAccessors = {
+  getNodeOutput?: (nodeId: string) => unknown
+  getNodeError?: (nodeId: string) => string | undefined
+  getNodeLogs?: (nodeId: string) => string[] | undefined
+}
+
 const truncateStr = (str: string, maxLen: number): string =>
   str.length > maxLen ? `${str.slice(0, maxLen)}…` : str
 
@@ -348,11 +354,27 @@ function buildNodeSkeleton(node: SanitizedWorkflowNode): SanitizedWorkflowNode {
   }
 }
 
-function buildNodeEnrichment(node: SanitizedWorkflowNode): Partial<SanitizedWorkflowNode['data']> {
+function buildNodeEnrichment(
+  node: SanitizedWorkflowNode,
+  accessors?: WorkflowRuntimeAccessors,
+): Partial<SanitizedWorkflowNode['data']> {
+  const output = typeof accessors?.getNodeOutput === 'function'
+    ? sanitizeOutput(accessors.getNodeOutput(node.id))
+    : node.data.output
+  const error = typeof accessors?.getNodeError === 'function'
+    ? (() => {
+        const value = accessors.getNodeError(node.id)
+        return value ? truncateStr(value, MAX_ERROR_LENGTH) : undefined
+      })()
+    : node.data.error
+  const logs = typeof accessors?.getNodeLogs === 'function'
+    ? sanitizeLogs(accessors.getNodeLogs(node.id))
+    : node.data.logs
+
   return {
-    ...(node.data.error ? { error: node.data.error } : {}),
-    ...(node.data.logs?.length ? { logs: node.data.logs } : {}),
-    ...(node.data.output !== undefined ? { output: node.data.output } : {}),
+    ...(error ? { error } : {}),
+    ...(logs?.length ? { logs } : {}),
+    ...(output !== undefined ? { output } : {}),
     ...(Object.keys(node.data.config).length ? { config: node.data.config } : {}),
   }
 }
@@ -370,7 +392,11 @@ function mergeNodeData(
   }
 }
 
-function clampNodesByBudget(nodes: SanitizedWorkflowNode[], maxBytes: number): SanitizedWorkflowNode[] {
+function clampNodesByBudget(
+  nodes: SanitizedWorkflowNode[],
+  maxBytes: number,
+  accessors?: WorkflowRuntimeAccessors,
+): SanitizedWorkflowNode[] {
   const baseNodes = nodes.map(buildNodeSkeleton)
   const result = [...baseNodes]
 
@@ -379,7 +405,7 @@ function clampNodesByBudget(nodes: SanitizedWorkflowNode[], maxBytes: number): S
   }
 
   for (let index = 0; index < nodes.length; index++) {
-    const fullPatch = buildNodeEnrichment(nodes[index]!)
+    const fullPatch = buildNodeEnrichment(nodes[index]!, accessors)
     const enriched = mergeNodeData(result[index]!, fullPatch)
     const tentative = [...result]
     tentative[index] = enriched
@@ -462,16 +488,29 @@ export function sanitizeWorkflowSnapshot(nodes: WorkflowNode[]): SanitizedWorkfl
   return clampJsonSize(budgetedNodes, MAX_PAYLOAD_BYTES)
 }
 
+function sanitizeWorkflowSnapshotWithRuntime(
+  nodes: WorkflowNode[],
+  accessors?: WorkflowRuntimeAccessors,
+): SanitizedWorkflowNode[] {
+  const sanitizedNodes = sanitizeWorkflowNodes(nodes)
+  const budgetedNodes = clampNodesByBudget(sanitizedNodes, MAX_PAYLOAD_BYTES, accessors)
+  return clampJsonSize(budgetedNodes, MAX_PAYLOAD_BYTES)
+}
+
 export function buildSanitizedWorkflowSnapshot(
   input: {
     name: string
     nodes: WorkflowNode[]
     edges: Edge[]
-  },
+  } & WorkflowRuntimeAccessors,
 ): SanitizedWorkflowSnapshot {
   return {
     name: input.name,
-    nodes: sanitizeWorkflowSnapshot(input.nodes),
+    nodes: sanitizeWorkflowSnapshotWithRuntime(input.nodes, {
+      getNodeOutput: input.getNodeOutput,
+      getNodeError: input.getNodeError,
+      getNodeLogs: input.getNodeLogs,
+    }),
     edges: sanitizeWorkflowEdges(input.edges),
   }
 }

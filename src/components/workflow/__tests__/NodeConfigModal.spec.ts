@@ -255,6 +255,104 @@ describe("NodeConfigModal", () => {
     expect(inputPanel.text()).toContain('"fields":["id","city"]');
   });
 
+  it("reads single-input runtime output for input panel and upstream factors when canvas node output is stripped", () => {
+    const store = useWorkflowStore();
+    store.nodes = [
+      {
+        id: "source-1",
+        type: "custom",
+        position: { x: 0, y: 0 },
+        label: "来源一",
+        data: {
+          label: "来源一",
+          type: "manual-json-import",
+          category: "trigger",
+          status: "success",
+          config: {},
+          logs: [],
+          useManualInput: false,
+          manualInput: "",
+          isPinned: false,
+        },
+      } as any,
+      {
+        id: "pearson-node",
+        type: "custom",
+        position: { x: 300, y: 0 },
+        label: "Pearson 分析",
+        data: {
+          label: "Pearson 分析",
+          type: "pearson",
+          category: "terminal",
+          status: "idle",
+          config: { xFields: [], yFields: [] },
+          logs: [],
+          useManualInput: false,
+          manualInput: "",
+          isPinned: false,
+        },
+      } as any,
+    ];
+    (store as any).setNodeRuntime("source-1", {
+      output: {
+        kind: "table",
+        payload: [{ temperature: 12.3, batchCode: "A-01" }],
+        schema: {
+          fields: [
+            { name: "temperature", type: "number", nullable: false },
+            { name: "batchCode", type: "string", nullable: false },
+          ],
+        },
+      },
+    });
+    store.edges = [
+      {
+        id: "e1",
+        source: "source-1",
+        target: "pearson-node",
+        type: "n8n",
+        animated: true,
+      },
+    ] as any;
+
+    const wrapper = mount(NodeConfigModal, {
+      props: { visible: true, nodeId: "pearson-node" },
+      global: {
+        stubs: {
+          Dialog: dialogStub,
+          DataDisplayPanel: {
+            props: ["title", "data"],
+            template:
+              '<div class="data-display-panel">{{ title }}::{{ JSON.stringify(data) }}</div>',
+          },
+          DataAnalysisModal: true,
+          ConfigHeader: {
+            template: "<div />",
+            props: ["nodeLabel", "isPinned", "nodeType"],
+          },
+          ConfigFooter: { template: "<div />" },
+          ConfigForm: {
+            props: ["upstreamFactors"],
+            template:
+              '<div class="upstream-factors">{{ JSON.stringify(upstreamFactors) }}</div>',
+          },
+          RuntimeInputs: {
+            template: "<div />",
+            props: ["config", "properties", "upstreamFactors"],
+          },
+        },
+      },
+    });
+
+    const inputPanel = wrapper.findAll(".data-display-panel")[0]!;
+    expect(inputPanel.text()).toContain('"kind":"table"');
+    expect(inputPanel.text()).toContain('"temperature"');
+
+    const upstreamFactorsText = wrapper.find(".upstream-factors").text();
+    expect(upstreamFactorsText).toContain('"name":"temperature"');
+    expect(upstreamFactorsText).toContain('"name":"batchCode"');
+  });
+
   it("exposes upstream factor schema metadata for analysis field hints", () => {
     const store = useWorkflowStore();
     store.nodes = [
@@ -273,16 +371,6 @@ describe("NodeConfigModal", () => {
           useManualInput: false,
           manualInput: "",
           isPinned: false,
-          output: {
-            kind: "table",
-            payload: [{ temperature: 12.3, batchCode: "A-01" }],
-            schema: {
-              fields: [
-                { name: "temperature", type: "number" },
-                { name: "batchCode", type: "string" },
-              ],
-            },
-          },
         },
       } as any,
       {
@@ -312,6 +400,18 @@ describe("NodeConfigModal", () => {
         animated: true,
       },
     ] as any;
+    (store as any).setNodeRuntime("source-1", {
+      output: {
+        kind: "table",
+        payload: [{ temperature: 12.3, batchCode: "A-01" }],
+        schema: {
+          fields: [
+            { name: "temperature", type: "number" },
+            { name: "batchCode", type: "string" },
+          ],
+        },
+      },
+    });
 
     const wrapper = mount(NodeConfigModal, {
       props: { visible: true, nodeId: "pearson-node" },
@@ -365,25 +465,6 @@ describe("NodeConfigModal", () => {
           useManualInput: false,
           manualInput: "",
           isPinned: false,
-          output: {
-            kind: "tableCollection",
-            payload: [
-              {
-                name: "来源一",
-                data: [
-                  { score: null, temperature: 10, onlyA: 1 },
-                  { score: 2, temperature: 12 },
-                ],
-              },
-              {
-                name: "来源二",
-                data: [
-                  { score: null, temperature: 20, onlyB: 9 },
-                  { score: 5, temperature: 24 },
-                ],
-              },
-            ],
-          },
         },
       } as any,
       {
@@ -413,6 +494,27 @@ describe("NodeConfigModal", () => {
         animated: true,
       },
     ] as any;
+    (store as any).setNodeRuntime("merge-node", {
+      output: {
+        kind: "tableCollection",
+        payload: [
+          {
+            name: "来源一",
+            data: [
+              { score: null, temperature: 10, onlyA: 1 },
+              { score: 2, temperature: 12 },
+            ],
+          },
+          {
+            name: "来源二",
+            data: [
+              { score: null, temperature: 20, onlyB: 9 },
+              { score: 5, temperature: 24 },
+            ],
+          },
+        ],
+      },
+    });
 
     const wrapper = mount(NodeConfigModal, {
       props: { visible: true, nodeId: "chart-node" },
@@ -465,17 +567,6 @@ describe("NodeConfigModal", () => {
           useManualInput: false,
           manualInput: "",
           isPinned: false,
-          output: {
-            kind: "table",
-            payload: [{ target: 12, f1: 1.2, f2: 3.4 }],
-            schema: {
-              fields: [
-                { name: "target", type: "number" },
-                { name: "f1", type: "number" },
-                { name: "f2", type: "number" },
-              ],
-            },
-          },
         },
       } as any,
       {
@@ -505,6 +596,19 @@ describe("NodeConfigModal", () => {
         animated: true,
       },
     ] as any;
+    (store as any).setNodeRuntime("source-1", {
+      output: {
+        kind: "table",
+        payload: [{ target: 12, f1: 1.2, f2: 3.4 }],
+        schema: {
+          fields: [
+            { name: "target", type: "number" },
+            { name: "f1", type: "number" },
+            { name: "f2", type: "number" },
+          ],
+        },
+      },
+    });
 
     const wrapper = mount(NodeConfigModal, {
       props: { visible: true, nodeId: "pearson-node" },

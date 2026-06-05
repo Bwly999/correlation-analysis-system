@@ -15,6 +15,7 @@ interface BuildLocalWorkflowAiContextInput {
   nodes: WorkflowNode[]
   edges: Edge[]
   inspectNode?: (nodeId: string) => Promise<unknown>
+  getNodeOutput?: (nodeId: string) => unknown
 }
 
 interface BuildLocalWorkflowAiContextResult {
@@ -29,8 +30,11 @@ export const buildLocalWorkflowAiContext = async ({
   nodes,
   edges,
   inspectNode,
+  getNodeOutput,
 }: BuildLocalWorkflowAiContextInput): Promise<BuildLocalWorkflowAiContextResult> => {
   const toolTrace: WorkflowAiToolTraceItem[] = []
+  const resolveNodeOutput = (node: WorkflowNode) =>
+    typeof getNodeOutput === 'function' ? getNodeOutput(node.id) : node.data.output
 
   toolTrace.push({
     toolName: 'get_workflow_context',
@@ -58,15 +62,19 @@ export const buildLocalWorkflowAiContext = async ({
   })
 
   const schemaSummaries = nodes
-    .filter((node) => node.data.output)
+    .map((node) => ({
+      node,
+      output: resolveNodeOutput(node),
+    }))
+    .filter(({ output }) => output != null)
     .slice(0, 3)
-    .map((node) => {
+    .map(({ node, output }) => {
       const summary = inspectAiSchemaSummary({
         source: {
           kind: 'canvas-cache',
           nodeRef: node.id,
         },
-        value: node.data.output,
+        value: output,
       })
 
       return {
@@ -93,7 +101,7 @@ export const buildLocalWorkflowAiContext = async ({
 
   if (inspectNode && schemaSummaries.length < 3) {
     const candidateNodes = nodes
-      .filter((node) => !node.data.output && node.data.category !== 'terminal')
+      .filter((node) => resolveNodeOutput(node) == null && node.data.category !== 'terminal')
       .slice(0, Math.max(0, 3 - schemaSummaries.length))
 
     const ephemeralSummaries: typeof schemaSummaries = []

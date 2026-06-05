@@ -240,10 +240,10 @@ const inputData = computed(() => {
     };
   }
 
-  return (
-    currentNodes.find((item) => item.id === incomingEdges[0]?.source)?.data
-      .output ?? null
+  const sourceNode = currentNodes.find(
+    (item) => item.id === incomingEdges[0]?.source,
   );
+  return sourceNode ? store.getNodeOutput(sourceNode.id) : null;
 });
 
 type NeighborNodeEntry = {

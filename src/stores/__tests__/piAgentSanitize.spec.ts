@@ -434,4 +434,54 @@ describe('piAgentSanitize', () => {
       total: 20,
     })
   })
+
+  it('uses runtime accessors to enrich snapshot when canvas nodes no longer carry output, error and logs', () => {
+    const snapshot = buildSanitizedWorkflowSnapshot({
+      name: '运行态补全测试',
+      nodes: [
+        {
+          id: 'node_runtime',
+          type: 'custom',
+          label: '运行态节点',
+          position: { x: 0, y: 0 },
+          selected: false,
+          dragging: false,
+          data: {
+            label: '运行态节点',
+            type: 'pearson',
+            category: 'terminal',
+            config: {
+              targetField: 'target',
+            },
+            status: 'error',
+            logs: [],
+          },
+        } as any,
+      ],
+      edges: [],
+      getNodeOutput: (nodeId) =>
+        nodeId === 'node_runtime'
+          ? {
+              kind: 'table',
+              payload: [{ target: 1, score: 2 }],
+            }
+          : null,
+      getNodeError: (nodeId) =>
+        nodeId === 'node_runtime' ? '字段 target 不存在' : undefined,
+      getNodeLogs: (nodeId) =>
+        nodeId === 'node_runtime' ? ['第一条运行日志', '第二条运行日志'] : [],
+    })
+
+    expect(snapshot.nodes[0]).toMatchObject({
+      data: {
+        status: 'error',
+        error: '字段 target 不存在',
+        logs: ['第一条运行日志', '第二条运行日志'],
+      },
+    })
+    expect((snapshot.nodes[0] as Record<string, any>).data.output).toMatchObject({
+      kind: 'table',
+      payload: [{ target: 1, score: 2 }],
+    })
+  })
 })

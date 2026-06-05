@@ -54,6 +54,7 @@ export const usePiAgentConfigStore = defineStore('pi-agent-config', () => {
     nodes: any[]
     edges: any[]
     executeForAiInspection?: (nodeId: string) => Promise<unknown>
+    getNodeOutput?: (nodeId: string) => unknown
   }, prompt: string) => {
     const canInspectCanvas =
       workflowStore.nodes.every((node) => typeof node === 'object' && node !== null && 'data' in node)
@@ -71,6 +72,7 @@ export const usePiAgentConfigStore = defineStore('pi-agent-config', () => {
       nodes: workflowStore.nodes,
       edges: workflowStore.edges,
       inspectNode: workflowStore.executeForAiInspection,
+      getNodeOutput: workflowStore.getNodeOutput,
     })
 
     contextHints.value = localContext.contextHints ?? null
