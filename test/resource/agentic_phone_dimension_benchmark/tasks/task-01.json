@@ -1,0 +1,15 @@
+{
+  "task_id": "phone-dim-gap-01",
+  "dataset": "agentic_phone_dimension_benchmark_v1",
+  "prompt": "请分析导致整机齐平间隙（final_flush_gap）异常的关键因素，给出中文结论，并用必要图表说明哪些因素是真正主因、哪些只是表面相关。",
+  "reference_conclusions": [
+    "中框壁厚偏置与最终齐平间隙显著相关，并通过中间装配间隙传导",
+    "显示柔性偏移会影响段差，但在高温漂条件下会被明显放大",
+    "工站或班次看起来可能相关，但不是最稳定的根因"
+  ],
+  "focus_points": [
+    "是否正确跨表关联 part_measurements、mapping_or_lot_bridge、assembly_measurements",
+    "是否区分主因、中介变量和伪相关",
+    "图表是否能支撑结论"
+  ]
+}

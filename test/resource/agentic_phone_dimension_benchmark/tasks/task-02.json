@@ -1,0 +1,15 @@
+{
+  "task_id": "phone-dim-back-step-02",
+  "dataset": "agentic_phone_dimension_benchmark_v1",
+  "prompt": "请分析背盖台阶（final_back_cover_step）和漏液风险（leak_risk_score）偏高的原因，说明是否存在路径传播关系，并给出中文图表化结论。",
+  "reference_conclusions": [
+    "电池膨胀代理量不是简单直接影响背盖台阶，而是会先抬高装配应力再放大问题",
+    "应力代理值（stress_proxy）是很关键的中介变量",
+    "胶水波动和密封台阶也会影响风险，但不是唯一主链"
+  ],
+  "focus_points": [
+    "是否识别 battery_swelling_index -> stress_proxy -> final_back_cover_step 的传播路径",
+    "是否给出中介链路而不是只报浅层相关性",
+    "图表和文字是否便于业务人员理解"
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "task_id": "phone-dim-spurious-03",
+  "dataset": "agentic_phone_dimension_benchmark_v1",
+  "prompt": "请检查这套数据里哪些字段容易被误判为根因。重点判断工站、班次、近似关联键是否存在伪相关，并给出一份中文说明，包含必要图表。",
+  "reference_conclusions": [
+    "station_id 或 pseudo_station_score 可能显得很显著，但主要受治具磨损和环境漂移共因影响",
+    "near_match_code 这类近似关联键容易制造错误归因",
+    "如果没有控制变量或分层分析，很容易把表面相关误判为根因"
+  ],
+  "focus_points": [
+    "是否识别并解释伪相关",
+    "是否说明为什么近似键不能替代稳定主键 join",
+    "最终输出是否清楚区分可疑信号和真实根因"
+  ]
+}

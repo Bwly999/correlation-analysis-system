@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>手机尺寸评测工作台</title>
+    <style>
+      :root {
+        --bg: #07111f;
+        --bg-soft: rgba(12, 28, 45, 0.92);
+        --panel: rgba(11, 24, 39, 0.88);
+        --panel-strong: rgba(7, 17, 31, 0.98);
+        --line: rgba(126, 168, 214, 0.2);
+        --line-strong: rgba(126, 168, 214, 0.45);
+        --text: #e8f0f8;
+        --muted: #91a6bc;
+        --accent: #3b82f6;
+        --accent-soft: rgba(59, 130, 246, 0.16);
+        --green: #4ade80;
+        --amber: #fbbf24;
+        --rose: #fb7185;
+        --shadow: 0 24px 70px rgba(0, 0, 0, 0.38);
+        --mono: "Cascadia Code", "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+        --display: "Segoe UI Variable Display", "Microsoft YaHei UI", "PingFang SC", sans-serif;
+        --body: "Segoe UI Variable Text", "Microsoft YaHei", "PingFang SC", sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        background:
+          radial-gradient(circle at top left, rgba(59, 130, 246, 0.18), transparent 24%),
+          radial-gradient(circle at 85% 12%, rgba(74, 222, 128, 0.12), transparent 18%),
+          linear-gradient(180deg, #08101b 0%, #07111f 45%, #040a13 100%);
+        color: var(--text);
+        font-family: var(--body);
+      }
+
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        background:
+          linear-gradient(rgba(148, 163, 184, 0.04) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(148, 163, 184, 0.04) 1px, transparent 1px);
+        background-size: 28px 28px;
+        mask-image: radial-gradient(circle at center, black 55%, transparent 100%);
+      }
+
+      .shell {
+        width: min(1500px, calc(100vw - 32px));
+        margin: 24px auto 40px;
+      }
+
+      .hero {
+        position: relative;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        background:
+          linear-gradient(135deg, rgba(59, 130, 246, 0.16), rgba(8, 15, 27, 0.2) 30%, rgba(8, 15, 27, 0.92) 72%),
+          var(--panel-strong);
+        border-radius: 28px;
+        padding: 28px 30px 26px;
+        box-shadow: var(--shadow);
+      }
+
+      .hero::after {
+        content: "";
+        position: absolute;
+        inset: auto -60px -70px auto;
+        width: 240px;
+        height: 240px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(59, 130, 246, 0.32), transparent 68%);
+        filter: blur(8px);
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 7px 12px;
+        border: 1px solid var(--line-strong);
+        border-radius: 999px;
+        background: rgba(5, 13, 24, 0.5);
+        color: #d6e7ff;
+        font-family: var(--mono);
+        font-size: 12px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+
+      .hero-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.75fr);
+        gap: 24px;
+        margin-top: 18px;
+      }
+
+      .hero h1 {
+        margin: 0 0 12px;
+        font-family: var(--display);
+        font-size: clamp(40px, 5vw, 72px);
+        line-height: 0.94;
+        letter-spacing: -0.05em;
+      }
+
+      .hero p {
+        margin: 0;
+        max-width: 760px;
+        color: var(--muted);
+        font-size: 15px;
+        line-height: 1.8;
+      }
+
+      .stat-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .stat {
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        padding: 16px;
+        background: rgba(6, 17, 29, 0.74);
+      }
+
+      .stat-label {
+        color: var(--muted);
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .stat-value {
+        margin-top: 10px;
+        font-family: var(--display);
+        font-size: 28px;
+        line-height: 1;
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: 280px minmax(0, 1fr) 320px;
+        gap: 18px;
+        margin-top: 18px;
+        align-items: start;
+      }
+
+      .panel {
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        background: var(--panel);
+        box-shadow: var(--shadow);
+        overflow: hidden;
+        backdrop-filter: blur(12px);
+      }
+
+      .panel-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 18px 20px 14px;
+        border-bottom: 1px solid rgba(126, 168, 214, 0.12);
+      }
+
+      .panel-title {
+        margin: 0;
+        font-family: var(--display);
+        font-size: 18px;
+        letter-spacing: -0.02em;
+      }
+
+      .panel-kicker {
+        color: var(--muted);
+        font-size: 12px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .task-list {
+        padding: 12px;
+        display: grid;
+        gap: 10px;
+      }
+
+      .task-button {
+        width: 100%;
+        padding: 14px;
+        border: 1px solid rgba(126, 168, 214, 0.15);
+        border-radius: 18px;
+        background: rgba(7, 18, 31, 0.6);
+        color: var(--text);
+        text-align: left;
+        cursor: pointer;
+        transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
+      }
+
+      .task-button:hover,
+      .task-button.active {
+        transform: translateY(-1px);
+        border-color: rgba(59, 130, 246, 0.58);
+        background: linear-gradient(135deg, rgba(59, 130, 246, 0.18), rgba(7, 18, 31, 0.9));
+      }
+
+      .task-button strong {
+        display: block;
+        font-size: 15px;
+        line-height: 1.45;
+      }
+
+      .task-button span {
+        display: block;
+        margin-top: 8px;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
+      .content {
+        padding: 20px;
+      }
+
+      .chip-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-bottom: 18px;
+      }
+
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.03);
+        color: #dbeafe;
+        font-size: 12px;
+      }
+
+      .main-grid {
+        display: grid;
+        gap: 16px;
+      }
+
+      .card {
+        border: 1px solid rgba(126, 168, 214, 0.14);
+        border-radius: 22px;
+        padding: 18px;
+        background: rgba(5, 14, 24, 0.68);
+      }
+
+      .card h3 {
+        margin: 0 0 10px;
+        font-family: var(--display);
+        font-size: 18px;
+      }
+
+      .card p,
+      .card li {
+        color: #d8e5f2;
+        line-height: 1.75;
+        font-size: 14px;
+      }
+
+      .card ul,
+      .card ol {
+        margin: 0;
+        padding-left: 18px;
+      }
+
+      .prompt-box {
+        position: relative;
+        padding: 18px 18px 18px 22px;
+        border-radius: 18px;
+        background:
+          linear-gradient(90deg, rgba(59, 130, 246, 0.16), transparent 24%),
+          rgba(3, 11, 20, 0.95);
+        border: 1px solid rgba(59, 130, 246, 0.24);
+      }
+
+      .prompt-box::before {
+        content: "PROMPT";
+        position: absolute;
+        top: 10px;
+        right: 14px;
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: 0.16em;
+        color: rgba(147, 197, 253, 0.75);
+      }
+
+      .prompt-text {
+        margin: 0;
+        padding-right: 74px;
+        white-space: pre-wrap;
+        font-size: 15px;
+        line-height: 1.9;
+      }
+
+      .copy-button {
+        border: 1px solid rgba(59, 130, 246, 0.28);
+        background: rgba(59, 130, 246, 0.12);
+        color: #dcebff;
+        border-radius: 12px;
+        padding: 10px 14px;
+        font-family: var(--mono);
+        font-size: 12px;
+        cursor: pointer;
+        transition: background 180ms ease, transform 180ms ease;
+      }
+
+      .copy-button:hover {
+        background: rgba(59, 130, 246, 0.2);
+        transform: translateY(-1px);
+      }
+
+      .ref-list,
+      .focus-list,
+      .dataset-list,
+      .score-list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .list-item {
+        padding: 12px 14px;
+        border-radius: 16px;
+        border: 1px solid rgba(126, 168, 214, 0.14);
+        background: rgba(255, 255, 255, 0.025);
+      }
+
+      .list-item strong {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 14px;
+      }
+
+      .dataset-row {
+        display: flex;
+        align-items: start;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .dataset-row code {
+        color: #c9e1ff;
+        font-family: var(--mono);
+        font-size: 12px;
+      }
+
+      .badge {
+        flex-shrink: 0;
+        padding: 4px 8px;
+        border-radius: 999px;
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      .badge.data {
+        background: rgba(74, 222, 128, 0.14);
+        color: #b8f7cd;
+      }
+
+      .badge.task {
+        background: rgba(251, 191, 36, 0.14);
+        color: #fde7a7;
+      }
+
+      .aside {
+        padding: 18px;
+        display: grid;
+        gap: 16px;
+        position: sticky;
+        top: 18px;
+      }
+
+      .score-list .list-item {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: center;
+      }
+
+      .score-list b {
+        color: #f8fbff;
+      }
+
+      .tiny {
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.65;
+      }
+
+      .note {
+        padding: 14px;
+        border-radius: 16px;
+        background: rgba(251, 113, 133, 0.08);
+        border: 1px solid rgba(251, 113, 133, 0.22);
+        color: #ffd7df;
+        font-size: 13px;
+        line-height: 1.7;
+      }
+
+      .footer {
+        margin-top: 18px;
+        padding: 18px 4px 0;
+        color: var(--muted);
+        font-size: 12px;
+        text-align: center;
+      }
+
+      .pulse {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--green);
+        box-shadow: 0 0 0 rgba(74, 222, 128, 0.45);
+        animation: pulse 1.8s infinite;
+      }
+
+      @keyframes pulse {
+        0% {
+          box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.42);
+        }
+        70% {
+          box-shadow: 0 0 0 10px rgba(74, 222, 128, 0);
+        }
+        100% {
+          box-shadow: 0 0 0 0 rgba(74, 222, 128, 0);
+        }
+      }
+
+      @media (max-width: 1220px) {
+        .layout {
+          grid-template-columns: 1fr;
+        }
+
+        .aside {
+          position: static;
+        }
+
+        .hero-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 760px) {
+        .shell {
+          width: min(100vw - 18px, 100%);
+          margin: 10px auto 24px;
+        }
+
+        .hero,
+        .content,
+        .aside {
+          padding: 16px;
+        }
+
+        .hero h1 {
+          font-size: 34px;
+        }
+
+        .prompt-text {
+          padding-right: 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <section class="hero">
+        <div class="eyebrow"><span class="pulse"></span> PHONE DIMENSION BENCH / HUMAN EVAL STATION</div>
+        <div class="hero-grid">
+          <div>
+            <h1>手机尺寸评测工作台</h1>
+            <p>
+              一页完成评测准备、任务选择、Prompt 复制、参考结论查看与人工评分提示。
+              这不是自动判分器，而是一块给评测人快速使用的工程评审台。
+            </p>
+          </div>
+          <div class="stat-grid">
+            <div class="stat">
+              <div class="stat-label">数据主表</div>
+              <div class="stat-value">2 张</div>
+            </div>
+            <div class="stat">
+              <div class="stat-label">桥接关系</div>
+              <div class="stat-value">1440 行</div>
+            </div>
+            <div class="stat">
+              <div class="stat-label">评测任务</div>
+              <div class="stat-value">3 题</div>
+            </div>
+            <div class="stat">
+              <div class="stat-label">评分维度</div>
+              <div class="stat-value">4 项</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="layout">
+        <aside class="panel">
+          <div class="panel-head">
+            <div>
+              <div class="panel-kicker">Task Router</div>
+              <h2 class="panel-title">选择评测题目</h2>
+            </div>
+          </div>
+          <div class="task-list" id="task-list"></div>
+        </aside>
+
+        <main class="panel">
+          <div class="content">
+            <div class="chip-row">
+              <div class="chip">适配 Agent：Codex / Claude Code / OpenCode</div>
+              <div class="chip">评测方式：人工发起分析 + 人工打分</div>
+              <div class="chip" id="task-id-chip">任务编号</div>
+            </div>
+
+            <div class="main-grid">
+              <section class="card">
+                <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:12px;">
+                  <h3 style="margin:0;">给 Agent 的 Prompt</h3>
+                  <button class="copy-button" id="copy-prompt-button">复制 Prompt</button>
+                </div>
+                <div class="prompt-box">
+                  <p class="prompt-text" id="prompt-text"></p>
+                </div>
+              </section>
+
+              <section class="card">
+                <h3>本题参考结论</h3>
+                <div class="ref-list" id="reference-list"></div>
+              </section>
+
+              <section class="card">
+                <h3>评测观察重点</h3>
+                <div class="focus-list" id="focus-list"></div>
+              </section>
+
+              <section class="card">
+                <h3>需要交给 Agent 的数据</h3>
+                <div class="dataset-list" id="dataset-list"></div>
+              </section>
+
+              <section class="card">
+                <h3>评测人操作流程</h3>
+                <ol>
+                  <li>选中左侧题目，复制 Prompt。</li>
+                  <li>把 `data/` 目录下的 3 个 CSV 发给 Agent，必要时再补 `data/field_dictionary.json`。</li>
+                  <li>不要把 `data/dataset_truth.json`、参考结论和评分标准提前给 Agent。</li>
+                  <li>等待 Agent 输出中文结论、关键图表、证据字段和不确定性说明。</li>
+                  <li>依据右侧评分维度和本题参考结论做人工判断。</li>
+                </ol>
+              </section>
+            </div>
+          </div>
+        </main>
+
+        <aside class="panel">
+          <div class="aside">
+            <section class="card">
+              <h3>人工评分维度</h3>
+              <div class="score-list">
+                <div class="list-item"><span>结论正确性</span><b>1-5</b></div>
+                <div class="list-item"><span>证据充分性</span><b>1-5</b></div>
+                <div class="list-item"><span>图表与结果可读性</span><b>1-5</b></div>
+                <div class="list-item"><span>表达清晰度</span><b>1-5</b></div>
+              </div>
+            </section>
+
+            <section class="card">
+              <h3>评审提醒</h3>
+              <p class="tiny">
+                `reference_conclusions` 是参考命中点，不是唯一标准答案。重点看它有没有抓住主因、有没有做对跨表关联、有没有把伪相关误判成根因。
+              </p>
+              <div class="note">
+                如果 Agent 把 `near_match_code` 这类近似键当成稳定主键，或者只报工站/班次相关而没有控制变量，应该明显扣分。
+              </div>
+            </section>
+
+            <section class="card">
+              <h3>建议记录项</h3>
+              <ul>
+                <li>Agent / 工具名</li>
+                <li>模型名</li>
+                <li>任务编号</li>
+                <li>四项评分</li>
+                <li>命中点与主要失误</li>
+              </ul>
+            </section>
+          </div>
+        </aside>
+      </section>
+
+      <div class="footer">建议将本页与 `guide/rubric.md`、`guide/review-sheet.md` 一起使用。</div>
+    </div>
+
+    <script>
+      const tasks = [
+        {
+          taskId: "phone-dim-gap-01",
+          shortTitle: "整机齐平间隙主因",
+          prompt:
+            "请分析导致整机齐平间隙（final_flush_gap）异常的关键因素，给出中文结论，并用必要图表说明哪些因素是真正主因、哪些只是表面相关。",
+          referenceConclusions: [
+            "中框壁厚偏置与最终齐平间隙显著相关，并通过中间装配间隙传导。",
+            "显示柔性偏移会影响段差，但在高温漂条件下会被明显放大。",
+            "工站或班次看起来可能相关，但不是最稳定的根因。"
+          ],
+          focusPoints: [
+            "是否正确跨表关联 part_measurements、mapping_or_lot_bridge、assembly_measurements。",
+            "是否区分主因、中介变量和伪相关。",
+            "图表是否真的支撑最终结论。"
+          ]
+        },
+        {
+          taskId: "phone-dim-back-step-02",
+          shortTitle: "背盖台阶与漏液风险",
+          prompt:
+            "请分析背盖台阶（final_back_cover_step）和漏液风险（leak_risk_score）偏高的原因，说明是否存在路径传播关系，并给出中文图表化结论。",
+          referenceConclusions: [
+            "电池膨胀代理量不是简单直接影响背盖台阶，而是会先抬高装配应力再放大问题。",
+            "应力代理值（stress_proxy）是很关键的中介变量。",
+            "胶水波动和密封台阶也会影响风险，但不是唯一主链。"
+          ],
+          focusPoints: [
+            "是否识别 battery_swelling_index -> stress_proxy -> final_back_cover_step 的传播路径。",
+            "是否给出中介链路，而不是只报浅层相关性。",
+            "图表和文字是否适合业务评审快速理解。"
+          ]
+        },
+        {
+          taskId: "phone-dim-spurious-03",
+          shortTitle: "伪相关与错误归因",
+          prompt:
+            "请检查这套数据里哪些字段容易被误判为根因。重点判断工站、班次、近似关联键是否存在伪相关，并给出一份中文说明，包含必要图表。",
+          referenceConclusions: [
+            "station_id 或 pseudo_station_score 可能显得很显著，但主要受治具磨损和环境漂移共因影响。",
+            "near_match_code 这类近似关联键容易制造错误归因。",
+            "如果没有控制变量或分层分析，很容易把表面相关误判为根因。"
+          ],
+          focusPoints: [
+            "是否识别并解释伪相关。",
+            "是否说明为什么近似键不能替代稳定主键 join。",
+            "最终输出是否清楚区分可疑信号和真实根因。"
+          ]
+        }
+      ];
+
+      const datasetFiles = [
+        {
+          filename: "data/part_measurements.csv",
+          tag: "必给",
+          tagClass: "data",
+          description: "单体物料测量数据，包含 228 列高维因子。"
+        },
+        {
+          filename: "data/assembly_measurements.csv",
+          tag: "必给",
+          tagClass: "data",
+          description: "组装后尺寸与风险结果，包含 226 列。"
+        },
+        {
+          filename: "data/mapping_or_lot_bridge.csv",
+          tag: "必给",
+          tagClass: "data",
+          description: "桥接 part_id、assembly_id、批次、工站与治具。"
+        },
+        {
+          filename: "data/field_dictionary.json",
+          tag: "可选",
+          tagClass: "task",
+          description: "字段语义提示，帮助 Agent 更快理解字段。"
+        }
+      ];
+
+      const taskList = document.getElementById("task-list");
+      const promptText = document.getElementById("prompt-text");
+      const referenceList = document.getElementById("reference-list");
+      const focusList = document.getElementById("focus-list");
+      const datasetList = document.getElementById("dataset-list");
+      const taskIdChip = document.getElementById("task-id-chip");
+      const copyPromptButton = document.getElementById("copy-prompt-button");
+
+      let activeIndex = 0;
+
+      const renderDatasetFiles = () => {
+        datasetList.innerHTML = "";
+        datasetFiles.forEach((item) => {
+          const div = document.createElement("div");
+          div.className = "list-item dataset-row";
+          div.innerHTML = `
+            <div>
+              <strong><code>${item.filename}</code></strong>
+              <div class="tiny">${item.description}</div>
+            </div>
+            <span class="badge ${item.tagClass}">${item.tag}</span>
+          `;
+          datasetList.appendChild(div);
+        });
+      };
+
+      const renderTaskButtons = () => {
+        taskList.innerHTML = "";
+        tasks.forEach((task, index) => {
+          const button = document.createElement("button");
+          button.className = `task-button${index === activeIndex ? " active" : ""}`;
+          button.innerHTML = `
+            <strong>${task.shortTitle}</strong>
+            <span>${task.taskId}</span>
+          `;
+          button.addEventListener("click", () => {
+            activeIndex = index;
+            renderTaskButtons();
+            renderTaskContent();
+          });
+          taskList.appendChild(button);
+        });
+      };
+
+      const renderTaskContent = () => {
+        const task = tasks[activeIndex];
+        taskIdChip.textContent = `当前任务：${task.taskId}`;
+        promptText.textContent = task.prompt;
+
+        referenceList.innerHTML = "";
+        task.referenceConclusions.forEach((text, index) => {
+          const div = document.createElement("div");
+          div.className = "list-item";
+          div.innerHTML = `<strong>参考结论 ${index + 1}</strong><div>${text}</div>`;
+          referenceList.appendChild(div);
+        });
+
+        focusList.innerHTML = "";
+        task.focusPoints.forEach((text, index) => {
+          const div = document.createElement("div");
+          div.className = "list-item";
+          div.innerHTML = `<strong>观察点 ${index + 1}</strong><div>${text}</div>`;
+          focusList.appendChild(div);
+        });
+      };
+
+      copyPromptButton.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(tasks[activeIndex].prompt);
+          copyPromptButton.textContent = "已复制 Prompt";
+          window.setTimeout(() => {
+            copyPromptButton.textContent = "复制 Prompt";
+          }, 1400);
+        } catch (error) {
+          copyPromptButton.textContent = "复制失败";
+          window.setTimeout(() => {
+            copyPromptButton.textContent = "复制 Prompt";
+          }, 1400);
+        }
+      });
+
+      renderDatasetFiles();
+      renderTaskButtons();
+      renderTaskContent();
+    </script>
+  </body>
+</html>
