@@ -14,9 +14,7 @@
 
 把下面几类文件一起提供给 Agent：
 
-- `data/part_measurements.csv`
-- `data/assembly_measurements.csv`
-- `data/mapping_or_lot_bridge.csv`
+- `data/phone_dimension_benchmark.csv`
 - 当前题目的 `prompt`
 
 可选提供：
@@ -47,7 +45,7 @@
 评测人重点检查：
 
 - 结论是否基本正确
-- 有没有把跨表关联做对
+- 有没有正确理解 `frame_` / `display_` / `battery_` 前缀字段
 - 有没有把伪相关误判成根因
 - 图表是否真的支撑文字结论
 - 中文表达是否清楚易懂
@@ -76,7 +74,7 @@
 如果要横向比较 `Codex`、`Claude Code`、`OpenCode`，尽量保持一致：
 
 - 使用同一题目
-- 提供同一批数据文件
+- 提供同一份宽表数据文件
 - 使用相近的提示词
 - 由同一个评测人打分
 

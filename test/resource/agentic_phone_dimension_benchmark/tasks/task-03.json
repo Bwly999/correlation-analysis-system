@@ -3,13 +3,13 @@
   "dataset": "agentic_phone_dimension_benchmark_v1",
   "prompt": "请检查这套数据里哪些字段容易被误判为根因。重点判断工站、班次、近似关联键是否存在伪相关，并给出一份中文说明，包含必要图表。",
   "reference_conclusions": [
-    "station_id 或 pseudo_station_score 可能显得很显著，但主要受治具磨损和环境漂移共因影响",
-    "near_match_code 这类近似关联键容易制造错误归因",
-    "如果没有控制变量或分层分析，很容易把表面相关误判为根因"
+    "需要明确指出 `station_id` 或 `pseudo_station_score` 之所以看起来和 `final_flush_gap`、`cosmetic_score` 有关，更可能是因为它们间接承载了 `fixture_wear_index`、`env_temp`、`env_humidity` 这些共因，而不是独立根因。",
+    "需要明确指出 `near_match_code` 或 `join_hint_key` 这类近似关联键不能替代稳定主键 `part_id` / `assembly_id`，否则很容易在跨表分析时制造错误 join，从而生成看似合理但实际错误的归因。",
+    "需要说明如果不做控制变量、分层分析，或者不先确认 join 是否稳定，模型很容易把 `shift`、`operator_team`、`station_id` 这类表面相关字段误判为真实根因。"
   ],
   "focus_points": [
-    "是否识别并解释伪相关",
-    "是否说明为什么近似键不能替代稳定主键 join",
-    "最终输出是否清楚区分可疑信号和真实根因"
+    "是否识别并解释 `station_id`、`pseudo_station_score`、`shift` 这类伪相关或共因代理",
+    "是否说明为什么 `near_match_code`、`join_hint_key` 不能替代稳定主键 join",
+    "最终输出是否清楚区分可疑信号、共因代理和真实根因"
   ]
 }

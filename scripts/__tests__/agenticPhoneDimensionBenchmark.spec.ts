@@ -8,9 +8,7 @@ const benchmarkDir = path.resolve(
 )
 
 const requiredFiles = [
-  'data/part_measurements.csv',
-  'data/assembly_measurements.csv',
-  'data/mapping_or_lot_bridge.csv',
+  'data/phone_dimension_benchmark.csv',
   'data/field_dictionary.json',
   'data/dataset_truth.json',
   'README.md',
@@ -38,53 +36,50 @@ describe('agentic phone dimension benchmark assets', () => {
     }
   })
 
-  it('provides two high-dimensional main tables and a bridge table', () => {
-    const partDataset = readCsv('data/part_measurements.csv')
-    const assemblyDataset = readCsv('data/assembly_measurements.csv')
-    const bridgeDataset = readCsv('data/mapping_or_lot_bridge.csv')
+  it('provides one high-dimensional benchmark table with assembly and part data in the same row', () => {
+    const dataset = readCsv('data/phone_dimension_benchmark.csv')
 
-    expect(partDataset.header.length).toBeGreaterThanOrEqual(200)
-    expect(partDataset.rows.length).toBeGreaterThanOrEqual(400)
-
-    expect(assemblyDataset.header.length).toBeGreaterThanOrEqual(200)
-    expect(assemblyDataset.rows.length).toBeGreaterThanOrEqual(400)
-
-    expect(bridgeDataset.header).toEqual(
+    expect(dataset.header.length).toBeGreaterThanOrEqual(400)
+    expect(dataset.rows.length).toBeGreaterThanOrEqual(400)
+    expect(dataset.header).toEqual(
       expect.arrayContaining([
-        'part_id',
-        'sub_batch_id',
         'assembly_id',
+        'sub_batch_id',
         'station_id',
         'fixture_id',
         'shift',
         'timestamp_bucket',
+        'final_flush_gap',
+        'final_back_cover_step',
+        'frame_part_id',
+        'display_part_id',
+        'battery_part_id',
+        'frame_frame_wall_bias',
+        'display_display_flex_bias',
+        'battery_battery_swelling_index',
       ]),
     )
-    expect(bridgeDataset.rows.length).toBeGreaterThanOrEqual(400)
   })
 
-  it('keeps join keys connected across part, assembly and bridge datasets', () => {
-    const partDataset = readCsv('data/part_measurements.csv')
-    const assemblyDataset = readCsv('data/assembly_measurements.csv')
-    const bridgeDataset = readCsv('data/mapping_or_lot_bridge.csv')
+  it('keeps assembly and single-part identifiers aligned within the same row', () => {
+    const dataset = readCsv('data/phone_dimension_benchmark.csv')
 
-    const partIdIndex = partDataset.header.indexOf('part_id')
-    const assemblyIdIndex = assemblyDataset.header.indexOf('assembly_id')
-    const bridgePartIdIndex = bridgeDataset.header.indexOf('part_id')
-    const bridgeAssemblyIdIndex = bridgeDataset.header.indexOf('assembly_id')
+    const assemblyIdIndex = dataset.header.indexOf('assembly_id')
+    const framePartIdIndex = dataset.header.indexOf('frame_part_id')
+    const displayPartIdIndex = dataset.header.indexOf('display_part_id')
+    const batteryPartIdIndex = dataset.header.indexOf('battery_part_id')
 
-    expect(partIdIndex).toBeGreaterThanOrEqual(0)
     expect(assemblyIdIndex).toBeGreaterThanOrEqual(0)
-    expect(bridgePartIdIndex).toBeGreaterThanOrEqual(0)
-    expect(bridgeAssemblyIdIndex).toBeGreaterThanOrEqual(0)
+    expect(framePartIdIndex).toBeGreaterThanOrEqual(0)
+    expect(displayPartIdIndex).toBeGreaterThanOrEqual(0)
+    expect(batteryPartIdIndex).toBeGreaterThanOrEqual(0)
 
-    const partIds = new Set(partDataset.rows.map((row) => row[partIdIndex]))
-    const assemblyIds = new Set(assemblyDataset.rows.map((row) => row[assemblyIdIndex]))
-    const bridgePartIds = new Set(bridgeDataset.rows.map((row) => row[bridgePartIdIndex]))
-    const bridgeAssemblyIds = new Set(bridgeDataset.rows.map((row) => row[bridgeAssemblyIdIndex]))
-
-    expect([...bridgePartIds].every((partId) => partIds.has(partId))).toBe(true)
-    expect([...bridgeAssemblyIds].every((assemblyId) => assemblyIds.has(assemblyId))).toBe(true)
+    for (const row of dataset.rows.slice(0, 50)) {
+      const assemblyId = row[assemblyIdIndex]
+      expect(row[framePartIdIndex]).toContain(assemblyId)
+      expect(row[displayPartIdIndex]).toContain(assemblyId)
+      expect(row[batteryPartIdIndex]).toContain(assemblyId)
+    }
   })
 
   it('includes structured truth metadata for rules, misleading signals and conclusions', () => {

@@ -21,9 +21,7 @@
 
 ### 数据文件
 
-- `data/part_measurements.csv`：单体物料测量数据，列数 228
-- `data/assembly_measurements.csv`：组装后测量数据，列数 226
-- `data/mapping_or_lot_bridge.csv`：多表桥接关系表，行数 1440
+- `data/phone_dimension_benchmark.csv`：单表宽表数据；每一行代表一个组装件，同一行同时包含组装结果字段与 `frame_` / `display_` / `battery_` 前缀的单体字段
 - `data/field_dictionary.json`：字段字典
 - `data/dataset_truth.json`：结构化规律真值与参考结论
 
@@ -45,9 +43,9 @@
 
 ## 设计特点
 
-- 两张主表均为高维数据，便于考察特征筛选、回归、树模型和多表关联能力
+- 单表宽表结构，便于直接分析整机结果与对应单体字段之间的关系
 - 同时包含真实根因、中介变量、阈值效应、交互项、伪相关和误导项
-- 提供稳定主键与近似可关联键，便于观察 Agent 的 join 策略是否稳健
+- 通过字段前缀区分单体来源，评测 Agent 是否能理解 `frame_` / `display_` / `battery_` 的语义边界
 
 ## 评审提醒
 

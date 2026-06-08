@@ -3,13 +3,13 @@
   "dataset": "agentic_phone_dimension_benchmark_v1",
   "prompt": "请分析背盖台阶（final_back_cover_step）和漏液风险（leak_risk_score）偏高的原因，说明是否存在路径传播关系，并给出中文图表化结论。",
   "reference_conclusions": [
-    "电池膨胀代理量不是简单直接影响背盖台阶，而是会先抬高装配应力再放大问题",
-    "应力代理值（stress_proxy）是很关键的中介变量",
-    "胶水波动和密封台阶也会影响风险，但不是唯一主链"
+    "需要明确指出 `battery_swelling_index` 与 `final_back_cover_step`、`leak_risk_score` 的关系更像路径传播，而不是单条直接线性链；更合理的描述应是 `battery_swelling_index -> stress_proxy -> final_back_cover_step -> leak_risk_score`。",
+    "需要把 `stress_proxy` 识别为关键中介变量，因为它同时吸收了 `battery_swelling_index`、`press_alignment_index` 和阈值项 `threshold_trigger` 的影响；如果只说 `battery_swelling_index` 显著，而没有解释 `stress_proxy`，结论应视为不完整。",
+    "需要说明 `glue_variation_index`、`seal_step` 也会影响 `leak_risk_score`，但它们更适合作为次级链路或辅助因素，不能替代 `battery_swelling_index` 与 `stress_proxy` 组成的主链。"
   ],
   "focus_points": [
-    "是否识别 battery_swelling_index -> stress_proxy -> final_back_cover_step 的传播路径",
-    "是否给出中介链路而不是只报浅层相关性",
-    "图表和文字是否便于业务人员理解"
+    "是否识别 `battery_swelling_index -> stress_proxy -> final_back_cover_step` 的传播路径，并进一步关联到 `leak_risk_score`",
+    "是否给出包含 `stress_proxy`、`threshold_trigger`、`seal_step` 的中介/辅助解释，而不是只报浅层相关性",
+    "图表和文字是否便于业务人员理解主链与次级链路的差别"
   ]
 }

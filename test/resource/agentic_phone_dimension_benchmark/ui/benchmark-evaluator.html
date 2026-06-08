@@ -492,12 +492,12 @@
           </div>
           <div class="stat-grid">
             <div class="stat">
-              <div class="stat-label">数据主表</div>
-              <div class="stat-value">2 张</div>
+              <div class="stat-label">主数据表</div>
+              <div class="stat-value">1 张</div>
             </div>
             <div class="stat">
-              <div class="stat-label">桥接关系</div>
-              <div class="stat-value">1440 行</div>
+              <div class="stat-label">单体来源</div>
+              <div class="stat-value">3 类</div>
             </div>
             <div class="stat">
               <div class="stat-label">评测任务</div>
@@ -560,7 +560,7 @@
                 <h3>评测人操作流程</h3>
                 <ol>
                   <li>选中左侧题目，复制 Prompt。</li>
-                  <li>把 `data/` 目录下的 3 个 CSV 发给 Agent，必要时再补 `data/field_dictionary.json`。</li>
+                  <li>把 `data/phone_dimension_benchmark.csv` 发给 Agent，必要时再补 `data/field_dictionary.json`。</li>
                   <li>不要把 `data/dataset_truth.json`、参考结论和评分标准提前给 Agent。</li>
                   <li>等待 Agent 输出中文结论、关键图表、证据字段和不确定性说明。</li>
                   <li>依据右侧评分维度和本题参考结论做人工判断。</li>
@@ -585,7 +585,7 @@
             <section class="card">
               <h3>评审提醒</h3>
               <p class="tiny">
-                `reference_conclusions` 是参考命中点，不是唯一标准答案。重点看它有没有抓住主因、有没有做对跨表关联、有没有把伪相关误判成根因。
+                `reference_conclusions` 是参考命中点，不是唯一标准答案。重点看它有没有抓住主因、有没有正确理解 `frame_` / `display_` / `battery_` 前缀字段、有没有把伪相关误判成根因。
               </p>
               <div class="note">
                 如果 Agent 把 `near_match_code` 这类近似键当成稳定主键，或者只报工站/班次相关而没有控制变量，应该明显扣分。
@@ -617,14 +617,14 @@
           prompt:
             "请分析导致整机齐平间隙（final_flush_gap）异常的关键因素，给出中文结论，并用必要图表说明哪些因素是真正主因、哪些只是表面相关。",
           referenceConclusions: [
-            "中框壁厚偏置与最终齐平间隙显著相关，并通过中间装配间隙传导。",
-            "显示柔性偏移会影响段差，但在高温漂条件下会被明显放大。",
-            "工站或班次看起来可能相关，但不是最稳定的根因。"
+            "需要明确指出 `frame_wall_bias` 和 `frame_critical_wall_delta` 与 `final_flush_gap` 呈显著正相关，而且通常会先体现在 `intermediate_gap` 变差，再传导到 `final_flush_gap` 和 `cosmetic_score`。",
+            "需要指出 `display_flex_bias` 不是始终同等强度地影响 `final_flush_gap`，而是在 `env_temp` / `env_humidity` 对应的高温漂场景下更明显；如果分析里能识别 `interaction_trigger` 的放大作用，应视为高质量命中。",
+            "需要提醒 `station_id`、`shift` 或 `pseudo_station_score` 可能在浅层分析里看起来显著，但它们更像 `fixture_wear_index` 与环境漂移的共因代理，不能直接当作 `final_flush_gap` 的稳定根因。"
           ],
           focusPoints: [
-            "是否正确跨表关联 part_measurements、mapping_or_lot_bridge、assembly_measurements。",
-            "是否区分主因、中介变量和伪相关。",
-            "图表是否真的支撑最终结论。"
+            "是否正确理解 `frame_` 前缀字段对应中框单体、`display_` 前缀字段对应显示单体、`battery_` 前缀字段对应电池单体。",
+            "是否区分 `frame_wall_bias` 这类主因、`intermediate_gap` 这类中介变量，以及 `station_id` / `pseudo_station_score` 这类伪相关项。",
+            "图表是否能直接支撑 `frame_wall_bias`、`intermediate_gap`、`final_flush_gap` 之间的关系。"
           ]
         },
         {
@@ -633,14 +633,14 @@
           prompt:
             "请分析背盖台阶（final_back_cover_step）和漏液风险（leak_risk_score）偏高的原因，说明是否存在路径传播关系，并给出中文图表化结论。",
           referenceConclusions: [
-            "电池膨胀代理量不是简单直接影响背盖台阶，而是会先抬高装配应力再放大问题。",
-            "应力代理值（stress_proxy）是很关键的中介变量。",
-            "胶水波动和密封台阶也会影响风险，但不是唯一主链。"
+            "需要明确指出 `battery_swelling_index` 与 `final_back_cover_step`、`leak_risk_score` 的关系更像路径传播，而不是单条直接线性链；更合理的描述应是 `battery_swelling_index -> stress_proxy -> final_back_cover_step -> leak_risk_score`。",
+            "需要把 `stress_proxy` 识别为关键中介变量，因为它同时吸收了 `battery_swelling_index`、`press_alignment_index` 和阈值项 `threshold_trigger` 的影响；如果只说 `battery_swelling_index` 显著，而没有解释 `stress_proxy`，结论应视为不完整。",
+            "需要说明 `glue_variation_index`、`seal_step` 也会影响 `leak_risk_score`，但它们更适合作为次级链路或辅助因素，不能替代 `battery_swelling_index` 与 `stress_proxy` 组成的主链。"
           ],
           focusPoints: [
-            "是否识别 battery_swelling_index -> stress_proxy -> final_back_cover_step 的传播路径。",
-            "是否给出中介链路，而不是只报浅层相关性。",
-            "图表和文字是否适合业务评审快速理解。"
+            "是否识别 `battery_swelling_index -> stress_proxy -> final_back_cover_step` 的传播路径，并进一步关联到 `leak_risk_score`。",
+            "是否给出包含 `stress_proxy`、`threshold_trigger`、`seal_step` 的中介/辅助解释，而不是只报浅层相关性。",
+            "图表和文字是否适合业务评审快速理解主链与次级链路的差别。"
           ]
         },
         {
@@ -649,36 +649,24 @@
           prompt:
             "请检查这套数据里哪些字段容易被误判为根因。重点判断工站、班次、近似关联键是否存在伪相关，并给出一份中文说明，包含必要图表。",
           referenceConclusions: [
-            "station_id 或 pseudo_station_score 可能显得很显著，但主要受治具磨损和环境漂移共因影响。",
-            "near_match_code 这类近似关联键容易制造错误归因。",
-            "如果没有控制变量或分层分析，很容易把表面相关误判为根因。"
+            "需要明确指出 `station_id` 或 `pseudo_station_score` 之所以看起来和 `final_flush_gap`、`cosmetic_score` 有关，更可能是因为它们间接承载了 `fixture_wear_index`、`env_temp`、`env_humidity` 这些共因，而不是独立根因。",
+            "需要明确指出 `near_match_code` 或 `join_hint_key` 这类近似关联键不能替代稳定主键 `part_id` / `assembly_id`，否则很容易在跨表分析时制造错误 join，从而生成看似合理但实际错误的归因。",
+            "需要说明如果不做控制变量、分层分析，或者不先确认 join 是否稳定，模型很容易把 `shift`、`operator_team`、`station_id` 这类表面相关字段误判为真实根因。"
           ],
           focusPoints: [
-            "是否识别并解释伪相关。",
-            "是否说明为什么近似键不能替代稳定主键 join。",
-            "最终输出是否清楚区分可疑信号和真实根因。"
+            "是否识别并解释 `station_id`、`pseudo_station_score`、`shift` 这类伪相关或共因代理。",
+            "是否说明为什么 `near_match_code`、`join_hint_key` 不能替代稳定主键 join。",
+            "最终输出是否清楚区分可疑信号、共因代理和真实根因。"
           ]
         }
       ];
 
       const datasetFiles = [
         {
-          filename: "data/part_measurements.csv",
+          filename: "data/phone_dimension_benchmark.csv",
           tag: "必给",
           tagClass: "data",
-          description: "单体物料测量数据，包含 228 列高维因子。"
-        },
-        {
-          filename: "data/assembly_measurements.csv",
-          tag: "必给",
-          tagClass: "data",
-          description: "组装后尺寸与风险结果，包含 226 列。"
-        },
-        {
-          filename: "data/mapping_or_lot_bridge.csv",
-          tag: "必给",
-          tagClass: "data",
-          description: "桥接 part_id、assembly_id、批次、工站与治具。"
+          description: "单表宽表；每行同时包含组装结果与 frame_ / display_ / battery_ 前缀的单体字段。"
         },
         {
           filename: "data/field_dictionary.json",

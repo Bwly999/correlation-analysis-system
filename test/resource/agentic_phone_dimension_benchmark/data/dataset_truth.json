@@ -1,27 +1,25 @@
 {
   "dataset_summary": {
-    "name": "agentic_phone_dimension_benchmark_v1",
+    "name": "agentic_phone_dimension_benchmark_v2_single_table",
     "seed": 20260608,
-    "assembly_count": 480,
-    "part_count": 1440,
-    "tables": [
-      "part_measurements.csv",
-      "assembly_measurements.csv",
-      "mapping_or_lot_bridge.csv"
+    "row_count": 480,
+    "format": "single_wide_csv",
+    "files": [
+      "phone_dimension_benchmark.csv"
     ],
-    "goal": "验证 Agent 在高维手机尺寸数据中主动发现跨表复杂规律的能力。"
+    "goal": "验证 Agent 在单表宽表结构下发现手机尺寸复杂规律的能力。"
   },
   "analysis_topics": [
     "整机齐平度与外观段差的根因定位",
-    "显示模组柔性偏移与夜班温漂的交互效应",
+    "显示模组柔性偏移与高温漂交互效应",
     "电池膨胀代理量与背盖台阶的路径传播",
-    "伪相关机台分组与真实根因拆解"
+    "伪相关信号与错误归因风险识别"
   ],
   "causal_chains": [
     {
       "chain_id": "chain_frame_flush_gap",
       "steps": [
-        "frame_wall_bias",
+        "frame_frame_wall_bias",
         "intermediate_gap",
         "final_flush_gap",
         "cosmetic_score"
@@ -30,7 +28,7 @@
     {
       "chain_id": "chain_battery_back_step",
       "steps": [
-        "battery_swelling_index",
+        "battery_battery_swelling_index",
         "stress_proxy",
         "final_back_cover_step",
         "leak_risk_score"
@@ -39,8 +37,9 @@
     {
       "chain_id": "chain_display_interaction",
       "steps": [
-        "display_flex_bias",
-        "env_temp/env_humidity",
+        "display_display_flex_bias",
+        "env_temp",
+        "env_humidity",
         "interaction_trigger",
         "touch_failure_risk"
       ]
@@ -51,8 +50,8 @@
       "rule_id": "R1",
       "category": "direct_linear",
       "source_fields": [
-        "frame_wall_bias",
-        "frame_critical_wall_delta"
+        "frame_frame_wall_bias",
+        "frame_frame_critical_wall_delta"
       ],
       "target_fields": [
         "intermediate_gap",
@@ -62,13 +61,13 @@
       "activation_condition": "全样本稳定生效",
       "strength": "strong",
       "is_root_cause": true,
-      "expected_discovery_statement": "中框壁厚偏置越大，组装中间间隙和最终齐平间隙越差，是外观段差的主根因之一。"
+      "expected_discovery_statement": "frame_frame_wall_bias 越大，intermediate_gap 和 final_flush_gap 越差，是外观段差主根因。"
     },
     {
       "rule_id": "R2",
       "category": "multi_variable_interaction",
       "source_fields": [
-        "display_flex_bias",
+        "display_display_flex_bias",
         "env_temp",
         "env_humidity"
       ],
@@ -78,16 +77,16 @@
         "final_flush_gap"
       ],
       "relationship_type": "interaction_amplification",
-      "activation_condition": "display_flex_bias > 0.58 且 env_drift > 0.45",
+      "activation_condition": "display_display_flex_bias 高且 env_drift 高时更明显",
       "strength": "strong",
       "is_root_cause": true,
-      "expected_discovery_statement": "显示柔性偏移在高温漂/高湿度班次下被放大，显著推高触控失效率和最终段差。"
+      "expected_discovery_statement": "display_display_flex_bias 在高温漂环境下被放大，显著推高 touch_failure_risk 与 final_flush_gap。"
     },
     {
       "rule_id": "R3",
       "category": "threshold_effect",
       "source_fields": [
-        "frame_wall_bias"
+        "frame_frame_wall_bias"
       ],
       "target_fields": [
         "threshold_trigger",
@@ -95,17 +94,17 @@
         "final_back_cover_step"
       ],
       "relationship_type": "piecewise_jump",
-      "activation_condition": "frame_wall_bias > 0.82",
+      "activation_condition": "frame_frame_wall_bias 超过阈值后突增",
       "strength": "medium",
       "is_root_cause": true,
-      "expected_discovery_statement": "当中框关键壁厚偏置超过阈值后，应力代理值和背盖台阶出现明显突增。"
+      "expected_discovery_statement": "frame_frame_wall_bias 超阈值后，stress_proxy 与 final_back_cover_step 出现明显跳变。"
     },
     {
       "rule_id": "R4",
       "category": "path_propagation",
       "source_fields": [
-        "battery_swelling_index",
-        "battery_shell_hint"
+        "battery_battery_swelling_index",
+        "battery_battery_shell_hint"
       ],
       "target_fields": [
         "stress_proxy",
@@ -116,7 +115,7 @@
       "activation_condition": "全样本稳定生效",
       "strength": "strong",
       "is_root_cause": true,
-      "expected_discovery_statement": "电池膨胀代理量不会直接决定所有外观问题，但会先抬高装配应力，再推高背盖台阶和漏液风险。"
+      "expected_discovery_statement": "battery_battery_swelling_index 通过 stress_proxy 传导到 final_back_cover_step 和 leak_risk_score。"
     },
     {
       "rule_id": "R5",
@@ -130,16 +129,16 @@
         "cosmetic_score"
       ],
       "relationship_type": "spurious_correlation",
-      "activation_condition": "浅层分析或未控制 fixture_wear_index/env_drift 时明显",
+      "activation_condition": "未控制 fixture_wear_index / env_temp / env_humidity 时明显",
       "strength": "medium",
       "is_root_cause": false,
-      "expected_discovery_statement": "某些工站看起来和外观不良强相关，但主要是治具磨损和环境漂移共同造成的表面相关。"
+      "expected_discovery_statement": "station_id 与 pseudo_station_score 更像共因代理，而不是独立根因。"
     },
     {
       "rule_id": "R6",
       "category": "misleading_proxy",
       "source_fields": [
-        "near_match_code",
+        "frame_near_match_code",
         "join_hint_key"
       ],
       "target_fields": [
@@ -147,39 +146,39 @@
         "leak_risk_score"
       ],
       "relationship_type": "weak_proxy",
-      "activation_condition": "仅做批次聚合时可能出现",
+      "activation_condition": "浅层聚合分析时可能出现",
       "strength": "weak",
       "is_root_cause": false,
-      "expected_discovery_statement": "近似关联键可能带来伪模式，必须通过稳定主键 join 和控制变量验证。"
+      "expected_discovery_statement": "near_match_code / join_hint_key 易制造伪模式，必须避免替代真实结构关系。"
     }
   ],
   "misleading_signals": [
     {
       "signal": "pseudo_station_score",
-      "why_misleading": "与段差结果显著相关，但本质是 fixture_wear_index 和 env_drift 的共因代理。"
+      "why_misleading": "更像 fixture_wear_index 与环境漂移的共因代理。"
     },
     {
-      "signal": "near_match_code",
-      "why_misleading": "可形成看似可用的近似关联，但不是稳定主键，可能引入错误归因。"
+      "signal": "frame_near_match_code",
+      "why_misleading": "近似关联键会制造错误模式。"
     },
     {
       "signal": "operator_team",
-      "why_misleading": "和班次、工站同时变化，未分层时容易被误判成人员差异。"
+      "why_misleading": "与 shift、station_id 一起变化，易被误判。"
     }
   ],
   "recommended_analysis_path": [
-    "先用 mapping_or_lot_bridge.csv 建立 part_id 到 assembly_id 的稳定关联",
-    "先看 assembly_measurements 中 final_flush_gap、final_back_cover_step、touch_failure_risk 的分布和异常值",
-    "跨表回溯 frame_wall_bias、display_flex_bias、battery_swelling_index 等根因字段",
-    "对工站/班次相关信号做控制变量或分层分析，排除伪相关",
-    "对阈值规则尝试分箱、分组和树模型验证"
+    "直接在单表中以 final_flush_gap、final_back_cover_step、touch_failure_risk 为目标字段做画像。",
+    "按前缀区分 assembly 字段、frame_ 字段、display_ 字段、battery_ 字段。",
+    "优先验证 frame_frame_wall_bias、display_display_flex_bias、battery_battery_swelling_index 的主链。",
+    "对 station_id、shift、pseudo_station_score、frame_near_match_code 做控制变量或分层分析。",
+    "针对 threshold_trigger 与 interaction_trigger 关注阈值和交互效应。"
   ],
   "standard_conclusions": [
     {
       "title": "外观段差主链",
-      "statement": "中框关键壁厚偏置是 final_flush_gap 的第一主链，且通过 intermediate_gap 传导到 cosmetic_score。",
+      "statement": "frame_frame_wall_bias 是 final_flush_gap 的第一主链，并通过 intermediate_gap 传导到 cosmetic_score。",
       "evidence_anchor_fields": [
-        "frame_wall_bias",
+        "frame_frame_wall_bias",
         "intermediate_gap",
         "final_flush_gap",
         "cosmetic_score"
@@ -187,9 +186,9 @@
     },
     {
       "title": "温漂交互效应",
-      "statement": "display_flex_bias 单独影响有限，但在高温漂条件下会显著放大触控失败风险和最终段差。",
+      "statement": "display_display_flex_bias 在高温漂环境下会放大 touch_failure_risk 与最终段差。",
       "evidence_anchor_fields": [
-        "display_flex_bias",
+        "display_display_flex_bias",
         "env_temp",
         "env_humidity",
         "interaction_trigger",
@@ -198,23 +197,12 @@
     },
     {
       "title": "背盖台阶路径传播",
-      "statement": "battery_swelling_index 主要通过 stress_proxy 影响 final_back_cover_step，而不是简单直接线性关系。",
+      "statement": "battery_battery_swelling_index 主要通过 stress_proxy 影响 final_back_cover_step 和 leak_risk_score。",
       "evidence_anchor_fields": [
-        "battery_swelling_index",
+        "battery_battery_swelling_index",
         "stress_proxy",
         "final_back_cover_step",
         "leak_risk_score"
-      ]
-    },
-    {
-      "title": "工站伪相关",
-      "statement": "station_id 和 pseudo_station_score 的显著性不能直接解释为工站根因，需要先控制治具磨损和环境漂移。",
-      "evidence_anchor_fields": [
-        "station_id",
-        "pseudo_station_score",
-        "fixture_wear_index",
-        "env_temp",
-        "final_flush_gap"
       ]
     }
   ]
