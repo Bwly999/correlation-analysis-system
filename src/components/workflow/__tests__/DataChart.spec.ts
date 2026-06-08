@@ -1595,6 +1595,7 @@ describe('DataChart', () => {
 
     await wrapper.get('[data-test="chart-type-select"]').setValue('boxplot')
     await wrapper.get('[data-test="chart-key-select"]').setValue(['score'])
+    await wrapper.get('[data-test="boxplot-outlier-toggle"]').trigger('click')
 
     const option = getChartOption(wrapper)
     const boxplotSeries = option.series.find((series: { type: string }) => series.type === 'boxplot')
@@ -1617,6 +1618,7 @@ describe('DataChart', () => {
 
     expect(wrapper.get('[data-test="boxplot-whisker-mode-toggle"]').text()).toContain('1.5 IQR')
 
+    await wrapper.get('[data-test="boxplot-outlier-toggle"]').trigger('click')
     await wrapper.get('[data-test="boxplot-whisker-mode-percentile"]').trigger('click')
 
     const option = getChartOption(wrapper)
@@ -2009,6 +2011,97 @@ describe('DataChart', () => {
 
     expect(option.series[0].data[0].value).toEqual([1, 1, 2, 4, 4])
     expect(option.series[0].data[1].value).toEqual([10, 10, 30, 40, 40])
+  })
+
+  it('hides boxplot outliers by default, toggles them on demand, and restores the stored preference on remount', async () => {
+    localStorage.clear()
+
+    const wrapper = mount(DataChart, {
+      props: {
+        storageScopeKey: 'node-boxplot-outliers',
+        data: [
+          { score: 10 },
+          { score: 11 },
+          { score: 12 },
+          { score: 13 },
+          { score: 100 },
+        ],
+      },
+    })
+
+    await wrapper.get('[data-test="chart-type-select"]').setValue('boxplot')
+    await nextTick()
+
+    let option = getChartOption(wrapper)
+    expect(option.series).toHaveLength(1)
+    expect(option.series[0].name).toBe('数据分布')
+    expect(option.series.some((series: { name?: string }) => series.name === '离群点')).toBe(false)
+    expect(localStorage.getItem('workflow-result-preview:node-boxplot-outliers:chart-show-boxplot-outliers')).toBe(
+      'false',
+    )
+
+    const toggle = wrapper.get('[data-test="boxplot-outlier-toggle"]')
+    await toggle.trigger('click')
+
+    option = getChartOption(wrapper)
+    expect(option.series.some((series: { name?: string }) => series.name === '离群点')).toBe(true)
+    expect(localStorage.getItem('workflow-result-preview:node-boxplot-outliers:chart-show-boxplot-outliers')).toBe(
+      'true',
+    )
+
+    await toggle.trigger('click')
+
+    option = getChartOption(wrapper)
+    expect(option.series.some((series: { name?: string }) => series.name === '离群点')).toBe(false)
+    expect(localStorage.getItem('workflow-result-preview:node-boxplot-outliers:chart-show-boxplot-outliers')).toBe(
+      'false',
+    )
+
+    await toggle.trigger('click')
+    await wrapper.unmount()
+
+    const remounted = mount(DataChart, {
+      props: {
+        storageScopeKey: 'node-boxplot-outliers',
+        data: [
+          { score: 10 },
+          { score: 11 },
+          { score: 12 },
+          { score: 13 },
+          { score: 100 },
+        ],
+      },
+    })
+
+    await remounted.get('[data-test="chart-type-select"]').setValue('boxplot')
+    await nextTick()
+
+    expect(remounted.get('[data-test="boxplot-outlier-toggle"]').attributes('data-state')).toBe('active')
+    expect(
+      getChartOption(remounted).series.some((series: { name?: string }) => series.name === '离群点'),
+    ).toBe(true)
+  })
+
+  it('renders the boxplot outlier toggle to the left of the whisker mode toggle', async () => {
+    const wrapper = mount(DataChart, {
+      props: {
+        data: [
+          { score: 10 },
+          { score: 11 },
+          { score: 12 },
+          { score: 13 },
+          { score: 100 },
+        ],
+      },
+    })
+
+    await wrapper.get('[data-test="chart-type-select"]').setValue('boxplot')
+    await nextTick()
+
+    const outlierToggle = wrapper.get('[data-test="boxplot-outlier-toggle"]').element
+    const whiskerToggle = wrapper.get('[data-test="boxplot-whisker-mode-toggle"]').element
+
+    expect(outlierToggle.compareDocumentPosition(whiskerToggle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   it('restores the invalid-row toggle from local storage', async () => {

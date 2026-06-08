@@ -53,6 +53,7 @@ export type DataChartState = {
   viewMode: Ref<ChartViewMode>
   normalizationMethod: Ref<NormalizationMethod>
   skipInvalidRows: Ref<boolean>
+  showBoxplotOutliers: Ref<boolean>
   boxplotWhiskerMode: Ref<BoxplotWhiskerMode>
   isPresetPanelOpen: Ref<boolean>
   presetNameInput: Ref<string>

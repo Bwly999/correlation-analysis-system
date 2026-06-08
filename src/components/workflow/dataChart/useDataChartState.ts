@@ -99,6 +99,7 @@ export const useDataChartState = ({
     'min-max',
   )
   const skipInvalidRows = useScopedResultPreviewStorage(storageScopeKey, 'chart-skip-invalid-rows', false)
+  const showBoxplotOutliers = useScopedResultPreviewStorage(storageScopeKey, 'chart-show-boxplot-outliers', false)
   const boxplotWhiskerMode = useScopedResultPreviewStorage<BoxplotWhiskerMode>(
     storageScopeKey,
     'chart-boxplot-whisker-mode',
@@ -287,6 +288,10 @@ export const useDataChartState = ({
     if (typeof value !== 'boolean') skipInvalidRows.value = false
   }, { immediate: true })
 
+  watch(showBoxplotOutliers, (value) => {
+    if (typeof value !== 'boolean') showBoxplotOutliers.value = false
+  }, { immediate: true })
+
   watch(lowerBound, (value) => {
     const normalized = normalizeOptionalNumber(value)
     if (normalized !== value) lowerBound.value = normalized
@@ -374,6 +379,7 @@ export const useDataChartState = ({
     viewMode,
     normalizationMethod,
     skipInvalidRows,
+    showBoxplotOutliers,
     boxplotWhiskerMode,
     isPresetPanelOpen,
     presetNameInput,

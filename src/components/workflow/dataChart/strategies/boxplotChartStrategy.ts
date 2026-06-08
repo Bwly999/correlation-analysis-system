@@ -50,52 +50,54 @@ export const boxplotChartStrategy: ChartStrategy = {
         }
       })
 
-      const outlierSeries = activeGroups.flatMap((group, index, groups) => {
-        const color = BOX_PLOT_COLORS[index % BOX_PLOT_COLORS.length]!
-        const outlierData = model.keys.flatMap((key, keyIndex) =>
-          buildBoxStatsByKey(group.data || [], [key], context.state.boxplotWhiskerMode.value)[0]!.outliers.map((value) => ({
-            value: [keyIndex, value] as [number, number],
-            factorName: key,
-            groupName: group.name,
-          })),
-        )
-        if (outlierData.length === 0) return []
-        return [
-          {
-            name: `${group.name}-离群点`,
-            type: 'custom',
-            data: outlierData,
-            renderItem: (params: any, api: any) => {
-              const categoryIndex = api.value(0)
-              const pointValue = api.value(1)
-              const coord = api.coord([categoryIndex, pointValue])
+      const outlierSeries = context.state.showBoxplotOutliers.value
+        ? activeGroups.flatMap((group, index, groups) => {
+            const color = BOX_PLOT_COLORS[index % BOX_PLOT_COLORS.length]!
+            const outlierData = model.keys.flatMap((key, keyIndex) =>
+              buildBoxStatsByKey(group.data || [], [key], context.state.boxplotWhiskerMode.value)[0]!.outliers.map((value) => ({
+                value: [keyIndex, value] as [number, number],
+                factorName: key,
+                groupName: group.name,
+              })),
+            )
+            if (outlierData.length === 0) return []
+            return [
+              {
+                name: `${group.name}-离群点`,
+                type: 'custom',
+                data: outlierData,
+                renderItem: (params: any, api: any) => {
+                  const categoryIndex = api.value(0)
+                  const pointValue = api.value(1)
+                  const coord = api.coord([categoryIndex, pointValue])
 
-              const barLayout = api.barLayout({
-                barGap: '30%',
-                barCategoryGap: '20%',
-                count: groups.length,
-              })
+                  const barLayout = api.barLayout({
+                    barGap: '30%',
+                    barCategoryGap: '20%',
+                    count: groups.length,
+                  })
 
-              return {
-                type: 'circle',
-                shape: {
-                  cx: coord[0] + barLayout[index].offset + barLayout[index].width / 2,
-                  cy: coord[1],
-                  r: 4,
+                  return {
+                    type: 'circle',
+                    shape: {
+                      cx: coord[0] + barLayout[index].offset + barLayout[index].width / 2,
+                      cy: coord[1],
+                      r: 4,
+                    },
+                    style: {
+                      fill: color,
+                      stroke: '#ffffff',
+                      lineWidth: 1.2,
+                    },
+                  }
                 },
-                style: {
-                  fill: color,
-                  stroke: '#ffffff',
-                  lineWidth: 1.2,
-                },
-              }
-            },
-            z: 4,
-            legendHoverLink: false,
-            tooltip: { trigger: 'item', formatter: createBoxplotOutlierTooltipFormatter(whiskerModeLabel) },
-          },
-        ]
-      })
+                z: 4,
+                legendHoverLink: false,
+                tooltip: { trigger: 'item', formatter: createBoxplotOutlierTooltipFormatter(whiskerModeLabel) },
+              },
+            ]
+          })
+        : []
       applyNativeVerticalDataZoom(
         option,
         context.state.yZoomEnabled.value ? context.state.yZoomRange.value[0] : 0,
@@ -144,7 +146,7 @@ export const boxplotChartStrategy: ChartStrategy = {
         bottom: 40,
       },
     )
-    if (outlierData.length > 0) {
+    if (context.state.showBoxplotOutliers.value && outlierData.length > 0) {
       option.series.push({
         name: '离群点',
         type: 'scatter',

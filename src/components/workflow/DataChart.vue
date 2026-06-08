@@ -19,6 +19,7 @@ import SearchAppendMultiSelect from './common/SearchAppendMultiSelect.vue'
 import { useWorkflowOverlayHost } from './workflowOverlayHost'
 import { CHART_VIEW_MODE_OPTIONS, NORMALIZATION_METHOD_OPTIONS, getChartTypeOptions } from './dataChart/constants'
 import type { ChartContext, ChartType } from './dataChart/types'
+import ChartBoxplotOutlierToggle from './dataChart/controls/ChartBoxplotOutlierToggle.vue'
 import { useChartFilterPresets } from './dataChart/useChartFilterPresets'
 import { useDataChartSource } from './dataChart/useDataChartSource'
 import { useDataChartState } from './dataChart/useDataChartState'
@@ -376,6 +377,10 @@ const trendLineVisible = computed(
         >
           <div v-if="source.hasRenderableData.value" data-test="chart-host" class="h-full w-full relative" :style="chartHostStyle">
             <div class="absolute inset-0 z-20 pointer-events-none">
+              <ChartBoxplotOutlierToggle
+                v-if="boxplotToggleVisible"
+                v-model="state.showBoxplotOutliers.value"
+              />
               <ChartBoxplotWhiskerTool
                 v-if="boxplotToggleVisible"
                 v-model="state.boxplotWhiskerMode.value"
