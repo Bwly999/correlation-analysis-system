@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed, watch } from 'vue'
-import { useScopedResultPreviewStorage } from '../useScopedResultPreviewStorage'
+import TableViewer from './TableViewer.vue'
+import { buildScopedResultPreviewStorageKey, useScopedResultPreviewStorage } from '../useScopedResultPreviewStorage'
 import { getResultGroups } from '../resultView'
+import type { NodeResult } from '@/nodes/result'
 
 const props = defineProps<{
   data: unknown
@@ -9,7 +11,16 @@ const props = defineProps<{
 }>()
 
 const groups = computed(() => getResultGroups(props.data))
-const activeGroupName = useScopedResultPreviewStorage(props.storageScopeKey, 'table-collection-group', '')
+const initialActiveGroupName = (() => {
+  const storageKey = buildScopedResultPreviewStorageKey(props.storageScopeKey, 'table-collection-group')
+  if (!storageKey || typeof localStorage === 'undefined') return ''
+  return localStorage.getItem(storageKey) ?? ''
+})()
+const activeGroupName = useScopedResultPreviewStorage(
+  props.storageScopeKey,
+  'table-collection-group',
+  initialActiveGroupName,
+)
 
 watch(
   groups,
@@ -30,9 +41,22 @@ const activeGroup = computed(
   () => groups.value.find((group) => group.name === activeGroupName.value) ?? groups.value[0] ?? null,
 )
 
-const fields = computed(() => {
-  const firstRow = activeGroup.value?.data[0]
-  return firstRow ? Object.keys(firstRow) : []
+const activeGroupResult = computed<NodeResult | null>(() => {
+  const group = activeGroup.value
+  if (!group) return null
+
+  return {
+    kind: 'table',
+    payload: group.data,
+  }
+})
+
+const activeGroupStorageScopeKey = computed(() => {
+  const baseScope = props.storageScopeKey?.trim()
+  const groupName = activeGroup.value?.name?.trim()
+
+  if (!baseScope || !groupName) return props.storageScopeKey
+  return `${baseScope}:group:${groupName}`
 })
 </script>
 
@@ -62,49 +86,14 @@ const fields = computed(() => {
             {{ group.name }} ({{ group.data.length }})
           </button>
         </div>
-        <div class="flex-1 overflow-auto custom-scrollbar">
-          <table class="min-w-full text-sm text-left text-slate-700">
-            <thead class="sticky top-0 bg-slate-50 z-10">
-              <tr>
-                <th
-                  v-for="field in fields"
-                  :key="field"
-                  class="px-4 py-3 text-xs font-black tracking-wide text-slate-500 uppercase border-b border-slate-200"
-                >
-                  {{ field }}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                v-for="(row, rowIndex) in activeGroup?.data ?? []"
-                :key="rowIndex"
-                class="border-b border-slate-100 hover:bg-slate-50/80"
-              >
-                <td
-                  v-for="field in fields"
-                  :key="field"
-                  class="px-4 py-3 align-top whitespace-pre-wrap break-all"
-                >
-                  {{ row[field] ?? '-' }}
-                </td>
-              </tr>
-            </tbody>
-          </table>
+        <div class="flex-1 min-h-0">
+          <TableViewer
+            v-if="activeGroupResult"
+            :data="activeGroupResult"
+            :storage-scope-key="activeGroupStorageScopeKey"
+          />
         </div>
       </template>
     </div>
   </div>
 </template>
-
-<style scoped>
-.custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 999px;
-}
-</style>
