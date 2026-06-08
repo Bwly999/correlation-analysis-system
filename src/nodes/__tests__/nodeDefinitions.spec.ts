@@ -2016,6 +2016,29 @@ describe('Node Definitions Execution Logic', () => {
       expect(summarySection.content).toContain('不同字段对的样本量可能不同')
     })
 
+    it('should treat a selected field as numeric when later rows contain numeric values', async () => {
+      const input = createTableResult([
+        { target: 1 },
+        { target: 2, lateNumeric: 10 },
+        { target: 3, lateNumeric: 20 },
+        { target: 4, lateNumeric: 30 },
+      ])
+
+      const result = await pearsonNode.execute(input, {
+        xFields: ['lateNumeric'],
+        yFields: ['target'],
+        topN: 5,
+      })
+
+      const legacy = asLegacy(result)
+      const detail = legacy.meta?.pairDetails?.find(
+        (item: any) => item.xField === 'lateNumeric' && item.yField === 'target',
+      )
+
+      expect(detail?.sampleSize).toBe(3)
+      expect(legacy.report.sections[0].content).toContain('已自动过滤缺失或非数值行')
+    })
+
     it('should flag high collinearity between x fields when they are strongly correlated', async () => {
       const input = createTableResult([
         { target: 10, f1: 1, f2: 2, f3: 8 },

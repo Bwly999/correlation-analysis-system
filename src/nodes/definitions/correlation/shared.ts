@@ -261,7 +261,7 @@ const directionLabel = (correlation: number) => {
 }
 
 const buildNumericDataset = (rows: Record<string, unknown>[]) => {
-  const keys = Object.keys(rows[0] ?? {})
+  const keys = [...new Set(rows.flatMap((row) => Object.keys(row)))]
   const numericKeys = keys.filter((key) => rows.some((row) => toFiniteNumber(row[key]) !== null))
 
   const normalizedRows: NumericRow[] = rows.map((row) => {
