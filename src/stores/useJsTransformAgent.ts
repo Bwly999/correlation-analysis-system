@@ -40,7 +40,7 @@ export function useJsTransformAgent() {
   const TOOL_PROGRESS_HEARTBEAT_MS = 10_000
   const sessionId = ref<string | null>(null)
   const status = ref<'idle' | 'connecting' | 'running' | 'completed' | 'failed' | 'cancelled'>('idle')
-  const mode = ref<JsTransformAgentMode>('ask')
+  const mode = ref<JsTransformAgentMode>('agent')
   const messages = ref<JsTransformAgentMessage[]>([])
   const errorMessage = ref('')
   const inputText = ref('')

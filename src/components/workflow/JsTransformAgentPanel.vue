@@ -84,7 +84,7 @@ const handleSend = async () => {
 
 const handleReset = () => {
   agent.reset()
-  agent.mode.value = 'ask'
+  agent.mode.value = 'agent'
 }
 
 const handleModeSwitch = async (nextMode: 'ask' | 'agent') => {
