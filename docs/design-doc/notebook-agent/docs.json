@@ -1,0 +1,38 @@
+{
+  "navigation": [
+    {
+      "title": "概览",
+      "items": [
+        { "title": "系统概述", "path": "index.md" },
+        { "title": "架构与数据流", "path": "架构与数据流.md" }
+      ]
+    },
+    {
+      "title": "执行与协议",
+      "items": [
+        { "title": "执行模型", "path": "执行模型.md" },
+        { "title": "工具集协议", "path": "工具集协议.md" },
+        { "title": "数据接入", "path": "数据接入.md" }
+      ]
+    },
+    {
+      "title": "用户体验",
+      "items": [
+        { "title": "UX 与交互", "path": "UX与交互.md" }
+      ]
+    },
+    {
+      "title": "安全与部署",
+      "items": [
+        { "title": "安全模型", "path": "安全模型.md" },
+        { "title": "部署与构建", "path": "部署与构建.md" }
+      ]
+    },
+    {
+      "title": "验收",
+      "items": [
+        { "title": "验收与基线", "path": "验收与基线.md" }
+      ]
+    }
+  ]
+}

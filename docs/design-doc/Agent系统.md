@@ -5,16 +5,19 @@
 本文档描述当前仓库中 Agent / AI 相关服务端代码的现行架构、职责边界与实现约束。
 
 > **读者对象：** 需要维护 `Pi Agent`、`analysis` 代理、`js-transform` 子域的开发者与 LLM Agent。
+>
+> **关于 Notebook Agent：** 见 [`notebook-agent/`](notebook-agent/index.md)（前端 Pyodide 笔记本，与 Pi Agent 主链平级、零耦合）。
 
 ---
 
 ## 2. 当前子系统划分
 
-当前 server 中与 AI 相关的代码分为三类：
+当前 server 中与 AI 相关的代码分为四类：
 
 | 子系统 | 入口 | 说明 |
 |------|------|------|
 | **Pi Agent 主链** | `/api/pi-agent/*` | 面向工作流画布的自然语言分析与操作助手 |
+| **Notebook Agent** | `/api/notebook-agent/*` | 独立于画布的 AI 数据分析笔记本（前端 Pyodide）；详见 [`notebook-agent/`](notebook-agent/index.md) |
 | **Analysis 代理** | `/api/analysis/*` | 纯 Python 算法 HTTP 代理，不参与 Pi Agent session/tool 体系 |
 | **JS Transform 子域** | `/api/js-transform-agent/*` | 仅服务 `js-transform` 节点的专用 Agent 子域 |
 
