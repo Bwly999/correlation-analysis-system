@@ -47,16 +47,18 @@ const makeSafeConsole = (post: (level: string, args: unknown[]) => void) => {
 export const bootPyodide = async (opts: BootOptions): Promise<BootResult> => {
   opts.onProgress('loading_runtime', '加载 pyodide.asm.wasm')
 
-  // Classic worker 内通过 importScripts 加载 pyodide.js（UMD 版）。
-  // pyodide.js 会把 loadPyodide 挂到 self.loadPyodide。
-  ;(self as unknown as { importScripts: (url: string) => void }).importScripts(
-    `${opts.pyodideIndexUrl}pyodide.js`,
-  )
-  const loadPyodide = (self as unknown as { loadPyodide: (config: unknown) => Promise<PyodideInterface> })
-    .loadPyodide
-  if (typeof loadPyodide !== 'function') {
-    throw new Error('pyodide.js 加载后未挂上 self.loadPyodide')
+  // Vite ?worker 生成的是 module worker，importScripts 不可用。
+  // Pyodide 0.27 的 loadPyodide 会先试 importScripts，捕获 TypeError 后 fallback
+  // 到 await import('pyodide.mjs')。Chrome module worker 抛的是 DOMException，
+  // 这里 shim 成 TypeError，让 fallback 生效。
+  ;(globalThis as { importScripts?: (...urls: string[]) => void }).importScripts = () => {
+    throw new TypeError('importScripts is disabled in module workers')
   }
+
+  const pyodideModule = (await import(
+    /* @vite-ignore */ `${opts.pyodideIndexUrl}pyodide.mjs`
+  )) as { loadPyodide: (config: unknown) => Promise<PyodideInterface> }
+  const loadPyodide = pyodideModule.loadPyodide
 
   // 1) 构造受限 jsglobals
   //    注意：Python 侧 from js import 是基于「这个对象的 own/inherited 属性」判断的。
@@ -102,8 +104,23 @@ export const bootPyodide = async (opts: BootOptions): Promise<BootResult> => {
   opts.onProgress('loading_packages', 'numpy + pandas')
   await pyodide.loadPackage(['numpy', 'pandas'])
 
+  // 5) 创建工作区固定目录骨架（MEMFS 内）。
+  //    inputs/   主站 import_csv 灌入数据
+  //    scripts/  Agent fs_write 脚本
+  //    artifacts/ Agent 产物（图、中间数据）
+  //    reports/  Agent 撰写的报告
+  //    架构上 OPFS 才是事实持久层，MEMFS 内的同名目录用作 Pyodide 端可见的工作区，
+  //    通过 iframe 主线程在两者之间双向 sync（详见 docs/design-doc/notebook-agent/架构与数据流.md §3.4）。
+  for (const dir of ['/inputs', '/scripts', '/artifacts', '/reports']) {
+    try {
+      pyodide.FS.mkdirTree(dir)
+    } catch {
+      // mkdirTree 在已存在时也可能抛 EEXIST，忽略
+    }
+  }
+
   opts.onProgress('locking', 'sealing globals')
-  // 5) 冻结 pyodide 对象本身，防止 Python 通过 sys 模块改其属性
+  // 6) 冻结 pyodide 对象本身，防止 Python 通过 sys 模块改其属性
   //    （这是对 host 端的保护，Python 侧仍能正常用）
   Object.freeze(safeJsGlobals)
 

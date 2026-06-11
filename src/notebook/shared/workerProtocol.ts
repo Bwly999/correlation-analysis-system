@@ -25,6 +25,15 @@ export type HostToWorkerRequest =
       timeoutMs?: number
     }
   | {
+      // 主线程把字节写进 Worker 内 Pyodide 的 MEMFS。
+      // 仅供 import_csv / sync 桥接使用，**不暴露给 Agent**。
+      kind: 'fs_write_inline'
+      requestId: string
+      // 必须以 inputs|scripts|artifacts|reports 之一开头。Worker 内会用 resolveSafePath 二次校验。
+      path: string
+      bytes: ArrayBuffer
+    }
+  | {
       kind: 'shutdown'
       requestId: string
     }
@@ -86,6 +95,17 @@ export type WorkerToHostMessage =
   | {
       kind: 'shutdown_done'
       requestId: string
+    }
+  | {
+      kind: 'fs_write_done'
+      requestId: string
+      path: string
+      bytes: number
+    }
+  | {
+      kind: 'fs_write_error'
+      requestId: string
+      message: string
     }
 
 // ──────────────────────────────────────────────

@@ -17,19 +17,10 @@ import {
   type HostToWorkerRequest,
   type WorkerToHostMessage,
 } from '../shared/workerProtocol'
+import { resolveSafePath } from '../shared/opfsAccess'
+import type { PyodideInterface } from 'pyodide'
 
-// 故意不 import { PyodideInterface }，避免 vite worker pipeline 把 pyodide 整包打入
-// 用 unknown + 鸭子类型即可
-type AnyPyodide = {
-  setInterruptBuffer: (b: Uint8Array) => void
-  runPythonAsync: (code: string, opts?: unknown) => Promise<unknown>
-  setStdout: (cfg: { batched: (s: string) => void }) => void
-  setStderr: (cfg: { batched: (s: string) => void }) => void
-  toPy: (v: unknown) => unknown
-  version: string
-}
-
-let pyodide: AnyPyodide | null = null
+let pyodide: PyodideInterface | null = null
 let interruptBuffer: SharedArrayBuffer | null = null
 let booting = false
 
@@ -134,9 +125,64 @@ self.addEventListener('message', (event: MessageEvent<HostToWorkerRequest>) => {
     case 'exec_inline':
       void handleExec(req)
       break
+    case 'fs_write_inline':
+      void handleFsWrite(req)
+      break
     case 'shutdown':
       post({ kind: 'shutdown_done', requestId: req.requestId })
       ;(self as unknown as DedicatedWorkerGlobalScope).close()
       break
   }
 })
+
+const handleFsWrite = async (
+  req: Extract<HostToWorkerRequest, { kind: 'fs_write_inline' }>,
+) => {
+  if (!pyodide) {
+    post({
+      kind: 'fs_write_error',
+      requestId: req.requestId,
+      message: 'Pyodide 尚未初始化',
+    })
+    return
+  }
+  let segments: string[]
+  try {
+    segments = resolveSafePath(req.path)
+  } catch (err) {
+    post({
+      kind: 'fs_write_error',
+      requestId: req.requestId,
+      message: err instanceof Error ? err.message : String(err),
+    })
+    return
+  }
+
+  try {
+    // 父目录递归创建（顶级 4 个由 bootPyodide 已建好；子目录按需建）
+    let cur = ''
+    for (let i = 0; i < segments.length - 1; i += 1) {
+      cur = `${cur}/${segments[i]}`
+      try {
+        pyodide.FS.mkdirTree(cur)
+      } catch {
+        // EEXIST 忽略
+      }
+    }
+    const fullPath = `/${segments.join('/')}`
+    const bytes = new Uint8Array(req.bytes)
+    pyodide.FS.writeFile(fullPath, bytes)
+    post({
+      kind: 'fs_write_done',
+      requestId: req.requestId,
+      path: segments.join('/'),
+      bytes: bytes.byteLength,
+    })
+  } catch (err) {
+    post({
+      kind: 'fs_write_error',
+      requestId: req.requestId,
+      message: err instanceof Error ? err.message : String(err),
+    })
+  }
+}
