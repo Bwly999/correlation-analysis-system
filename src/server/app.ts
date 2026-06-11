@@ -10,6 +10,7 @@ import { createAnalysisRoutes } from './modules/analysisRoutes.js'
 import { createJsTransformAgentRoutes } from './modules/jsTransformAgentRoutes.js'
 import { createStorageRoutes } from './modules/storageRoutes.js'
 import { createPiAgentRoutes } from './modules/piAgentRoutes.js'
+import { createNotebookAgentRoutes } from './modules/notebookAgentRoutes.js'
 import { WORKFLOW_USER_ID_HEADER, WORKFLOW_USER_NAME_HEADER } from './http/workflowHeaders.js'
 import { disposeAllPiAgentSessions } from './piAgent/gateway.js'
 import { disposeAllJsTransformAgentSessions } from './piAgent/jsTransformAgentGateway.js'
@@ -118,6 +119,7 @@ export const createServerApp = (
 
   void app.register(createJsTransformAgentRoutes())
   void app.register(createPiAgentRoutes())
+  void app.register(createNotebookAgentRoutes())
   void app.register(createStorageRoutes())
   void app.register(createAnalysisRoutes())
 

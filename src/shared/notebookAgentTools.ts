@@ -1,0 +1,185 @@
+/**
+ * Notebook Agent 工具 spec 共享层（前后端共用）。
+ *
+ * 与画布工具集严格分离：
+ *   - notebook 工具不出现在画布会话里
+ *   - 画布工具不出现在 notebook 会话里
+ *
+ * spec 里描述用中文 + 关键约束（详见 docs/design-doc/notebook-agent/工具集协议.md）。
+ *
+ * 用 typebox 给参数 schema 打字以便 server 复用做 LLM tool definition。
+ */
+
+import { Type, type Static } from 'typebox'
+
+export type NotebookToolName =
+  | 'python_exec_inline'
+  | 'python_exec_file'
+  | 'fs_read'
+  | 'fs_write'
+  | 'fs_edit'
+  | 'fs_list'
+  | 'fs_grep'
+  | 'todo_write'
+  | 'ask_user'
+
+export interface NotebookToolSpec {
+  name: NotebookToolName
+  description: string
+  inputSchema: ReturnType<typeof Type.Object>
+}
+
+const PythonExecInlineSchema = Type.Object({
+  code: Type.String({ description: 'Python 代码（无状态执行，每次新 globals）' }),
+  timeoutMs: Type.Optional(Type.Number({ description: '超时毫秒，默认 60000，最大 300000' })),
+})
+
+const PythonExecFileSchema = Type.Object({
+  path: Type.String({ description: '相对 workspace 的 .py 路径，必须以 scripts/ 开头' }),
+  timeoutMs: Type.Optional(Type.Number({ description: '超时毫秒，默认 60000，最大 300000' })),
+})
+
+const FsReadSchema = Type.Object({
+  path: Type.String({
+    description: '相对 workspace 的路径；必须以 inputs/ scripts/ artifacts/ reports/ 之一开头',
+  }),
+  offset: Type.Optional(Type.Number({ description: '起始行索引（默认 0）' })),
+  limit: Type.Optional(
+    Type.Number({
+      description: '行数上限。文本默认 300 行，数据文件（.csv/.parquet 等）默认 10 行',
+    }),
+  ),
+})
+
+const FsWriteSchema = Type.Object({
+  path: Type.String({ description: '相对 workspace 的路径' }),
+  content: Type.String({ description: '文本内容（仅支持文本；二进制需用 plt.savefig 等 Python 路径）' }),
+})
+
+const FsEditSchema = Type.Object({
+  path: Type.String({ description: '相对 workspace 的路径' }),
+  oldStr: Type.String({ description: '要替换的字符串；默认必须在文件中唯一存在' }),
+  newStr: Type.String({ description: '替换后的内容' }),
+  replaceAll: Type.Optional(
+    Type.Boolean({ description: '默认 false；为 true 时不要求唯一并替换全部出现' }),
+  ),
+})
+
+const FsListSchema = Type.Object({
+  path: Type.Optional(
+    Type.String({ description: '相对路径（默认根，列出 4 个固定顶级目录）' }),
+  ),
+  recursive: Type.Optional(Type.Boolean({ description: '默认 false' })),
+})
+
+const FsGrepSchema = Type.Object({
+  pattern: Type.String({ description: '正则表达式' }),
+  path: Type.Optional(Type.String({ description: '搜索范围（默认整个 workspace）' })),
+  fileGlob: Type.Optional(Type.String({ description: '类似 "scripts/*.py"' })),
+  caseInsensitive: Type.Optional(Type.Boolean()),
+  contextLines: Type.Optional(Type.Number({ description: '前后上下文行数，默认 0' })),
+  maxMatches: Type.Optional(Type.Number({ description: '默认 50，上限 200' })),
+})
+
+const TodoItemSchema = Type.Object({
+  title: Type.String({ description: '任务标题（1-100 字符）' }),
+  status: Type.Union(
+    [Type.Literal('pending'), Type.Literal('in_progress'), Type.Literal('completed')],
+    { description: '任务状态' },
+  ),
+})
+
+const TodoWriteSchema = Type.Object({
+  items: Type.Array(TodoItemSchema, {
+    description: '完整任务列表（全量覆盖语义）',
+  }),
+})
+
+const AskUserOptionSchema = Type.Object({
+  label: Type.String({ description: '选项文字（1-30 字符）' }),
+  description: Type.Optional(Type.String({ description: '解释文字（≤80 字符）' })),
+})
+
+const AskUserSchema = Type.Object({
+  question: Type.String({ description: '问题文本（中文 1-300 字符）' }),
+  header: Type.String({ description: '短标签（≤12 字符），UI 显示为 chip' }),
+  options: Type.Optional(Type.Array(AskUserOptionSchema)),
+  multiSelect: Type.Optional(Type.Boolean()),
+  recommendedIndex: Type.Optional(Type.Number({ description: '推荐项索引' })),
+})
+
+export const NOTEBOOK_AGENT_TOOL_SPECS: readonly NotebookToolSpec[] = [
+  {
+    name: 'python_exec_inline',
+    description:
+      '执行一段 Python 代码（等价 python -c）。无状态：每次都要重新 import 与读数据；想跨步骤复用就把中间结果落盘 artifacts/。出图必须 plt.savefig 到 artifacts/，并 plt.close() 释放内存。',
+    inputSchema: PythonExecInlineSchema,
+  },
+  {
+    name: 'python_exec_file',
+    description:
+      '执行 workspace 里某 .py 脚本。当代码较长 / 后续可能复用 / 用户可能下载时，先 fs_write 到 scripts/，再用本工具跑。',
+    inputSchema: PythonExecFileSchema,
+  },
+  {
+    name: 'fs_read',
+    description:
+      '读 workspace 文件。文本默认前 300 行，数据文件（csv/parquet 等）默认前 10 行；要看更多用 python_exec_inline 写代码。不要试图通过 offset/limit 翻完整张表。',
+    inputSchema: FsReadSchema,
+  },
+  {
+    name: 'fs_write',
+    description:
+      '整体覆盖写入文本文件。脚本写到 scripts/，中间产物落到 artifacts/，报告写到 reports/。引用图表用 ../artifacts/xxx.png 相对路径。',
+    inputSchema: FsWriteSchema,
+  },
+  {
+    name: 'fs_edit',
+    description:
+      '精确字符串替换式编辑。oldStr 默认必须在文件中唯一存在；不唯一时扩大上下文带几行；明确需要时传 replaceAll=true。',
+    inputSchema: FsEditSchema,
+  },
+  {
+    name: 'fs_list',
+    description:
+      '列目录内容。默认返回 4 个固定顶级目录；传 path 列子目录；传 recursive=true 递归。返回 entries 含 name / kind / size / modifiedAt。',
+    inputSchema: FsListSchema,
+  },
+  {
+    name: 'fs_grep',
+    description:
+      '在 workspace 内做 ripgrep 风格的全文搜索。仅扫描文本文件；单文件超过 1MB 仅扫描前 100KB；默认匹配上限 50（最多 200）。',
+    inputSchema: FsGrepSchema,
+  },
+  {
+    name: 'todo_write',
+    description:
+      '维护任务清单（全量覆盖）。进入分析前先写下 5-10 条任务；同一时刻只有一个 in_progress；任务粒度面向"清洗数据""相关性热力图"这种业务步骤，不要写成"调 fs_read"工具级粒度。',
+    inputSchema: TodoWriteSchema,
+  },
+  {
+    name: 'ask_user',
+    description:
+      '暂停 Agent，向用户提问。新分析进入时第一件事用本工具跟用户对齐目标（grill-me 风格刨根问底）；只在关键决策点打断用户，不要在每个细节都用。',
+    inputSchema: AskUserSchema,
+  },
+]
+
+export const getNotebookAgentToolSpec = (
+  name: string,
+): NotebookToolSpec | undefined =>
+  NOTEBOOK_AGENT_TOOL_SPECS.find((spec) => spec.name === name)
+
+// ──────────────────────────────────────────────
+// 静态类型导出，前端 dispatcher 可以用作参数类型
+// ──────────────────────────────────────────────
+
+export type PythonExecInlineParams = Static<typeof PythonExecInlineSchema>
+export type PythonExecFileParams = Static<typeof PythonExecFileSchema>
+export type FsReadParams = Static<typeof FsReadSchema>
+export type FsWriteParams = Static<typeof FsWriteSchema>
+export type FsEditParams = Static<typeof FsEditSchema>
+export type FsListParams = Static<typeof FsListSchema>
+export type FsGrepParams = Static<typeof FsGrepSchema>
+export type TodoWriteParams = Static<typeof TodoWriteSchema>
+export type AskUserParams = Static<typeof AskUserSchema>

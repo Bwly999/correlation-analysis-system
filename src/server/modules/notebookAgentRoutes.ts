@@ -1,0 +1,152 @@
+/**
+ * Notebook Agent HTTP 路由（M1 最小骨架）。
+ *
+ * 端点：
+ *   POST   /api/notebook-agent/sessions                  创建 session + 返回 systemPrompt
+ *   GET    /api/notebook-agent/sessions/:sessionId       拿 session 概览
+ *   POST   /api/notebook-agent/sessions/:sessionId/messages
+ *   POST   /api/notebook-agent/sessions/:sessionId/tool-result
+ *   DELETE /api/notebook-agent/sessions/:sessionId       结束 session
+ *
+ * SSE 流接入留给迭代二（复用 piAgent eventBridge 模块），M1 仅定义入参与状态机骨架。
+ */
+
+import type { FastifyPluginAsync } from 'fastify'
+import { requireWorkflowUser } from '../http/workflowUser.js'
+import { assertSessionOwner } from '../piAgent/sessionAccess.js'
+import {
+  closeNotebookAgentSession,
+  createNotebookAgentSession,
+  finishNotebookAgentToolCall,
+  getNotebookAgentSessionOwner,
+  getNotebookAgentSessionView,
+  recordNotebookAgentMessage,
+  recordNotebookAgentToolCall,
+} from '../notebookAgent/gateway.js'
+import type { ImportCsvMeta } from '../../notebook/shared/parentBridge.js'
+
+const validateImportCsvMeta = (meta: unknown): meta is ImportCsvMeta => {
+  if (!meta || typeof meta !== 'object') return false
+  const m = meta as Partial<ImportCsvMeta>
+  return (
+    (m.sourceKind === 'canvas-node' || m.sourceKind === 'data-source') &&
+    typeof m.sourceLabel === 'string' &&
+    typeof m.rowCount === 'number' &&
+    typeof m.columnCount === 'number'
+  )
+}
+
+export const createNotebookAgentRoutes = (): FastifyPluginAsync => async (app) => {
+  const requireOwnedSession = (sessionId: string, userId: string) =>
+    assertSessionOwner({
+      sessionId,
+      currentUserId: userId,
+      resolveOwnerId: getNotebookAgentSessionOwner,
+      missingMessage: '未找到 Notebook Agent 会话',
+      forbiddenMessage: '无权访问该 Notebook Agent 会话',
+    })
+
+  app.post('/api/notebook-agent/sessions', async (request, reply) => {
+    const user = requireWorkflowUser(request)
+    const body = request.body as {
+      initialDataMeta?: unknown
+      origin?: string
+    }
+    if (!validateImportCsvMeta(body.initialDataMeta)) {
+      reply.code(400)
+      return { message: '缺少或非法 initialDataMeta' }
+    }
+    const result = createNotebookAgentSession({
+      userId: user.id,
+      initialDataMeta: body.initialDataMeta,
+      origin: typeof body.origin === 'string' ? body.origin : '',
+    })
+    return result
+  })
+
+  app.get('/api/notebook-agent/sessions/:sessionId', async (request, reply) => {
+    const user = requireWorkflowUser(request)
+    const { sessionId } = request.params as { sessionId: string }
+    requireOwnedSession(sessionId, user.id)
+    const view = getNotebookAgentSessionView(sessionId)
+    if (!view) {
+      reply.code(404)
+      return { message: '未找到 Notebook Agent 会话' }
+    }
+    return view
+  })
+
+  app.post('/api/notebook-agent/sessions/:sessionId/messages', async (request, reply) => {
+    const user = requireWorkflowUser(request)
+    const { sessionId } = request.params as { sessionId: string }
+    requireOwnedSession(sessionId, user.id)
+    const body = request.body as { id?: string; content?: string }
+    if (!body.id || !body.content) {
+      reply.code(400)
+      return { message: '缺少 id 或 content' }
+    }
+    recordNotebookAgentMessage(sessionId, {
+      id: body.id,
+      role: 'user',
+      content: body.content,
+    })
+    return { ok: true }
+  })
+
+  app.post('/api/notebook-agent/sessions/:sessionId/tool-result', async (request, reply) => {
+    const user = requireWorkflowUser(request)
+    const { sessionId } = request.params as { sessionId: string }
+    requireOwnedSession(sessionId, user.id)
+    const body = request.body as {
+      toolCallId?: string
+      isError?: boolean
+      result?: { details?: unknown }
+    }
+    if (!body.toolCallId) {
+      reply.code(400)
+      return { message: '缺少 toolCallId' }
+    }
+    const ok = finishNotebookAgentToolCall(sessionId, body.toolCallId, {
+      result: body.result?.details ? JSON.stringify(body.result.details) : undefined,
+      isError: !!body.isError,
+    })
+    if (!ok) {
+      reply.code(404)
+      return { message: '会话不存在' }
+    }
+    return { ok }
+  })
+
+  app.post('/api/notebook-agent/sessions/:sessionId/tool-call', async (request, reply) => {
+    const user = requireWorkflowUser(request)
+    const { sessionId } = request.params as { sessionId: string }
+    requireOwnedSession(sessionId, user.id)
+    const body = request.body as {
+      id?: string
+      toolName?: string
+      args?: unknown
+    }
+    if (!body.id || !body.toolName) {
+      reply.code(400)
+      return { message: '缺少 id / toolName' }
+    }
+    recordNotebookAgentToolCall(sessionId, {
+      id: body.id,
+      toolName: body.toolName,
+      args: body.args,
+    })
+    return { ok: true }
+  })
+
+  app.delete('/api/notebook-agent/sessions/:sessionId', async (request, reply) => {
+    const user = requireWorkflowUser(request)
+    const { sessionId } = request.params as { sessionId: string }
+    requireOwnedSession(sessionId, user.id)
+    const ok = closeNotebookAgentSession(sessionId)
+    if (!ok) {
+      reply.code(404)
+      return { message: '会话不存在' }
+    }
+    return { ok }
+  })
+}
