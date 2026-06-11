@@ -66,31 +66,33 @@ const stateLabel = computed(() => {
 </script>
 
 <template>
-  <div class="fixed inset-0 z-50 flex flex-col bg-slate-50">
-    <header
-      class="flex h-12 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4"
-    >
-      <div class="flex items-center gap-3">
-        <button
-          class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-          aria-label="关闭笔记本"
-          @click="onClose"
-        >
-          ← 关闭笔记本
-        </button>
-        <span class="text-sm font-semibold text-slate-900">📓 AI 分析笔记本</span>
-        <span
-          class="rounded-full border px-2 py-0.5 text-xs font-medium"
-          :class="stateLabel.cls"
-        >{{ stateLabel.text }}</span>
-      </div>
-    </header>
+  <Teleport to="body">
+    <div class="fixed inset-0 z-[2000] flex flex-col bg-slate-50">
+      <header
+        class="flex h-12 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4"
+      >
+        <div class="flex items-center gap-3">
+          <button
+            class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            aria-label="关闭笔记本"
+            @click="onClose"
+          >
+            ← 关闭笔记本
+          </button>
+          <span class="text-sm font-semibold text-slate-900">📓 AI 分析笔记本</span>
+          <span
+            class="rounded-full border px-2 py-0.5 text-xs font-medium"
+            :class="stateLabel.cls"
+          >{{ stateLabel.text }}</span>
+        </div>
+      </header>
 
-    <iframe
-      ref="iframeRef"
-      :src="iframeSrc"
-      class="h-full w-full flex-1 border-0 bg-white"
-      title="AI 分析笔记本"
-    />
-  </div>
+      <iframe
+        ref="iframeRef"
+        :src="iframeSrc"
+        class="h-full w-full flex-1 border-0 bg-white"
+        title="AI 分析笔记本"
+      />
+    </div>
+  </Teleport>
 </template>

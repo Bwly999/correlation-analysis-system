@@ -24,6 +24,8 @@ import Menu from 'primevue/menu'
 import Popover from 'primevue/popover'
 import { useToast } from 'primevue/usetoast'
 import { getErrorMessage } from '@/utils/requestError'
+import NotebookLauncher from '../notebookAgent/NotebookLauncher.vue'
+import type { NotebookDataSource } from '../notebookAgent/NewNotebookDialog.vue'
 
 const emit = defineEmits<{
   openProjects: []
@@ -32,12 +34,14 @@ const emit = defineEmits<{
   importWorkflow: [file: File]
   openHelp: []
   toggleAi: []
+  startNotebook: [source: NotebookDataSource]
 }>()
 const store = useWorkflowStore()
 const toast = useToast()
 const showUnsavedIndicator = computed(() => !store.isHistoryMode && store.hasUnsavedChanges)
 const props = defineProps<{
   isAiPanelVisible?: boolean
+  availableNotebookSources?: NotebookDataSource[]
 }>()
 
 // 过滤当前工作流的历史记录
@@ -311,6 +315,12 @@ const formatDuration = (ms: number) => {
         <Bot :size="14" />
         <span>{{ props.isAiPanelVisible ? '收起 Pi Agent' : 'Pi Agent' }}</span>
       </button>
+
+      <NotebookLauncher
+        v-if="!store.isHistoryMode"
+        :available="props.availableNotebookSources ?? []"
+        @start="(source) => emit('startNotebook', source)"
+      />
 
       <button v-if="!store.isHistoryMode" class="file-btn" @click="toggleMenu">
         <FileUp :size="14" />

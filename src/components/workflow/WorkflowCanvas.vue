@@ -45,6 +45,12 @@ import Toast from 'primevue/toast'
 import { useToast } from 'primevue/usetoast'
 import UnsavedWorkflowDialog from './UnsavedWorkflowDialog.vue'
 import { getErrorMessage } from '@/utils/requestError'
+import NotebookFrame from '../notebookAgent/NotebookFrame.vue'
+import { nodeResultToCsv } from '../notebookAgent/dataSourceCsv'
+import { httpClient } from '@/services/httpClient'
+import type { NotebookDataSource } from '../notebookAgent/NewNotebookDialog.vue'
+import type { CsvImport } from '../notebookAgent/dataSourceCsv'
+import type { NodeResult } from '@/nodes/result'
 
 const { onConnect, addEdges, project, findNode, fitView, getViewport, setViewport } = useVueFlow()
 const store = useWorkflowStore()
@@ -65,6 +71,92 @@ const isResettingView = ref(false)
 const isShortcutHintsCollapsed = ref(false)
 const isEditableFocused = ref(false)
 const canvasViewportRef = useTemplateRef<HTMLDivElement>('canvasViewport')
+
+// ── Notebook Agent ──
+const notebookSession = ref<{
+  sessionId: string
+  initialData: CsvImport
+} | null>(null)
+
+const isNodeResult = (v: unknown): v is NodeResult =>
+  typeof v === 'object' &&
+  v !== null &&
+  typeof (v as { kind?: unknown }).kind === 'string' &&
+  'payload' in (v as object)
+
+const availableNotebookSources = computed<NotebookDataSource[]>(() =>
+  store.nodes
+    .filter((node) => isNodeResult(node.data.output))
+    .map((node) => {
+      const result = node.data.output as NodeResult
+      const rowCount =
+        result.kind === 'table' && Array.isArray(result.payload)
+          ? result.payload.length
+          : result.kind === 'tableCollection' && Array.isArray(result.payload)
+            ? ((result.payload[0] as { data?: unknown[] } | undefined)?.data?.length ?? 0)
+            : 0
+      const columnCount =
+        result.kind === 'table' && Array.isArray(result.payload) && result.payload[0]
+          ? Object.keys(result.payload[0]).length
+          : result.kind === 'tableCollection' &&
+              Array.isArray(result.payload) &&
+              (result.payload[0] as { data?: unknown[] } | undefined)?.data?.[0]
+            ? Object.keys(
+                (result.payload[0] as { data: Record<string, unknown>[] }).data[0],
+              ).length
+            : 0
+      return {
+        id: node.id,
+        kind: 'canvas-node' as const,
+        label: node.data.label || node.label || node.id,
+        rowCount,
+        columnCount,
+        fields:
+          result.kind === 'table' && Array.isArray(result.payload) && result.payload[0]
+            ? Object.keys(result.payload[0]).slice(0, 5)
+            : [],
+      }
+    }),
+)
+
+const handleStartNotebook = async (source: NotebookDataSource) => {
+  const node = store.nodes.find((n) => n.id === source.id)
+  if (!node || !isNodeResult(node.data.output)) {
+    toast.add({
+      severity: 'error',
+      summary: '无法启动笔记本',
+      detail: '该节点没有可用数据',
+      life: 3000,
+    })
+    return
+  }
+  try {
+    const csvImport = nodeResultToCsv(node.data.output, {
+      sourceKind: 'canvas-node',
+      sourceLabel: source.label,
+    })
+    const response = await httpClient.post('/notebook-agent/sessions', {
+      initialDataMeta: csvImport.meta,
+      origin: window.location.origin,
+    })
+    if (response.status >= 400) {
+      throw new Error(`创建会话失败：${response.status}`)
+    }
+    const { sessionId } = response.data as { sessionId: string }
+    notebookSession.value = { sessionId, initialData: csvImport }
+  } catch (err) {
+    toast.add({
+      severity: 'error',
+      summary: '笔记本启动失败',
+      detail: getErrorMessage(err, '请稍后重试'),
+      life: 4000,
+    })
+  }
+}
+
+const handleNotebookClose = () => {
+  notebookSession.value = null
+}
 const PI_AGENT_DESKTOP_BREAKPOINT = 1280
 const PI_AGENT_PANEL_DEFAULT_WIDTH = 480
 const PI_AGENT_PANEL_MIN_WIDTH = 360
@@ -674,12 +766,14 @@ onBeforeUnmount(() => {
   >
     <WorkflowHeader
       :is-ai-panel-visible="isAiPanelVisible"
+      :available-notebook-sources="availableNotebookSources"
       @open-projects="openWorkflowList"
       @open-template-library="openTemplateLibrary"
       @new-workflow="handleCreateWorkflow"
       @import-workflow="handleImportWorkflow"
       @open-help="isHelpCenterVisible = true"
       @toggle-ai="toggleAiPanel"
+      @start-notebook="handleStartNotebook"
     />
 
     <main
@@ -964,6 +1058,12 @@ onBeforeUnmount(() => {
     <ConfirmDialog />
     <Toast />
     <Toast group="node-config" position="bottom-left" />
+    <NotebookFrame
+      v-if="notebookSession"
+      :session-id="notebookSession.sessionId"
+      :initial-data="notebookSession.initialData"
+      @close="handleNotebookClose"
+    />
   </div>
 </template>
 
