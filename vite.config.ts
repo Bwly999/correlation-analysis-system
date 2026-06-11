@@ -102,7 +102,8 @@ const notebookCoiHeaders = (): Plugin => ({
         url.startsWith('/notebook-iframe.html') ||
         url === '/notebook' ||
         url.startsWith('/notebook?')
-      if (isCoiPage) {
+      const isNotebookWorkerModule = url.startsWith('/src/notebook/')
+      if (isCoiPage || isNotebookWorkerModule) {
         res.setHeader('Cross-Origin-Opener-Policy', 'same-origin')
         res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp')
       }
@@ -177,27 +178,44 @@ const pyodideStaticProxy = (): Plugin => {
           return
         }
 
-        // 兜底：代理到 jsdelivr（仅 dev）
-        const cdnUrl = `https://cdn.jsdelivr.net/pyodide/${CDN_VERSION}/full/${fileName}`
-        const upstream = https.get(cdnUrl, (upRes) => {
-          const status = upRes.statusCode ?? 502
-          if (status !== 200) {
-            res.statusCode = status
-            res.end(`pyodide cdn upstream ${status}`)
-            upRes.resume()
+        // 兜底：代理到 jsdelivr 镜像（仅 dev）
+        const cdnUrls = [
+          `https://cdn.jsdelivr.net/pyodide/${CDN_VERSION}/full/${fileName}`,
+          `https://fastly.jsdelivr.net/pyodide/${CDN_VERSION}/full/${fileName}`,
+          `https://gcore.jsdelivr.net/pyodide/${CDN_VERSION}/full/${fileName}`,
+        ]
+
+        const tryCdn = (index: number) => {
+          const cdnUrl = cdnUrls[index]
+          if (!cdnUrl) {
+            res.statusCode = 502
+            res.end('pyodide cdn unreachable')
             return
           }
-          // 透传 content-length
-          const len = upRes.headers['content-length']
-          if (len) res.setHeader('Content-Length', len)
-          upRes.pipe(res)
-        })
-        upstream.on('error', (err) => {
-          // eslint-disable-next-line no-console
-          console.error('[pyodide-proxy] cdn fetch failed', cdnUrl, err)
-          res.statusCode = 502
-          res.end('pyodide cdn unreachable')
-        })
+
+          const upstream = https.get(cdnUrl, (upRes) => {
+            const status = upRes.statusCode ?? 502
+            if (status !== 200) {
+              upRes.resume()
+              tryCdn(index + 1)
+              return
+            }
+            // 透传 content-length
+            const len = upRes.headers['content-length']
+            if (len) res.setHeader('Content-Length', len)
+            upRes.pipe(res)
+          })
+          upstream.setTimeout(120_000, () => {
+            upstream.destroy(new Error('pyodide cdn timeout'))
+          })
+          upstream.on('error', (err) => {
+            // eslint-disable-next-line no-console
+            console.warn('[pyodide-proxy] cdn fetch failed', cdnUrl, err)
+            tryCdn(index + 1)
+          })
+        }
+
+        tryCdn(0)
       })
     },
   }
@@ -205,11 +223,12 @@ const pyodideStaticProxy = (): Plugin => {
 
 // https://vite.dev/config/
 export default defineConfig({
-  // worker 输出 classic 格式（iife），而非 module worker。
-  // 原因：pyodide 在 worker 中靠 importScripts(pyodide.asm.js) 加载，
-  // module worker 没有 importScripts，会触发 fallback await import() 路径，
-  // 实际测试 dev 模式下加载会因循环依赖+sourcemap 等问题失败。
-  // classic worker + importScripts 是 pyodide 官方推荐路径，最稳。
+  // Notebook Worker 通过 vite ?worker import 加载，dev 下实际跑的是 module worker。
+  // Pyodide 启动时会先尝试 importScripts(pyodide.asm.js)，module worker 中此 API 不可用，
+  // 所以在 src/notebook/worker/pyodideBoot.ts 内把 importScripts shim 成 throw TypeError，
+  // 让 pyodide 走 await import('pyodide.mjs') 这条 fallback。
+  // 此处保留 format: 'iife' 主要是控制生产 build 产物的形态；
+  // 真正的加载机制由 pyodideBoot.ts 内的 shim + dynamic import 决定。
   worker: {
     format: 'iife',
   },

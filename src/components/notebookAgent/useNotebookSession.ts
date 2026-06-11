@@ -1,0 +1,158 @@
+/**
+ * useNotebookSession：NotebookFrame.vue 的核心逻辑 composable。
+ *
+ * 流程：
+ *   1) iframeRef 挂载后创建 ParentBridgeServer
+ *   2) 监听 iframe 事件
+ *      - iframe.ready → 发 parent.handshake → 发 parent.import_csv
+ *      - iframe.session_state → 同步 state
+ *      - iframe.workspace_changed → 透传给上层
+ *      - iframe.request_unload_confirm → 透传给上层
+ *   3) 暴露 requestClose / dispose
+ *
+ * 单测覆盖：src/components/notebookAgent/__tests__/useNotebookSession.spec.ts
+ */
+
+import { ref, watch, type Ref } from 'vue'
+import {
+  createParentBridgeServer,
+  type ParentBridgeServer,
+  type ParentBridgeServerOptions,
+} from './parentBridgeServer'
+import type { CsvImport } from './dataSourceCsv'
+import type {
+  IframeBridgeRequest,
+  IframeSessionState,
+  CloseReason,
+  ParentBridgeRequest,
+} from '../../notebook/shared/parentBridge'
+
+export interface UseNotebookSessionOptions {
+  iframeRef: Ref<HTMLIFrameElement | null>
+  sessionId: string
+  origin: string
+  initialData: CsvImport
+  /** 工厂注入；测试时传 mock。生产环境用 createParentBridgeServer */
+  createBridge?: (opts: ParentBridgeServerOptions) => ParentBridgeServer
+  onWorkspaceChanged?: (paths: string[]) => void
+  onUnloadConfirm?: (hasUnsavedExec: boolean) => void
+  /** 注入消息源订阅器；默认走 window.addEventListener */
+  addMessageListener?: (l: (e: MessageEvent) => void) => () => void
+}
+
+export interface UseNotebookSession {
+  state: Ref<IframeSessionState>
+  requestClose: (reason: CloseReason) => Promise<void>
+  dispose: () => void
+}
+
+const defaultListener = (l: (e: MessageEvent) => void): (() => void) => {
+  if (typeof window === 'undefined') return () => undefined
+  window.addEventListener('message', l)
+  return () => window.removeEventListener('message', l)
+}
+
+const genId = (() => {
+  let n = 0
+  return () => `req-${Date.now()}-${++n}`
+})()
+
+export const useNotebookSession = (
+  options: UseNotebookSessionOptions,
+): UseNotebookSession => {
+  const {
+    iframeRef,
+    sessionId,
+    origin,
+    initialData,
+    createBridge = createParentBridgeServer,
+    onWorkspaceChanged,
+    onUnloadConfirm,
+    addMessageListener = defaultListener,
+  } = options
+
+  const state = ref<IframeSessionState>('loading_pyodide')
+  let bridge: ParentBridgeServer | null = null
+  let imported = false
+
+  const handleEvent = (evt: IframeBridgeRequest) => {
+    switch (evt.kind) {
+      case 'iframe.ready':
+        void onIframeReady()
+        break
+      case 'iframe.session_state':
+        state.value = evt.state
+        break
+      case 'iframe.workspace_changed':
+        onWorkspaceChanged?.(evt.paths)
+        break
+      case 'iframe.request_unload_confirm':
+        onUnloadConfirm?.(evt.hasUnsavedExec)
+        break
+    }
+  }
+
+  const onIframeReady = async () => {
+    if (!bridge || imported) return
+    try {
+      // handshake：通知 iframe 我们这边已经就绪
+      const handshakeReq: ParentBridgeRequest = {
+        kind: 'parent.handshake',
+        requestId: genId(),
+        sessionId,
+        origin,
+      }
+      await bridge.request(handshakeReq)
+
+      // 灌入 CSV
+      const importReq: ParentBridgeRequest = {
+        kind: 'parent.import_csv',
+        requestId: genId(),
+        filename: 'upstream.csv',
+        buffer: initialData.buffer,
+        meta: initialData.meta,
+      }
+      await bridge.request(importReq, { transfer: [initialData.buffer] })
+      imported = true
+    } catch (err) {
+      // 失败时把状态置 failed，让上层 UI 提示
+      state.value = 'failed'
+      // eslint-disable-next-line no-console
+      console.error('[useNotebookSession] handshake/import 失败：', err)
+    }
+  }
+
+  const ensureBridge = (iframe: HTMLIFrameElement) => {
+    if (bridge) return
+    bridge = createBridge({
+      iframe,
+      targetOrigin: origin || '*',
+      addMessageListener,
+      onEvent: handleEvent,
+    })
+  }
+
+  watch(
+    iframeRef,
+    (frame) => {
+      if (frame) ensureBridge(frame)
+    },
+    { immediate: true },
+  )
+
+  const requestClose = async (reason: CloseReason) => {
+    if (!bridge) return
+    await bridge.request({
+      kind: 'parent.close_request',
+      requestId: genId(),
+      reason,
+    })
+  }
+
+  const dispose = () => {
+    bridge?.dispose()
+    bridge = null
+  }
+
+  return { state, requestClose, dispose }
+}
