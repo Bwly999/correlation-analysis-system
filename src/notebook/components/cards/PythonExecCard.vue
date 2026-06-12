@@ -43,86 +43,141 @@ const showStderr = computed(() => props.tool.stderr.length > 0 || props.tool.err
     :duration-ms="tool.durationMs"
   >
     <template #leadingIcon>
-      <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700">
-        <FileCode2 v-if="tool.variant === 'file'" :size="13" />
-        <Terminal v-else :size="13" />
+      <span
+        class="flex h-6 w-6 shrink-0 items-center justify-center rounded-[3px] border"
+        style="border-color: var(--nb-rule); background-color: var(--nb-card); color: var(--nb-ink);"
+      >
+        <FileCode2 v-if="tool.variant === 'file'" :size="12" :stroke-width="1.6" />
+        <Terminal v-else :size="12" :stroke-width="1.6" />
       </span>
     </template>
 
     <div class="space-y-2 px-3 py-2.5">
-      <!-- 代码段 -->
-      <section v-if="tool.variant === 'inline'" class="rounded-lg border border-slate-200/80 bg-white">
+      <!-- 代码段（inline） -->
+      <section
+        v-if="tool.variant === 'inline'"
+        class="rounded-[3px] border"
+        style="border-color: var(--nb-rule); background-color: var(--nb-card);"
+      >
         <button
-          class="flex w-full items-center gap-2 px-2.5 py-1.5 text-[11px] font-mono uppercase tracking-[0.14em] text-slate-500"
+          class="flex w-full items-center gap-2 px-2.5 py-1.5 nb-mono text-[10px]"
+          style="color: var(--nb-ink-mute); letter-spacing: 0.16em;"
           @click="codeOpen = !codeOpen"
         >
-          <Code2 :size="11" />
-          <span>code</span>
-          <span class="font-sans normal-case font-medium text-slate-400">
+          <Code2 :size="11" :stroke-width="1.6" />
+          <span style="font-weight: 700;">CODE</span>
+          <span class="flex-1" />
+          <span style="letter-spacing: 0.06em; color: var(--nb-ink-faint);">
+            {{ tool.code.split('\n').length }} 行
+          </span>
+          <span
+            class="font-sans"
+            style="text-transform: none; letter-spacing: 0; color: var(--nb-ink-mute);"
+          >
             {{ codeOpen ? '收起' : '展开' }}
           </span>
-          <span class="flex-1" />
-          <span class="text-[10px] text-slate-400">{{ tool.code.split('\n').length }} 行</span>
         </button>
         <pre
           v-if="codeOpen"
-          class="overflow-x-auto border-t border-slate-100 bg-slate-950 px-3 py-2 font-mono text-[11.5px] leading-5 text-slate-100"
+          class="overflow-x-auto border-t nb-mono px-3 py-2 text-[11.5px] leading-5"
+          style="border-color: var(--nb-rule); background-color: #2A2825; color: #F4F0E6;"
         >{{ tool.code }}</pre>
         <pre
           v-else
-          class="overflow-hidden border-t border-slate-100 bg-slate-50/60 px-3 py-1.5 font-mono text-[11px] leading-5 text-slate-400"
+          class="overflow-hidden border-t nb-mono px-3 py-1.5 text-[11px] leading-5"
+          style="border-color: var(--nb-rule); background-color: var(--nb-paper-tint); color: var(--nb-ink-mute);"
         >{{ codePreview }}</pre>
       </section>
 
       <!-- 文件路径段：variant=file -->
-      <section v-else class="rounded-lg border border-slate-200/80 bg-white px-3 py-1.5">
-        <div class="flex items-center gap-2 text-[11.5px]">
-          <span class="font-mono uppercase tracking-[0.14em] text-[10px] text-slate-500">file</span>
-          <span class="font-mono text-slate-800">{{ tool.code }}</span>
+      <section
+        v-else
+        class="rounded-[3px] border px-3 py-1.5"
+        style="border-color: var(--nb-rule); background-color: var(--nb-card);"
+      >
+        <div class="flex items-center gap-2.5 text-[11.5px]">
+          <span
+            class="nb-mono text-[10px]"
+            style="color: var(--nb-ink-mute); letter-spacing: 0.16em; font-weight: 700;"
+          >
+            FILE
+          </span>
+          <span class="nb-mono" style="color: var(--nb-ink);">{{ tool.code }}</span>
         </div>
       </section>
 
       <!-- stdout -->
-      <section v-if="showStdoutToggle" class="rounded-lg border border-slate-200/80 bg-slate-950">
-        <div class="flex items-center gap-2 px-2.5 py-1.5 text-[11px] font-mono uppercase tracking-[0.14em] text-slate-400">
-          <Terminal :size="11" />
-          <span>stdout</span>
+      <section
+        v-if="showStdoutToggle"
+        class="rounded-[3px] overflow-hidden"
+        style="background-color: #2A2825;"
+      >
+        <div
+          class="flex items-center gap-2 px-2.5 py-1.5 nb-mono text-[10px]"
+          style="color: rgba(244, 240, 230, 0.6); letter-spacing: 0.16em;"
+        >
+          <Terminal :size="10" :stroke-width="1.6" />
+          <span style="font-weight: 700;">STDOUT</span>
           <span class="flex-1" />
-          <span class="font-sans normal-case font-medium text-slate-400 tabular-nums">
+          <span class="nb-mono tabular-nums" style="font-weight: 400; letter-spacing: 0.04em;">
             {{ tool.stdout.length }} chars
           </span>
         </div>
         <div
-          class="overflow-auto border-t border-slate-800/60 px-3 py-2 font-mono text-[11.5px] leading-5 text-slate-100"
+          class="nb-scroll overflow-auto border-t nb-mono px-3 py-2 text-[11.5px] leading-5"
+          style="border-color: rgba(244, 240, 230, 0.08); color: #F4F0E6;"
           :style="{ maxHeight: stdoutExpanded ? 'none' : STDOUT_HEIGHT_LIMIT + 'px' }"
         >
           <pre class="whitespace-pre-wrap">{{ tool.stdout }}</pre>
         </div>
         <button
           v-if="tool.stdout.length > 800"
-          class="block w-full border-t border-slate-800/60 bg-slate-900 py-1 text-center text-[11px] font-medium text-slate-400 hover:text-slate-200"
+          class="block w-full border-t py-1 text-center nb-mono text-[10px] transition hover:opacity-100"
+          style="
+            border-color: rgba(244, 240, 230, 0.08);
+            background-color: rgba(244, 240, 230, 0.04);
+            color: rgba(244, 240, 230, 0.6);
+            letter-spacing: 0.14em;
+            font-weight: 600;
+          "
           @click="stdoutExpanded = !stdoutExpanded"
         >
           {{ stdoutExpanded ? '收起' : '全文展开' }}
         </button>
       </section>
 
-      <!-- stderr / 错误 -->
-      <section v-if="showStderr" class="rounded-lg border border-rose-200 bg-rose-50/60">
+      <!-- stderr -->
+      <section
+        v-if="showStderr"
+        class="rounded-[3px] border"
+        style="border-color: rgba(184, 84, 80, 0.3); background-color: var(--nb-clay-soft);"
+      >
         <button
-          class="flex w-full items-center gap-2 px-2.5 py-1.5 text-[11px] font-mono uppercase tracking-[0.14em] text-rose-700"
+          class="flex w-full items-center gap-2 px-2.5 py-1.5 nb-mono text-[10px]"
+          style="color: #8B3A37; letter-spacing: 0.16em;"
           @click="stderrOpen = !stderrOpen"
         >
-          <span>stderr</span>
-          <span v-if="tool.errorType" class="font-sans normal-case font-semibold text-rose-700">
+          <span style="font-weight: 700;">STDERR</span>
+          <span
+            v-if="tool.errorType"
+            class="font-sans nb-mono"
+            style="text-transform: none; letter-spacing: 0.04em; font-weight: 700;"
+          >
             · {{ tool.errorType }}
           </span>
           <span class="flex-1" />
-          <span class="font-sans normal-case font-medium text-rose-500">
+          <span
+            class="font-sans"
+            style="text-transform: none; letter-spacing: 0; color: rgba(139, 58, 55, 0.7);"
+          >
             {{ stderrOpen ? '收起' : '展开' }}
           </span>
         </button>
-        <div v-if="stderrOpen" class="border-t border-rose-200/70 px-3 py-2 font-mono text-[11.5px] leading-5 text-rose-800">
+        <div
+          v-if="stderrOpen"
+          class="border-t px-3 py-2 nb-mono text-[11.5px] leading-5"
+          style="border-color: rgba(184, 84, 80, 0.2); color: #6E2D2A;"
+        >
           <pre class="whitespace-pre-wrap">{{ tool.stderr || tool.errorMessage }}</pre>
         </div>
       </section>

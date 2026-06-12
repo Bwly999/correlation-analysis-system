@@ -1,9 +1,10 @@
 <script setup lang="ts">
 /**
  * UserMessageBlock.vue
- * 用户发出的消息块。视觉上保持与 Agent 块的清晰区分：右对齐冷色卡片。
+ *
+ * 用户发出的消息块。视觉：右对齐的暖色卡片（像便签贴在稿纸上），
+ * 顶部一个铜色「YOU」眉签提示来源。
  */
-import { User } from 'lucide-vue-next'
 import type { UserMessage } from '../types/messageStream'
 
 defineProps<{ message: UserMessage }>()
@@ -11,17 +12,29 @@ defineProps<{ message: UserMessage }>()
 
 <template>
   <div class="flex justify-end">
-    <div class="flex max-w-[88%] items-start gap-3">
+    <div class="flex max-w-[78%] flex-col items-end">
       <div
-        class="rounded-2xl rounded-tr-sm border border-slate-200 bg-white px-4 py-2.5 text-[13px] leading-6 text-slate-800 shadow-[0_8px_18px_-14px_rgba(15,23,42,0.18)]"
+        class="nb-eyebrow mb-1 flex items-center gap-1.5"
+        style="font-size: 9px; letter-spacing: 0.28em;"
       >
-        <p class="whitespace-pre-wrap">{{ message.text }}</p>
+        <span style="color: var(--nb-copper-deep);">YOU</span>
+        <span class="h-px w-6" style="background-color: var(--nb-copper); opacity: 0.55;" />
       </div>
-      <span
-        class="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-slate-100 text-slate-600"
+      <div
+        class="rounded-[3px] border px-4 py-3"
+        style="
+          background-color: var(--nb-copper-soft);
+          border-color: rgba(204, 120, 92, 0.25);
+          color: var(--nb-ink);
+        "
       >
-        <User :size="13" />
-      </span>
+        <p
+          class="whitespace-pre-wrap text-[13.5px] leading-[1.7]"
+          style="font-feature-settings: 'cv11';"
+        >
+          {{ message.text }}
+        </p>
+      </div>
     </div>
   </div>
 </template>

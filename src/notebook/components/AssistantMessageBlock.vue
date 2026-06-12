@@ -3,11 +3,12 @@
  * AssistantMessageBlock.vue
  *
  * 渲染单条 Agent 消息：thinking / text / tool / ask_user 多个 block 顺序展开。
- * 工具卡片矩阵根据 kind 路由到对应组件。
+ *
+ * 视觉风格 ▸ 稿件正文：assistant 不再是气泡，而是流动的版式正文；
+ *           左侧只用一道铜色细竖线标识来源；标题印「ASSISTANT」眉签。
  */
 
 import { computed } from 'vue'
-import { Bot } from 'lucide-vue-next'
 import type { AssistantMessage } from '../types/messageStream'
 import { renderMarkdownSafe } from '../preview/markdownRenderer'
 import ThinkingCard from './cards/ThinkingCard.vue'
@@ -36,24 +37,31 @@ const onAskSubmit = (askId: string, payload: { optionId: string; text?: string }
 </script>
 
 <template>
-  <div class="flex items-start gap-3">
+  <article class="relative pl-5">
+    <!-- 左侧装饰：铜色细竖线 -->
     <span
-      class="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-slate-950 text-blue-300 shadow-[0_8px_16px_-10px_rgba(15,23,42,0.6)]"
-    >
-      <Bot :size="13" />
-    </span>
-    <div class="min-w-0 flex-1 space-y-2.5">
+      class="absolute left-0 top-1 bottom-0 w-px"
+      style="background-color: var(--nb-copper); opacity: 0.4;"
+    />
+
+    <!-- 眉签 -->
+    <div class="mb-3 flex items-center gap-2">
+      <span
+        class="nb-eyebrow"
+        style="font-size: 9px; letter-spacing: 0.28em; color: var(--nb-copper-deep);"
+      >
+        ASSISTANT
+      </span>
+      <span class="h-px flex-1 max-w-12" style="background-color: var(--nb-copper); opacity: 0.4;" />
+    </div>
+
+    <div class="space-y-3.5">
       <template v-for="(b, i) in message.blocks" :key="b.data.id + '-' + i">
         <ThinkingCard v-if="b.kind === 'thinking'" :block="b.data" />
 
         <div
           v-else-if="b.kind === 'text'"
-          class="prose prose-sm max-w-none text-[13.5px] leading-7 text-slate-800
-                 prose-headings:tracking-tight prose-headings:text-slate-900
-                 prose-strong:text-slate-900 prose-code:text-blue-700
-                 prose-code:bg-blue-50 prose-code:rounded prose-code:px-1
-                 prose-pre:bg-slate-950 prose-pre:text-slate-100
-                 prose-a:text-blue-600 prose-a:no-underline hover:prose-a:underline"
+          class="nb-prose"
           v-html="renderText(b.data.text)"
         />
 
@@ -86,13 +94,23 @@ const onAskSubmit = (askId: string, payload: { optionId: string; text?: string }
         />
       </template>
 
-      <!-- streaming 指示：尾部跳动光标 -->
-      <div v-if="isStreaming" class="flex items-center gap-1.5 pt-0.5">
-        <span class="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500" />
-        <span class="text-[11px] font-mono uppercase tracking-[0.18em] text-slate-400">
-          Agent 正在分析…
+      <!-- streaming 指示：印刷感的细线脉动 + 字符光标 -->
+      <div v-if="isStreaming" class="flex items-center gap-2 pt-1">
+        <span
+          class="h-1.5 w-1.5 rounded-full"
+          style="background-color: var(--nb-copper); animation: nb-pulse 1.4s ease-in-out infinite;"
+        />
+        <span
+          class="nb-display-italic text-[12px]"
+          style="color: var(--nb-ink-mute);"
+        >
+          正在落笔
         </span>
+        <span
+          class="h-px flex-1 max-w-16"
+          style="background: linear-gradient(to right, var(--nb-copper) 0%, transparent 100%); opacity: 0.5;"
+        />
       </div>
     </div>
-  </div>
+  </article>
 </template>

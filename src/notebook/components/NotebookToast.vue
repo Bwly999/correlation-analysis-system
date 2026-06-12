@@ -2,8 +2,7 @@
 /**
  * NotebookToast.vue
  *
- * §8.1/8.2/8.5 错误恢复 toast：右下角堆叠，5s 自动消失（error 不消失）。
- * 配合 useNotebookToasts() composable。
+ * §8.1/8.2/8.5 错误恢复 toast：右下角堆叠。
  */
 import { CheckCircle2, X, AlertTriangle, Info, OctagonAlert } from 'lucide-vue-next'
 import type { NotebookToastSpec } from '../composables/useNotebookToasts'
@@ -33,58 +32,80 @@ const styleFor = (k: NotebookToastSpec['kind']) => {
   switch (k) {
     case 'success':
       return {
-        ring: 'border-emerald-200/80',
-        icon: 'text-emerald-600 bg-emerald-50 border-emerald-200',
+        accent: 'var(--nb-sage)',
+        bg: 'var(--nb-sage-soft)',
+        text: '#4A5740',
       }
     case 'warning':
       return {
-        ring: 'border-amber-200/80',
-        icon: 'text-amber-600 bg-amber-50 border-amber-200',
+        accent: 'var(--nb-amber)',
+        bg: 'var(--nb-amber-soft)',
+        text: '#7C5A28',
       }
     case 'error':
       return {
-        ring: 'border-rose-200/80',
-        icon: 'text-rose-600 bg-rose-50 border-rose-200',
+        accent: 'var(--nb-clay)',
+        bg: 'var(--nb-clay-soft)',
+        text: '#8B3A37',
       }
     default:
       return {
-        ring: 'border-slate-200/80',
-        icon: 'text-slate-600 bg-slate-50 border-slate-200',
+        accent: 'var(--nb-copper)',
+        bg: 'var(--nb-copper-soft)',
+        text: 'var(--nb-copper-deep)',
       }
   }
 }
 </script>
 
 <template>
-  <div class="pointer-events-none fixed bottom-12 right-4 z-50 flex w-[360px] max-w-[90vw] flex-col gap-2">
+  <div
+    class="pointer-events-none fixed bottom-12 right-4 z-50 flex w-[380px] max-w-[90vw] flex-col gap-2"
+  >
     <transition-group name="toast" tag="div" class="flex flex-col gap-2">
       <div
         v-for="t in toasts"
         :key="t.id"
-        class="pointer-events-auto overflow-hidden rounded-xl border bg-white shadow-[0_24px_60px_-30px_rgba(15,23,42,0.45)]"
-        :class="styleFor(t.kind).ring"
+        class="pointer-events-auto overflow-hidden rounded-[3px] border"
+        style="
+          background-color: var(--nb-card);
+          border-color: var(--nb-rule-strong);
+          box-shadow: 0 24px 48px -16px rgba(61, 57, 41, 0.32);
+        "
       >
-        <div class="flex items-start gap-3 p-3.5">
+        <!-- 顶部色条 -->
+        <div :style="{ height: '2px', backgroundColor: styleFor(t.kind).accent }" />
+
+        <div class="flex items-start gap-3 p-4">
           <span
-            class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border"
-            :class="styleFor(t.kind).icon"
+            class="flex h-7 w-7 shrink-0 items-center justify-center rounded-[3px]"
+            :style="{ backgroundColor: styleFor(t.kind).bg, color: styleFor(t.kind).text }"
           >
-            <component :is="iconFor(t.kind)" :size="14" />
+            <component :is="iconFor(t.kind)" :size="13" :stroke-width="1.8" />
           </span>
           <div class="min-w-0 flex-1">
-            <div class="text-[13px] font-semibold tracking-tight text-slate-900">{{ t.title }}</div>
-            <div v-if="t.message" class="mt-0.5 text-[12px] leading-5 text-slate-600">
+            <div
+              class="nb-display text-[13px] font-medium leading-snug"
+              style="color: var(--nb-ink); letter-spacing: -0.005em;"
+            >
+              {{ t.title }}
+            </div>
+            <div
+              v-if="t.message"
+              class="mt-0.5 text-[12px] leading-5"
+              style="color: var(--nb-ink-mute);"
+            >
               {{ t.message }}
             </div>
             <div v-if="t.actions?.length" class="mt-2.5 flex gap-2">
               <button
                 v-for="(a, i) in t.actions"
                 :key="i"
-                class="inline-flex items-center rounded-md border px-2.5 py-1 text-[11.5px] font-semibold transition"
-                :class="
+                class="nb-focus inline-flex items-center rounded-[3px] border px-2.5 py-1 text-[11px] font-semibold transition"
+                :style="
                   a.primary
-                    ? 'border-blue-600 bg-blue-600 text-white hover:bg-blue-500'
-                    : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                    ? { backgroundColor: 'var(--nb-ink)', color: 'var(--nb-paper)', borderColor: 'var(--nb-ink)' }
+                    : { backgroundColor: 'var(--nb-card)', color: 'var(--nb-ink-mute)', borderColor: 'var(--nb-rule)' }
                 "
                 @click="a.onClick(); emit('dismiss', t.id)"
               >
@@ -93,11 +114,20 @@ const styleFor = (k: NotebookToastSpec['kind']) => {
             </div>
           </div>
           <button
-            class="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+            class="nb-focus flex h-6 w-6 shrink-0 items-center justify-center rounded-[3px] transition"
+            style="color: var(--nb-ink-faint);"
             aria-label="关闭通知"
             @click="emit('dismiss', t.id)"
+            @mouseenter="(e) => {
+              (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--nb-paper-tint)';
+              (e.currentTarget as HTMLElement).style.color = 'var(--nb-ink)'
+            }"
+            @mouseleave="(e) => {
+              (e.currentTarget as HTMLElement).style.backgroundColor = '';
+              (e.currentTarget as HTMLElement).style.color = 'var(--nb-ink-faint)'
+            }"
           >
-            <X :size="13" />
+            <X :size="13" :stroke-width="1.6" />
           </button>
         </div>
       </div>
@@ -108,7 +138,7 @@ const styleFor = (k: NotebookToastSpec['kind']) => {
 <style scoped>
 .toast-enter-active,
 .toast-leave-active {
-  transition: all 0.24s cubic-bezier(0.22, 0.61, 0.36, 1);
+  transition: all 0.26s cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 .toast-enter-from {
   opacity: 0;

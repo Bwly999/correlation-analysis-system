@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
  * 工具卡片状态徽章：running / success / failed
- * 视觉：胶囊状，左圆点 + 文案 + 耗时。
+ *
+ * 视觉 ▸ 朴素印章式：mono caps 文案 + 极小色点。
  */
 import { computed } from 'vue'
 import { Loader2, Check, X } from 'lucide-vue-next'
@@ -12,38 +13,48 @@ const props = defineProps<{
   durationMs?: number
 }>()
 
-const klass = computed(() => {
+const tone = computed(() => {
   switch (props.status) {
     case 'running':
-      return 'border-amber-200/80 bg-amber-50 text-amber-700'
+      return 'amber'
     case 'success':
-      return 'border-emerald-200/80 bg-emerald-50 text-emerald-700'
+      return 'sage'
     case 'failed':
-      return 'border-rose-200/80 bg-rose-50 text-rose-700'
+      return 'clay'
   }
-  return ''
+  return 'default'
+})
+
+const label = computed(() => {
+  switch (props.status) {
+    case 'running':
+      return 'RUNNING'
+    case 'success':
+      return 'OK'
+    case 'failed':
+      return 'FAIL'
+  }
 })
 
 const formatDuration = (ms?: number): string => {
   if (ms == null) return ''
-  if (ms < 1000) return `${ms} ms`
+  if (ms < 1000) return `${ms}ms`
   return `${(ms / 1000).toFixed(2)}s`
 }
 </script>
 
 <template>
-  <span
-    class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold tracking-wide"
-    :class="klass"
-  >
-    <Loader2 v-if="status === 'running'" :size="10" class="animate-spin" />
-    <Check v-else-if="status === 'success'" :size="10" />
-    <X v-else :size="10" />
-    <span>
-      {{ status === 'running' ? '执行中' : status === 'success' ? '完成' : '失败' }}
-    </span>
-    <span v-if="durationMs != null" class="font-mono tabular-nums opacity-70">
-      · {{ formatDuration(durationMs) }}
+  <span class="nb-chip" :data-tone="tone" style="padding: 2px 8px; font-size: 9.5px;">
+    <Loader2 v-if="status === 'running'" :size="9" :stroke-width="2.2" class="animate-spin" />
+    <Check v-else-if="status === 'success'" :size="9" :stroke-width="2.4" />
+    <X v-else :size="9" :stroke-width="2.4" />
+    <span class="nb-mono" style="letter-spacing: 0.14em; font-weight: 700;">{{ label }}</span>
+    <span
+      v-if="durationMs != null"
+      class="nb-mono opacity-60"
+      style="letter-spacing: 0.04em;"
+    >
+      {{ formatDuration(durationMs) }}
     </span>
   </span>
 </template>

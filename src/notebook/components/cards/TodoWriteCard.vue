@@ -21,8 +21,11 @@ defineProps<{ tool: TodoWriteToolCall }>()
     :default-open="false"
   >
     <template #leadingIcon>
-      <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700">
-        <ListTodo :size="13" />
+      <span
+        class="flex h-6 w-6 shrink-0 items-center justify-center rounded-[3px] border"
+        style="border-color: var(--nb-rule); background-color: var(--nb-card); color: var(--nb-ink);"
+      >
+        <ListTodo :size="12" :stroke-width="1.6" />
       </span>
     </template>
     <div class="px-3 py-2.5">

@@ -28,29 +28,42 @@ const subtitle = computed(() => {
     :duration-ms="tool.durationMs"
   >
     <template #leadingIcon>
-      <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700">
-        <FileSearch2 :size="13" />
+      <span
+        class="flex h-6 w-6 shrink-0 items-center justify-center rounded-[3px] border"
+        style="border-color: var(--nb-rule); background-color: var(--nb-card); color: var(--nb-ink);"
+      >
+        <FileSearch2 :size="12" :stroke-width="1.6" />
       </span>
     </template>
 
     <div class="space-y-2 px-3 py-2.5">
-      <div v-if="tool.status === 'failed'" class="rounded-md border border-rose-200 bg-rose-50/60 px-3 py-2 text-[12px] text-rose-700">
+      <div
+        v-if="tool.status === 'failed'"
+        class="rounded-[3px] border px-3 py-2 text-[12px]"
+        style="border-color: rgba(184, 84, 80, 0.3); background-color: var(--nb-clay-soft); color: #8B3A37;"
+      >
         <div class="flex items-start gap-2">
-          <AlertTriangle :size="13" class="mt-0.5 shrink-0" />
+          <AlertTriangle :size="13" :stroke-width="1.6" class="mt-0.5 shrink-0" />
           <div>
             <div class="font-medium">读取失败</div>
-            <div class="mt-0.5 font-mono text-[11.5px] leading-5">{{ tool.errorMessage }}</div>
+            <div class="mt-0.5 nb-mono text-[11px] leading-5" style="color: #6E2D2A;">
+              {{ tool.errorMessage }}
+            </div>
           </div>
         </div>
       </div>
 
       <template v-else>
-        <pre class="overflow-x-auto rounded-md border border-slate-200/80 bg-white px-3 py-2 font-mono text-[11.5px] leading-5 text-slate-700 whitespace-pre-wrap">{{ tool.content || '（空文件）' }}</pre>
+        <pre
+          class="nb-scroll overflow-x-auto rounded-[3px] border px-3 py-2 nb-mono text-[11.5px] leading-5 whitespace-pre-wrap"
+          style="border-color: var(--nb-rule); background-color: var(--nb-card); color: var(--nb-ink-soft);"
+        >{{ tool.content || '（空文件）' }}</pre>
         <div
           v-if="tool.truncated"
-          class="flex items-center gap-1.5 text-[11px] text-amber-700"
+          class="flex items-center gap-1.5 text-[11px]"
+          style="color: #7C5A28;"
         >
-          <AlertTriangle :size="11" />
+          <AlertTriangle :size="11" :stroke-width="1.6" />
           已截断；如需完整数据请改用 python_exec_inline 直接读取。
         </div>
       </template>

@@ -4,7 +4,7 @@
  *
  * §3.4 底部状态条：内存 / cell 数 / 时长 / 停止按钮
  *
- * 视觉语言：终端化的等宽数字 + 状态点；克制不抢戏。
+ * 视觉风格 ▸ 编辑稿底栏：mono 等宽字 + 印刷感分隔。
  */
 
 import { computed } from 'vue'
@@ -40,67 +40,135 @@ const memText = computed(() => {
 })
 
 const dotColor = computed(() => {
-  if (props.stats.recentlyRestarted) return 'bg-amber-400'
-  if (props.stats.isRunning) return 'bg-blue-400 animate-pulse'
-  return 'bg-emerald-400'
+  if (props.stats.recentlyRestarted) return 'var(--nb-amber)'
+  if (props.stats.isRunning) return 'var(--nb-copper)'
+  return 'var(--nb-sage)'
 })
 
 const dotLabel = computed(() => {
   if (props.stats.recentlyRestarted) return '已重启'
-  if (props.stats.isRunning) return '执行中'
+  if (props.stats.isRunning) return '运行中'
   return '空闲'
+})
+
+const memPercent = computed(() => {
+  if (!props.memoryLimitMb) return 0
+  return Math.min(100, (props.stats.memoryMb / props.memoryLimitMb) * 100)
 })
 </script>
 
 <template>
   <div
-    class="flex h-9 items-center gap-4 border-t border-slate-200 bg-slate-50/80 px-4 text-[11px] font-medium text-slate-600 backdrop-blur"
+    class="relative flex h-9 items-center gap-5 border-t px-5 text-[10.5px]"
+    style="
+      border-color: var(--nb-rule);
+      background-color: var(--nb-paper-tint);
+      color: var(--nb-ink-mute);
+    "
   >
-    <div class="flex items-center gap-1.5">
+    <!-- 状态点 -->
+    <div class="flex items-center gap-2">
       <span
-        class="inline-block h-1.5 w-1.5 rounded-full transition-colors"
-        :class="dotColor"
-      />
-      <span class="font-mono uppercase tracking-[0.14em] text-[10px] text-slate-500">
-        Python · {{ dotLabel }}
+        class="relative inline-flex h-1.5 w-1.5 rounded-full"
+        :style="{ backgroundColor: dotColor }"
+      >
+        <span
+          v-if="stats.isRunning"
+          class="absolute inset-0 animate-ping rounded-full"
+          :style="{ backgroundColor: dotColor, opacity: 0.6 }"
+        />
+      </span>
+      <span
+        class="nb-mono"
+        style="letter-spacing: 0.12em; font-weight: 700; color: var(--nb-ink);"
+      >
+        Python
+      </span>
+      <span
+        class="nb-mono"
+        style="letter-spacing: 0.06em; color: var(--nb-ink-mute);"
+      >
+        {{ dotLabel }}
       </span>
     </div>
 
-    <span class="h-3 w-px bg-slate-300" />
+    <span class="h-3 w-px" style="background-color: var(--nb-rule-strong);" />
 
-    <div class="flex items-center gap-1.5">
-      <Cpu :size="12" class="text-slate-400" />
-      <span class="text-slate-500">内存</span>
-      <span class="font-mono tabular-nums text-slate-800">{{ memText }}</span>
+    <!-- 内存（带细进度条） -->
+    <div class="flex items-center gap-2">
+      <Cpu :size="11" :stroke-width="1.6" style="color: var(--nb-ink-faint);" />
+      <span class="nb-mono" style="letter-spacing: 0.04em;">mem</span>
+      <span
+        class="nb-mono tabular-nums"
+        style="color: var(--nb-ink); font-weight: 600;"
+      >
+        {{ memText }}
+      </span>
+      <span
+        v-if="memoryLimitMb"
+        class="relative h-1 w-16 overflow-hidden rounded-full"
+        style="background-color: rgba(61, 57, 41, 0.1);"
+      >
+        <span
+          class="absolute inset-y-0 left-0 rounded-full transition-[width] duration-500"
+          :style="{
+            width: memPercent + '%',
+            backgroundColor:
+              memPercent > 80 ? 'var(--nb-clay)' : memPercent > 60 ? 'var(--nb-amber)' : 'var(--nb-copper)',
+          }"
+        />
+      </span>
     </div>
 
-    <div class="flex items-center gap-1.5">
-      <Layers :size="12" class="text-slate-400" />
-      <span class="text-slate-500">cells</span>
-      <span class="font-mono tabular-nums text-slate-800">{{ stats.cellCount }}</span>
+    <div class="flex items-center gap-2">
+      <Layers :size="11" :stroke-width="1.6" style="color: var(--nb-ink-faint);" />
+      <span class="nb-mono" style="letter-spacing: 0.04em;">cells</span>
+      <span
+        class="nb-mono tabular-nums"
+        style="color: var(--nb-ink); font-weight: 600;"
+      >
+        {{ stats.cellCount }}
+      </span>
     </div>
 
-    <div class="flex items-center gap-1.5">
-      <Timer :size="12" class="text-slate-400" />
-      <span class="text-slate-500">时长</span>
-      <span class="font-mono tabular-nums text-slate-800">{{ formatDuration(stats.agentSeconds) }}</span>
+    <div class="flex items-center gap-2">
+      <Timer :size="11" :stroke-width="1.6" style="color: var(--nb-ink-faint);" />
+      <span class="nb-mono" style="letter-spacing: 0.04em;">elapsed</span>
+      <span
+        class="nb-mono tabular-nums"
+        style="color: var(--nb-ink); font-weight: 600;"
+      >
+        {{ formatDuration(stats.agentSeconds) }}
+      </span>
     </div>
 
     <div class="flex-1" />
 
     <button
-      class="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[11px] font-semibold transition disabled:cursor-not-allowed"
-      :class="
+      class="nb-focus inline-flex items-center gap-1.5 rounded-[3px] border px-2.5 py-1 text-[10.5px] font-semibold transition disabled:cursor-not-allowed"
+      :style="
         stats.isRunning
-          ? 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100'
-          : 'border-slate-200 bg-white text-slate-400 disabled:bg-slate-50'
+          ? {
+              borderColor: 'rgba(184, 84, 80, 0.4)',
+              backgroundColor: 'var(--nb-clay-soft)',
+              color: '#8B3A37',
+            }
+          : {
+              borderColor: 'var(--nb-rule)',
+              backgroundColor: 'var(--nb-card)',
+              color: 'var(--nb-ink-faint)',
+            }
       "
       :disabled="!stats.isRunning"
       :aria-label="stats.isRunning ? '停止当前执行' : '当前空闲，无需停止'"
       @click="emit('stop')"
     >
-      <Square :size="11" :fill="stats.isRunning ? 'currentColor' : 'none'" />
-      停止
+      <Square
+        :size="9"
+        :stroke-width="1.8"
+        :fill="stats.isRunning ? 'currentColor' : 'none'"
+      />
+      <span class="nb-mono" style="letter-spacing: 0.12em; font-weight: 700;">STOP</span>
     </button>
   </div>
 </template>

@@ -4,26 +4,22 @@
  *
  * iframe 内的笔记本主视图（M1 完整版）。
  *
+ * 视觉风格 ▸ Editorial Notebook（暖纸 + 衬线 + 铜色），独立于主站工作流的
+ *           Slate-50 / Blue-600 SaaS 体系。
+ *
  * 布局（§3.1）：
  *   ┌──────────────────────────────────────────────────┐
- *   │ 顶栏 (NotebookTopBar)                              │
+ *   │ NotebookTopBar                                    │
  *   ├──────────────────────────────────────────────────┤
- *   │ 网络横幅 (ConnectionBanner，offline 时显示)         │
+ *   │ ConnectionBanner (offline 时)                      │
  *   ├────────────────────────────┬─────────────────────┤
- *   │ 消息流 (NotebookMessageStream) │ Workspace tree     │
+ *   │ NotebookMessageStream       │ WorkspaceTree        │
  *   │                            ├─────────────────────┤
- *   │ TodoPanel (常驻，可折叠)    │ FilePreview         │
- *   │ MessageInput               │                     │
+ *   │ TodoPanel                   │ FilePreview          │
+ *   │ MessageInput                │                      │
  *   ├────────────────────────────┴─────────────────────┤
  *   │ NotebookStatusBar                                 │
  *   └──────────────────────────────────────────────────┘
- *
- * 加载阶段叠 NotebookLoadingScreen，工具调用错误用 NotebookToast。
- *
- * 数据：
- *   - props.session: 完整 ViewModel（messages / todos / runtime / phase / connection）
- *   - props.opfsRoot: 真实 OPFS handle，用于文件树 / 预览
- *   - props.messages（旧协议兼容）：未传 session 时使用，把它转成 demo session
  */
 
 import { computed, ref, watch } from 'vue'
@@ -116,7 +112,6 @@ const onSelect = async (path: string) => {
   selectedPath.value = path
   previewLoading.value = true
 
-  // 切换 blob URL 时回收旧的
   if (previewBlobUrl.value) {
     URL.revokeObjectURL(previewBlobUrl.value)
     previewBlobUrl.value = null
@@ -125,7 +120,6 @@ const onSelect = async (path: string) => {
   const kind = resolvePreviewKind(path)
   previewMeta.value = findNodeMeta(path)
 
-  // 200ms 内不强制 spinner，避免闪烁——但实际读取异步即可
   try {
     if (kind === 'image') {
       const bytes = await readBytes(props.opfsRoot, path)
@@ -229,9 +223,9 @@ const onSplitDrag = (e: PointerEvent) => {
 const badge = computed(() => {
   switch (session.value.agent) {
     case 'running':
-      return { text: 'Agent 运行中', tone: 'running' as const }
+      return { text: '运行中', tone: 'running' as const }
     case 'awaiting_user':
-      return { text: '等待你的回答', tone: 'awaiting_user' as const }
+      return { text: '等待答复', tone: 'awaiting_user' as const }
     case 'completed':
       return { text: '已完成', tone: 'completed' as const }
     case 'failed':
@@ -259,21 +253,14 @@ const tryRestart = () => {
   restartConfirmOpen.value = true
 }
 
-// ──────────────────────────────────────────────
-// 快捷键
-// ──────────────────────────────────────────────
 useNotebookShortcuts({
   onClose: tryClose,
   onRestart: tryRestart,
   onDownload: () => emit('download'),
 })
 
-// ──────────────────────────────────────────────
-// Toasts
-// ──────────────────────────────────────────────
 const toasts = useNotebookToasts()
 
-// 文件树有变更时（外部 notify）→ 暴露 push 错误的能力
 defineExpose({
   toasts,
   refreshTree: ws.refresh,
@@ -284,7 +271,10 @@ const onSend = (text: string) => emit('send', text)
 </script>
 
 <template>
-  <div class="relative flex h-full w-full flex-col bg-slate-50 text-slate-900">
+  <div class="nb-root relative flex h-full w-full flex-col">
+    <!-- 全局纸面颗粒 -->
+    <div class="nb-grain" />
+
     <NotebookTopBar
       :title="session.title"
       :session-id="session.sessionId"
@@ -301,10 +291,15 @@ const onSend = (text: string) => emit('send', text)
     <ConnectionBanner :state="session.connection" />
 
     <!-- 主区：三栏 -->
-    <div data-split-root class="flex min-h-0 flex-1">
+    <div data-split-root class="relative flex min-h-0 flex-1">
       <!-- 左栏：消息流 + TodoPanel + Input -->
       <section
-        class="flex min-h-0 flex-col border-r border-slate-200 bg-[radial-gradient(circle_at_top,_rgba(37,99,235,0.05),_transparent_30%),linear-gradient(180deg,_#fbfcfd_0%,_#f4f7fa_100%)]"
+        class="flex min-h-0 flex-col border-r"
+        style="
+          flex-basis: 60%;
+          background-color: var(--nb-paper);
+          border-color: var(--nb-rule);
+        "
         :style="{ flexBasis: leftRatio * 100 + '%' }"
         aria-label="消息流"
       >
@@ -312,6 +307,7 @@ const onSend = (text: string) => emit('send', text)
           <NotebookMessageStream
             class="flex-1 min-h-0"
             :messages="session.messages"
+            :session-title="session.title"
             @ask-user-submit="(p) => emit('askUserSubmit', p)"
             @ask-user-cancel="(id) => emit('askUserCancel', id)"
             @open-in-tree="onSelect"
@@ -327,22 +323,32 @@ const onSend = (text: string) => emit('send', text)
 
       <!-- 拖拽分隔条 -->
       <button
-        class="group relative w-1.5 shrink-0 cursor-col-resize border-x border-slate-200 bg-slate-100/40 hover:bg-blue-100/60"
+        class="group relative w-1 shrink-0 cursor-col-resize transition-colors"
+        style="background-color: transparent;"
         aria-label="拖动调整宽度"
         @pointerdown.prevent="onSplitDrag"
       >
         <span
-          class="absolute left-1/2 top-1/2 h-8 w-px -translate-x-1/2 -translate-y-1/2 rounded-full bg-slate-300 transition group-hover:bg-blue-500"
+          class="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 transition"
+          style="background-color: var(--nb-rule);"
+        />
+        <span
+          class="absolute left-1/2 top-1/2 h-10 w-[3px] -translate-x-1/2 -translate-y-1/2 rounded-full transition group-hover:opacity-100"
+          style="background-color: var(--nb-copper); opacity: 0;"
         />
       </button>
 
       <!-- 右栏：Workspace + Preview -->
       <section
         class="flex min-h-0 flex-1 flex-col"
+        style="background-color: var(--nb-sidebar);"
         aria-label="Workspace"
       >
         <div class="flex min-h-0 flex-1 flex-col">
-          <div class="flex min-h-0 basis-[40%] flex-col border-b border-slate-200">
+          <div
+            class="flex min-h-0 basis-[42%] flex-col border-b"
+            style="border-color: var(--nb-rule);"
+          >
             <WorkspaceTree
               :tree="ws.tree.value"
               :selected-path="selectedPath"
@@ -352,7 +358,7 @@ const onSend = (text: string) => emit('send', text)
               @copy-path="onCopyPath"
             />
           </div>
-          <div class="flex min-h-0 basis-[60%] flex-col" aria-label="预览">
+          <div class="flex min-h-0 basis-[58%] flex-col" aria-label="预览">
             <FilePreview
               :selected-path="selectedPath"
               :content="previewContent"
@@ -370,17 +376,14 @@ const onSend = (text: string) => emit('send', text)
       @stop="emit('stopExec')"
     />
 
-    <!-- 加载遮罩 -->
     <NotebookLoadingScreen
       :phase="session.phase"
       @retry="emit('restart')"
       @cancel="emit('close')"
     />
 
-    <!-- Toasts -->
     <NotebookToast :toasts="toasts.toasts.value" @dismiss="toasts.dismiss" />
 
-    <!-- 关闭确认 -->
     <ConfirmDialog
       :open="closeConfirmOpen"
       title="Agent 还在工作"
@@ -392,7 +395,6 @@ const onSend = (text: string) => emit('send', text)
       @cancel="closeConfirmOpen = false"
     />
 
-    <!-- 重启确认 -->
     <ConfirmDialog
       :open="restartConfirmOpen"
       title="重启 Python 环境？"

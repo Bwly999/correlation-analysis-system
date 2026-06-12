@@ -3,9 +3,11 @@
  * NotebookTopBar.vue
  *
  * §3.2 顶栏：关闭 / 标题（可改）/ 重启 / 下载
+ *
+ * 视觉：暖色纸面 + 衬线显示字 + 铜色品牌点。
  */
 import { computed, ref } from 'vue'
-import { ArrowLeft, Notebook, RotateCcw, Download, Pencil, Check, X } from 'lucide-vue-next'
+import { ArrowLeft, RotateCcw, Download, Pencil, Check, X } from 'lucide-vue-next'
 
 const props = defineProps<{
   title: string
@@ -40,96 +42,173 @@ const cancel = () => {
   editing.value = false
 }
 
-const badgeKlass = computed(() => {
+const badgeTone = computed(() => {
   switch (props.badgeTone) {
     case 'loading':
-      return 'border-amber-200 bg-amber-50 text-amber-700'
     case 'running':
-      return 'border-blue-200 bg-blue-50 text-blue-700'
     case 'awaiting_user':
-      return 'border-amber-200 bg-amber-50 text-amber-700'
+      return 'amber'
     case 'failed':
-      return 'border-rose-200 bg-rose-50 text-rose-700'
+      return 'clay'
     case 'completed':
-      return 'border-emerald-200 bg-emerald-50 text-emerald-700'
+      return 'sage'
     default:
-      return 'border-slate-200 bg-slate-50 text-slate-600'
+      return 'default'
   }
 })
+
+const dotColor = computed(() => {
+  switch (props.badgeTone) {
+    case 'loading':
+    case 'running':
+      return 'bg-[color:var(--nb-amber)]'
+    case 'awaiting_user':
+      return 'bg-[color:var(--nb-copper)]'
+    case 'failed':
+      return 'bg-[color:var(--nb-clay)]'
+    case 'completed':
+      return 'bg-[color:var(--nb-sage)]'
+    default:
+      return 'bg-[color:var(--nb-ink-faint)]'
+  }
+})
+
+const isLive = computed(() =>
+  props.badgeTone === 'running' || props.badgeTone === 'loading',
+)
 </script>
 
 <template>
   <header
-    class="flex h-12 shrink-0 items-center justify-between border-b border-slate-200 bg-white/95 px-4 backdrop-blur-md"
+    class="relative z-10 flex h-14 shrink-0 items-center gap-4 border-b px-5"
+    style="
+      border-color: var(--nb-rule);
+      background: linear-gradient(180deg, var(--nb-paper) 0%, var(--nb-paper) 70%, var(--nb-paper-tint) 100%);
+    "
   >
-    <div class="flex min-w-0 items-center gap-3">
-      <button
-        class="inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 text-[12.5px] font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
-        aria-label="关闭笔记本"
-        @click="emit('close')"
-      >
-        <ArrowLeft :size="13" />
-        关闭笔记本
-      </button>
+    <!-- 关闭 -->
+    <button
+      class="nb-focus group inline-flex h-8 items-center gap-1.5 rounded-[3px] border px-2.5 text-[12px] font-medium transition"
+      style="border-color: var(--nb-rule); color: var(--nb-ink-mute); background-color: var(--nb-card);"
+      aria-label="关闭笔记本"
+      @click="emit('close')"
+    >
+      <ArrowLeft :size="13" :stroke-width="1.8" />
+      <span>返回</span>
+    </button>
 
-      <span class="h-5 w-px bg-slate-200" />
-
-      <Notebook :size="14" class="text-blue-600" />
-
-      <div v-if="!editing" class="flex min-w-0 items-center gap-2">
-        <span class="truncate text-[13.5px] font-semibold tracking-tight text-slate-900">
-          {{ title }}
-        </span>
-        <button
-          class="hidden text-slate-400 transition hover:text-slate-700 md:inline-flex"
-          aria-label="重命名"
-          @click="beginEdit"
-        >
-          <Pencil :size="12" />
-        </button>
-        <span class="font-mono text-[10.5px] uppercase tracking-[0.16em] text-slate-400">
-          · {{ sessionId.slice(0, 16) }}
-        </span>
-      </div>
-      <div v-else class="flex items-center gap-1">
-        <input
-          v-model="draft"
-          class="h-7 rounded-md border border-blue-300 bg-white px-2 text-[13px] font-semibold text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-          @keydown.enter="commit"
-          @keydown.esc="cancel"
-        />
-        <button class="flex h-7 w-7 items-center justify-center rounded-md text-emerald-600 hover:bg-emerald-50" @click="commit">
-          <Check :size="14" />
-        </button>
-        <button class="flex h-7 w-7 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100" @click="cancel">
-          <X :size="14" />
-        </button>
-      </div>
-
+    <!-- 品牌点：铜色三角形 + Notebook 字样 -->
+    <div class="flex items-center gap-2.5">
       <span
-        class="ml-1 inline-flex items-center rounded-full border px-2 py-0.5 text-[10.5px] font-semibold tracking-wide"
-        :class="badgeKlass"
+        class="flex h-7 w-7 items-center justify-center rounded-[3px]"
+        style="background-color: var(--nb-ink); color: var(--nb-paper);"
       >
-        {{ badgeText }}
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M2 1.5h7l3 3v8H2V1.5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" />
+          <path d="M9 1.5v3h3" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" />
+          <path d="M4.6 7.5h4.8M4.6 9.6h3.2" stroke="var(--nb-copper)" stroke-width="1.2" stroke-linecap="round" />
+        </svg>
       </span>
+      <div class="flex flex-col leading-tight">
+        <span
+          class="nb-eyebrow"
+          style="font-size: 9.5px; letter-spacing: 0.26em;"
+        >
+          NOTEBOOK
+        </span>
+        <span class="nb-display text-[11px] italic" style="color: var(--nb-ink-mute); font-weight: 400;">
+          analyse · explain · report
+        </span>
+      </div>
     </div>
 
-    <div class="flex items-center gap-2">
+    <span class="h-6 w-px" style="background-color: var(--nb-rule);" />
+
+    <!-- 标题 -->
+    <div v-if="!editing" class="group flex min-w-0 flex-1 items-center gap-2">
+      <h1
+        class="nb-display truncate text-[18px] font-medium"
+        style="color: var(--nb-ink); letter-spacing: -0.01em;"
+      >
+        {{ title }}
+      </h1>
       <button
-        class="inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 text-[12px] font-medium text-slate-600 transition hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700"
+        class="nb-focus inline-flex h-6 w-6 items-center justify-center rounded-[3px] opacity-0 transition group-hover:opacity-100"
+        style="color: var(--nb-ink-faint);"
+        aria-label="重命名"
+        @click="beginEdit"
+      >
+        <Pencil :size="12" :stroke-width="1.6" />
+      </button>
+      <span
+        class="nb-mono text-[10.5px]"
+        style="color: var(--nb-ink-faint); letter-spacing: 0.06em;"
+      >
+        / {{ sessionId.slice(0, 14) }}
+      </span>
+    </div>
+    <div v-else class="flex flex-1 items-center gap-1.5">
+      <input
+        v-model="draft"
+        class="nb-display nb-focus h-8 flex-1 max-w-md rounded-[3px] border bg-transparent px-2.5 text-[17px] font-medium outline-none"
+        style="border-color: var(--nb-copper); color: var(--nb-ink);"
+        @keydown.enter="commit"
+        @keydown.esc="cancel"
+      />
+      <button
+        class="flex h-7 w-7 items-center justify-center rounded-[3px]"
+        style="color: var(--nb-sage); background-color: var(--nb-sage-soft);"
+        @click="commit"
+      >
+        <Check :size="13" :stroke-width="2" />
+      </button>
+      <button
+        class="flex h-7 w-7 items-center justify-center rounded-[3px]"
+        style="color: var(--nb-ink-mute);"
+        @click="cancel"
+      >
+        <X :size="13" :stroke-width="2" />
+      </button>
+    </div>
+
+    <!-- 状态徽章 -->
+    <div
+      class="nb-chip"
+      :data-tone="badgeTone"
+    >
+      <span
+        class="relative inline-flex h-1.5 w-1.5 items-center justify-center rounded-full"
+        :class="dotColor"
+      >
+        <span
+          v-if="isLive"
+          class="absolute inset-0 animate-ping rounded-full"
+          :class="dotColor"
+          style="opacity: 0.5;"
+        />
+      </span>
+      <span class="nb-mono text-[10px]" style="letter-spacing: 0.1em;">{{ badgeText }}</span>
+    </div>
+
+    <!-- 操作 -->
+    <div class="flex items-center gap-1">
+      <button
+        class="nb-focus inline-flex h-8 items-center gap-1.5 rounded-[3px] px-2.5 text-[12px] font-medium transition hover:bg-[color:var(--nb-overlay)]"
+        style="color: var(--nb-ink-mute);"
         title="重启 Python 环境 (⌘/Ctrl + R)"
         @click="emit('restart')"
       >
-        <RotateCcw :size="12" />
-        重启
+        <RotateCcw :size="13" :stroke-width="1.6" />
+        <span>重启</span>
       </button>
       <button
-        class="inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 text-[12px] font-medium text-slate-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
+        class="nb-focus inline-flex h-8 items-center gap-1.5 rounded-[3px] px-2.5 text-[12px] font-medium transition hover:bg-[color:var(--nb-overlay)]"
+        style="color: var(--nb-ink-mute);"
         title="下载工作区 (⌘/Ctrl + S)"
         @click="emit('download')"
       >
-        <Download :size="12" />
-        下载
+        <Download :size="13" :stroke-width="1.6" />
+        <span>下载</span>
       </button>
     </div>
   </header>

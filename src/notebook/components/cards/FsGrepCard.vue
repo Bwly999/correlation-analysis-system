@@ -24,24 +24,37 @@ const formatLine = (n: number) => String(n).padStart(3, ' ')
     :duration-ms="tool.durationMs"
   >
     <template #leadingIcon>
-      <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700">
-        <Search :size="13" />
+      <span
+        class="flex h-6 w-6 shrink-0 items-center justify-center rounded-[3px] border"
+        style="border-color: var(--nb-rule); background-color: var(--nb-card); color: var(--nb-ink);"
+      >
+        <Search :size="12" :stroke-width="1.6" />
       </span>
     </template>
 
-    <div v-if="tool.matches.length === 0" class="px-3 py-3 text-[12px] text-slate-500">
+    <div
+      v-if="tool.matches.length === 0"
+      class="px-3 py-3 text-[12px]"
+      style="color: var(--nb-ink-mute);"
+    >
       没有命中
     </div>
-    <ul v-else class="divide-y divide-slate-100">
+    <ul v-else class="divide-y" style="border-color: var(--nb-rule);">
       <li
         v-for="(m, i) in tool.matches"
         :key="`${m.path}:${m.line}:${i}`"
-        class="flex items-baseline gap-3 px-3 py-1.5 font-mono text-[11.5px] leading-5"
+        class="flex items-baseline gap-3 px-3 py-1.5 nb-mono text-[11.5px] leading-5"
+        style="border-color: var(--nb-rule);"
       >
-        <span class="shrink-0 text-slate-400">{{ m.path }}</span>
-        <span class="shrink-0 text-slate-300">:</span>
-        <span class="shrink-0 tabular-nums text-amber-600">{{ formatLine(m.line) }}</span>
-        <span class="min-w-0 flex-1 truncate text-slate-700">{{ m.text }}</span>
+        <span class="shrink-0" style="color: var(--nb-ink-faint);">{{ m.path }}</span>
+        <span class="shrink-0" style="color: var(--nb-rule-strong);">:</span>
+        <span
+          class="shrink-0 tabular-nums"
+          style="color: var(--nb-copper-deep); font-weight: 600;"
+        >
+          {{ formatLine(m.line) }}
+        </span>
+        <span class="min-w-0 flex-1 truncate" style="color: var(--nb-ink);">{{ m.text }}</span>
       </li>
     </ul>
   </ToolCardShell>

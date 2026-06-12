@@ -28,50 +28,76 @@ const emit = defineEmits<{
   <transition name="fade">
     <div
       v-if="open"
-      class="fixed inset-0 z-[1900] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm"
+      class="fixed inset-0 z-[1900] flex items-center justify-center"
+      style="background-color: rgba(42, 40, 37, 0.42); backdrop-filter: blur(4px);"
       role="dialog"
       aria-modal="true"
       @click.self="emit('cancel')"
     >
       <div
-        class="w-[400px] max-w-[90vw] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_60px_120px_-30px_rgba(15,23,42,0.5)]"
+        class="nb-fade-up w-[420px] max-w-[90vw] overflow-hidden rounded-[3px] border"
+        style="
+          background-color: var(--nb-card);
+          border-color: var(--nb-rule-strong);
+          box-shadow: 0 40px 80px -20px rgba(42, 40, 37, 0.5);
+        "
       >
-        <header class="flex items-start gap-3 px-5 pt-5">
+        <!-- 顶部色条 -->
+        <div
+          style="height: 3px;"
+          :style="{
+            backgroundColor:
+              tone === 'danger' ? 'var(--nb-clay)' : tone === 'warning' ? 'var(--nb-amber)' : 'var(--nb-copper)',
+          }"
+        />
+        <header class="flex items-start gap-3 px-6 pt-6">
           <span
-            class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border"
-            :class="
+            class="flex h-9 w-9 shrink-0 items-center justify-center rounded-[3px]"
+            :style="
               tone === 'danger'
-                ? 'border-rose-200 bg-rose-50 text-rose-600'
+                ? { backgroundColor: 'var(--nb-clay-soft)', color: '#8B3A37' }
                 : tone === 'warning'
-                ? 'border-amber-200 bg-amber-50 text-amber-600'
-                : 'border-blue-200 bg-blue-50 text-blue-600'
+                ? { backgroundColor: 'var(--nb-amber-soft)', color: '#7C5A28' }
+                : { backgroundColor: 'var(--nb-copper-soft)', color: 'var(--nb-copper-deep)' }
             "
           >
-            <AlertTriangle :size="16" />
+            <AlertTriangle :size="14" :stroke-width="1.8" />
           </span>
-          <div>
-            <div class="text-[14.5px] font-semibold tracking-tight text-slate-900">
+          <div class="flex-1">
+            <div
+              class="nb-display text-[16px] font-medium leading-tight"
+              style="color: var(--nb-ink); letter-spacing: -0.012em;"
+            >
               {{ title }}
             </div>
-            <p class="mt-1 text-[12.5px] leading-5 text-slate-600">{{ message }}</p>
+            <p
+              class="mt-1.5 text-[13px] leading-[1.65]"
+              style="color: var(--nb-ink-mute);"
+            >
+              {{ message }}
+            </p>
           </div>
         </header>
 
-        <footer class="mt-5 flex justify-end gap-2 border-t border-slate-100 bg-slate-50/60 px-4 py-3">
+        <footer
+          class="mt-5 flex justify-end gap-2 border-t px-5 py-3"
+          style="border-color: var(--nb-rule); background-color: var(--nb-paper-tint);"
+        >
           <button
-            class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[12.5px] font-medium text-slate-700 transition hover:bg-slate-50"
+            class="nb-focus rounded-[3px] border px-3 py-1.5 text-[12.5px] font-medium transition hover:bg-[color:var(--nb-overlay)]"
+            style="border-color: var(--nb-rule); color: var(--nb-ink-mute); background-color: var(--nb-card);"
             @click="emit('cancel')"
           >
             {{ cancelText ?? '取消' }}
           </button>
           <button
-            class="rounded-lg px-3.5 py-1.5 text-[12.5px] font-semibold text-white transition shadow-sm"
-            :class="
+            class="nb-focus rounded-[3px] px-3.5 py-1.5 text-[12.5px] font-semibold text-white transition"
+            :style="
               tone === 'danger'
-                ? 'bg-rose-600 hover:bg-rose-500'
+                ? { backgroundColor: 'var(--nb-clay)', border: '1px solid var(--nb-clay)' }
                 : tone === 'warning'
-                ? 'bg-amber-600 hover:bg-amber-500'
-                : 'bg-blue-600 hover:bg-blue-500'
+                ? { backgroundColor: 'var(--nb-ink)', border: '1px solid var(--nb-ink)' }
+                : { backgroundColor: 'var(--nb-copper)', border: '1px solid var(--nb-copper)' }
             "
             @click="emit('confirm')"
           >
@@ -86,7 +112,7 @@ const emit = defineEmits<{
 <style scoped>
 .fade-enter-active,
 .fade-leave-active {
-  transition: opacity 0.16s ease;
+  transition: opacity 0.18s ease;
 }
 .fade-enter-from,
 .fade-leave-to {

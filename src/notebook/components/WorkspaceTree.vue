@@ -5,17 +5,15 @@
  * §6 Workspace 文件树升级版：
  *   - 4 顶级目录固定（inputs / scripts / artifacts / reports），不可创建其他
  *   - 文件按 mtime 倒序
- *   - 30s 内变更的文件标 ⭐
- *   - hover 显示 [👁 预览] [⬇ 下载] [📋 拷路径]
+ *   - 30s 内变更的文件标 ★
+ *   - hover 显示 [预览 / 下载 / 拷路径]
  *   - 单击 = 选中并预览
  *
- * 不实现：删除 / 重命名 / 双击新 tab（M2）
+ * 视觉风格 ▸ 编辑稿目录：纯 SVG 图标（无 emoji），每个分组一个章节眉签。
  */
 
-import { computed, type Ref } from 'vue'
+import { computed, type Component } from 'vue'
 import {
-  Folder,
-  FolderOpen,
   File as FileIcon,
   FileText,
   Image as ImageIcon,
@@ -25,6 +23,11 @@ import {
   Eye,
   Clipboard,
   Star,
+  ArrowDownToLine,
+  ScrollText,
+  BarChart3,
+  Inbox,
+  Code2,
 } from 'lucide-vue-next'
 import type { TreeNode } from '../shared/opfsAccess'
 import { WORKSPACE_TOP_DIRS } from '../shared/opfsAccess'
@@ -58,7 +61,6 @@ const groups = computed<DirGroup[]>(() => {
       if (top.kind !== 'directory') continue
       const group = map.get(top.name)
       if (!group) continue
-      // 仅展示一层文件；允许子目录递归（M1 简化：拍平显示）
       const collect = (node: TreeNode, prefix: string) => {
         if (!node.children) return
         for (const child of node.children) {
@@ -108,114 +110,213 @@ const fileKindIcon = (name: string) => {
   return FileIcon
 }
 
-const groupIcon = (name: string) => {
+const groupMeta = (name: string): { icon: Component; label: string } => {
   switch (name) {
     case 'inputs':
-      return '📥'
+      return { icon: Inbox, label: 'Inputs' }
     case 'scripts':
-      return '🐍'
+      return { icon: Code2, label: 'Scripts' }
     case 'artifacts':
-      return '📊'
+      return { icon: BarChart3, label: 'Artifacts' }
     case 'reports':
-      return '📝'
+      return { icon: ScrollText, label: 'Reports' }
     default:
-      return '📁'
+      return { icon: FileIcon, label: name }
   }
 }
 </script>
 
 <template>
-  <div class="flex h-full flex-col bg-white">
-    <header class="flex items-center justify-between border-b border-slate-200 px-3.5 py-2.5">
-      <div class="flex items-center gap-2">
-        <FolderOpen :size="14" class="text-slate-500" />
-        <span class="text-[12px] font-semibold tracking-tight text-slate-900">Workspace</span>
+  <div
+    class="flex h-full flex-col"
+    style="background-color: var(--nb-sidebar);"
+  >
+    <header
+      class="flex items-center justify-between border-b px-4 py-3"
+      style="border-color: var(--nb-rule);"
+    >
+      <div class="flex items-center gap-2.5">
+        <ArrowDownToLine
+          :size="13"
+          :stroke-width="1.6"
+          style="color: var(--nb-copper-deep);"
+        />
+        <span
+          class="nb-eyebrow"
+          style="font-size: 10px; letter-spacing: 0.22em; color: var(--nb-ink);"
+        >
+          Workspace
+        </span>
       </div>
-      <span class="font-mono text-[10px] uppercase tracking-[0.18em] text-slate-400">
+      <span
+        class="nb-mono text-[10px] tabular-nums"
+        style="color: var(--nb-ink-faint); letter-spacing: 0.12em; font-weight: 700;"
+      >
         {{ totalFiles }} files
       </span>
     </header>
 
-    <div class="flex-1 overflow-y-auto">
+    <div class="nb-scroll flex-1 overflow-y-auto">
       <section
         v-for="group in groups"
         :key="group.name"
-        class="border-b border-slate-100 last:border-b-0"
+        class="border-b last:border-b-0"
+        style="border-color: var(--nb-rule);"
       >
-        <header class="flex items-center justify-between bg-slate-50/60 px-3 py-1.5">
+        <header
+          class="flex items-center justify-between px-4 py-1.5"
+          style="background-color: rgba(61, 57, 41, 0.04);"
+        >
           <div class="flex items-center gap-2">
-            <span class="text-[12px]">{{ groupIcon(group.name) }}</span>
-            <span class="font-mono text-[11px] font-semibold tracking-wide text-slate-700">
+            <component
+              :is="groupMeta(group.name).icon"
+              :size="11"
+              :stroke-width="1.6"
+              style="color: var(--nb-ink-mute);"
+            />
+            <span
+              class="nb-mono text-[10.5px]"
+              style="color: var(--nb-ink-soft); letter-spacing: 0.04em; font-weight: 600;"
+            >
               {{ group.name }}/
             </span>
+            <span
+              class="nb-display-italic text-[11px]"
+              style="color: var(--nb-ink-faint);"
+            >
+              {{ groupMeta(group.name).label }}
+            </span>
           </div>
-          <span class="font-mono text-[10px] tabular-nums text-slate-400">
-            [{{ group.files.length }}]
+          <span
+            class="nb-mono text-[10px] tabular-nums"
+            style="color: var(--nb-ink-faint); letter-spacing: 0.04em;"
+          >
+            {{ group.files.length }}
           </span>
         </header>
         <ul v-if="group.files.length" class="py-1">
           <li
             v-for="f in group.files"
             :key="f.path"
-            class="group relative flex cursor-pointer items-center gap-2 px-3 py-1 transition"
-            :class="
+            class="group relative flex cursor-pointer items-center gap-2 px-4 py-1 transition"
+            :style="
               selectedPath === f.path
-                ? 'bg-blue-50/70 ring-inset ring-1 ring-blue-200'
-                : 'hover:bg-slate-50'
+                ? {
+                    backgroundColor: 'var(--nb-copper-soft)',
+                    boxShadow: 'inset 2px 0 0 var(--nb-copper)',
+                  }
+                : {}
             "
             :data-path="f.path"
             @click="emit('select', f.path)"
+            @mouseenter="(e) => {
+              if (selectedPath !== f.path) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(61, 57, 41, 0.04)'
+            }"
+            @mouseleave="(e) => {
+              if (selectedPath !== f.path) (e.currentTarget as HTMLElement).style.backgroundColor = ''
+            }"
           >
-            <component :is="fileKindIcon(f.name)" :size="13" class="shrink-0 text-slate-400 group-hover:text-slate-600" />
+            <component
+              :is="fileKindIcon(f.name)"
+              :size="12"
+              :stroke-width="1.6"
+              class="shrink-0"
+              :style="
+                selectedPath === f.path
+                  ? { color: 'var(--nb-copper-deep)' }
+                  : { color: 'var(--nb-ink-faint)' }
+              "
+            />
             <span
-              class="min-w-0 truncate text-[12px] tracking-tight"
-              :class="selectedPath === f.path ? 'font-semibold text-blue-800' : 'text-slate-700'"
+              class="min-w-0 truncate text-[12px]"
+              :style="
+                selectedPath === f.path
+                  ? { color: 'var(--nb-ink)', fontWeight: 600 }
+                  : { color: 'var(--nb-ink-soft)' }
+              "
             >
               {{ f.name }}
             </span>
 
             <Star
               v-if="isFresh(f.path)"
-              :size="11"
-              class="shrink-0 text-amber-500"
+              :size="10"
+              :stroke-width="1.6"
+              class="shrink-0"
               fill="currentColor"
+              style="color: var(--nb-copper);"
               title="最近 30s 内变更"
             />
 
-            <span class="ml-auto flex shrink-0 items-center gap-1.5 font-mono text-[10px] tabular-nums text-slate-400">
+            <span
+              class="ml-auto flex shrink-0 items-center gap-2 nb-mono text-[10px] tabular-nums"
+              style="color: var(--nb-ink-faint);"
+            >
               <span v-if="f.modifiedAt">{{ timeLabel(f.modifiedAt) }}</span>
               <span v-if="f.size">{{ sizeLabel(f.size) }}</span>
             </span>
 
             <!-- hover 工具栏 -->
             <div
-              class="invisible absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5 rounded-md border border-slate-200 bg-white px-1 py-0.5 shadow-sm opacity-0 transition group-hover:visible group-hover:opacity-100"
+              class="invisible absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5 rounded-[3px] border px-1 py-0.5 opacity-0 transition group-hover:visible group-hover:opacity-100"
+              style="border-color: var(--nb-rule-strong); background-color: var(--nb-card);"
             >
               <button
-                class="flex h-5 w-5 items-center justify-center rounded text-slate-500 hover:bg-blue-50 hover:text-blue-600"
+                class="flex h-5 w-5 items-center justify-center rounded-[2px] transition"
+                style="color: var(--nb-ink-mute);"
                 title="预览"
                 @click.stop="emit('select', f.path)"
+                @mouseenter="(e) => {
+                  (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--nb-copper-soft)';
+                  (e.currentTarget as HTMLElement).style.color = 'var(--nb-copper-deep)'
+                }"
+                @mouseleave="(e) => {
+                  (e.currentTarget as HTMLElement).style.backgroundColor = '';
+                  (e.currentTarget as HTMLElement).style.color = 'var(--nb-ink-mute)'
+                }"
               >
-                <Eye :size="11" />
+                <Eye :size="11" :stroke-width="1.6" />
               </button>
               <button
-                class="flex h-5 w-5 items-center justify-center rounded text-slate-500 hover:bg-blue-50 hover:text-blue-600"
+                class="flex h-5 w-5 items-center justify-center rounded-[2px] transition"
+                style="color: var(--nb-ink-mute);"
                 title="下载"
                 @click.stop="emit('download', f.path)"
+                @mouseenter="(e) => {
+                  (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--nb-copper-soft)';
+                  (e.currentTarget as HTMLElement).style.color = 'var(--nb-copper-deep)'
+                }"
+                @mouseleave="(e) => {
+                  (e.currentTarget as HTMLElement).style.backgroundColor = '';
+                  (e.currentTarget as HTMLElement).style.color = 'var(--nb-ink-mute)'
+                }"
               >
-                <Download :size="11" />
+                <Download :size="11" :stroke-width="1.6" />
               </button>
               <button
-                class="flex h-5 w-5 items-center justify-center rounded text-slate-500 hover:bg-blue-50 hover:text-blue-600"
+                class="flex h-5 w-5 items-center justify-center rounded-[2px] transition"
+                style="color: var(--nb-ink-mute);"
                 title="拷贝路径"
                 @click.stop="emit('copyPath', f.path)"
+                @mouseenter="(e) => {
+                  (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--nb-copper-soft)';
+                  (e.currentTarget as HTMLElement).style.color = 'var(--nb-copper-deep)'
+                }"
+                @mouseleave="(e) => {
+                  (e.currentTarget as HTMLElement).style.backgroundColor = '';
+                  (e.currentTarget as HTMLElement).style.color = 'var(--nb-ink-mute)'
+                }"
               >
-                <Clipboard :size="11" />
+                <Clipboard :size="11" :stroke-width="1.6" />
               </button>
             </div>
           </li>
         </ul>
-        <p v-else class="px-3 py-1.5 text-[11px] text-slate-400">
+        <p
+          v-else
+          class="px-4 py-2 nb-display-italic text-[11.5px]"
+          style="color: var(--nb-ink-faint);"
+        >
           暂无文件
         </p>
       </section>

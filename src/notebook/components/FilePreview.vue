@@ -3,16 +3,24 @@
  * FilePreview.vue
  *
  * §7 文件预览面板：根据 previewKind 路由到不同 viewer。
- *   - markdown：marked sanitize + 左侧 H1/H2 锚点 TOC
- *   - code：代码块（M1 不引 monaco，纯 pre + 行号）
- *   - image：blob URL（M1 占位：路径文本）
- *   - table：CSV 简单解析为表格（M1 仅显示前 50 行）
+ *   - markdown：印刷感版式 + 左侧目录锚点
+ *   - code：暗色稿纸 + 行号
+ *   - image：纸面居中展示
+ *   - table：CSV 简单表格
  *   - parquet-meta / meta：FileMetaCard
- *   - 切换文件时显示 200ms 骨架屏
+ *   - 切换文件时显示骨架屏
  */
 
 import { computed, ref, watch } from 'vue'
-import { FileText, FileCode2, ImageIcon, Sheet, Info, Hash } from 'lucide-vue-next'
+import {
+  FileText,
+  FileCode2,
+  Image as ImageIcon,
+  Sheet,
+  Info,
+  Hash,
+  CircleSlash,
+} from 'lucide-vue-next'
 import { renderMarkdownSafe } from '../preview/markdownRenderer'
 import { resolvePreviewKind } from '../preview/previewRouter'
 import type { PreviewKind } from '../preview/previewRouter'
@@ -23,13 +31,9 @@ interface MetaInfo {
 }
 
 const props = defineProps<{
-  /** 当前选中文件路径；null 时显示空态 */
   selectedPath: string | null
-  /** 预先准备好的内容（main thread 异步读取）；image 时为 blob URL，table/code/markdown 为文本 */
   content: string
-  /** loading 状态：切换文件时父级把它打开 200ms */
   loading: boolean
-  /** 元信息，用于 meta 卡片 */
   meta?: MetaInfo
 }>()
 
@@ -50,9 +54,7 @@ watch(
   [previewKind, () => props.content],
   ([kind, raw]) => {
     if (kind === 'markdown') {
-      // 1) sanitize
       let html = renderMarkdownSafe(raw)
-      // 2) 给 h1/h2/h3 加 id（用于锚点）
       tocEntries.value = []
       html = html.replace(/<h([123])>([\s\S]*?)<\/h\1>/g, (_match, lvl, text) => {
         const plain = String(text).replace(/<[^>]*>/g, '').trim()
@@ -81,7 +83,6 @@ const codeLines = computed(() => {
 
 const csvCells = computed<string[][]>(() => {
   if (previewKind.value !== 'table') return []
-  // M1 极简 CSV 解析：不处理引号转义；仅前 50 行
   return props.content
     .split('\n')
     .slice(0, 50)
@@ -107,11 +108,15 @@ const onTocClick = (id: string) => {
 </script>
 
 <template>
-  <div class="flex h-full flex-col bg-white">
+  <div
+    class="flex h-full flex-col"
+    style="background-color: var(--nb-paper);"
+  >
     <header
-      class="flex items-center justify-between gap-3 border-b border-slate-200 px-3.5 py-2.5"
+      class="flex items-center justify-between gap-3 border-b px-4 py-3"
+      style="border-color: var(--nb-rule); background-color: var(--nb-sidebar);"
     >
-      <div class="flex min-w-0 items-center gap-2">
+      <div class="flex min-w-0 items-center gap-2.5">
         <component
           :is="
             previewKind === 'markdown'
@@ -125,36 +130,75 @@ const onTocClick = (id: string) => {
               : Info
           "
           :size="13"
-          class="shrink-0 text-slate-500"
+          :stroke-width="1.6"
+          class="shrink-0"
+          style="color: var(--nb-copper-deep);"
         />
-        <span class="text-[12px] font-semibold tracking-tight text-slate-900">预览</span>
-        <span v-if="selectedPath" class="truncate font-mono text-[11px] text-slate-500">
+        <span
+          class="nb-eyebrow"
+          style="font-size: 10px; letter-spacing: 0.22em; color: var(--nb-ink);"
+        >
+          Preview
+        </span>
+        <span
+          v-if="selectedPath"
+          class="truncate nb-mono text-[10.5px]"
+          style="color: var(--nb-ink-mute); letter-spacing: 0.02em;"
+        >
           {{ selectedPath }}
         </span>
       </div>
       <span
         v-if="selectedPath"
-        class="font-mono text-[10px] uppercase tracking-[0.18em] text-slate-400"
+        class="nb-chip"
+        data-tone="default"
+        style="padding: 1px 7px; font-size: 9px; letter-spacing: 0.16em; font-weight: 700;"
       >
         {{ previewKind }}
       </span>
     </header>
 
     <!-- 骨架屏 -->
-    <div v-if="loading" class="space-y-3 p-4">
-      <div class="h-3 w-1/3 animate-pulse rounded bg-slate-100" />
-      <div class="h-3 w-2/3 animate-pulse rounded bg-slate-100" />
-      <div class="h-3 w-1/2 animate-pulse rounded bg-slate-100" />
-      <div class="mt-2 h-32 animate-pulse rounded bg-slate-100" />
+    <div v-if="loading" class="space-y-3 p-6">
+      <div
+        class="h-3 w-1/3 rounded"
+        style="background-color: var(--nb-rule-strong); animation: nb-pulse 1.4s ease-in-out infinite;"
+      />
+      <div
+        class="h-3 w-2/3 rounded"
+        style="background-color: var(--nb-rule); animation: nb-pulse 1.4s ease-in-out infinite;"
+      />
+      <div
+        class="h-3 w-1/2 rounded"
+        style="background-color: var(--nb-rule); animation: nb-pulse 1.4s ease-in-out infinite;"
+      />
+      <div
+        class="mt-2 h-32 rounded"
+        style="background-color: var(--nb-rule); animation: nb-pulse 1.4s ease-in-out infinite;"
+      />
     </div>
 
     <!-- 空态 -->
-    <div v-else-if="!selectedPath" class="flex flex-1 flex-col items-center justify-center text-center">
-      <span class="mb-2 inline-flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-400">
-        <Info :size="14" />
-      </span>
-      <p class="text-[12.5px] text-slate-500">
+    <div
+      v-else-if="!selectedPath"
+      class="flex flex-1 flex-col items-center justify-center px-6 text-center"
+    >
+      <CircleSlash
+        :size="20"
+        :stroke-width="1.4"
+        style="color: var(--nb-ink-faint);"
+      />
+      <p
+        class="nb-display-italic mt-3 text-[14px]"
+        style="color: var(--nb-ink-mute);"
+      >
         点击文件树中的条目以预览
+      </p>
+      <p
+        class="mt-2 nb-mono text-[10px]"
+        style="color: var(--nb-ink-faint); letter-spacing: 0.16em; font-weight: 700;"
+      >
+        nothing selected
       </p>
     </div>
 
@@ -162,18 +206,31 @@ const onTocClick = (id: string) => {
     <div v-else-if="previewKind === 'markdown'" class="flex min-h-0 flex-1">
       <aside
         v-if="tocEntries.length"
-        class="hidden w-40 shrink-0 overflow-y-auto border-r border-slate-100 bg-slate-50/50 px-2 py-3 lg:block"
+        class="nb-scroll hidden w-44 shrink-0 overflow-y-auto border-r py-4 pl-4 pr-2 lg:block"
+        style="border-color: var(--nb-rule); background-color: var(--nb-sidebar);"
       >
-        <div class="mb-1.5 flex items-center gap-1 px-1 text-[10px] font-mono uppercase tracking-[0.18em] text-slate-400">
-          <Hash :size="10" />
+        <div
+          class="mb-2 flex items-center gap-1.5 nb-eyebrow"
+          style="font-size: 9px; letter-spacing: 0.24em;"
+        >
+          <Hash :size="9" :stroke-width="1.8" />
           目录
         </div>
         <ul class="space-y-0.5">
           <li v-for="t in tocEntries" :key="t.id">
             <button
-              class="block w-full truncate rounded px-1.5 py-0.5 text-left text-[11.5px] text-slate-600 transition hover:bg-blue-50 hover:text-blue-700"
-              :style="{ paddingLeft: 6 + (t.level - 1) * 10 + 'px' }"
+              class="nb-focus block w-full truncate rounded-[3px] px-1.5 py-1 text-left text-[11.5px] transition"
+              style="color: var(--nb-ink-mute);"
+              :style="{ paddingLeft: 6 + (t.level - 1) * 12 + 'px' }"
               @click="onTocClick(t.id)"
+              @mouseenter="(e) => {
+                (e.currentTarget as HTMLElement).style.color = 'var(--nb-copper-deep)';
+                (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--nb-copper-soft)'
+              }"
+              @mouseleave="(e) => {
+                (e.currentTarget as HTMLElement).style.color = 'var(--nb-ink-mute)';
+                (e.currentTarget as HTMLElement).style.backgroundColor = ''
+              }"
             >
               {{ t.text }}
             </button>
@@ -181,51 +238,78 @@ const onTocClick = (id: string) => {
         </ul>
       </aside>
       <div
-        class="prose prose-sm max-w-none flex-1 overflow-y-auto px-5 py-4 text-[13px] leading-7 text-slate-800
-               prose-headings:tracking-tight prose-headings:text-slate-900 prose-headings:scroll-mt-4
-               prose-strong:text-slate-900 prose-code:text-blue-700 prose-code:bg-blue-50
-               prose-code:rounded prose-code:px-1
-               prose-pre:bg-slate-950 prose-pre:text-slate-100
-               prose-a:text-blue-600 prose-a:no-underline hover:prose-a:underline
-               prose-img:rounded-lg prose-img:border prose-img:border-slate-200"
+        class="nb-scroll nb-prose flex-1 overflow-y-auto px-8 py-7"
+        style="max-width: none;"
         v-html="renderedHtml"
       />
     </div>
 
-    <!-- 代码：行号 + 高亮容器 -->
+    <!-- 代码：行号 + 暗色稿 -->
     <pre
       v-else-if="previewKind === 'code'"
-      class="m-0 flex-1 overflow-auto bg-slate-950 p-0 font-mono text-[11.5px] leading-5 text-slate-100"
+      class="nb-scroll m-0 flex-1 overflow-auto p-0 nb-mono text-[11.5px] leading-[1.6]"
+      style="background-color: #2A2825; color: #F4F0E6;"
     ><code class="block">
         <span
           v-for="(line, i) in codeLines"
           :key="i"
           class="grid grid-cols-[3rem_1fr] gap-2"
-        ><span class="select-none border-r border-slate-800/60 pr-2 text-right text-slate-500 tabular-nums">{{ i + 1 }}</span><span class="whitespace-pre-wrap pr-4">{{ line || ' ' }}</span></span>
+        ><span
+          class="select-none border-r pr-2 text-right tabular-nums"
+          style="border-color: rgba(244, 240, 230, 0.08); color: rgba(244, 240, 230, 0.35);"
+        >{{ i + 1 }}</span><span class="whitespace-pre-wrap pr-4">{{ line || ' ' }}</span></span>
       </code></pre>
 
     <!-- CSV 表格 -->
-    <div v-else-if="previewKind === 'table'" class="flex-1 overflow-auto">
-      <table class="min-w-full border-separate border-spacing-0 font-mono text-[11.5px]">
-        <thead class="sticky top-0 bg-slate-50">
-          <tr>
-            <th class="border-b border-slate-200 bg-slate-50 px-2 py-1.5 text-left text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">#</th>
+    <div v-else-if="previewKind === 'table'" class="nb-scroll flex-1 overflow-auto">
+      <table class="min-w-full border-separate border-spacing-0 nb-mono text-[11.5px]">
+        <thead class="sticky top-0">
+          <tr style="background-color: var(--nb-paper-tint);">
+            <th
+              class="border-b px-2.5 py-2 text-left nb-mono text-[9.5px]"
+              style="
+                border-color: var(--nb-rule-strong);
+                color: var(--nb-ink-mute);
+                letter-spacing: 0.18em;
+                font-weight: 700;
+              "
+            >
+              #
+            </th>
             <th
               v-for="(_h, i) in csvCells[0] || []"
               :key="i"
-              class="border-b border-slate-200 bg-slate-50 px-2 py-1.5 text-left text-[11px] font-bold tracking-tight text-slate-700"
+              class="border-b px-2.5 py-2 text-left text-[10.5px]"
+              style="
+                border-color: var(--nb-rule-strong);
+                color: var(--nb-ink);
+                letter-spacing: 0.06em;
+                font-weight: 700;
+              "
             >
               {{ csvCells[0]?.[i] }}
             </th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(row, ri) in csvCells.slice(1)" :key="ri" class="hover:bg-slate-50/60">
-            <td class="border-b border-slate-100 px-2 py-1 text-[10px] text-slate-400 tabular-nums">{{ ri + 1 }}</td>
+          <tr
+            v-for="(row, ri) in csvCells.slice(1)"
+            :key="ri"
+            class="transition"
+            @mouseenter="(e) => (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--nb-paper-tint)'"
+            @mouseleave="(e) => (e.currentTarget as HTMLElement).style.backgroundColor = ''"
+          >
+            <td
+              class="border-b px-2.5 py-1 text-[10px] tabular-nums"
+              style="border-color: var(--nb-rule); color: var(--nb-ink-faint);"
+            >
+              {{ ri + 1 }}
+            </td>
             <td
               v-for="(cell, ci) in row"
               :key="ci"
-              class="border-b border-slate-100 px-2 py-1 text-slate-700"
+              class="border-b px-2.5 py-1"
+              style="border-color: var(--nb-rule); color: var(--nb-ink-soft);"
             >
               {{ cell }}
             </td>
@@ -235,35 +319,87 @@ const onTocClick = (id: string) => {
     </div>
 
     <!-- 图片 -->
-    <div v-else-if="previewKind === 'image'" class="flex flex-1 items-center justify-center bg-[radial-gradient(circle_at_center,_rgba(15,23,42,0.04),_transparent_60%)] p-4">
+    <div
+      v-else-if="previewKind === 'image'"
+      class="flex flex-1 items-center justify-center p-6"
+      style="
+        background-image:
+          radial-gradient(circle at center, transparent 0%, rgba(61, 57, 41, 0.04) 100%);
+      "
+    >
       <img
         v-if="content"
         :src="content"
         :alt="selectedPath ?? ''"
-        class="max-h-full max-w-full rounded-lg border border-slate-200 shadow-sm"
+        class="max-h-full max-w-full rounded-[3px] border"
+        style="border-color: var(--nb-rule-strong); box-shadow: 0 12px 40px -20px rgba(61, 57, 41, 0.25);"
       />
-      <div v-else class="text-[12px] text-slate-500">图片正在加载…</div>
+      <div
+        v-else
+        class="nb-display-italic text-[13px]"
+        style="color: var(--nb-ink-mute);"
+      >
+        图片正在加载…
+      </div>
     </div>
 
     <!-- meta / parquet-meta -->
-    <div v-else class="flex-1 p-5">
-      <div class="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+    <div v-else class="flex-1 p-6">
+      <div
+        class="rounded-[3px] border p-5"
+        style="border-color: var(--nb-rule); background-color: var(--nb-card);"
+      >
         <div class="flex items-center gap-2">
-          <Info :size="14" class="text-slate-500" />
-          <span class="text-[13px] font-semibold text-slate-800">文件信息</span>
+          <Info :size="13" :stroke-width="1.6" style="color: var(--nb-copper-deep);" />
+          <span
+            class="nb-eyebrow"
+            style="font-size: 10px; letter-spacing: 0.22em; color: var(--nb-ink);"
+          >
+            File / 文件信息
+          </span>
         </div>
-        <dl class="mt-3 grid grid-cols-[80px_1fr] gap-y-1.5 text-[12px]">
-          <dt class="text-slate-500">路径</dt>
-          <dd class="font-mono text-slate-800">{{ selectedPath }}</dd>
-          <dt class="text-slate-500">大小</dt>
-          <dd class="font-mono tabular-nums text-slate-800">{{ formatSize(meta?.size) }}</dd>
-          <dt class="text-slate-500">修改时间</dt>
-          <dd class="font-mono text-slate-800">{{ formatTimestamp(meta?.modifiedAt) }}</dd>
+        <div class="mt-4 nb-rule" />
+        <dl class="mt-4 grid grid-cols-[80px_1fr] gap-y-2.5 text-[12px]">
+          <dt
+            class="nb-mono text-[10px]"
+            style="color: var(--nb-ink-faint); letter-spacing: 0.14em; font-weight: 700;"
+          >
+            PATH
+          </dt>
+          <dd class="nb-mono" style="color: var(--nb-ink); word-break: break-all;">
+            {{ selectedPath }}
+          </dd>
+          <dt
+            class="nb-mono text-[10px]"
+            style="color: var(--nb-ink-faint); letter-spacing: 0.14em; font-weight: 700;"
+          >
+            SIZE
+          </dt>
+          <dd class="nb-mono tabular-nums" style="color: var(--nb-ink);">
+            {{ formatSize(meta?.size) }}
+          </dd>
+          <dt
+            class="nb-mono text-[10px]"
+            style="color: var(--nb-ink-faint); letter-spacing: 0.14em; font-weight: 700;"
+          >
+            MTIME
+          </dt>
+          <dd class="nb-mono" style="color: var(--nb-ink);">
+            {{ formatTimestamp(meta?.modifiedAt) }}
+          </dd>
         </dl>
-        <p v-if="previewKind === 'parquet-meta'" class="mt-4 text-[11.5px] leading-5 text-slate-500">
+        <p
+          v-if="previewKind === 'parquet-meta'"
+          class="nb-display-italic mt-5 text-[12.5px] leading-6"
+          style="color: var(--nb-ink-mute);"
+        >
           Parquet/Arrow 格式的内容预览未在 M1 实装。可下载后用本地工具或让 Agent 通过 python_exec 读取。
         </p>
-        <p v-else class="mt-4 text-[11.5px] leading-5 text-slate-500">
+        <p
+          v-else
+          class="nb-display-italic mt-5 text-[12.5px] leading-6"
+          style="color: var(--nb-ink-mute);"
+        >
           此格式不支持预览。可点击下载到本地查看。
         </p>
       </div>

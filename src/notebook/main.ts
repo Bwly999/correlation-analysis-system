@@ -7,5 +7,6 @@
 import { createApp } from 'vue'
 import App from './App.vue'
 import '../style/main.css'
+import './style/notebook.css'
 
 createApp(App).mount('#notebook-root')
