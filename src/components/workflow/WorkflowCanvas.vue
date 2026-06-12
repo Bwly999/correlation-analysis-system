@@ -86,9 +86,9 @@ const isNodeResult = (v: unknown): v is NodeResult =>
 
 const availableNotebookSources = computed<NotebookDataSource[]>(() =>
   store.nodes
-    .filter((node) => isNodeResult(node.data.output))
+    .filter((node) => isNodeResult(store.getNodeOutput(node.id)))
     .map((node) => {
-      const result = node.data.output as NodeResult
+      const result = store.getNodeOutput(node.id) as NodeResult
       const rowCount =
         result.kind === 'table' && Array.isArray(result.payload)
           ? result.payload.length
@@ -121,7 +121,8 @@ const availableNotebookSources = computed<NotebookDataSource[]>(() =>
 
 const handleStartNotebook = async (source: NotebookDataSource) => {
   const node = store.nodes.find((n) => n.id === source.id)
-  if (!node || !isNodeResult(node.data.output)) {
+  const nodeOutput = store.getNodeOutput(source.id)
+  if (!node || !isNodeResult(nodeOutput)) {
     toast.add({
       severity: 'error',
       summary: '无法启动笔记本',
@@ -131,7 +132,7 @@ const handleStartNotebook = async (source: NotebookDataSource) => {
     return
   }
   try {
-    const csvImport = nodeResultToCsv(node.data.output, {
+    const csvImport = nodeResultToCsv(nodeOutput, {
       sourceKind: 'canvas-node',
       sourceLabel: source.label,
     })
