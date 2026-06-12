@@ -22,7 +22,7 @@
  *   └──────────────────────────────────────────────────┘
  */
 
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useWorkspaceTree } from '../composables/useWorkspaceTree'
 import { useFreshFileTracker } from '../composables/useFreshFileTracker'
 import { useNotebookShortcuts } from '../composables/useNotebookShortcuts'
@@ -42,12 +42,20 @@ import TodoPanel from './TodoPanel.vue'
 import ConnectionBanner from './ConnectionBanner.vue'
 import NotebookToast from './NotebookToast.vue'
 import ConfirmDialog from './ConfirmDialog.vue'
+import NotebookConversationSidebar from './NotebookConversationSidebar.vue'
+import type { NotebookConversation } from '../types/messageStream'
 
 const props = defineProps<{
   opfsRoot: OpfsDirectoryHandle
   session?: NotebookSessionVm
   /** 旧协议兼容：传简单消息列表时自动包装成 session */
   messages?: NotebookMessage[]
+  /** 历史对话列表（左栏使用）；不传则视为空 */
+  conversations?: NotebookConversation[]
+  /** 当前激活的对话 id */
+  activeConversationId?: string | null
+  /** 工作区标签（左栏底栏） */
+  workspaceLabel?: string
 }>()
 
 const emit = defineEmits<{
@@ -59,6 +67,10 @@ const emit = defineEmits<{
   askUserSubmit: [payload: { askId: string; optionId: string; text?: string }]
   askUserCancel: [askId: string]
   stopExec: []
+  newConversation: []
+  selectConversation: [id: string]
+  customize: []
+  openWorkspaceMenu: []
 }>()
 
 // ──────────────────────────────────────────────
@@ -201,6 +213,36 @@ watch(leftRatio, (v) => {
   if (typeof localStorage !== 'undefined') localStorage.setItem(splitKey, String(v))
 })
 
+// 对话侧栏折叠：localStorage 记忆 + ⌘/Ctrl + . 快捷键
+const convCollapseKey = 'notebook:layout:convCollapsed'
+const convCollapsed = ref<boolean>(
+  typeof localStorage !== 'undefined'
+    ? localStorage.getItem(convCollapseKey) === '1'
+    : false,
+)
+watch(convCollapsed, (v) => {
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem(convCollapseKey, v ? '1' : '0')
+  }
+})
+const onToggleConvCollapsed = () => {
+  convCollapsed.value = !convCollapsed.value
+}
+const onConvShortcut = (e: KeyboardEvent) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === '.') {
+    e.preventDefault()
+    onToggleConvCollapsed()
+  }
+}
+if (typeof window !== 'undefined') {
+  window.addEventListener('keydown', onConvShortcut)
+}
+onBeforeUnmount(() => {
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('keydown', onConvShortcut)
+  }
+})
+
 const onSplitDrag = (e: PointerEvent) => {
   const root = (e.currentTarget as HTMLElement).closest('[data-split-root]') as HTMLElement | null
   if (!root) return
@@ -290,8 +332,23 @@ const onSend = (text: string) => emit('send', text)
 
     <ConnectionBanner :state="session.connection" />
 
-    <!-- 主区：三栏 -->
-    <div data-split-root class="relative flex min-h-0 flex-1">
+    <!-- 主区：对话栏 + 消息流 + Workspace -->
+    <div class="flex min-h-0 flex-1">
+      <!-- 左侧对话选择栏（可收起） -->
+      <NotebookConversationSidebar
+        :conversations="props.conversations ?? []"
+        :active-id="props.activeConversationId ?? null"
+        :collapsed="convCollapsed"
+        :workspace-label="props.workspaceLabel"
+        @toggle-collapsed="onToggleConvCollapsed"
+        @new-session="emit('newConversation')"
+        @select-conversation="(id) => emit('selectConversation', id)"
+        @customize="emit('customize')"
+        @open-workspace-menu="emit('openWorkspaceMenu')"
+      />
+
+      <!-- 右侧：消息流 + Workspace（保留原拖拽分隔） -->
+      <div data-split-root class="relative flex min-h-0 flex-1">
       <!-- 左栏：消息流 + 悬浮 TodoPanel + 悬浮 Input -->
       <section
         class="relative flex min-h-0 flex-col border-r"
@@ -378,6 +435,7 @@ const onSend = (text: string) => emit('send', text)
           </div>
         </div>
       </section>
+      </div>
     </div>
 
     <NotebookStatusBar

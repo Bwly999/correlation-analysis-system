@@ -214,3 +214,22 @@ export interface NotebookSessionVm {
   /** 网络/连接状态 */
   connection: 'online' | 'reconnecting' | 'offline'
 }
+
+// ──────────────────────────────────────────────
+// 对话列表（左侧 sidebar 用）
+// ──────────────────────────────────────────────
+
+/**
+ * 一条历史对话的展示态。
+ *
+ * 列表由父站灌入：本组件只负责呈现与触发选择/新建/自定义事件，
+ * 不持有真实持久化逻辑。
+ */
+export interface NotebookConversation {
+  id: string
+  title: string
+  /** 最后活动时间（ms）— 列表按此倒序 */
+  updatedAt: number
+  /** 简短摘要，未使用时为空 */
+  preview?: string
+}

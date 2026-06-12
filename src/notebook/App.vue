@@ -17,7 +17,7 @@ import NotebookView from './components/NotebookView.vue'
 import { createMemOpfsRoot } from './shared/__tests__/memOpfs'
 import { ensureWorkspaceTree, writeFile, type OpfsDirectoryHandle } from './shared/opfsAccess'
 import { demoSession, demoLoading, demoLoadFailed } from './fixtures/demoSession'
-import type { NotebookSessionVm } from './types/messageStream'
+import type { NotebookConversation, NotebookSessionVm } from './types/messageStream'
 import PocApp from './PocApp.vue'
 
 const params = new URLSearchParams(window.location.search)
@@ -25,6 +25,31 @@ const mode = params.get('demo') ?? 'ux'
 
 const opfsRoot = ref<OpfsDirectoryHandle | null>(null)
 const session = ref<NotebookSessionVm>(demoSession)
+
+// 演示态对话列表：列出几条历史会话，匹配 Claude Desktop 设计
+const conversations = ref<NotebookConversation[]>([
+  {
+    id: 'c-current',
+    title: '用户流失因子探索分析',
+    updatedAt: Date.now(),
+  },
+  {
+    id: 'c-1',
+    title: '画布节点与运行时联调',
+    updatedAt: Date.now() - 1000 * 60 * 60 * 4,
+  },
+  {
+    id: 'c-2',
+    title: '看板 A/B 对比草稿',
+    updatedAt: Date.now() - 1000 * 60 * 60 * 28,
+  },
+  {
+    id: 'c-3',
+    title: '复购率单调性专题',
+    updatedAt: Date.now() - 1000 * 60 * 60 * 72,
+  },
+])
+const activeConversationId = ref<string>('c-current')
 
 onMounted(async () => {
   if (mode === 'poc') return
@@ -151,6 +176,9 @@ const isPoc = computed(() => mode === 'poc')
     v-else-if="opfsRoot"
     :opfs-root="opfsRoot"
     :session="session"
+    :conversations="conversations"
+    :active-conversation-id="activeConversationId"
+    workspace-label="相关性分析"
     @close="() => undefined"
     @restart="() => session = { ...session, runtime: { ...session.runtime, recentlyRestarted: true, cellCount: 0, memoryMb: 0 } }"
     @download="() => undefined"
@@ -159,5 +187,9 @@ const isPoc = computed(() => mode === 'poc')
     @ask-user-cancel="() => undefined"
     @stop-exec="() => undefined"
     @rename="(v) => session = { ...session, title: v }"
+    @new-conversation="() => undefined"
+    @select-conversation="(id) => (activeConversationId = id)"
+    @customize="() => undefined"
+    @open-workspace-menu="() => undefined"
   />
 </template>

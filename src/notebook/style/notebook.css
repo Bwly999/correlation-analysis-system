@@ -13,12 +13,12 @@
 
 /* —— Theme tokens ———————————————————————————————————————————— */
 :root {
-  /* 纸面与墨色（参考 Claude Desktop：暖中性，几乎不偏黄） */
-  --nb-paper:        #FAFAF8;   /* 主背景：暖白 */
-  --nb-paper-tint:   #F5F4F1;   /* 副本：略深暖白 */
-  --nb-sidebar:      #F2F1ED;   /* 侧栏：极淡暖灰 */
+  /* 纸面与墨色（参考 Claude Desktop：中性微冷白，去暖黄调） */
+  --nb-paper:        #FBFBFA;   /* 主背景：近中性白 */
+  --nb-paper-tint:   #F5F5F3;   /* 副本：略深中性 */
+  --nb-sidebar:      #F1F1EF;   /* 侧栏：中性浅灰 */
   --nb-card:         #FFFFFF;
-  --nb-overlay:      rgba(40, 40, 38, 0.06);
+  --nb-overlay:      rgba(40, 40, 40, 0.06);
 
   --nb-ink:          #1F1F1D;   /* 标题：近黑中性 */
   --nb-ink-soft:     #3D3D3B;   /* 正文：中性深灰，去棕调 */
