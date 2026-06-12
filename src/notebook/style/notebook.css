@@ -13,21 +13,21 @@
 
 /* —— Theme tokens ———————————————————————————————————————————— */
 :root {
-  /* 纸面与墨色 */
-  --nb-paper:        #FAF9F5;   /* 主背景：奶油纸 */
-  --nb-paper-tint:   #F5F2E9;   /* 副本：略深的米黄 */
-  --nb-sidebar:      #F0EEE6;   /* 侧栏：暖米 */
+  /* 纸面与墨色（参考 Claude Desktop：暖中性，几乎不偏黄） */
+  --nb-paper:        #FAFAF8;   /* 主背景：暖白 */
+  --nb-paper-tint:   #F5F4F1;   /* 副本：略深暖白 */
+  --nb-sidebar:      #F2F1ED;   /* 侧栏：极淡暖灰 */
   --nb-card:         #FFFFFF;
-  --nb-overlay:      rgba(61, 57, 41, 0.06);
+  --nb-overlay:      rgba(40, 40, 38, 0.06);
 
-  --nb-ink:          #2A2825;   /* 标题墨色 */
-  --nb-ink-soft:     #3D3929;   /* 正文棕墨 */
-  --nb-ink-mute:     #6B6354;   /* 次要文字 */
-  --nb-ink-faint:    #9A9180;   /* 时间戳 / 占位 */
+  --nb-ink:          #1F1F1D;   /* 标题：近黑中性 */
+  --nb-ink-soft:     #3D3D3B;   /* 正文：中性深灰，去棕调 */
+  --nb-ink-mute:     #6E6E6A;   /* 次要文字 */
+  --nb-ink-faint:    #9C9A95;   /* 时间戳 / 占位 */
 
   /* hairlines */
-  --nb-rule:         rgba(61, 57, 41, 0.10);
-  --nb-rule-strong:  rgba(61, 57, 41, 0.18);
+  --nb-rule:         rgba(40, 40, 38, 0.10);
+  --nb-rule-strong:  rgba(40, 40, 38, 0.18);
 
   /* 强调色 */
   --nb-copper:       #CC785C;   /* 主品牌：铜橙 */
@@ -61,9 +61,9 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
-  opacity: 0.4;
+  opacity: 0.28;
   mix-blend-mode: multiply;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.24 0 0 0 0 0.22 0 0 0 0 0.16 0 0 0 0.05 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.16 0 0 0 0 0.16 0 0 0 0 0.15 0 0 0 0.05 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
 }
 
 /* —— Typography helpers ———————————————————————————————————— */
@@ -196,8 +196,9 @@
   color: var(--nb-copper-deep);
 }
 .nb-prose pre {
-  background-color: #2A2825;
-  color: #F4F0E6;
+  background-color: var(--nb-paper-tint);
+  color: var(--nb-ink);
+  border: 1px solid var(--nb-rule);
   border-radius: 4px;
   padding: 14px 16px;
   overflow-x: auto;
@@ -284,13 +285,13 @@
 }
 .nb-scroll::-webkit-scrollbar-track { background: transparent; }
 .nb-scroll::-webkit-scrollbar-thumb {
-  background: rgba(61, 57, 41, 0.14);
+  background: rgba(40, 40, 38, 0.14);
   border-radius: 999px;
   border: 2px solid transparent;
   background-clip: padding-box;
 }
 .nb-scroll::-webkit-scrollbar-thumb:hover {
-  background: rgba(61, 57, 41, 0.28);
+  background: rgba(40, 40, 38, 0.28);
   background-clip: padding-box;
   border: 2px solid transparent;
 }

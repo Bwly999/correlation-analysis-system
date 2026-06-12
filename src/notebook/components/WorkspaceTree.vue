@@ -165,7 +165,7 @@ const groupMeta = (name: string): { icon: Component; label: string } => {
       >
         <header
           class="flex items-center justify-between px-4 py-1.5"
-          style="background-color: rgba(61, 57, 41, 0.04);"
+          style="background-color: rgba(40, 40, 38, 0.04);"
         >
           <div class="flex items-center gap-2">
             <component
@@ -194,7 +194,11 @@ const groupMeta = (name: string): { icon: Component; label: string } => {
             {{ group.files.length }}
           </span>
         </header>
-        <ul v-if="group.files.length" class="py-1">
+        <ul
+          v-if="group.files.length"
+          class="py-1"
+          style="background-color: var(--nb-paper);"
+        >
           <li
             v-for="f in group.files"
             :key="f.path"
@@ -210,7 +214,7 @@ const groupMeta = (name: string): { icon: Component; label: string } => {
             :data-path="f.path"
             @click="emit('select', f.path)"
             @mouseenter="(e) => {
-              if (selectedPath !== f.path) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(61, 57, 41, 0.04)'
+              if (selectedPath !== f.path) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(40, 40, 38, 0.04)'
             }"
             @mouseleave="(e) => {
               if (selectedPath !== f.path) (e.currentTarget as HTMLElement).style.backgroundColor = ''

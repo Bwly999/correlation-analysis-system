@@ -244,11 +244,11 @@ const onTocClick = (id: string) => {
       />
     </div>
 
-    <!-- 代码：行号 + 暗色稿 -->
+    <!-- 代码：行号 + 浅色稿 -->
     <pre
       v-else-if="previewKind === 'code'"
       class="nb-scroll m-0 flex-1 overflow-auto p-0 nb-mono text-[11.5px] leading-[1.6]"
-      style="background-color: #2A2825; color: #F4F0E6;"
+      style="background-color: var(--nb-paper-tint); color: var(--nb-ink);"
     ><code class="block">
         <span
           v-for="(line, i) in codeLines"
@@ -256,7 +256,7 @@ const onTocClick = (id: string) => {
           class="grid grid-cols-[3rem_1fr] gap-2"
         ><span
           class="select-none border-r pr-2 text-right tabular-nums"
-          style="border-color: rgba(244, 240, 230, 0.08); color: rgba(244, 240, 230, 0.35);"
+          style="border-color: var(--nb-rule); color: var(--nb-ink-faint);"
         >{{ i + 1 }}</span><span class="whitespace-pre-wrap pr-4">{{ line || ' ' }}</span></span>
       </code></pre>
 
@@ -324,7 +324,7 @@ const onTocClick = (id: string) => {
       class="flex flex-1 items-center justify-center p-6"
       style="
         background-image:
-          radial-gradient(circle at center, transparent 0%, rgba(61, 57, 41, 0.04) 100%);
+          radial-gradient(circle at center, transparent 0%, rgba(40, 40, 38, 0.04) 100%);
       "
     >
       <img
@@ -332,7 +332,7 @@ const onTocClick = (id: string) => {
         :src="content"
         :alt="selectedPath ?? ''"
         class="max-h-full max-w-full rounded-[3px] border"
-        style="border-color: var(--nb-rule-strong); box-shadow: 0 12px 40px -20px rgba(61, 57, 41, 0.25);"
+        style="border-color: var(--nb-rule-strong); box-shadow: 0 12px 40px -20px rgba(40, 40, 38, 0.25);"
       />
       <div
         v-else

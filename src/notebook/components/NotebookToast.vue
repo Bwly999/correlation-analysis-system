@@ -70,7 +70,7 @@ const styleFor = (k: NotebookToastSpec['kind']) => {
         style="
           background-color: var(--nb-card);
           border-color: var(--nb-rule-strong);
-          box-shadow: 0 24px 48px -16px rgba(61, 57, 41, 0.32);
+          box-shadow: 0 24px 48px -16px rgba(40, 40, 38, 0.32);
         "
       >
         <!-- 顶部色条 -->

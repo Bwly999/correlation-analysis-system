@@ -119,7 +119,7 @@ const todayLabel = computed(() => {
     <!-- 正文消息流 -->
     <ul
       v-else
-      class="mx-auto max-w-[760px] space-y-8 px-10 pb-10"
+      class="mx-auto max-w-[760px] space-y-8 px-10 pb-[220px]"
     >
       <li
         v-for="(m, idx) in messages"

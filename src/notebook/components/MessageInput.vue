@@ -2,9 +2,9 @@
 /**
  * MessageInput.vue
  *
- * 消息输入框：Ctrl/⌘+Enter 发送，遇到 ask_user 暂停时禁用。
+ * 消息输入：悬浮卡片样式（参考 Codex），Ctrl/⌘+Enter 发送，遇到 ask_user 暂停时禁用。
  *
- * 视觉风格 ▸ 稿纸的最后一行：双线分隔上方稿件，铜色细横线作为输入区域的 baseline。
+ * 视觉风格 ▸ 圆角白卡 + 柔和阴影；放在消息流底部上方浮起。
  */
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ArrowUp, Lock } from 'lucide-vue-next'
@@ -63,98 +63,70 @@ const charCount = computed(() => text.value.length)
 
 <template>
   <div
-    class="relative px-10 pt-5 pb-6"
-    style="background: linear-gradient(180deg, transparent 0%, var(--nb-paper-tint) 100%);"
+    class="rounded-[12px] border transition-colors"
+    :style="
+      awaitingUser
+        ? {
+            borderColor: 'rgba(204, 120, 92, 0.4)',
+            backgroundColor: 'var(--nb-card)',
+            boxShadow: '0 12px 32px -16px rgba(40, 40, 38, 0.18), 0 2px 6px -3px rgba(40, 40, 38, 0.08)',
+          }
+        : {
+            borderColor: 'var(--nb-rule-strong)',
+            backgroundColor: 'var(--nb-card)',
+            boxShadow: '0 12px 32px -16px rgba(40, 40, 38, 0.18), 0 2px 6px -3px rgba(40, 40, 38, 0.08)',
+          }
+    "
   >
-    <!-- 双线 baseline（编辑稿感） -->
-    <div class="mx-auto mb-3 max-w-[680px]">
-      <div class="nb-rule-double" />
-    </div>
-
-    <div class="mx-auto max-w-[680px]">
-      <div class="flex items-center justify-between">
-        <span
-          class="nb-eyebrow"
-          style="
-            font-size: 9.5px;
-            letter-spacing: 0.26em;
-            color: var(--nb-ink-mute);
-          "
-        >
-          Compose / 撰写
-        </span>
-        <div
-          class="flex items-center gap-2 nb-mono text-[10px]"
-          style="color: var(--nb-ink-faint); letter-spacing: 0.06em;"
-        >
-          <Lock v-if="awaitingUser" :size="10" :stroke-width="1.8" />
-          <span v-if="awaitingUser" style="color: var(--nb-copper-deep);">
-            等待回答
-          </span>
-          <span v-else>⌘ + Enter 发送 · ⌘ + K 聚焦</span>
-        </div>
-      </div>
-
+    <textarea
+      ref="inputRef"
+      v-model="text"
+      rows="2"
+      :disabled="awaitingUser"
+      :placeholder="placeholder"
+      class="nb-focus block w-full resize-none rounded-t-[12px] bg-transparent px-4 pt-3 pb-2 text-[14px] leading-[1.7] outline-none disabled:cursor-not-allowed"
+      style="
+        color: var(--nb-ink);
+        font-family: var(--nb-font-sans);
+      "
+      @keydown="onKeydown"
+    />
+    <div
+      class="flex items-center justify-between gap-3 px-3 py-2"
+    >
       <div
-        class="mt-2 rounded-[3px] border transition-colors"
+        class="flex items-center gap-2 nb-mono text-[10.5px]"
+        style="color: var(--nb-ink-faint); letter-spacing: 0.06em;"
+      >
+        <Lock v-if="awaitingUser" :size="10" :stroke-width="1.8" />
+        <span v-if="awaitingUser" style="color: var(--nb-copper-deep);">
+          等待回答
+        </span>
+        <span v-else>⌘ + Enter 发送 · ⌘ + K 聚焦</span>
+        <span v-if="charCount > 0" style="color: var(--nb-rule-strong);">·</span>
+        <span v-if="charCount > 0" class="tabular-nums">{{ charCount }} 字</span>
+      </div>
+      <button
+        class="nb-focus inline-flex h-8 w-8 items-center justify-center rounded-full transition disabled:cursor-not-allowed"
         :style="
-          awaitingUser
+          !text.trim() || awaitingUser
             ? {
-                borderColor: 'rgba(204, 120, 92, 0.4)',
-                backgroundColor: 'var(--nb-copper-soft)',
+                backgroundColor: 'var(--nb-paper-tint)',
+                color: 'var(--nb-ink-faint)',
+                border: '1px solid var(--nb-rule)',
               }
             : {
-                borderColor: 'var(--nb-rule-strong)',
-                backgroundColor: 'var(--nb-card)',
+                backgroundColor: 'var(--nb-ink)',
+                color: 'var(--nb-paper)',
+                border: '1px solid var(--nb-ink)',
               }
         "
+        :disabled="!text.trim() || awaitingUser"
+        :title="awaitingUser ? '等待回答' : '发送 (⌘+Enter)'"
+        @click="onSend"
       >
-        <textarea
-          ref="inputRef"
-          v-model="text"
-          rows="2"
-          :disabled="awaitingUser"
-          :placeholder="placeholder"
-          class="nb-focus block w-full resize-none rounded-t-[3px] bg-transparent px-4 py-3 text-[14px] leading-[1.7] outline-none disabled:cursor-not-allowed"
-          style="
-            color: var(--nb-ink);
-            font-family: var(--nb-font-sans);
-          "
-          @keydown="onKeydown"
-        />
-        <div
-          class="flex items-center justify-between gap-3 border-t px-3 py-2"
-          style="border-color: var(--nb-rule);"
-        >
-          <span
-            class="nb-mono text-[10px] tabular-nums"
-            style="color: var(--nb-ink-faint); letter-spacing: 0.04em;"
-          >
-            {{ charCount }} 字
-          </span>
-          <button
-            class="nb-focus inline-flex items-center gap-1.5 rounded-[3px] px-3 py-1.5 text-[12px] font-semibold transition disabled:cursor-not-allowed"
-            :style="
-              !text.trim() || awaitingUser
-                ? {
-                    backgroundColor: 'var(--nb-paper-tint)',
-                    color: 'var(--nb-ink-faint)',
-                    border: '1px solid var(--nb-rule)',
-                  }
-                : {
-                    backgroundColor: 'var(--nb-ink)',
-                    color: 'var(--nb-paper)',
-                    border: '1px solid var(--nb-ink)',
-                  }
-            "
-            :disabled="!text.trim() || awaitingUser"
-            @click="onSend"
-          >
-            <span>发送</span>
-            <ArrowUp :size="12" :stroke-width="2" />
-          </button>
-        </div>
-      </div>
+        <ArrowUp :size="14" :stroke-width="2.2" />
+      </button>
     </div>
   </div>
 </template>

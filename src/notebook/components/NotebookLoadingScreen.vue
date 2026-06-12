@@ -57,8 +57,8 @@ const detail = computed(() => {
       style="
         opacity: 0.5;
         background-image:
-          linear-gradient(rgba(61, 57, 41, 0.06) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(61, 57, 41, 0.06) 1px, transparent 1px);
+          linear-gradient(rgba(40, 40, 38, 0.06) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(40, 40, 38, 0.06) 1px, transparent 1px);
         background-size: 40px 40px;
       "
     />
@@ -70,7 +70,7 @@ const detail = computed(() => {
       style="
         background-color: var(--nb-card);
         border-color: var(--nb-rule-strong);
-        box-shadow: 0 40px 80px -30px rgba(61, 57, 41, 0.25);
+        box-shadow: 0 40px 80px -30px rgba(40, 40, 38, 0.25);
       "
     >
       <!-- 顶部铜色细线 -->

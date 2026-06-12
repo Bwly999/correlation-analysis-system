@@ -2,7 +2,9 @@
 /**
  * TodoPanel.vue
  *
- * §3.1 左下常驻 TODO 面板：折叠 / 展开；展示当前 in_progress 摘要。
+ * §3.1 悬浮 TODO 卡片：折叠 / 展开；展示当前 in_progress 摘要。
+ *
+ * 视觉风格 ▸ 圆角玻璃卡，叠在消息流之上、输入卡上方。
  */
 import { computed, ref } from 'vue'
 import { ChevronUp } from 'lucide-vue-next'
@@ -24,49 +26,58 @@ const completedCount = computed(() => props.todos.filter((t) => t.state === 'com
 <template>
   <div
     v-if="todos.length"
-    class="border-t"
-    style="border-color: var(--nb-rule); background-color: var(--nb-paper);"
+    class="rounded-[12px] border overflow-hidden"
+    style="
+      border-color: var(--nb-rule-strong);
+      background-color: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      box-shadow: 0 8px 24px -14px rgba(40, 40, 38, 0.16), 0 1px 3px -1px rgba(40, 40, 38, 0.06);
+    "
   >
     <button
-      class="nb-focus flex w-full items-center gap-3 px-5 py-2.5 text-left transition hover:bg-[color:var(--nb-overlay)]"
+      class="nb-focus flex w-full items-center gap-2.5 px-4 py-2 text-left transition hover:bg-[color:var(--nb-overlay)]"
       @click="open = !open"
     >
-      <!-- 罗马数字风格的章节编号 -->
       <span
-        class="nb-display text-[14px] italic"
+        class="nb-display text-[13px] italic"
         style="color: var(--nb-copper-deep); font-weight: 500;"
       >
         §
       </span>
       <span
         class="nb-eyebrow"
-        style="font-size: 10px; letter-spacing: 0.22em; color: var(--nb-ink);"
+        style="font-size: 9.5px; letter-spacing: 0.22em; color: var(--nb-ink);"
       >
         Plan / 分析计划
       </span>
       <span
         v-if="inProgress && !open"
-        class="nb-display-italic truncate text-[12.5px]"
+        class="nb-display-italic truncate text-[12px]"
         style="color: var(--nb-copper-deep);"
       >
         — 当前：{{ inProgress.text }}
       </span>
       <span class="flex-1" />
       <span
-        class="nb-mono text-[10.5px] tabular-nums"
+        class="nb-mono text-[10px] tabular-nums"
         style="color: var(--nb-ink-faint); letter-spacing: 0.12em; font-weight: 700;"
       >
         {{ completedCount }} / {{ todos.length }}
       </span>
       <ChevronUp
-        :size="14"
+        :size="13"
         :stroke-width="1.6"
         class="transition-transform"
         style="color: var(--nb-ink-faint);"
         :class="open ? '' : 'rotate-180'"
       />
     </button>
-    <div v-if="open" class="px-5 pb-3 pt-1">
+    <div
+      v-if="open"
+      class="border-t px-4 pb-2.5 pt-2"
+      style="border-color: var(--nb-rule);"
+    >
       <TodoListView :items="todos" />
     </div>
   </div>

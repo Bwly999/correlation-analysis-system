@@ -292,9 +292,9 @@ const onSend = (text: string) => emit('send', text)
 
     <!-- 主区：三栏 -->
     <div data-split-root class="relative flex min-h-0 flex-1">
-      <!-- 左栏：消息流 + TodoPanel + Input -->
+      <!-- 左栏：消息流 + 悬浮 TodoPanel + 悬浮 Input -->
       <section
-        class="flex min-h-0 flex-col border-r"
+        class="relative flex min-h-0 flex-col border-r"
         style="
           flex-basis: 60%;
           background-color: var(--nb-paper);
@@ -303,22 +303,32 @@ const onSend = (text: string) => emit('send', text)
         :style="{ flexBasis: leftRatio * 100 + '%' }"
         aria-label="消息流"
       >
-        <div class="flex min-h-0 flex-1 flex-col">
-          <NotebookMessageStream
-            class="flex-1 min-h-0"
-            :messages="session.messages"
-            :session-title="session.title"
-            @ask-user-submit="(p) => emit('askUserSubmit', p)"
-            @ask-user-cancel="(id) => emit('askUserCancel', id)"
-            @open-in-tree="onSelect"
-          />
-          <TodoPanel :todos="session.todos" />
-        </div>
-        <MessageInput
-          :awaiting-user="awaitingUser"
-          :agent-running="session.runtime.isRunning"
-          @send="onSend"
+        <NotebookMessageStream
+          class="absolute inset-0"
+          :messages="session.messages"
+          :session-title="session.title"
+          @ask-user-submit="(p) => emit('askUserSubmit', p)"
+          @ask-user-cancel="(id) => emit('askUserCancel', id)"
+          @open-in-tree="onSelect"
         />
+
+        <!-- 悬浮输入区域：Todo 卡 + 输入卡 -->
+        <div
+          class="pointer-events-none absolute inset-x-0 bottom-0 px-6 pb-5"
+          style="
+            background: linear-gradient(180deg, transparent 0%, var(--nb-paper) 60%);
+            padding-top: 48px;
+          "
+        >
+          <div class="pointer-events-auto mx-auto flex max-w-[720px] flex-col gap-2.5">
+            <TodoPanel :todos="session.todos" />
+            <MessageInput
+              :awaiting-user="awaitingUser"
+              :agent-running="session.runtime.isRunning"
+              @send="onSend"
+            />
+          </div>
+        </div>
       </section>
 
       <!-- 拖拽分隔条 -->

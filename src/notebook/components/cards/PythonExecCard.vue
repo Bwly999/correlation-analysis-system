@@ -80,7 +80,7 @@ const showStderr = computed(() => props.tool.stderr.length > 0 || props.tool.err
         <pre
           v-if="codeOpen"
           class="overflow-x-auto border-t nb-mono px-3 py-2 text-[11.5px] leading-5"
-          style="border-color: var(--nb-rule); background-color: #2A2825; color: #F4F0E6;"
+          style="border-color: var(--nb-rule); background-color: var(--nb-paper-tint); color: var(--nb-ink);"
         >{{ tool.code }}</pre>
         <pre
           v-else
@@ -109,12 +109,12 @@ const showStderr = computed(() => props.tool.stderr.length > 0 || props.tool.err
       <!-- stdout -->
       <section
         v-if="showStdoutToggle"
-        class="rounded-[3px] overflow-hidden"
-        style="background-color: #2A2825;"
+        class="rounded-[3px] overflow-hidden border"
+        style="border-color: var(--nb-rule); background-color: var(--nb-paper-tint);"
       >
         <div
           class="flex items-center gap-2 px-2.5 py-1.5 nb-mono text-[10px]"
-          style="color: rgba(244, 240, 230, 0.6); letter-spacing: 0.16em;"
+          style="color: var(--nb-ink-mute); letter-spacing: 0.16em; border-bottom: 1px solid var(--nb-rule);"
         >
           <Terminal :size="10" :stroke-width="1.6" />
           <span style="font-weight: 700;">STDOUT</span>
@@ -124,8 +124,8 @@ const showStderr = computed(() => props.tool.stderr.length > 0 || props.tool.err
           </span>
         </div>
         <div
-          class="nb-scroll overflow-auto border-t nb-mono px-3 py-2 text-[11.5px] leading-5"
-          style="border-color: rgba(244, 240, 230, 0.08); color: #F4F0E6;"
+          class="nb-scroll overflow-auto nb-mono px-3 py-2 text-[11.5px] leading-5"
+          style="color: var(--nb-ink);"
           :style="{ maxHeight: stdoutExpanded ? 'none' : STDOUT_HEIGHT_LIMIT + 'px' }"
         >
           <pre class="whitespace-pre-wrap">{{ tool.stdout }}</pre>
@@ -134,9 +134,9 @@ const showStderr = computed(() => props.tool.stderr.length > 0 || props.tool.err
           v-if="tool.stdout.length > 800"
           class="block w-full border-t py-1 text-center nb-mono text-[10px] transition hover:opacity-100"
           style="
-            border-color: rgba(244, 240, 230, 0.08);
-            background-color: rgba(244, 240, 230, 0.04);
-            color: rgba(244, 240, 230, 0.6);
+            border-color: var(--nb-rule);
+            background-color: var(--nb-paper);
+            color: var(--nb-ink-mute);
             letter-spacing: 0.14em;
             font-weight: 600;
           "

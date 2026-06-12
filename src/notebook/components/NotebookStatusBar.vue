@@ -107,7 +107,7 @@ const memPercent = computed(() => {
       <span
         v-if="memoryLimitMb"
         class="relative h-1 w-16 overflow-hidden rounded-full"
-        style="background-color: rgba(61, 57, 41, 0.1);"
+        style="background-color: rgba(40, 40, 38, 0.1);"
       >
         <span
           class="absolute inset-y-0 left-0 rounded-full transition-[width] duration-500"
