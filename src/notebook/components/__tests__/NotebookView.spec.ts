@@ -6,15 +6,15 @@
  *   - 文件树展示 OPFS 中的文件
  *   - 点击文本文件 → 预览面板显示内容
  *   - 点击 markdown 文件 → 预览面板渲染 HTML
+ *   - 传入 messages 时正确渲染对话块
  */
 
 import { describe, it, expect } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import NotebookView from '../NotebookView.vue'
-import {
-  createMemOpfsRoot,
-} from '../../shared/__tests__/memOpfs'
+import { createMemOpfsRoot } from '../../shared/__tests__/memOpfs'
 import { ensureWorkspaceTree, writeFile } from '../../shared/opfsAccess'
+import type { NotebookMessage } from '../../types/messageStream'
 
 const buildEnv = async () => {
   const root = createMemOpfsRoot()
@@ -29,7 +29,7 @@ describe('NotebookView', () => {
     const root = await buildEnv()
     const wrapper = mount(NotebookView, { props: { opfsRoot: root } })
     await flushPromises()
-    expect(wrapper.text()).toContain('消息流')
+    expect(wrapper.text()).toContain('准备就绪')
     expect(wrapper.text()).toContain('Workspace')
     expect(wrapper.text()).toContain('预览')
   })
@@ -48,6 +48,7 @@ describe('NotebookView', () => {
     await flushPromises()
 
     const pyRow = wrapper.find('[data-path="scripts/explore.py"]')
+    expect(pyRow.exists()).toBe(true)
     await pyRow.trigger('click')
     await flushPromises()
 
@@ -63,19 +64,23 @@ describe('NotebookView', () => {
     await mdRow.trigger('click')
     await flushPromises()
 
-    expect(wrapper.html()).toMatch(/<h1>\s*报告\s*<\/h1>/)
+    // h1 会带上自动生成的 id
+    expect(wrapper.html()).toMatch(/<h1[^>]*>\s*报告\s*<\/h1>/)
   })
 
   it('messages 不为空时渲染消息内容', async () => {
     const root = await buildEnv()
-    const wrapper = mount(NotebookView, {
-      props: {
-        opfsRoot: root,
-        messages: [
-          { id: 'm-1', role: 'user', content: '你好' },
-          { id: 'm-2', role: 'assistant', content: '收到，开始分析' },
-        ],
+    const messages: NotebookMessage[] = [
+      { id: 'm-1', role: 'user', text: '你好', at: 0 },
+      {
+        id: 'm-2',
+        role: 'assistant',
+        at: 1,
+        blocks: [{ kind: 'text', data: { id: 'b-1', text: '收到，开始分析' } }],
       },
+    ]
+    const wrapper = mount(NotebookView, {
+      props: { opfsRoot: root, messages },
     })
     await flushPromises()
     expect(wrapper.text()).toContain('你好')
