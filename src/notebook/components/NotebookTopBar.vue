@@ -88,7 +88,7 @@ const isLive = computed(() =>
   >
     <!-- 关闭 -->
     <button
-      class="nb-focus group inline-flex h-8 items-center gap-1.5 rounded-[3px] border px-2.5 text-[12px] font-medium transition"
+      class="nb-focus group inline-flex h-8 items-center gap-1.5 rounded-[var(--nb-radius-sm)] border px-2.5 text-[12px] font-medium transition"
       style="border-color: var(--nb-rule); color: var(--nb-ink-mute); background-color: var(--nb-card);"
       aria-label="关闭笔记本"
       @click="emit('close')"
@@ -100,7 +100,7 @@ const isLive = computed(() =>
     <!-- 品牌点：铜色三角形 + Notebook 字样 -->
     <div class="flex items-center gap-2.5">
       <span
-        class="flex h-7 w-7 items-center justify-center rounded-[3px]"
+        class="flex h-7 w-7 items-center justify-center rounded-[var(--nb-radius-xs)]"
         style="background-color: var(--nb-ink); color: var(--nb-paper);"
       >
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
@@ -133,7 +133,7 @@ const isLive = computed(() =>
         {{ title }}
       </h1>
       <button
-        class="nb-focus inline-flex h-6 w-6 items-center justify-center rounded-[3px] opacity-0 transition group-hover:opacity-100"
+        class="nb-focus inline-flex h-6 w-6 items-center justify-center rounded-[var(--nb-radius-xs)] opacity-0 transition group-hover:opacity-100"
         style="color: var(--nb-ink-faint);"
         aria-label="重命名"
         @click="beginEdit"
@@ -150,20 +150,20 @@ const isLive = computed(() =>
     <div v-else class="flex flex-1 items-center gap-1.5">
       <input
         v-model="draft"
-        class="nb-display nb-focus h-8 flex-1 max-w-md rounded-[3px] border bg-transparent px-2.5 text-[17px] font-medium outline-none"
+        class="nb-display nb-focus h-8 flex-1 max-w-md rounded-[var(--nb-radius-sm)] border bg-transparent px-2.5 text-[17px] font-medium outline-none"
         style="border-color: var(--nb-copper); color: var(--nb-ink);"
         @keydown.enter="commit"
         @keydown.esc="cancel"
       />
       <button
-        class="flex h-7 w-7 items-center justify-center rounded-[3px]"
+        class="flex h-7 w-7 items-center justify-center rounded-[var(--nb-radius-xs)]"
         style="color: var(--nb-sage); background-color: var(--nb-sage-soft);"
         @click="commit"
       >
         <Check :size="13" :stroke-width="2" />
       </button>
       <button
-        class="flex h-7 w-7 items-center justify-center rounded-[3px]"
+        class="flex h-7 w-7 items-center justify-center rounded-[var(--nb-radius-xs)]"
         style="color: var(--nb-ink-mute);"
         @click="cancel"
       >
@@ -193,7 +193,7 @@ const isLive = computed(() =>
     <!-- 操作 -->
     <div class="flex items-center gap-1">
       <button
-        class="nb-focus inline-flex h-8 items-center gap-1.5 rounded-[3px] px-2.5 text-[12px] font-medium transition hover:bg-[color:var(--nb-overlay)]"
+        class="nb-focus inline-flex h-8 items-center gap-1.5 rounded-[var(--nb-radius-sm)] px-2.5 text-[12px] font-medium transition hover:bg-[color:var(--nb-overlay)]"
         style="color: var(--nb-ink-mute);"
         title="重启 Python 环境 (⌘/Ctrl + R)"
         @click="emit('restart')"
@@ -202,7 +202,7 @@ const isLive = computed(() =>
         <span>重启</span>
       </button>
       <button
-        class="nb-focus inline-flex h-8 items-center gap-1.5 rounded-[3px] px-2.5 text-[12px] font-medium transition hover:bg-[color:var(--nb-overlay)]"
+        class="nb-focus inline-flex h-8 items-center gap-1.5 rounded-[var(--nb-radius-sm)] px-2.5 text-[12px] font-medium transition hover:bg-[color:var(--nb-overlay)]"
         style="color: var(--nb-ink-mute);"
         title="下载工作区 (⌘/Ctrl + S)"
         @click="emit('download')"

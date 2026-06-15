@@ -63,18 +63,18 @@ const charCount = computed(() => text.value.length)
 
 <template>
   <div
-    class="rounded-[12px] border transition-colors"
+    class="rounded-[var(--nb-radius-lg)] border transition-colors"
     :style="
       awaitingUser
         ? {
-            borderColor: 'rgba(204, 120, 92, 0.4)',
+            borderColor: 'rgba(199, 107, 74, 0.45)',
             backgroundColor: 'var(--nb-card)',
-            boxShadow: '0 12px 32px -16px rgba(40, 40, 38, 0.18), 0 2px 6px -3px rgba(40, 40, 38, 0.08)',
+            boxShadow: 'var(--nb-shadow-lg), 0 0 0 1px var(--nb-copper-glow)',
           }
         : {
             borderColor: 'var(--nb-rule-strong)',
             backgroundColor: 'var(--nb-card)',
-            boxShadow: '0 12px 32px -16px rgba(40, 40, 38, 0.18), 0 2px 6px -3px rgba(40, 40, 38, 0.08)',
+            boxShadow: 'var(--nb-shadow-lg)',
           }
     "
   >
@@ -84,7 +84,7 @@ const charCount = computed(() => text.value.length)
       rows="2"
       :disabled="awaitingUser"
       :placeholder="placeholder"
-      class="nb-focus block w-full resize-none rounded-t-[12px] bg-transparent px-4 pt-3 pb-2 text-[14px] leading-[1.7] outline-none disabled:cursor-not-allowed"
+      class="nb-focus block w-full resize-none rounded-t-[var(--nb-radius-lg)] bg-transparent px-4 pt-3 pb-2 text-[14px] leading-[1.7] outline-none disabled:cursor-not-allowed"
       style="
         color: var(--nb-ink);
         font-family: var(--nb-font-sans);

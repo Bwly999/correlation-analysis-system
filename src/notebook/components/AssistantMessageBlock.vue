@@ -41,7 +41,7 @@ const onAskSubmit = (askId: string, payload: { optionId: string; text?: string }
     <!-- 左侧装饰：铜色细竖线 -->
     <span
       class="absolute left-0 top-1 bottom-0 w-px"
-      style="background-color: var(--nb-copper); opacity: 0.4;"
+      style="background-color: var(--nb-copper); opacity: 0.45;"
     />
 
     <!-- 眉签 -->
@@ -52,7 +52,7 @@ const onAskSubmit = (askId: string, payload: { optionId: string; text?: string }
       >
         ASSISTANT
       </span>
-      <span class="h-px flex-1 max-w-12" style="background-color: var(--nb-copper); opacity: 0.4;" />
+      <span class="h-px flex-1 max-w-12" style="background-color: var(--nb-copper); opacity: 0.45;" />
     </div>
 
     <div class="space-y-3.5">

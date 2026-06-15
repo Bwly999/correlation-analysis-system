@@ -67,13 +67,13 @@ const answeredOptionLabel = computed(() => {
 
 <template>
   <div
-    class="relative overflow-hidden rounded-[3px] border"
+    class="relative overflow-hidden rounded-[var(--nb-radius-sm)] border"
     :style="
       isPending
         ? {
-            borderColor: 'rgba(204, 120, 92, 0.45)',
+            borderColor: 'rgba(199, 107, 74, 0.45)',
             backgroundColor: 'var(--nb-card)',
-            boxShadow: '0 24px 50px -28px rgba(204, 120, 92, 0.45)',
+            boxShadow: 'var(--nb-shadow-copper)',
           }
         : {
             borderColor: 'var(--nb-rule)',
@@ -90,7 +90,7 @@ const answeredOptionLabel = computed(() => {
     <!-- 头部 -->
     <header class="flex items-start gap-3 px-5 pt-4 pb-3">
       <span
-        class="flex h-9 w-9 shrink-0 items-center justify-center rounded-[3px]"
+        class="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--nb-radius-sm)]"
         :style="
           isPending
             ? { backgroundColor: 'var(--nb-copper)', color: 'white' }
@@ -133,7 +133,7 @@ const answeredOptionLabel = computed(() => {
     <ul class="space-y-2 px-5">
       <li v-for="(opt, idx) in block.options" :key="opt.id">
         <button
-          class="group relative flex w-full items-start gap-3 rounded-[3px] border bg-white px-3.5 py-2.5 text-left transition"
+          class="group relative flex w-full items-start gap-3 rounded-[var(--nb-radius-sm)] border bg-white px-3.5 py-2.5 text-left transition"
           :style="
             !isPending
               ? {
@@ -145,7 +145,7 @@ const answeredOptionLabel = computed(() => {
               ? {
                   borderColor: 'var(--nb-copper)',
                   backgroundColor: 'var(--nb-copper-soft)',
-                  boxShadow: '0 4px 16px -8px rgba(204, 120, 92, 0.5)',
+                  boxShadow: '0 4px 16px -8px rgba(199, 107, 74, 0.5)',
                 }
               : { borderColor: 'var(--nb-rule)' }
           "
@@ -153,7 +153,7 @@ const answeredOptionLabel = computed(() => {
           @click="isPending && (selectedId = opt.id)"
           @mouseenter="(e) => {
             if (isPending && selectedId !== opt.id) {
-              (e.currentTarget as HTMLElement).style.borderColor = 'rgba(204, 120, 92, 0.4)';
+              (e.currentTarget as HTMLElement).style.borderColor = 'rgba(199, 107, 74, 0.4)';
               (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--nb-paper-tint)'
             }
           }"
@@ -224,7 +224,7 @@ const answeredOptionLabel = computed(() => {
 
       <li v-if="block.allowFreeText && isPending">
         <button
-          class="flex w-full items-center gap-3 rounded-[3px] border-[1.5px] border-dashed bg-white/60 px-3.5 py-2.5 text-left transition"
+          class="flex w-full items-center gap-3 rounded-[var(--nb-radius-sm)] border-[1.5px] border-dashed bg-white/60 px-3.5 py-2.5 text-left transition"
           :style="
             selectedId === '__free_text__'
               ? { borderColor: 'var(--nb-copper)', backgroundColor: 'var(--nb-copper-soft)' }
@@ -271,7 +271,7 @@ const answeredOptionLabel = computed(() => {
       <textarea
         v-model="customText"
         rows="2"
-        class="nb-focus block w-full resize-none rounded-[3px] border bg-white px-3 py-2 text-[13px] leading-5 outline-none transition"
+        class="nb-focus block w-full resize-none rounded-[var(--nb-radius-sm)] border bg-white px-3 py-2 text-[13px] leading-5 outline-none transition"
         style="
           border-color: var(--nb-rule-strong);
           color: var(--nb-ink);
@@ -312,17 +312,17 @@ const answeredOptionLabel = computed(() => {
       style="border-color: var(--nb-rule); background-color: var(--nb-paper-tint);"
     >
       <button
-        class="nb-focus rounded-[3px] border px-3 py-1.5 text-[12px] font-medium transition hover:bg-[color:var(--nb-overlay)]"
+        class="nb-focus rounded-[var(--nb-radius-sm)] border px-3 py-1.5 text-[12px] font-medium transition hover:bg-[color:var(--nb-overlay)]"
         style="border-color: var(--nb-rule); color: var(--nb-ink-mute); background-color: var(--nb-card);"
         @click="emit('cancel')"
       >
         取消
       </button>
       <button
-        class="nb-focus inline-flex items-center gap-1.5 rounded-[3px] px-4 py-1.5 text-[12px] font-semibold text-white transition disabled:cursor-not-allowed"
+        class="nb-focus inline-flex items-center gap-1.5 rounded-[var(--nb-radius-sm)] px-4 py-1.5 text-[12px] font-semibold text-white transition disabled:cursor-not-allowed"
         :style="
           canSubmit
-            ? { backgroundColor: 'var(--nb-copper)', border: '1px solid var(--nb-copper)' }
+            ? { backgroundColor: 'var(--nb-copper)', border: '1px solid var(--nb-copper)', boxShadow: 'var(--nb-shadow-sm)' }
             : {
                 backgroundColor: 'var(--nb-paper-tint)',
                 border: '1px solid var(--nb-rule)',

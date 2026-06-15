@@ -26,13 +26,13 @@ const completedCount = computed(() => props.todos.filter((t) => t.state === 'com
 <template>
   <div
     v-if="todos.length"
-    class="rounded-[12px] border overflow-hidden"
+    class="rounded-[var(--nb-radius-md)] border overflow-hidden"
     style="
       border-color: var(--nb-rule-strong);
       background-color: rgba(255, 255, 255, 0.92);
       backdrop-filter: blur(8px);
       -webkit-backdrop-filter: blur(8px);
-      box-shadow: 0 8px 24px -14px rgba(40, 40, 38, 0.16), 0 1px 3px -1px rgba(40, 40, 38, 0.06);
+      box-shadow: var(--nb-shadow-md);
     "
   >
     <button

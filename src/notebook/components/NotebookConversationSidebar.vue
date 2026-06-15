@@ -107,12 +107,13 @@ const widthStyle = computed(() =>
       :class="collapsed ? 'px-2' : 'px-3'"
     >
       <button
-        class="nb-focus group flex h-9 items-center rounded-[4px] text-[13px] transition"
+        class="nb-focus group flex h-9 items-center rounded-[var(--nb-radius-sm)] text-[13px] transition"
         :class="collapsed ? 'justify-center w-9 mx-auto' : 'gap-2.5 px-2.5'"
         style="
           color: var(--nb-ink);
           background-color: var(--nb-card);
           border: 1px solid var(--nb-rule);
+          box-shadow: var(--nb-shadow-sm);
         "
         title="新建对话"
         aria-label="新建对话"
@@ -124,7 +125,7 @@ const widthStyle = computed(() =>
         </span>
       </button>
       <button
-        class="nb-focus group flex h-9 items-center rounded-[4px] text-[12.5px] transition hover:bg-[color:var(--nb-overlay)]"
+        class="nb-focus group flex h-9 items-center rounded-[var(--nb-radius-sm)] text-[12.5px] transition hover:bg-[color:var(--nb-overlay)]"
         :class="collapsed ? 'justify-center w-9 mx-auto' : 'gap-2.5 px-2.5'"
         style="color: var(--nb-ink-mute);"
         title="自定义偏好"
@@ -174,7 +175,7 @@ const widthStyle = computed(() =>
           :style="{ animationDelay: Math.min(idx, 8) * 24 + 'ms' }"
         >
           <button
-            class="nb-conv-item nb-focus group flex h-8 w-full items-center rounded-[4px] text-[12.5px] transition"
+            class="nb-conv-item nb-focus group flex h-8 w-full items-center rounded-[var(--nb-radius-sm)] text-[12.5px] transition"
             :class="[
               collapsed ? 'justify-center px-0' : 'gap-2 px-2.5',
               conv.id === activeId ? 'is-active' : '',
@@ -238,11 +239,11 @@ const widthStyle = computed(() =>
         @click="emit('openWorkspaceMenu')"
       >
         <span
-          class="flex h-7 w-7 shrink-0 items-center justify-center rounded-[4px]"
+          class="flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--nb-radius-xs)]"
           style="
             background-color: var(--nb-copper-soft);
             color: var(--nb-copper-deep);
-            border: 1px solid rgba(204, 120, 92, 0.28);
+            border: 1px solid rgba(199, 107, 74, 0.26);
           "
         >
           <Briefcase :size="13" :stroke-width="1.7" />
@@ -277,7 +278,7 @@ const widthStyle = computed(() =>
 
 <style scoped>
 .nb-conv-sidebar {
-  background-color: #EDEDEB;
+  background-color: var(--nb-sidebar);
   border-color: var(--nb-rule);
   /* 展开/收起的丝滑过渡：宽度 + 内含元素的轻微淡入 */
   transition:
@@ -303,11 +304,12 @@ const widthStyle = computed(() =>
   transition: transform 200ms cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 .nb-conv-item:hover {
-  background-color: rgba(40, 40, 38, 0.05);
+  background-color: var(--nb-overlay);
 }
 .nb-conv-item.is-active {
   background-color: var(--nb-card);
   border-color: var(--nb-rule);
+  box-shadow: var(--nb-shadow-sm);
 }
 .nb-conv-item.is-active::before {
   transform: translateY(-50%) scaleY(1);

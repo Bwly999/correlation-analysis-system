@@ -165,7 +165,7 @@ const groupMeta = (name: string): { icon: Component; label: string } => {
       >
         <header
           class="flex items-center justify-between px-4 py-1.5"
-          style="background-color: rgba(40, 40, 38, 0.04);"
+          style="background-color: var(--nb-overlay);"
         >
           <div class="flex items-center gap-2">
             <component
@@ -214,7 +214,7 @@ const groupMeta = (name: string): { icon: Component; label: string } => {
             :data-path="f.path"
             @click="emit('select', f.path)"
             @mouseenter="(e) => {
-              if (selectedPath !== f.path) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(40, 40, 38, 0.04)'
+              if (selectedPath !== f.path) (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--nb-overlay)'
             }"
             @mouseleave="(e) => {
               if (selectedPath !== f.path) (e.currentTarget as HTMLElement).style.backgroundColor = ''
@@ -262,11 +262,11 @@ const groupMeta = (name: string): { icon: Component; label: string } => {
 
             <!-- hover 工具栏 -->
             <div
-              class="invisible absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5 rounded-[3px] border px-1 py-0.5 opacity-0 transition group-hover:visible group-hover:opacity-100"
-              style="border-color: var(--nb-rule-strong); background-color: var(--nb-card);"
+              class="invisible absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5 rounded-[var(--nb-radius-xs)] border px-1 py-0.5 opacity-0 transition group-hover:visible group-hover:opacity-100"
+              style="border-color: var(--nb-rule-strong); background-color: var(--nb-card); box-shadow: var(--nb-shadow-sm);"
             >
               <button
-                class="flex h-5 w-5 items-center justify-center rounded-[2px] transition"
+                class="flex h-5 w-5 items-center justify-center rounded-[var(--nb-radius-xs)] transition"
                 style="color: var(--nb-ink-mute);"
                 title="预览"
                 @click.stop="emit('select', f.path)"
@@ -282,7 +282,7 @@ const groupMeta = (name: string): { icon: Component; label: string } => {
                 <Eye :size="11" :stroke-width="1.6" />
               </button>
               <button
-                class="flex h-5 w-5 items-center justify-center rounded-[2px] transition"
+                class="flex h-5 w-5 items-center justify-center rounded-[var(--nb-radius-xs)] transition"
                 style="color: var(--nb-ink-mute);"
                 title="下载"
                 @click.stop="emit('download', f.path)"
@@ -298,7 +298,7 @@ const groupMeta = (name: string): { icon: Component; label: string } => {
                 <Download :size="11" :stroke-width="1.6" />
               </button>
               <button
-                class="flex h-5 w-5 items-center justify-center rounded-[2px] transition"
+                class="flex h-5 w-5 items-center justify-center rounded-[var(--nb-radius-xs)] transition"
                 style="color: var(--nb-ink-mute);"
                 title="拷贝路径"
                 @click.stop="emit('copyPath', f.path)"

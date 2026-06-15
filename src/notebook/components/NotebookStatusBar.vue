@@ -107,7 +107,7 @@ const memPercent = computed(() => {
       <span
         v-if="memoryLimitMb"
         class="relative h-1 w-16 overflow-hidden rounded-full"
-        style="background-color: rgba(40, 40, 38, 0.1);"
+        style="background-color: var(--nb-overlay-strong);"
       >
         <span
           class="absolute inset-y-0 left-0 rounded-full transition-[width] duration-500"
@@ -145,13 +145,13 @@ const memPercent = computed(() => {
     <div class="flex-1" />
 
     <button
-      class="nb-focus inline-flex items-center gap-1.5 rounded-[3px] border px-2.5 py-1 text-[10.5px] font-semibold transition disabled:cursor-not-allowed"
+      class="nb-focus inline-flex items-center gap-1.5 rounded-[var(--nb-radius-sm)] border px-2.5 py-1 text-[10.5px] font-semibold transition disabled:cursor-not-allowed"
       :style="
         stats.isRunning
           ? {
-              borderColor: 'rgba(184, 84, 80, 0.4)',
+              borderColor: 'rgba(176, 82, 78, 0.4)',
               backgroundColor: 'var(--nb-clay-soft)',
-              color: '#8B3A37',
+              color: '#823331',
             }
           : {
               borderColor: 'var(--nb-rule)',

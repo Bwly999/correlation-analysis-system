@@ -13,32 +13,52 @@
 
 /* —— Theme tokens ———————————————————————————————————————————— */
 :root {
-  /* 纸面与墨色（参考 Claude Desktop：中性微冷白，去暖黄调） */
-  --nb-paper:        #FBFBFA;   /* 主背景：近中性白 */
-  --nb-paper-tint:   #F5F5F3;   /* 副本：略深中性 */
-  --nb-sidebar:      #F1F1EF;   /* 侧栏：中性浅灰 */
-  --nb-card:         #FFFFFF;
-  --nb-overlay:      rgba(40, 40, 40, 0.06);
+  /*
+   * 空间层次（从远到近）：
+   *   sidebar (最远，沉) → paper-tint (分区/底栏) → paper (主稿面) → card (浮起)
+   * 每档之间留出可感知的明度差，避免"一片灰白分不清边界"。
+   */
+  --nb-sidebar:      #F2EFEA;   /* 远景：暖灰，沉下去 */
+  --nb-paper-tint:   #F7F4EF;   /* 次背景：分区底栏、骨架 */
+  --nb-paper:        #FBF9F5;   /* 主稿面：暖白纸 */
+  --nb-card:         #FFFFFFFE; /* 卡片：近白，叠加极淡透明感 */
+  --nb-overlay:      rgba(60, 50, 40, 0.06);
+  --nb-overlay-strong: rgba(60, 50, 40, 0.10);
 
-  --nb-ink:          #1F1F1D;   /* 标题：近黑中性 */
-  --nb-ink-soft:     #3D3D3B;   /* 正文：中性深灰，去棕调 */
-  --nb-ink-mute:     #6E6E6A;   /* 次要文字 */
-  --nb-ink-faint:    #9C9A95;   /* 时间戳 / 占位 */
+  /* 墨色：略带暖底的中性灰阶（避免纯冷灰与暖纸割裂） */
+  --nb-ink:          #2A2722;   /* 标题：暖近黑 */
+  --nb-ink-soft:     #46423C;   /* 正文 */
+  --nb-ink-mute:     #7A7368;   /* 次要文字 */
+  --nb-ink-faint:    #ABA496;   /* 时间戳 / 占位 */
 
-  /* hairlines */
-  --nb-rule:         rgba(40, 40, 38, 0.10);
-  --nb-rule-strong:  rgba(40, 40, 38, 0.18);
+  /* hairlines：用暖色相的半透明，避免冷硬的纯灰边 */
+  --nb-rule:         rgba(60, 50, 40, 0.09);
+  --nb-rule-strong:  rgba(60, 50, 40, 0.16);
 
-  /* 强调色 */
-  --nb-copper:       #CC785C;   /* 主品牌：铜橙 */
-  --nb-copper-deep:  #B25E42;
-  --nb-copper-soft:  #F4E5DD;
-  --nb-sage:         #7A8B70;   /* 成功 */
-  --nb-sage-soft:    #E5EBDF;
-  --nb-clay:         #B85450;   /* 错误 */
-  --nb-clay-soft:    #F2DAD7;
-  --nb-amber:        #C58B3F;   /* 进行中 */
-  --nb-amber-soft:   #F5E6CB;
+  /* 强调色：铜橙主品牌，副色饱和度统一收一档，避免互相抢戏 */
+  --nb-copper:       #C76B4A;   /* 主品牌：铜橙 */
+  --nb-copper-deep:  #A85534;
+  --nb-copper-soft:  #F6E7DE;
+  --nb-copper-glow:  rgba(199, 107, 74, 0.12);
+  --nb-sage:         #6E8A66;   /* 成功 */
+  --nb-sage-soft:    #E2EAD9;
+  --nb-clay:         #B0524E;   /* 错误 */
+  --nb-clay-soft:    #F1D9D5;
+  --nb-amber:        #BE8536;   /* 进行中 */
+  --nb-amber-soft:   #F4E4C6;
+
+  /* —— 圆角阶梯：印刷感的方正为骨，浮起元素适度圆润 —— */
+  --nb-radius-xs:    3px;       /* 印章、chip、内联元素 */
+  --nb-radius-sm:    6px;       /* 按钮、工具卡、列表项 */
+  --nb-radius-md:    10px;      /* 浮层卡片、对话框 */
+  --nb-radius-lg:    14px;      /* 主输入框、大型面板 */
+  --nb-radius-full:  999px;
+
+  /* —— 阴影系统：3 档 elevation，全部暖底色，避免冷蓝灰投影 —— */
+  --nb-shadow-sm:    0 1px 2px -1px rgba(60, 50, 40, 0.10), 0 1px 3px -2px rgba(60, 50, 40, 0.06);
+  --nb-shadow-md:    0 4px 14px -6px rgba(60, 50, 40, 0.16), 0 2px 4px -2px rgba(60, 50, 40, 0.06);
+  --nb-shadow-lg:    0 18px 40px -16px rgba(60, 50, 40, 0.20), 0 4px 10px -6px rgba(60, 50, 40, 0.08);
+  --nb-shadow-copper: 0 12px 32px -12px rgba(199, 107, 74, 0.30), 0 2px 6px -2px rgba(199, 107, 74, 0.15);
 
   /* 字体 */
   --nb-font-display: 'Fraunces', 'Source Han Serif SC', 'Songti SC', serif;
@@ -108,40 +128,40 @@
   align-items: center;
   gap: 6px;
   padding: 3px 10px;
-  border-radius: 999px;
+  border-radius: var(--nb-radius-xs);
   border: 1px solid var(--nb-rule);
-  background-color: var(--nb-paper);
+  background-color: var(--nb-card);
   font-size: 11px;
   font-weight: 500;
   color: var(--nb-ink-mute);
   letter-spacing: 0.02em;
 }
 .nb-chip[data-tone='copper'] {
-  border-color: rgba(204, 120, 92, 0.32);
+  border-color: rgba(199, 107, 74, 0.30);
   background-color: var(--nb-copper-soft);
   color: var(--nb-copper-deep);
 }
 .nb-chip[data-tone='sage'] {
-  border-color: rgba(122, 139, 112, 0.32);
+  border-color: rgba(110, 138, 102, 0.30);
   background-color: var(--nb-sage-soft);
-  color: #4A5740;
+  color: #45603E;
 }
 .nb-chip[data-tone='clay'] {
-  border-color: rgba(184, 84, 80, 0.32);
+  border-color: rgba(176, 82, 78, 0.30);
   background-color: var(--nb-clay-soft);
-  color: #8B3A37;
+  color: #823331;
 }
 .nb-chip[data-tone='amber'] {
-  border-color: rgba(197, 139, 63, 0.34);
+  border-color: rgba(190, 133, 54, 0.32);
   background-color: var(--nb-amber-soft);
-  color: #7C5A28;
+  color: #74521F;
 }
 
 /* —— Card ———————————————————————————————————————————————— */
 .nb-card {
   background-color: var(--nb-card);
   border: 1px solid var(--nb-rule);
-  border-radius: 4px;            /* 印刷感的方正边角 */
+  border-radius: var(--nb-radius-sm);
   transition: border-color 200ms ease, box-shadow 200ms ease;
 }
 .nb-card:hover {
@@ -151,7 +171,7 @@
 /* —— Focus ring ———————————————————————————————————————————— */
 .nb-focus:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(204, 120, 92, 0.22);
+  box-shadow: 0 0 0 3px var(--nb-copper-glow);
   border-color: var(--nb-copper);
 }
 
@@ -191,15 +211,15 @@
   font-family: var(--nb-font-mono);
   font-size: 0.86em;
   padding: 1px 5px;
-  border-radius: 3px;
-  background-color: rgba(204, 120, 92, 0.10);
+  border-radius: var(--nb-radius-xs);
+  background-color: var(--nb-copper-glow);
   color: var(--nb-copper-deep);
 }
 .nb-prose pre {
   background-color: var(--nb-paper-tint);
   color: var(--nb-ink);
   border: 1px solid var(--nb-rule);
-  border-radius: 4px;
+  border-radius: var(--nb-radius-sm);
   padding: 14px 16px;
   overflow-x: auto;
   font-size: 12.5px;
@@ -213,7 +233,7 @@
 .nb-prose a {
   color: var(--nb-copper-deep);
   text-decoration: underline;
-  text-decoration-color: rgba(204, 120, 92, 0.4);
+  text-decoration-color: rgba(199, 107, 74, 0.4);
   text-underline-offset: 3px;
 }
 .nb-prose a:hover {
@@ -244,7 +264,7 @@
 .nb-prose ol { margin: 0.8em 0; padding-left: 1.4em; }
 .nb-prose li { margin: 0.3em 0; }
 .nb-prose img {
-  border-radius: 4px;
+  border-radius: var(--nb-radius-sm);
   border: 1px solid var(--nb-rule);
 }
 
@@ -285,13 +305,13 @@
 }
 .nb-scroll::-webkit-scrollbar-track { background: transparent; }
 .nb-scroll::-webkit-scrollbar-thumb {
-  background: rgba(40, 40, 38, 0.14);
+  background: rgba(60, 50, 40, 0.14);
   border-radius: 999px;
   border: 2px solid transparent;
   background-clip: padding-box;
 }
 .nb-scroll::-webkit-scrollbar-thumb:hover {
-  background: rgba(40, 40, 38, 0.28);
+  background: rgba(60, 50, 40, 0.28);
   background-clip: padding-box;
   border: 2px solid transparent;
 }

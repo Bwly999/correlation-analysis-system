@@ -45,7 +45,7 @@ const canCollapse = computed(() => props.collapsible)
 
 <template>
   <div
-    class="group relative overflow-hidden rounded-[3px] border transition"
+    class="group relative overflow-hidden rounded-[var(--nb-radius-sm)] border transition"
     style="background-color: var(--nb-card); border-color: var(--nb-rule);"
   >
     <!-- 左侧色条 -->
@@ -61,7 +61,7 @@ const canCollapse = computed(() => props.collapsible)
     >
       <slot name="leadingIcon">
         <span
-          class="flex h-6 w-6 shrink-0 items-center justify-center rounded-[3px] border"
+          class="flex h-6 w-6 shrink-0 items-center justify-center rounded-[var(--nb-radius-xs)] border"
           style="border-color: var(--nb-rule); background-color: var(--nb-paper-tint); color: var(--nb-ink-mute);"
         >
           <span class="nb-mono text-[9.5px]" style="letter-spacing: 0.04em;">fn</span>

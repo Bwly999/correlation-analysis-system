@@ -24,7 +24,7 @@ const durationLabel = computed(() => {
 
 <template>
   <div
-    class="rounded-[3px] border transition"
+    class="rounded-[var(--nb-radius-sm)] border transition"
     style="border-color: var(--nb-rule); background-color: var(--nb-paper-tint);"
   >
     <button

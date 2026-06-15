@@ -324,15 +324,15 @@ const onTocClick = (id: string) => {
       class="flex flex-1 items-center justify-center p-6"
       style="
         background-image:
-          radial-gradient(circle at center, transparent 0%, rgba(40, 40, 38, 0.04) 100%);
+          radial-gradient(circle at center, transparent 0%, var(--nb-overlay) 100%);
       "
     >
       <img
         v-if="content"
         :src="content"
         :alt="selectedPath ?? ''"
-        class="max-h-full max-w-full rounded-[3px] border"
-        style="border-color: var(--nb-rule-strong); box-shadow: 0 12px 40px -20px rgba(40, 40, 38, 0.25);"
+        class="max-h-full max-w-full rounded-[var(--nb-radius-sm)] border"
+        style="border-color: var(--nb-rule-strong); box-shadow: var(--nb-shadow-lg);"
       />
       <div
         v-else
@@ -346,8 +346,8 @@ const onTocClick = (id: string) => {
     <!-- meta / parquet-meta -->
     <div v-else class="flex-1 p-6">
       <div
-        class="rounded-[3px] border p-5"
-        style="border-color: var(--nb-rule); background-color: var(--nb-card);"
+        class="rounded-[var(--nb-radius-sm)] border p-5"
+        style="border-color: var(--nb-rule); background-color: var(--nb-card); box-shadow: var(--nb-shadow-sm);"
       >
         <div class="flex items-center gap-2">
           <Info :size="13" :stroke-width="1.6" style="color: var(--nb-copper-deep);" />
