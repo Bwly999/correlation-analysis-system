@@ -53,6 +53,7 @@
     "lowdb": "^7.0.1",
     "lucide-vue-next": "^0.577.0",
     "marked": "^15.0.12",
+    "material-icon-theme": "^5.35.0",
     "mysql2": "^3.22.2",
     "papaparse": "^5.5.3",
     "pinia": "^3.0.4",
