@@ -6,7 +6,8 @@
  *
  * 视觉风格 ▸ 编辑稿：顶部带 session 大标题 + tag 行，消息流像逐段排版的稿件。
  */
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, ref } from 'vue'
+import { watchDebounced } from '@vueuse/core'
 import type { NotebookMessage } from '../types/messageStream'
 import UserMessageBlock from './UserMessageBlock.vue'
 import AssistantMessageBlock from './AssistantMessageBlock.vue'
@@ -32,14 +33,19 @@ const onScroll = () => {
   stickToBottom = distance < 64
 }
 
-watch(
-  () => props.messages.length,
+// messages 按 token 高频更新（mapper 每次 mutate 同一引用），用 watchDebounced
+// 合并连续变更，避免每个 delta 都 deep 比较整树 + 触发一次滚动。
+// - debounce：合并突发（人眼对 ~80ms 内的滚动合并无感）
+// - maxWait：持续输出时强制触发，保证不会一直卡着不滚（trailing 默认 true 最终贴底）
+watchDebounced(
+  () => props.messages,
   async () => {
     await nextTick()
     if (stickToBottom && scrollRef.value) {
       scrollRef.value.scrollTop = scrollRef.value.scrollHeight
     }
   },
+  { deep: true, debounce: 80, maxWait: 240 },
 )
 
 const todayLabel = computed(() => {
