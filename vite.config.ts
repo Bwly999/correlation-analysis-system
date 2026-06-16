@@ -2,7 +2,7 @@ import { fileURLToPath, URL } from 'node:url'
 import { resolve } from 'node:path'
 import { createReadStream, statSync } from 'node:fs'
 
-import { defineConfig, loadEnv } from 'vite'
+import { defineConfig, loadEnv, build } from 'vite'
 import type { Plugin } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
@@ -73,15 +73,15 @@ const workflowServerDevMiddleware = (): Plugin => {
 }
 
 /**
- * Notebook Agent COI 头中间件。
+ * Notebook Agent COI 头中间件�?
  *
- * - /notebook.html、/notebook-iframe.html：注入 COOP+COEP（让页面进入 cross-origin isolated）
- * - 所有同源请求：注入 CORP=same-origin。
- *   COEP=require-corp 模式下，如果不给同源资源加 CORP 头，
- *   连 vite dev 的 /src/* / /@vite/client / Worker 脚本都会被浏览器以 ERR_BLOCKED_BY_RESPONSE 拒收。
- *   主站（/、/api/* 等）也加这个头是无害的（同源、最严格）。
+ * - /notebook.html�?notebook-iframe.html：注�?COOP+COEP（让页面进入 cross-origin isolated�?
+ * - 所有同源请求：注入 CORP=same-origin�?
+ *   COEP=require-corp 模式下，如果不给同源资源�?CORP 头，
+ *   �?vite dev �?/src/* / /@vite/client / Worker 脚本都会被浏览器�?ERR_BLOCKED_BY_RESPONSE 拒收�?
+ *   主站�?�?api/* 等）也加这个头是无害的（同源、最严格）�?
  *
- * 主站 / 不加 COOP/COEP，行为不受影响。
+ * 主站 / 不加 COOP/COEP，行为不受影响�?
  */
 const notebookCoiHeaders = (): Plugin => ({
   name: 'notebook-coi-headers',
@@ -90,8 +90,8 @@ const notebookCoiHeaders = (): Plugin => ({
     server.middlewares.use((req, res, next) => {
       const url = req.url ?? ''
 
-      // 给所有响应都加 CORP=same-origin（除非后续中间件改写）
-      // /pyodide/* 由 pyodideStaticProxy 改为 cross-origin
+      // 给所有响应都�?CORP=same-origin（除非后续中间件改写�?
+      // /pyodide/* �?pyodideStaticProxy 改为 cross-origin
       if (!res.getHeader('Cross-Origin-Resource-Policy')) {
         res.setHeader('Cross-Origin-Resource-Policy', 'same-origin')
       }
@@ -112,13 +112,40 @@ const notebookCoiHeaders = (): Plugin => ({
 })
 
 /**
- * Pyodide 资源代理（dev）。
- * 1) /pyodide/v0.27/<file> 优先从 ops/pyodide-runtime/v0.27.x 命中（完整自托管运行时）
- * 2) 若 ops 目录尚未准备，则退回 node_modules/pyodide/（仅运行时本体 + lockfile + stdlib）
- * 3) 若两者都未命中，直接返回明确错误，提示先执行 setup 脚本准备 wheel 资源。
+ * Pyodide 资源代理（dev）�?
+ * 1) /pyodide/v0.27/<file> 优先�?ops/pyodide-runtime/v0.27.x 命中（完整自托管运行时）
+ * 2) �?ops 目录尚未准备，则退�?node_modules/pyodide/（仅运行时本�?+ lockfile + stdlib�?
+ * 3) 若两者都未命中，直接返回明确错误，提示先执行 setup 脚本准备 wheel 资源�?
  *
- * 生产构建时由 ops/pyodide-runtime/ 中预先下载好的产物替代。
+ * 生产构建时由 ops/pyodide-runtime/ 中预先下载好的产物替代�?
  */
+/**
+ * 生产构建：把 src/notebook/sw.ts 编译为 dist/notebook-sw.js（IIFE 单文件）。
+ *
+ * Vite 默认不会为非入口 ts 文件生成独立 bundle；这里用 lib 模式单独 build。
+ * 注册由 src/notebook/main.ts 在 import.meta.env.PROD 下完成。
+ * 详见 docs/design-doc/notebook-agent/部署与构建.md §5.4。
+ */
+const buildNotebookSw = (): Plugin => ({
+  name: 'build-notebook-sw',
+  apply: 'build',
+  closeBundle: async () => {
+    await build({
+      configFile: false,
+      build: {
+        lib: {
+          entry: resolve(__dirname, 'src/notebook/sw.ts'),
+          formats: ['iife'],
+          fileName: () => 'notebook-sw.js',
+        },
+        outDir: resolve(__dirname, 'dist'),
+        emptyOutDir: false,
+      },
+    })
+    console.log('[notebook-sw] built -> dist/notebook-sw.js')
+  },
+})
+
 const pyodideStaticProxy = (): Plugin => {
   const PYODIDE_VERSION = 'v0.27'
   const runtimeDir = resolve(__dirname, 'ops', 'pyodide-runtime', 'v0.27.x')
@@ -145,7 +172,7 @@ const pyodideStaticProxy = (): Plugin => {
           return
         }
 
-        // 解析文件名（去 query string）
+        // 解析文件名（�?query string�?
         const fileName = url
           .slice(`/pyodide/${PYODIDE_VERSION}/`.length)
           .split('?')[0]
@@ -174,7 +201,7 @@ const pyodideStaticProxy = (): Plugin => {
           }
         }
 
-        // COEP 必须头
+        // COEP 必须�?
         res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin')
         res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp')
         res.setHeader('Content-Type', contentTypeOf(fileName))
@@ -195,12 +222,12 @@ const pyodideStaticProxy = (): Plugin => {
 
 // https://vite.dev/config/
 export default defineConfig({
-  // Notebook Worker 通过 vite ?worker import 加载，dev 下实际跑的是 module worker。
-  // Pyodide 启动时会先尝试 importScripts(pyodide.asm.js)，module worker 中此 API 不可用，
-  // 所以在 src/notebook/worker/pyodideBoot.ts 内把 importScripts shim 成 throw TypeError，
-  // 让 pyodide 走 await import('pyodide.mjs') 这条 fallback。
-  // 此处保留 format: 'iife' 主要是控制生产 build 产物的形态；
-  // 真正的加载机制由 pyodideBoot.ts 内的 shim + dynamic import 决定。
+  // Notebook Worker 通过 vite ?worker import 加载，dev 下实际跑的是 module worker�?
+  // Pyodide 启动时会先尝�?importScripts(pyodide.asm.js)，module worker 中此 API 不可用，
+  // 所以在 src/notebook/worker/pyodideBoot.ts 内把 importScripts shim �?throw TypeError�?
+  // �?pyodide �?await import('pyodide.mjs') 这条 fallback�?
+  // 此处保留 format: 'iife' 主要是控制生�?build 产物的形态；
+  // 真正的加载机制由 pyodideBoot.ts 内的 shim + dynamic import 决定�?
   worker: {
     format: 'iife',
   },
@@ -286,6 +313,7 @@ export default defineConfig({
     workflowServerDevMiddleware(),
     notebookCoiHeaders(),
     pyodideStaticProxy(),
+      buildNotebookSw(),
   ],
   resolve: {
     alias: {

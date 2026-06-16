@@ -10,3 +10,15 @@ import '../style/main.css'
 import './style/notebook.css'
 
 createApp(App).mount('#notebook-root')
+
+// 注册 Service Worker（仅生产构建；缓存 Pyodide 运行时，热启动 <=5s）
+// dev 下不走 SW：vite serve 用 pyodideStaticProxy 中间件直接服务，无需缓存层
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker
+      .register('/notebook-sw.js', { scope: '/' })
+      .catch(() => {
+        // SW 注册失败不阻塞笔记本主功能（只是少了缓存，每次重下 pyodide）
+      })
+  })
+}
