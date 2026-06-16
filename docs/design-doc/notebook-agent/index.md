@@ -77,10 +77,10 @@ Notebook Agent 是一个**独立于画布的 AI 数据分析工作站**：用户
 | Notebook 前端入口 | `notebook.html` + `src/notebook/main.ts` | iframe 内的独立 Vue 应用入口 |
 | Notebook 主站组件 | `src/components/notebookAgent/` | 主站侧的入口按钮、对话框、iframe 容器 |
 | Notebook 视图组件 | `src/notebook/components/` | iframe 内的消息流、文件树、文件预览 |
-| Pyodide Worker | `src/notebook/worker/pyodideWorker.ts` | Web Worker 内的 Pyodide kernel + RPC |
+| Pyodide Worker | `src/notebook/worker/worker.ts`（+ `pyodideBoot.ts`）| Web Worker 内的 Pyodide kernel + RPC |
 | 跨 iframe 协议 | `src/notebook/shared/parentBridge.ts` | postMessage RPC 协议（主站 ↔ iframe）|
 | Notebook Agent Gateway | `src/server/notebookAgent/gateway.ts` | 复用 Pi SDK，独立于画布主链 |
-| Notebook 工具 | `src/server/notebookAgent/tools/` | python_exec / fs_* / todo_write / ask_user spec 与执行 |
+| Notebook 工具 | `src/server/notebookAgent/tools.ts`（单文件，统一 `bridge.request` 转发壳）| python_exec / fs_* / todo_write / ask_user spec 与执行 |
 | 工具 spec（共享）| `src/shared/notebookAgentTools.ts` | 前后端共享的工具 spec |
 | HTTP 路由 | `src/server/modules/notebookAgentRoutes.ts` | `/api/notebook-agent/*` 入口 |
 | Pyodide 资源 | `dist/pyodide/v0.27/...` | 自托管的 wasm + stdlib + wheel |
@@ -92,8 +92,9 @@ Notebook Agent 是一个**独立于画布的 AI 数据分析工作站**：用户
 ### 5.1 复用
 
 - `src/server/piAgent/runtimeFactory.ts` —— 模型加载、provider 解析
-- `src/server/piAgent/safePayload.ts` —— 数据脱敏（仅画布 NodeResult 灌入时使用）
-- `src/server/piAgent/eventBridge.ts` —— SSE 事件流封装
+- `src/server/piAgent/frontendBridge.ts` —— 前端工具执行 bridge（工具调用经此转发到 iframe 执行，gateway 实际复用项）
+- `src/server/notebookAgent/eventBridge.ts` —— SSE 事件流封装（**notebook 自有同名文件**，非复用 piAgent/eventBridge.ts；因 notebook 工具执行走前端 bridge 而非画布数据通路，与 piAgent/eventBridge 实现不同）
+- ⚠️ `safePayload.ts`：notebook **不复用**（notebook 不走画布 NodeResult 数据通路，工具返回直接回 Agent）
 - 前端 `PiAgentMarkdownRenderer` / `AgGridTablePreview` / `ChartViewer` 等组件
 - 统一 axios 请求层（`src/services/httpClient.ts`）
 
@@ -102,7 +103,7 @@ Notebook Agent 是一个**独立于画布的 AI 数据分析工作站**：用户
 - 路由：`/api/notebook-agent/*` 与 `/api/pi-agent/*` 平级，零耦合
 - Session：Notebook Agent 使用独立 sessionStore，不复用 piAgent 的 session 状态机
 - 工具：spec、registry、bridge 都独立维护，不与 `src/shared/piWorkflowTools.ts` 共享
-- 前端 store：`notebookAgentStore.ts` 独立于 `piAgentStore.ts`
+- 前端状态：iframe 内状态在 `src/notebook/runtime/notebookSessionRuntime.ts` 的 `reactive(...)`（**刻意不挂 Pinia**，notebook main.ts 保持极小依赖）；Todo 用 `notebookTodoStore.ts` 工厂函数；主站侧会话逻辑在 `useNotebookSession.ts` 组合式。独立于 `piAgentStore.ts`
 
 ---
 
@@ -122,7 +123,7 @@ Notebook Agent 是一个**独立于画布的 AI 数据分析工作站**：用户
 ### 6.2 新增 Notebook 工具的步骤
 
 1. 在 `src/shared/notebookAgentTools.ts` 添加 spec
-2. 在 `src/server/notebookAgent/tools/` 实现工具的服务端 schema 与执行入口
+2. 在 `src/server/notebookAgent/tools.ts` 实现工具的服务端 schema 与执行入口（单文件，统一 `bridge.request` 转发壳）
 3. 工具如果需要前端执行（如 `data_import_from_node` 在主站侧），通过 parentBridge 转发
 4. 添加或更新工具 spec 一致性测试（前后端 registry 一一对应）
 5. 更新 [工具集协议](工具集协议.md) 文档
