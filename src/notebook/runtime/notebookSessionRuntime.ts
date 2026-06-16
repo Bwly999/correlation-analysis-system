@@ -89,6 +89,7 @@ export const createNotebookSessionRuntime = async (
 
   let eventAbortController: AbortController | null = null
   let bridgeDispose: (() => void) | null = null
+  let bridgeNotifyWorkspaceChanged: (paths: string[]) => void = () => undefined
   let pollTimer: ReturnType<typeof setInterval> | null = null
   let requestParentClose = () => undefined
 
@@ -161,7 +162,15 @@ export const createNotebookSessionRuntime = async (
     )
 
     if (event.toolName === 'python_exec_inline' || event.toolName === 'python_exec_file') {
-      void syncWorkerFilesToOpfs(['artifacts', 'reports', 'scripts']).catch(() => undefined)
+      // exec 落盘的 artifacts/reports/scripts 同步到 OPFS，
+      // 并通知主站刷新文件树（B6：savefig 闭环）
+      void syncWorkerFilesToOpfs(['artifacts', 'reports', 'scripts'])
+        .then((writtenPaths) => {
+          if (writtenPaths.length > 0) {
+            bridgeNotifyWorkspaceChanged(writtenPaths)
+          }
+        })
+        .catch(() => undefined)
     }
 
     if (event.toolName === 'fs_write' || event.toolName === 'fs_edit') {
@@ -224,6 +233,7 @@ export const createNotebookSessionRuntime = async (
       },
     })
     bridgeDispose = parentBridge.dispose
+    bridgeNotifyWorkspaceChanged = parentBridge.notifyWorkspaceChanged
     requestParentClose = parentBridge.requestParentClose
     parentBridge.sendSessionState('loading_pyodide', '正在连接 Notebook Agent')
 

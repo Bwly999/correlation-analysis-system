@@ -48,6 +48,11 @@ export interface ParentBridgeClientOptions {
 export interface ParentBridgeClient {
   /** 主动向主站推送 session 状态变化 */
   sendSessionState: (state: IframeSessionState, detail?: string) => void
+  /**
+   * 主动通知主站工作区文件发生变化（如 python_exec 落盘的 artifacts/）。
+   * 主站可据此刷新外部文件视图 / 提示"产物可回导画布"。
+   */
+  notifyWorkspaceChanged: (paths: string[]) => void
   /** iframe 内部主动请求关闭笔记本 */
   requestParentClose: () => void
   /** 卸载：解除消息监听 */
@@ -154,6 +159,10 @@ export const createParentBridgeClient = (
   return {
     sendSessionState: (state, detail) => {
       send({ kind: 'iframe.session_state', state, detail })
+    },
+    notifyWorkspaceChanged: (paths) => {
+      if (paths.length === 0) return
+      send({ kind: 'iframe.workspace_changed', paths })
     },
     requestParentClose: () => {
       send({

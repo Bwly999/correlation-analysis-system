@@ -276,4 +276,29 @@ describe('parentBridgeClient', () => {
       expect(evt.detail).toBe('环境就绪')
     })
   })
+
+  describe('notifyWorkspaceChanged', () => {
+    it('有变更路径时发 iframe.workspace_changed', () => {
+      const client = buildClient()
+      postedToParent.length = 0 // 清掉构造时的 iframe.ready
+      client.notifyWorkspaceChanged(['artifacts/plot.png', 'reports/sum.md'])
+
+      const evt = postedToParent.find(
+        (m) => 'kind' in m && m.kind === 'iframe.workspace_changed',
+      ) as Extract<IframeBridgeRequest, { kind: 'iframe.workspace_changed' }>
+      expect(evt).toBeDefined()
+      expect(evt.paths).toEqual(['artifacts/plot.png', 'reports/sum.md'])
+    })
+
+    it('空数组不发消息（避免无意义刷新）', () => {
+      const client = buildClient()
+      postedToParent.length = 0
+      client.notifyWorkspaceChanged([])
+      expect(
+        postedToParent.some(
+          (m) => 'kind' in m && m.kind === 'iframe.workspace_changed',
+        ),
+      ).toBe(false)
+    })
+  })
 })
