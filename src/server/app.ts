@@ -11,6 +11,7 @@ import { createJsTransformAgentRoutes } from './modules/jsTransformAgentRoutes.j
 import { createStorageRoutes } from './modules/storageRoutes.js'
 import { createPiAgentRoutes } from './modules/piAgentRoutes.js'
 import { createNotebookAgentRoutes } from './modules/notebookAgentRoutes.js'
+import { registerNotebookHeaders } from './notebookHeadersPlugin.js'
 import { WORKFLOW_USER_ID_HEADER, WORKFLOW_USER_NAME_HEADER } from './http/workflowHeaders.js'
 import { disposeAllPiAgentSessions } from './piAgent/gateway.js'
 import { disposeAllJsTransformAgentSessions } from './piAgent/jsTransformAgentGateway.js'
@@ -122,6 +123,10 @@ export const createServerApp = (
   void app.register(createNotebookAgentRoutes())
   void app.register(createStorageRoutes())
   void app.register(createAnalysisRoutes())
+
+  // 生产 COI 头（Notebook SharedArrayBuffer 前提）
+  // 直接 addHook 到根实例，覆盖所有路由与静态资源响应
+  void registerNotebookHeaders(app)
 
   return app
 }
