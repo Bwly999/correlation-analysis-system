@@ -66,6 +66,9 @@ dist-server/
 # pm2 日志
 deploy/logs/
 
+# ZCode / CLI 会话产物（时间戳+uuid 命名的 jsonl）
+[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T*-*.jsonl
+
 .workflow-storage
 .workflow-debug/
 test/resource/demo_data_2000x300.xlsx
