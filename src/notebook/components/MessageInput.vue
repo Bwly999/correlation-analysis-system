@@ -7,13 +7,19 @@
  * 视觉风格 ▸ 圆角白卡 + 柔和阴影；放在消息流底部上方浮起。
  */
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { ArrowUp, Lock } from 'lucide-vue-next'
+import { ArrowUp, Gauge, Lock } from 'lucide-vue-next'
 
 const props = defineProps<{
   /** 当 Agent 在 ask_user 等待回答时禁用 */
   awaitingUser: boolean
   /** 当前 Agent 是否在跑（仅显示状态，不强制禁用，让用户能补刀） */
   agentRunning: boolean
+  /** 模型上下文窗口使用情况（每轮结束由后端推送） */
+  contextUsage?: {
+    tokens: number | null
+    contextWindow: number
+    percent: number | null
+  }
 }>()
 
 const emit = defineEmits<{
@@ -59,6 +65,29 @@ onMounted(() => window.addEventListener('keydown', onCtrlK))
 onBeforeUnmount(() => window.removeEventListener('keydown', onCtrlK))
 
 const charCount = computed(() => text.value.length)
+
+// ── 上下文窗口使用情况圆环 ──
+// 无数据 / tokens 未知（紧凑后、首次响应前）→ 静态灰态图标
+const ctxHasValue = computed(
+  () => !!props.contextUsage && props.contextUsage.percent != null,
+)
+const ctxPercent = computed(() => props.contextUsage?.percent ?? 0)
+// 使用率分级复用 notebook 现有色板：<60% sage / 60-80% amber / >80% clay
+const ctxColor = computed(() => {
+  if (!ctxHasValue.value) return 'var(--nb-ink-faint)'
+  const p = ctxPercent.value
+  if (p >= 80) return 'var(--nb-clay)'
+  if (p >= 60) return 'var(--nb-amber)'
+  return 'var(--nb-sage)'
+})
+const formatK = (n: number) => (n >= 1000 ? `${Math.round(n / 1000)}k` : String(n))
+const ctxTitle = computed(() => {
+  const u = props.contextUsage
+  if (!u || u.percent == null) return '上下文使用情况待统计'
+  const used = u.tokens != null ? formatK(u.tokens) : '?'
+  const win = formatK(u.contextWindow)
+  return `上下文 ${u.percent}% · ${used} / ${win} tokens`
+})
 </script>
 
 <template>
@@ -106,27 +135,62 @@ const charCount = computed(() => text.value.length)
         <span v-if="charCount > 0" style="color: var(--nb-rule-strong);">·</span>
         <span v-if="charCount > 0" class="tabular-nums">{{ charCount }} 字</span>
       </div>
-      <button
-        class="nb-focus inline-flex h-8 w-8 items-center justify-center rounded-full transition disabled:cursor-not-allowed"
-        :style="
-          !text.trim() || awaitingUser
-            ? {
-                backgroundColor: 'var(--nb-paper-tint)',
-                color: 'var(--nb-ink-faint)',
-                border: '1px solid var(--nb-rule)',
-              }
-            : {
-                backgroundColor: 'var(--nb-ink)',
-                color: 'var(--nb-paper)',
-                border: '1px solid var(--nb-ink)',
-              }
-        "
-        :disabled="!text.trim() || awaitingUser"
-        :title="awaitingUser ? '等待回答' : '发送 (⌘+Enter)'"
-        @click="onSend"
-      >
-        <ArrowUp :size="14" :stroke-width="2.2" />
-      </button>
+      <div class="flex items-center gap-1.5">
+        <!-- 上下文窗口使用情况：圆环 Icon，紧贴发送按钮左侧 -->
+        <span
+          class="nb-focus inline-flex h-8 w-8 items-center justify-center rounded-full"
+          :title="ctxTitle"
+          role="img"
+          :aria-label="ctxTitle"
+        >
+          <template v-if="ctxHasValue">
+            <!-- 16px 圆环：stroke-dasharray 控制填充弧长 -->
+            <svg width="16" height="16" viewBox="0 0 16 16">
+              <circle
+                cx="8"
+                cy="8"
+                r="6"
+                fill="none"
+                :stroke="'var(--nb-rule-strong)'"
+                stroke-width="1.6"
+              />
+              <circle
+                cx="8"
+                cy="8"
+                r="6"
+                fill="none"
+                :stroke="ctxColor"
+                stroke-width="1.6"
+                stroke-linecap="round"
+                :stroke-dasharray="`${(ctxPercent / 100) * 2 * Math.PI * 6} ${2 * Math.PI * 6}`"
+                :transform="'rotate(-90 8 8)'"
+              />
+            </svg>
+          </template>
+          <Gauge v-else :size="14" :stroke-width="1.6" style="color: var(--nb-ink-faint);" />
+        </span>
+        <button
+          class="nb-focus inline-flex h-8 w-8 items-center justify-center rounded-full transition disabled:cursor-not-allowed"
+          :style="
+            !text.trim() || awaitingUser
+              ? {
+                  backgroundColor: 'var(--nb-paper-tint)',
+                  color: 'var(--nb-ink-faint)',
+                  border: '1px solid var(--nb-rule)',
+                }
+              : {
+                  backgroundColor: 'var(--nb-ink)',
+                  color: 'var(--nb-paper)',
+                  border: '1px solid var(--nb-ink)',
+                }
+          "
+          :disabled="!text.trim() || awaitingUser"
+          :title="awaitingUser ? '等待回答' : '发送 (⌘+Enter)'"
+          @click="onSend"
+        >
+          <ArrowUp :size="14" :stroke-width="2.2" />
+        </button>
+      </div>
     </div>
   </div>
 </template>

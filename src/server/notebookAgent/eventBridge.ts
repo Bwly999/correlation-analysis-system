@@ -10,6 +10,13 @@ import {
 export type NotebookAgentSseEvent =
   | { type: 'session.status'; sessionId: string; status: string }
   | {
+      type: 'session.context_usage'
+      sessionId: string
+      tokens: number | null
+      contextWindow: number
+      percent: number | null
+    }
+  | {
       type: 'message.start'
       sessionId: string
       messageId: string

@@ -148,6 +148,19 @@ export const createNotebookAgentSession = async (
     for (const sseEvent of sseEvents) {
       emitRuntimeEvent(runtime, sseEvent)
     }
+    // 一轮结束后上报上下文窗口使用情况（SDK 同步方法，数据此时最新）
+    if (event.type === 'agent_end') {
+      const usage = runtime.session.getContextUsage?.()
+      if (usage) {
+        emitRuntimeEvent(runtime, {
+          type: 'session.context_usage',
+          sessionId: runtime.sessionId,
+          tokens: usage.tokens,
+          contextWindow: usage.contextWindow,
+          percent: usage.percent,
+        })
+      }
+    }
   })
   runtime.unsubscribe = unsubscribe
   runtimes.set(record.sessionId, runtime)

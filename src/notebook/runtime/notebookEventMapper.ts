@@ -424,6 +424,14 @@ export const applyNotebookEvent = (
     case 'stream.ready':
     case 'stream.heartbeat':
       return
+    case 'session.context_usage': {
+      session.runtime.contextUsage = {
+        tokens: event.tokens,
+        contextWindow: event.contextWindow,
+        percent: event.percent,
+      }
+      return
+    }
     case 'session.status': {
       const status = String(event.status ?? '')
       if (status === 'running') {

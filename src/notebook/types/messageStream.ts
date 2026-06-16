@@ -195,6 +195,12 @@ export interface RuntimeStats {
   recentlyRestarted?: boolean
   /** Worker 自动重启累计次数（watch 此字段变化触发"环境已重启"吐司，UX §8.1） */
   restartCount?: number
+  /** 模型上下文窗口使用情况（每轮结束由后端推送） */
+  contextUsage?: {
+    tokens: number | null
+    contextWindow: number
+    percent: number | null
+  }
 }
 
 export type AgentLifecycle = 'idle' | 'running' | 'awaiting_user' | 'completed' | 'failed'

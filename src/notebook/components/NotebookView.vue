@@ -399,6 +399,7 @@ const onSend = (text: string) => emit('send', text)
             <MessageInput
               :awaiting-user="awaitingUser"
               :agent-running="session.runtime.isRunning"
+              :context-usage="session.runtime.contextUsage"
               @send="onSend"
             />
           </div>
