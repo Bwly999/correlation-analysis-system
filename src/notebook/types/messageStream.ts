@@ -193,6 +193,8 @@ export interface RuntimeStats {
   isRunning: boolean
   /** Python 是否被重启过（用于状态条提示） */
   recentlyRestarted?: boolean
+  /** Worker 自动重启累计次数（watch 此字段变化触发"环境已重启"吐司，UX §8.1） */
+  restartCount?: number
 }
 
 export type AgentLifecycle = 'idle' | 'running' | 'awaiting_user' | 'completed' | 'failed'

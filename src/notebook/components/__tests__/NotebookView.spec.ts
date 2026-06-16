@@ -106,4 +106,32 @@ describe('NotebookView', () => {
     expect(wrapper.text()).toContain('你好')
     expect(wrapper.text()).toContain('开始分析')
   })
+
+  it('session.runtime.restartCount 增加 → 弹"Python 环境已重启"吐司', async () => {
+    const root = createMemOpfsRoot()
+    const baseSession = {
+      sessionId: 's1',
+      title: '测试',
+      phase: { kind: 'ready' } as never,
+      agent: 'idle' as never,
+      runtime: { memoryMb: 0, cellCount: 0, agentSeconds: 0, isRunning: false, restartCount: 0 },
+      messages: [],
+      todos: [],
+      connection: 'online' as never,
+    }
+    const wrapper = mount(NotebookView, {
+      props: { opfsRoot: root, session: baseSession },
+    })
+    await flushPromises()
+    // 初始无吐司
+    expect(wrapper.text()).not.toContain('Python 环境已重启')
+
+    // restartCount 0 → 1 → 触发吐司
+    await wrapper.setProps({
+      session: { ...baseSession, runtime: { ...baseSession.runtime, restartCount: 1 } },
+    })
+    await flushPromises()
+    expect(wrapper.text()).toContain('Python 环境已重启')
+    expect(wrapper.text()).toContain('内存变量已清空')
+  })
 })

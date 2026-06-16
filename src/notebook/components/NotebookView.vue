@@ -303,6 +303,22 @@ useNotebookShortcuts({
 
 const toasts = useNotebookToasts()
 
+// Worker 自动重启 → 弹"环境已重启"吐司（UX §8.1：5s 自动消失 warning）
+// watch restartCount 变化（首次 0→N 也算，但 demo 模式恒 0 不触发）
+watch(
+  () => session.value.runtime?.restartCount ?? 0,
+  (count, prev) => {
+    if (count > 0 && count !== prev) {
+      toasts.push({
+        kind: 'warning',
+        title: 'Python 环境已重启',
+        message: '执行超时或崩溃自愈。Workspace 文件已保留，内存变量已清空，请重新加载数据。',
+        autoDismissMs: 5000,
+      })
+    }
+  },
+)
+
 defineExpose({
   toasts,
   refreshTree: ws.refresh,

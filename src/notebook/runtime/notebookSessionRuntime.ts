@@ -101,6 +101,8 @@ export const createNotebookSessionRuntime = async (
   let bridgeNotifyWorkspaceChanged: (paths: string[]) => void = () => undefined
   let pollTimer: ReturnType<typeof setInterval> | null = null
   let requestParentClose = () => undefined
+  // beforeunload：worker 忙时提示用户确认离开（UX §9.4）
+  let beforeunloadHandler: ((event: BeforeUnloadEvent) => void) | null = null
 
   const collectOpfsPaths = async (basePath: string): Promise<string[]> => {
     const entries = await listDirectoryEntries(opfsRoot, basePath)
@@ -157,6 +159,9 @@ export const createNotebookSessionRuntime = async (
 
   // Worker 自动重启（硬超时 / 崩溃自愈）后的闭环：重灌 OPFS → MEMFS + 通知 Agent + 审计
   workerHost.onAutoRestarted = (info) => {
+    state.session.runtime.recentlyRestarted = true
+    // restartCount 累加：UI watch 此字段变化触发"环境已重启"吐司（UX §8.1）
+    state.session.runtime.restartCount = (state.session.runtime.restartCount ?? 0) + 1
     auditLog.pushAndReport({
       ts: new Date().toISOString(),
       kind: 'worker_restart',
@@ -312,6 +317,17 @@ export const createNotebookSessionRuntime = async (
     requestParentClose = parentBridge.requestParentClose
     parentBridge.sendSessionState('loading_pyodide', '正在连接 Notebook Agent')
 
+    // beforeunload：Worker 忙时提示用户确认离开（UX §9.4）
+    // 仅在 worker 正在跑 exec 时拦截，避免无谓打扰
+    beforeunloadHandler = (event: BeforeUnloadEvent) => {
+      if (workerHost.isBusy()) {
+        event.preventDefault()
+        // 部分浏览器需要 returnValue 非空才弹原生确认框
+        event.returnValue = 'Agent 正在工作，确认离开？'
+      }
+    }
+    window.addEventListener('beforeunload', beforeunloadHandler)
+
     eventAbortController = new AbortController()
     await new Promise<void>((resolve, reject) => {
       let opened = false
@@ -432,6 +448,10 @@ export const createNotebookSessionRuntime = async (
       if (pollTimer) {
         clearInterval(pollTimer)
         pollTimer = null
+      }
+      if (beforeunloadHandler) {
+        window.removeEventListener('beforeunload', beforeunloadHandler)
+        beforeunloadHandler = null
       }
       eventAbortController?.abort()
       bridgeDispose?.()
