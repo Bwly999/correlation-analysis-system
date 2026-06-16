@@ -1,0 +1,7 @@
+allowBuilds:
+  '@google/genai': true
+  core-js: true
+  esbuild: true
+  koffi: true
+  protobufjs: true
+  vue-demi: true
