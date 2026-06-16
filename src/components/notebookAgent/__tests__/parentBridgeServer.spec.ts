@@ -11,6 +11,7 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { isReactive, reactive } from 'vue'
 import { createParentBridgeServer } from '../parentBridgeServer'
 import type {
   ParentBridgeRequest,
@@ -159,6 +160,49 @@ describe('parentBridgeServer', () => {
       expect((msg as ParentBridgeRequest).kind).toBe('parent.import_csv')
       expect(origin).toBe('*')
       expect(transfer).toEqual([buf])
+    })
+
+    it('parent.import_csv 会把 meta 归一化为可结构化克隆的普通对象', async () => {
+      build()
+      const promise = server.request(
+        {
+          kind: 'parent.import_csv',
+          requestId: 'r-5b',
+          filename: 'x.csv',
+          buffer: new ArrayBuffer(8),
+          meta: reactive({
+            sourceKind: 'canvas-node',
+            sourceLabel: '字段筛选',
+            rowCount: 5,
+            columnCount: 4,
+          }),
+        },
+        { timeoutMs: 0 },
+      )
+      await Promise.resolve()
+
+      const [msg] = iframe.contentWindow.postMessage.mock.calls[0]!
+      expect((msg as ParentBridgeRequest).kind).toBe('parent.import_csv')
+      expect(isReactive((msg as Extract<ParentBridgeRequest, { kind: 'parent.import_csv' }>).meta)).toBe(false)
+      expect(() => structuredClone(msg)).not.toThrow()
+
+      server.dispose()
+      await expect(promise).rejects.toThrow(/销毁/)
+    })
+
+    it('postMessage 同步抛错 → 直接 reject', async () => {
+      iframe.contentWindow.postMessage.mockImplementation(() => {
+        throw new Error('clone failed')
+      })
+      build()
+      await expect(
+        server.request({
+          kind: 'parent.handshake',
+          requestId: 'r-5c',
+          sessionId: 's-1',
+          origin: 'http://localhost',
+        }),
+      ).rejects.toThrow(/clone failed/)
     })
   })
 

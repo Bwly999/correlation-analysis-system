@@ -6,7 +6,7 @@
  *   - 含执行规则（无状态 / artifacts / plt.savefig / fs_read 截断 / fs_edit 唯一）
  *   - 含强约束（中文输出 / 没有画布工具 / 不 monkey-patch）
  *   - 含 grill-me 风格 (含"刨根问底" 或 "interview me relentlessly" 关键词)
- *   - 含可用包列表 numpy/pandas/scipy/sklearn/matplotlib/seaborn/statsmodels
+ *   - 含可用包列表 numpy/pandas/scipy/sklearn/matplotlib/statsmodels
  *   - 注入数据 meta 后应包含数据集信息
  */
 
@@ -53,7 +53,6 @@ describe('notebookAgent systemPrompt', () => {
       'scipy',
       'scikit-learn',
       'matplotlib',
-      'seaborn',
       'statsmodels',
     ]) {
       expect(prompt).toMatch(new RegExp(pkg))

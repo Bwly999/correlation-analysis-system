@@ -427,6 +427,7 @@ const onSend = (text: string) => emit('send', text)
           </div>
           <div class="flex min-h-0 basis-[58%] flex-col" aria-label="预览">
             <FilePreview
+              :opfs-root="props.opfsRoot"
               :selected-path="selectedPath"
               :content="previewContent"
               :loading="previewLoading"

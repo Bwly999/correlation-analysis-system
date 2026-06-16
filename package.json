@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "dev:server": "tsx watch server/index.ts",
-    "build": "run-p type-check \"build-only {@}\" build:server --",
+    "build": "run-p type-check \"build-only {@}\" build:server build:pyodide --",
     "preview": "vite preview",
     "test:unit": "vitest run",
     "test:watch": "vitest",
@@ -16,6 +16,7 @@
     "db:mysql:generate": "drizzle-kit generate --config=drizzle.config.ts",
     "db:mysql:migrate": "tsx scripts/mysql-storage-migrate.ts",
     "build:server": "esbuild server/index.ts --bundle --platform=node --target=es2022 --format=esm --outfile=dist-server/server/index.js --sourcemap --banner:js=\"import{createRequire as __createRequire}from'module';const require=__createRequire(import.meta.url);\" && pnpm build:server:post",
+    "build:pyodide": "node scripts/copy-pyodide-runtime.mjs",
     "build:server:post": "node scripts/copy-server-package-json.mjs",
     "start:server": "node dist-server/server/index.js",
     "format": "prettier --write --experimental-cli src/",

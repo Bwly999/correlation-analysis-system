@@ -257,6 +257,56 @@ describe('WorkerHost', () => {
     })
   })
 
+  describe('snapshotFs', () => {
+    const ready = async () => {
+      const initPromise = host.init('/pyodide/v0.27/')
+      const req = fake.posted[0]!
+      fake.emit({
+        kind: 'init_done',
+        requestId: req.requestId,
+        pyodideVersion: '0.27.7',
+        crossOriginIsolated: true,
+        sabSupported: true,
+      })
+      await initPromise
+    }
+
+    it('fs_snapshot_done → 返回文件快照', async () => {
+      await ready()
+
+      const promise = host.snapshotFs(['reports'])
+      const sentReq = fake.posted[1]! as Extract<
+        HostToWorkerRequest,
+        { kind: 'fs_snapshot' }
+      >
+      expect(sentReq.kind).toBe('fs_snapshot')
+      expect(sentReq.paths).toEqual(['reports'])
+
+      const fileBytes = new TextEncoder().encode('# 报告').buffer
+      fake.emit({
+        kind: 'fs_snapshot_done',
+        requestId: sentReq.requestId,
+        files: [{ path: 'reports/main.md', bytes: fileBytes }],
+      })
+
+      await expect(promise).resolves.toEqual([
+        { path: 'reports/main.md', bytes: fileBytes },
+      ])
+    })
+
+    it('fs_snapshot_error → reject', async () => {
+      await ready()
+      const promise = host.snapshotFs()
+      const sentReq = fake.posted[1]!
+      fake.emit({
+        kind: 'fs_snapshot_error',
+        requestId: sentReq.requestId,
+        message: 'snapshot failed',
+      })
+      await expect(promise).rejects.toThrow(/snapshot failed/)
+    })
+  })
+
   describe('hardKill', () => {
     it('terminate Worker、状态变 dead、pending exec resolve 为 kernel_dead', async () => {
       const initPromise = host.init('/pyodide/v0.27/')

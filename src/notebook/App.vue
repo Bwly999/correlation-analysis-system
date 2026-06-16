@@ -1,32 +1,20 @@
 <script setup lang="ts">
-/**
- * Notebook iframe 主入口。
- *
- * 三种模式（由 URL query 切换）：
- *
- *   - 默认（无 query）           → UX 演示：用 demoSession fixture 渲染完整 NotebookView
- *   - ?demo=loading              → 演示加载中遮罩
- *   - ?demo=failed               → 演示加载失败遮罩
- *   - ?demo=poc                  → PoC 红队验证页（保留既有用例）
- *
- * 真实 Pi Agent 接入时，将由父站 postMessage 灌入消息流；本组件只负责渲染。
- */
-
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import NotebookView from './components/NotebookView.vue'
 import { createMemOpfsRoot } from './shared/__tests__/memOpfs'
 import { ensureWorkspaceTree, writeFile, type OpfsDirectoryHandle } from './shared/opfsAccess'
 import { demoSession, demoLoading, demoLoadFailed } from './fixtures/demoSession'
 import type { NotebookConversation, NotebookSessionVm } from './types/messageStream'
 import PocApp from './PocApp.vue'
+import { createNotebookSessionRuntime, type NotebookSessionRuntime } from './runtime/notebookSessionRuntime'
+import { exportWorkspaceZip } from './runtime/workspaceExporter'
 
 const params = new URLSearchParams(window.location.search)
-const mode = params.get('demo') ?? 'ux'
+const sessionId = params.get('session')
+const mode = params.get('demo') ?? (sessionId ? 'session' : 'ux')
 
 const opfsRoot = ref<OpfsDirectoryHandle | null>(null)
 const session = ref<NotebookSessionVm>(demoSession)
-
-// 演示态对话列表：列出几条历史会话，匹配 Claude Desktop 设计
 const conversations = ref<NotebookConversation[]>([
   {
     id: 'c-current',
@@ -50,14 +38,12 @@ const conversations = ref<NotebookConversation[]>([
   },
 ])
 const activeConversationId = ref<string>('c-current')
+const workspaceLabel = ref('相关性分析')
+const runtime = ref<NotebookSessionRuntime | null>(null)
 
-onMounted(async () => {
-  if (mode === 'poc') return
-
+const seedDemoWorkspace = async () => {
   const root = createMemOpfsRoot()
   await ensureWorkspaceTree(root)
-
-  // 灌一些样例文件
   await writeFile(
     root,
     'inputs/upstream.csv',
@@ -121,50 +107,147 @@ service_q   float64
 下一步检验单调性，确认方向稳定。
 `,
   )
-  opfsRoot.value = root
+  return root
+}
 
+const initDemoMode = async () => {
+  const root = await seedDemoWorkspace()
+  opfsRoot.value = root
   if (mode === 'loading') session.value = demoLoading
   else if (mode === 'failed') session.value = demoLoadFailed
   else session.value = demoSession
+}
+
+const initSessionMode = async (targetSessionId: string) => {
+  const notebookRuntime = await createNotebookSessionRuntime(targetSessionId)
+  runtime.value = notebookRuntime
+  opfsRoot.value = notebookRuntime.opfsRoot
+  session.value = notebookRuntime.state.session
+  conversations.value = notebookRuntime.state.conversations
+  activeConversationId.value = notebookRuntime.state.activeConversationId ?? targetSessionId
+  workspaceLabel.value = '画布分析'
+
+  try {
+    await notebookRuntime.connect()
+  } catch (error) {
+    session.value.phase = {
+      kind: 'failed',
+      failure: {
+        reason: 'Notebook 初始化失败',
+        detail: error instanceof Error ? error.message : String(error),
+      },
+    }
+    session.value.connection = 'offline'
+    session.value.agent = 'failed'
+  }
+}
+
+onMounted(async () => {
+  if (mode === 'poc') return
+  if (mode === 'session' && sessionId) {
+    await initSessionMode(sessionId)
+    return
+  }
+  await initDemoMode()
 })
 
-const handleSend = (text: string) => {
-  // 演示态：把消息追加到 session
-  const next: NotebookSessionVm = {
+onBeforeUnmount(() => {
+  runtime.value?.dispose()
+})
+
+const handleSend = async (text: string) => {
+  if (runtime.value) {
+    await runtime.value.sendUserMessage(text)
+    return
+  }
+
+  session.value = {
     ...session.value,
     messages: [
       ...session.value.messages,
       { id: 'u-' + Date.now(), role: 'user', text, at: Date.now() },
     ],
   }
-  session.value = next
 }
 
-const handleAskUserSubmit = (payload: { askId: string; optionId: string; text?: string }) => {
-  const next: NotebookSessionVm = {
+const handleAskUserSubmit = async (payload: { askId: string; optionId: string; text?: string }) => {
+  if (runtime.value) {
+    await runtime.value.answerAskUser(payload)
+    return
+  }
+
+  session.value = {
     ...session.value,
     agent: 'running',
-    messages: session.value.messages.map((m) => {
-      if (m.role !== 'assistant') return m
+    messages: session.value.messages.map((message) => {
+      if (message.role !== 'assistant') return message
       return {
-        ...m,
-        blocks: m.blocks.map((b) =>
-          b.kind === 'ask_user' && b.data.id === payload.askId
+        ...message,
+        blocks: message.blocks.map((block) =>
+          block.kind === 'ask_user' && block.data.id === payload.askId
             ? {
                 kind: 'ask_user' as const,
                 data: {
-                  ...b.data,
+                  ...block.data,
                   status: 'answered' as const,
                   answeredOptionId: payload.optionId,
                   answeredText: payload.text,
                 },
               }
-            : b,
+            : block,
         ),
       }
     }),
   }
-  session.value = next
+}
+
+const handleRestart = async () => {
+  if (runtime.value) {
+    await runtime.value.restart()
+    return
+  }
+  session.value = {
+    ...session.value,
+    runtime: {
+      ...session.value.runtime,
+      recentlyRestarted: true,
+      cellCount: 0,
+      memoryMb: 0,
+    },
+  }
+}
+
+const handleDownload = async () => {
+  if (!opfsRoot.value) return
+  const currentSessionId = runtime.value?.state.session.sessionId ?? 'demo'
+  const out = await exportWorkspaceZip(opfsRoot.value, currentSessionId)
+  const url = URL.createObjectURL(out.toBlob())
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = out.fileName
+  anchor.click()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
+const handleRename = (nextTitle: string) => {
+  session.value = {
+    ...session.value,
+    title: nextTitle,
+  }
+}
+
+const handleSelectConversation = (conversationId: string) => {
+  activeConversationId.value = conversationId
+}
+
+const handleStopExec = () => {
+  runtime.value?.stop()
+}
+
+const handleClose = () => {
+  if (runtime.value) {
+    runtime.value.requestParentClose()
+  }
 }
 
 const isPoc = computed(() => mode === 'poc')
@@ -178,17 +261,17 @@ const isPoc = computed(() => mode === 'poc')
     :session="session"
     :conversations="conversations"
     :active-conversation-id="activeConversationId"
-    workspace-label="相关性分析"
-    @close="() => undefined"
-    @restart="() => session = { ...session, runtime: { ...session.runtime, recentlyRestarted: true, cellCount: 0, memoryMb: 0 } }"
-    @download="() => undefined"
+    :workspace-label="workspaceLabel"
+    @close="handleClose"
+    @restart="handleRestart"
+    @download="handleDownload"
     @send="handleSend"
     @ask-user-submit="handleAskUserSubmit"
     @ask-user-cancel="() => undefined"
-    @stop-exec="() => undefined"
-    @rename="(v) => session = { ...session, title: v }"
+    @stop-exec="handleStopExec"
+    @rename="handleRename"
     @new-conversation="() => undefined"
-    @select-conversation="(id) => (activeConversationId = id)"
+    @select-conversation="handleSelectConversation"
     @customize="() => undefined"
     @open-workspace-menu="() => undefined"
   />

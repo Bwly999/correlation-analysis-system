@@ -18,9 +18,9 @@
    *   sidebar (最远，沉) → paper-tint (分区/底栏) → paper (主稿面) → card (浮起)
    * 每档之间留出可感知的明度差，避免"一片灰白分不清边界"。
    */
-  --nb-sidebar:      #F2EFEA;   /* 远景：暖灰，沉下去 */
-  --nb-paper-tint:   #F7F4EF;   /* 次背景：分区底栏、骨架 */
-  --nb-paper:        #FBF9F5;   /* 主稿面：暖白纸 */
+  --nb-sidebar:      #fffdfd;   /* 远景：暖灰，沉下去 */
+  --nb-paper-tint:   #fffdfd;   /* 次背景：分区底栏、骨架 */
+  --nb-paper:        #fffdfd;   /* 主稿面：暖白纸 */
   --nb-card:         #FFFFFFFE; /* 卡片：近白，叠加极淡透明感 */
   --nb-overlay:      rgba(60, 50, 40, 0.06);
   --nb-overlay-strong: rgba(60, 50, 40, 0.10);

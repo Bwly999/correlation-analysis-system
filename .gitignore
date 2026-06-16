@@ -70,3 +70,5 @@ deploy/logs/
 .workflow-debug/
 test/resource/demo_data_2000x300.xlsx
 .playwright-cli
+
+ops/pyodide-runtime

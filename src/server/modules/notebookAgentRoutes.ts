@@ -4,15 +4,15 @@
  * 端点：
  *   POST   /api/notebook-agent/sessions                  创建 session + 返回 systemPrompt
  *   GET    /api/notebook-agent/sessions/:sessionId       拿 session 概览
+ *   GET    /api/notebook-agent/sessions/:sessionId/events NDJSON 事件流
  *   POST   /api/notebook-agent/sessions/:sessionId/messages
  *   POST   /api/notebook-agent/sessions/:sessionId/tool-result
  *   DELETE /api/notebook-agent/sessions/:sessionId       结束 session
- *
- * SSE 流接入留给迭代二（复用 piAgent eventBridge 模块），M1 仅定义入参与状态机骨架。
  */
 
 import type { FastifyPluginAsync } from 'fastify'
 import { requireWorkflowUser } from '../http/workflowUser.js'
+import { startNdjsonStream } from '../http/ndjson.js'
 import { assertSessionOwner } from '../piAgent/sessionAccess.js'
 import {
   closeNotebookAgentSession,
@@ -20,8 +20,8 @@ import {
   finishNotebookAgentToolCall,
   getNotebookAgentSessionOwner,
   getNotebookAgentSessionView,
-  recordNotebookAgentMessage,
-  recordNotebookAgentToolCall,
+  sendNotebookAgentMessage,
+  subscribeNotebookAgentEvents,
 } from '../notebookAgent/gateway.js'
 import type { ImportCsvMeta } from '../../notebook/shared/parentBridge.js'
 
@@ -56,7 +56,7 @@ export const createNotebookAgentRoutes = (): FastifyPluginAsync => async (app) =
       reply.code(400)
       return { message: '缺少或非法 initialDataMeta' }
     }
-    const result = createNotebookAgentSession({
+    const result = await createNotebookAgentSession({
       userId: user.id,
       initialDataMeta: body.initialDataMeta,
       origin: typeof body.origin === 'string' ? body.origin : '',
@@ -76,6 +76,24 @@ export const createNotebookAgentRoutes = (): FastifyPluginAsync => async (app) =
     return view
   })
 
+  app.get('/api/notebook-agent/sessions/:sessionId/events', async (request, reply) => {
+    const user = requireWorkflowUser(request)
+    const { sessionId } = request.params as { sessionId: string }
+    requireOwnedSession(sessionId, user.id)
+    const view = getNotebookAgentSessionView(sessionId)
+    if (!view) {
+      reply.code(404)
+      return { message: '未找到 Notebook Agent 会话' }
+    }
+
+    reply.hijack()
+    startNdjsonStream(reply.raw, (write) => {
+      const unsubscribe = subscribeNotebookAgentEvents(sessionId, write)
+      return () => unsubscribe?.()
+    })
+    return reply
+  })
+
   app.post('/api/notebook-agent/sessions/:sessionId/messages', async (request, reply) => {
     const user = requireWorkflowUser(request)
     const { sessionId } = request.params as { sessionId: string }
@@ -85,11 +103,14 @@ export const createNotebookAgentRoutes = (): FastifyPluginAsync => async (app) =
       reply.code(400)
       return { message: '缺少 id 或 content' }
     }
-    recordNotebookAgentMessage(sessionId, {
+    const ok = await sendNotebookAgentMessage(sessionId, {
       id: body.id,
-      role: 'user',
       content: body.content,
     })
+    if (!ok) {
+      reply.code(404)
+      return { message: '会话不存在' }
+    }
     return { ok: true }
   })
 
@@ -99,43 +120,26 @@ export const createNotebookAgentRoutes = (): FastifyPluginAsync => async (app) =
     requireOwnedSession(sessionId, user.id)
     const body = request.body as {
       toolCallId?: string
-      isError?: boolean
-      result?: { details?: unknown }
+      result?: {
+        content?: Array<{ type: 'text'; text: string }>
+        details?: Record<string, unknown>
+        isError?: boolean
+      }
     }
     if (!body.toolCallId) {
       reply.code(400)
       return { message: '缺少 toolCallId' }
     }
     const ok = finishNotebookAgentToolCall(sessionId, body.toolCallId, {
-      result: body.result?.details ? JSON.stringify(body.result.details) : undefined,
-      isError: !!body.isError,
+      content: body.result?.content,
+      details: body.result?.details,
+      isError: !!body.result?.isError,
     })
     if (!ok) {
       reply.code(404)
       return { message: '会话不存在' }
     }
     return { ok }
-  })
-
-  app.post('/api/notebook-agent/sessions/:sessionId/tool-call', async (request, reply) => {
-    const user = requireWorkflowUser(request)
-    const { sessionId } = request.params as { sessionId: string }
-    requireOwnedSession(sessionId, user.id)
-    const body = request.body as {
-      id?: string
-      toolName?: string
-      args?: unknown
-    }
-    if (!body.id || !body.toolName) {
-      reply.code(400)
-      return { message: '缺少 id / toolName' }
-    }
-    recordNotebookAgentToolCall(sessionId, {
-      id: body.id,
-      toolName: body.toolName,
-      args: body.args,
-    })
-    return { ok: true }
   })
 
   app.delete('/api/notebook-agent/sessions/:sessionId', async (request, reply) => {

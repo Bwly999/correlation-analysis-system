@@ -44,6 +44,24 @@ const isIframeSource = (e: MessageEvent, iframe: HTMLIFrameElement): boolean => 
   return e.source === iframe.contentWindow
 }
 
+const normalizeRequestForPostMessage = (req: ParentBridgeRequest): ParentBridgeRequest => {
+  switch (req.kind) {
+    case 'parent.import_csv':
+      return {
+        ...req,
+        meta: {
+          sourceKind: req.meta.sourceKind,
+          sourceLabel: req.meta.sourceLabel,
+          rowCount: req.meta.rowCount,
+          columnCount: req.meta.columnCount,
+        },
+      }
+    case 'parent.handshake':
+    case 'parent.close_request':
+      return { ...req }
+  }
+}
+
 interface PendingRequest {
   resolve: (data: unknown) => void
   reject: (err: Error) => void
@@ -103,7 +121,17 @@ export const createParentBridgeServer = (
           reject(new Error('iframe.contentWindow 不可用'))
           return
         }
-        iframe.contentWindow.postMessage(req, targetOrigin, opts?.transfer)
+        try {
+          iframe.contentWindow.postMessage(
+            normalizeRequestForPostMessage(req),
+            targetOrigin,
+            opts?.transfer,
+          )
+        } catch (err) {
+          pending.delete(req.requestId)
+          if (timer) clearTimeout(timer)
+          reject(err instanceof Error ? err : new Error(String(err)))
+        }
       })
     },
     dispose: () => {

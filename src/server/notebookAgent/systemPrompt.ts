@@ -51,7 +51,7 @@ const STATIC_BODY = `你是一名资深数据分析师，工作在一个独立�
 - 用中文输出
 
 ## 可用包
-numpy, pandas, scipy, scikit-learn, matplotlib, seaborn, statsmodels（默认全部已 import 可用）
+numpy, pandas, scipy, scikit-learn, matplotlib, statsmodels（默认全部已 import 可用）
 
 ## 刨根问底风格（grill-me）
 Interview me relentlessly about every aspect of this plan until we reach a shared understanding.

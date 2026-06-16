@@ -77,6 +77,8 @@ export const bootPyodide = async (opts: BootOptions): Promise<BootResult> => {
 
   const pyodide = await loadPyodide({
     indexURL: opts.pyodideIndexUrl,
+    lockFileURL: `${opts.pyodideIndexUrl}pyodide-lock.json`,
+    packageBaseUrl: opts.pyodideIndexUrl,
     jsglobals: safeJsGlobals,
     fullStdLib: false,
     // 默认 stdout/stderr 走 console；我们后续在 exec 入口替换
@@ -100,9 +102,16 @@ export const bootPyodide = async (opts: BootOptions): Promise<BootResult> => {
     pyodide.setInterruptBuffer(new Uint8Array(opts.interruptBuffer))
   }
 
-  // 4) 加载 PoC 用的最小包集（pandas 包含 numpy）
-  opts.onProgress('loading_packages', 'numpy + pandas')
-  await pyodide.loadPackage(['numpy', 'pandas'])
+  // 4) 加载 Notebook M1 默认分析包集
+  opts.onProgress('loading_packages', 'numpy + pandas + scipy + scikit-learn + matplotlib + statsmodels')
+  await pyodide.loadPackage([
+    'numpy',
+    'pandas',
+    'scipy',
+    'scikit-learn',
+    'matplotlib',
+    'statsmodels',
+  ])
 
   // 5) 创建工作区固定目录骨架（MEMFS 内）。
   //    inputs/   主站 import_csv 灌入数据
@@ -118,6 +127,9 @@ export const bootPyodide = async (opts: BootOptions): Promise<BootResult> => {
       // mkdirTree 在已存在时也可能抛 EEXIST，忽略
     }
   }
+
+  // 让 python_exec_* 的相对路径与工作区根目录对齐。
+  pyodide.FS.chdir('/')
 
   opts.onProgress('locking', 'sealing globals')
   // 6) 冻结 pyodide 对象本身，防止 Python 通过 sys 模块改其属性

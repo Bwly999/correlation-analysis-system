@@ -23,6 +23,13 @@ import type { PyodideInterface } from 'pyodide'
 let pyodide: PyodideInterface | null = null
 let interruptBuffer: SharedArrayBuffer | null = null
 let booting = false
+const WORKSPACE_ROOTS = ['inputs', 'scripts', 'artifacts', 'reports'] as const
+
+const cloneUint8ArrayToArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
+  const out = new ArrayBuffer(bytes.byteLength)
+  new Uint8Array(out).set(bytes)
+  return out
+}
 
 const post = (msg: WorkerToHostMessage) => {
   ;(self as unknown as Worker).postMessage(msg)
@@ -128,6 +135,9 @@ self.addEventListener('message', (event: MessageEvent<HostToWorkerRequest>) => {
     case 'fs_write_inline':
       void handleFsWrite(req)
       break
+    case 'fs_snapshot':
+      void handleFsSnapshot(req)
+      break
     case 'shutdown':
       post({ kind: 'shutdown_done', requestId: req.requestId })
       ;(self as unknown as DedicatedWorkerGlobalScope).close()
@@ -181,6 +191,93 @@ const handleFsWrite = async (
   } catch (err) {
     post({
       kind: 'fs_write_error',
+      requestId: req.requestId,
+      message: err instanceof Error ? err.message : String(err),
+    })
+  }
+}
+
+const collectSnapshotPaths = (
+  baseDir: string,
+  requestedPaths?: string[],
+): string[] => {
+  if (!pyodide) return []
+  const fs = pyodide.FS
+  const listFileRecursive = (dirPath: string): string[] => {
+    let entries: string[] = []
+    try {
+      entries = fs.readdir(dirPath)
+    } catch {
+      return []
+    }
+
+    return entries
+      .filter((name) => name !== '.' && name !== '..')
+      .flatMap((name) => {
+        const childPath = `${dirPath}/${name}`.replace(/\/+/g, '/')
+        try {
+          const stat = fs.stat(childPath)
+          if (fs.isDir(stat.mode)) {
+            return listFileRecursive(childPath)
+          }
+          return [childPath]
+        } catch {
+          return []
+        }
+      })
+  }
+
+  if (!requestedPaths || requestedPaths.length === 0) {
+    return WORKSPACE_ROOTS.flatMap((dir) => listFileRecursive(`/${dir}`))
+  }
+
+  return requestedPaths.flatMap((path) => {
+    try {
+      const normalized = `/${resolveSafePath(path).join('/')}`
+      const stat = fs.stat(normalized)
+      if (fs.isDir(stat.mode)) {
+        return listFileRecursive(normalized)
+      }
+      return [normalized]
+    } catch {
+      return []
+    }
+  })
+}
+
+const handleFsSnapshot = async (
+  req: Extract<HostToWorkerRequest, { kind: 'fs_snapshot' }>,
+) => {
+  if (!pyodide) {
+    post({
+      kind: 'fs_snapshot_error',
+      requestId: req.requestId,
+      message: 'Pyodide 尚未初始化',
+    })
+    return
+  }
+
+  try {
+    const files = collectSnapshotPaths('/', req.paths).map((fullPath) => {
+      const bytes = pyodide!.FS.readFile(fullPath) as Uint8Array
+      return {
+        path: fullPath.replace(/^\//, ''),
+        bytes: cloneUint8ArrayToArrayBuffer(bytes),
+      }
+    })
+
+    const transfer = files.map((file) => file.bytes)
+    ;(self as unknown as Worker).postMessage(
+      {
+        kind: 'fs_snapshot_done',
+        requestId: req.requestId,
+        files,
+      } satisfies WorkerToHostMessage,
+      transfer,
+    )
+  } catch (err) {
+    post({
+      kind: 'fs_snapshot_error',
       requestId: req.requestId,
       message: err instanceof Error ? err.message : String(err),
     })

@@ -143,10 +143,20 @@ export const createToolDispatcher = (deps: ToolDispatcherDeps): ToolDispatcher =
           const out = await workerHost.exec(r.content, timeout)
           return okResult({
             execId: toolCallId,
-            status: out.ok ? 'ok' : 'error',
+            status:
+              out.ok
+                ? 'ok'
+                : out.errorType === 'interrupted'
+                  ? 'interrupted'
+                  : out.errorType === 'timeout'
+                    ? 'timeout'
+                    : 'error',
             stdout: out.stdout,
             stderr: out.stderr,
             elapsedMs: out.durationMs,
+            error: out.errorMessage
+              ? { code: out.errorType ?? 'python_exception', message: out.errorMessage }
+              : undefined,
           })
         }
         case 'fs_read': {
@@ -181,6 +191,7 @@ export const createToolDispatcher = (deps: ToolDispatcherDeps): ToolDispatcher =
           todoStore.setItems(p.items)
           const stats = todoStore.getStats()
           return okResult({
+            items: p.items,
             total: stats.total,
             inProgress: stats.inProgress,
             completed: stats.completed,

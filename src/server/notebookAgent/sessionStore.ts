@@ -122,6 +122,16 @@ export const endNotebookSession = (
   record.updatedAt = Date.now()
 }
 
+export const updateNotebookSessionRecord = (
+  sessionId: string,
+  update: Partial<Pick<NotebookSessionRecord, 'status'>>,
+): void => {
+  const record = sessions.get(sessionId)
+  if (!record) return
+  Object.assign(record, update)
+  record.updatedAt = Date.now()
+}
+
 /** 单测专用：清空所有会话 */
 export const __resetNotebookSessionsForTest = (): void => {
   sessions.clear()

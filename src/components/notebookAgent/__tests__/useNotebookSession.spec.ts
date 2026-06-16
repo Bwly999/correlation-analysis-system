@@ -117,6 +117,13 @@ describe('useNotebookSession', () => {
     expect(fake.bridge.request).not.toHaveBeenCalled()
   })
 
+  it('仅挂载 iframe 但未收到 iframe.ready 时，不会提前 handshake', async () => {
+    useSession()
+    mountIframe()
+    await nextTick()
+    expect(fake.bridge.request).not.toHaveBeenCalled()
+  })
+
   it('iframe 挂载后创建 bridge；收到 iframe.ready 后发 handshake → import_csv', async () => {
     const session = useSession()
     mountIframe()
@@ -140,6 +147,23 @@ describe('useNotebookSession', () => {
     await Promise.resolve()
     await nextTick()
     void session // 触发 watcher 的话用得到
+  })
+
+  it('重复收到 iframe.ready 时，不会重复发起 import_csv', async () => {
+    useSession()
+    mountIframe()
+    await nextTick()
+
+    fake.bridge.emitEvent({ kind: 'iframe.ready', sessionId: 'sess-1' })
+    await nextTick()
+    fake.bridge.resolveNextRequest({ sessionId: 'sess-1' })
+    await Promise.resolve()
+
+    fake.bridge.emitEvent({ kind: 'iframe.ready', sessionId: 'sess-1' })
+    await nextTick()
+
+    const importCalls = fake.bridge.posted.filter((req) => req.kind === 'parent.import_csv')
+    expect(importCalls).toHaveLength(1)
   })
 
   it('iframe.session_state=ready → state 同步更新', async () => {

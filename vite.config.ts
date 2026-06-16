@@ -1,7 +1,6 @@
 import { fileURLToPath, URL } from 'node:url'
 import { resolve } from 'node:path'
 import { createReadStream, statSync } from 'node:fs'
-import https from 'node:https'
 
 import { defineConfig, loadEnv } from 'vite'
 import type { Plugin } from 'vite'
@@ -114,16 +113,16 @@ const notebookCoiHeaders = (): Plugin => ({
 
 /**
  * Pyodide 资源代理（dev）。
- * 1) /pyodide/v0.27/<file> 优先从 node_modules/pyodide/ 命中（运行时本体 + stdlib）
- * 2) 未命中（即 wheel 包：pandas/numpy 等）→ 透明代理到 jsdelivr
- *    https://cdn.jsdelivr.net/pyodide/v0.27.7/full/<file>
+ * 1) /pyodide/v0.27/<file> 优先从 ops/pyodide-runtime/v0.27.x 命中（完整自托管运行时）
+ * 2) 若 ops 目录尚未准备，则退回 node_modules/pyodide/（仅运行时本体 + lockfile + stdlib）
+ * 3) 若两者都未命中，直接返回明确错误，提示先执行 setup 脚本准备 wheel 资源。
  *
  * 生产构建时由 ops/pyodide-runtime/ 中预先下载好的产物替代。
  */
 const pyodideStaticProxy = (): Plugin => {
   const PYODIDE_VERSION = 'v0.27'
-  const CDN_VERSION = 'v0.27.7'
-  const localDir = resolve(__dirname, 'node_modules/pyodide')
+  const runtimeDir = resolve(__dirname, 'ops', 'pyodide-runtime', 'v0.27.x')
+  const fallbackDir = resolve(__dirname, 'node_modules/pyodide')
 
   const contentTypeOf = (file: string): string => {
     if (file.endsWith('.wasm')) return 'application/wasm'
@@ -157,15 +156,22 @@ const pyodideStaticProxy = (): Plugin => {
           return
         }
 
-        const localPath = resolve(localDir, fileName)
-        let hitLocal = false
-        try {
-          const stat = statSync(localPath)
-          if (stat.isFile()) {
-            hitLocal = true
+        const candidatePaths = [
+          resolve(runtimeDir, fileName),
+          resolve(fallbackDir, fileName),
+        ]
+
+        let localPath: string | null = null
+        for (const candidate of candidatePaths) {
+          try {
+            const stat = statSync(candidate)
+            if (stat.isFile()) {
+              localPath = candidate
+              break
+            }
+          } catch {
+            // ignore
           }
-        } catch {
-          hitLocal = false
         }
 
         // COEP 必须头
@@ -173,49 +179,15 @@ const pyodideStaticProxy = (): Plugin => {
         res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp')
         res.setHeader('Content-Type', contentTypeOf(fileName))
 
-        if (hitLocal) {
+        if (localPath) {
           createReadStream(localPath).pipe(res)
           return
         }
 
-        // 兜底：代理到 jsdelivr 镜像（仅 dev）
-        const cdnUrls = [
-          `https://cdn.jsdelivr.net/pyodide/${CDN_VERSION}/full/${fileName}`,
-          `https://fastly.jsdelivr.net/pyodide/${CDN_VERSION}/full/${fileName}`,
-          `https://gcore.jsdelivr.net/pyodide/${CDN_VERSION}/full/${fileName}`,
-        ]
-
-        const tryCdn = (index: number) => {
-          const cdnUrl = cdnUrls[index]
-          if (!cdnUrl) {
-            res.statusCode = 502
-            res.end('pyodide cdn unreachable')
-            return
-          }
-
-          const upstream = https.get(cdnUrl, (upRes) => {
-            const status = upRes.statusCode ?? 502
-            if (status !== 200) {
-              upRes.resume()
-              tryCdn(index + 1)
-              return
-            }
-            // 透传 content-length
-            const len = upRes.headers['content-length']
-            if (len) res.setHeader('Content-Length', len)
-            upRes.pipe(res)
-          })
-          upstream.setTimeout(120_000, () => {
-            upstream.destroy(new Error('pyodide cdn timeout'))
-          })
-          upstream.on('error', (err) => {
-            // eslint-disable-next-line no-console
-            console.warn('[pyodide-proxy] cdn fetch failed', cdnUrl, err)
-            tryCdn(index + 1)
-          })
-        }
-
-        tryCdn(0)
+        res.statusCode = 404
+        res.end(
+          `pyodide asset missing: ${fileName}. 请先运行 node scripts/setup-pyodide-runtime.mjs 准备 ops/pyodide-runtime/v0.27.x`,
+        )
       })
     },
   }
@@ -299,6 +271,7 @@ export default defineConfig({
       },
     },
   },
+  publicDir: 'public',
   plugins: [
     vue(),
     vueDevTools(),

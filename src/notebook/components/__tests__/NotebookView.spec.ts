@@ -9,7 +9,7 @@
  *   - 传入 messages 时正确渲染对话块
  */
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import NotebookView from '../NotebookView.vue'
 import { createMemOpfsRoot } from '../../shared/__tests__/memOpfs'
@@ -66,6 +66,26 @@ describe('NotebookView', () => {
 
     // h1 会带上自动生成的 id
     expect(wrapper.html()).toMatch(/<h1[^>]*>\s*报告\s*<\/h1>/)
+  })
+
+  it('markdown 中引用 ../artifacts 图片时会内联预览', async () => {
+    const root = createMemOpfsRoot()
+    await ensureWorkspaceTree(root)
+    await writeFile(root, 'reports/main.md', '# 报告\n\n![](../artifacts/chart.png)')
+    await writeFile(root, 'artifacts/chart.png', new Uint8Array([137, 80, 78, 71]).buffer)
+
+    const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:chart-preview')
+    const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
+
+    const wrapper = mount(NotebookView, { props: { opfsRoot: root } })
+    await flushPromises()
+    await wrapper.find('[data-path="reports/main.md"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.html()).toContain('src="blob:chart-preview"')
+
+    createObjectURL.mockRestore()
+    revokeObjectURL.mockRestore()
   })
 
   it('messages 不为空时渲染消息内容', async () => {

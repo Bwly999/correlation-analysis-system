@@ -42,11 +42,14 @@ export interface ParentBridgeClientOptions {
   addMessageListener: (listener: (e: MessageEvent) => void) => () => void
   /** iframe 与主站约定的目标 origin，用于 postMessage 第二参数；测试时传 '*' 即可 */
   parentTargetOrigin?: string
+  onWorkspaceChanged?: (paths: string[]) => void | Promise<void>
 }
 
 export interface ParentBridgeClient {
   /** 主动向主站推送 session 状态变化 */
   sendSessionState: (state: IframeSessionState, detail?: string) => void
+  /** iframe 内部主动请求关闭笔记本 */
+  requestParentClose: () => void
   /** 卸载：解除消息监听 */
   dispose: () => void
 }
@@ -67,6 +70,7 @@ export const createParentBridgeClient = (
     workerHost,
     addMessageListener,
     parentTargetOrigin = '*',
+    onWorkspaceChanged,
   } = options
 
   const send = (msg: IframeBridgeRequest | ParentBridgeResponse) => {
@@ -94,16 +98,20 @@ export const createParentBridgeClient = (
     req: Extract<ParentBridgeRequest, { kind: 'parent.import_csv' }>,
   ) => {
     const targetPath = `inputs/${req.filename}`
+    const metaPath = 'inputs/upstream.meta.json'
     try {
       // 给 worker / OPFS 各保留一份独立 ArrayBuffer：postMessage transferable
       // 会让 buffer 失效，主线程内的两次写入需要分别拥有自己的副本。
       const opfsCopy = cloneArrayBuffer(req.buffer)
       await writeFile(opfsRoot, targetPath, opfsCopy)
+      await writeFile(opfsRoot, metaPath, JSON.stringify(req.meta, null, 2))
       // 给 worker 的 buffer 不再克隆 —— 由 workerHost.writeFs 内部 transfer 给 worker
       const workerCopy = cloneArrayBuffer(req.buffer)
       await workerHost.writeFs(targetPath, workerCopy)
       respond(req.requestId, true, { path: targetPath, bytes: req.buffer.byteLength })
-      send({ kind: 'iframe.workspace_changed', paths: [targetPath] })
+      const changedPaths = [targetPath, metaPath]
+      send({ kind: 'iframe.workspace_changed', paths: changedPaths })
+      void onWorkspaceChanged?.(changedPaths)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       respond(req.requestId, false, undefined, {
@@ -141,10 +149,17 @@ export const createParentBridgeClient = (
   }
 
   const off = addMessageListener(onMessage)
+  send({ kind: 'iframe.ready', sessionId })
 
   return {
     sendSessionState: (state, detail) => {
       send({ kind: 'iframe.session_state', state, detail })
+    },
+    requestParentClose: () => {
+      send({
+        kind: 'iframe.request_unload_confirm',
+        hasUnsavedExec: workerHost.isBusy(),
+      })
     },
     dispose: () => off(),
   }

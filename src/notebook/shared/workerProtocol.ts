@@ -37,6 +37,11 @@ export type HostToWorkerRequest =
       kind: 'shutdown'
       requestId: string
     }
+  | {
+      kind: 'fs_snapshot'
+      requestId: string
+      paths?: string[]
+    }
 
 // ──────────────────────────────────────────────
 // Worker → 主线程
@@ -104,6 +109,19 @@ export type WorkerToHostMessage =
     }
   | {
       kind: 'fs_write_error'
+      requestId: string
+      message: string
+    }
+  | {
+      kind: 'fs_snapshot_done'
+      requestId: string
+      files: Array<{
+        path: string
+        bytes: ArrayBuffer
+      }>
+    }
+  | {
+      kind: 'fs_snapshot_error'
       requestId: string
       message: string
     }

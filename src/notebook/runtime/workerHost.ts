@@ -72,6 +72,11 @@ interface PendingFsWrite {
   reject: (err: Error) => void
 }
 
+interface PendingFsSnapshot {
+  resolve: (files: Array<{ path: string; bytes: ArrayBuffer }>) => void
+  reject: (err: Error) => void
+}
+
 export class WorkerHost {
   readonly state: HostState
   private worker: Worker | null = null
@@ -79,6 +84,7 @@ export class WorkerHost {
   private pendingInit: PendingInit | null = null
   private pendingExec: Map<string, PendingExec> = new Map()
   private pendingFsWrite: Map<string, PendingFsWrite> = new Map()
+  private pendingFsSnapshot: Map<string, PendingFsSnapshot> = new Map()
   private nextId = 0
   private readonly workerFactory: WorkerFactory
 
@@ -194,6 +200,10 @@ export class WorkerHost {
     return true
   }
 
+  isBusy(): boolean {
+    return this.state.status === 'busy'
+  }
+
   /**
    * 把字节写到 Worker 内 Pyodide 的 MEMFS。
    *
@@ -215,6 +225,22 @@ export class WorkerHost {
       }
       // bytes 走 transferable，避免拷贝
       this.worker!.postMessage(req, [bytes])
+    })
+  }
+
+  async snapshotFs(paths?: string[]): Promise<Array<{ path: string; bytes: ArrayBuffer }>> {
+    if (!this.worker || this.state.status === 'dead') {
+      throw new Error('Worker 未就绪')
+    }
+    const requestId = this.genId()
+    return new Promise((resolve, reject) => {
+      this.pendingFsSnapshot.set(requestId, { resolve, reject })
+      const req: HostToWorkerRequest = {
+        kind: 'fs_snapshot',
+        requestId,
+        ...(paths && paths.length > 0 ? { paths } : {}),
+      }
+      this.worker!.postMessage(req)
     })
   }
 
@@ -317,6 +343,20 @@ export class WorkerHost {
         break
       }
 
+      case 'fs_snapshot_done': {
+        const pending = this.pendingFsSnapshot.get(msg.requestId)
+        this.pendingFsSnapshot.delete(msg.requestId)
+        pending?.resolve(msg.files)
+        break
+      }
+
+      case 'fs_snapshot_error': {
+        const pending = this.pendingFsSnapshot.get(msg.requestId)
+        this.pendingFsSnapshot.delete(msg.requestId)
+        pending?.reject(new Error(msg.message))
+        break
+      }
+
       case 'shutdown_done':
         if (this.worker) {
           this.worker.terminate()
@@ -384,6 +424,8 @@ export class WorkerHost {
     this.pendingExec.clear()
     this.pendingFsWrite.forEach(({ reject }) => reject(new Error(message)))
     this.pendingFsWrite.clear()
+    this.pendingFsSnapshot.forEach(({ reject }) => reject(new Error(message)))
+    this.pendingFsSnapshot.clear()
   }
 
   /** 自动重建：在硬超时分支后调用 */

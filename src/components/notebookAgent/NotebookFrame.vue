@@ -35,6 +35,9 @@ const session = useNotebookSession({
   origin: props.origin ?? window.location.origin,
   initialData: props.initialData,
   onWorkspaceChanged: (paths) => emit('workspaceChanged', paths),
+  onUnloadConfirm: () => {
+    void onClose()
+  },
 })
 
 const iframeSrc = computed(() => `/notebook.html?session=${encodeURIComponent(props.sessionId)}`)
