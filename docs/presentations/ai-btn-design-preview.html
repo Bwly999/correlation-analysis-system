@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>AI分析 按钮 - 设计方向探索</title>
+<style>
+  :root {
+    --paper: #fffdfd;
+    --deck-bg: linear-gradient(180deg, #f8fbff 0%, #f2f6fb 100%);
+    --deck-border: #dbe4ef;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #0b1020;
+    color: #e5e7eb;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 48px;
+    padding: 56px 24px;
+  }
+
+  /* 模拟真实 action-deck 胶囊工具栏（白底浅色），按钮置于其中看反差 */
+  .stage-label {
+    font-size: 11px;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: #7c8499;
+    margin-bottom: -28px;
+  }
+
+  .action-deck {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 2.5rem;
+    padding: 4px 6px;
+    border-radius: 14px;
+    border: 1px solid var(--deck-border);
+    background: var(--deck-bg);
+    box-shadow: 0 6px 14px -10px rgba(15,23,42,.45), inset 0 1px 0 rgba(255,255,255,.95);
+  }
+  /* 兄弟按钮（浅色，用于衬托主角） */
+  .sibling {
+    height: 2rem; padding: 0 14px;
+    border-radius: 10px; border: 1px solid #cbd5e1;
+    background: linear-gradient(180deg,#fff,#f8fafc);
+    color: #334155; font-size: 12px; font-weight: 700;
+    display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+  }
+  .deck-divider { width:1px;height:18px;background:#d6dfeb; }
+
+  /* ============ 方向 A：暗夜流光（深底 + 流动渐变描边 + 光晕）============ */
+  .btn-A {
+    position: relative;
+    height: 2rem;
+    padding: 0 16px 0 14px;
+    border: 0;
+    border-radius: 10px;
+    background: #0b1020;
+    color: #f8fafc;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    cursor: pointer;
+    isolation: isolate;
+    overflow: hidden;
+    box-shadow:
+      0 0 0 1px rgba(99,102,241,.0),
+      0 8px 20px -8px rgba(99,102,241,.65);
+    transition: box-shadow .35s ease, transform .15s ease;
+  }
+  /* 流动渐变描边：伪元素放大旋转，按钮遮罩只露出边框一圈 */
+  .btn-A::before {
+    content:"";
+    position:absolute;
+    inset:-60%;
+    z-index:-2;
+    background: conic-gradient(from 0deg,
+      #6366f1, #22d3ee, #a78bfa, #f472b6, #6366f1);
+    animation: a-spin 3.2s linear infinite;
+  }
+  .btn-A::after {
+    content:"";
+    position:absolute;
+    inset:1.5px;            /* 留出 1.5px 描边宽度 */
+    border-radius:8.5px;
+    background: #0b1020;
+    z-index:-1;
+  }
+  @keyframes a-spin { to { transform: rotate(360deg); } }
+  .btn-A:hover {
+    transform: translateY(-1px);
+    box-shadow:
+      0 0 0 1px rgba(99,102,241,.4),
+      0 0 22px rgba(99,102,241,.55),
+      0 12px 26px -10px rgba(99,102,241,.85);
+  }
+  .btn-A:active { transform: translateY(0); }
+  .btn-A .spark {
+    filter: drop-shadow(0 0 5px rgba(167,139,250,.9));
+  }
+
+  /* ============ 方向 B：日落熔岩（暖橙红实体渐变 + 内高光 + 微光扫过）============ */
+  .btn-B {
+    position: relative;
+    height: 2rem;
+    padding: 0 16px 0 14px;
+    border: 1px solid #b91c1c;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #f97316 0%, #ef4444 48%, #db2777 100%);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 800;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    cursor: pointer;
+    overflow: hidden;
+    box-shadow:
+      0 10px 22px -10px rgba(239,68,68,.9),
+      inset 0 1px 0 rgba(255,255,255,.4);
+    transition: transform .15s ease, box-shadow .3s ease, filter .3s ease;
+  }
+  .btn-B::before {  /* 高光扫过 */
+    content:"";
+    position:absolute; top:0; left:-60%;
+    width:50%; height:100%;
+    background: linear-gradient(105deg, transparent, rgba(255,255,255,.55), transparent);
+    transform: skewX(-18deg);
+    animation: b-sheen 3.6s ease-in-out infinite;
+  }
+  @keyframes b-sheen { 0%,100%{left:-60%} 55%{left:140%} }
+  .btn-B:hover {
+    transform: translateY(-1px);
+    filter: saturate(1.12) brightness(1.04);
+    box-shadow:
+      0 14px 28px -10px rgba(239,68,68,.95),
+      inset 0 1px 0 rgba(255,255,255,.5);
+  }
+  .btn-B:active { transform: translateY(0); }
+
+  /* ============ 方向 C：玻璃霓虹（暗玻璃 + 青绿发光 + 微粒）============ */
+  .btn-C {
+    position: relative;
+    height: 2rem;
+    padding: 0 16px 0 14px;
+    border: 1px solid rgba(45,212,191,.45);
+    border-radius: 10px;
+    background: rgba(13,18,30,.86);
+    backdrop-filter: blur(6px);
+    color: #5eead4;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    cursor: pointer;
+    overflow: hidden;
+    box-shadow:
+      0 0 0 1px rgba(45,212,191,.12),
+      0 8px 22px -8px rgba(20,184,166,.7),
+      inset 0 0 14px rgba(45,212,191,.12);
+    transition: transform .15s ease, box-shadow .3s ease;
+  }
+  .btn-C::after {  /* 底部呼吸光带 */
+    content:"";
+    position:absolute; left:12%; right:12%; bottom:-40%;
+    height:70%;
+    background: radial-gradient(ellipse at center, rgba(45,212,191,.55), transparent 70%);
+    filter: blur(6px);
+    animation: c-breathe 2.8s ease-in-out infinite;
+  }
+  @keyframes c-breathe { 0%,100%{opacity:.5} 50%{opacity:1} }
+  .btn-C:hover {
+    transform: translateY(-1px);
+    color:#99f6e4;
+    box-shadow:
+      0 0 0 1px rgba(45,212,191,.3),
+      0 0 20px rgba(45,212,191,.5),
+      0 12px 26px -10px rgba(20,184,166,.9),
+      inset 0 0 18px rgba(45,212,191,.2);
+  }
+  .btn-C:active { transform: translateY(0); }
+</style>
+</head>
+<body>
+
+  <div>
+    <div class="stage-label">方向 A · 暗夜流光 — 深墨底 + 旋转渐变描边 + 蓝紫光晕</div>
+    <div class="action-deck">
+      <button class="sibling">新建</button>
+      <button class="sibling">模板</button>
+      <div class="deck-divider"></div>
+      <!-- 主角 -->
+      <button class="btn-A" aria-label="AI分析">
+        <svg class="spark" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/>
+          <path d="M19 14l.8 2.2L22 17l-2.2.8L19 20l-.8-2.2L16 17l2.2-.8z"/>
+        </svg>
+        <span>AI分析</span>
+      </button>
+      <button class="sibling">文件</button>
+    </div>
+  </div>
+
+  <div>
+    <div class="stage-label">方向 B · 日落熔岩 — 橙红实体渐变 + 高光扫过 + 厚阴影</div>
+    <div class="action-deck">
+      <button class="sibling">新建</button>
+      <button class="sibling">模板</button>
+      <div class="deck-divider"></div>
+      <button class="btn-B" aria-label="AI分析">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/>
+          <path d="M19 14l.8 2.2L22 17l-2.2.8L19 20l-.8-2.2L16 17l2.2-.8z"/>
+        </svg>
+        <span>AI分析</span>
+      </button>
+      <button class="sibling">文件</button>
+    </div>
+  </div>
+
+  <div>
+    <div class="stage-label">方向 C · 玻璃霓虹 — 暗玻璃 + 青绿发光 + 呼吸底光</div>
+    <div class="action-deck">
+      <button class="sibling">新建</button>
+      <button class="sibling">模板</button>
+      <div class="deck-divider"></div>
+      <button class="btn-C" aria-label="AI分析">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/>
+          <path d="M19 14l.8 2.2L22 17l-2.2.8L19 20l-.8-2.2L16 17l2.2-.8z"/>
+        </svg>
+        <span>AI分析</span>
+      </button>
+      <button class="sibling">文件</button>
+    </div>
+  </div>
+
+</body>
+</html>
