@@ -113,6 +113,13 @@ export const bootPyodide = async (opts: BootOptions): Promise<BootResult> => {
     'statsmodels',
   ])
 
+  // 4.5) 注入中文字体
+  //      matplotlib 默认只捆绑 DejaVu Sans，不含中文字形，画中文会出现「豆腐块」。
+  //      此处在删除 fetch 之前完成拉取，写入 MEMFS 并注册到 fontManager。
+  //      sys.modules 跨 exec 持久，注册一次后续所有 python_exec_* 都默认中文可用。
+  //      字体缺失/加载失败不阻断 boot，仅退化原行为（中文显示为方块）。
+  await configureChineseFont(pyodide, opts.pyodideIndexUrl, opts.onProgress)
+
   // 5) 创建工作区固定目录骨架（MEMFS 内）。
   //    inputs/   主站 import_csv 灌入数据
   //    scripts/  Agent fs_write 脚本
@@ -200,5 +207,75 @@ export const execPython = async (
     ) {
       ;(globalsHandle as { destroy: () => void }).destroy()
     }
+  }
+}
+
+/**
+ * 中文字体文件名（位于 ops/pyodide-runtime/v0.27.x/fonts/，随构建进入 public/pyodide/v0.27/fonts/）。
+ *
+ * 如需换字体：把新字体 .ttf 放到上述 fonts 目录，并同步修改：
+ *   1) 这里的 ZH_FONT_FILE（文件名）
+ *   2) 下面的 ZH_FONT_FAMILY（matplotlib font_manager 里识别的字体名，即 PostScript/name）
+ * 字体推荐思源黑体（Noto Sans SC，OFL-1.1 许可，可商用）。
+ */
+const ZH_FONT_FILE = 'NotoSansSC-Regular.ttf'
+const ZH_FONT_FAMILY = 'Noto Sans SC'
+
+/**
+ * 拉取并注册中文字体到 matplotlib。
+ *
+ * 在 boot 阶段（loadPackage 之后、删除 fetch 之前）调用：
+ *   1) fetch 字体字节 → 写入 MEMFS /fonts/
+ *   2) matplotlib.fontManager.addfont + 设 rcParams，使后续 savefig 默认用中文字体
+ *
+ * 失败（字体缺失/网络错/Python 执行错）一律吞掉并打 progress，不阻断 boot。
+ */
+const configureChineseFont = async (
+  pyodide: PyodideInterface,
+  indexUrl: string,
+  onProgress: (stage: string, detail?: string) => void,
+): Promise<void> => {
+  const fontUrl = `${indexUrl}fonts/${ZH_FONT_FILE}`
+  let resp: Response
+  try {
+    resp = await fetch(fontUrl)
+  } catch (err) {
+    onProgress('loading_packages', `中文字体跳过：fetch 失败 ${err instanceof Error ? err.message : ''}`)
+    return
+  }
+  if (!resp.ok) {
+    onProgress(
+      'loading_packages',
+      `中文字体跳过：HTTP ${resp.status}（请把 ${ZH_FONT_FILE} 放到 ops/pyodide-runtime/v0.27.x/fonts/）`,
+    )
+    return
+  }
+
+  try {
+    const buf = new Uint8Array(await resp.arrayBuffer())
+    try {
+      pyodide.FS.mkdirTree('/fonts')
+    } catch {
+      // 已存在忽略
+    }
+    pyodide.FS.writeFile(`/fonts/${ZH_FONT_FILE}`, buf)
+
+    await pyodide.runPythonAsync(
+      [
+        'import matplotlib',
+        "matplotlib.use('Agg')",
+        'import matplotlib.font_manager as fm',
+        'import matplotlib.pyplot as plt',
+        `fm.fontManager.addfont('/fonts/${ZH_FONT_FILE}')`,
+        `plt.rcParams['font.sans-serif'] = ['${ZH_FONT_FAMILY}', 'DejaVu Sans']`,
+        `plt.rcParams['axes.unicode_minus'] = False`,
+      ].join('\n'),
+    )
+    onProgress('loading_packages', '中文字体就绪')
+  } catch (err) {
+    onProgress(
+      'loading_packages',
+      `中文字体跳过：注册失败 ${err instanceof Error ? err.message : String(err)}`,
+    )
   }
 }
