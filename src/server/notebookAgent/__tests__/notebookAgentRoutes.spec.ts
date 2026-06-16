@@ -7,6 +7,7 @@ const {
   sendNotebookAgentMessageMock,
   markNotebookAgentSessionReadyMock,
   injectNotebookSystemMessageMock,
+  appendNotebookAuditEntriesMock,
   subscribeNotebookAgentEventsMock,
   getNotebookAgentSessionViewMock,
   getNotebookAgentSessionOwnerMock,
@@ -18,6 +19,7 @@ const {
   sendNotebookAgentMessageMock: vi.fn(),
   markNotebookAgentSessionReadyMock: vi.fn(),
   injectNotebookSystemMessageMock: vi.fn(),
+  appendNotebookAuditEntriesMock: vi.fn(),
   subscribeNotebookAgentEventsMock: vi.fn(),
   getNotebookAgentSessionViewMock: vi.fn(),
   getNotebookAgentSessionOwnerMock: vi.fn(),
@@ -31,6 +33,7 @@ vi.mock('../gateway.js', () => ({
   sendNotebookAgentMessage: sendNotebookAgentMessageMock,
   markNotebookAgentSessionReady: markNotebookAgentSessionReadyMock,
   injectNotebookSystemMessage: injectNotebookSystemMessageMock,
+  appendNotebookAuditEntries: appendNotebookAuditEntriesMock,
   subscribeNotebookAgentEvents: subscribeNotebookAgentEventsMock,
   getNotebookAgentSessionView: getNotebookAgentSessionViewMock,
   getNotebookAgentSessionOwner: getNotebookAgentSessionOwnerMock,
@@ -75,6 +78,7 @@ afterEach(async () => {
   sendNotebookAgentMessageMock.mockReset()
   markNotebookAgentSessionReadyMock.mockReset()
   injectNotebookSystemMessageMock.mockReset()
+  appendNotebookAuditEntriesMock.mockReset()
   subscribeNotebookAgentEventsMock.mockReset()
   getNotebookAgentSessionViewMock.mockReset()
   getNotebookAgentSessionOwnerMock.mockReset()
@@ -331,6 +335,56 @@ describe('POST /api/notebook-agent/sessions/:id/system-message', () => {
     })
 
     expect(response.statusCode).toBe(404)
+  })
+})
+
+describe('POST /api/notebook-agent/sessions/:id/audit', () => {
+  it('把审计条目透传给 gateway，回执含 received 数', async () => {
+    const app = await createTestApp()
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/notebook-agent/sessions/notebook-session-1/audit',
+      headers: userHeaders(),
+      payload: {
+        entries: [
+          { ts: 't1', kind: 'worker_restart', reason: 'hard_timeout' },
+          { ts: 't2', kind: 'tool_error', tool: 'python_exec_inline', code: 'exec_error' },
+        ],
+      },
+    })
+
+    expect(response.statusCode).toBe(200)
+    expect(appendNotebookAuditEntriesMock).toHaveBeenCalledTimes(1)
+    expect(appendNotebookAuditEntriesMock.mock.calls[0]![0]).toBe('notebook-session-1')
+    expect(appendNotebookAuditEntriesMock.mock.calls[0]![1]).toHaveLength(2)
+    const body = JSON.parse(response.body)
+    expect(body.received).toBe(2)
+  })
+
+  it('缺少 entries → 400', async () => {
+    const app = await createTestApp()
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/notebook-agent/sessions/notebook-session-1/audit',
+      headers: userHeaders(),
+      payload: {},
+    })
+
+    expect(response.statusCode).toBe(400)
+    expect(appendNotebookAuditEntriesMock).not.toHaveBeenCalled()
+  })
+
+  it('entries 为空数组 → 200（不调 gateway，避免无意义调用）', async () => {
+    // gateway.appendNotebookAuditEntries 内部已判空，端点仍允许空数组通过
+    const app = await createTestApp()
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/notebook-agent/sessions/notebook-session-1/audit',
+      headers: userHeaders(),
+      payload: { entries: [] },
+    })
+
+    expect(response.statusCode).toBe(200)
   })
 })
 

@@ -1,4 +1,5 @@
 import { httpClient, requestStream } from '@/services/httpClient'
+import type { AuditEntry } from './auditLogger'
 
 export type NotebookAgentEvent =
   | { type: 'stream.ready' }
@@ -230,5 +231,26 @@ export const notifyNotebookEnvironmentChanged = async (
     })
   } catch {
     // 静默：环境通知是 best-effort，失败不阻塞
+  }
+}
+
+/**
+ * 上报审计日志条目到后端（关键事件 / session 结束全量）。
+ * 失败静默：审计是 best-effort，不应阻塞笔记本主流程。
+ */
+export const reportNotebookAuditEntries = async (
+  sessionId: string,
+  entries: AuditEntry[],
+): Promise<void> => {
+  if (entries.length === 0) return
+  try {
+    await httpClient.request({
+      url: `/notebook-agent/sessions/${sessionId}/audit`,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      data: { entries },
+    })
+  } catch {
+    // 静默：审计上报失败不阻塞
   }
 }

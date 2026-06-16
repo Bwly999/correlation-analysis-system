@@ -13,11 +13,13 @@ import { createNotebookTodoStore } from './notebookTodoStore'
 import { createAskUserQueue } from './askUserQueue'
 import {
   notifyNotebookEnvironmentChanged,
+  reportNotebookAuditEntries,
   resolveNotebookAgentToolResult,
   sendNotebookAgentMessage,
   streamNotebookAgentEvents,
   type NotebookAgentEvent,
 } from './notebookAgentClient'
+import { AuditLog, computeCodeHash } from './auditLogger'
 import {
   applyNotebookEvent,
   createNotebookRuntimeState,
@@ -81,6 +83,12 @@ export const createNotebookSessionRuntime = async (
   const workerHost = new WorkerHost()
   const todoStore = createNotebookTodoStore()
   const askUserQueue = createAskUserQueue()
+  // 审计日志（L6）：ring buffer 500 条；关键事件上报后端
+  const auditLog = new AuditLog({
+    onReportable: (entries) => {
+      void reportNotebookAuditEntries(sessionId, entries)
+    },
+  })
   const toolDispatcher = createToolDispatcher({
     opfsRoot,
     workerHost,
@@ -147,8 +155,13 @@ export const createNotebookSessionRuntime = async (
     )
   }
 
-  // Worker 自动重启（硬超时 / 崩溃自愈）后的闭环：重灌 OPFS → MEMFS + 通知 Agent
-  workerHost.onAutoRestarted = () => {
+  // Worker 自动重启（硬超时 / 崩溃自愈）后的闭环：重灌 OPFS → MEMFS + 通知 Agent + 审计
+  workerHost.onAutoRestarted = (info) => {
+    auditLog.pushAndReport({
+      ts: new Date().toISOString(),
+      kind: 'worker_restart',
+      reason: `auto_restart #${info.autoRestartCount}`,
+    })
     void (async () => {
       // 新 Worker 的 MEMFS 是空的，把 OPFS 里的 inputs/scripts 灌回去
       await syncOpfsFilesToWorker().catch(() => undefined)
@@ -169,22 +182,64 @@ export const createNotebookSessionRuntime = async (
       return
     }
 
+    const isExec = event.toolName === 'python_exec_inline' || event.toolName === 'python_exec_file'
+    const execStartedAt = isExec ? Date.now() : 0
+    if (isExec) {
+      const code =
+        event.params && typeof event.params === 'object' && 'code' in event.params
+          ? String((event.params as Record<string, unknown>).code ?? '')
+          : ''
+      void computeCodeHash(code).then((codeHash) => {
+        auditLog.push({
+          ts: new Date().toISOString(),
+          kind: 'exec_start',
+          execId: event.toolCallId,
+          codeHash,
+          codeLen: code.length,
+        })
+      })
+    }
+
     const result = await toolDispatcher.dispatch(
       event.toolName,
       event.params,
       event.toolCallId,
     )
 
-    if (event.toolName === 'python_exec_inline' || event.toolName === 'python_exec_file') {
+    if (isExec) {
+      auditLog.push({
+        ts: new Date().toISOString(),
+        kind: 'exec_done',
+        execId: event.toolCallId,
+        status: result.isError ? 'error' : 'ok',
+        elapsedMs: Date.now() - execStartedAt,
+      })
       // exec 落盘的 artifacts/reports/scripts 同步到 OPFS，
       // 并通知主站刷新文件树（B6：savefig 闭环）
       void syncWorkerFilesToOpfs(['artifacts', 'reports', 'scripts'])
         .then((writtenPaths) => {
           if (writtenPaths.length > 0) {
             bridgeNotifyWorkspaceChanged(writtenPaths)
+            for (const p of writtenPaths) {
+              auditLog.push({
+                ts: new Date().toISOString(),
+                kind: 'fs_write',
+                path: p,
+                bytes: 0,
+              })
+            }
           }
         })
         .catch(() => undefined)
+    }
+
+    if (result.isError) {
+      auditLog.push({
+        ts: new Date().toISOString(),
+        kind: 'tool_error',
+        tool: event.toolName,
+        code: 'exec_error',
+      })
     }
 
     if (event.toolName === 'fs_write' || event.toolName === 'fs_edit') {
@@ -194,6 +249,12 @@ export const createNotebookSessionRuntime = async (
           : ''
       if (path) {
         await syncSinglePathToWorker(path)
+        auditLog.push({
+          ts: new Date().toISOString(),
+          kind: event.toolName === 'fs_write' ? 'fs_write' : 'fs_edit',
+          path,
+          replacements: event.toolName === 'fs_edit' ? 1 : 0,
+        } as never)
       }
     }
 
@@ -375,6 +436,12 @@ export const createNotebookSessionRuntime = async (
       eventAbortController?.abort()
       bridgeDispose?.()
       askUserQueue.cancelAll('会话已关闭')
+      // session 结束上报全部审计 buffer（§8.2）
+      const snapshot = auditLog.snapshot()
+      if (snapshot.length > 0) {
+        void reportNotebookAuditEntries(sessionId, snapshot)
+      }
+      auditLog.clear()
       workerHost.hardKill()
     },
   }

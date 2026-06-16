@@ -21,6 +21,7 @@ import {
   type NotebookSessionRecord,
 } from './sessionStore.js'
 import type { ImportCsvMeta } from '../../notebook/shared/parentBridge.js'
+import type { AuditEntry } from '../../notebook/runtime/auditLogger.js'
 import { createNotebookTools } from './tools.js'
 import { FrontendBridge, FrontendBridgeTimeoutError } from '../piAgent/frontendBridge.js'
 import {
@@ -173,6 +174,7 @@ export const closeNotebookAgentSession = (sessionId: string): boolean => {
   runtime?.eventListeners.clear()
   runtimes.delete(sessionId)
   endNotebookSession(sessionId, 'completed')
+  clearNotebookAuditEntries(sessionId)
   return true
 }
 
@@ -282,6 +284,9 @@ export const markNotebookAgentSessionReady = (sessionId: string): boolean => {
   return true
 }
 
+/** 审计日志存储（内存，session 维度；session 关闭时清）。M1 用内存即可。 */
+const auditBuffers = new Map<string, AuditEntry[]>()
+
 /**
  * 向 Agent 上下文注入一条 system message（不触发新一轮，挂在下一条用户消息之前）。
  *
@@ -320,4 +325,32 @@ export const injectNotebookSystemMessage = async (
       return false
     }
   }
+}
+
+/**
+ * 接收前端上报的审计日志条目（关键事件 / session 结束时全量）。
+ * 存内存 buffer（session 维度），供事后排查。session 不存在时仍记录（便于排查已关闭 session 的尾包）。
+ */
+export const appendNotebookAuditEntries = (
+  sessionId: string,
+  entries: AuditEntry[],
+): void => {
+  if (entries.length === 0) return
+  const existing = auditBuffers.get(sessionId) ?? []
+  existing.push(...entries)
+  // 服务端再裁一次（前端已限 500，这里防止异常上报撑爆内存）
+  if (existing.length > 1000) {
+    existing.splice(0, existing.length - 1000)
+  }
+  auditBuffers.set(sessionId, existing)
+}
+
+/** 读取某 session 的审计日志（调试 / 排查用）。 */
+export const getNotebookAuditEntries = (sessionId: string): AuditEntry[] => {
+  return auditBuffers.get(sessionId) ?? []
+}
+
+/** session 关闭时清理审计 buffer（由 closeNotebookAgentSession 调用）。 */
+const clearNotebookAuditEntries = (sessionId: string): void => {
+  auditBuffers.delete(sessionId)
 }

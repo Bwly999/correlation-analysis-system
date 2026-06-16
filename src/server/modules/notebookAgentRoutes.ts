@@ -15,6 +15,7 @@ import { requireWorkflowUser } from '../http/workflowUser.js'
 import { startNdjsonStream } from '../http/ndjson.js'
 import { assertSessionOwner } from '../piAgent/sessionAccess.js'
 import {
+  appendNotebookAuditEntries,
   closeNotebookAgentSession,
   createNotebookAgentSession,
   finishNotebookAgentToolCall,
@@ -143,6 +144,19 @@ export const createNotebookAgentRoutes = (): FastifyPluginAsync => async (app) =
       return { message: '会话不存在或注入失败' }
     }
     return { ok: true }
+  })
+
+  app.post('/api/notebook-agent/sessions/:sessionId/audit', async (request, reply) => {
+    const user = requireWorkflowUser(request)
+    const { sessionId } = request.params as { sessionId: string }
+    requireOwnedSession(sessionId, user.id)
+    const body = request.body as { entries?: unknown[] }
+    if (!Array.isArray(body.entries)) {
+      reply.code(400)
+      return { message: '缺少 entries' }
+    }
+    appendNotebookAuditEntries(sessionId, body.entries as never[])
+    return { ok: true, received: body.entries.length }
   })
 
   app.post('/api/notebook-agent/sessions/:sessionId/tool-result', async (request, reply) => {
