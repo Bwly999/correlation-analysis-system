@@ -281,3 +281,43 @@ export const markNotebookAgentSessionReady = (sessionId: string): boolean => {
   tryStartNotebookBootstrap(runtime)
   return true
 }
+
+/**
+ * 向 Agent 上下文注入一条 system message（不触发新一轮，挂在下一条用户消息之前）。
+ *
+ * 用途：Worker 硬超时 / 崩溃自愈重启后，告知 Agent "Python 环境已重启，Workspace 文件保留"，
+ * 让其下一轮动作能正确处理已失效的 in-memory 状态（如已 import 的模块、已加载的 DataFrame）。
+ *
+ * 实现：走 Pi SDK 的 sendCustomMessage(deliverAs: 'nextTurn')，把消息挂到下一次 prompt
+ * 的上下文里，不打断当前流、不创建独立 user turn。
+ *
+ * @returns true=成功注入；false=会话不存在或注入失败
+ */
+export const injectNotebookSystemMessage = async (
+  sessionId: string,
+  message: string,
+): Promise<boolean> => {
+  const runtime = runtimes.get(sessionId)
+  if (!runtime) return false
+  try {
+    // nextTurn：挂在下一次用户消息前作上下文，不触发独立 turn
+    await runtime.session.sendCustomMessage(
+      {
+        customType: 'environment_notice',
+        content: message,
+        display: false,
+        details: { source: 'worker_restart' },
+      },
+      { deliverAs: 'nextTurn' },
+    )
+    return true
+  } catch {
+    // sendCustomMessage 失败时退化为 steer：当前 turn 结束后注入（不阻塞）
+    try {
+      await runtime.session.steer(message)
+      return true
+    } catch {
+      return false
+    }
+  }
+}

@@ -6,6 +6,7 @@ const {
   createNotebookAgentSessionMock,
   sendNotebookAgentMessageMock,
   markNotebookAgentSessionReadyMock,
+  injectNotebookSystemMessageMock,
   subscribeNotebookAgentEventsMock,
   getNotebookAgentSessionViewMock,
   getNotebookAgentSessionOwnerMock,
@@ -16,6 +17,7 @@ const {
   createNotebookAgentSessionMock: vi.fn(),
   sendNotebookAgentMessageMock: vi.fn(),
   markNotebookAgentSessionReadyMock: vi.fn(),
+  injectNotebookSystemMessageMock: vi.fn(),
   subscribeNotebookAgentEventsMock: vi.fn(),
   getNotebookAgentSessionViewMock: vi.fn(),
   getNotebookAgentSessionOwnerMock: vi.fn(),
@@ -28,6 +30,7 @@ vi.mock('../gateway.js', () => ({
   createNotebookAgentSession: createNotebookAgentSessionMock,
   sendNotebookAgentMessage: sendNotebookAgentMessageMock,
   markNotebookAgentSessionReady: markNotebookAgentSessionReadyMock,
+  injectNotebookSystemMessage: injectNotebookSystemMessageMock,
   subscribeNotebookAgentEvents: subscribeNotebookAgentEventsMock,
   getNotebookAgentSessionView: getNotebookAgentSessionViewMock,
   getNotebookAgentSessionOwner: getNotebookAgentSessionOwnerMock,
@@ -71,6 +74,7 @@ afterEach(async () => {
   createNotebookAgentSessionMock.mockReset()
   sendNotebookAgentMessageMock.mockReset()
   markNotebookAgentSessionReadyMock.mockReset()
+  injectNotebookSystemMessageMock.mockReset()
   subscribeNotebookAgentEventsMock.mockReset()
   getNotebookAgentSessionViewMock.mockReset()
   getNotebookAgentSessionOwnerMock.mockReset()
@@ -277,6 +281,53 @@ describe('POST /api/notebook-agent/sessions/:id/ready', () => {
       method: 'POST',
       url: '/api/notebook-agent/sessions/notebook-session-1/ready',
       headers: userHeaders(),
+    })
+
+    expect(response.statusCode).toBe(404)
+  })
+})
+
+describe('POST /api/notebook-agent/sessions/:id/system-message', () => {
+  it('把环境变更通知透传给 gateway', async () => {
+    injectNotebookSystemMessageMock.mockResolvedValueOnce(true)
+
+    const app = await createTestApp()
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/notebook-agent/sessions/notebook-session-1/system-message',
+      headers: userHeaders(),
+      payload: { message: 'Python 运行时已重启' },
+    })
+
+    expect(response.statusCode).toBe(200)
+    expect(injectNotebookSystemMessageMock).toHaveBeenCalledWith(
+      'notebook-session-1',
+      'Python 运行时已重启',
+    )
+  })
+
+  it('缺少 message → 400', async () => {
+    const app = await createTestApp()
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/notebook-agent/sessions/notebook-session-1/system-message',
+      headers: userHeaders(),
+      payload: {},
+    })
+
+    expect(response.statusCode).toBe(400)
+    expect(injectNotebookSystemMessageMock).not.toHaveBeenCalled()
+  })
+
+  it('gateway 返回 false（会话不存在或注入失败）→ 404', async () => {
+    injectNotebookSystemMessageMock.mockResolvedValueOnce(false)
+
+    const app = await createTestApp()
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/notebook-agent/sessions/notebook-session-1/system-message',
+      headers: userHeaders(),
+      payload: { message: 'Python 运行时已重启' },
     })
 
     expect(response.statusCode).toBe(404)

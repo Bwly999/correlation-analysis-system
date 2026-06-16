@@ -211,3 +211,24 @@ export const resolveNotebookAgentToolResult = async (
 
   return response.data as { ok: boolean }
 }
+
+/**
+ * 向 Agent 注入一条 system message（环境变更通知，如 Worker 重启）。
+ * 不触发新一轮，挂在下一条用户消息之前作上下文。
+ * 失败静默：这是可观测性增强，不应阻塞重启主流程。
+ */
+export const notifyNotebookEnvironmentChanged = async (
+  sessionId: string,
+  message: string,
+): Promise<void> => {
+  try {
+    await httpClient.request({
+      url: `/notebook-agent/sessions/${sessionId}/system-message`,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      data: { message },
+    })
+  } catch {
+    // 静默：环境通知是 best-effort，失败不阻塞
+  }
+}

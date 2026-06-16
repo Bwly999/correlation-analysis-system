@@ -124,4 +124,40 @@ describe('WorkerHost 60s/90s 超时 + 自愈', () => {
     expect(result.errorType).toBe('kernel_dead')
     expect(host.state.status).toBe('dead')
   })
+
+  it('autoRestart 成功 init_done 后触发 onAutoRestarted 回调', async () => {
+    await ready()
+    const restartedSpy = vi.fn()
+    host.onAutoRestarted = restartedSpy
+
+    const execPromise = host.exec('while True: pass', 60_000)
+    // 90s 硬超时 → terminate + autoRestart（建第二个 worker + 发 init）
+    await vi.advanceTimersByTimeAsync(90_001)
+    await execPromise
+
+    expect(workers.length).toBe(2)
+    expect(restartedSpy).not.toHaveBeenCalled() // init_done 还没回
+
+    // 第二个 worker 回 init_done → 触发 onAutoRestarted
+    workers[1]!.emit({
+      kind: 'init_done',
+      requestId: workers[1]!.posted[0]!.requestId,
+      pyodideVersion: '0.27.7',
+      crossOriginIsolated: true,
+      sabSupported: true,
+    })
+
+    expect(restartedSpy).toHaveBeenCalledTimes(1)
+    expect(restartedSpy).toHaveBeenCalledWith({
+      pyodideVersion: '0.27.7',
+      autoRestartCount: 1,
+    })
+  })
+
+  it('首次 init_done 不触发 onAutoRestarted（仅自愈路径触发）', async () => {
+    const restartedSpy = vi.fn()
+    host.onAutoRestarted = restartedSpy
+    await ready() // 首启 init_done
+    expect(restartedSpy).not.toHaveBeenCalled()
+  })
 })

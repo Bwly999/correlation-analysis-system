@@ -20,6 +20,7 @@ import {
   finishNotebookAgentToolCall,
   getNotebookAgentSessionOwner,
   getNotebookAgentSessionView,
+  injectNotebookSystemMessage,
   markNotebookAgentSessionReady,
   sendNotebookAgentMessage,
   subscribeNotebookAgentEvents,
@@ -123,6 +124,23 @@ export const createNotebookAgentRoutes = (): FastifyPluginAsync => async (app) =
     if (!ok) {
       reply.code(404)
       return { message: '会话不存在' }
+    }
+    return { ok: true }
+  })
+
+  app.post('/api/notebook-agent/sessions/:sessionId/system-message', async (request, reply) => {
+    const user = requireWorkflowUser(request)
+    const { sessionId } = request.params as { sessionId: string }
+    requireOwnedSession(sessionId, user.id)
+    const body = request.body as { message?: string }
+    if (!body.message || typeof body.message !== 'string') {
+      reply.code(400)
+      return { message: '缺少 message' }
+    }
+    const ok = await injectNotebookSystemMessage(sessionId, body.message)
+    if (!ok) {
+      reply.code(404)
+      return { message: '会话不存在或注入失败' }
     }
     return { ok: true }
   })

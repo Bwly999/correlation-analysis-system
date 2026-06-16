@@ -87,6 +87,13 @@ export class WorkerHost {
   private pendingFsSnapshot: Map<string, PendingFsSnapshot> = new Map()
   private nextId = 0
   private readonly workerFactory: WorkerFactory
+  /**
+   * 自动重启（硬超时 / 崩溃自愈）成功 init 后的回调。
+   * runtime 注入：用于通知 Agent "Python 环境已重启，Workspace 文件保留"。
+   */
+  onAutoRestarted?: (info: { pyodideVersion: string; autoRestartCount: number }) => void
+  /** 标记 autoRestart 发出的 init 尚未收到 init_done（用于区分首启 / 自愈） */
+  private restartInitInFlight = false
 
   constructor(workerFactory: WorkerFactory = createDefaultWorker) {
     this.workerFactory = workerFactory
@@ -276,6 +283,18 @@ export class WorkerHost {
           sabSupported: msg.sabSupported,
         })
         this.pendingInit = null
+        // autoRestart 发出的 init（无 pendingInit）：触发重启通知回调
+        if (this.restartInitInFlight) {
+          this.restartInitInFlight = false
+          try {
+            this.onAutoRestarted?.({
+              pyodideVersion: msg.pyodideVersion,
+              autoRestartCount: this.state.autoRestartCount,
+            })
+          } catch {
+            // 回调失败不影响重启主流程
+          }
+        }
         break
 
       case 'init_error':
@@ -432,6 +451,7 @@ export class WorkerHost {
   private autoRestart = async () => {
     if (!this.lastInitIndexUrl) return
     this.state.autoRestartCount += 1
+    this.restartInitInFlight = true
     this.worker = this.workerFactory()
     this.interruptBuffer = createInterruptBuffer()
     this.worker.addEventListener('message', this.handleMessage)

@@ -12,6 +12,7 @@ import { createToolDispatcher } from './toolDispatcher'
 import { createNotebookTodoStore } from './notebookTodoStore'
 import { createAskUserQueue } from './askUserQueue'
 import {
+  notifyNotebookEnvironmentChanged,
   resolveNotebookAgentToolResult,
   sendNotebookAgentMessage,
   streamNotebookAgentEvents,
@@ -144,6 +145,19 @@ export const createNotebookSessionRuntime = async (
       path,
       toTransferableArrayBuffer(bytes),
     )
+  }
+
+  // Worker 自动重启（硬超时 / 崩溃自愈）后的闭环：重灌 OPFS → MEMFS + 通知 Agent
+  workerHost.onAutoRestarted = () => {
+    void (async () => {
+      // 新 Worker 的 MEMFS 是空的，把 OPFS 里的 inputs/scripts 灌回去
+      await syncOpfsFilesToWorker().catch(() => undefined)
+      // 告知 Agent 环境已重启，下一轮动作需重新 import / 重新加载数据
+      await notifyNotebookEnvironmentChanged(
+        sessionId,
+        '⚠️ Python 运行时已自动重启（执行超时或崩溃自愈）。Workspace 文件已保留，但内存中的变量、已 import 的模块、已加载的 DataFrame 均已失效。下一次操作前请重新加载数据。',
+      )
+    })()
   }
 
   const handleToolExecute = async (event: NotebookAgentEvent) => {
