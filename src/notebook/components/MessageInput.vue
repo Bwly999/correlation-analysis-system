@@ -2,7 +2,7 @@
 /**
  * MessageInput.vue
  *
- * 消息输入：悬浮卡片样式（参考 Codex），Ctrl/⌘+Enter 发送，遇到 ask_user 暂停时禁用。
+ * 消息输入：悬浮卡片样式（参考 Codex），Enter 发送、Shift/Ctrl+Enter 换行，遇到 ask_user 暂停时禁用。
  *
  * 视觉风格 ▸ 圆角白卡 + 柔和阴影；放在消息流底部上方浮起。
  */
@@ -36,7 +36,8 @@ const placeholder = computed(() => {
 })
 
 const onKeydown = (e: KeyboardEvent) => {
-  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+  // Enter 发送；Ctrl/⌘+Enter 或 Shift+Enter 换行
+  if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.isComposing) {
     e.preventDefault()
     onSend()
   }
@@ -131,7 +132,7 @@ const ctxTitle = computed(() => {
         <span v-if="awaitingUser" style="color: var(--nb-copper-deep);">
           等待回答
         </span>
-        <span v-else>⌘ + Enter 发送 · ⌘ + K 聚焦</span>
+        <span v-else>Enter 发送 · Shift/Ctrl + Enter 换行 · ⌘ + K 聚焦</span>
         <span v-if="charCount > 0" style="color: var(--nb-rule-strong);">·</span>
         <span v-if="charCount > 0" class="tabular-nums">{{ charCount }} 字</span>
       </div>
@@ -185,7 +186,7 @@ const ctxTitle = computed(() => {
                 }
           "
           :disabled="!text.trim() || awaitingUser"
-          :title="awaitingUser ? '等待回答' : '发送 (⌘+Enter)'"
+          :title="awaitingUser ? '等待回答' : '发送 (Enter)'"
           @click="onSend"
         >
           <ArrowUp :size="14" :stroke-width="2.2" />
