@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * notebookAgentSessionStore 单测。
  *
@@ -44,6 +45,7 @@ describe('notebookAgent sessionStore', () => {
     expect(rec.sessionId).toMatch(/-/)
     expect(rec.userId).toBe('u-1')
     expect(rec.status).toBe('idle')
+    expect(rec.dataReady).toBe(false)
     expect(rec.initialDataMeta.rowCount).toBe(100)
   })
 

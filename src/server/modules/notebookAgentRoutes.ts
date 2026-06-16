@@ -20,6 +20,7 @@ import {
   finishNotebookAgentToolCall,
   getNotebookAgentSessionOwner,
   getNotebookAgentSessionView,
+  markNotebookAgentSessionReady,
   sendNotebookAgentMessage,
   subscribeNotebookAgentEvents,
 } from '../notebookAgent/gateway.js'
@@ -107,6 +108,18 @@ export const createNotebookAgentRoutes = (): FastifyPluginAsync => async (app) =
       id: body.id,
       content: body.content,
     })
+    if (!ok) {
+      reply.code(404)
+      return { message: '会话不存在' }
+    }
+    return { ok: true }
+  })
+
+  app.post('/api/notebook-agent/sessions/:sessionId/ready', async (request, reply) => {
+    const user = requireWorkflowUser(request)
+    const { sessionId } = request.params as { sessionId: string }
+    requireOwnedSession(sessionId, user.id)
+    const ok = markNotebookAgentSessionReady(sessionId)
     if (!ok) {
       reply.code(404)
       return { message: '会话不存在' }

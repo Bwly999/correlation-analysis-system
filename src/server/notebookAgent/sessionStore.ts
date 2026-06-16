@@ -49,6 +49,7 @@ export interface NotebookSessionRecord {
   origin: string
   initialDataMeta: ImportCsvMeta
   status: NotebookSessionStatus
+  dataReady: boolean
   messages: NotebookMessage[]
   toolCalls: NotebookToolCall[]
   createdAt: number
@@ -67,6 +68,7 @@ export const createNotebookSession = (
     origin: init.origin,
     initialDataMeta: init.initialDataMeta,
     status: 'idle',
+    dataReady: false,
     messages: [],
     toolCalls: [],
     createdAt: now,
@@ -124,7 +126,7 @@ export const endNotebookSession = (
 
 export const updateNotebookSessionRecord = (
   sessionId: string,
-  update: Partial<Pick<NotebookSessionRecord, 'status'>>,
+  update: Partial<Pick<NotebookSessionRecord, 'status' | 'dataReady'>>,
 ): void => {
   const record = sessions.get(sessionId)
   if (!record) return

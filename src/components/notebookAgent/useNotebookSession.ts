@@ -21,6 +21,7 @@ import {
   type ParentBridgeServerOptions,
 } from './parentBridgeServer'
 import type { CsvImport } from './dataSourceCsv'
+import { httpClient } from '@/services/httpClient'
 import type {
   IframeBridgeRequest,
   IframeSessionState,
@@ -39,6 +40,7 @@ export interface UseNotebookSessionOptions {
   onUnloadConfirm?: (hasUnsavedExec: boolean) => void
   /** 注入消息源订阅器；默认走 window.addEventListener */
   addMessageListener?: (l: (e: MessageEvent) => void) => () => void
+  notifySessionReady?: (sessionId: string) => Promise<void>
 }
 
 export interface UseNotebookSession {
@@ -64,6 +66,13 @@ const cloneTransferBuffer = (buffer: ArrayBuffer): ArrayBuffer => {
   return cloned
 }
 
+const defaultNotifySessionReady = async (sessionId: string): Promise<void> => {
+  const response = await httpClient.post(`/notebook-agent/sessions/${sessionId}/ready`)
+  if (response.status >= 400) {
+    throw new Error(`通知 Notebook 会话就绪失败：${response.status}`)
+  }
+}
+
 export const useNotebookSession = (
   options: UseNotebookSessionOptions,
 ): UseNotebookSession => {
@@ -76,6 +85,7 @@ export const useNotebookSession = (
     onWorkspaceChanged,
     onUnloadConfirm,
     addMessageListener = defaultListener,
+    notifySessionReady = defaultNotifySessionReady,
   } = options
 
   const state = ref<IframeSessionState>('loading_pyodide')
@@ -135,6 +145,7 @@ export const useNotebookSession = (
           meta: initialData.meta,
         }
         await bridge.request(importReq, { transfer: [buffer] })
+        await notifySessionReady(sessionId)
         imported = true
       } catch (err) {
         // 失败时把状态置 failed，让上层 UI 提示

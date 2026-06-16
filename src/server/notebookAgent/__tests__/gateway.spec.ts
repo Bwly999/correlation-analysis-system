@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -40,6 +41,7 @@ import {
   closeNotebookAgentSession,
   createNotebookAgentSession,
   getNotebookAgentSessionView,
+  markNotebookAgentSessionReady,
   sendNotebookAgentMessage,
   subscribeNotebookAgentEvents,
 } from '../gateway.js'
@@ -90,7 +92,7 @@ describe('notebookAgent gateway', () => {
     expect(loaderReloadMock).toHaveBeenCalledOnce()
   })
 
-  it('订阅事件流时会自动触发首轮 bootstrap prompt', async () => {
+  it('仅订阅事件流时不会自动触发首轮 bootstrap prompt', async () => {
     const created = await createNotebookAgentSession({
       userId: 'u-1',
       origin: 'http://localhost:5173',
@@ -104,12 +106,86 @@ describe('notebookAgent gateway', () => {
 
     const unsubscribe = subscribeNotebookAgentEvents(created.sessionId, () => undefined)
     expect(unsubscribe).toBeTypeOf('function')
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(sessionPromptMock).not.toHaveBeenCalled()
+  })
+
+  it('先订阅事件流，收到 session ready 后才触发首轮 bootstrap prompt', async () => {
+    const created = await createNotebookAgentSession({
+      userId: 'u-1',
+      origin: 'http://localhost:5173',
+      initialDataMeta: {
+        sourceKind: 'canvas-node',
+        sourceLabel: '清洗-Q2',
+        rowCount: 123,
+        columnCount: 4,
+      },
+    })
+
+    const unsubscribe = subscribeNotebookAgentEvents(created.sessionId, () => undefined)
+    expect(unsubscribe).toBeTypeOf('function')
+    expect(sessionPromptMock).not.toHaveBeenCalled()
+
+    const ok = markNotebookAgentSessionReady(created.sessionId)
+    expect(ok).toBe(true)
 
     await vi.waitFor(() => {
       expect(sessionPromptMock).toHaveBeenCalledWith(
         '请先开始需求澄清：用 grill-me 风格向用户提 1-3 个最关键的问题，然后再写 todo_write 计划。',
       )
     })
+  })
+
+  it('先收到 session ready，再订阅事件流时才触发 bootstrap prompt', async () => {
+    const created = await createNotebookAgentSession({
+      userId: 'u-1',
+      origin: 'http://localhost:5173',
+      initialDataMeta: {
+        sourceKind: 'canvas-node',
+        sourceLabel: '清洗-Q2',
+        rowCount: 123,
+        columnCount: 4,
+      },
+    })
+
+    const ok = markNotebookAgentSessionReady(created.sessionId)
+    expect(ok).toBe(true)
+    expect(sessionPromptMock).not.toHaveBeenCalled()
+
+    const unsubscribe = subscribeNotebookAgentEvents(created.sessionId, () => undefined)
+    expect(unsubscribe).toBeTypeOf('function')
+
+    await vi.waitFor(() => {
+      expect(sessionPromptMock).toHaveBeenCalledWith(
+        '请先开始需求澄清：用 grill-me 风格向用户提 1-3 个最关键的问题，然后再写 todo_write 计划。',
+      )
+    })
+  })
+
+  it('重复收到 session ready 时不会重复触发 bootstrap prompt', async () => {
+    const created = await createNotebookAgentSession({
+      userId: 'u-1',
+      origin: 'http://localhost:5173',
+      initialDataMeta: {
+        sourceKind: 'canvas-node',
+        sourceLabel: '清洗-Q2',
+        rowCount: 123,
+        columnCount: 4,
+      },
+    })
+
+    subscribeNotebookAgentEvents(created.sessionId, () => undefined)
+
+    expect(markNotebookAgentSessionReady(created.sessionId)).toBe(true)
+    await vi.waitFor(() => {
+      expect(sessionPromptMock).toHaveBeenCalledTimes(1)
+    })
+
+    expect(markNotebookAgentSessionReady(created.sessionId)).toBe(true)
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(sessionPromptMock).toHaveBeenCalledTimes(1)
   })
 
   it('发送消息时把用户消息入库并调用 SDK prompt', async () => {

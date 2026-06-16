@@ -1,9 +1,11 @@
+// @vitest-environment node
 import Fastify, { type FastifyInstance } from 'fastify'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   createNotebookAgentSessionMock,
   sendNotebookAgentMessageMock,
+  markNotebookAgentSessionReadyMock,
   subscribeNotebookAgentEventsMock,
   getNotebookAgentSessionViewMock,
   getNotebookAgentSessionOwnerMock,
@@ -13,6 +15,7 @@ const {
 } = vi.hoisted(() => ({
   createNotebookAgentSessionMock: vi.fn(),
   sendNotebookAgentMessageMock: vi.fn(),
+  markNotebookAgentSessionReadyMock: vi.fn(),
   subscribeNotebookAgentEventsMock: vi.fn(),
   getNotebookAgentSessionViewMock: vi.fn(),
   getNotebookAgentSessionOwnerMock: vi.fn(),
@@ -24,6 +27,7 @@ const {
 vi.mock('../gateway.js', () => ({
   createNotebookAgentSession: createNotebookAgentSessionMock,
   sendNotebookAgentMessage: sendNotebookAgentMessageMock,
+  markNotebookAgentSessionReady: markNotebookAgentSessionReadyMock,
   subscribeNotebookAgentEvents: subscribeNotebookAgentEventsMock,
   getNotebookAgentSessionView: getNotebookAgentSessionViewMock,
   getNotebookAgentSessionOwner: getNotebookAgentSessionOwnerMock,
@@ -66,6 +70,7 @@ afterEach(async () => {
   vi.restoreAllMocks()
   createNotebookAgentSessionMock.mockReset()
   sendNotebookAgentMessageMock.mockReset()
+  markNotebookAgentSessionReadyMock.mockReset()
   subscribeNotebookAgentEventsMock.mockReset()
   getNotebookAgentSessionViewMock.mockReset()
   getNotebookAgentSessionOwnerMock.mockReset()
@@ -246,6 +251,35 @@ describe('POST /api/notebook-agent/sessions/:id/messages', () => {
       id: 'msg-1',
       content: '继续分析',
     })
+  })
+})
+
+describe('POST /api/notebook-agent/sessions/:id/ready', () => {
+  it('通知 gateway 当前会话数据已导入完成', async () => {
+    markNotebookAgentSessionReadyMock.mockReturnValueOnce(true)
+
+    const app = await createTestApp()
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/notebook-agent/sessions/notebook-session-1/ready',
+      headers: userHeaders(),
+    })
+
+    expect(response.statusCode).toBe(200)
+    expect(markNotebookAgentSessionReadyMock).toHaveBeenCalledWith('notebook-session-1')
+  })
+
+  it('会话不存在时返回 404', async () => {
+    markNotebookAgentSessionReadyMock.mockReturnValueOnce(false)
+
+    const app = await createTestApp()
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/notebook-agent/sessions/notebook-session-1/ready',
+      headers: userHeaders(),
+    })
+
+    expect(response.statusCode).toBe(404)
   })
 })
 

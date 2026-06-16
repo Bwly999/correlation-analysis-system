@@ -39,6 +39,7 @@ interface NotebookAgentRuntime {
   eventListeners: Set<(event: NotebookAgentSseEvent) => void>
   currentMessageId: { value: string }
   bootstrapStarted: boolean
+  streamSubscribed: boolean
   unsubscribe?: () => void
 }
 
@@ -67,8 +68,8 @@ const emitRuntimeEvent = (runtime: NotebookAgentRuntime, event: NotebookAgentSse
   }
 }
 
-const startNotebookBootstrap = (runtime: NotebookAgentRuntime) => {
-  if (runtime.bootstrapStarted) return
+const tryStartNotebookBootstrap = (runtime: NotebookAgentRuntime) => {
+  if (runtime.bootstrapStarted || !runtime.streamSubscribed || !runtime.record.dataReady) return
   runtime.bootstrapStarted = true
   void Promise.resolve()
     .then(() => runtime.session.prompt(NOTEBOOK_BOOTSTRAP_PROMPT))
@@ -138,6 +139,7 @@ export const createNotebookAgentSession = async (
     eventListeners,
     currentMessageId: { value: '' },
     bootstrapStarted: false,
+    streamSubscribed: false,
   }
 
   const unsubscribe = session.subscribe((event) => {
@@ -264,8 +266,18 @@ export const subscribeNotebookAgentEvents = (
   const runtime = runtimes.get(sessionId)
   if (!runtime) return null
   runtime.eventListeners.add(listener)
-  startNotebookBootstrap(runtime)
+  runtime.streamSubscribed = true
+  tryStartNotebookBootstrap(runtime)
   return () => {
     runtime.eventListeners.delete(listener)
   }
+}
+
+export const markNotebookAgentSessionReady = (sessionId: string): boolean => {
+  const runtime = runtimes.get(sessionId)
+  if (!runtime) return false
+  runtime.record.dataReady = true
+  updateNotebookSessionRecord(sessionId, { dataReady: true })
+  tryStartNotebookBootstrap(runtime)
+  return true
 }

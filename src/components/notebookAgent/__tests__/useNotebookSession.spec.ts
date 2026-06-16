@@ -107,6 +107,7 @@ describe('useNotebookSession', () => {
       createBridge: fake.factory as unknown as (
         opts: ParentBridgeServerOptions,
       ) => ParentBridgeServer,
+      notifySessionReady: vi.fn().mockResolvedValue(undefined),
       ...init,
     })
   }
@@ -125,7 +126,8 @@ describe('useNotebookSession', () => {
   })
 
   it('iframe 挂载后创建 bridge；收到 iframe.ready 后发 handshake → import_csv', async () => {
-    const session = useSession()
+    const notifySessionReady = vi.fn().mockResolvedValue(undefined)
+    const session = useSession({ notifySessionReady })
     mountIframe()
     await nextTick()
 
@@ -146,7 +148,54 @@ describe('useNotebookSession', () => {
     fake.bridge.resolveNextRequest({ path: 'inputs/upstream.csv', bytes: 8 })
     await Promise.resolve()
     await nextTick()
+    void notifySessionReady
     void session // 触发 watcher 的话用得到
+  })
+
+  it('import_csv 成功后才通知 session ready', async () => {
+    const notifySessionReady = vi.fn().mockResolvedValue(undefined)
+    useSession({ notifySessionReady })
+    mountIframe()
+    await nextTick()
+
+    fake.bridge.emitEvent({ kind: 'iframe.ready', sessionId: 'sess-1' })
+    await nextTick()
+    expect(notifySessionReady).not.toHaveBeenCalled()
+
+    fake.bridge.resolveNextRequest({ sessionId: 'sess-1' })
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(notifySessionReady).not.toHaveBeenCalled()
+
+    fake.bridge.resolveNextRequest({ path: 'inputs/upstream.csv', bytes: 8 })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    await vi.waitFor(() => {
+      expect(notifySessionReady).toHaveBeenCalledWith('sess-1')
+    })
+  })
+
+  it('import_csv 失败时不会通知 session ready，且状态转为 failed', async () => {
+    const notifySessionReady = vi.fn().mockResolvedValue(undefined)
+    const session = useSession({ notifySessionReady })
+    mountIframe()
+    await nextTick()
+
+    fake.bridge.emitEvent({ kind: 'iframe.ready', sessionId: 'sess-1' })
+    await nextTick()
+
+    fake.bridge.resolveNextRequest({ sessionId: 'sess-1' })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    fake.bridge.rejectNextRequest(new Error('导入失败'))
+    await Promise.resolve()
+    await Promise.resolve()
+    await nextTick()
+
+    expect(notifySessionReady).not.toHaveBeenCalled()
+    expect(session.state.value).toBe('failed')
   })
 
   it('重复收到 iframe.ready 时，不会重复发起 import_csv', async () => {
