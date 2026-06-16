@@ -22,7 +22,7 @@ describe('NotebookLauncher', () => {
     const wrapper = mount(NotebookLauncher, { props: { available: SOURCES } })
     const btn = wrapper.find('[data-testid="notebook-launcher-button"]')
     expect(btn.exists()).toBe(true)
-    expect(btn.text()).toContain('AI 分析笔记本')
+    expect(btn.text()).toContain('AI分析')
   })
 
   it('点击按钮 → dialog 打开', async () => {

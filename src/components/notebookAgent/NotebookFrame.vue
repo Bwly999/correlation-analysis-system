@@ -59,7 +59,7 @@ const onClose = async () => {
         ref="iframeRef"
         :src="iframeSrc"
         class="h-full w-full border-0 bg-white"
-        title="AI 洞察"
+        title="AI分析"
       />
     </div>
   </Teleport>
