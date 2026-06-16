@@ -24,7 +24,8 @@ import {
 import { renderMarkdownSafe } from '../preview/markdownRenderer'
 import { resolvePreviewKind } from '../preview/previewRouter'
 import type { PreviewKind } from '../preview/previewRouter'
-import { readBytes, resolveSafePath, type OpfsDirectoryHandle } from '../shared/opfsAccess'
+import type { OpfsDirectoryHandle } from '../shared/opfsAccess'
+import { createArtifactImageReplacer } from '../preview/markdownArtifacts'
 
 interface MetaInfo {
   size?: number
@@ -51,82 +52,15 @@ interface TocEntry {
 
 const renderedHtml = ref('')
 const tocEntries = ref<TocEntry[]>([])
-const markdownBlobUrls = ref<string[]>([])
 
-const revokeMarkdownBlobUrls = () => {
-  for (const url of markdownBlobUrls.value) {
-    URL.revokeObjectURL(url)
-  }
-  markdownBlobUrls.value = []
-}
-
-const resolveMarkdownAssetPath = (basePath: string, rawSrc: string): string | null => {
-  if (!rawSrc || !rawSrc.startsWith('../')) return null
-  const baseSegs = basePath.split('/').slice(0, -1)
-  const targetSegs = rawSrc.split('/')
-  for (const seg of targetSegs) {
-    if (seg === '..') {
-      baseSegs.pop()
-      continue
-    }
-    if (seg === '.' || seg === '') continue
-    baseSegs.push(seg)
-  }
-  const resolvedPath = baseSegs.join('/')
-  try {
-    resolveSafePath(resolvedPath)
-    return resolvedPath
-  } catch {
-    return null
-  }
-}
-
-const inferImageMime = (path: string): string => {
-  const ext = path.slice(path.lastIndexOf('.')).toLowerCase()
-  switch (ext) {
-    case '.png':
-      return 'image/png'
-    case '.jpg':
-    case '.jpeg':
-      return 'image/jpeg'
-    case '.svg':
-      return 'image/svg+xml'
-    case '.gif':
-      return 'image/gif'
-    case '.webp':
-      return 'image/webp'
-    default:
-      return 'application/octet-stream'
-  }
-}
-
-const replaceMarkdownArtifactImages = async (html: string): Promise<string> => {
-  if (!props.opfsRoot || !props.selectedPath) return html
-  const imageMatches = [...html.matchAll(/<img\b[^>]*\ssrc="([^"]+)"[^>]*>/gi)]
-  if (imageMatches.length === 0) return html
-
-  let nextHtml = html
-  revokeMarkdownBlobUrls()
-
-  for (const match of imageMatches) {
-    const rawSrc = match[1]
-    if (!rawSrc) continue
-    const resolvedPath = resolveMarkdownAssetPath(props.selectedPath, rawSrc)
-    if (!resolvedPath) continue
-    try {
-      const bytes = await readBytes(props.opfsRoot, resolvedPath)
-      const blobUrl = URL.createObjectURL(
-        new Blob([bytes], { type: inferImageMime(resolvedPath) }),
-      )
-      markdownBlobUrls.value.push(blobUrl)
-      nextHtml = nextHtml.replace(`src="${rawSrc}"`, `src="${blobUrl}"`)
-    } catch {
-      // ignore missing asset and keep relative src
-    }
-  }
-
-  return nextHtml
-}
+const artifactReplacer = createArtifactImageReplacer({
+  get opfsRoot() {
+    return props.opfsRoot
+  },
+  get basePath() {
+    return props.selectedPath ?? ''
+  },
+})
 
 watch(
   [previewKind, () => props.content],
@@ -145,9 +79,9 @@ watch(
         tocEntries.value.push({ level: Number(lvl), text: plain, id })
         return `<h${lvl} id="${id}">${text}</h${lvl}>`
       })
-      renderedHtml.value = await replaceMarkdownArtifactImages(html)
+      renderedHtml.value = await artifactReplacer.rewrite(html)
     } else {
-      revokeMarkdownBlobUrls()
+      artifactReplacer.dispose()
       tocEntries.value = []
       renderedHtml.value = ''
     }
@@ -156,7 +90,7 @@ watch(
 )
 
 onBeforeUnmount(() => {
-  revokeMarkdownBlobUrls()
+  artifactReplacer.dispose()
 })
 
 const codeLines = computed(() => {

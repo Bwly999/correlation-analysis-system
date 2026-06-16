@@ -364,6 +364,7 @@ const onSend = (text: string) => emit('send', text)
           class="absolute inset-0"
           :messages="session.messages"
           :session-title="session.title"
+          :opfs-root="props.opfsRoot"
           @ask-user-submit="(p) => emit('askUserSubmit', p)"
           @ask-user-cancel="(id) => emit('askUserCancel', id)"
           @open-in-tree="onSelect"

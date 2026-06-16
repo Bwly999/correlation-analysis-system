@@ -10,7 +10,7 @@
 
 import { computed } from 'vue'
 import type { AssistantMessage } from '../types/messageStream'
-import { renderMarkdownSafe } from '../preview/markdownRenderer'
+import type { OpfsDirectoryHandle } from '../shared/opfsAccess'
 import ThinkingCard from './cards/ThinkingCard.vue'
 import PythonExecCard from './cards/PythonExecCard.vue'
 import FsWriteCard from './cards/FsWriteCard.vue'
@@ -18,16 +18,15 @@ import FsReadCard from './cards/FsReadCard.vue'
 import FsGrepCard from './cards/FsGrepCard.vue'
 import TodoWriteCard from './cards/TodoWriteCard.vue'
 import AskUserCard from './cards/AskUserCard.vue'
+import AssistantTextBlock from './AssistantTextBlock.vue'
 
-const props = defineProps<{ message: AssistantMessage }>()
+const props = defineProps<{ message: AssistantMessage; opfsRoot?: OpfsDirectoryHandle }>()
 
 const emit = defineEmits<{
   askUserSubmit: [payload: { askId: string; optionId: string; text?: string }]
   askUserCancel: [askId: string]
   openInTree: [path: string]
 }>()
-
-const renderText = (md: string) => renderMarkdownSafe(md)
 
 const isStreaming = computed(() => props.message.streaming)
 
@@ -59,10 +58,10 @@ const onAskSubmit = (askId: string, payload: { optionId: string; text?: string }
       <template v-for="(b, i) in message.blocks" :key="b.data.id + '-' + i">
         <ThinkingCard v-if="b.kind === 'thinking'" :block="b.data" />
 
-        <div
+        <AssistantTextBlock
           v-else-if="b.kind === 'text'"
-          class="nb-prose"
-          v-html="renderText(b.data.text)"
+          :text="b.data.text"
+          :opfs-root="props.opfsRoot"
         />
 
         <PythonExecCard

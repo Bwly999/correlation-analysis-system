@@ -9,12 +9,14 @@
 import { computed, nextTick, ref } from 'vue'
 import { watchDebounced } from '@vueuse/core'
 import type { NotebookMessage } from '../types/messageStream'
+import type { OpfsDirectoryHandle } from '../shared/opfsAccess'
 import UserMessageBlock from './UserMessageBlock.vue'
 import AssistantMessageBlock from './AssistantMessageBlock.vue'
 
 const props = defineProps<{
   messages: NotebookMessage[]
   sessionTitle?: string
+  opfsRoot?: OpfsDirectoryHandle
 }>()
 
 const emit = defineEmits<{
@@ -137,6 +139,7 @@ const todayLabel = computed(() => {
         <AssistantMessageBlock
           v-else
           :message="m"
+          :opfs-root="props.opfsRoot"
           @ask-user-submit="(p) => emit('askUserSubmit', p)"
           @ask-user-cancel="(id) => emit('askUserCancel', id)"
           @open-in-tree="(p) => emit('openInTree', p)"
