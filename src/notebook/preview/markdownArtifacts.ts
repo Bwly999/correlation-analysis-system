@@ -50,7 +50,13 @@ export const resolveArtifactPath = (basePath: string, rawSrc: string): string | 
       continue
     }
     if (seg === '.' || seg === '') continue
-    baseSegs.push(seg)
+    // marked 会把中文等非 ASCII 文件名做 URL 编码（%E7%9B%B8...），
+    // 但 OPFS 里文件名是原始未编码文本，这里逐段 decode 还原后才能命中。
+    try {
+      baseSegs.push(decodeURIComponent(seg))
+    } catch {
+      baseSegs.push(seg)
+    }
   }
   const resolvedPath = baseSegs.join('/')
   if (!resolvedPath) return null

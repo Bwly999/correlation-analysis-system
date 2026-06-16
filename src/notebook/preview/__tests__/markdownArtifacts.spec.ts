@@ -48,6 +48,18 @@ describe('resolveArtifactPath', () => {
   it('越界 ../ 返回 null', () => {
     expect(resolveArtifactPath('', '../../etc/passwd')).toBeNull()
   })
+
+  it('marked 编码过的中文文件名会被 decode 还原', () => {
+    // marked 会把中文 URL 编码成 %E7%9B%B8... 而 OPFS 文件名是原始中文
+    const encoded = '../artifacts/%E7%9B%B8%E5%85%B3%E6%80%A7%E7%83%AD%E5%8A%9B%E5%9B%BE.png'
+    expect(resolveArtifactPath('', encoded)).toBe('artifacts/相关性热力图.png')
+  })
+
+  it('已经是原始中文（未编码）的路径也能解析', () => {
+    expect(resolveArtifactPath('', '../artifacts/相关性热力图.png')).toBe(
+      'artifacts/相关性热力图.png',
+    )
+  })
 })
 
 describe('inferImageMime', () => {
