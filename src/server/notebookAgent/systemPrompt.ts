@@ -13,18 +13,26 @@
 import type { ImportCsvMeta } from '../../notebook/shared/parentBridge.js'
 
 export interface BuildSystemPromptInput {
-  initialDataMeta: ImportCsvMeta
+  initialDataMeta?: ImportCsvMeta
   /** 自定义补充段，写到 system prompt 末尾 */
   extraGuidance?: string
 }
 
-const buildDataIntro = (meta: ImportCsvMeta): string =>
-  [
+const buildDataIntro = (meta: ImportCsvMeta | undefined): string => {
+  if (!meta) {
+    return [
+      `## 当前数据集`,
+      `- 本次为空白笔记本，尚未导入数据`,
+      `- 如需数据，请在对话中向用户说明，或让用户先在画布执行节点产出数据后重新进入`,
+    ].join('\n')
+  }
+  return [
     `## 当前数据集`,
     `- 来源：${meta.sourceKind === 'canvas-node' ? '画布节点' : '数据源'} 「${meta.sourceLabel}」`,
     `- 规模：${meta.rowCount} 行 × ${meta.columnCount} 列`,
     `- 数据已写入 inputs/upstream.csv；列描述见 inputs/upstream.meta.json`,
   ].join('\n')
+}
 
 const STATIC_BODY = `你是一名资深数据分析师，工作在一个独立的 Python 笔记本工作区。
 

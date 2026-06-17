@@ -123,12 +123,30 @@ describe('POST /api/notebook-agent/sessions', () => {
     expect(body.systemPrompt).toMatch(/工作循环|分析师/)
   })
 
-  it('缺 initialDataMeta → 400', async () => {
+  it('缺 initialDataMeta → 视为空白笔记本，正常建会话', async () => {
+    createNotebookAgentSessionMock.mockResolvedValueOnce({
+      sessionId: 'notebook-session-blank',
+      systemPrompt: '你是一名资深数据分析师。',
+    })
     const app = await createTestApp()
     const res = await app.inject({
       method: 'POST',
       url: '/api/notebook-agent/sessions',
       payload: { origin: 'http://localhost:5173' },
+      headers: userHeaders(),
+    })
+    expect(res.statusCode).toBe(200)
+    expect(createNotebookAgentSessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ initialDataMeta: undefined }),
+    )
+  })
+
+  it('initialDataMeta 存在但非法 → 400', async () => {
+    const app = await createTestApp()
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/notebook-agent/sessions',
+      payload: { initialDataMeta: { sourceKind: 'canvas-node' }, origin: 'http://localhost' },
       headers: userHeaders(),
     })
     expect(res.statusCode).toBe(400)

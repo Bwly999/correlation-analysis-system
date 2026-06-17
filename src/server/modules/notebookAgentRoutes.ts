@@ -55,13 +55,18 @@ export const createNotebookAgentRoutes = (): FastifyPluginAsync => async (app) =
       initialDataMeta?: unknown
       origin?: string
     }
-    if (!validateImportCsvMeta(body.initialDataMeta)) {
-      reply.code(400)
-      return { message: '缺少或非法 initialDataMeta' }
+    // 缺失 initialDataMeta = 空白笔记本（不导入数据直接进入）；存在则必须合法
+    let validatedMeta: ImportCsvMeta | undefined
+    if (body.initialDataMeta !== undefined) {
+      if (!validateImportCsvMeta(body.initialDataMeta)) {
+        reply.code(400)
+        return { message: 'initialDataMeta 非法' }
+      }
+      validatedMeta = body.initialDataMeta
     }
     const result = await createNotebookAgentSession({
       userId: user.id,
-      initialDataMeta: body.initialDataMeta,
+      initialDataMeta: validatedMeta,
       origin: typeof body.origin === 'string' ? body.origin : '',
     })
     return result

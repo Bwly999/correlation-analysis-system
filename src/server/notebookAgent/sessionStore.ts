@@ -11,7 +11,7 @@ import type { ImportCsvMeta } from '../../notebook/shared/parentBridge.js'
 
 export interface NotebookSessionInit {
   userId: string
-  initialDataMeta: ImportCsvMeta
+  initialDataMeta?: ImportCsvMeta
   origin: string
 }
 
@@ -47,7 +47,7 @@ export interface NotebookSessionRecord {
   sessionId: string
   userId: string
   origin: string
-  initialDataMeta: ImportCsvMeta
+  initialDataMeta?: ImportCsvMeta
   status: NotebookSessionStatus
   dataReady: boolean
   messages: NotebookMessage[]

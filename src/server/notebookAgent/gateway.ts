@@ -50,7 +50,7 @@ const NOTEBOOK_BOOTSTRAP_PROMPT =
 
 export interface CreateNotebookSessionInput {
   userId: string
-  initialDataMeta: ImportCsvMeta
+  initialDataMeta?: ImportCsvMeta
   origin: string
 }
 
