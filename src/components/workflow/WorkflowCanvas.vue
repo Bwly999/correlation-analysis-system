@@ -73,10 +73,13 @@ const isEditableFocused = ref(false)
 const canvasViewportRef = useTemplateRef<HTMLDivElement>('canvasViewport')
 
 // ── Notebook Agent ──
+// keep-alive：notebookSession 非空 = 存活会话（iframe 常驻、Pyodide 在线）；
+//            notebookVisible = 是否显示（关闭即隐藏，恢复时直接显示，跳过 Pyodide 重启）。
 const notebookSession = ref<{
   sessionId: string
   initialData: CsvImport | null
 } | null>(null)
+const notebookVisible = ref(false)
 
 const isNodeResult = (v: unknown): v is NodeResult =>
   typeof v === 'object' &&
@@ -148,7 +151,18 @@ const handleStartNotebook = async (source: NotebookDataSource | null) => {
       throw new Error(`创建会话失败：${response.status}`)
     }
     const { sessionId } = response.data as { sessionId: string }
+    // 同一标签页内「重新开新分析」时，先记下旧会话以便清理后端。
+    const previousSessionId =
+      notebookSession.value?.sessionId && notebookSession.value.sessionId !== sessionId
+        ? notebookSession.value.sessionId
+        : null
+    // :key(sessionId) 变化 → 旧 NotebookFrame 卸载（runtime.dispose + workerHost.hardKill）；新 iframe 挂载重启 Pyodide。
     notebookSession.value = { sessionId, initialData }
+    notebookVisible.value = true
+    // 异步清理上一个后端会话（不阻塞 UI）
+    if (previousSessionId) {
+      httpClient.delete(`/notebook-agent/sessions/${previousSessionId}`).catch(() => undefined)
+    }
   } catch (err) {
     toast.add({
       severity: 'error',
@@ -159,8 +173,13 @@ const handleStartNotebook = async (source: NotebookDataSource | null) => {
   }
 }
 
-const handleNotebookClose = () => {
-  notebookSession.value = null
+// 关闭 = 隐藏（保留存活会话，可恢复；不销毁 Pyodide / Worker / 后端会话）
+const handleNotebookHide = () => {
+  notebookVisible.value = false
+}
+// 恢复上次仍存活的笔记本（直接显示，跳过 Pyodide 重启，秒回）
+const handleNotebookResume = () => {
+  notebookVisible.value = true
 }
 const PI_AGENT_DESKTOP_BREAKPOINT = 1280
 const PI_AGENT_PANEL_DEFAULT_WIDTH = 480
@@ -772,6 +791,7 @@ onBeforeUnmount(() => {
     <WorkflowHeader
       :is-ai-panel-visible="isAiPanelVisible"
       :available-notebook-sources="availableNotebookSources"
+      :has-live-notebook="!!notebookSession"
       @open-projects="openWorkflowList"
       @open-template-library="openTemplateLibrary"
       @new-workflow="handleCreateWorkflow"
@@ -779,6 +799,7 @@ onBeforeUnmount(() => {
       @open-help="isHelpCenterVisible = true"
       @toggle-ai="toggleAiPanel"
       @start-notebook="handleStartNotebook"
+      @resume-notebook="handleNotebookResume"
     />
 
     <main
@@ -1065,9 +1086,11 @@ onBeforeUnmount(() => {
     <Toast group="node-config" position="bottom-left" />
     <NotebookFrame
       v-if="notebookSession"
+      :key="notebookSession.sessionId"
       :session-id="notebookSession.sessionId"
       :initial-data="notebookSession.initialData"
-      @close="handleNotebookClose"
+      :visible="notebookVisible"
+      @close="handleNotebookHide"
     />
   </div>
 </template>
