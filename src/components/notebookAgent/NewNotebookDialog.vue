@@ -4,7 +4,8 @@
  *
  * 「AI分析」选数据入口弹窗。
  *
- * 两条路径：
+ * 路径：
+ *   - 检测到上次分析仍在运行 → resume（直接恢复，跳过 Pyodide 重启，秒回）
  *   - 选择一个画布节点 → start(source)
  *   - 选择「空白笔记本」 → start(null)（不导入数据直接进入）
  *
@@ -14,7 +15,7 @@
 import { ref, watch } from 'vue'
 import Dialog from 'primevue/dialog'
 import Button from 'primevue/button'
-import { Sparkles, X, Table2, FilePlus2 } from 'lucide-vue-next'
+import { Sparkles, X, Table2, FilePlus2, History } from 'lucide-vue-next'
 
 export interface NotebookDataSource {
   id: string
@@ -29,11 +30,15 @@ export interface NotebookDataSource {
 const props = defineProps<{
   open: boolean
   available: NotebookDataSource[]
+  /** 是否有存活的笔记本会话（可恢复）。为真时弹窗顶部展示「继续上次分析」。 */
+  hasLiveSession?: boolean
 }>()
 
 const emit = defineEmits<{
   cancel: []
   start: [source: NotebookDataSource | null]
+  /** 恢复上次仍存活的笔记本会话（keep-alive：直接显示，不重建 Pyodide） */
+  resume: []
   'update:open': [open: boolean]
 }>()
 
@@ -63,6 +68,11 @@ const onStart = () => {
     if (!source) return
     emit('start', source)
   }
+  emit('update:open', false)
+}
+
+const onResume = () => {
+  emit('resume')
   emit('update:open', false)
 }
 </script>
@@ -99,6 +109,25 @@ const onStart = () => {
     </template>
 
     <div class="py-2">
+      <!-- 恢复上次分析（keep-alive：有存活会话时展示，秒回，不重建 Pyodide） -->
+      <button
+        v-if="hasLiveSession"
+        type="button"
+        class="mb-3 flex w-full items-center gap-3 rounded-lg border border-emerald-200 bg-emerald-50/70 p-3 text-left transition-all hover:border-emerald-400 hover:bg-emerald-50"
+        @click="onResume"
+      >
+        <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600">
+          <History :size="16" :stroke-width="2" />
+        </span>
+        <div class="min-w-0 flex-1">
+          <div class="text-sm font-semibold text-slate-900">继续上次分析</div>
+          <div class="mt-0.5 text-xs text-slate-500">上次的分析仍在运行，直接恢复（秒回）</div>
+        </div>
+        <span class="shrink-0 rounded-full bg-emerald-600 px-2.5 py-0.5 text-[11px] font-bold text-white">
+          推荐
+        </span>
+      </button>
+
       <!-- 画布节点 -->
       <div class="mb-2 flex items-center gap-2">
         <span class="text-xs font-semibold tracking-wide text-slate-400">画布节点</span>

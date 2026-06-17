@@ -35,6 +35,8 @@ const emit = defineEmits<{
   openHelp: []
   toggleAi: []
   startNotebook: [source: NotebookDataSource | null]
+  /** 恢复上次仍存活的笔记本会话（keep-alive） */
+  resumeNotebook: []
 }>()
 const store = useWorkflowStore()
 const toast = useToast()
@@ -42,6 +44,8 @@ const showUnsavedIndicator = computed(() => !store.isHistoryMode && store.hasUns
 const props = defineProps<{
   isAiPanelVisible?: boolean
   availableNotebookSources?: NotebookDataSource[]
+  /** 是否有存活的笔记本会话（可恢复） */
+  hasLiveNotebook?: boolean
 }>()
 
 // 过滤当前工作流的历史记录
@@ -319,7 +323,9 @@ const formatDuration = (ms: number) => {
       <NotebookLauncher
         v-if="!store.isHistoryMode"
         :available="props.availableNotebookSources ?? []"
+        :has-live-session="props.hasLiveNotebook"
         @start="(source) => emit('startNotebook', source)"
+        @resume="emit('resumeNotebook')"
       />
 
       <button v-if="!store.isHistoryMode" class="file-btn" @click="toggleMenu">

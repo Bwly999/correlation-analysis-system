@@ -21,10 +21,14 @@ import NewNotebookDialog, { type NotebookDataSource } from './NewNotebookDialog.
 
 defineProps<{
   available: NotebookDataSource[]
+  /** 是否有存活的笔记本会话（可恢复）。透传给弹窗以展示「继续上次分析」。 */
+  hasLiveSession?: boolean
 }>()
 
 const emit = defineEmits<{
   start: [source: NotebookDataSource | null]
+  /** 恢复上次仍存活的笔记本会话（keep-alive） */
+  resume: []
 }>()
 
 /** 三套视觉风格，挂载时随机选其一并固定（避免每次重渲染跳动） */
@@ -45,6 +49,10 @@ const onClick = () => {
 const onStart = (source: NotebookDataSource | null) => {
   emit('start', source)
 }
+
+const onResume = () => {
+  emit('resume')
+}
 </script>
 
 <template>
@@ -61,7 +69,9 @@ const onStart = (source: NotebookDataSource | null) => {
     <NewNotebookDialog
       v-model:open="dialogOpen"
       :available="available"
+      :has-live-session="hasLiveSession"
       @start="onStart"
+      @resume="onResume"
     />
   </div>
 </template>
