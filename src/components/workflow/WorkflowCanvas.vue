@@ -75,7 +75,7 @@ const canvasViewportRef = useTemplateRef<HTMLDivElement>('canvasViewport')
 // ── Notebook Agent ──
 const notebookSession = ref<{
   sessionId: string
-  initialData: CsvImport
+  initialData: CsvImport | null
 } | null>(null)
 
 const isNodeResult = (v: unknown): v is NodeResult =>
@@ -119,32 +119,36 @@ const availableNotebookSources = computed<NotebookDataSource[]>(() =>
     }),
 )
 
-const handleStartNotebook = async (source: NotebookDataSource) => {
-  const node = store.nodes.find((n) => n.id === source.id)
-  const nodeOutput = store.getNodeOutput(source.id)
-  if (!node || !isNodeResult(nodeOutput)) {
-    toast.add({
-      severity: 'error',
-      summary: '无法启动笔记本',
-      detail: '该节点没有可用数据',
-      life: 3000,
-    })
-    return
-  }
+const handleStartNotebook = async (source: NotebookDataSource | null) => {
   try {
-    const csvImport = nodeResultToCsv(nodeOutput, {
-      sourceKind: 'canvas-node',
-      sourceLabel: source.label,
-    })
+    let initialData: CsvImport | null = null
+    if (source) {
+      const node = store.nodes.find((n) => n.id === source.id)
+      const nodeOutput = store.getNodeOutput(source.id)
+      if (!node || !isNodeResult(nodeOutput)) {
+        toast.add({
+          severity: 'error',
+          summary: '无法启动笔记本',
+          detail: '该节点没有可用数据',
+          life: 3000,
+        })
+        return
+      }
+      initialData = nodeResultToCsv(nodeOutput, {
+        sourceKind: 'canvas-node',
+        sourceLabel: source.label,
+      })
+    }
     const response = await httpClient.post('/notebook-agent/sessions', {
-      initialDataMeta: csvImport.meta,
+      // 无数据进入时不传 initialDataMeta
+      ...(initialData ? { initialDataMeta: initialData.meta } : {}),
       origin: window.location.origin,
     })
     if (response.status >= 400) {
       throw new Error(`创建会话失败：${response.status}`)
     }
     const { sessionId } = response.data as { sessionId: string }
-    notebookSession.value = { sessionId, initialData: csvImport }
+    notebookSession.value = { sessionId, initialData }
   } catch (err) {
     toast.add({
       severity: 'error',

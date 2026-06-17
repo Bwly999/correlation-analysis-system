@@ -33,7 +33,8 @@ export interface UseNotebookSessionOptions {
   iframeRef: Ref<HTMLIFrameElement | null>
   sessionId: string
   origin: string
-  initialData: CsvImport
+  /** null = 空白笔记本（不导入数据直接进入），此时跳过 parent.import_csv */
+  initialData: CsvImport | null
   /** 工厂注入；测试时传 mock。生产环境用 createParentBridgeServer */
   createBridge?: (opts: ParentBridgeServerOptions) => ParentBridgeServer
   onWorkspaceChanged?: (paths: string[]) => void
@@ -135,16 +136,18 @@ export const useNotebookSession = (
         }
         await bridge.request(handshakeReq)
 
-        // 灌入 CSV
-        const buffer = cloneTransferBuffer(initialData.buffer)
-        const importReq: ParentBridgeRequest = {
-          kind: 'parent.import_csv',
-          requestId: genId(),
-          filename: 'upstream.csv',
-          buffer,
-          meta: initialData.meta,
+        // 灌入 CSV（空白笔记本 initialData 为 null，跳过导入）
+        if (initialData) {
+          const buffer = cloneTransferBuffer(initialData.buffer)
+          const importReq: ParentBridgeRequest = {
+            kind: 'parent.import_csv',
+            requestId: genId(),
+            filename: 'upstream.csv',
+            buffer,
+            meta: initialData.meta,
+          }
+          await bridge.request(importReq, { transfer: [buffer] })
         }
-        await bridge.request(importReq, { transfer: [buffer] })
         await notifySessionReady(sessionId)
         imported = true
       } catch (err) {

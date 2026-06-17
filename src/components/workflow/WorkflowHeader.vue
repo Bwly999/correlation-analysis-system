@@ -34,7 +34,7 @@ const emit = defineEmits<{
   importWorkflow: [file: File]
   openHelp: []
   toggleAi: []
-  startNotebook: [source: NotebookDataSource]
+  startNotebook: [source: NotebookDataSource | null]
 }>()
 const store = useWorkflowStore()
 const toast = useToast()

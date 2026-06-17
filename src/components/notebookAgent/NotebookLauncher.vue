@@ -24,7 +24,7 @@ defineProps<{
 }>()
 
 const emit = defineEmits<{
-  start: [source: NotebookDataSource]
+  start: [source: NotebookDataSource | null]
 }>()
 
 /** 三套视觉风格，挂载时随机选其一并固定（避免每次重渲染跳动） */
@@ -42,7 +42,7 @@ const onClick = () => {
   dialogOpen.value = true
 }
 
-const onStart = (source: NotebookDataSource) => {
+const onStart = (source: NotebookDataSource | null) => {
   emit('start', source)
 }
 </script>

@@ -16,8 +16,8 @@ import type { CsvImport } from './dataSourceCsv'
 
 const props = defineProps<{
   sessionId: string
-  /** 用户选择的数据源 + meta；交由 iframe 写到 inputs/upstream.csv */
-  initialData: CsvImport
+  /** 用户选择的数据源 + meta；交由 iframe 写到 inputs/upstream.csv。null = 不导入数据 */
+  initialData: CsvImport | null
   /** 主站 origin；同源时填具体 origin，跨域时浏览器会拒绝 */
   origin?: string
 }>()
