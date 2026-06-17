@@ -25,6 +25,7 @@ describe('parentBridge schema', () => {
       expect(PARENT_BRIDGE_KINDS).toEqual([
         'parent.handshake',
         'parent.import_csv',
+        'parent.switch_session',
         'parent.close_request',
       ])
     })

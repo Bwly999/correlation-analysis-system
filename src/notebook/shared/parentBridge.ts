@@ -16,6 +16,7 @@
 export const PARENT_BRIDGE_KINDS = [
   'parent.handshake',
   'parent.import_csv',
+  'parent.switch_session',
   'parent.close_request',
 ] as const
 
@@ -57,6 +58,14 @@ export type ParentBridgeRequest =
       filename: string // 写入 inputs/<filename>
       buffer: ArrayBuffer // transferable
       meta: ImportCsvMeta
+    }
+  | {
+      // 切换到新 session（开新分析时复用同一个 iframe/runtime，不重建 Pyodide）。
+      // iframe 内 runtime 会：重置 Python 状态 → 切 OPFS 目录 → 重连 SSE → 回放历史。
+      // 新数据通过随后的 parent.import_csv 单独灌入（若有）。
+      kind: 'parent.switch_session'
+      requestId: string
+      sessionId: string
     }
   | {
       kind: 'parent.close_request'
@@ -180,6 +189,8 @@ export const isParentBridgeRequest = (v: unknown): v is ParentBridgeRequest => {
         isArrayBufferLike(v.buffer) &&
         validateImportCsvMeta(v.meta)
       )
+    case 'parent.switch_session':
+      return isNonEmptyString(v.sessionId)
     case 'parent.close_request':
       return typeof v.reason === 'string' && VALID_CLOSE_REASONS.has(v.reason)
     default:

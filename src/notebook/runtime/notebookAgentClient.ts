@@ -291,3 +291,68 @@ export const reportNotebookAuditEntries = async (
     // 静默：审计上报失败不阻塞
   }
 }
+
+// ──────────────────────────────────────────────
+// 历史回放 & resume（「继续上次分析」）
+// ──────────────────────────────────────────────
+
+/** 后端 sessionStore 里的历史消息记录（与 gateway summarize 返回结构一致） */
+export interface NotebookHistoryMessage {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  rawContent?: string
+  thinking?: string
+  status: 'streaming' | 'completed'
+  createdAt: number
+}
+
+/** 后端 sessionStore 里的历史工具调用记录 */
+export interface NotebookHistoryToolCall {
+  id: string
+  toolName: string
+  args: unknown
+  status: 'running' | 'success' | 'failed'
+  result?: string
+  isError?: boolean
+  startedAt: number
+  finishedAt?: number
+}
+
+export interface NotebookSessionHistory {
+  sessionId: string
+  status: string
+  messages: NotebookHistoryMessage[]
+  toolCalls: NotebookHistoryToolCall[]
+  createdAt: number
+  updatedAt: number
+}
+
+/** GET /sessions/:id 拉取完整历史（含 messages + toolCalls），供 resume 时回放。 */
+export const fetchNotebookSessionHistory = async (
+  sessionId: string,
+): Promise<NotebookSessionHistory | null> => {
+  const response = await httpClient.request({
+    url: `/notebook-agent/sessions/${sessionId}`,
+    method: 'GET',
+  })
+  if (!isSuccessStatus(response.status)) return null
+  return response.data as NotebookSessionHistory
+}
+
+/** POST /sessions/:id/resume 恢复已归档会话（重建 runtime，保留历史 record）。 */
+export const resumeNotebookSession = async (
+  sessionId: string,
+): Promise<boolean> => {
+  try {
+    const response = await httpClient.request({
+      url: `/notebook-agent/sessions/${sessionId}/resume`,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      data: {},
+    })
+    return isSuccessStatus(response.status)
+  } catch {
+    return false
+  }
+}

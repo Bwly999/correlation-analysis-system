@@ -57,6 +57,7 @@ const normalizeRequestForPostMessage = (req: ParentBridgeRequest): ParentBridgeR
         },
       }
     case 'parent.handshake':
+    case 'parent.switch_session':
     case 'parent.close_request':
       return { ...req }
   }

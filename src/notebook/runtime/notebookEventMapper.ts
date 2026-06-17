@@ -6,6 +6,7 @@ import type {
   NotebookConversation,
   NotebookSessionVm,
   TodoItem,
+  ToolStatus,
 } from '../types/messageStream'
 import type { NotebookAgentEvent } from './notebookAgentClient'
 
@@ -414,6 +415,232 @@ export const createNotebookRuntimeState = (sessionId: string): NotebookRuntimeSt
   ],
   activeConversationId: sessionId,
 })
+
+/**
+ * 从后端历史记录回放 VM 状态（「继续上次分析」刷新页面后调用）。
+ *
+ * 后端的 messages（user/assistant 文本）和 toolCalls（扁平数组，无 messageId 归属）
+ * 按时间线合并重建 session.messages：
+ *   - user message → UserMessage
+ *   - assistant message → AssistantMessage（content 转 text block，thinking 转 thinking block）
+ *   - toolCall → 一条独立的 AssistantMessage，含单个 tool block（按 startedAt 插入时间线）
+ *
+ * 说明：工具调用在后端是扁平结构，无法精确还原"属于哪条 assistant 消息"，
+ * 故按时间顺序穿插为独立消息，保证历史活动轨迹完整可见。
+ */
+export interface NotebookHistoryMessageItem {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  thinking?: string
+  createdAt: number
+}
+
+export interface NotebookHistoryToolItem {
+  id: string
+  toolName: string
+  args: unknown
+  status: 'running' | 'success' | 'failed'
+  result?: string
+  isError?: boolean
+  startedAt: number
+  finishedAt?: number
+}
+
+export const hydrateFromHistory = (
+  state: NotebookRuntimeState,
+  history: {
+    messages: NotebookHistoryMessageItem[]
+    toolCalls?: NotebookHistoryToolItem[]
+  },
+): void => {
+  const session = state.session
+  session.messages = []
+
+  type TimelineItem =
+    | { kind: 'message'; data: NotebookHistoryMessageItem }
+    | { kind: 'tool'; data: NotebookHistoryToolItem }
+
+  const timeline: TimelineItem[] = []
+  for (const msg of history.messages) {
+    timeline.push({ kind: 'message', data: msg })
+  }
+  for (const tc of history.toolCalls ?? []) {
+    timeline.push({ kind: 'tool', data: tc })
+  }
+  // 按 createdAt / startedAt 升序排列
+  timeline.sort((a, b) => {
+    const ta = a.kind === 'message' ? a.data.createdAt : a.data.startedAt
+    const tb = b.kind === 'message' ? b.data.createdAt : b.data.startedAt
+    return ta - tb
+  })
+
+  for (const item of timeline) {
+    if (item.kind === 'message') {
+      const msg = item.data
+      if (msg.role === 'user') {
+        session.messages.push({
+          id: msg.id,
+          role: 'user',
+          text: msg.content,
+          at: msg.createdAt,
+        })
+      } else {
+        const blocks: AssistantBlock[] = []
+        if (msg.thinking && msg.thinking.length > 0) {
+          blocks.push({
+            kind: 'thinking',
+            data: {
+              id: `thinking-${msg.id}`,
+              text: msg.thinking,
+            },
+          })
+        }
+        if (msg.content && msg.content.length > 0) {
+          blocks.push({
+            kind: 'text',
+            data: {
+              id: `text-${msg.id}`,
+              text: msg.content,
+            },
+          })
+        }
+        session.messages.push({
+          id: msg.id,
+          role: 'assistant',
+          blocks,
+          streaming: false,
+          at: msg.createdAt,
+        })
+      }
+    } else {
+      const tc = item.data
+      const toolBlock = buildHistoryToolBlock(tc)
+      if (toolBlock) {
+        session.messages.push({
+          id: `tool-msg-${tc.id}`,
+          role: 'assistant',
+          blocks: [toolBlock],
+          streaming: false,
+          at: tc.startedAt,
+        })
+      }
+    }
+  }
+
+  // 历史回放后处于 idle 状态，等待用户继续对话
+  session.agent = 'idle'
+  session.runtime.isRunning = false
+  state.conversations[0]!.updatedAt = Date.now()
+}
+
+/**
+ * 把后端 toolCall 记录转成展示层 tool block。
+ * 回放场景只保留最终态（status/result），不还原流式过程。
+ */
+const buildHistoryToolBlock = (tc: NotebookHistoryToolItem): AssistantBlock | null => {
+  const params =
+    tc.args && typeof tc.args === 'object' ? (tc.args as Record<string, unknown>) : {}
+  const details = tc.result ? parseToolResultDetails(tc.result) : null
+  const status: ToolStatus = tc.isError || tc.status === 'failed' ? 'failed' : 'success'
+  const durationMs =
+    typeof tc.finishedAt === 'number' ? Math.max(0, tc.finishedAt - tc.startedAt) : undefined
+
+  switch (tc.toolName) {
+    case 'python_exec_inline':
+    case 'python_exec_file':
+      return {
+        kind: 'tool',
+        data: {
+          id: tc.id,
+          kind: 'python_exec',
+          variant: tc.toolName === 'python_exec_file' ? 'file' : 'inline',
+          code:
+            tc.toolName === 'python_exec_file'
+              ? String(params.path ?? '')
+              : String(params.code ?? ''),
+          stdout: typeof details?.stdout === 'string' ? details.stdout : '',
+          stderr: typeof details?.stderr === 'string' ? details.stderr : '',
+          status,
+          durationMs,
+          ...(status === 'failed' && tc.result ? { errorMessage: tc.result } : {}),
+        },
+      }
+    case 'fs_read':
+      return {
+        kind: 'tool',
+        data: {
+          id: tc.id,
+          kind: 'fs_read',
+          path: String(params.path ?? ''),
+          linesShown:
+            typeof details?.content === 'string'
+              ? details.content.split('\n').length
+              : 0,
+          content: typeof details?.content === 'string' ? details.content : '',
+          truncated: Boolean(details?.truncated),
+          status,
+          durationMs,
+        },
+      }
+    case 'fs_write':
+      return {
+        kind: 'tool',
+        data: {
+          id: tc.id,
+          kind: 'fs_write',
+          path: String(params.path ?? ''),
+          bytes: typeof details?.bytes === 'number' ? details.bytes : 0,
+          preview: previewText(params.content),
+          status,
+          durationMs,
+        },
+      }
+    case 'fs_edit':
+      return {
+        kind: 'tool',
+        data: {
+          id: tc.id,
+          kind: 'fs_edit',
+          path: String(params.path ?? ''),
+          preview: previewText(params.newStr),
+          status,
+          durationMs,
+        },
+      }
+    case 'fs_grep':
+      return {
+        kind: 'tool',
+        data: {
+          id: tc.id,
+          kind: 'fs_grep',
+          pattern: String(params.pattern ?? ''),
+          scope:
+            typeof params.path === 'string' && params.path.length > 0
+              ? params.path
+              : 'workspace',
+          matches: [],
+          status,
+          durationMs,
+        },
+      }
+    case 'todo_write': {
+      const items = normalizeTodoItems(details?.items ?? params.items)
+      return {
+        kind: 'tool',
+        data: {
+          id: tc.id,
+          kind: 'todo_write',
+          items,
+          status,
+          durationMs,
+        },
+      }
+    }
+    default:
+      return null
+  }
+}
 
 export const applyNotebookEvent = (
   state: NotebookRuntimeState,

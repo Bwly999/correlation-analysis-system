@@ -43,6 +43,12 @@ export interface ParentBridgeClientOptions {
   /** iframe 与主站约定的目标 origin，用于 postMessage 第二参数；测试时传 '*' 即可 */
   parentTargetOrigin?: string
   onWorkspaceChanged?: (paths: string[]) => void | Promise<void>
+  /**
+   * 主站请求切换到新 session（开新分析时复用同一个 iframe/runtime）。
+   * runtime 注入：重置 Python 状态 → 切 OPFS 目录 → 重连 SSE → 回放历史。
+   * 返回 Promise：resolve 后主站会接着发 parent.import_csv（若有新数据）。
+   */
+  onSwitchSession?: (newSessionId: string) => Promise<void> | void
 }
 
 export interface ParentBridgeClient {
@@ -76,6 +82,7 @@ export const createParentBridgeClient = (
     addMessageListener,
     parentTargetOrigin = '*',
     onWorkspaceChanged,
+    onSwitchSession,
   } = options
 
   const send = (msg: IframeBridgeRequest | ParentBridgeResponse) => {
@@ -136,6 +143,21 @@ export const createParentBridgeClient = (
     respond(req.requestId, true)
   }
 
+  const handleSwitchSession = async (
+    req: Extract<ParentBridgeRequest, { kind: 'parent.switch_session' }>,
+  ) => {
+    try {
+      await onSwitchSession?.(req.sessionId)
+      respond(req.requestId, true, { sessionId: req.sessionId })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      respond(req.requestId, false, undefined, {
+        code: 'switch_session_failed',
+        message,
+      })
+    }
+  }
+
   const onMessage = (e: MessageEvent) => {
     if (e.source !== parentWindow) return
     if (!isParentBridgeRequest(e.data)) return
@@ -146,6 +168,9 @@ export const createParentBridgeClient = (
         break
       case 'parent.import_csv':
         void handleImportCsv(req)
+        break
+      case 'parent.switch_session':
+        void handleSwitchSession(req)
         break
       case 'parent.close_request':
         handleCloseRequest(req)

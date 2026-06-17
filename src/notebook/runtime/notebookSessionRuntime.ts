@@ -18,12 +18,14 @@ import {
   sendNotebookAgentMessage,
   streamNotebookAgentEvents,
   abortNotebookAgentSession,
+  fetchNotebookSessionHistory,
   type NotebookAgentEvent,
 } from './notebookAgentClient'
 import { AuditLog, computeCodeHash } from './auditLogger'
 import {
   applyNotebookEvent,
   createNotebookRuntimeState,
+  hydrateFromHistory,
   type NotebookRuntimeState,
 } from './notebookEventMapper'
 import type { LoadingStage } from '../types/messageStream'
@@ -33,6 +35,13 @@ export interface NotebookSessionRuntime {
   opfsRoot: OpfsDirectoryHandle
   workerHost: WorkerHost
   connect: () => Promise<void>
+  /**
+   * 切换到新的 session（开新分析时复用同一个 iframe/runtime，不重建 Pyodide）。
+   * 流程：断开旧 SSE → 重置 Python 状态（清 globals）→ 切 OPFS 目录 → 重置 VM →
+   *       回放新 session 历史（若有）→ 重连 SSE。
+   * 失败降级：Python 重置异常时 hardKill + 重新 init（慢一次但保证正确）。
+   */
+  switchSession: (newSessionId: string) => Promise<void>
   sendUserMessage: (text: string) => Promise<void>
   answerAskUser: (payload: { askId: string; optionId: string; text?: string }) => Promise<void>
   /** 用户主动取消某个 ask_user（修 AskUserCard 取消按钮无反应的 bug） */
@@ -94,7 +103,9 @@ export const createNotebookOpfsRoot = async (
 export const createNotebookSessionRuntime = async (
   sessionId: string,
 ): Promise<NotebookSessionRuntime> => {
-  const opfsRoot = await createNotebookOpfsRoot(sessionId)
+  let opfsRoot = await createNotebookOpfsRoot(sessionId)
+  // currentSessionId 可变：switchSession 切换会话时更新（闭包内引用此变量读取最新值）
+  let currentSessionId = sessionId
   const state = reactive(createNotebookRuntimeState(sessionId))
   state.session.title = createSessionTitle(sessionId)
   state.conversations[0]!.title = state.session.title
@@ -105,15 +116,24 @@ export const createNotebookSessionRuntime = async (
   // 审计日志（L6）：ring buffer 500 条；关键事件上报后端
   const auditLog = new AuditLog({
     onReportable: (entries) => {
-      void reportNotebookAuditEntries(sessionId, entries)
+      void reportNotebookAuditEntries(currentSessionId, entries)
     },
   })
-  const toolDispatcher = createToolDispatcher({
+  let toolDispatcher = createToolDispatcher({
     opfsRoot,
     workerHost,
     todoStore,
     askUserQueue,
   })
+  // switchSession 切 OPFS 目录后重建 dispatcher（其内部闭包捕获了 opfsRoot）
+  const rebuildToolDispatcher = () => {
+    toolDispatcher = createToolDispatcher({
+      opfsRoot,
+      workerHost,
+      todoStore,
+      askUserQueue,
+    })
+  }
 
   // ── 启动进度桥接 ──────────────────────────────────────────────
   // Worker 在 bootPyodide 期间通过 init_progress 推送 bootStage/bootStageDetail，
@@ -142,7 +162,7 @@ export const createNotebookSessionRuntime = async (
   let bridgeDispose: (() => void) | null = null
   let bridgeNotifyWorkspaceChanged: (paths: string[]) => void = () => undefined
   let pollTimer: ReturnType<typeof setInterval> | null = null
-  let requestParentClose = () => undefined
+  let requestParentClose: () => void = () => undefined
   // beforeunload：worker 忙时提示用户确认离开（UX §9.4）
   let beforeunloadHandler: ((event: BeforeUnloadEvent) => void) | null = null
 
@@ -214,7 +234,7 @@ export const createNotebookSessionRuntime = async (
       await syncOpfsFilesToWorker().catch(() => undefined)
       // 告知 Agent 环境已重启，下一轮动作需重新 import / 重新加载数据
       await notifyNotebookEnvironmentChanged(
-        sessionId,
+        currentSessionId,
         '⚠️ Python 运行时已自动重启（执行超时或崩溃自愈）。Workspace 文件已保留，但内存中的变量、已 import 的模块、已加载的 DataFrame 均已失效。下一次操作前请重新加载数据。',
       )
     })()
@@ -305,7 +325,7 @@ export const createNotebookSessionRuntime = async (
       }
     }
 
-    await resolveNotebookAgentToolResult(sessionId, event.toolCallId, result)
+    await resolveNotebookAgentToolResult(currentSessionId, event.toolCallId, result)
   }
 
   const handleEvent = (event: NotebookAgentEvent) => {
@@ -315,33 +335,34 @@ export const createNotebookSessionRuntime = async (
     }
   }
 
-  const connect = async () => {
-    state.session.phase = {
-      kind: 'loading',
-      progress: {
-        stage: 'load_runtime',
-        percent: 10,
-        detail: '正在加载 Python 运行时',
-      },
+  // 断开当前 session 的所有实时绑定（SSE 流 / parentBridge / pollTimer / beforeunload），
+  // 但保留 workerHost（Pyodide 实例）。switchSession 和 dispose 前调用。
+  const teardownSessionBindings = () => {
+    if (pollTimer) {
+      clearInterval(pollTimer)
+      pollTimer = null
     }
-    state.session.connection = 'reconnecting'
+    if (beforeunloadHandler) {
+      window.removeEventListener('beforeunload', beforeunloadHandler)
+      beforeunloadHandler = null
+    }
+    eventAbortController?.abort()
+    eventAbortController = null
+    bridgeDispose?.()
+    bridgeDispose = null
+    bridgeNotifyWorkspaceChanged = () => undefined
+    requestParentClose = () => undefined
+    askUserQueue.cancelAll('会话已切换')
+  }
 
-    await workerHost.init(DEFAULT_PYODIDE_INDEX_URL)
-    state.session.phase = {
-      kind: 'loading',
-      progress: {
-        stage: 'mount_fs',
-        percent: 70,
-        detail: '正在同步工作区文件',
-      },
-    }
-    await syncOpfsFilesToWorker()
-    state.session.phase = {
-      kind: 'ready',
-    }
-
+  /**
+   * 为指定 session 建立实时绑定：parentBridge + SSE 事件流 + pollTimer。
+   * withHistory=true 时先拉取后端历史并回放（resume / 刷新页面后继续场景）。
+   * 由 connect（首启）和 switchSession（切会话）复用。
+   */
+  const setupSessionStream = async (targetSessionId: string, opts: { withHistory: boolean }) => {
     const parentBridge = createParentBridgeClient({
-      sessionId,
+      sessionId: targetSessionId,
       parentWindow: window.parent,
       opfsRoot,
       workerHost,
@@ -353,18 +374,18 @@ export const createNotebookSessionRuntime = async (
       onWorkspaceChanged: async () => {
         void syncWorkerFilesToOpfs(['inputs']).catch(() => undefined)
       },
+      onSwitchSession: async (newSessionId) => {
+        await switchSession(newSessionId)
+      },
     })
     bridgeDispose = parentBridge.dispose
     bridgeNotifyWorkspaceChanged = parentBridge.notifyWorkspaceChanged
     requestParentClose = parentBridge.requestParentClose
-    parentBridge.sendSessionState('loading_pyodide', '正在连接 Notebook Agent')
+    parentBridge.sendSessionState('ready', 'Notebook 环境就绪')
 
-    // beforeunload：Worker 忙时提示用户确认离开（UX §9.4）
-    // 仅在 worker 正在跑 exec 时拦截，避免无谓打扰
     beforeunloadHandler = (event: BeforeUnloadEvent) => {
       if (workerHost.isBusy()) {
         event.preventDefault()
-        // 部分浏览器需要 returnValue 非空才弹原生确认框
         event.returnValue = 'Agent 正在工作，确认离开？'
       }
     }
@@ -373,12 +394,11 @@ export const createNotebookSessionRuntime = async (
     eventAbortController = new AbortController()
     await new Promise<void>((resolve, reject) => {
       let opened = false
-      void streamNotebookAgentEvents(sessionId, {
+      void streamNotebookAgentEvents(targetSessionId, {
         signal: eventAbortController?.signal,
         onOpen: () => {
           opened = true
           state.session.connection = 'online'
-          parentBridge.sendSessionState('ready', 'Notebook 环境就绪')
           if (!pollTimer) {
             pollTimer = setInterval(() => {
               void syncWorkerFilesToOpfs(['artifacts', 'reports']).catch(() => undefined)
@@ -406,6 +426,114 @@ export const createNotebookSessionRuntime = async (
         }
       })
     })
+
+    // 历史回放：resume / 刷新页面后继续，把后端已存的对话灌入 VM
+    if (opts.withHistory) {
+      try {
+        const history = await fetchNotebookSessionHistory(targetSessionId)
+        if (history && history.messages.length > 0) {
+          hydrateFromHistory(state, history)
+        }
+      } catch {
+        // 历史拉取失败不阻塞：用户看到空对话仍可继续
+      }
+    }
+  }
+
+  /**
+   * 重置 Pyodide 的 Python 运行时状态（清用户 globals / 关闭 matplotlib 图），
+   * 复用同一个 Worker 进程。失败时 hardKill + 重新 init 降级。
+   */
+  const resetPythonState = async () => {
+    // 关闭 matplotlib 图窗 + 清理用户 globals（保留 builtins / __main__ 框架）
+    const resetCode = [
+      'import sys',
+      "try:",
+      "    import matplotlib.pyplot as _plt",
+      "    _plt.close('all')",
+      "except Exception:",
+      "    pass",
+      "_keep = {'__name__', '__doc__', '__package__', '__loader__', '__spec__', '__builtins__', '__file__', '__cached__'}",
+      "for _k in list(globals().keys()):",
+      "    if _k not in _keep and not _k.startswith('__'):",
+      "        try: del globals()[_k]",
+      "        except Exception: pass",
+      'import gc; gc.collect()',
+    ].join('\n')
+    try {
+      const result = await workerHost.exec(resetCode, 15_000)
+      if (!result.ok && result.errorType === 'kernel_dead') {
+        throw new Error('kernel dead')
+      }
+    } catch {
+      // 降级：重置失败则重建 Worker（慢一次但保证状态干净）
+      workerHost.hardKill()
+      await workerHost.init(DEFAULT_PYODIDE_INDEX_URL)
+    }
+  }
+
+  /**
+   * 切换到新 session：复用 Pyodide Worker，重置 Python 状态 + 换 OPFS + 回放历史。
+   * 由 parentBridge.parent.switch_session 触发（主站「开新分析」时调用）。
+   */
+  const switchSession = async (newSessionId: string) => {
+    // 1. 断开旧 session 的实时绑定（SSE / bridge / poll），保留 Worker
+    teardownSessionBindings()
+
+    state.session.phase = {
+      kind: 'loading',
+      progress: { stage: 'mount_fs', percent: 60, detail: '正在切换工作区' },
+    }
+
+    // 2. 重置 Python 状态（复用 Worker）
+    await resetPythonState()
+
+    // 3. 切 OPFS 目录 + 重建 toolDispatcher（其闭包捕获 opfsRoot）
+    opfsRoot = await createNotebookOpfsRoot(newSessionId)
+    rebuildToolDispatcher()
+
+    // 4. 把新 session 的 inputs/scripts 灌入 Worker MEMFS
+    await syncOpfsFilesToWorker()
+
+    // 5. 重置 VM 状态为新 session
+    currentSessionId = newSessionId
+    const freshState = createNotebookRuntimeState(newSessionId)
+    freshState.session.title = createSessionTitle(newSessionId)
+    state.session = freshState.session
+    state.conversations = freshState.conversations
+    state.activeConversationId = freshState.activeConversationId
+    state.session.runtime.recentlyRestarted = true
+    state.session.phase = { kind: 'ready' }
+
+    // 6. 建立新 session 的实时绑定 + 回放历史
+    await setupSessionStream(newSessionId, { withHistory: true })
+  }
+
+  const connect = async () => {
+    state.session.phase = {
+      kind: 'loading',
+      progress: {
+        stage: 'load_runtime',
+        percent: 10,
+        detail: '正在加载 Python 运行时',
+      },
+    }
+    state.session.connection = 'reconnecting'
+
+    await workerHost.init(DEFAULT_PYODIDE_INDEX_URL)
+    state.session.phase = {
+      kind: 'loading',
+      progress: {
+        stage: 'mount_fs',
+        percent: 70,
+        detail: '正在同步工作区文件',
+      },
+    }
+    await syncOpfsFilesToWorker()
+    state.session.phase = { kind: 'ready' }
+
+    // 建立实时绑定（parentBridge + SSE）+ 回放历史（首启通常无历史，resume 场景有）
+    await setupSessionStream(currentSessionId, { withHistory: true })
   }
 
   const sendUserMessageAndTrack = async (text: string) => {
@@ -421,7 +549,7 @@ export const createNotebookSessionRuntime = async (
     state.session.agent = 'running'
     state.session.runtime.isRunning = true
     const messageId = `msg-${Date.now()}`
-    await sendNotebookAgentMessage(sessionId, {
+    await sendNotebookAgentMessage(currentSessionId, {
       id: messageId,
       content,
     })
@@ -515,6 +643,7 @@ export const createNotebookSessionRuntime = async (
     opfsRoot,
     workerHost,
     connect,
+    switchSession,
     sendUserMessage: sendUserMessageAndTrack,
     answerAskUser,
     cancelAskUser,
@@ -525,21 +654,12 @@ export const createNotebookSessionRuntime = async (
     requestParentClose: () => requestParentClose(),
     dispose: () => {
       bootProgressStop()
-      if (pollTimer) {
-        clearInterval(pollTimer)
-        pollTimer = null
-      }
-      if (beforeunloadHandler) {
-        window.removeEventListener('beforeunload', beforeunloadHandler)
-        beforeunloadHandler = null
-      }
-      eventAbortController?.abort()
-      bridgeDispose?.()
+      teardownSessionBindings()
       askUserQueue.cancelAll('会话已关闭')
       // session 结束上报全部审计 buffer（§8.2）
       const snapshot = auditLog.snapshot()
       if (snapshot.length > 0) {
-        void reportNotebookAuditEntries(sessionId, snapshot)
+        void reportNotebookAuditEntries(currentSessionId, snapshot)
       }
       auditLog.clear()
       workerHost.hardKill()
