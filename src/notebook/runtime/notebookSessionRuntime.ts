@@ -1,4 +1,4 @@
-import { reactive } from 'vue'
+import { reactive, watch } from 'vue'
 import type { OpfsDirectoryHandle } from '../shared/opfsAccess'
 import {
   ensureWorkspaceTree,
@@ -26,6 +26,7 @@ import {
   createNotebookRuntimeState,
   type NotebookRuntimeState,
 } from './notebookEventMapper'
+import type { LoadingStage } from '../types/messageStream'
 
 export interface NotebookSessionRuntime {
   state: NotebookRuntimeState
@@ -48,6 +49,19 @@ export interface NotebookSessionRuntime {
 const DEFAULT_PYODIDE_INDEX_URL = '/pyodide/v0.27/'
 const FILE_TREE_POLL_MS = 2_000
 const WORKER_SYNC_DIRS = ['inputs', 'scripts'] as const
+
+/**
+ * Worker bootStage（pyodideBoot.ts / worker 内发出）→ UI LoadingStage 映射。
+ * Worker 端阶段：'starting' | 'loading_runtime' | 'loading_packages' | 'locking' | 'ready' | ''
+ * UI 阶段（types/messageStream.ts）：load_runtime | load_packages | mount_fs | lock_sandbox
+ */
+const BOOT_STAGE_TO_UI: Record<string, { stage: LoadingStage; percent: number }> = {
+  starting: { stage: 'load_runtime', percent: 12 },
+  loading_runtime: { stage: 'load_runtime', percent: 35 },
+  loading_packages: { stage: 'load_packages', percent: 60 },
+  locking: { stage: 'lock_sandbox', percent: 88 },
+  ready: { stage: 'lock_sandbox', percent: 95 },
+}
 
 const createSessionTitle = (sessionId: string) => `分析笔记本 ${sessionId.slice(0, 8)}`
 
@@ -100,6 +114,29 @@ export const createNotebookSessionRuntime = async (
     todoStore,
     askUserQueue,
   })
+
+  // ── 启动进度桥接 ──────────────────────────────────────────────
+  // Worker 在 bootPyodide 期间通过 init_progress 推送 bootStage/bootStageDetail，
+  // 这里 watch workerHost.state，把进度实时映射到 state.session.phase.progress，
+  // 仅在 phase.kind === 'loading' 时生效，避免覆盖 ready/failed。
+  // 不这样做的话，UI 会一直卡在 10% 的 load_runtime，直到 workerHost.init 解析。
+  const bootProgressStop = watch(
+    () => ({ stage: workerHost.state.bootStage, detail: workerHost.state.bootStageDetail }),
+    ({ stage, detail }) => {
+      if (state.session.phase.kind !== 'loading') return
+      if (!stage) return
+      const mapped = BOOT_STAGE_TO_UI[stage]
+      if (!mapped) return
+      // percent 单调递增：避免后发的小阶段值把进度条往回拉
+      const prev = state.session.phase.progress.percent
+      const percent = Math.max(prev, mapped.percent)
+      state.session.phase.progress = {
+        stage: mapped.stage,
+        percent,
+        detail: detail || state.session.phase.progress.detail || '',
+      }
+    },
+  )
 
   let eventAbortController: AbortController | null = null
   let bridgeDispose: (() => void) | null = null
@@ -487,6 +524,7 @@ export const createNotebookSessionRuntime = async (
     exportWorkspaceFiles,
     requestParentClose: () => requestParentClose(),
     dispose: () => {
+      bootProgressStop()
       if (pollTimer) {
         clearInterval(pollTimer)
         pollTimer = null
