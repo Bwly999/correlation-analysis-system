@@ -13,6 +13,7 @@ const {
   getNotebookAgentSessionOwnerMock,
   finishNotebookAgentToolCallMock,
   closeNotebookAgentSessionMock,
+  ensureNotebookAgentRuntimeMock,
   startNdjsonStreamMock,
 } = vi.hoisted(() => ({
   createNotebookAgentSessionMock: vi.fn(),
@@ -25,6 +26,7 @@ const {
   getNotebookAgentSessionOwnerMock: vi.fn(),
   finishNotebookAgentToolCallMock: vi.fn(),
   closeNotebookAgentSessionMock: vi.fn(),
+  ensureNotebookAgentRuntimeMock: vi.fn().mockResolvedValue(true),
   startNdjsonStreamMock: vi.fn(),
 }))
 
@@ -39,6 +41,7 @@ vi.mock('../gateway.js', () => ({
   getNotebookAgentSessionOwner: getNotebookAgentSessionOwnerMock,
   finishNotebookAgentToolCall: finishNotebookAgentToolCallMock,
   closeNotebookAgentSession: closeNotebookAgentSessionMock,
+  ensureNotebookAgentRuntime: ensureNotebookAgentRuntimeMock,
 }))
 
 vi.mock('../../http/ndjson.js', () => ({
@@ -81,6 +84,7 @@ afterEach(async () => {
   appendNotebookAuditEntriesMock.mockReset()
   subscribeNotebookAgentEventsMock.mockReset()
   getNotebookAgentSessionViewMock.mockReset()
+  ensureNotebookAgentRuntimeMock.mockReset().mockResolvedValue(true)
   getNotebookAgentSessionOwnerMock.mockReset()
   finishNotebookAgentToolCallMock.mockReset()
   closeNotebookAgentSessionMock.mockReset()

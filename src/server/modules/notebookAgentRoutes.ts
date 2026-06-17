@@ -3,12 +3,14 @@
  *
  * 端点：
  *   POST   /api/notebook-agent/sessions                  创建 session + 返回 systemPrompt
- *   GET    /api/notebook-agent/sessions/:sessionId       拿 session 概览
+ *   GET    /api/notebook-agent/sessions                  列出当前用户最近会话（用于「继续上次分析」）
+ *   GET    /api/notebook-agent/sessions/:sessionId       拿 session 概览（含 messages/toolCalls，供历史回放）
  *   GET    /api/notebook-agent/sessions/:sessionId/events NDJSON 事件流
+ *   POST   /api/notebook-agent/sessions/:sessionId/resume 恢复已归档会话（重建 runtime）
  *   POST   /api/notebook-agent/sessions/:sessionId/messages
  *   POST   /api/notebook-agent/sessions/:sessionId/abort    终止当前轮 Agent 推理
  *   POST   /api/notebook-agent/sessions/:sessionId/tool-result
- *   DELETE /api/notebook-agent/sessions/:sessionId       结束 session
+ *   DELETE /api/notebook-agent/sessions/:sessionId       软关闭（释放 runtime，保留历史）
  */
 
 import type { FastifyPluginAsync } from 'fastify'
@@ -19,10 +21,13 @@ import {
   appendNotebookAuditEntries,
   closeNotebookAgentSession,
   createNotebookAgentSession,
+  destroyNotebookAgentSession,
+  ensureNotebookAgentRuntime,
   finishNotebookAgentToolCall,
   getNotebookAgentSessionOwner,
   getNotebookAgentSessionView,
   injectNotebookSystemMessage,
+  listNotebookAgentSessionsByUser,
   markNotebookAgentSessionReady,
   sendNotebookAgentMessage,
   abortNotebookAgentSession,
@@ -74,6 +79,13 @@ export const createNotebookAgentRoutes = (): FastifyPluginAsync => async (app) =
     return result
   })
 
+  // 列出当前用户最近的 notebook 会话（用于「继续上次分析」入口探测）
+  app.get('/api/notebook-agent/sessions', async (request) => {
+    const user = requireWorkflowUser(request)
+    const sessions = listNotebookAgentSessionsByUser(user.id)
+    return { sessions }
+  })
+
   app.get('/api/notebook-agent/sessions/:sessionId', async (request, reply) => {
     const user = requireWorkflowUser(request)
     const { sessionId } = request.params as { sessionId: string }
@@ -96,12 +108,30 @@ export const createNotebookAgentRoutes = (): FastifyPluginAsync => async (app) =
       return { message: '未找到 Notebook Agent 会话' }
     }
 
+    // resume 场景：runtime 可能已被软关闭释放，订阅前确保 runtime 在线。
+    // record 存在但 runtime 不在时重建（保留历史 messages）。
+    await ensureNotebookAgentRuntime(sessionId)
+
     reply.hijack()
     startNdjsonStream(reply.raw, (write) => {
       const unsubscribe = subscribeNotebookAgentEvents(sessionId, write)
       return () => unsubscribe?.()
     })
     return reply
+  })
+
+  // 显式恢复已归档会话（重建 runtime，保留历史 record）。
+  // 刷新页面后前端「继续上次分析」会调用，随后再订阅 events 流。
+  app.post('/api/notebook-agent/sessions/:sessionId/resume', async (request, reply) => {
+    const user = requireWorkflowUser(request)
+    const { sessionId } = request.params as { sessionId: string }
+    requireOwnedSession(sessionId, user.id)
+    const ok = await ensureNotebookAgentRuntime(sessionId)
+    if (!ok) {
+      reply.code(404)
+      return { message: '未找到 Notebook Agent 会话' }
+    }
+    return { ok: true }
   })
 
   app.post('/api/notebook-agent/sessions/:sessionId/messages', async (request, reply) => {

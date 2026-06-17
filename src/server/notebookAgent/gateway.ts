@@ -13,9 +13,11 @@ import {
 import { buildNotebookSystemPrompt } from './systemPrompt.js'
 import {
   appendNotebookMessage,
+  archiveNotebookSession,
   createNotebookSession,
-  endNotebookSession,
+  deleteNotebookSession,
   getNotebookSession,
+  listNotebookSessionsByUser,
   updateNotebookSessionRecord,
   updateNotebookToolCall,
   type NotebookSessionRecord,
@@ -100,7 +102,17 @@ export const createNotebookAgentSession = async (
   const systemPrompt = buildNotebookSystemPrompt({
     initialDataMeta: input.initialDataMeta,
   })
+  await buildAndRegisterRuntime(record, systemPrompt)
+  return { sessionId: record.sessionId, systemPrompt }
+}
 
+/**
+ * 构建 Pi SDK runtime 并注册到 runtimes Map。供 create / resume 复用。
+ */
+const buildAndRegisterRuntime = async (
+  record: NotebookSessionRecord,
+  systemPrompt: string,
+): Promise<NotebookAgentRuntime> => {
   const profile = getDefaultNotebookProfile()
   const eventListeners = new Set<(event: NotebookAgentSseEvent) => void>()
   const bridge = new FrontendBridge((event) => {
@@ -164,8 +176,25 @@ export const createNotebookAgentSession = async (
   })
   runtime.unsubscribe = unsubscribe
   runtimes.set(record.sessionId, runtime)
+  return runtime
+}
 
-  return { sessionId: record.sessionId, systemPrompt }
+/**
+ * Resume：为已归档（runtime 已释放）的会话重建 runtime，保留历史 record。
+ * 若 runtime 仍在线则直接返回。用于「继续上次分析」刷新页面后的场景。
+ * @returns true=runtime 已就绪；false=会话 record 不存在
+ */
+export const ensureNotebookAgentRuntime = async (
+  sessionId: string,
+): Promise<boolean> => {
+  if (runtimes.has(sessionId)) return true
+  const record = getNotebookSession(sessionId)
+  if (!record) return false
+  const systemPrompt = buildNotebookSystemPrompt({
+    initialDataMeta: record.initialDataMeta,
+  })
+  await buildAndRegisterRuntime(record, systemPrompt)
+  return true
 }
 
 export const getNotebookAgentSessionOwner = (sessionId: string): string | null =>
@@ -177,6 +206,44 @@ export const getNotebookAgentSessionView = (sessionId: string) => {
   return summarize(r)
 }
 
+/**
+ * 列出某用户最近的 notebook 会话概要（用于前端「继续上次分析」入口）。
+ */
+export const listNotebookAgentSessionsByUser = (
+  userId: string,
+): Array<{
+  sessionId: string
+  initialDataMeta?: ImportCsvMeta
+  status: NotebookSessionRecord['status']
+  archivedAt?: number
+  createdAt: number
+  updatedAt: number
+  messageCount: number
+  lastUserMessagePreview?: string
+}> => {
+  return listNotebookSessionsByUser(userId).map((r) => {
+    const lastUserMsg = [...r.messages]
+      .reverse()
+      .find((m) => m.role === 'user')
+    return {
+      sessionId: r.sessionId,
+      initialDataMeta: r.initialDataMeta,
+      status: r.status,
+      archivedAt: r.archivedAt,
+      createdAt: r.createdAt,
+      updatedAt: r.updatedAt,
+      messageCount: r.messages.length,
+      lastUserMessagePreview: lastUserMsg
+        ? lastUserMsg.content.slice(0, 60)
+        : undefined,
+    }
+  })
+}
+
+/**
+ * 软关闭：释放 runtime（Pi SDK AgentSession），但保留 sessionStore record，
+ * 以便「继续上次分析」时能回放历史。runtime 可后续 resume 时按需重建。
+ */
 export const closeNotebookAgentSession = (sessionId: string): boolean => {
   const r = getNotebookSession(sessionId)
   if (!r) return false
@@ -186,9 +253,24 @@ export const closeNotebookAgentSession = (sessionId: string): boolean => {
   runtime?.session.dispose()
   runtime?.eventListeners.clear()
   runtimes.delete(sessionId)
-  endNotebookSession(sessionId, 'completed')
-  clearNotebookAuditEntries(sessionId)
+  // 软关闭：标记 archivedAt，record 保留（不改 status，不清审计——历史需要保留）。
+  // 前端 resume 时若 runtime 已不在，拿到的 status 仍能反映最后状态。
+  archiveNotebookSession(sessionId)
   return true
+}
+
+/**
+ * 彻底删除会话 record + runtime（显式 DELETE 端点调用）。
+ */
+export const destroyNotebookAgentSession = (sessionId: string): boolean => {
+  const runtime = runtimes.get(sessionId)
+  runtime?.bridge.dispose()
+  runtime?.unsubscribe?.()
+  runtime?.session.dispose()
+  runtime?.eventListeners.clear()
+  runtimes.delete(sessionId)
+  clearNotebookAuditEntries(sessionId)
+  return deleteNotebookSession(sessionId)
 }
 
 export const sendNotebookAgentMessage = async (

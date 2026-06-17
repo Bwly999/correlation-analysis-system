@@ -300,6 +300,7 @@ describe('notebookAgent gateway', () => {
 
     expect(ok).toBe(true)
     expect(sessionDisposeMock).toHaveBeenCalled()
-    expect(getNotebookAgentSessionView(created.sessionId)?.status).toBe('completed')
+    // 软关闭：释放 runtime 但保留 record（status 不变，供 resume 回放历史）
+    expect(getNotebookAgentSessionView(created.sessionId)).toBeDefined()
   })
 })
