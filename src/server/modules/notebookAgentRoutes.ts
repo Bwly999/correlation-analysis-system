@@ -6,6 +6,7 @@
  *   GET    /api/notebook-agent/sessions/:sessionId       拿 session 概览
  *   GET    /api/notebook-agent/sessions/:sessionId/events NDJSON 事件流
  *   POST   /api/notebook-agent/sessions/:sessionId/messages
+ *   POST   /api/notebook-agent/sessions/:sessionId/abort    终止当前轮 Agent 推理
  *   POST   /api/notebook-agent/sessions/:sessionId/tool-result
  *   DELETE /api/notebook-agent/sessions/:sessionId       结束 session
  */
@@ -24,6 +25,7 @@ import {
   injectNotebookSystemMessage,
   markNotebookAgentSessionReady,
   sendNotebookAgentMessage,
+  abortNotebookAgentSession,
   subscribeNotebookAgentEvents,
 } from '../notebookAgent/gateway.js'
 import type { ImportCsvMeta } from '../../notebook/shared/parentBridge.js'
@@ -118,6 +120,18 @@ export const createNotebookAgentRoutes = (): FastifyPluginAsync => async (app) =
     if (!ok) {
       reply.code(404)
       return { message: '会话不存在' }
+    }
+    return { ok: true }
+  })
+
+  app.post('/api/notebook-agent/sessions/:sessionId/abort', async (request, reply) => {
+    const user = requireWorkflowUser(request)
+    const { sessionId } = request.params as { sessionId: string }
+    requireOwnedSession(sessionId, user.id)
+    const result = await abortNotebookAgentSession(sessionId)
+    if (!result.ok) {
+      reply.code(404)
+      return { message: result.error ?? '会话不存在' }
     }
     return { ok: true }
   })

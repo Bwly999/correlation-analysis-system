@@ -201,6 +201,32 @@ const handleAskUserSubmit = async (payload: { askId: string; optionId: string; t
   }
 }
 
+const handleAskUserCancel = async (askId: string) => {
+  if (runtime.value) {
+    await runtime.value.cancelAskUser(askId)
+    return
+  }
+
+  // demo 模式：本地置为 cancelled
+  session.value = {
+    ...session.value,
+    messages: session.value.messages.map((message) => {
+      if (message.role !== 'assistant') return message
+      return {
+        ...message,
+        blocks: message.blocks.map((block) =>
+          block.kind === 'ask_user' && block.data.id === askId
+            ? {
+                kind: 'ask_user' as const,
+                data: { ...block.data, status: 'cancelled' as const },
+              }
+            : block,
+        ),
+      }
+    }),
+  }
+}
+
 const handleRestart = async () => {
   if (runtime.value) {
     await runtime.value.restart()
@@ -244,6 +270,10 @@ const handleStopExec = () => {
   runtime.value?.stop()
 }
 
+const handleAbort = async () => {
+  await runtime.value?.abort()
+}
+
 const handleClose = () => {
   if (runtime.value) {
     runtime.value.requestParentClose()
@@ -267,7 +297,8 @@ const isPoc = computed(() => mode === 'poc')
     @download="handleDownload"
     @send="handleSend"
     @ask-user-submit="handleAskUserSubmit"
-    @ask-user-cancel="() => undefined"
+    @ask-user-cancel="handleAskUserCancel"
+    @abort="handleAbort"
     @stop-exec="handleStopExec"
     @rename="handleRename"
     @new-conversation="() => undefined"

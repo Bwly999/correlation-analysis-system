@@ -7,7 +7,7 @@
  * 视觉风格 ▸ 圆角白卡 + 柔和阴影；放在消息流底部上方浮起。
  */
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { ArrowUp, Gauge, Lock } from 'lucide-vue-next'
+import { ArrowUp, Gauge, Lock, Square } from 'lucide-vue-next'
 
 const props = defineProps<{
   /** 当 Agent 在 ask_user 等待回答时禁用 */
@@ -24,6 +24,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   send: [text: string]
+  abort: []
 }>()
 
 const text = ref('')
@@ -50,6 +51,16 @@ const onSend = () => {
   text.value = ''
 }
 
+// running 或 awaiting_user 时都展示终止按钮：
+//   - running → 调后端 abort 终止推理
+//   - awaiting_user → 等同于取消当前 ask_user 卡片
+const showStop = computed(() => props.agentRunning || props.awaitingUser)
+
+const onAbort = () => {
+  if (!showStop.value) return
+  emit('abort')
+}
+
 const focus = () => {
   inputRef.value?.focus()
 }
@@ -62,8 +73,22 @@ const onCtrlK = (e: KeyboardEvent) => {
     focus()
   }
 }
-onMounted(() => window.addEventListener('keydown', onCtrlK))
-onBeforeUnmount(() => window.removeEventListener('keydown', onCtrlK))
+
+// ESC 终止：Agent 运行中时随时触发（含输入框聚焦时），不 blur
+const onEsc = (e: KeyboardEvent) => {
+  if (e.key !== 'Escape') return
+  if (!showStop.value) return
+  e.preventDefault()
+  emit('abort')
+}
+onMounted(() => {
+  window.addEventListener('keydown', onCtrlK)
+  window.addEventListener('keydown', onEsc)
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onCtrlK)
+  window.removeEventListener('keydown', onEsc)
+})
 
 const charCount = computed(() => text.value.length)
 
@@ -132,6 +157,9 @@ const ctxTitle = computed(() => {
         <span v-if="awaitingUser" style="color: var(--nb-copper-deep);">
           等待回答
         </span>
+        <span v-else-if="agentRunning">
+          Agent 工作中 · <span style="color: var(--nb-clay);">ESC 终止</span>
+        </span>
         <span v-else>Enter 发送 · Shift/Ctrl + Enter 换行 · ⌘ + K 聚焦</span>
         <span v-if="charCount > 0" style="color: var(--nb-rule-strong);">·</span>
         <span v-if="charCount > 0" class="tabular-nums">{{ charCount }} 字</span>
@@ -170,7 +198,24 @@ const ctxTitle = computed(() => {
           </template>
           <Gauge v-else :size="14" :stroke-width="1.6" style="color: var(--nb-ink-faint);" />
         </span>
+        <!-- 终止按钮：Agent 运行中或等待回答时替换发送按钮 -->
         <button
+          v-if="showStop"
+          class="nb-focus inline-flex h-8 w-8 items-center justify-center rounded-full transition hover:brightness-110 active:brightness-95"
+          style="
+            background-color: var(--nb-clay);
+            color: var(--nb-paper);
+            border: 1px solid var(--nb-clay);
+            box-shadow: var(--nb-shadow-sm);
+          "
+          :title="awaitingUser ? '取消该问题 (ESC)' : '终止 (ESC)'"
+          aria-label="终止"
+          @click="onAbort"
+        >
+          <Square :size="12" :stroke-width="2.4" fill="currentColor" />
+        </button>
+        <button
+          v-else
           class="nb-focus inline-flex h-8 w-8 items-center justify-center rounded-full transition disabled:cursor-not-allowed"
           :style="
             !text.trim() || awaitingUser

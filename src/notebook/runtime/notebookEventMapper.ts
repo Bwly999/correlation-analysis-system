@@ -443,6 +443,15 @@ export const applyNotebookEvent = (
       } else if (status === 'failed') {
         session.agent = 'failed'
         session.runtime.isRunning = false
+      } else if (status === 'cancelled') {
+        // 用户主动终止：落到 idle，并把所有正在 streaming 的 assistant 消息停止（避免"正在落笔"脉动卡住）
+        session.agent = 'idle'
+        session.runtime.isRunning = false
+        for (const message of session.messages) {
+          if (message.role === 'assistant' && message.streaming) {
+            message.streaming = false
+          }
+        }
       } else {
         session.agent = 'idle'
         session.runtime.isRunning = false

@@ -53,14 +53,10 @@ export function bridgeNotebookEvent(
       break
 
     case 'agent_end':
-      if (record.status === 'running') {
-        updateNotebookSessionRecord(sessionId, { status: 'completed' })
-      }
-      events.push({
-        type: 'session.status',
-        sessionId,
-        status: record.status === 'running' ? 'completed' : record.status,
-      })
+      // 不主动改 record.status：用户主动 abort 时 record 已是 idle，
+      // 此处若改成 completed 会覆盖 cancelled 状态导致前端"还在运行"的假象。
+      // 只把当前 status 广播出去（与 bridgePiEvent 行为一致）。
+      events.push({ type: 'session.status', sessionId, status: record.status })
       break
 
     case 'message_start': {

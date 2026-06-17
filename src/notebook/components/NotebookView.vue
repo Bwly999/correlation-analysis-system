@@ -66,6 +66,7 @@ const emit = defineEmits<{
   send: [text: string]
   askUserSubmit: [payload: { askId: string; optionId: string; text?: string }]
   askUserCancel: [askId: string]
+  abort: []
   stopExec: []
   newConversation: []
   selectConversation: [id: string]
@@ -401,6 +402,7 @@ const onSend = (text: string) => emit('send', text)
               :agent-running="session.runtime.isRunning"
               :context-usage="session.runtime.contextUsage"
               @send="onSend"
+              @abort="emit('abort')"
             />
           </div>
         </div>

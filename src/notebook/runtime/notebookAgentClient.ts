@@ -221,6 +221,36 @@ export const resolveNotebookAgentToolResult = async (
 }
 
 /**
+ * 终止当前轮 Agent 推理（用户主动取消）。
+ * 后端会清队列、取消挂起的工具调用、session.abort() 并广播 session.status:"cancelled"。
+ */
+export const abortNotebookAgentSession = async (
+  sessionId: string,
+) => {
+  const response = await httpClient.request({
+    url: `/notebook-agent/sessions/${sessionId}/abort`,
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    data: {},
+  })
+
+  if (!isSuccessStatus(response.status)) {
+    const message =
+      typeof response.data === 'object'
+      && response.data
+      && 'message' in response.data
+      && typeof response.data.message === 'string'
+        ? response.data.message
+        : '终止 Notebook Agent 失败'
+    throw new Error(message)
+  }
+
+  return response.data as { ok: boolean }
+}
+
+/**
  * 向 Agent 注入一条 system message（环境变更通知，如 Worker 重启）。
  * 不触发新一轮，挂在下一条用户消息之前作上下文。
  * 失败静默：这是可观测性增强，不应阻塞重启主流程。

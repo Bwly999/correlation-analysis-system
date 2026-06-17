@@ -214,6 +214,8 @@ export const sendNotebookAgentMessage = async (
     try {
       await runtime.session.prompt(payload.content)
     } catch (error) {
+      // 用户已主动 abort 时，record.status 已是 idle：忽略 abort 引发的错误，避免覆盖 cancelled 状态并弹错误消息
+      if (runtime.record.status === 'idle') return
       const message = error instanceof Error ? error.message : String(error)
       updateNotebookSessionRecord(sessionId, { status: 'failed' })
       emitRuntimeEvent(runtime, { type: 'error', sessionId, message })
@@ -224,6 +226,36 @@ export const sendNotebookAgentMessage = async (
   })()
 
   return true
+}
+
+/**
+ * 终止当前轮 Agent 推理（用户主动取消）。
+ * 照搬 jsTransformAgentGateway.abortJsTransformAgentRun 模式：
+ *   清队列 → 取消挂起的工具调用 → 标记 idle → session.abort() → 广播 session.status:"cancelled"。
+ *
+ * 关键顺序：必须在 session.abort() 之前就把 record.status 置为 idle，
+ * 否则 abort 触发的 agent_end 事件经 eventBridge 时 record.status 仍是 'running'，
+ * 会广播错误的 'completed' 让前端误以为还在跑。
+ */
+export const abortNotebookAgentSession = async (
+  sessionId: string,
+): Promise<{ ok: boolean; error?: string }> => {
+  const runtime = runtimes.get(sessionId)
+  if (!runtime) return { ok: false, error: '会话不存在' }
+
+  runtime.session.clearQueue()
+  runtime.bridge.cancelPendingRequests('当前轮已取消')
+  // 先标记 idle，防止 abort 期间到达的 agent_end 事件覆盖状态
+  updateNotebookSessionRecord(sessionId, { status: 'idle' })
+  await runtime.session.abort()
+
+  emitRuntimeEvent(runtime, {
+    type: 'session.status',
+    sessionId,
+    status: 'cancelled',
+  })
+
+  return { ok: true }
 }
 
 export const finishNotebookAgentToolCall = (

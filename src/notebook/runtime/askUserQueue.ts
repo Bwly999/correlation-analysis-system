@@ -44,6 +44,8 @@ export interface AskUserQueue {
   items: Ref<AskUserItem[]>
   enqueue: (item: AskUserItem) => Promise<AskUserResult>
   resolve: (toolCallId: string, result: AskUserResult) => void
+  /** 取消单条挂起的 ask_user（用户点了取消 / 终止时调用），reject 该条 promise */
+  cancel: (toolCallId: string, reason: string) => boolean
   cancelAll: (reason: string) => void
   peek: () => AskUserItem | null
   list: () => AskUserItem[]
@@ -83,10 +85,20 @@ export const createAskUserQueue = (): AskUserQueue => {
     refreshItems()
   }
 
+  const cancel = (toolCallId: string, reason: string) => {
+    const idx = queue.findIndex((p) => p.item.toolCallId === toolCallId)
+    if (idx === -1) return false
+    const [pending] = queue.splice(idx, 1)
+    refreshItems()
+    pending!.reject(new Error(reason))
+    return true
+  }
+
   return {
     items,
     enqueue,
     resolve,
+    cancel,
     cancelAll,
     peek: () => queue[0]?.item ?? null,
     list: () => queue.map((p) => p.item),

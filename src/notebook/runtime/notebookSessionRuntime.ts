@@ -17,6 +17,7 @@ import {
   resolveNotebookAgentToolResult,
   sendNotebookAgentMessage,
   streamNotebookAgentEvents,
+  abortNotebookAgentSession,
   type NotebookAgentEvent,
 } from './notebookAgentClient'
 import { AuditLog, computeCodeHash } from './auditLogger'
@@ -33,6 +34,10 @@ export interface NotebookSessionRuntime {
   connect: () => Promise<void>
   sendUserMessage: (text: string) => Promise<void>
   answerAskUser: (payload: { askId: string; optionId: string; text?: string }) => Promise<void>
+  /** 用户主动取消某个 ask_user（修 AskUserCard 取消按钮无反应的 bug） */
+  cancelAskUser: (askId: string) => Promise<void>
+  /** 终止当前轮 Agent（推理中调后端 abort；ask_user 等待中等同于 cancelAskUser） */
+  abort: () => Promise<void>
   restart: () => Promise<void>
   stop: () => boolean
   exportWorkspaceFiles: (paths?: string[]) => Promise<string[]>
@@ -400,6 +405,41 @@ export const createNotebookSessionRuntime = async (
     })
   }
 
+  const cancelAskUser = async (askId: string) => {
+    // 取消本地等待的 promise，避免 30s 超时；并把 isError 结果推给后端，
+    // notebookEventMapper 在收到 tool.end isError 时会自动把 AskUserBlock.status 置为 'cancelled'
+    askUserQueue.cancel(askId, '用户取消')
+    await resolveNotebookAgentToolResult(sessionId, askId, {
+      isError: true,
+      content: [{ type: 'text', text: '用户已取消该问题' }],
+      details: {},
+    }).catch(() => undefined)
+  }
+
+  const stopStreamingAssistant = () => {
+    state.session.runtime.isRunning = false
+    for (const message of state.session.messages) {
+      if (message.role === 'assistant' && message.streaming) {
+        message.streaming = false
+      }
+    }
+  }
+
+  const abort = async () => {
+    // 1. 若正在等待 ask_user：等同于取消该 Ask 卡片，不调后端 abort（Agent 此刻阻塞在等回答）
+    const pendingAsk = askUserQueue.peek()
+    if (pendingAsk) {
+      await cancelAskUser(pendingAsk.toolCallId)
+      return
+    }
+    // 2. 否则（正在跑推理）：先乐观更新 UI，避免等 RTT 期间还显示"正在落笔"
+    stopStreamingAssistant()
+    // 同时中断 Python worker：abort 只停 LLM 推理，Python exec 可能仍在跑，
+    // 不打断会导致 workerHost.isBusy() 仍为 true，用户终止后离开页面还会弹 beforeunload 确认框
+    workerHost.interrupt()
+    await abortNotebookAgentSession(sessionId).catch(() => undefined)
+  }
+
   const restart = async () => {
     state.session.phase = {
       kind: 'loading',
@@ -440,6 +480,8 @@ export const createNotebookSessionRuntime = async (
     connect,
     sendUserMessage: sendUserMessageAndTrack,
     answerAskUser,
+    cancelAskUser,
+    abort,
     restart,
     stop,
     exportWorkspaceFiles,
