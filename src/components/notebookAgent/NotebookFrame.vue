@@ -66,6 +66,12 @@ const onClose = () => {
 onBeforeUnmount(() => {
   session.dispose()
 })
+
+// 暴露 switchSession 给父级：开新分析时复用 iframe/runtime，避免 :key 变化销毁 Pyodide。
+defineExpose({
+  switchSession: (newSessionId: string, newInitialData: CsvImport | null) =>
+    session.switchSession(newSessionId, newInitialData),
+})
 </script>
 
 <template>

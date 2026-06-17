@@ -46,6 +46,11 @@ import { useToast } from 'primevue/usetoast'
 import UnsavedWorkflowDialog from './UnsavedWorkflowDialog.vue'
 import { getErrorMessage } from '@/utils/requestError'
 import NotebookFrame from '../notebookAgent/NotebookFrame.vue'
+import {
+  readPersistedNotebookSession,
+  writePersistedNotebookSession,
+  clearPersistedNotebookSession,
+} from '../notebookAgent/notebookSessionPersist'
 import { nodeResultToCsv } from '../notebookAgent/dataSourceCsv'
 import { httpClient } from '@/services/httpClient'
 import type { NotebookDataSource } from '../notebookAgent/NewNotebookDialog.vue'
@@ -75,11 +80,16 @@ const canvasViewportRef = useTemplateRef<HTMLDivElement>('canvasViewport')
 // ── Notebook Agent ──
 // keep-alive：notebookSession 非空 = 存活会话（iframe 常驻、Pyodide 在线）；
 //            notebookVisible = 是否显示（关闭即隐藏，恢复时直接显示，跳过 Pyodide 重启）。
+// notebookSession 初始化时尝试从 localStorage 恢复上次 session（刷新页面后「继续上次分析」可用）。
 const notebookSession = ref<{
   sessionId: string
   initialData: CsvImport | null
 } | null>(null)
 const notebookVisible = ref(false)
+// NotebookFrame 实例引用：开新分析时调 switchSession 复用 iframe/runtime
+const notebookFrameRef = ref<InstanceType<typeof NotebookFrame> | null>(null)
+// session 是否已探测确认后端存活（避免反复探测）
+const notebookSessionProbed = ref(false)
 
 const isNodeResult = (v: unknown): v is NodeResult =>
   typeof v === 'object' &&
@@ -151,16 +161,35 @@ const handleStartNotebook = async (source: NotebookDataSource | null) => {
       throw new Error(`创建会话失败：${response.status}`)
     }
     const { sessionId } = response.data as { sessionId: string }
-    // 同一标签页内「重新开新分析」时，先记下旧会话以便清理后端。
-    const previousSessionId =
-      notebookSession.value?.sessionId && notebookSession.value.sessionId !== sessionId
-        ? notebookSession.value.sessionId
-        : null
-    // :key(sessionId) 变化 → 旧 NotebookFrame 卸载（runtime.dispose + workerHost.hardKill）；新 iframe 挂载重启 Pyodide。
-    notebookSession.value = { sessionId, initialData }
+    const previousSessionId = notebookSession.value?.sessionId ?? null
+
+    // 关键优化：若 iframe 已挂载且就绪，复用 runtime（秒开），不重建 Pyodide。
+    // 通过 parent.switch_session 通知 iframe 内 runtime 切换 session。
+    if (notebookFrameRef.value && notebookSession.value) {
+      try {
+        await notebookFrameRef.value.switchSession(sessionId, initialData)
+      } catch {
+        // switchSession 失败降级：重建 iframe（:key 变化销毁旧实例）
+        notebookSession.value = null
+      }
+    }
+
+    // 首次挂载或降级重建：设置 notebookSession 触发 NotebookFrame 挂载
+    if (!notebookSession.value) {
+      notebookSession.value = { sessionId, initialData }
+    } else {
+      // 复用场景：更新 sessionId（用于持久化），但保持 :key 稳定避免 iframe 重载
+      notebookSession.value = { sessionId, initialData }
+    }
     notebookVisible.value = true
-    // 异步清理上一个后端会话（不阻塞 UI）
-    if (previousSessionId) {
+    // 持久化当前 session（刷新页面后「继续上次分析」可用）
+    writePersistedNotebookSession({
+      sessionId,
+      ...(initialData ? { initialDataMeta: initialData.meta } : {}),
+      savedAt: Date.now(),
+    })
+    // 软关闭上一个后端会话（释放 runtime，保留历史 record 以便 resume）
+    if (previousSessionId && previousSessionId !== sessionId) {
       httpClient.delete(`/notebook-agent/sessions/${previousSessionId}`).catch(() => undefined)
     }
   } catch (err) {
@@ -177,9 +206,35 @@ const handleStartNotebook = async (source: NotebookDataSource | null) => {
 const handleNotebookHide = () => {
   notebookVisible.value = false
 }
-// 恢复上次仍存活的笔记本（直接显示，跳过 Pyodide 重启，秒回）
+// 恢复上次仍存活的笔记本（直接显示，跳过 Pyodide 重启，秒回）。
+// 若后端 runtime 已被软关闭释放，iframe 内 runtime 会通过 events 流订阅时自动重建。
 const handleNotebookResume = () => {
   notebookVisible.value = true
+}
+
+/**
+ * 探测 localStorage 里持久化的 session 是否在后端仍存活。
+ * 存活 → 恢复 notebookSession（「继续上次分析」入口可用）；
+ * 不存活（404 / 网络错误）→ 清除持久化，避免无效入口。
+ */
+const probePersistedNotebookSession = async () => {
+  if (notebookSessionProbed.value) return
+  notebookSessionProbed.value = true
+  const persisted = readPersistedNotebookSession()
+  if (!persisted) return
+  try {
+    const response = await httpClient.get(`/notebook-agent/sessions/${persisted.sessionId}`)
+    if (response.status < 400) {
+      notebookSession.value = {
+        sessionId: persisted.sessionId,
+        initialData: null,
+      }
+    } else {
+      clearPersistedNotebookSession()
+    }
+  } catch {
+    clearPersistedNotebookSession()
+  }
 }
 const PI_AGENT_DESKTOP_BREAKPOINT = 1280
 const PI_AGENT_PANEL_DEFAULT_WIDTH = 480
@@ -577,6 +632,8 @@ const handleFocusOut = (e: FocusEvent) => {
 
 onMounted(async () => {
   window.addEventListener('keydown', handleWindowKeydown)
+  // 探测 localStorage 里持久化的 notebook session（刷新后「继续上次分析」入口）
+  void probePersistedNotebookSession()
   window.addEventListener('focusin', handleFocusIn)
   window.addEventListener('focusout', handleFocusOut)
   window.addEventListener('resize', onWindowResize)
@@ -1086,7 +1143,8 @@ onBeforeUnmount(() => {
     <Toast group="node-config" position="bottom-left" />
     <NotebookFrame
       v-if="notebookSession"
-      :key="notebookSession.sessionId"
+      ref="notebookFrameRef"
+      :key="'notebook-frame'"
       :session-id="notebookSession.sessionId"
       :initial-data="notebookSession.initialData"
       :visible="notebookVisible"

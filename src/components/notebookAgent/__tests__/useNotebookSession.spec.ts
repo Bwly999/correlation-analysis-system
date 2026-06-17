@@ -192,6 +192,7 @@ describe('useNotebookSession', () => {
     fake.bridge.rejectNextRequest(new Error('导入失败'))
     await Promise.resolve()
     await Promise.resolve()
+    await Promise.resolve()
     await nextTick()
 
     expect(notifySessionReady).not.toHaveBeenCalled()

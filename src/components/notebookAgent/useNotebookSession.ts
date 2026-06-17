@@ -47,6 +47,8 @@ export interface UseNotebookSessionOptions {
 export interface UseNotebookSession {
   state: Ref<IframeSessionState>
   requestClose: (reason: CloseReason) => Promise<void>
+  /** 切换到新 session（复用 iframe/runtime，发 parent.switch_session + 可选灌新数据） */
+  switchSession: (newSessionId: string, newInitialData: CsvImport | null) => Promise<void>
   dispose: () => void
 }
 
@@ -118,6 +120,19 @@ export const useNotebookSession = (
     }
   }
 
+  /** 通过 parentBridge 向 iframe 灌入 CSV（首启 / switchSession 复用） */
+  const importCsvIntoIframe = async (b: ParentBridgeServer, data: CsvImport) => {
+    const buffer = cloneTransferBuffer(data.buffer)
+    const importReq: ParentBridgeRequest = {
+      kind: 'parent.import_csv',
+      requestId: genId(),
+      filename: 'upstream.csv',
+      buffer,
+      meta: data.meta,
+    }
+    await b.request(importReq, { transfer: [buffer] })
+  }
+
   const onIframeReady = async () => {
     if (!bridge || imported || !iframeReady) return
     if (importInFlight) {
@@ -138,15 +153,7 @@ export const useNotebookSession = (
 
         // 灌入 CSV（空白笔记本 initialData 为 null，跳过导入）
         if (initialData) {
-          const buffer = cloneTransferBuffer(initialData.buffer)
-          const importReq: ParentBridgeRequest = {
-            kind: 'parent.import_csv',
-            requestId: genId(),
-            filename: 'upstream.csv',
-            buffer,
-            meta: initialData.meta,
-          }
-          await bridge.request(importReq, { transfer: [buffer] })
+          await importCsvIntoIframe(bridge, initialData)
         }
         await notifySessionReady(sessionId)
         imported = true
@@ -196,10 +203,35 @@ export const useNotebookSession = (
     }
   }
 
+  /**
+   * 切换到新 session：iframe 已就绪时复用 runtime（秒开），
+   * 否则降级（上层会通过 :key 重建 iframe）。
+   * 流程：发 parent.switch_session → iframe 内 runtime 切换 → 灌新数据（若有）→ notify ready
+   */
+  const switchSession = async (newSessionId: string, newInitialData: CsvImport | null) => {
+    if (!bridge || !iframeReady) {
+      throw new Error('iframe 未就绪，无法切换 session')
+    }
+    state.value = 'loading_pyodide'
+    // 1. 通知 iframe 切换 session（runtime 内部重置 Python + 切 OPFS + 回放历史）
+    await bridge.request({
+      kind: 'parent.switch_session',
+      requestId: genId(),
+      sessionId: newSessionId,
+    })
+    // 2. 灌入新数据（若有）
+    if (newInitialData) {
+      await importCsvIntoIframe(bridge, newInitialData)
+    }
+    // 3. 通知后端新 session 就绪
+    await notifySessionReady(newSessionId)
+    state.value = 'ready'
+  }
+
   const dispose = () => {
     bridge?.dispose()
     bridge = null
   }
 
-  return { state, requestClose, dispose }
+  return { state, requestClose, switchSession, dispose }
 }
