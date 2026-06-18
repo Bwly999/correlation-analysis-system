@@ -156,7 +156,26 @@ export interface AssistantMessage {
   at: number
 }
 
-export type NotebookMessage = UserMessage | AssistantMessage
+/**
+ * 系统提示消息（非 user / assistant，用于在时间线上标注会话级事件）。
+ *
+ * 当前用途：上下文压缩完成后留痕 —— 让用户看到"这里发生过压缩"，
+ * 而非压缩后流里凭空消失一段对话。刷新页面后不回放（后端 sessionStore
+ * 只存 user/assistant），与压缩"早期对话被摘要替代"的性质一致。
+ */
+export interface SystemNoticeMessage {
+  id: string
+  role: 'system'
+  /** 提示种类 */
+  kind: 'compaction'
+  at: number
+  /** 触发来源 */
+  reason: 'manual' | 'threshold' | 'overflow'
+  /** 压缩前 token 数（用于展示"释放了 X tokens"） */
+  tokensBefore: number | null
+}
+
+export type NotebookMessage = UserMessage | AssistantMessage | SystemNoticeMessage
 
 // ──────────────────────────────────────────────
 // Runtime / Loading / Banner / Toast
@@ -201,6 +220,20 @@ export interface RuntimeStats {
     contextWindow: number
     percent: number | null
   }
+  /** 正在压缩中（SDK compaction_start 到 compaction_end 之间） */
+  compactionInProgress?: boolean
+  /** 历史压缩记录（仅保留最近若干条，用于 hover 面板展示） */
+  compactionHistory?: CompactionRecord[]
+}
+
+/** 一次上下文压缩的元数据记录（不存 summary 全文，仅元数据） */
+export interface CompactionRecord {
+  id: string
+  reason: 'manual' | 'threshold' | 'overflow'
+  finishedAt: number
+  /** 压缩前 token 数（用于展示"节省了 X tokens"） */
+  tokensBefore: number | null
+  aborted: boolean
 }
 
 export type AgentLifecycle = 'idle' | 'running' | 'awaiting_user' | 'completed' | 'failed'

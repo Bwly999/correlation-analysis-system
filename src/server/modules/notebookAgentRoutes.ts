@@ -9,6 +9,7 @@
  *   POST   /api/notebook-agent/sessions/:sessionId/resume 恢复已归档会话（重建 runtime）
  *   POST   /api/notebook-agent/sessions/:sessionId/messages
  *   POST   /api/notebook-agent/sessions/:sessionId/abort    终止当前轮 Agent 推理
+ *   POST   /api/notebook-agent/sessions/:sessionId/compact  手动触发上下文压缩
  *   POST   /api/notebook-agent/sessions/:sessionId/tool-result
  *   DELETE /api/notebook-agent/sessions/:sessionId       软关闭（释放 runtime，保留历史）
  */
@@ -20,6 +21,7 @@ import { assertSessionOwner } from '../piAgent/sessionAccess.js'
 import {
   appendNotebookAuditEntries,
   closeNotebookAgentSession,
+  compactNotebookAgentSession,
   createNotebookAgentSession,
   destroyNotebookAgentSession,
   ensureNotebookAgentRuntime,
@@ -159,6 +161,24 @@ export const createNotebookAgentRoutes = (): FastifyPluginAsync => async (app) =
     const { sessionId } = request.params as { sessionId: string }
     requireOwnedSession(sessionId, user.id)
     const result = await abortNotebookAgentSession(sessionId)
+    if (!result.ok) {
+      reply.code(404)
+      return { message: result.error ?? '会话不存在' }
+    }
+    return { ok: true }
+  })
+
+  // 手动触发上下文压缩（SDK 用 LLM 总结早期对话）。
+  // 压缩过程的 compaction_start/end 事件会经 events 流推给前端。
+  app.post('/api/notebook-agent/sessions/:sessionId/compact', async (request, reply) => {
+    const user = requireWorkflowUser(request)
+    const { sessionId } = request.params as { sessionId: string }
+    requireOwnedSession(sessionId, user.id)
+    const body = (request.body as { customInstructions?: string }) ?? {}
+    const result = await compactNotebookAgentSession(
+      sessionId,
+      typeof body.customInstructions === 'string' ? body.customInstructions : undefined,
+    )
     if (!result.ok) {
       reply.code(404)
       return { message: result.error ?? '会话不存在' }

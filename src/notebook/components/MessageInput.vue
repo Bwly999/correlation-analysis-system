@@ -8,6 +8,8 @@
  */
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ArrowUp, Gauge, Lock, Square } from 'lucide-vue-next'
+import ContextUsagePopover from './ContextUsagePopover.vue'
+import type { CompactionRecord } from '../types/messageStream'
 
 const props = defineProps<{
   /** 当 Agent 在 ask_user 等待回答时禁用 */
@@ -20,11 +22,16 @@ const props = defineProps<{
     contextWindow: number
     percent: number | null
   }
+  /** 正在压缩中（圆环叠加脉动指示） */
+  compactionInProgress?: boolean
+  /** 压缩历史记录（透传给 popover 面板） */
+  compactionHistory?: CompactionRecord[]
 }>()
 
 const emit = defineEmits<{
   send: [text: string]
   abort: []
+  compact: []
 }>()
 
 const text = ref('')
@@ -165,39 +172,58 @@ const ctxTitle = computed(() => {
         <span v-if="charCount > 0" class="tabular-nums">{{ charCount }} 字</span>
       </div>
       <div class="flex items-center gap-1.5">
-        <!-- 上下文窗口使用情况：圆环 Icon，紧贴发送按钮左侧 -->
-        <span
-          class="nb-focus inline-flex h-8 w-8 items-center justify-center rounded-full"
-          :title="ctxTitle"
-          role="img"
-          :aria-label="ctxTitle"
-        >
-          <template v-if="ctxHasValue">
-            <!-- 16px 圆环：stroke-dasharray 控制填充弧长 -->
-            <svg width="16" height="16" viewBox="0 0 16 16">
-              <circle
-                cx="8"
-                cy="8"
-                r="6"
-                fill="none"
-                :stroke="'var(--nb-rule-strong)'"
-                stroke-width="1.6"
-              />
-              <circle
-                cx="8"
-                cy="8"
-                r="6"
-                fill="none"
-                :stroke="ctxColor"
-                stroke-width="1.6"
-                stroke-linecap="round"
-                :stroke-dasharray="`${(ctxPercent / 100) * 2 * Math.PI * 6} ${2 * Math.PI * 6}`"
-                :transform="'rotate(-90 8 8)'"
-              />
-            </svg>
-          </template>
-          <Gauge v-else :size="14" :stroke-width="1.6" style="color: var(--nb-ink-faint);" />
-        </span>
+        <!-- 上下文窗口使用情况：圆环 Icon + hover 弹出详情面板 -->
+        <div class="group relative">
+          <span
+            class="nb-focus inline-flex h-8 w-8 cursor-help items-center justify-center rounded-full"
+            :title="ctxTitle"
+            role="img"
+            :aria-label="ctxTitle"
+          >
+            <template v-if="ctxHasValue">
+              <!-- 16px 圆环：stroke-dasharray 控制填充弧长 -->
+              <svg width="16" height="16" viewBox="0 0 16 16">
+                <circle
+                  cx="8"
+                  cy="8"
+                  r="6"
+                  fill="none"
+                  :stroke="'var(--nb-rule-strong)'"
+                  stroke-width="1.6"
+                />
+                <circle
+                  cx="8"
+                  cy="8"
+                  r="6"
+                  fill="none"
+                  :stroke="ctxColor"
+                  stroke-width="1.6"
+                  stroke-linecap="round"
+                  :stroke-dasharray="`${(ctxPercent / 100) * 2 * Math.PI * 6} ${2 * Math.PI * 6}`"
+                  :transform="'rotate(-90 8 8)'"
+                  :style="
+                    compactionInProgress
+                      ? { animation: 'nb-pulse 1.1s ease-in-out infinite' }
+                      : undefined
+                  "
+                />
+              </svg>
+            </template>
+            <Gauge v-else :size="14" :stroke-width="1.6" style="color: var(--nb-ink-faint);" />
+          </span>
+          <!-- hover 详情面板：group-hover 触发，鼠标移入面板也能保持显示 -->
+          <div
+            class="invisible absolute opacity-0 transition-opacity duration-150 group-hover:visible group-hover:opacity-100"
+            style="bottom: calc(100% + 8px); right: 0; z-index: 50;"
+          >
+            <ContextUsagePopover
+              :context-usage="contextUsage"
+              :compaction-in-progress="!!compactionInProgress"
+              :compaction-history="compactionHistory ?? []"
+              @compact="emit('compact')"
+            />
+          </div>
+        </div>
         <!-- 终止按钮：Agent 运行中或等待回答时替换发送按钮 -->
         <button
           v-if="showStop"

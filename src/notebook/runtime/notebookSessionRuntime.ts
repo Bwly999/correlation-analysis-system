@@ -18,6 +18,7 @@ import {
   sendNotebookAgentMessage,
   streamNotebookAgentEvents,
   abortNotebookAgentSession,
+  compactNotebookAgentSession,
   fetchNotebookSessionHistory,
   type NotebookAgentEvent,
 } from './notebookAgentClient'
@@ -48,6 +49,8 @@ export interface NotebookSessionRuntime {
   cancelAskUser: (askId: string) => Promise<void>
   /** 终止当前轮 Agent（推理中调后端 abort；ask_user 等待中等同于 cancelAskUser） */
   abort: () => Promise<void>
+  /** 手动触发上下文压缩（后端调 SDK session.compact；事件流自动回推 compaction_start/end） */
+  compact: () => Promise<void>
   restart: () => Promise<void>
   stop: () => boolean
   exportWorkspaceFiles: (paths?: string[]) => Promise<string[]>
@@ -605,6 +608,18 @@ export const createNotebookSessionRuntime = async (
     await abortNotebookAgentSession(sessionId).catch(() => undefined)
   }
 
+  /**
+   * 手动触发上下文压缩。
+   *
+   * 调后端 POST /compact → SDK session.compact()。
+   * 压缩过程的 compaction_start / compaction_end 事件会经 SSE 流自动推回，
+   * 由 notebookEventMapper 更新 session.runtime.compactionInProgress / compactionHistory。
+   * 故这里不主动改 VM 状态（与 abort 的"乐观更新"不同）——等事件回流即可。
+   */
+  const compact = async () => {
+    await compactNotebookAgentSession(currentSessionId).catch(() => undefined)
+  }
+
   const restart = async () => {
     state.session.phase = {
       kind: 'loading',
@@ -648,6 +663,7 @@ export const createNotebookSessionRuntime = async (
     answerAskUser,
     cancelAskUser,
     abort,
+    compact,
     restart,
     stop,
     exportWorkspaceFiles,

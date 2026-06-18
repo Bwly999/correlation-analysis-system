@@ -13,6 +13,22 @@ export type NotebookAgentEvent =
       percent: number | null
     }
   | {
+      type: 'session.compaction_start'
+      sessionId: string
+      reason: 'manual' | 'threshold' | 'overflow'
+    }
+  | {
+      type: 'session.compaction_end'
+      sessionId: string
+      reason: 'manual' | 'threshold' | 'overflow'
+      aborted: boolean
+      willRetry: boolean
+      errorMessage?: string
+      tokensBefore: number | null
+      firstKeptEntryId: string | null
+      summary: string | null
+    }
+  | {
       type: 'message.start'
       sessionId: string
       messageId: string
@@ -244,6 +260,42 @@ export const abortNotebookAgentSession = async (
       && typeof response.data.message === 'string'
         ? response.data.message
         : '终止 Notebook Agent 失败'
+    throw new Error(message)
+  }
+
+  return response.data as { ok: boolean }
+}
+
+/**
+ * 手动触发上下文压缩。
+ *
+ * 后端调 SDK 的 session.compact()，由 LLM 把早期对话总结成结构化摘要。
+ * 压缩过程的 compaction_start / compaction_end 事件会经 events 流自动推回，
+ * 调用方无需轮询；返回的 ok 仅表示"已成功触发"。
+ *
+ * @param customInstructions 可选自定义摘要指令（如"重点保留代码变更"）
+ */
+export const compactNotebookAgentSession = async (
+  sessionId: string,
+  customInstructions?: string,
+) => {
+  const response = await httpClient.request({
+    url: `/notebook-agent/sessions/${sessionId}/compact`,
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    data: { customInstructions },
+  })
+
+  if (!isSuccessStatus(response.status)) {
+    const message =
+      typeof response.data === 'object'
+      && response.data
+      && 'message' in response.data
+      && typeof response.data.message === 'string'
+        ? response.data.message
+        : '触发上下文压缩失败'
     throw new Error(message)
   }
 

@@ -274,6 +274,10 @@ const handleAbort = async () => {
   await runtime.value?.abort()
 }
 
+const handleCompact = async () => {
+  await runtime.value?.compact()
+}
+
 const handleClose = () => {
   if (runtime.value) {
     runtime.value.requestParentClose()
@@ -299,6 +303,7 @@ const isPoc = computed(() => mode === 'poc')
     @ask-user-submit="handleAskUserSubmit"
     @ask-user-cancel="handleAskUserCancel"
     @abort="handleAbort"
+    @compact="handleCompact"
     @stop-exec="handleStopExec"
     @rename="handleRename"
     @new-conversation="() => undefined"

@@ -12,11 +12,15 @@ import type { NotebookMessage } from '../types/messageStream'
 import type { OpfsDirectoryHandle } from '../shared/opfsAccess'
 import UserMessageBlock from './UserMessageBlock.vue'
 import AssistantMessageBlock from './AssistantMessageBlock.vue'
+import CompactingBanner from './CompactingBanner.vue'
+import SystemNoticeBlock from './SystemNoticeBlock.vue'
 
 const props = defineProps<{
   messages: NotebookMessage[]
   sessionTitle?: string
   opfsRoot?: OpfsDirectoryHandle
+  /** 正在压缩上下文（显示底部扫光提示条；自动/手动压缩共用同一通路） */
+  compacting?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -137,13 +141,18 @@ const todayLabel = computed(() => {
       >
         <UserMessageBlock v-if="m.role === 'user'" :message="m" />
         <AssistantMessageBlock
-          v-else
+          v-else-if="m.role === 'assistant'"
           :message="m"
           :opfs-root="props.opfsRoot"
           @ask-user-submit="(p) => emit('askUserSubmit', p)"
           @ask-user-cancel="(id) => emit('askUserCancel', id)"
           @open-in-tree="(p) => emit('openInTree', p)"
         />
+        <SystemNoticeBlock v-else-if="m.role === 'system'" :message="m" />
+      </li>
+      <!-- 上下文压缩提示条：贴在最新消息下方，扫光掠过表示进行中 -->
+      <li v-if="compacting" class="nb-fade-up">
+        <CompactingBanner :active="!!compacting" />
       </li>
     </ul>
   </div>

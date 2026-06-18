@@ -659,6 +659,38 @@ export const applyNotebookEvent = (
       }
       return
     }
+    case 'session.compaction_start': {
+      session.runtime.compactionInProgress = true
+      return
+    }
+    case 'session.compaction_end': {
+      session.runtime.compactionInProgress = false
+      if (!event.aborted) {
+        const finishedAt = Date.now()
+        const noticeId = event.firstKeptEntryId ?? `compact-${finishedAt}`
+        // 1. 压缩历史（hover 面板用，最多 5 条）
+        const history = session.runtime.compactionHistory ?? []
+        history.push({
+          id: noticeId,
+          reason: event.reason,
+          finishedAt,
+          tokensBefore: event.tokensBefore,
+          aborted: false,
+        })
+        session.runtime.compactionHistory = history.slice(-5)
+        // 2. 在消息流时间线上留痕：push 一条系统提示消息，
+        //    让用户看到"这里压缩过"，而非压缩后对话凭空缺一段。
+        session.messages.push({
+          id: `notice-${noticeId}`,
+          role: 'system',
+          kind: 'compaction',
+          at: finishedAt,
+          reason: event.reason,
+          tokensBefore: event.tokensBefore,
+        })
+      }
+      return
+    }
     case 'session.status': {
       const status = String(event.status ?? '')
       if (status === 'running') {

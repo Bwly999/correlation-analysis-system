@@ -67,6 +67,7 @@ const emit = defineEmits<{
   askUserSubmit: [payload: { askId: string; optionId: string; text?: string }]
   askUserCancel: [askId: string]
   abort: []
+  compact: []
   stopExec: []
   newConversation: []
   selectConversation: [id: string]
@@ -382,6 +383,7 @@ const onSend = (text: string) => emit('send', text)
           :messages="session.messages"
           :session-title="session.title"
           :opfs-root="props.opfsRoot"
+          :compacting="!!session.runtime.compactionInProgress"
           @ask-user-submit="(p) => emit('askUserSubmit', p)"
           @ask-user-cancel="(id) => emit('askUserCancel', id)"
           @open-in-tree="onSelect"
@@ -401,8 +403,11 @@ const onSend = (text: string) => emit('send', text)
               :awaiting-user="awaitingUser"
               :agent-running="session.runtime.isRunning"
               :context-usage="session.runtime.contextUsage"
+              :compaction-in-progress="session.runtime.compactionInProgress"
+              :compaction-history="session.runtime.compactionHistory"
               @send="onSend"
               @abort="emit('abort')"
+              @compact="emit('compact')"
             />
           </div>
         </div>

@@ -173,6 +173,20 @@ const buildAndRegisterRuntime = async (
         })
       }
     }
+    // 压缩结束后 SDK 内部上下文已变（早期消息被摘要替代），
+    // 立即重报一次 contextUsage：tokens 通常大幅下降，或为 null 等下一轮恢复。
+    if (event.type === 'compaction_end') {
+      const usage = runtime.session.getContextUsage?.()
+      if (usage) {
+        emitRuntimeEvent(runtime, {
+          type: 'session.context_usage',
+          sessionId: runtime.sessionId,
+          tokens: usage.tokens,
+          contextWindow: usage.contextWindow,
+          percent: usage.percent,
+        })
+      }
+    }
   })
   runtime.unsubscribe = unsubscribe
   runtimes.set(record.sessionId, runtime)
@@ -338,6 +352,31 @@ export const abortNotebookAgentSession = async (
   })
 
   return { ok: true }
+}
+
+/**
+ * 手动触发上下文压缩。
+ *
+ * 走 Pi SDK 的 session.compact()：由 SDK 用 LLM 把早期对话总结成结构化摘要，
+ * 替换原始消息。压缩过程的 compaction_start / compaction_end 事件会经
+ * session.subscribe 自动推到前端，无需这里手动 emit。
+ *
+ * @param customInstructions 可选的自定义摘要指令（如"重点保留代码变更"）
+ * @returns ok=true=已触发；ok=false + error=会话不存在或压缩失败
+ */
+export const compactNotebookAgentSession = async (
+  sessionId: string,
+  customInstructions?: string,
+): Promise<{ ok: boolean; error?: string }> => {
+  const runtime = runtimes.get(sessionId)
+  if (!runtime) return { ok: false, error: '会话不存在' }
+  try {
+    await runtime.session.compact(customInstructions)
+    return { ok: true }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return { ok: false, error: message }
+  }
 }
 
 export const finishNotebookAgentToolCall = (

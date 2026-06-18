@@ -17,6 +17,22 @@ export type NotebookAgentSseEvent =
       percent: number | null
     }
   | {
+      type: 'session.compaction_start'
+      sessionId: string
+      reason: 'manual' | 'threshold' | 'overflow'
+    }
+  | {
+      type: 'session.compaction_end'
+      sessionId: string
+      reason: 'manual' | 'threshold' | 'overflow'
+      aborted: boolean
+      willRetry: boolean
+      errorMessage?: string
+      tokensBefore: number | null
+      firstKeptEntryId: string | null
+      summary: string | null
+    }
+  | {
       type: 'message.start'
       sessionId: string
       messageId: string
@@ -58,6 +74,30 @@ export function bridgeNotebookEvent(
       // 只把当前 status 广播出去（与 bridgePiEvent 行为一致）。
       events.push({ type: 'session.status', sessionId, status: record.status })
       break
+
+    case 'compaction_start':
+      events.push({
+        type: 'session.compaction_start',
+        sessionId,
+        reason: piEvent.reason,
+      })
+      break
+
+    case 'compaction_end': {
+      const result = piEvent.result
+      events.push({
+        type: 'session.compaction_end',
+        sessionId,
+        reason: piEvent.reason,
+        aborted: Boolean(piEvent.aborted),
+        willRetry: Boolean(piEvent.willRetry),
+        errorMessage: piEvent.errorMessage,
+        tokensBefore: typeof result?.tokensBefore === 'number' ? result.tokensBefore : null,
+        firstKeptEntryId: typeof result?.firstKeptEntryId === 'string' ? result.firstKeptEntryId : null,
+        summary: typeof result?.summary === 'string' ? result.summary : null,
+      })
+      break
+    }
 
     case 'message_start': {
       if (!isAssistantMessage(piEvent.message)) break
