@@ -35,7 +35,7 @@ const buildTree = (files: Array<{ path: string; mtime: number }>): TreeNode => {
 describe('useFreshFileTracker', () => {
   it('文件首次出现 → 标记 fresh', async () => {
     const tree = ref<TreeNode | null>(null)
-    let now = 1_000_000
+    const now = 1_000_000
     const { isFresh } = useFreshFileTracker({ tree, now: () => now })
 
     tree.value = buildTree([{ path: 'reports/main.md', mtime: 1_000_000 }])
@@ -74,7 +74,7 @@ describe('useFreshFileTracker', () => {
 
   it('被删除的文件不会一直留在缓存里', async () => {
     const tree = ref<TreeNode | null>(buildTree([{ path: 'reports/a.md', mtime: 1 }]))
-    let now = 1_000_000
+    const now = 1_000_000
     const { isFresh } = useFreshFileTracker({ tree, now: () => now })
     await nextTick()
     expect(isFresh('reports/a.md')).toBe(true)

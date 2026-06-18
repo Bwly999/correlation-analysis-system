@@ -33,6 +33,18 @@ const codePreview = computed(() => {
 
 const showStdoutToggle = computed(() => props.tool.stdout.length > 0)
 const showStderr = computed(() => props.tool.stderr.length > 0 || props.tool.errorMessage)
+
+/** 截断徽标文案：显示在 STDOUT/STDERR 头部，让用户知道输出被裁剪过 */
+const stdoutTruncationLabel = computed(() => {
+  const t = props.tool.stdoutTruncation
+  if (!t) return ''
+  return `已截断 ${t.outputLines}/${t.totalLines} 行`
+})
+const stderrTruncationLabel = computed(() => {
+  const t = props.tool.stderrTruncation
+  if (!t) return ''
+  return `已截断 ${t.outputLines}/${t.totalLines} 行`
+})
 </script>
 
 <template>
@@ -119,6 +131,22 @@ const showStderr = computed(() => props.tool.stderr.length > 0 || props.tool.err
           <Terminal :size="10" :stroke-width="1.6" />
           <span style="font-weight: 700;">STDOUT</span>
           <span class="flex-1" />
+          <span
+            v-if="stdoutTruncationLabel"
+            class="nb-mono"
+            style="
+              margin-right: 8px;
+              padding: 1px 6px;
+              border-radius: 2px;
+              font-weight: 600;
+              letter-spacing: 0.04em;
+              color: var(--nb-clay, #8B3A37);
+              background-color: var(--nb-clay-soft, rgba(184, 84, 80, 0.08));
+            "
+            :title="`输出超过 2000 行/50KB 限制，仅保留末尾 ${tool.stdoutTruncation?.outputLines} 行（原始 ${tool.stdoutTruncation?.totalLines} 行 / ${tool.stdoutTruncation?.totalBytes} 字节）`"
+          >
+            {{ stdoutTruncationLabel }}
+          </span>
           <span class="nb-mono tabular-nums" style="font-weight: 400; letter-spacing: 0.04em;">
             {{ tool.stdout.length }} chars
           </span>
@@ -166,6 +194,22 @@ const showStderr = computed(() => props.tool.stderr.length > 0 || props.tool.err
             · {{ tool.errorType }}
           </span>
           <span class="flex-1" />
+          <span
+            v-if="stderrTruncationLabel"
+            class="nb-mono"
+            style="
+              margin-right: 8px;
+              padding: 1px 6px;
+              border-radius: 2px;
+              font-weight: 600;
+              letter-spacing: 0.04em;
+              color: #8B3A37;
+              background-color: rgba(184, 84, 80, 0.12);
+            "
+            :title="`输出超过 2000 行/50KB 限制，仅保留末尾 ${tool.stderrTruncation?.outputLines} 行（原始 ${tool.stderrTruncation?.totalLines} 行 / ${tool.stderrTruncation?.totalBytes} 字节）`"
+          >
+            {{ stderrTruncationLabel }}
+          </span>
           <span
             class="font-sans"
             style="text-transform: none; letter-spacing: 0; color: rgba(139, 58, 55, 0.7);"

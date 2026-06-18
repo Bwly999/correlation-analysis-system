@@ -14,6 +14,10 @@ import {
   fsGrep,
   type FsToolError,
 } from './fsTools'
+import {
+  truncateOutputTail,
+  type TruncationMeta,
+} from './outputTruncate'
 import type { OpfsDirectoryHandle } from '../shared/opfsAccess'
 import type { BridgeWorkerHost } from './parentBridgeClient'
 import type { NotebookTodoStore, TodoItem } from './notebookTodoStore'
@@ -48,6 +52,41 @@ const errorResult = (
     details,
     isError: true,
   }
+}
+
+/**
+ * 截断 Python exec 的 stdout / stderr，防止超长输出（print(df)、长 traceback）
+ * 填满 Agent 上下文窗口。尾部保留——关键内容（traceback 末帧、最终结果）在末尾。
+ *
+ * 仅在触发截断时追加提示行（让 LLM 知道信息不全，建议改用落盘），
+ * 并在 details 里挂 stdoutTruncation / stderrTruncation 元数据。
+ */
+const truncateExecOutput = (
+  stdout: string,
+  stderr: string,
+): {
+  stdout: string
+  stderr: string
+  stdoutTruncation?: TruncationMeta
+  stderrTruncation?: TruncationMeta
+} => {
+  const outT = truncateOutputTail(stdout)
+  const errT = truncateOutputTail(stderr)
+  const result: {
+    stdout: string
+    stderr: string
+    stdoutTruncation?: TruncationMeta
+    stderrTruncation?: TruncationMeta
+  } = { stdout: outT.content, stderr: errT.content }
+  if (outT.truncation.truncated) {
+    result.stdout = `${outT.content}\n\n[stdout 已截断：显示末尾 ${outT.truncation.outputLines} 行 / 共 ${outT.truncation.totalLines} 行（${outT.truncation.totalBytes} 字节）。如需完整输出请写入 artifacts/ 后用 fs_read 分段查看]`
+    result.stdoutTruncation = outT.truncation
+  }
+  if (errT.truncation.truncated) {
+    result.stderr = `${errT.content}\n\n[stderr 已截断：显示末尾 ${errT.truncation.outputLines} 行 / 共 ${errT.truncation.totalLines} 行（${errT.truncation.totalBytes} 字节）]`
+    result.stderrTruncation = errT.truncation
+  }
+  return result
 }
 
 // ──────────────────────────────────────────────
@@ -106,13 +145,16 @@ export const createToolDispatcher = (deps: ToolDispatcherDeps): ToolDispatcher =
           }
           const timeout = Math.min(Math.max(p.timeoutMs ?? DEFAULT_EXEC_TIMEOUT, 1_000), 300_000)
           const out = await workerHost.exec(p.code, timeout)
+          const t = truncateExecOutput(out.stdout, out.stderr)
           if (out.ok) {
             return okResult({
               execId: toolCallId,
               status: 'ok',
-              stdout: out.stdout,
-              stderr: out.stderr,
+              stdout: t.stdout,
+              stderr: t.stderr,
               elapsedMs: out.durationMs,
+              ...(t.stdoutTruncation ? { stdoutTruncation: t.stdoutTruncation } : {}),
+              ...(t.stderrTruncation ? { stderrTruncation: t.stderrTruncation } : {}),
             })
           }
           return okResult({
@@ -123,12 +165,14 @@ export const createToolDispatcher = (deps: ToolDispatcherDeps): ToolDispatcher =
                 : out.errorType === 'timeout'
                   ? 'timeout'
                   : 'error',
-            stdout: out.stdout,
-            stderr: out.stderr,
+            stdout: t.stdout,
+            stderr: t.stderr,
             elapsedMs: out.durationMs,
             error: out.errorMessage
               ? { code: out.errorType ?? 'python_exception', message: out.errorMessage }
               : undefined,
+            ...(t.stdoutTruncation ? { stdoutTruncation: t.stdoutTruncation } : {}),
+            ...(t.stderrTruncation ? { stderrTruncation: t.stderrTruncation } : {}),
           })
         }
         case 'python_exec_file': {
@@ -141,6 +185,7 @@ export const createToolDispatcher = (deps: ToolDispatcherDeps): ToolDispatcher =
           const r = await fsRead(opfsRoot, { path: p.path, limit: 1_000_000 })
           const timeout = Math.min(Math.max(p.timeoutMs ?? DEFAULT_EXEC_TIMEOUT, 1_000), 300_000)
           const out = await workerHost.exec(r.content, timeout)
+          const t = truncateExecOutput(out.stdout, out.stderr)
           return okResult({
             execId: toolCallId,
             status:
@@ -151,12 +196,14 @@ export const createToolDispatcher = (deps: ToolDispatcherDeps): ToolDispatcher =
                   : out.errorType === 'timeout'
                     ? 'timeout'
                     : 'error',
-            stdout: out.stdout,
-            stderr: out.stderr,
+            stdout: t.stdout,
+            stderr: t.stderr,
             elapsedMs: out.durationMs,
             error: out.errorMessage
               ? { code: out.errorType ?? 'python_exception', message: out.errorMessage }
               : undefined,
+            ...(t.stdoutTruncation ? { stdoutTruncation: t.stdoutTruncation } : {}),
+            ...(t.stderrTruncation ? { stderrTruncation: t.stderrTruncation } : {}),
           })
         }
         case 'fs_read': {

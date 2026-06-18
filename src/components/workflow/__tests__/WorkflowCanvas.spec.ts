@@ -66,13 +66,13 @@ const notebookFrameStub = defineComponent({
   name: 'NotebookFrame',
   props: ['sessionId', 'initialData', 'visible'],
   emits: ['close'],
-  template: '<div class="notebook-frame-stub" :data-session-id="sessionId" :data-visible="String(visible)"></div>',
   setup(_props, { expose }) {
     expose({
       switchSession: notebookFrameSwitchSessionMock,
     })
     return {}
   },
+  template: '<div class="notebook-frame-stub" :data-session-id="sessionId" :data-visible="String(visible)"></div>',
 })
 
 const flushAsyncWork = async () => {

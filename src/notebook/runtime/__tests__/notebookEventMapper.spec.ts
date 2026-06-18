@@ -89,6 +89,55 @@ describe('notebookEventMapper', () => {
     expect(state.session.runtime.cellCount).toBe(1)
   })
 
+  it('tool.end 含 stdoutTruncation 时透传到卡片数据', () => {
+    const state = createNotebookRuntimeState('sess-1')
+    applyNotebookEvent(state, {
+      type: 'message.start',
+      sessionId: 'sess-1',
+      messageId: 'm-1',
+      role: 'assistant',
+      visibility: 'assistant_visible',
+    })
+    applyNotebookEvent(state, {
+      type: 'tool.execute',
+      sessionId: 'sess-1',
+      toolCallId: 'tool-1',
+      toolName: 'python_exec_inline',
+      params: { code: 'print(big)' },
+    })
+    applyNotebookEvent(state, {
+      type: 'tool.end',
+      sessionId: 'sess-1',
+      toolCallId: 'tool-1',
+      result: JSON.stringify({
+        status: 'ok',
+        stdout: '...last lines',
+        stderr: '',
+        stdoutTruncation: {
+          truncated: true,
+          truncatedBy: 'lines',
+          outputLines: 2000,
+          outputBytes: 48000,
+          totalLines: 5000,
+          totalBytes: 200000,
+        },
+      }),
+      isError: false,
+    })
+
+    const assistant = state.session.messages[0]
+    const toolBlock =
+      assistant && 'blocks' in assistant
+        ? assistant.blocks.find((block) => block.kind === 'tool')
+        : null
+    if (toolBlock?.kind === 'tool' && toolBlock.data.kind === 'python_exec') {
+      expect(toolBlock.data.stdoutTruncation?.truncated).toBe(true)
+      expect(toolBlock.data.stdoutTruncation?.truncatedBy).toBe('lines')
+      expect(toolBlock.data.stdoutTruncation?.totalLines).toBe(5000)
+      expect(toolBlock.data.stderrTruncation).toBeUndefined()
+    }
+  })
+
   it('ask_user 回答后会更新 block 状态并恢复 running', () => {
     const state = createNotebookRuntimeState('sess-1')
     applyNotebookEvent(state, {

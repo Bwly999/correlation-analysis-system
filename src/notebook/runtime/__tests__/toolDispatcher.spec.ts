@@ -98,6 +98,74 @@ describe('toolDispatcher', () => {
       expect(details.status).toBe('error')
       expect(details.stderr).toMatch(/Traceback/)
     })
+
+    it('短输出不截断，不含 truncation 字段', async () => {
+      const dispatcher = createToolDispatcher(env.deps)
+      const result = await dispatcher.dispatch(
+        'python_exec_inline',
+        { code: 'print(1)' },
+        'tc-short',
+      )
+      const details = result.details as Record<string, unknown>
+      expect(details.stdout).toBe('hello\n') // 默认 mock
+      expect(details.stdoutTruncation).toBeUndefined()
+      expect(details.stderrTruncation).toBeUndefined()
+    })
+
+    it('超长 stdout 被截断并挂 stdoutTruncation + 追加提示', async () => {
+      // 生成 5000 行 stdout，超过 2000 行默认上限
+      const bigStdout = Array.from({ length: 5000 }, (_, i) => `line-${i}`).join('\n')
+      env.workerHost.exec = vi.fn().mockResolvedValue({
+        ok: true,
+        stdout: bigStdout,
+        stderr: '',
+        errorType: null,
+        durationMs: 10,
+      }) as unknown as typeof env.workerHost.exec
+      const dispatcher = createToolDispatcher(env.deps)
+      const result = await dispatcher.dispatch(
+        'python_exec_inline',
+        { code: 'print(big)' },
+        'tc-big',
+      )
+      const details = result.details as Record<string, {
+        truncated?: boolean
+        truncatedBy?: string
+        totalLines?: number
+      }>
+      expect(details.stdoutTruncation?.truncated).toBe(true)
+      expect(details.stdoutTruncation?.truncatedBy).toBe('lines')
+      expect(details.stdoutTruncation?.totalLines).toBe(5000)
+      // 截断后 stdout 含末尾行 + 提示
+      expect(details.stdout as string).toMatch(/line-4999/)
+      expect(details.stdout as string).toMatch(/stdout 已截断/)
+      // stderrTruncation 不应出现（stderr 为空）
+      expect(details.stderrTruncation).toBeUndefined()
+    })
+
+    it('python_exec_file 同样对超长输出截断', async () => {
+      await writeFile(
+        env.root,
+        'scripts/big.py',
+        Array.from({ length: 10 }, () => 'print(1)').join('\n'),
+      )
+      const bigStdout = Array.from({ length: 3000 }, (_, i) => `o-${i}`).join('\n')
+      env.workerHost.exec = vi.fn().mockResolvedValue({
+        ok: true,
+        stdout: bigStdout,
+        stderr: '',
+        errorType: null,
+        durationMs: 10,
+      }) as unknown as typeof env.workerHost.exec
+      const dispatcher = createToolDispatcher(env.deps)
+      const result = await dispatcher.dispatch(
+        'python_exec_file',
+        { path: 'scripts/big.py' },
+        'tc-file-big',
+      )
+      const details = result.details as Record<string, { truncated?: boolean }>
+      expect(details.stdoutTruncation?.truncated).toBe(true)
+    })
   })
 
   describe('fs_read', () => {

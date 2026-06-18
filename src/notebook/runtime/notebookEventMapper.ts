@@ -185,6 +185,36 @@ const parseToolResultDetails = (result: string): Record<string, unknown> | null 
   }
 }
 
+/**
+ * 从 details 里安全读取 stdoutTruncation / stderrTruncation 元数据。
+ * 仅在 truncated=true 且 truncatedBy 合法时返回，否则 undefined（保证 UI 类型窄化）。
+ */
+const readTruncation = (
+  raw: unknown,
+):
+  | {
+      truncated: true
+      truncatedBy: 'lines' | 'bytes'
+      outputLines: number
+      outputBytes: number
+      totalLines: number
+      totalBytes: number
+    }
+  | undefined => {
+  if (!raw || typeof raw !== 'object') return undefined
+  const t = raw as Record<string, unknown>
+  if (t.truncated !== true) return undefined
+  if (t.truncatedBy !== 'lines' && t.truncatedBy !== 'bytes') return undefined
+  return {
+    truncated: true,
+    truncatedBy: t.truncatedBy,
+    outputLines: Number(t.outputLines) || 0,
+    outputBytes: Number(t.outputBytes) || 0,
+    totalLines: Number(t.totalLines) || 0,
+    totalBytes: Number(t.totalBytes) || 0,
+  }
+}
+
 const applyToolExecute = (
   session: NotebookSessionVm,
   event: Extract<NotebookAgentEvent, { type: 'tool.execute' }>,
@@ -314,6 +344,10 @@ const applyToolEnd = (
         if (block.data.kind === 'python_exec') {
           block.data.stdout = typeof details?.stdout === 'string' ? details.stdout : ''
           block.data.stderr = typeof details?.stderr === 'string' ? details.stderr : ''
+          const stdoutT = readTruncation(details?.stdoutTruncation)
+          if (stdoutT) block.data.stdoutTruncation = stdoutT
+          const stderrT = readTruncation(details?.stderrTruncation)
+          if (stderrT) block.data.stderrTruncation = stderrT
           if (typeof details?.error?.message === 'string') {
             block.data.errorMessage = details.error.message
           }
@@ -578,6 +612,12 @@ const buildHistoryToolBlock = (tc: NotebookHistoryToolItem): AssistantBlock | nu
           status,
           durationMs,
           ...(status === 'failed' && tc.result ? { errorMessage: tc.result } : {}),
+          ...(readTruncation(details?.stdoutTruncation)
+            ? { stdoutTruncation: readTruncation(details?.stdoutTruncation) }
+            : {}),
+          ...(readTruncation(details?.stderrTruncation)
+            ? { stderrTruncation: readTruncation(details?.stderrTruncation) }
+            : {}),
         },
       }
     case 'fs_read':

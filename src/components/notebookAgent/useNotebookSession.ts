@@ -168,7 +168,7 @@ export const useNotebookSession = (
       } catch (err) {
         // 失败时把状态置 failed，让上层 UI 提示
         state.value = 'failed'
-        // eslint-disable-next-line no-console
+         
         console.error('[useNotebookSession] handshake/import 失败：', err)
       } finally {
         importInFlight = null

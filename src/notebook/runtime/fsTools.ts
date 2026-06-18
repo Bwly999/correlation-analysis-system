@@ -319,6 +319,13 @@ export interface FsGrepResult {
 
 const SCAN_TEXT_HEAD_BYTES = 100 * 1024
 const SCAN_FILE_LIMIT_BYTES = 1024 * 1024
+/** grep 命中行最大字符数（与 SDK 内置 grep 一致），超长则尾部截断 */
+const GREP_MAX_LINE_CHARS = 500
+
+const truncateGrepLine = (line: string): string => {
+  if (line.length <= GREP_MAX_LINE_CHARS) return line
+  return `${line.slice(0, GREP_MAX_LINE_CHARS)}... [truncated, +${line.length - GREP_MAX_LINE_CHARS} chars]`
+}
 
 const collectTextFiles = async (
   root: OpfsDirectoryHandle,
@@ -382,7 +389,7 @@ export const fsGrep = async (
       matches.push({
         path: p,
         lineNumber: i + 1,
-        line,
+        line: truncateGrepLine(line),
         contextBefore: params.contextLines
           ? lines.slice(Math.max(0, i - params.contextLines), i)
           : undefined,

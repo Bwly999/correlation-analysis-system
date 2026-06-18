@@ -220,5 +220,23 @@ describe('Notebook fs_* 工具', () => {
       const r = await fsGrep(root, { pattern: 'lasso = None' })
       expect(r.matches[0]?.lineNumber).toBe(2)
     })
+
+    it('超长命中行被截断到 500 字符 + 提示后缀', async () => {
+      // 构造 800 字符的单行，中间放 lasso 关键词
+      const longLine = 'x'.repeat(350) + ' lasso ' + 'y'.repeat(443)
+      await writeFile(root, 'scripts/big.py', longLine)
+      const r = await fsGrep(root, { pattern: 'lasso' })
+      const match = r.matches.find((m) => m.path === 'scripts/big.py')
+      expect(match).toBeDefined()
+      // 截断后含前 500 字符 + 截断提示
+      expect(match!.line.startsWith('x'.repeat(350))).toBe(true)
+      expect(match!.line).toMatch(/\[truncated, \+300 chars\]/)
+    })
+
+    it('短命中行不截断', async () => {
+      const r = await fsGrep(root, { pattern: 'lasso' })
+      // 已有的短行保持原样，无截断提示
+      expect(r.matches.every((m) => !/\[truncated/.test(m.line))).toBe(true)
+    })
   })
 })

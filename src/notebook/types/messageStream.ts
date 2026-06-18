@@ -32,6 +32,24 @@ export interface PythonExecToolCall extends ToolCallBase {
   stderr: string
   /** 解释错误类型（interrupted / timeout / runtime_error 等） */
   errorType?: string
+  /** stdout 被截断时的元数据（dispatcher 层 2000 行 / 50KB 限制触发后挂上） */
+  stdoutTruncation?: {
+    truncated: true
+    truncatedBy: 'lines' | 'bytes'
+    outputLines: number
+    outputBytes: number
+    totalLines: number
+    totalBytes: number
+  }
+  /** stderr 被截断时的元数据 */
+  stderrTruncation?: {
+    truncated: true
+    truncatedBy: 'lines' | 'bytes'
+    outputLines: number
+    outputBytes: number
+    totalLines: number
+    totalBytes: number
+  }
 }
 
 export interface FsWriteToolCall extends ToolCallBase {
