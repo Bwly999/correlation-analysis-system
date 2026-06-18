@@ -27,7 +27,7 @@ export interface BootResult {
 export interface BootOptions {
   pyodideIndexUrl: string
   interruptBuffer: SharedArrayBuffer | null
-  onProgress: (stage: string, detail?: string) => void
+  onProgress: (stage: string, detail?: string, percent?: number) => void
 }
 
 /** 安全 console 代理：只允许 log/warn/error/info，转发到 Worker postMessage */
@@ -45,7 +45,7 @@ const makeSafeConsole = (post: (level: string, args: unknown[]) => void) => {
 }
 
 export const bootPyodide = async (opts: BootOptions): Promise<BootResult> => {
-  opts.onProgress('loading_runtime', '加载 pyodide.asm.wasm')
+  opts.onProgress('importing_pyodide', '正在加载 Pyodide 模块', 18)
 
   // Vite ?worker 生成的是 module worker，importScripts 不可用。
   // Pyodide 0.27 的 loadPyodide 会先试 importScripts，捕获 TypeError 后 fallback
@@ -59,6 +59,8 @@ export const bootPyodide = async (opts: BootOptions): Promise<BootResult> => {
     /* @vite-ignore */ `${opts.pyodideIndexUrl}pyodide.mjs`
   )) as { loadPyodide: (config: unknown) => Promise<PyodideInterface> }
   const loadPyodide = pyodideModule.loadPyodide
+
+  opts.onProgress('loading_runtime', '正在启动 Python 运行时', 35)
 
   // 1) 构造受限 jsglobals
   //    注意：Python 侧 from js import 是基于「这个对象的 own/inherited 属性」判断的。
@@ -103,15 +105,22 @@ export const bootPyodide = async (opts: BootOptions): Promise<BootResult> => {
   }
 
   // 4) 加载 Notebook M1 默认分析包集
-  opts.onProgress('loading_packages', 'numpy + pandas + scipy + scikit-learn + matplotlib + statsmodels')
-  await pyodide.loadPackage([
+  //    逐个加载以汇报真实进度，detail 显示当前包名
+  const PACKAGES = [
     'numpy',
     'pandas',
     'scipy',
     'scikit-learn',
     'matplotlib',
     'statsmodels',
-  ])
+  ]
+  const PKG_PROGRESS_START = 60
+  const PKG_PROGRESS_END = 83
+  for (let i = 0; i < PACKAGES.length; i++) {
+    const pct = PKG_PROGRESS_START + Math.round((i / PACKAGES.length) * (PKG_PROGRESS_END - PKG_PROGRESS_START))
+    opts.onProgress('loading_packages', `正在加载 ${PACKAGES[i]}`, pct)
+    await pyodide.loadPackage(PACKAGES[i])
+  }
 
   // 4.5) 注入中文字体
   //      matplotlib 默认只捆绑 DejaVu Sans，不含中文字形，画中文会出现「豆腐块」。

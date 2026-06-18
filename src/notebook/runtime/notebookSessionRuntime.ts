@@ -75,6 +75,7 @@ const WORKER_SYNC_DIRS = ['inputs', 'scripts'] as const
  */
 const BOOT_STAGE_TO_UI: Record<string, { stage: LoadingStage; percent: number }> = {
   starting: { stage: 'load_runtime', percent: 12 },
+  importing_pyodide: { stage: 'load_runtime', percent: 18 },
   loading_runtime: { stage: 'load_runtime', percent: 35 },
   loading_packages: { stage: 'load_packages', percent: 60 },
   locking: { stage: 'lock_sandbox', percent: 88 },
@@ -159,15 +160,20 @@ export const createNotebookSessionRuntime = async (
   // 仅在 phase.kind === 'loading' 时生效，避免覆盖 ready/failed。
   // 不这样做的话，UI 会一直卡在 10% 的 load_runtime，直到 workerHost.init 解析。
   const bootProgressStop = watch(
-    () => ({ stage: workerHost.state.bootStage, detail: workerHost.state.bootStageDetail }),
-    ({ stage, detail }) => {
+    () => ({
+      stage: workerHost.state.bootStage,
+      detail: workerHost.state.bootStageDetail,
+      wPercent: workerHost.state.bootStagePercent,
+    }),
+    ({ stage, detail, wPercent }) => {
       if (state.session.phase.kind !== 'loading') return
       if (!stage) return
       const mapped = BOOT_STAGE_TO_UI[stage]
       if (!mapped) return
       // percent 单调递增：避免后发的小阶段值把进度条往回拉
       const prev = state.session.phase.progress.percent
-      const percent = Math.max(prev, mapped.percent)
+      // Worker 直报百分比起伏度更高（如逐包加载）；有值时用它代替映射值
+      const percent = wPercent > 0 ? Math.max(prev, wPercent) : Math.max(prev, mapped.percent)
       state.session.phase.progress = {
         stage: mapped.stage,
         percent,

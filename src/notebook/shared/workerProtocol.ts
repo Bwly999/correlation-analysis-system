@@ -50,8 +50,10 @@ export type HostToWorkerRequest =
 export type WorkerToHostMessage =
   | {
       kind: 'init_progress'
-      stage: 'loading_runtime' | 'loading_packages' | 'locking' | 'ready'
+      stage: string
       detail?: string
+      /** 0-100 进度百分比；为空时由主线程回退到 BOOT_STAGE_TO_UI 映射 */
+      percent?: number
     }
   | {
       kind: 'init_done'

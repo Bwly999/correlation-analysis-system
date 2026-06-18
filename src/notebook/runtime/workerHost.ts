@@ -38,6 +38,8 @@ export interface HostState {
   status: 'idle' | 'booting' | 'ready' | 'busy' | 'dead'
   bootStage: string
   bootStageDetail: string
+  /** Worker 直报的 0-100 进度；0 表示未上报 */
+  bootStagePercent: number
   pyodideVersion: string
   crossOriginIsolated: boolean
   sabSupported: boolean
@@ -108,6 +110,7 @@ export class WorkerHost {
       status: 'idle',
       bootStage: '',
       bootStageDetail: '',
+      bootStagePercent: 0,
       pyodideVersion: '',
       crossOriginIsolated: hostCrossOriginIsolated,
       sabSupported: hostSabSupported,
@@ -277,6 +280,7 @@ export class WorkerHost {
       case 'init_progress':
         this.state.bootStage = msg.stage
         this.state.bootStageDetail = msg.detail ?? ''
+        this.state.bootStagePercent = msg.percent ?? 0
         break
 
       case 'init_done':
