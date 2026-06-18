@@ -71,6 +71,7 @@ const emit = defineEmits<{
   stopExec: []
   newConversation: []
   selectConversation: [id: string]
+  deleteConversation: [id: string]
   openWorkspaceMenu: []
 }>()
 
@@ -283,6 +284,20 @@ const badge = computed(() => {
 // ──────────────────────────────────────────────
 const closeConfirmOpen = ref(false)
 const restartConfirmOpen = ref(false)
+// 删除对话确认：Ctrl+点击跳过确认，直接 emit
+const deleteConfirmId = ref<string | null>(null)
+
+const onDeleteConversation = (id: string, skipConfirm: boolean) => {
+  if (skipConfirm) {
+    emit('deleteConversation', id)
+    return
+  }
+  deleteConfirmId.value = id
+}
+const confirmDelete = () => {
+  if (deleteConfirmId.value) emit('deleteConversation', deleteConfirmId.value)
+  deleteConfirmId.value = null
+}
 
 const tryClose = () => {
   if (session.value.runtime.isRunning || session.value.agent === 'running') {
@@ -360,6 +375,7 @@ const onSend = (text: string) => emit('send', text)
         @toggle-collapsed="onToggleConvCollapsed"
         @new-session="emit('newConversation')"
         @select-conversation="(id) => emit('selectConversation', id)"
+        @delete-conversation="onDeleteConversation"
         @open-workspace-menu="emit('openWorkspaceMenu')"
       />
 
@@ -496,6 +512,17 @@ const onSend = (text: string) => emit('send', text)
       tone="warning"
       @confirm="restartConfirmOpen = false; emit('restart')"
       @cancel="restartConfirmOpen = false"
+    />
+
+    <ConfirmDialog
+      :open="deleteConfirmId !== null"
+      title="删除对话？"
+      message="删除后该对话的历史记录与工作区文件将无法恢复。"
+      confirm-text="删除"
+      cancel-text="取消"
+      tone="danger"
+      @confirm="confirmDelete"
+      @cancel="deleteConfirmId = null"
     />
   </div>
 </template>

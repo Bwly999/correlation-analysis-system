@@ -10,6 +10,7 @@ import { createNotebookSessionRuntime, type NotebookSessionRuntime } from './run
 import { exportWorkspaceZip } from './runtime/workspaceExporter'
 import {
   createNotebookSessionEntry,
+  deleteNotebookSession,
   listNotebookSessions,
   type NotebookSessionListItem,
 } from './runtime/notebookAgentClient'
@@ -316,6 +317,25 @@ const handleNewConversation = async () => {
   syncActiveConversation()
 }
 
+const handleDeleteConversation = async (conversationId: string) => {
+  try {
+    await deleteNotebookSession(conversationId)
+  } catch (error) {
+    console.error('[notebook] 删除会话失败', error)
+    return
+  }
+  const wasActive = conversationId === activeConversationId.value
+  await loadConversationList()
+  if (!wasActive) return
+  // 删除的是当前会话：落到列表里最近的会话，或新建一个空白会话
+  const next = conversations.value[0]
+  if (next) {
+    await handleSelectConversation(next.id)
+  } else {
+    await handleNewConversation()
+  }
+}
+
 const handleStopExec = () => {
   runtime.value?.stop()
 }
@@ -358,6 +378,7 @@ const isPoc = computed(() => mode === 'poc')
     @rename="handleRename"
     @new-conversation="handleNewConversation"
     @select-conversation="handleSelectConversation"
+    @delete-conversation="handleDeleteConversation"
     @customize="() => undefined"
     @open-workspace-menu="() => undefined"
   />

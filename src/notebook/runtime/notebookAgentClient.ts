@@ -502,6 +502,28 @@ export const renameNotebookSession = async (
   return response.data as { ok: boolean }
 }
 
+export const deleteNotebookSession = async (
+  sessionId: string,
+): Promise<{ ok: boolean }> => {
+  const response = await httpClient.request({
+    url: `/notebook-agent/sessions/${sessionId}`,
+    method: 'DELETE',
+  })
+
+  if (!isSuccessStatus(response.status)) {
+    const message =
+      typeof response.data === 'object'
+      && response.data
+      && 'message' in response.data
+      && typeof response.data.message === 'string'
+        ? response.data.message
+        : '删除 Notebook 会话失败'
+    throw new Error(message)
+  }
+
+  return response.data as { ok: boolean }
+}
+
 /** POST /sessions/:id/resume 恢复已归档会话（重建 runtime，保留历史 record）。 */
 export const resumeNotebookSession = async (
   sessionId: string,

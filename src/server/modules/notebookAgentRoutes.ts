@@ -11,7 +11,7 @@
  *   POST   /api/notebook-agent/sessions/:sessionId/abort    终止当前轮 Agent 推理
  *   POST   /api/notebook-agent/sessions/:sessionId/compact  手动触发上下文压缩
  *   POST   /api/notebook-agent/sessions/:sessionId/tool-result
- *   DELETE /api/notebook-agent/sessions/:sessionId       软关闭（释放 runtime，保留历史）
+ *   DELETE /api/notebook-agent/sessions/:sessionId       彻底删除会话（runtime + record + 审计）
  */
 
 import type { FastifyPluginAsync } from 'fastify'
@@ -20,7 +20,6 @@ import { startNdjsonStream } from '../http/ndjson.js'
 import { assertSessionOwner } from '../piAgent/sessionAccess.js'
 import {
   appendNotebookAuditEntries,
-  closeNotebookAgentSession,
   compactNotebookAgentSession,
   createNotebookAgentSession,
   destroyNotebookAgentSession,
@@ -279,7 +278,7 @@ export const createNotebookAgentRoutes = (): FastifyPluginAsync => async (app) =
     const user = requireWorkflowUser(request)
     const { sessionId } = request.params as { sessionId: string }
     requireOwnedSession(sessionId, user.id)
-    const ok = closeNotebookAgentSession(sessionId)
+    const ok = destroyNotebookAgentSession(sessionId)
     if (!ok) {
       reply.code(404)
       return { message: '会话不存在' }

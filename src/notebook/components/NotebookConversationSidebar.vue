@@ -23,6 +23,7 @@ import {
   ChevronDown,
   SlidersHorizontal,
   MessageSquare,
+  Trash2,
 } from 'lucide-vue-next'
 import type { NotebookConversation } from '../types/messageStream'
 
@@ -41,8 +42,19 @@ const emit = defineEmits<{
   toggleCollapsed: []
   newSession: []
   selectConversation: [id: string]
+  deleteConversation: [id: string, skipConfirm: boolean]
   openWorkspaceMenu: []
 }>()
+
+/**
+ * 删除按钮：Ctrl/Cmd + 点击直接删除（跳过确认），否则走确认弹窗。
+ * stopPropagation / preventDefault 避免触发外层 button 的 selectConversation。
+ */
+const onDeleteClick = (event: MouseEvent, id: string) => {
+  event.stopPropagation()
+  event.preventDefault()
+  emit('deleteConversation', id, event.ctrlKey || event.metaKey)
+}
 
 const sortedConversations = computed(() =>
   [...props.conversations].sort((a, b) => b.updatedAt - a.updatedAt),
@@ -204,11 +216,24 @@ const formatRelativeTime = (ts: number): string => {
               >
                 {{ conv.title }}
               </span>
-              <span
-                class="shrink-0 text-[10.5px] tabular-nums"
-                style="color: var(--nb-ink-faint);"
-              >
-                {{ formatRelativeTime(conv.updatedAt) }}
+              <span class="relative flex shrink-0 items-center justify-end" style="min-width: 36px;">
+                <!-- 默认：相对时间；group-hover 时淡出 -->
+                <span
+                  class="nb-conv-time text-[10.5px] tabular-nums transition-opacity duration-150"
+                  style="color: var(--nb-ink-faint);"
+                >
+                  {{ formatRelativeTime(conv.updatedAt) }}
+                </span>
+                <!-- hover：删除按钮，绝对定位覆盖在时间位置 -->
+                <button
+                  class="nb-conv-delete nb-focus absolute right-0 inline-flex h-5 w-5 items-center justify-center rounded-[3px] opacity-0 transition-opacity duration-150 hover:bg-[color:var(--nb-clay-soft)]"
+                  style="color: var(--nb-ink-faint);"
+                  title="删除对话 (Ctrl+点击 跳过确认)"
+                  aria-label="删除对话"
+                  @click="onDeleteClick($event, conv.id)"
+                >
+                  <Trash2 :size="11" :stroke-width="1.7" />
+                </button>
               </span>
             </span>
           </button>
@@ -323,6 +348,17 @@ const formatRelativeTime = (ts: number): string => {
 }
 .nb-conv-item.is-active::before {
   transform: translateY(-50%) scaleY(1);
+}
+
+/* 列表项 hover：右侧时间淡出、删除按钮淡入 */
+.nb-conv-item:hover .nb-conv-time {
+  opacity: 0;
+}
+.nb-conv-item:hover .nb-conv-delete {
+  opacity: 1;
+}
+.nb-conv-delete:hover {
+  color: var(--nb-clay) !important;
 }
 
 /* 收起态：移除内边距、收紧 hover 区 */

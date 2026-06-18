@@ -14,7 +14,7 @@ const {
   getNotebookAgentSessionOwnerMock,
   updateNotebookAgentSessionTitleMock,
   finishNotebookAgentToolCallMock,
-  closeNotebookAgentSessionMock,
+  destroyNotebookAgentSessionMock,
   ensureNotebookAgentRuntimeMock,
   startNdjsonStreamMock,
 } = vi.hoisted(() => ({
@@ -29,7 +29,7 @@ const {
   getNotebookAgentSessionOwnerMock: vi.fn(),
   updateNotebookAgentSessionTitleMock: vi.fn(),
   finishNotebookAgentToolCallMock: vi.fn(),
-  closeNotebookAgentSessionMock: vi.fn(),
+  destroyNotebookAgentSessionMock: vi.fn(),
   ensureNotebookAgentRuntimeMock: vi.fn().mockResolvedValue(true),
   startNdjsonStreamMock: vi.fn(),
 }))
@@ -46,7 +46,7 @@ vi.mock('../gateway.js', () => ({
   getNotebookAgentSessionOwner: getNotebookAgentSessionOwnerMock,
   updateNotebookAgentSessionTitle: updateNotebookAgentSessionTitleMock,
   finishNotebookAgentToolCall: finishNotebookAgentToolCallMock,
-  closeNotebookAgentSession: closeNotebookAgentSessionMock,
+  destroyNotebookAgentSession: destroyNotebookAgentSessionMock,
   ensureNotebookAgentRuntime: ensureNotebookAgentRuntimeMock,
 }))
 
@@ -95,7 +95,7 @@ afterEach(async () => {
   getNotebookAgentSessionOwnerMock.mockReset()
   updateNotebookAgentSessionTitleMock.mockReset()
   finishNotebookAgentToolCallMock.mockReset()
-  closeNotebookAgentSessionMock.mockReset()
+  destroyNotebookAgentSessionMock.mockReset()
   startNdjsonStreamMock.mockReset()
 
   while (apps.length > 0) {
@@ -521,8 +521,8 @@ describe('POST /api/notebook-agent/sessions/:id/tool-result', () => {
 })
 
 describe('DELETE /api/notebook-agent/sessions/:id', () => {
-  it('标记 completed 并返回 ok', async () => {
-    closeNotebookAgentSessionMock.mockReturnValueOnce(true)
+  it('彻底删除会话并返回 ok', async () => {
+    destroyNotebookAgentSessionMock.mockReturnValueOnce(true)
 
     const app = await createTestApp()
     const res = await app.inject({
@@ -532,6 +532,6 @@ describe('DELETE /api/notebook-agent/sessions/:id', () => {
     })
 
     expect(res.statusCode).toBe(200)
-    expect(closeNotebookAgentSessionMock).toHaveBeenCalledWith('notebook-session-1')
+    expect(destroyNotebookAgentSessionMock).toHaveBeenCalledWith('notebook-session-1')
   })
 })
