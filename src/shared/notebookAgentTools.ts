@@ -112,13 +112,13 @@ export const NOTEBOOK_AGENT_TOOL_SPECS: readonly NotebookToolSpec[] = [
   {
     name: 'python_exec_inline',
     description:
-      '执行一段 Python 代码（等价 python -c）。无状态：每次都要重新 import 与读数据；想跨步骤复用就把中间结果落盘 artifacts/。出图必须 plt.savefig 到 artifacts/，并 plt.close() 释放内存。',
+      '执行一段 Python 代码（等价 python -c）。无状态：每次都要重新 import 与读数据；想跨步骤复用就把中间结果落盘。落盘路径强制约束：所有写文件操作（plt.savefig / df.to_csv / df.to_parquet / df.to_excel / open(path,"w") 等）必须以 artifacts/（中间产物）或 reports/（最终报告）开头，禁止写到工作区根或使用无前缀相对路径（如 "out.csv"）——否则文件不会同步到文件树，worker 重启后也会丢失。出图后 plt.close() 释放内存。',
     inputSchema: PythonExecInlineSchema,
   },
   {
     name: 'python_exec_file',
     description:
-      '执行 workspace 里某 .py 脚本。当代码较长 / 后续可能复用 / 用户可能下载时，先 fs_write 到 scripts/，再用本工具跑。',
+      '执行 workspace 里某 .py 脚本。当代码较长 / 后续可能复用 / 用户可能下载时，先 fs_write 到 scripts/，再用本工具跑。脚本内的所有写文件操作同样必须以 artifacts/ 或 reports/ 开头（见 python_exec_inline 的路径约束）。',
     inputSchema: PythonExecFileSchema,
   },
   {
