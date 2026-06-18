@@ -54,7 +54,10 @@ describe('notebookAgent gateway', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     __resetNotebookSessionsForTest()
-    sessionManagerCreateMock.mockReturnValue({ type: 'persistent-session-manager' })
+    sessionManagerCreateMock.mockReturnValue({
+      type: 'persistent-session-manager',
+      getSessionFile: () => '/tmp/test-session.jsonl',
+    })
     buildModelFromProfileMock.mockReturnValue({
       id: 'glm-4.7',
       provider: 'openai',

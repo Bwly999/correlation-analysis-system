@@ -5,6 +5,8 @@
  * 与画布 Pi Agent 主链平级、零耦合。
  */
 
+import { existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import type { AgentSession } from '@earendil-works/pi-coding-agent'
 import {
   createAgentSession,
@@ -35,11 +37,16 @@ import {
 } from '../piAgent/runtimeFactory.js'
 import { getSystemModelProfiles } from '../piAgent/modelProfiles.js'
 import { bridgeNotebookEvent, type NotebookAgentSseEvent } from './eventBridge.js'
+import {
+  createNotebookSessionObjectStorage,
+  isNotebookSessionS3Enabled,
+} from './sessionStorage.js'
 
 interface NotebookAgentRuntime {
   sessionId: string
   record: NotebookSessionRecord
   session: AgentSession
+  sessionFile: string
   bridge: FrontendBridge
   eventListeners: Set<(event: NotebookAgentSseEvent) => void>
   currentMessageId: { value: string }
@@ -96,6 +103,114 @@ const getDefaultNotebookProfile = () => {
   return profiles[0]!
 }
 
+/** notebook agent JSONL 会话文件存放目录（相对于 cwd） */
+const resolveNotebookSessionDir = () =>
+  process.env.NOTEBOOK_SESSION_DIR?.trim() || join(process.cwd(), '.workflow-storage', 'notebook-agent-sessions')
+
+// --- S3 远端同步（可选，未配置 S3 环境变量时自动跳过） ---
+
+const S3_KEY_PREFIX = 'notebook-agent/sessions/'
+
+let _s3Storage: ReturnType<typeof createNotebookSessionObjectStorage> | null = null
+let _s3StorageChecked = false
+
+const getS3Storage = () => {
+  if (!_s3StorageChecked) {
+    _s3StorageChecked = true
+    if (isNotebookSessionS3Enabled()) {
+      _s3Storage = createNotebookSessionObjectStorage()
+    }
+  }
+  return _s3Storage
+}
+
+/** 确保本地 session 目录存在 */
+const ensureSessionDir = (): string => {
+  const dir = resolveNotebookSessionDir()
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true })
+  }
+  return dir
+}
+
+/** 将本地 session 目录中所有 JSONL 文件同步到 S3 */
+const syncSessionFilesToS3 = async (): Promise<void> => {
+  const s3 = getS3Storage()
+  if (!s3) return
+  const dir = resolveNotebookSessionDir()
+  if (!existsSync(dir)) return
+  try {
+    const files = readdirSync(dir).filter((f) => f.endsWith('.jsonl'))
+    for (const file of files) {
+      const content = readFileSync(join(dir, file), 'utf-8')
+      await s3.putObject(`${S3_KEY_PREFIX}${file}`, content)
+    }
+  } catch {
+    // S3 sync failure is non-fatal
+  }
+}
+
+/** 从 S3 下载 session 文件到本地（仅下载本地不存在的文件） */
+const syncSessionFilesFromS3 = async (): Promise<void> => {
+  const s3 = getS3Storage()
+  if (!s3) return
+  const dir = ensureSessionDir()
+  try {
+    const keys = await s3.listObjectKeys(S3_KEY_PREFIX)
+    for (const key of keys) {
+      const filename = key.split('/').pop()
+      if (!filename || !filename.endsWith('.jsonl')) continue
+      const localPath = join(dir, filename)
+      if (existsSync(localPath)) continue
+      const content = await s3.getObject(key)
+      if (content) {
+        writeFileSync(localPath, content, 'utf-8')
+      }
+    }
+  } catch {
+    // S3 sync failure is non-fatal
+  }
+}
+
+/** 将单个 session JSONL 文件上传到 S3 */
+const syncSessionFileToS3 = async (sessionFile: string): Promise<void> => {
+  const s3 = getS3Storage()
+  if (!s3) return
+  if (!sessionFile || !existsSync(sessionFile)) return
+  try {
+    const filename = sessionFile.split(/[\\/]/).pop()
+    if (!filename) return
+    const content = readFileSync(sessionFile, 'utf-8')
+    await s3.putObject(`${S3_KEY_PREFIX}${filename}`, content)
+  } catch {
+    // S3 sync failure is non-fatal
+  }
+}
+
+/** 删除本地 session JSONL 文件及其 S3 远端副本 */
+const deleteSessionFile = async (sessionFile: string): Promise<void> => {
+  // 删除本地文件
+  if (sessionFile) {
+    try {
+      if (existsSync(sessionFile)) {
+        unlinkSync(sessionFile)
+      }
+    } catch {
+      // ignore
+    }
+  }
+  // 删除 S3 远端副本
+  const s3 = getS3Storage()
+  if (!s3) return
+  try {
+    const filename = sessionFile.split(/[\\/]/).pop()
+    if (!filename) return
+    await s3.deleteObject(`${S3_KEY_PREFIX}${filename}`)
+  } catch {
+    // S3 delete failure is non-fatal
+  }
+}
+
 export const createNotebookAgentSession = async (
   input: CreateNotebookSessionInput,
 ): Promise<CreateNotebookSessionResult> => {
@@ -136,7 +251,7 @@ const buildAndRegisterRuntime = async (
   const model = buildModelFromProfile(profile)
   const resourceLoader = createPiAgentResourceLoader(() => systemPrompt)
   await resourceLoader.reload()
-  const sessionManager = SessionManager.create(process.cwd(), process.cwd())
+  const sessionManager = SessionManager.create(process.cwd(), ensureSessionDir())
   const { session } = await createAgentSession({
     sessionManager,
     authStorage,
@@ -153,6 +268,7 @@ const buildAndRegisterRuntime = async (
     sessionId: record.sessionId,
     record,
     session,
+    sessionFile: sessionManager.getSessionFile(),
     bridge,
     eventListeners,
     currentMessageId: { value: '' },
@@ -272,15 +388,21 @@ export const updateNotebookAgentSessionTitle = (
 /**
  * 软关闭：释放 runtime（Pi SDK AgentSession），但保留 sessionStore record，
  * 以便「继续上次分析」时能回放历史。runtime 可后续 resume 时按需重建。
+ *
+ * 关闭时同步 session JSONL 文件到 S3（若已配置），实现远端归档。
  */
 export const closeNotebookAgentSession = (sessionId: string): boolean => {
   const r = getNotebookSession(sessionId)
   if (!r) return false
   const runtime = runtimes.get(sessionId)
-  runtime?.bridge.dispose()
-  runtime?.unsubscribe?.()
-  runtime?.session.dispose()
-  runtime?.eventListeners.clear()
+  if (runtime) {
+    // 软关闭前将 session JSONL 文件同步到 S3
+    void syncSessionFileToS3(runtime.sessionFile)
+    runtime.bridge.dispose()
+    runtime.unsubscribe?.()
+    runtime.session.dispose()
+    runtime.eventListeners.clear()
+  }
   runtimes.delete(sessionId)
   // 软关闭：标记 archivedAt，record 保留（不改 status，不清审计——历史需要保留）。
   // 前端 resume 时若 runtime 已不在，拿到的 status 仍能反映最后状态。
@@ -290,13 +412,19 @@ export const closeNotebookAgentSession = (sessionId: string): boolean => {
 
 /**
  * 彻底删除会话 record + runtime（显式 DELETE 端点调用）。
+ *
+ * 同时清理本地 JSONL 文件，以及 S3 远端副本（若已配置）。
  */
 export const destroyNotebookAgentSession = (sessionId: string): boolean => {
   const runtime = runtimes.get(sessionId)
-  runtime?.bridge.dispose()
-  runtime?.unsubscribe?.()
-  runtime?.session.dispose()
-  runtime?.eventListeners.clear()
+  if (runtime) {
+    // 删除本地 + S3 远端 session JSONL 文件
+    void deleteSessionFile(runtime.sessionFile)
+    runtime.bridge.dispose()
+    runtime.unsubscribe?.()
+    runtime.session.dispose()
+    runtime.eventListeners.clear()
+  }
   runtimes.delete(sessionId)
   clearNotebookAuditEntries(sessionId)
   return deleteNotebookSession(sessionId)
