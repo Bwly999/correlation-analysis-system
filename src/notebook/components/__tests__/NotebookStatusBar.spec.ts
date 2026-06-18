@@ -18,29 +18,18 @@ describe('NotebookStatusBar', () => {
     expect(wrapper.text()).toContain('5m 13s')
   })
 
-  it('isRunning=true 时停止按钮可用', () => {
+  it('isRunning=true 时渲染运行中状态点', () => {
     const wrapper = mount(NotebookStatusBar, {
       props: { stats: { memoryMb: 100, cellCount: 1, agentSeconds: 5, isRunning: true } },
     })
-    const btn = wrapper.find('button[aria-label="停止当前执行"]')
-    expect(btn.exists()).toBe(true)
-    expect(btn.attributes('disabled')).toBeUndefined()
+    expect(wrapper.text()).toContain('运行中')
   })
 
-  it('isRunning=false 时停止按钮 disabled', () => {
-    const wrapper = mount(NotebookStatusBar, {
-      props: { stats: { memoryMb: 100, cellCount: 1, agentSeconds: 5, isRunning: false } },
-    })
-    const btn = wrapper.find('button')
-    expect(btn.attributes('disabled')).toBeDefined()
-  })
-
-  it('点击停止按钮 emit stop', async () => {
+  it('不再渲染 STOP 停止按钮', () => {
     const wrapper = mount(NotebookStatusBar, {
       props: { stats: { memoryMb: 100, cellCount: 1, agentSeconds: 5, isRunning: true } },
     })
-    await wrapper.find('button[aria-label="停止当前执行"]').trigger('click')
-    expect(wrapper.emitted('stop')).toBeTruthy()
+    expect(wrapper.find('button').exists()).toBe(false)
   })
 
   it('recentlyRestarted=true 时显示已重启', () => {

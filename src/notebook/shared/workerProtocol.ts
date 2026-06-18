@@ -125,6 +125,12 @@ export type WorkerToHostMessage =
       requestId: string
       message: string
     }
+  | {
+      // Worker 内 performance.memory.usedJSHeapSize 周期上报（UX §3.4 状态条内存）。
+      // 非 Chromium 内核无 performance.memory 时不上报。
+      kind: 'mem_report'
+      usedBytes: number
+    }
 
 // ──────────────────────────────────────────────
 // SAB 中断协议
@@ -159,3 +165,4 @@ export const clearInterrupt = (sab: SharedArrayBuffer): void => {
   const view = new Int32Array(sab)
   view[0] = INTERRUPT_NONE
 }
+

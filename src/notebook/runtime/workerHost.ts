@@ -46,6 +46,8 @@ export interface HostState {
   softInterruptedAt: number
   /** Worker 累计自动重启次数（含硬超时 / 崩溃自愈） */
   autoRestartCount: number
+  /** Worker 上报的内存使用（MB），由 mem_report 事件更新（UX §3.4 状态条）*/
+  memoryMb: number
 }
 
 interface PendingExec {
@@ -112,6 +114,7 @@ export class WorkerHost {
       lastError: '',
       softInterruptedAt: 0,
       autoRestartCount: 0,
+      memoryMb: 0,
     })
   }
 
@@ -216,9 +219,13 @@ export class WorkerHost {
    *
    * 仅供主线程"灌入数据 / OPFS → MEMFS sync"使用，**不要暴露给 Agent**。
    * 路径必须以 inputs|scripts|artifacts|reports 之一开头。
+   *
+   * 守卫同时挡 `booting`：booting 期 worker 内 pyodide 尚未就绪，handleFsWrite 会
+   * 立即回 fs_write_error。直接拒绝比让 postMessage 往返一次更干净，且避免把
+   * transferable bytes 发给半成品 worker（bytes 会被 transfer 掉无法重试）。
    */
   async writeFs(path: string, bytes: ArrayBuffer): Promise<{ path: string; bytes: number }> {
-    if (!this.worker || this.state.status === 'dead') {
+    if (!this.worker || this.state.status === 'dead' || this.state.status === 'booting') {
       throw new Error('Worker 未就绪')
     }
     const requestId = this.genId()
@@ -236,7 +243,7 @@ export class WorkerHost {
   }
 
   async snapshotFs(paths?: string[]): Promise<Array<{ path: string; bytes: ArrayBuffer }>> {
-    if (!this.worker || this.state.status === 'dead') {
+    if (!this.worker || this.state.status === 'dead' || this.state.status === 'booting') {
       throw new Error('Worker 未就绪')
     }
     const requestId = this.genId()
@@ -375,6 +382,11 @@ export class WorkerHost {
         pending?.reject(new Error(msg.message))
         break
       }
+
+      case 'mem_report':
+        // Worker 周期上报 JS 堆内存（UX §3.4 状态条）；换算 MB 写入 reactive state
+        this.state.memoryMb = msg.usedBytes / 1024 / 1024
+        break
 
       case 'shutdown_done':
         if (this.worker) {

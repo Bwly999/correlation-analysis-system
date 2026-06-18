@@ -25,6 +25,34 @@ let interruptBuffer: SharedArrayBuffer | null = null
 let booting = false
 const WORKSPACE_ROOTS = ['inputs', 'scripts', 'artifacts', 'reports'] as const
 
+// 内存上报定时器（UX §3.4 状态条）：init 成功后每 2s 把 JS 堆占用推给主线程。
+// 仅 Chromium 系内核有 performance.memory；无该字段时不启动（状态条 mem 显示 0）。
+let memReportTimer: ReturnType<typeof setInterval> | null = null
+const MEM_REPORT_INTERVAL_MS = 2000
+
+const startMemReporting = () => {
+  if (memReportTimer) return
+  // performance.memory 是非标准 API，仅基于 Chromium 的浏览器可用。
+  const perfMemory = (performance as Performance & { memory?: { usedJSHeapSize?: number } }).memory
+  if (!perfMemory || typeof perfMemory.usedJSHeapSize !== 'number') return
+  const report = () => {
+    const used = (performance as Performance & { memory?: { usedJSHeapSize?: number } }).memory
+      ?.usedJSHeapSize
+    if (typeof used === 'number') {
+      post({ kind: 'mem_report', usedBytes: used })
+    }
+  }
+  report() // 立即上报一次，避免状态条前 2s 仍是 0
+  memReportTimer = setInterval(report, MEM_REPORT_INTERVAL_MS)
+}
+
+const stopMemReporting = () => {
+  if (memReportTimer) {
+    clearInterval(memReportTimer)
+    memReportTimer = null
+  }
+}
+
 const cloneUint8ArrayToArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
   const out = new ArrayBuffer(bytes.byteLength)
   new Uint8Array(out).set(bytes)
@@ -68,6 +96,7 @@ const handleInit = async (req: Extract<HostToWorkerRequest, { kind: 'init' }>) =
       crossOriginIsolated: typeof crossOriginIsolated !== 'undefined' && crossOriginIsolated,
       sabSupported: typeof SharedArrayBuffer !== 'undefined' && interruptBuffer !== null,
     })
+    startMemReporting()
   } catch (err) {
     booting = false
     const message = err instanceof Error ? err.message : String(err)
@@ -139,6 +168,7 @@ self.addEventListener('message', (event: MessageEvent<HostToWorkerRequest>) => {
       void handleFsSnapshot(req)
       break
     case 'shutdown':
+      stopMemReporting()
       post({ kind: 'shutdown_done', requestId: req.requestId })
       ;(self as unknown as DedicatedWorkerGlobalScope).close()
       break

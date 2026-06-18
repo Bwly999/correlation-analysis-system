@@ -2,13 +2,13 @@
 /**
  * NotebookStatusBar.vue
  *
- * §3.4 底部状态条：内存 / cell 数 / 时长 / 停止按钮
+ * §3.4 底部状态条：内存 / cell 数 / 时长
  *
  * 视觉风格 ▸ 编辑稿底栏：mono 等宽字 + 印刷感分隔。
  */
 
 import { computed } from 'vue'
-import { Square, Cpu, Layers, Timer } from 'lucide-vue-next'
+import { Cpu, Layers, Timer } from 'lucide-vue-next'
 import type { RuntimeStats } from '../types/messageStream'
 
 const props = defineProps<{
@@ -143,32 +143,5 @@ const memPercent = computed(() => {
     </div>
 
     <div class="flex-1" />
-
-    <button
-      class="nb-focus inline-flex items-center gap-1.5 rounded-[var(--nb-radius-sm)] border px-2.5 py-1 text-[10.5px] font-semibold transition disabled:cursor-not-allowed"
-      :style="
-        stats.isRunning
-          ? {
-              borderColor: 'rgba(176, 82, 78, 0.4)',
-              backgroundColor: 'var(--nb-clay-soft)',
-              color: '#823331',
-            }
-          : {
-              borderColor: 'var(--nb-rule)',
-              backgroundColor: 'var(--nb-card)',
-              color: 'var(--nb-ink-faint)',
-            }
-      "
-      :disabled="!stats.isRunning"
-      :aria-label="stats.isRunning ? '停止当前执行' : '当前空闲，无需停止'"
-      @click="emit('stop')"
-    >
-      <Square
-        :size="9"
-        :stroke-width="1.8"
-        :fill="stats.isRunning ? 'currentColor' : 'none'"
-      />
-      <span class="nb-mono" style="letter-spacing: 0.12em; font-weight: 700;">STOP</span>
-    </button>
   </div>
 </template>

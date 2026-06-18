@@ -184,6 +184,49 @@ export const createNotebookSessionRuntime = async (
   // beforeunload：worker 忙时提示用户确认离开（UX §9.4）
   let beforeunloadHandler: ((event: BeforeUnloadEvent) => void) | null = null
 
+  // connect / switchSession 的并发保护与取消。
+  // - connectAbort：connect 进行中若被 switchSession / dispose 抢占，abort 它，
+  //   避免后台 ghost connect 继续写 phase / 抢 setupSessionStream（bug B 根因）。
+  // - sessionOpChain：switchSession 串行化的 promise 链。后到的 switchSession 必须等
+  //   前一个完成再执行，否则两个 switchSession 并发抢 workerHost / opfsRootRef / state，
+  //   状态彻底错乱（"取消后再点继续上次分析也进不去"的直接成因）。
+  let connectAbort: AbortController | null = null
+  let sessionOpChain: Promise<void> = Promise.resolve()
+
+  // ── 状态条可观测性 ──────────────────────────────────────────────
+  // agentSeconds：累计 Agent 处于 running 的工作秒数（不计用户阅读时间，UX §3.4）。
+  //   watch isRunning：true → 起 1s interval 累加；false → 停。dispose 时一并清。
+  let agentSecondsTimer: ReturnType<typeof setInterval> | null = null
+  const stopAgentSecondsTimer = () => {
+    if (agentSecondsTimer) {
+      clearInterval(agentSecondsTimer)
+      agentSecondsTimer = null
+    }
+  }
+  const agentSecondsStop = watch(
+    () => state.session.runtime.isRunning,
+    (running) => {
+      if (running) {
+        if (!agentSecondsTimer) {
+          agentSecondsTimer = setInterval(() => {
+            state.session.runtime.agentSeconds += 1
+          }, 1000)
+        }
+      } else {
+        stopAgentSecondsTimer()
+      }
+    },
+  )
+
+  // memoryMb：由 Worker 内 performance.memory.usedJSHeapSize 上报（workerHost.state.memoryMb），
+  //   同步到 session.runtime.memoryMb 供状态条展示。
+  const memSyncStop = watch(
+    () => workerHost.state.memoryMb,
+    (mb) => {
+      state.session.runtime.memoryMb = mb
+    },
+  )
+
   const collectOpfsPaths = async (basePath: string): Promise<string[]> => {
     const entries = await listDirectoryEntries(opfsRootRef.value, basePath)
     const files: string[] = []
@@ -462,8 +505,31 @@ export const createNotebookSessionRuntime = async (
   }
 
   /**
+   * 轮询等待 Worker 从 booting 进入 ready（或 dead）。
+   * 用于 resetPythonState 降级 / autoRestart 后的同步等待——workerHost.init 已 await，
+   * 但 hardKill 触发的 autoRestart 是 fire-and-forget，调用方需要显式等待稳定态。
+   * 超时兜底（默认 120s）避免永久挂起。
+   */
+  const waitForWorkerReady = async (timeoutMs = 120_000): Promise<void> => {
+    const deadline = Date.now() + timeoutMs
+    while (Date.now() < deadline) {
+      const s = workerHost.state.status
+      if (s === 'ready' || s === 'dead') return
+      await new Promise((r) => setTimeout(r, 200))
+    }
+  }
+
+  /**
    * 重置 Pyodide 的 Python 运行时状态（清用户 globals / 关闭 matplotlib 图），
    * 复用同一个 Worker 进程。失败时 hardKill + 重新 init 降级。
+   *
+   * 关键修复：exec 任何失败形态（kernel_dead / timeout / 其它）都必须降级重建。
+   *   - timeout：resetCode 卡在 C 扩展（numpy 析构 / matplotlib / gc）时，22.5s 硬超时
+   *     会 terminate Worker 并 fire-and-forget 触发 autoRestart。若这里不识别 timeout，
+   *     switchSession 会继续在「booting」态 Worker 上执行 writeFs → 全部静默失败 → 卡 mount_fs。
+   *   - kernel_dead：上一会话残留 exec 让 Worker 不可用。
+   * 统一兜底：result.ok === false 即 throw → 走 catch 显式 hardKill + 同步 await init，
+   *          保证返回时 Worker 真正 ready，phase 由调用方配合 bootProgressStop 反映。
    */
   const resetPythonState = async () => {
     // 若 Worker 正忙（如上一会话 bootstrap 触发的 python_exec 还在跑），
@@ -487,13 +553,11 @@ export const createNotebookSessionRuntime = async (
       "        except Exception: pass",
       'import gc; gc.collect()',
     ].join('\n')
-    try {
-      const result = await workerHost.exec(resetCode, 15_000)
-      if (!result.ok && result.errorType === 'kernel_dead') {
-        throw new Error('kernel dead')
-      }
-    } catch {
+    const result = await workerHost.exec(resetCode, 15_000)
+    if (!result.ok) {
       // 降级：重置失败则重建 Worker（慢一次但保证状态干净）
+      // 注意：exec timeout 时 workerHost 内部已 terminate + fire-and-forget autoRestart，
+      //       这里 hardKill 兜住 race，再 await init 等真正 ready。
       workerHost.hardKill()
       await workerHost.init(DEFAULT_PYODIDE_INDEX_URL)
     }
@@ -504,39 +568,68 @@ export const createNotebookSessionRuntime = async (
    * 由 parentBridge.parent.switch_session 触发（主站「开新分析」时调用）。
    */
   const switchSession = async (newSessionId: string) => {
-    // 1. 断开旧 session 的实时绑定（SSE / bridge / poll），保留 Worker
-    teardownSessionBindings()
+    // 串行化：后到的 switchSession 必须等前一个完成。
+    // 否则两个 switchSession 并发抢 workerHost / opfsRootRef / state.session，
+    // 状态彻底错乱（"取消后再点继续上次分析也进不去"的直接成因）。
+    // 同时抢占正在进行的 connect：abort 它，避免 ghost connect 继续写 phase / 抢 SSE。
+    const run = async () => {
+      connectAbort?.abort()
+      connectAbort = null
 
-    state.session.phase = {
-      kind: 'loading',
-      progress: { stage: 'mount_fs', percent: 60, detail: '正在切换工作区' },
+      // 1. 断开旧 session 的实时绑定（SSE / bridge / poll），保留 Worker
+      teardownSessionBindings()
+
+      state.session.phase = {
+        kind: 'loading',
+        progress: { stage: 'mount_fs', percent: 60, detail: '正在切换工作区' },
+      }
+
+      // 2. 重置 Python 状态（复用 Worker；失败时内部 hardKill + await init 降级重建）
+      await resetPythonState()
+
+      // resetPythonState 降级重建后，把 phase 拉回 load_runtime 起点，
+      // 让 bootProgressStop 能正确反映 bootPyodide 的真实进度（而非一直停在 mount_fs 60%）。
+      if (workerHost.state.status === 'booting') {
+        state.session.phase = {
+          kind: 'loading',
+          progress: { stage: 'load_runtime', percent: 12, detail: '正在重建 Python 运行时' },
+        }
+        await waitForWorkerReady()
+      }
+
+      // 3. 切 OPFS 目录 + 重建 toolDispatcher（其闭包捕获 opfsRoot 快照）
+      opfsRootRef.value = await createNotebookOpfsRoot(newSessionId)
+      rebuildToolDispatcher()
+
+      // 4. 把新 session 的 inputs/scripts 灌入 Worker MEMFS
+      await syncOpfsFilesToWorker()
+
+      // 5. 重置 VM 状态为新 session
+      currentSessionId = newSessionId
+      const freshState = createNotebookRuntimeState(newSessionId)
+      freshState.session.title = createSessionTitle(newSessionId)
+      state.session = freshState.session
+      state.conversations = freshState.conversations
+      state.activeConversationId = freshState.activeConversationId
+      state.session.runtime.recentlyRestarted = true
+      state.session.phase = { kind: 'ready' }
+
+      // 6. 建立新 session 的实时绑定 + 回放历史
+      await setupSessionStream(newSessionId, { withHistory: true })
     }
-
-    // 2. 重置 Python 状态（复用 Worker）
-    await resetPythonState()
-
-    // 3. 切 OPFS 目录 + 重建 toolDispatcher（其闭包捕获 opfsRoot 快照）
-    opfsRootRef.value = await createNotebookOpfsRoot(newSessionId)
-    rebuildToolDispatcher()
-
-    // 4. 把新 session 的 inputs/scripts 灌入 Worker MEMFS
-    await syncOpfsFilesToWorker()
-
-    // 5. 重置 VM 状态为新 session
-    currentSessionId = newSessionId
-    const freshState = createNotebookRuntimeState(newSessionId)
-    freshState.session.title = createSessionTitle(newSessionId)
-    state.session = freshState.session
-    state.conversations = freshState.conversations
-    state.activeConversationId = freshState.activeConversationId
-    state.session.runtime.recentlyRestarted = true
-    state.session.phase = { kind: 'ready' }
-
-    // 6. 建立新 session 的实时绑定 + 回放历史
-    await setupSessionStream(newSessionId, { withHistory: true })
+    // 链式串行：下一次 switchSession 会 await 这次的 run() 完成。
+    // 错误不阻断链（catch 后继续），保证后续 switchSession 不会被永久挂起。
+    sessionOpChain = sessionOpChain.then(run, () => run())
+    await sessionOpChain
   }
 
   const connect = async () => {
+    // connect 专属 abort：switchSession / dispose 抢占时调 connectAbort.abort()，
+    // 让后台 ghost connect 在每个 await 点退出，不再写 phase / 不再抢 setupSessionStream。
+    connectAbort?.abort()
+    connectAbort = new AbortController()
+    const signal = connectAbort.signal
+
     state.session.phase = {
       kind: 'loading',
       progress: {
@@ -548,6 +641,7 @@ export const createNotebookSessionRuntime = async (
     state.session.connection = 'reconnecting'
 
     await workerHost.init(DEFAULT_PYODIDE_INDEX_URL)
+    if (signal.aborted) return
     state.session.phase = {
       kind: 'loading',
       progress: {
@@ -557,6 +651,7 @@ export const createNotebookSessionRuntime = async (
       },
     }
     await syncOpfsFilesToWorker()
+    if (signal.aborted) return
     state.session.phase = { kind: 'ready' }
 
     // 建立实时绑定（parentBridge + SSE）+ 回放历史（首启通常无历史，resume 场景有）
@@ -725,7 +820,13 @@ export const createNotebookSessionRuntime = async (
     exportWorkspaceFiles,
     requestParentClose: () => requestParentClose(),
     dispose: () => {
+      // 中断任何仍在进行的 connect，避免卸载后 ghost connect 继续写 phase / 抢 SSE
+      connectAbort?.abort()
+      connectAbort = null
       bootProgressStop()
+      agentSecondsStop()
+      stopAgentSecondsTimer()
+      memSyncStop()
       teardownSessionBindings()
       askUserQueue.cancelAll('会话已关闭')
       // session 结束上报全部审计 buffer（§8.2）

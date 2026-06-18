@@ -307,6 +307,36 @@ describe('WorkerHost', () => {
     })
   })
 
+  describe('mem_report', () => {
+    const ready = async () => {
+      const initPromise = host.init('/pyodide/v0.27/')
+      const req = fake.posted[0]!
+      fake.emit({
+        kind: 'init_done',
+        requestId: req.requestId,
+        pyodideVersion: '0.27.7',
+        crossOriginIsolated: true,
+        sabSupported: true,
+      })
+      await initPromise
+    }
+
+    it('收到 mem_report 时把 usedBytes 换算成 MB 写入 state.memoryMb', async () => {
+      await ready()
+      // 250 MB = 262144000 bytes
+      fake.emit({ kind: 'mem_report', usedBytes: 262_144_000 })
+      expect(host.state.memoryMb).toBeCloseTo(250, 1)
+    })
+
+    it('再次收到 mem_report 时覆盖上一次的值', async () => {
+      await ready()
+      fake.emit({ kind: 'mem_report', usedBytes: 104_857_600 }) // 100 MB
+      expect(host.state.memoryMb).toBeCloseTo(100, 1)
+      fake.emit({ kind: 'mem_report', usedBytes: 209_715_200 }) // 200 MB
+      expect(host.state.memoryMb).toBeCloseTo(200, 1)
+    })
+  })
+
   describe('hardKill', () => {
     it('terminate Worker、状态变 dead、pending exec resolve 为 kernel_dead', async () => {
       const initPromise = host.init('/pyodide/v0.27/')
