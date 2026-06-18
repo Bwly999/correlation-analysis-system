@@ -71,7 +71,6 @@ const emit = defineEmits<{
   stopExec: []
   newConversation: []
   selectConversation: [id: string]
-  customize: []
   openWorkspaceMenu: []
 }>()
 
@@ -361,7 +360,6 @@ const onSend = (text: string) => emit('send', text)
         @toggle-collapsed="onToggleConvCollapsed"
         @new-session="emit('newConversation')"
         @select-conversation="(id) => emit('selectConversation', id)"
-        @customize="emit('customize')"
         @open-workspace-menu="emit('openWorkspaceMenu')"
       />
 

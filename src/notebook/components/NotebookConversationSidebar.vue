@@ -40,7 +40,6 @@ const props = defineProps<{
 const emit = defineEmits<{
   toggleCollapsed: []
   newSession: []
-  customize: []
   selectConversation: [id: string]
   openWorkspaceMenu: []
 }>()
@@ -52,6 +51,18 @@ const sortedConversations = computed(() =>
 const widthStyle = computed(() =>
   props.collapsed ? { width: '56px' } : { width: '232px' },
 )
+
+/**
+ * 相对时间：与 ContextUsagePopover 保持同一套口径。
+ * 列表渲染时按 updatedAt 计算「刚刚 / X分 / X小时 / X天前」。
+ */
+const formatRelativeTime = (ts: number): string => {
+  const diff = Date.now() - ts
+  if (diff < 60_000) return '刚刚'
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}分`
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}小时`
+  return `${Math.floor(diff / 86_400_000)}天`
+}
 </script>
 
 <template>
@@ -101,7 +112,7 @@ const widthStyle = computed(() =>
       </button>
     </div>
 
-    <!-- 操作区：新建会话 / 自定义 -->
+    <!-- 操作区：新建会话 -->
     <div
       class="flex shrink-0 flex-col gap-0.5"
       :class="collapsed ? 'px-2' : 'px-3'"
@@ -123,17 +134,6 @@ const widthStyle = computed(() =>
         <span v-if="!collapsed" class="nb-display font-medium" style="letter-spacing: -0.005em;">
           新建对话
         </span>
-      </button>
-      <button
-        class="nb-focus group flex h-9 items-center rounded-[var(--nb-radius-sm)] text-[12.5px] transition hover:bg-[color:var(--nb-overlay)]"
-        :class="collapsed ? 'justify-center w-9 mx-auto' : 'gap-2.5 px-2.5'"
-        style="color: var(--nb-ink-mute);"
-        title="自定义偏好"
-        aria-label="自定义"
-        @click="emit('customize')"
-      >
-        <SlidersHorizontal :size="13" :stroke-width="1.6" />
-        <span v-if="!collapsed">自定义</span>
       </button>
     </div>
 
@@ -193,13 +193,23 @@ const widthStyle = computed(() =>
             />
             <span
               v-if="!collapsed"
-              class="truncate text-left"
-              :style="{
-                color:
-                  conv.id === activeId ? 'var(--nb-ink)' : 'var(--nb-ink-soft)',
-              }"
+              class="flex min-w-0 flex-1 items-center justify-between gap-2"
             >
-              {{ conv.title }}
+              <span
+                class="truncate text-left"
+                :style="{
+                  color:
+                    conv.id === activeId ? 'var(--nb-ink)' : 'var(--nb-ink-soft)',
+                }"
+              >
+                {{ conv.title }}
+              </span>
+              <span
+                class="shrink-0 text-[10.5px] tabular-nums"
+                style="color: var(--nb-ink-faint);"
+              >
+                {{ formatRelativeTime(conv.updatedAt) }}
+              </span>
             </span>
           </button>
         </li>

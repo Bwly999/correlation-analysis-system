@@ -450,11 +450,20 @@ export interface NotebookHistoryToolItem {
 export const hydrateFromHistory = (
   state: NotebookRuntimeState,
   history: {
+    sessionId?: string
+    title?: string
     messages: NotebookHistoryMessageItem[]
     toolCalls?: NotebookHistoryToolItem[]
   },
 ): void => {
   const session = state.session
+  if (history.sessionId) {
+    session.sessionId = history.sessionId
+    state.activeConversationId = history.sessionId
+  }
+  if (history.title) {
+    session.title = history.title
+  }
   session.messages = []
 
   type TimelineItem =
@@ -531,7 +540,12 @@ export const hydrateFromHistory = (
   // 历史回放后处于 idle 状态，等待用户继续对话
   session.agent = 'idle'
   session.runtime.isRunning = false
-  state.conversations[0]!.updatedAt = Date.now()
+  const activeId = state.activeConversationId ?? session.sessionId
+  const existingConversation = state.conversations.find((item) => item.id === activeId)
+  if (existingConversation) {
+    // 仅同步标题；回放历史本身不是「活动」，不更新 updatedAt 以免把会话顶到列表最前。
+    existingConversation.title = session.title
+  }
 }
 
 /**

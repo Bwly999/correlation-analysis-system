@@ -8,6 +8,11 @@ import type { NotebookConversation, NotebookSessionVm } from './types/messageStr
 import PocApp from './PocApp.vue'
 import { createNotebookSessionRuntime, type NotebookSessionRuntime } from './runtime/notebookSessionRuntime'
 import { exportWorkspaceZip } from './runtime/workspaceExporter'
+import {
+  createNotebookSessionEntry,
+  listNotebookSessions,
+  type NotebookSessionListItem,
+} from './runtime/notebookAgentClient'
 
 const params = new URLSearchParams(window.location.search)
 const sessionId = params.get('session')
@@ -15,31 +20,44 @@ const mode = params.get('demo') ?? (sessionId ? 'session' : 'ux')
 
 const opfsRoot = ref<OpfsDirectoryHandle | null>(null)
 const session = ref<NotebookSessionVm>(demoSession)
-const conversations = ref<NotebookConversation[]>([
-  {
-    id: 'c-current',
-    title: '用户流失因子探索分析',
-    updatedAt: Date.now(),
-  },
-  {
-    id: 'c-1',
-    title: '画布节点与运行时联调',
-    updatedAt: Date.now() - 1000 * 60 * 60 * 4,
-  },
-  {
-    id: 'c-2',
-    title: '看板 A/B 对比草稿',
-    updatedAt: Date.now() - 1000 * 60 * 60 * 28,
-  },
-  {
-    id: 'c-3',
-    title: '复购率单调性专题',
-    updatedAt: Date.now() - 1000 * 60 * 60 * 72,
-  },
-])
-const activeConversationId = ref<string>('c-current')
+const conversations = ref<NotebookConversation[]>([])
+const activeConversationId = ref<string>('')
 const workspaceLabel = ref('相关性分析')
 const runtime = ref<NotebookSessionRuntime | null>(null)
+
+const toConversation = (item: NotebookSessionListItem): NotebookConversation => ({
+  id: item.sessionId,
+  title: item.title,
+  updatedAt: item.updatedAt,
+  preview: item.lastUserMessagePreview,
+  status: item.status,
+  archived: Boolean(item.archivedAt),
+})
+
+const loadConversationList = async () => {
+  if (mode !== 'session') return
+  const response = await listNotebookSessions()
+  conversations.value = response.sessions.map(toConversation)
+}
+
+const syncActiveConversation = () => {
+  if (!runtime.value) return
+  const currentSession = runtime.value.state.session
+  const activeId = currentSession.sessionId
+  activeConversationId.value = activeId
+  const existing = conversations.value.find((item) => item.id === activeId)
+  if (existing) {
+    // 仅同步标题，不更新 updatedAt —— 切换/加载历史本身不构成「活动」，
+    // 不应把该会话顶到列表最前。updatedAt 由真实发消息/重命名推进。
+    existing.title = currentSession.title
+    return
+  }
+  conversations.value.unshift({
+    id: activeId,
+    title: currentSession.title,
+    updatedAt: Date.now(),
+  })
+}
 
 const seedDemoWorkspace = async () => {
   const root = createMemOpfsRoot()
@@ -123,12 +141,13 @@ const initSessionMode = async (targetSessionId: string) => {
   runtime.value = notebookRuntime
   opfsRoot.value = notebookRuntime.opfsRoot
   session.value = notebookRuntime.state.session
-  conversations.value = notebookRuntime.state.conversations
-  activeConversationId.value = notebookRuntime.state.activeConversationId ?? targetSessionId
+  activeConversationId.value = targetSessionId
   workspaceLabel.value = '画布分析'
 
   try {
+    await loadConversationList()
     await notebookRuntime.connect()
+    syncActiveConversation()
   } catch (error) {
     session.value.phase = {
       kind: 'failed',
@@ -158,6 +177,8 @@ onBeforeUnmount(() => {
 const handleSend = async (text: string) => {
   if (runtime.value) {
     await runtime.value.sendUserMessage(text)
+    await loadConversationList()
+    syncActiveConversation()
     return
   }
 
@@ -256,14 +277,41 @@ const handleDownload = async () => {
 }
 
 const handleRename = (nextTitle: string) => {
+  if (runtime.value) {
+    void runtime.value.renameSession(nextTitle).then(async () => {
+      session.value = runtime.value!.state.session
+      await loadConversationList()
+      syncActiveConversation()
+    })
+    return
+  }
+
   session.value = {
     ...session.value,
     title: nextTitle,
   }
 }
 
-const handleSelectConversation = (conversationId: string) => {
-  activeConversationId.value = conversationId
+const handleSelectConversation = async (conversationId: string) => {
+  if (!runtime.value || conversationId === activeConversationId.value) {
+    activeConversationId.value = conversationId
+    return
+  }
+  await runtime.value.switchSession(conversationId)
+  session.value = runtime.value.state.session
+  opfsRoot.value = runtime.value.opfsRoot
+  await loadConversationList()
+  syncActiveConversation()
+}
+
+const handleNewConversation = async () => {
+  if (!runtime.value) return
+  const payload = await createNotebookSessionEntry({ origin: window.location.origin })
+  await runtime.value.switchSession(payload.sessionId)
+  session.value = runtime.value.state.session
+  opfsRoot.value = runtime.value.opfsRoot
+  await loadConversationList()
+  syncActiveConversation()
 }
 
 const handleStopExec = () => {
@@ -306,9 +354,8 @@ const isPoc = computed(() => mode === 'poc')
     @compact="handleCompact"
     @stop-exec="handleStopExec"
     @rename="handleRename"
-    @new-conversation="() => undefined"
+    @new-conversation="handleNewConversation"
     @select-conversation="handleSelectConversation"
-    @customize="() => undefined"
     @open-workspace-menu="() => undefined"
   />
 </template>
