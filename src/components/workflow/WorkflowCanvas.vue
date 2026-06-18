@@ -78,16 +78,19 @@ const isEditableFocused = ref(false)
 const canvasViewportRef = useTemplateRef<HTMLDivElement>('canvasViewport')
 
 // ── Notebook Agent ──
-// keep-alive：notebookSession 非空 = 存活会话（iframe 常驻、Pyodide 在线）；
-//            notebookVisible = 是否显示（关闭即隐藏，恢复时直接显示，跳过 Pyodide 重启）。
-// notebookSession 初始化时尝试从 localStorage 恢复上次 session（刷新页面后「继续上次分析」可用）。
+// notebookSession 非空 = iframe 已挂载（首次点入口后才挂，不在页面加载时预挂）；
+//                     挂载后永不卸载（刷新页面才释放），对话切换全在 iframe 内部。
+// notebookVisible = 是否显示（关闭即隐藏，恢复时直接显示，跳过 Pyodide 重启）。
+// liveSessionId = localStorage 探测到的存活会话（仅决定「继续上次分析」按钮显隐，不挂 iframe）。
 const notebookSession = ref<{
   sessionId: string
   initialData: CsvImport | null
 } | null>(null)
 const notebookVisible = ref(false)
-// NotebookFrame 实例引用：开新分析时调 switchSession 复用 iframe/runtime
+// NotebookFrame 实例引用
 const notebookFrameRef = ref<InstanceType<typeof NotebookFrame> | null>(null)
+// 探测到的存活会话（用于「继续上次分析」入口显隐；与 iframe 挂载解耦）
+const liveSessionId = ref<string | null>(null)
 // session 是否已探测确认后端存活（避免反复探测）
 const notebookSessionProbed = ref(false)
 
@@ -97,11 +100,21 @@ const isNodeResult = (v: unknown): v is NodeResult =>
   typeof (v as { kind?: unknown }).kind === 'string' &&
   'payload' in (v as object)
 
+const resolveNotebookSourceResult = (nodeId: string): NodeResult | null => {
+  const runtimeOutput = store.getNodeOutput(nodeId)
+  if (isNodeResult(runtimeOutput)) {
+    return runtimeOutput
+  }
+
+  const node = store.nodes.find((item) => item.id === nodeId)
+  return isNodeResult(node?.data.output) ? node.data.output : null
+}
+
 const availableNotebookSources = computed<NotebookDataSource[]>(() =>
   store.nodes
-    .filter((node) => isNodeResult(store.getNodeOutput(node.id)))
+    .filter((node) => Boolean(resolveNotebookSourceResult(node.id)))
     .map((node) => {
-      const result = store.getNodeOutput(node.id) as NodeResult
+      const result = resolveNotebookSourceResult(node.id) as NodeResult
       const rowCount =
         result.kind === 'table' && Array.isArray(result.payload)
           ? result.payload.length
@@ -137,7 +150,7 @@ const handleStartNotebook = async (source: NotebookDataSource | null) => {
     let initialData: CsvImport | null = null
     if (source) {
       const node = store.nodes.find((n) => n.id === source.id)
-      const nodeOutput = store.getNodeOutput(source.id)
+      const nodeOutput = resolveNotebookSourceResult(source.id)
       if (!node || !isNodeResult(nodeOutput)) {
         toast.add({
           severity: 'error',
@@ -163,24 +176,15 @@ const handleStartNotebook = async (source: NotebookDataSource | null) => {
     const { sessionId } = response.data as { sessionId: string }
     const previousSessionId = notebookSession.value?.sessionId ?? null
 
-    // 关键优化：若 iframe 已挂载且就绪，复用 runtime（秒开），不重建 Pyodide。
-    // 通过 parent.switch_session 通知 iframe 内 runtime 切换 session。
+    // iframe 已挂载（runtime 在线）→ 复用 runtime 秒开，通过 parent.switch_session 通知切换。
+    // 失败按错误处理（方案 B：iframe 挂载一次永不卸载，不再 :key 重建降级）。
     if (notebookFrameRef.value && notebookSession.value) {
-      try {
-        await notebookFrameRef.value.switchSession(sessionId, initialData)
-      } catch {
-        // switchSession 失败降级：重建 iframe（:key 变化销毁旧实例）
-        notebookSession.value = null
-      }
+      await notebookFrameRef.value.switchSession(sessionId, initialData)
     }
 
-    // 首次挂载或降级重建：设置 notebookSession 触发 NotebookFrame 挂载
-    if (!notebookSession.value) {
-      notebookSession.value = { sessionId, initialData }
-    } else {
-      // 复用场景：更新 sessionId（用于持久化），但保持 :key 稳定避免 iframe 重载
-      notebookSession.value = { sessionId, initialData }
-    }
+    // 首次挂载：设置 notebookSession 触发 NotebookFrame 挂载。
+    // 复用场景也同步更新（用于持久化 / props），:key 稳定不重载 iframe。
+    notebookSession.value = { sessionId, initialData }
     notebookVisible.value = true
     // 持久化当前 session（刷新页面后「继续上次分析」可用）
     writePersistedNotebookSession({
@@ -206,16 +210,38 @@ const handleStartNotebook = async (source: NotebookDataSource | null) => {
 const handleNotebookHide = () => {
   notebookVisible.value = false
 }
-// 恢复上次仍存活的笔记本（直接显示，跳过 Pyodide 重启，秒回）。
-// 若后端 runtime 已被软关闭释放，iframe 内 runtime 会通过 events 流订阅时自动重建。
-const handleNotebookResume = () => {
+// 「继续上次分析」：iframe 未挂载 → 首次挂载指向 liveSessionId（connect 走首启 loading，
+// 后端 runtime 已释放则订阅 events 时自动重建）；已挂载 → 切换到 liveSessionId + 显示。
+const handleNotebookResume = async () => {
+  if (!liveSessionId.value) return
+  const target = liveSessionId.value
+  if (notebookSession.value && notebookFrameRef.value) {
+    if (notebookSession.value.sessionId !== target) {
+      try {
+        await notebookFrameRef.value.switchSession(target, null)
+      } catch (err) {
+        toast.add({
+          severity: 'error',
+          summary: '恢复失败',
+          detail: getErrorMessage(err, '请稍后重试'),
+          life: 4000,
+        })
+        return
+      }
+    }
+    notebookSession.value = { sessionId: target, initialData: null }
+    notebookVisible.value = true
+    return
+  }
+  notebookSession.value = { sessionId: target, initialData: null }
   notebookVisible.value = true
 }
 
 /**
  * 探测 localStorage 里持久化的 session 是否在后端仍存活。
- * 存活 → 恢复 notebookSession（「继续上次分析」入口可用）；
+ * 存活 → 只记录 liveSessionId（决定「继续上次分析」按钮显隐），不挂载 iframe；
  * 不存活（404 / 网络错误）→ 清除持久化，避免无效入口。
+ * iframe 的挂载严格推迟到用户首次点入口（start/resume）时，避免页面加载就预加载 Pyodide。
  */
 const probePersistedNotebookSession = async () => {
   if (notebookSessionProbed.value) return
@@ -225,10 +251,7 @@ const probePersistedNotebookSession = async () => {
   try {
     const response = await httpClient.get(`/notebook-agent/sessions/${persisted.sessionId}`)
     if (response.status < 400) {
-      notebookSession.value = {
-        sessionId: persisted.sessionId,
-        initialData: null,
-      }
+      liveSessionId.value = persisted.sessionId
     } else {
       clearPersistedNotebookSession()
     }
@@ -848,7 +871,7 @@ onBeforeUnmount(() => {
     <WorkflowHeader
       :is-ai-panel-visible="isAiPanelVisible"
       :available-notebook-sources="availableNotebookSources"
-      :has-live-notebook="!!notebookSession"
+      :has-live-notebook="!!liveSessionId"
       @open-projects="openWorkflowList"
       @open-template-library="openTemplateLibrary"
       @new-workflow="handleCreateWorkflow"

@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   createNotebookAgentSessionMock,
+  listNotebookAgentSessionsByUserMock,
   sendNotebookAgentMessageMock,
   markNotebookAgentSessionReadyMock,
   injectNotebookSystemMessageMock,
@@ -11,12 +12,14 @@ const {
   subscribeNotebookAgentEventsMock,
   getNotebookAgentSessionViewMock,
   getNotebookAgentSessionOwnerMock,
+  updateNotebookAgentSessionTitleMock,
   finishNotebookAgentToolCallMock,
   closeNotebookAgentSessionMock,
   ensureNotebookAgentRuntimeMock,
   startNdjsonStreamMock,
 } = vi.hoisted(() => ({
   createNotebookAgentSessionMock: vi.fn(),
+  listNotebookAgentSessionsByUserMock: vi.fn(),
   sendNotebookAgentMessageMock: vi.fn(),
   markNotebookAgentSessionReadyMock: vi.fn(),
   injectNotebookSystemMessageMock: vi.fn(),
@@ -24,6 +27,7 @@ const {
   subscribeNotebookAgentEventsMock: vi.fn(),
   getNotebookAgentSessionViewMock: vi.fn(),
   getNotebookAgentSessionOwnerMock: vi.fn(),
+  updateNotebookAgentSessionTitleMock: vi.fn(),
   finishNotebookAgentToolCallMock: vi.fn(),
   closeNotebookAgentSessionMock: vi.fn(),
   ensureNotebookAgentRuntimeMock: vi.fn().mockResolvedValue(true),
@@ -32,6 +36,7 @@ const {
 
 vi.mock('../gateway.js', () => ({
   createNotebookAgentSession: createNotebookAgentSessionMock,
+  listNotebookAgentSessionsByUser: listNotebookAgentSessionsByUserMock,
   sendNotebookAgentMessage: sendNotebookAgentMessageMock,
   markNotebookAgentSessionReady: markNotebookAgentSessionReadyMock,
   injectNotebookSystemMessage: injectNotebookSystemMessageMock,
@@ -39,6 +44,7 @@ vi.mock('../gateway.js', () => ({
   subscribeNotebookAgentEvents: subscribeNotebookAgentEventsMock,
   getNotebookAgentSessionView: getNotebookAgentSessionViewMock,
   getNotebookAgentSessionOwner: getNotebookAgentSessionOwnerMock,
+  updateNotebookAgentSessionTitle: updateNotebookAgentSessionTitleMock,
   finishNotebookAgentToolCall: finishNotebookAgentToolCallMock,
   closeNotebookAgentSession: closeNotebookAgentSessionMock,
   ensureNotebookAgentRuntime: ensureNotebookAgentRuntimeMock,
@@ -78,6 +84,7 @@ const userHeaders = (userId = 'notebook-route-user') => ({
 afterEach(async () => {
   vi.restoreAllMocks()
   createNotebookAgentSessionMock.mockReset()
+  listNotebookAgentSessionsByUserMock.mockReset()
   sendNotebookAgentMessageMock.mockReset()
   markNotebookAgentSessionReadyMock.mockReset()
   injectNotebookSystemMessageMock.mockReset()
@@ -86,6 +93,7 @@ afterEach(async () => {
   getNotebookAgentSessionViewMock.mockReset()
   ensureNotebookAgentRuntimeMock.mockReset().mockResolvedValue(true)
   getNotebookAgentSessionOwnerMock.mockReset()
+  updateNotebookAgentSessionTitleMock.mockReset()
   finishNotebookAgentToolCallMock.mockReset()
   closeNotebookAgentSessionMock.mockReset()
   startNdjsonStreamMock.mockReset()
@@ -229,6 +237,47 @@ describe('GET /api/notebook-agent/sessions/:id', () => {
   })
 })
 
+describe('GET /api/notebook-agent/sessions', () => {
+  it('返回当前用户最近会话列表', async () => {
+    listNotebookAgentSessionsByUserMock.mockReturnValueOnce([
+      {
+        sessionId: 'notebook-session-1',
+        title: '销量分析',
+        initialDataMeta: {
+          sourceKind: 'canvas-node',
+          sourceLabel: '清洗-Q2',
+          rowCount: 100,
+          columnCount: 4,
+        },
+        status: 'idle',
+        archivedAt: 123,
+        createdAt: 1,
+        updatedAt: 2,
+        messageCount: 3,
+        lastUserMessagePreview: '看下销量',
+      },
+    ])
+
+    const app = await createTestApp()
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/notebook-agent/sessions',
+      headers: userHeaders(),
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({
+      sessions: [
+        expect.objectContaining({
+          sessionId: 'notebook-session-1',
+          title: '销量分析',
+          lastUserMessagePreview: '看下销量',
+        }),
+      ],
+    })
+  })
+})
+
 describe('GET /api/notebook-agent/sessions/:id/events', () => {
   it('调用 ndjson stream 并订阅 notebook 事件', async () => {
     getNotebookAgentSessionViewMock.mockReturnValueOnce({
@@ -357,6 +406,39 @@ describe('POST /api/notebook-agent/sessions/:id/system-message', () => {
     })
 
     expect(response.statusCode).toBe(404)
+  })
+})
+
+describe('POST /api/notebook-agent/sessions/:id/title', () => {
+  it('更新会话标题', async () => {
+    updateNotebookAgentSessionTitleMock.mockReturnValueOnce(true)
+
+    const app = await createTestApp()
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/notebook-agent/sessions/notebook-session-1/title',
+      headers: userHeaders(),
+      payload: { title: '销量分析' },
+    })
+
+    expect(response.statusCode).toBe(200)
+    expect(updateNotebookAgentSessionTitleMock).toHaveBeenCalledWith(
+      'notebook-session-1',
+      '销量分析',
+    )
+  })
+
+  it('缺少 title 时返回 400', async () => {
+    const app = await createTestApp()
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/notebook-agent/sessions/notebook-session-1/title',
+      headers: userHeaders(),
+      payload: {},
+    })
+
+    expect(response.statusCode).toBe(400)
+    expect(updateNotebookAgentSessionTitleMock).not.toHaveBeenCalled()
   })
 })
 

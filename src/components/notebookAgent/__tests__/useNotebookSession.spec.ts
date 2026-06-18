@@ -12,6 +12,17 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { ref, nextTick } from 'vue'
+
+const { httpPostMock } = vi.hoisted(() => ({
+  httpPostMock: vi.fn(),
+}))
+
+vi.mock('@/services/httpClient', () => ({
+  httpClient: {
+    post: httpPostMock,
+  },
+}))
+
 import { useNotebookSession } from '../useNotebookSession'
 import type {
   ParentBridgeServer,
@@ -78,6 +89,7 @@ describe('useNotebookSession', () => {
   let fake: ReturnType<typeof buildFakeBridge>
 
   beforeEach(() => {
+    httpPostMock.mockReset().mockResolvedValue({ status: 200 })
     iframeRef = ref<HTMLIFrameElement | null>(null) as unknown as ReturnType<
       typeof ref<HTMLIFrameElement | null>
     >
@@ -241,5 +253,50 @@ describe('useNotebookSession', () => {
     await nextTick()
     session.dispose()
     expect(fake.bridge.dispose).toHaveBeenCalled()
+  })
+
+  it('默认 notifySessionReady 以 JSON POST 调 ready 接口，避免空 POST 被服务端判 415', async () => {
+    const session = useNotebookSession({
+      iframeRef: iframeRef as Parameters<typeof useNotebookSession>[0]['iframeRef'],
+      sessionId: 'sess-1',
+      origin: 'http://localhost:5173',
+      initialData: {
+        buffer: new TextEncoder().encode('a,b\n1,2').buffer as ArrayBuffer,
+        meta: {
+          sourceKind: 'canvas-node',
+          sourceLabel: 'cleanup',
+          rowCount: 1,
+          columnCount: 2,
+        },
+      },
+      createBridge: fake.factory as unknown as (
+        opts: ParentBridgeServerOptions,
+      ) => ParentBridgeServer,
+    })
+
+    mountIframe()
+    await nextTick()
+
+    fake.bridge.emitEvent({ kind: 'iframe.ready', sessionId: 'sess-1' })
+    await nextTick()
+    fake.bridge.resolveNextRequest({ sessionId: 'sess-1' })
+    await Promise.resolve()
+    await Promise.resolve()
+    fake.bridge.resolveNextRequest({ path: 'inputs/upstream.csv', bytes: 8 })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    await vi.waitFor(() => {
+      expect(httpPostMock).toHaveBeenCalledWith(
+        '/notebook-agent/sessions/sess-1/ready',
+        {},
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            'Content-Type': 'application/json',
+          }),
+        }),
+      )
+    })
+    void session
   })
 })

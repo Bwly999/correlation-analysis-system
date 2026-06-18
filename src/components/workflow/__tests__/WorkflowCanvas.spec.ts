@@ -5,6 +5,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { defineComponent } from 'vue'
 import WorkflowCanvas from '../WorkflowCanvas.vue'
 import { useWorkflowStore } from '@/stores/workflowStore'
+import { httpClient } from '@/services/httpClient'
 
 vi.mock('../MonacoEditor.vue', () => ({ default: { template: '<div />' } }))
 
@@ -58,6 +59,20 @@ const dataAnalysisModalStub = defineComponent({
   emits: ['close'],
   template:
     '<div class="data-analysis-modal-stub" :data-visible="String(visible)" :data-storage-scope-key="storageScopeKey ?? \'\'">{{ title }}</div>',
+})
+
+const notebookFrameSwitchSessionMock = vi.fn()
+const notebookFrameStub = defineComponent({
+  name: 'NotebookFrame',
+  props: ['sessionId', 'initialData', 'visible'],
+  emits: ['close'],
+  template: '<div class="notebook-frame-stub" :data-session-id="sessionId" :data-visible="String(visible)"></div>',
+  setup(_props, { expose }) {
+    expose({
+      switchSession: notebookFrameSwitchSessionMock,
+    })
+    return {}
+  },
 })
 
 const flushAsyncWork = async () => {
@@ -125,6 +140,7 @@ describe('WorkflowCanvas', () => {
     })
     fitView.mockResolvedValue(true)
     setViewport.mockResolvedValue(true)
+    notebookFrameSwitchSessionMock.mockReset()
   })
 
   it('keeps nodes selectable in history mode so snapshots can still be opened', async () => {
@@ -1177,6 +1193,88 @@ describe('WorkflowCanvas', () => {
 
     const dashboardModal = wrapper.findComponent(workflowResultDashboardModalStub)
     expect(dashboardModal.attributes('data-visible')).toBe('false')
+  })
+
+  it('再次开始 AI 分析时复用已有 notebook runtime', async () => {
+    const store = useWorkflowStore()
+    const httpPostSpy = vi.spyOn(httpClient, 'post')
+    httpPostSpy
+      .mockResolvedValueOnce({
+        status: 200,
+        data: { sessionId: 'sess-1' },
+      } as never)
+      .mockResolvedValueOnce({
+        status: 200,
+        data: { sessionId: 'sess-2' },
+      } as never)
+
+    store.nodes = [
+      {
+        id: 'node_1',
+        type: 'custom',
+        position: { x: 0, y: 0 },
+        label: '清洗结果',
+        data: {
+          label: '清洗结果',
+          type: 'data-cleaning',
+          category: 'action',
+          status: 'success',
+          config: {},
+          logs: [],
+          useManualInput: false,
+          manualInput: '',
+          isPinned: false,
+          output: {
+            kind: 'table',
+            payload: [{ a: 1, b: 2 }],
+          },
+        },
+      } as any,
+    ]
+
+    const workflowHeaderStub = defineComponent({
+      name: 'WorkflowHeader',
+      emits: ['start-notebook'],
+      template:
+        '<div><button data-testid="start-notebook" @click="$emit(\'start-notebook\', { id: \'node_1\', kind: \'canvas-node\', label: \'清洗结果\', rowCount: 1, columnCount: 2 })">start</button></div>',
+    })
+
+    const wrapper = mount(WorkflowCanvas, {
+      global: {
+        stubs: {
+          Background: { template: '<div />' },
+          Controls: { template: '<div />' },
+          NodeSidebar: { template: '<div />' },
+          WorkflowHeader: workflowHeaderStub,
+          NotebookFrame: notebookFrameStub,
+          BaseNode: { template: '<div />' },
+          LogPanel: { template: '<div />' },
+          NodeConfigModal: { template: '<div />' },
+          RuntimeInputModal: runtimeInputModalStub,
+          WorkflowResultDashboardModal: workflowResultDashboardModalStub,
+          WorkflowManagerModal: workflowManagerModalStub,
+          UnsavedWorkflowDialog: { template: '<div />' },
+          HelpCenterModal: { template: '<div />' },
+          ConfirmDialog: { template: '<div />' },
+          Toast: { template: '<div />' },
+          Button: { template: '<button><slot /></button>' },
+          N8nEdge: { template: '<div />' },
+        },
+        directives: {
+          tooltip: () => undefined,
+        },
+      },
+    })
+
+    await wrapper.get('[data-testid="start-notebook"]').trigger('click')
+    await flushAsyncWork()
+    expect(wrapper.find('.notebook-frame-stub').attributes('data-session-id')).toBe('sess-1')
+
+    await wrapper.get('[data-testid="start-notebook"]').trigger('click')
+    await flushAsyncWork()
+
+    expect(notebookFrameSwitchSessionMock).toHaveBeenCalledWith('sess-2', expect.any(Object))
+    expect(wrapper.find('.notebook-frame-stub').attributes('data-session-id')).toBe('sess-2')
   })
 
   it('clears the result dashboard summary after switching to a new workflow without running it', async () => {

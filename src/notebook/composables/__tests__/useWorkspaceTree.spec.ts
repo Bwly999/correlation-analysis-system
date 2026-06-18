@@ -30,7 +30,7 @@ describe('useWorkspaceTree', () => {
   })
 
   it('创建后第一次 refresh 同步建好树', async () => {
-    const ws = useWorkspaceTree({ root, intervalMs: 2000 })
+    const ws = useWorkspaceTree({ root: () => root, intervalMs: 2000 })
     // 初始 refresh 是异步，await 一次
     await ws.refresh()
     expect(ws.tree.value).toBeDefined()
@@ -41,7 +41,7 @@ describe('useWorkspaceTree', () => {
   })
 
   it('文件新增后下一次轮询能看到', async () => {
-    const ws = useWorkspaceTree({ root, intervalMs: 2000 })
+    const ws = useWorkspaceTree({ root: () => root, intervalMs: 2000 })
     await ws.refresh()
 
     await writeFile(root, 'reports/main.md', '# r')
@@ -54,7 +54,7 @@ describe('useWorkspaceTree', () => {
   })
 
   it('notify() 立即 refresh，不等下一轮', async () => {
-    const ws = useWorkspaceTree({ root, intervalMs: 2000 })
+    const ws = useWorkspaceTree({ root: () => root, intervalMs: 2000 })
     await ws.refresh()
 
     await writeFile(root, 'reports/a.md', 'x')
@@ -66,7 +66,7 @@ describe('useWorkspaceTree', () => {
   })
 
   it('dispose 后停止轮询', async () => {
-    const ws = useWorkspaceTree({ root, intervalMs: 2000 })
+    const ws = useWorkspaceTree({ root: () => root, intervalMs: 2000 })
     await ws.refresh()
     ws.dispose()
 
@@ -75,5 +75,24 @@ describe('useWorkspaceTree', () => {
 
     const reports = ws.tree.value?.children?.find((c) => c.name === 'reports')
     expect(reports?.children?.length).toBe(0)
+  })
+
+  it('root 变化（切会话）后自动 refresh 新目录（bug3）', async () => {
+    let currentRoot: MemDirectoryHandle = root
+    const ws = useWorkspaceTree({ root: () => currentRoot, intervalMs: 2000 })
+    await ws.refresh()
+    expect(ws.tree.value?.children?.length).toBe(4)
+
+    // 切到一个新的空 OPFS 根
+    const newRoot = createMemOpfsRoot()
+    await ensureWorkspaceTree(newRoot)
+    currentRoot = newRoot
+    // watch(root) 触发 refresh，await 一次微任务让 watch 回调跑完
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(ws.tree.value).not.toBe(root)
+    // 新根仍是空 workspace（4 个固定目录，无额外文件）
+    expect(ws.tree.value?.children?.length).toBe(4)
+    ws.dispose()
   })
 })

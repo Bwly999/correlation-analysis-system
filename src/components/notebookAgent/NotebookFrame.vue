@@ -42,6 +42,7 @@ const emit = defineEmits<{
 }>()
 
 const iframeRef = ref<HTMLIFrameElement | null>(null)
+const iframeSessionId = ref(props.sessionId)
 
 const session = useNotebookSession({
   iframeRef,
@@ -54,7 +55,7 @@ const session = useNotebookSession({
   },
 })
 
-const iframeSrc = computed(() => `/notebook.html?session=${encodeURIComponent(props.sessionId)}`)
+const iframeSrc = computed(() => `/notebook.html?session=${encodeURIComponent(iframeSessionId.value)}`)
 
 // 关闭 = 隐藏（保留存活会话，可恢复）。不再 requestClose/dispose：
 // 隐藏时 Worker 仍在运行、OPFS 有轮询兜底，无数据丢失；本地 message bridge 改为卸载时释放。

@@ -41,9 +41,12 @@ import {
   closeNotebookAgentSession,
   createNotebookAgentSession,
   getNotebookAgentSessionView,
+  listNotebookAgentSessionsByUser,
   markNotebookAgentSessionReady,
   sendNotebookAgentMessage,
   subscribeNotebookAgentEvents,
+  updateNotebookAgentSessionTitle,
+  ensureNotebookAgentRuntime,
 } from '../gateway.js'
 import { __resetNotebookSessionsForTest } from '../sessionStore.js'
 
@@ -282,6 +285,13 @@ describe('notebookAgent gateway', () => {
         expect.objectContaining({ type: 'message.completed', content: '先看概览。' }),
       ]),
     )
+    // agent_end 正常完成时必须广播 completed（而非 running），
+    // 否则前端 isRunning 永远不落 false，发送按钮停留在停止态、退出仍提示"还在工作"。
+    const statusEvents = events.filter((e) => e.type === 'session.status')
+    expect(statusEvents.at(-1)).toEqual(
+      expect.objectContaining({ type: 'session.status', status: 'completed' }),
+    )
+    expect(getNotebookAgentSessionView(created.sessionId)?.status).toBe('completed')
   })
 
   it('关闭会话时释放 runtime', async () => {
@@ -302,5 +312,62 @@ describe('notebookAgent gateway', () => {
     expect(sessionDisposeMock).toHaveBeenCalled()
     // 软关闭：释放 runtime 但保留 record（status 不变，供 resume 回放历史）
     expect(getNotebookAgentSessionView(created.sessionId)).toBeDefined()
+  })
+
+  it('更新标题后会反映到详情与列表摘要', async () => {
+    const created = await createNotebookAgentSession({
+      userId: 'u-1',
+      origin: 'http://localhost:5173',
+      initialDataMeta: {
+        sourceKind: 'canvas-node',
+        sourceLabel: '清洗-Q2',
+        rowCount: 123,
+        columnCount: 4,
+      },
+    })
+
+    const ok = updateNotebookAgentSessionTitle(created.sessionId, '销量分析')
+    expect(ok).toBe(true)
+
+    const detail = getNotebookAgentSessionView(created.sessionId)
+    expect(detail?.title).toBe('销量分析')
+
+    const list = listNotebookAgentSessionsByUser('u-1')
+    expect(list[0]?.title).toBe('销量分析')
+  })
+
+  it('恢复已存在历史消息的会话不会再次触发 bootstrap prompt', async () => {
+    const created = await createNotebookAgentSession({
+      userId: 'u-1',
+      origin: 'http://localhost:5173',
+      initialDataMeta: {
+        sourceKind: 'canvas-node',
+        sourceLabel: '清洗-Q2',
+        rowCount: 123,
+        columnCount: 4,
+      },
+    })
+
+    await sendNotebookAgentMessage(created.sessionId, {
+      id: 'msg-1',
+      content: '先看一下缺失值分布',
+    })
+    await vi.waitFor(() => {
+      expect(sessionPromptMock).toHaveBeenCalledWith('先看一下缺失值分布')
+    })
+
+    closeNotebookAgentSession(created.sessionId)
+    sessionPromptMock.mockClear()
+
+    const resumed = await ensureNotebookAgentRuntime(created.sessionId)
+    expect(resumed).toBe(true)
+
+    const unsubscribe = subscribeNotebookAgentEvents(created.sessionId, () => undefined)
+    expect(unsubscribe).toBeTypeOf('function')
+    expect(markNotebookAgentSessionReady(created.sessionId)).toBe(true)
+
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(sessionPromptMock).not.toHaveBeenCalled()
   })
 })

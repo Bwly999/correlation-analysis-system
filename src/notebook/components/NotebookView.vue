@@ -96,7 +96,7 @@ const awaitingUser = computed(() => session.value.agent === 'awaiting_user')
 // ──────────────────────────────────────────────
 // Workspace tree + fresh tracker
 // ──────────────────────────────────────────────
-const ws = useWorkspaceTree({ root: props.opfsRoot })
+const ws = useWorkspaceTree({ root: () => props.opfsRoot })
 void ws.refresh()
 const { isFresh } = useFreshFileTracker({ tree: ws.tree })
 

@@ -12,7 +12,7 @@
  * 仅做最小单测：create / get / append / list；list 仅返回未删除会话的 id
  */
 
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import {
   createNotebookSession,
   getNotebookSession,
@@ -20,6 +20,8 @@ import {
   appendNotebookToolCall,
   updateNotebookToolCall,
   endNotebookSession,
+  updateNotebookSessionTitle,
+  listNotebookSessionsByUser,
   __resetNotebookSessionsForTest,
   type NotebookSessionInit,
 } from '../sessionStore'
@@ -47,6 +49,7 @@ describe('notebookAgent sessionStore', () => {
     expect(rec.status).toBe('idle')
     expect(rec.dataReady).toBe(false)
     expect(rec.initialDataMeta?.rowCount).toBe(100)
+    expect(rec.title).toContain('分析笔记本')
   })
 
   it('getNotebookSession 通过 id 拿回同一对象', () => {
@@ -92,6 +95,34 @@ describe('notebookAgent sessionStore', () => {
     endNotebookSession(rec.sessionId, 'completed')
     expect(rec.status).toBe('completed')
     expect(rec.updatedAt).toBeGreaterThanOrEqual(before)
+  })
+
+  it('updateNotebookSessionTitle 会持久更新标题与更新时间', () => {
+    const rec = createNotebookSession(init())
+    const before = rec.updatedAt
+    updateNotebookSessionTitle(rec.sessionId, '销量分析')
+    expect(rec.title).toBe('销量分析')
+    expect(rec.updatedAt).toBeGreaterThanOrEqual(before)
+  })
+
+  it('listNotebookSessionsByUser 按更新时间倒序返回会话', () => {
+    const nowSpy = vi.spyOn(Date, 'now')
+    nowSpy
+      .mockReturnValueOnce(1)
+      .mockReturnValueOnce(2)
+      .mockReturnValueOnce(3)
+      .mockReturnValueOnce(4)
+
+    const first = createNotebookSession(init())
+    const second = createNotebookSession(init())
+    updateNotebookSessionTitle(first.sessionId, '第一轮')
+    updateNotebookSessionTitle(second.sessionId, '第二轮')
+
+    const list = listNotebookSessionsByUser('u-1')
+    expect(list[0]?.sessionId).toBe(second.sessionId)
+    expect(list[1]?.sessionId).toBe(first.sessionId)
+    expect(list[0]?.title).toBe('第二轮')
+    nowSpy.mockRestore()
   })
 
   it('未知 sessionId 时操作 silently no-op，不抛错', () => {

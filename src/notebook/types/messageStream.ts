@@ -273,4 +273,6 @@ export interface NotebookConversation {
   updatedAt: number
   /** 简短摘要，未使用时为空 */
   preview?: string
+  status?: string
+  archived?: boolean
 }

@@ -35,4 +35,19 @@ describe('NotebookFrame', () => {
     expect(iframe?.getAttribute('src')).toBe('/notebook.html?session=sess-x')
     wrapper.unmount()
   })
+
+  it('切换 session 后保持 iframe src 不变，避免整页重载 Python 环境', async () => {
+    const wrapper = mount(NotebookFrame, {
+      attachTo: document.body,
+      props: { sessionId: 'sess-1', initialData, origin: 'http://localhost:5173' },
+    })
+
+    const iframe = document.body.querySelector('iframe')
+    expect(iframe?.getAttribute('src')).toBe('/notebook.html?session=sess-1')
+
+    await wrapper.setProps({ sessionId: 'sess-2' })
+
+    expect(iframe?.getAttribute('src')).toBe('/notebook.html?session=sess-1')
+    wrapper.unmount()
+  })
 })

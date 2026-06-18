@@ -47,6 +47,8 @@ export interface NotebookSessionRecord {
   sessionId: string
   userId: string
   origin: string
+  title: string
+  bootstrapPromptedAt?: number
   initialDataMeta?: ImportCsvMeta
   status: NotebookSessionStatus
   dataReady: boolean
@@ -63,6 +65,7 @@ export interface NotebookSessionRecord {
 }
 
 const sessions = new Map<string, NotebookSessionRecord>()
+const buildDefaultTitle = (sessionId: string): string => `分析笔记本 ${sessionId.slice(0, 8)}`
 
 /** 单用户保留的会话上限（LRU：超过则删掉最旧的已归档会话） */
 const MAX_SESSIONS_PER_USER = 20
@@ -71,10 +74,13 @@ export const createNotebookSession = (
   init: NotebookSessionInit,
 ): NotebookSessionRecord => {
   const now = Date.now()
+  const sessionId = randomUUID()
   const record: NotebookSessionRecord = {
-    sessionId: randomUUID(),
+    sessionId,
     userId: init.userId,
     origin: init.origin,
+    title: buildDefaultTitle(sessionId),
+    bootstrapPromptedAt: undefined,
     initialDataMeta: init.initialDataMeta,
     status: 'idle',
     dataReady: false,
@@ -164,6 +170,25 @@ export const updateNotebookSessionRecord = (
   record.updatedAt = Date.now()
 }
 
+export const updateNotebookSessionTitle = (
+  sessionId: string,
+  title: string,
+): boolean => {
+  const record = sessions.get(sessionId)
+  if (!record) return false
+  record.title = title
+  record.updatedAt = Date.now()
+  return true
+}
+
+export const markNotebookSessionBootstrapPrompted = (sessionId: string): boolean => {
+  const record = sessions.get(sessionId)
+  if (!record) return false
+  record.bootstrapPromptedAt = Date.now()
+  record.updatedAt = Date.now()
+  return true
+}
+
 /**
  * 列出某用户最近的 notebook 会话（按 updatedAt 倒序）。
  * 用于前端「继续上次分析」入口探测 + 历史列表。
@@ -175,7 +200,7 @@ export const listNotebookSessionsByUser = (
   for (const record of sessions.values()) {
     if (record.userId === userId) list.push(record)
   }
-  list.sort((a, b) => b.updatedAt - a.updatedAt)
+  list.sort((a, b) => b.updatedAt - a.updatedAt || b.createdAt - a.createdAt)
   return list
 }
 

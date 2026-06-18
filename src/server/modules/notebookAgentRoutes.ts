@@ -34,6 +34,7 @@ import {
   sendNotebookAgentMessage,
   abortNotebookAgentSession,
   subscribeNotebookAgentEvents,
+  updateNotebookAgentSessionTitle,
 } from '../notebookAgent/gateway.js'
 import type { ImportCsvMeta } from '../../notebook/shared/parentBridge.js'
 
@@ -211,6 +212,24 @@ export const createNotebookAgentRoutes = (): FastifyPluginAsync => async (app) =
     if (!ok) {
       reply.code(404)
       return { message: '会话不存在或注入失败' }
+    }
+    return { ok: true }
+  })
+
+  app.post('/api/notebook-agent/sessions/:sessionId/title', async (request, reply) => {
+    const user = requireWorkflowUser(request)
+    const { sessionId } = request.params as { sessionId: string }
+    requireOwnedSession(sessionId, user.id)
+    const body = request.body as { title?: string }
+    const title = typeof body.title === 'string' ? body.title.trim() : ''
+    if (!title) {
+      reply.code(400)
+      return { message: '缺少 title' }
+    }
+    const ok = updateNotebookAgentSessionTitle(sessionId, title)
+    if (!ok) {
+      reply.code(404)
+      return { message: '会话不存在' }
     }
     return { ok: true }
   })

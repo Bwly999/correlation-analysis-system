@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue'
 import NotebookView from './components/NotebookView.vue'
 import { createMemOpfsRoot } from './shared/__tests__/memOpfs'
 import { ensureWorkspaceTree, writeFile, type OpfsDirectoryHandle } from './shared/opfsAccess'
@@ -18,12 +18,17 @@ const params = new URLSearchParams(window.location.search)
 const sessionId = params.get('session')
 const mode = params.get('demo') ?? (sessionId ? 'session' : 'ux')
 
-const opfsRoot = ref<OpfsDirectoryHandle | null>(null)
+// demo 模式独立的 OPFS 根；session 模式直接复用 runtime.opfsRoot（响应式跟随 switchSession）
+const demoOpfsRoot = ref<OpfsDirectoryHandle | null>(null)
+// session 模式：runtime.opfsRoot 是 shallowRef，切换会话后自动更新 → 文件树/预览响应式跟随
+const opfsRoot = computed<OpfsDirectoryHandle | null>(
+  () => runtime.value?.opfsRoot.value ?? demoOpfsRoot.value,
+)
 const session = ref<NotebookSessionVm>(demoSession)
 const conversations = ref<NotebookConversation[]>([])
 const activeConversationId = ref<string>('')
 const workspaceLabel = ref('相关性分析')
-const runtime = ref<NotebookSessionRuntime | null>(null)
+const runtime = shallowRef<NotebookSessionRuntime | null>(null)
 
 const toConversation = (item: NotebookSessionListItem): NotebookConversation => ({
   id: item.sessionId,
@@ -130,7 +135,7 @@ service_q   float64
 
 const initDemoMode = async () => {
   const root = await seedDemoWorkspace()
-  opfsRoot.value = root
+  demoOpfsRoot.value = root
   if (mode === 'loading') session.value = demoLoading
   else if (mode === 'failed') session.value = demoLoadFailed
   else session.value = demoSession
@@ -139,7 +144,6 @@ const initDemoMode = async () => {
 const initSessionMode = async (targetSessionId: string) => {
   const notebookRuntime = await createNotebookSessionRuntime(targetSessionId)
   runtime.value = notebookRuntime
-  opfsRoot.value = notebookRuntime.opfsRoot
   session.value = notebookRuntime.state.session
   activeConversationId.value = targetSessionId
   workspaceLabel.value = '画布分析'
@@ -299,7 +303,6 @@ const handleSelectConversation = async (conversationId: string) => {
   }
   await runtime.value.switchSession(conversationId)
   session.value = runtime.value.state.session
-  opfsRoot.value = runtime.value.opfsRoot
   await loadConversationList()
   syncActiveConversation()
 }
@@ -309,7 +312,6 @@ const handleNewConversation = async () => {
   const payload = await createNotebookSessionEntry({ origin: window.location.origin })
   await runtime.value.switchSession(payload.sessionId)
   session.value = runtime.value.state.session
-  opfsRoot.value = runtime.value.opfsRoot
   await loadConversationList()
   syncActiveConversation()
 }
@@ -356,6 +358,7 @@ const isPoc = computed(() => mode === 'poc')
     @rename="handleRename"
     @new-conversation="handleNewConversation"
     @select-conversation="handleSelectConversation"
+    @customize="() => undefined"
     @open-workspace-menu="() => undefined"
   />
 </template>

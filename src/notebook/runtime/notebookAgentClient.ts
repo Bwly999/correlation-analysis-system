@@ -373,11 +373,48 @@ export interface NotebookHistoryToolCall {
 
 export interface NotebookSessionHistory {
   sessionId: string
+  title?: string
   status: string
   messages: NotebookHistoryMessage[]
   toolCalls: NotebookHistoryToolCall[]
   createdAt: number
   updatedAt: number
+}
+
+export interface NotebookSessionListItem {
+  sessionId: string
+  title: string
+  status: string
+  archivedAt?: number
+  createdAt: number
+  updatedAt: number
+  messageCount: number
+  lastUserMessagePreview?: string
+  initialDataMeta?: {
+    sourceKind: 'canvas-node' | 'data-source'
+    sourceLabel: string
+    rowCount: number
+    columnCount: number
+  }
+}
+
+export interface NotebookSessionListResponse {
+  sessions: NotebookSessionListItem[]
+}
+
+export interface NotebookSessionCreateRequest {
+  initialDataMeta?: {
+    sourceKind: 'canvas-node' | 'data-source'
+    sourceLabel: string
+    rowCount: number
+    columnCount: number
+  }
+  origin?: string
+}
+
+export interface NotebookSessionCreateResponse {
+  sessionId: string
+  systemPrompt: string
 }
 
 /** GET /sessions/:id 拉取完整历史（含 messages + toolCalls），供 resume 时回放。 */
@@ -390,6 +427,79 @@ export const fetchNotebookSessionHistory = async (
   })
   if (!isSuccessStatus(response.status)) return null
   return response.data as NotebookSessionHistory
+}
+
+export const listNotebookSessions = async (): Promise<NotebookSessionListResponse> => {
+  const response = await httpClient.request({
+    url: '/notebook-agent/sessions',
+    method: 'GET',
+  })
+
+  if (!isSuccessStatus(response.status)) {
+    const message =
+      typeof response.data === 'object'
+      && response.data
+      && 'message' in response.data
+      && typeof response.data.message === 'string'
+        ? response.data.message
+        : '读取 Notebook 会话列表失败'
+    throw new Error(message)
+  }
+
+  return response.data as NotebookSessionListResponse
+}
+
+export const createNotebookSessionEntry = async (
+  payload: NotebookSessionCreateRequest,
+): Promise<NotebookSessionCreateResponse> => {
+  const response = await httpClient.request({
+    url: '/notebook-agent/sessions',
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    data: payload,
+  })
+
+  if (!isSuccessStatus(response.status)) {
+    const message =
+      typeof response.data === 'object'
+      && response.data
+      && 'message' in response.data
+      && typeof response.data.message === 'string'
+        ? response.data.message
+        : '创建 Notebook 会话失败'
+    throw new Error(message)
+  }
+
+  return response.data as NotebookSessionCreateResponse
+}
+
+export const renameNotebookSession = async (
+  sessionId: string,
+  title: string,
+): Promise<{ ok: boolean }> => {
+  const response = await httpClient.request({
+    url: `/notebook-agent/sessions/${sessionId}/title`,
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    data: { title },
+  })
+
+  if (!isSuccessStatus(response.status)) {
+    const message =
+      typeof response.data === 'object'
+      && response.data
+      && 'message' in response.data
+      && typeof response.data.message === 'string'
+        ? response.data.message
+        : '更新 Notebook 会话标题失败'
+    throw new Error(message)
+  }
+
+  return response.data as { ok: boolean }
 }
 
 /** POST /sessions/:id/resume 恢复已归档会话（重建 runtime，保留历史 record）。 */

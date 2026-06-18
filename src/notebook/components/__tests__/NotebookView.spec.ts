@@ -14,7 +14,7 @@ import { mount, flushPromises } from '@vue/test-utils'
 import NotebookView from '../NotebookView.vue'
 import { createMemOpfsRoot } from '../../shared/__tests__/memOpfs'
 import { ensureWorkspaceTree, writeFile } from '../../shared/opfsAccess'
-import type { NotebookMessage } from '../../types/messageStream'
+import type { NotebookConversation, NotebookMessage } from '../../types/messageStream'
 
 const buildEnv = async () => {
   const root = createMemOpfsRoot()
@@ -133,5 +133,47 @@ describe('NotebookView', () => {
     await flushPromises()
     expect(wrapper.text()).toContain('Python 环境已重启')
     expect(wrapper.text()).toContain('内存变量已清空')
+  })
+
+  it('渲染传入的真实历史会话列表并高亮当前会话', async () => {
+    const root = await buildEnv()
+    const conversations: NotebookConversation[] = [
+      { id: 'sess-2', title: '更早分析', updatedAt: 1 },
+      { id: 'sess-1', title: '当前分析', updatedAt: 2, preview: '看一下销量' },
+    ]
+    const wrapper = mount(NotebookView, {
+      props: {
+        opfsRoot: root,
+        conversations,
+        activeConversationId: 'sess-1',
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('当前分析')
+    expect(wrapper.text()).toContain('更早分析')
+    expect(wrapper.find('[aria-current="true"]').text()).toContain('当前分析')
+  })
+
+  it('点击历史会话会向上触发 selectConversation', async () => {
+    const root = await buildEnv()
+    const conversations: NotebookConversation[] = [
+      { id: 'sess-1', title: '当前分析', updatedAt: 2 },
+      { id: 'sess-2', title: '更早分析', updatedAt: 1 },
+    ]
+    const wrapper = mount(NotebookView, {
+      props: {
+        opfsRoot: root,
+        conversations,
+        activeConversationId: 'sess-1',
+      },
+    })
+    await flushPromises()
+
+    const button = wrapper.findAll('button').find((item) => item.text().includes('更早分析'))
+    expect(button).toBeTruthy()
+    await button!.trigger('click')
+
+    expect(wrapper.emitted('selectConversation')?.[0]).toEqual(['sess-2'])
   })
 })

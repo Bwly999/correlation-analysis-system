@@ -70,7 +70,15 @@ const cloneTransferBuffer = (buffer: ArrayBuffer): ArrayBuffer => {
 }
 
 const defaultNotifySessionReady = async (sessionId: string): Promise<void> => {
-  const response = await httpClient.post(`/notebook-agent/sessions/${sessionId}/ready`)
+  const response = await httpClient.post(
+    `/notebook-agent/sessions/${sessionId}/ready`,
+    {},
+    {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    },
+  )
   if (response.status >= 400) {
     throw new Error(`通知 Notebook 会话就绪失败：${response.status}`)
   }

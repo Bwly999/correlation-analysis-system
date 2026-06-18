@@ -1,4 +1,4 @@
-import { reactive, watch } from 'vue'
+import { reactive, shallowRef, watch, type ShallowRef } from 'vue'
 import type { OpfsDirectoryHandle } from '../shared/opfsAccess'
 import {
   ensureWorkspaceTree,
@@ -20,6 +20,7 @@ import {
   abortNotebookAgentSession,
   compactNotebookAgentSession,
   fetchNotebookSessionHistory,
+  renameNotebookSession,
   type NotebookAgentEvent,
 } from './notebookAgentClient'
 import { AuditLog, computeCodeHash } from './auditLogger'
@@ -33,7 +34,11 @@ import type { LoadingStage } from '../types/messageStream'
 
 export interface NotebookSessionRuntime {
   state: NotebookRuntimeState
-  opfsRoot: OpfsDirectoryHandle
+  /**
+   * 当前 session 的 OPFS 根（shallowRef）：switchSession 切换后自动更新，
+   * App.vue / 文件树等订阅方响应式跟随。模板内自动解包为 OpfsDirectoryHandle。
+   */
+  opfsRoot: ShallowRef<OpfsDirectoryHandle>
   workerHost: WorkerHost
   connect: () => Promise<void>
   /**
@@ -43,6 +48,7 @@ export interface NotebookSessionRuntime {
    * 失败降级：Python 重置异常时 hardKill + 重新 init（慢一次但保证正确）。
    */
   switchSession: (newSessionId: string) => Promise<void>
+  renameSession: (title: string) => Promise<void>
   sendUserMessage: (text: string) => Promise<void>
   answerAskUser: (payload: { askId: string; optionId: string; text?: string }) => Promise<void>
   /** 用户主动取消某个 ask_user（修 AskUserCard 取消按钮无反应的 bug） */
@@ -77,6 +83,13 @@ const BOOT_STAGE_TO_UI: Record<string, { stage: LoadingStage; percent: number }>
 
 const createSessionTitle = (sessionId: string) => `分析笔记本 ${sessionId.slice(0, 8)}`
 
+const isAbortLikeError = (error: unknown): boolean => {
+  if (error instanceof DOMException) {
+    return error.name === 'AbortError'
+  }
+  return error instanceof Error && error.name === 'AbortError'
+}
+
 const toTransferableArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
   const out = new ArrayBuffer(bytes.byteLength)
   new Uint8Array(out).set(bytes)
@@ -106,7 +119,9 @@ export const createNotebookOpfsRoot = async (
 export const createNotebookSessionRuntime = async (
   sessionId: string,
 ): Promise<NotebookSessionRuntime> => {
-  let opfsRoot = await createNotebookOpfsRoot(sessionId)
+  // opfsRoot 用 shallowRef 暴露给外部（App.vue / 文件树）响应式跟随 switchSession 切换；
+  // 内部读取统一走 opfsRootRef.value，避免 return 快照导致切换后读写错配（bug3）。
+  const opfsRootRef = shallowRef(await createNotebookOpfsRoot(sessionId))
   // currentSessionId 可变：switchSession 切换会话时更新（闭包内引用此变量读取最新值）
   let currentSessionId = sessionId
   const state = reactive(createNotebookRuntimeState(sessionId))
@@ -123,15 +138,15 @@ export const createNotebookSessionRuntime = async (
     },
   })
   let toolDispatcher = createToolDispatcher({
-    opfsRoot,
+    opfsRoot: opfsRootRef.value,
     workerHost,
     todoStore,
     askUserQueue,
   })
-  // switchSession 切 OPFS 目录后重建 dispatcher（其内部闭包捕获了 opfsRoot）
+  // switchSession 切 OPFS 目录后重建 dispatcher（其内部闭包捕获了 opfsRoot 快照）
   const rebuildToolDispatcher = () => {
     toolDispatcher = createToolDispatcher({
-      opfsRoot,
+      opfsRoot: opfsRootRef.value,
       workerHost,
       todoStore,
       askUserQueue,
@@ -170,7 +185,7 @@ export const createNotebookSessionRuntime = async (
   let beforeunloadHandler: ((event: BeforeUnloadEvent) => void) | null = null
 
   const collectOpfsPaths = async (basePath: string): Promise<string[]> => {
-    const entries = await listDirectoryEntries(opfsRoot, basePath)
+    const entries = await listDirectoryEntries(opfsRootRef.value, basePath)
     const files: string[] = []
     for (const entry of entries) {
       const childPath = basePath ? `${basePath}/${entry.name}` : entry.name
@@ -187,7 +202,7 @@ export const createNotebookSessionRuntime = async (
     const snapshot = await workerHost.snapshotFs(paths)
     const writtenPaths: string[] = []
     for (const file of snapshot) {
-      await writeFile(opfsRoot, file.path, file.bytes)
+      await writeFile(opfsRootRef.value, file.path, file.bytes)
       writtenPaths.push(file.path)
     }
     return writtenPaths
@@ -204,7 +219,7 @@ export const createNotebookSessionRuntime = async (
           ).flat()
 
     for (const path of targetPaths) {
-      const bytes = await readBytes(opfsRoot, path)
+      const bytes = await readBytes(opfsRootRef.value, path)
       await workerHost.writeFs(
         path,
         toTransferableArrayBuffer(bytes),
@@ -215,7 +230,7 @@ export const createNotebookSessionRuntime = async (
   }
 
   const syncSinglePathToWorker = async (path: string) => {
-    const bytes = await readBytes(opfsRoot, path)
+    const bytes = await readBytes(opfsRootRef.value, path)
     await workerHost.writeFs(
       path,
       toTransferableArrayBuffer(bytes),
@@ -367,7 +382,7 @@ export const createNotebookSessionRuntime = async (
     const parentBridge = createParentBridgeClient({
       sessionId: targetSessionId,
       parentWindow: window.parent,
-      opfsRoot,
+      opfsRoot: opfsRootRef.value,
       workerHost,
       addMessageListener: (listener) => {
         window.addEventListener('message', listener)
@@ -415,6 +430,9 @@ export const createNotebookSessionRuntime = async (
           parentBridge.sendSessionState(isRunning ? 'agent_running' : 'agent_idle')
         },
       }).catch((error) => {
+        if (eventAbortController?.signal.aborted || isAbortLikeError(error)) {
+          return
+        }
         state.session.connection = 'offline'
         if (!opened) {
           reject(error)
@@ -434,7 +452,7 @@ export const createNotebookSessionRuntime = async (
     if (opts.withHistory) {
       try {
         const history = await fetchNotebookSessionHistory(targetSessionId)
-        if (history && history.messages.length > 0) {
+        if (history) {
           hydrateFromHistory(state, history)
         }
       } catch {
@@ -448,6 +466,12 @@ export const createNotebookSessionRuntime = async (
    * 复用同一个 Worker 进程。失败时 hardKill + 重新 init 降级。
    */
   const resetPythonState = async () => {
+    // 若 Worker 正忙（如上一会话 bootstrap 触发的 python_exec 还在跑），
+    // 先软中断让占用中的 exec 尽快结束，否则下面的 reset exec 会排在消息队列后面
+    // 被无限阻塞 → switchSession 永久卡在 loading（bug1 死锁根因）。
+    if (workerHost.isBusy()) {
+      workerHost.interrupt()
+    }
     // 关闭 matplotlib 图窗 + 清理用户 globals（保留 builtins / __main__ 框架）
     const resetCode = [
       'import sys',
@@ -491,8 +515,8 @@ export const createNotebookSessionRuntime = async (
     // 2. 重置 Python 状态（复用 Worker）
     await resetPythonState()
 
-    // 3. 切 OPFS 目录 + 重建 toolDispatcher（其闭包捕获 opfsRoot）
-    opfsRoot = await createNotebookOpfsRoot(newSessionId)
+    // 3. 切 OPFS 目录 + 重建 toolDispatcher（其闭包捕获 opfsRoot 快照）
+    opfsRootRef.value = await createNotebookOpfsRoot(newSessionId)
     rebuildToolDispatcher()
 
     // 4. 把新 session 的 inputs/scripts 灌入 Worker MEMFS
@@ -556,6 +580,19 @@ export const createNotebookSessionRuntime = async (
       id: messageId,
       content,
     })
+  }
+
+  const renameSession = async (title: string) => {
+    const nextTitle = title.trim()
+    if (!nextTitle) return
+    await renameNotebookSession(currentSessionId, nextTitle)
+    state.session.title = nextTitle
+    const activeId = state.activeConversationId ?? currentSessionId
+    const conversation = state.conversations.find((item) => item.id === activeId)
+    if (conversation) {
+      conversation.title = nextTitle
+      conversation.updatedAt = Date.now()
+    }
   }
 
   const answerAskUser = async (payload: { askId: string; optionId: string; text?: string }) => {
@@ -655,10 +692,11 @@ export const createNotebookSessionRuntime = async (
 
   return {
     state,
-    opfsRoot,
+    opfsRoot: opfsRootRef,
     workerHost,
     connect,
     switchSession,
+    renameSession,
     sendUserMessage: sendUserMessageAndTrack,
     answerAskUser,
     cancelAskUser,

@@ -4,15 +4,17 @@
  * 在 iframe 内驱动文件树视图：
  *   - 每 intervalMs 轮询 OPFS listTree
  *   - notify(paths) 收到变更事件（来自 fs_write / import_csv）时立即 refresh
+ *   - root 为 getter：切换会话后 root 变化 → 自动 refresh + 重建轮询（bug3）
  *
  * 协议见 docs/design-doc/notebook-agent/UX与交互.md §6.2 + 架构与数据流.md §3.5。
  */
 
-import { ref, type Ref } from 'vue'
+import { ref, watch, type Ref } from 'vue'
 import { listTree, type OpfsDirectoryHandle, type TreeNode } from '../shared/opfsAccess'
 
 export interface UseWorkspaceTreeOptions {
-  root: OpfsDirectoryHandle
+  /** 当前 OPFS 根的 getter：root 变化（切会话）时自动 refresh */
+  root: () => OpfsDirectoryHandle
   /** 默认 2000ms */
   intervalMs?: number
 }
@@ -36,7 +38,7 @@ export const useWorkspaceTree = (
   const refresh = async () => {
     if (disposed) return
     try {
-      tree.value = await listTree(root)
+      tree.value = await listTree(root())
     } catch {
       // 静默：文件树是软功能，挂了不该把整个 UI 拖死
     }
@@ -53,6 +55,11 @@ export const useWorkspaceTree = (
       timer = null
     }
   }
+
+  // root 变化（切会话）→ 立即 refresh 新目录；轮询逻辑不变（始终读最新 root）
+  watch(root, () => {
+    void refresh()
+  })
 
   // 启动轮询；首次 refresh 由 caller 主动 await
   timer = setInterval(() => {

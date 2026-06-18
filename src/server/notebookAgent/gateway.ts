@@ -18,7 +18,9 @@ import {
   deleteNotebookSession,
   getNotebookSession,
   listNotebookSessionsByUser,
+  markNotebookSessionBootstrapPrompted,
   updateNotebookSessionRecord,
+  updateNotebookSessionTitle,
   updateNotebookToolCall,
   type NotebookSessionRecord,
 } from './sessionStore.js'
@@ -72,8 +74,11 @@ const emitRuntimeEvent = (runtime: NotebookAgentRuntime, event: NotebookAgentSse
 }
 
 const tryStartNotebookBootstrap = (runtime: NotebookAgentRuntime) => {
-  if (runtime.bootstrapStarted || !runtime.streamSubscribed || !runtime.record.dataReady) return
+  if (runtime.bootstrapStarted || !runtime.streamSubscribed) return
+  if (!runtime.record.dataReady || runtime.record.messages.length > 0) return
+  if (runtime.record.bootstrapPromptedAt) return
   runtime.bootstrapStarted = true
+  markNotebookSessionBootstrapPrompted(runtime.sessionId)
   void Promise.resolve()
     .then(() => runtime.session.prompt(NOTEBOOK_BOOTSTRAP_PROMPT))
     .catch((error) => {
@@ -154,6 +159,7 @@ const buildAndRegisterRuntime = async (
     bootstrapStarted: false,
     streamSubscribed: false,
   }
+  runtime.bootstrapStarted = Boolean(record.bootstrapPromptedAt)
 
   const unsubscribe = session.subscribe((event) => {
     const sseEvents = bridgeNotebookEvent(event, record, runtime.currentMessageId)
@@ -227,6 +233,7 @@ export const listNotebookAgentSessionsByUser = (
   userId: string,
 ): Array<{
   sessionId: string
+  title: string
   initialDataMeta?: ImportCsvMeta
   status: NotebookSessionRecord['status']
   archivedAt?: number
@@ -241,6 +248,7 @@ export const listNotebookAgentSessionsByUser = (
       .find((m) => m.role === 'user')
     return {
       sessionId: r.sessionId,
+      title: r.title,
       initialDataMeta: r.initialDataMeta,
       status: r.status,
       archivedAt: r.archivedAt,
@@ -252,6 +260,13 @@ export const listNotebookAgentSessionsByUser = (
         : undefined,
     }
   })
+}
+
+export const updateNotebookAgentSessionTitle = (
+  sessionId: string,
+  title: string,
+): boolean => {
+  return updateNotebookSessionTitle(sessionId, title)
 }
 
 /**
@@ -418,6 +433,7 @@ export const finishNotebookAgentToolCall = (
 
 const summarize = (r: NotebookSessionRecord) => ({
   sessionId: r.sessionId,
+  title: r.title,
   status: r.status,
   origin: r.origin,
   initialDataMeta: r.initialDataMeta,
