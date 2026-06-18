@@ -51,9 +51,9 @@ export interface NotebookSessionRuntime {
   renameSession: (title: string) => Promise<void>
   sendUserMessage: (text: string) => Promise<void>
   answerAskUser: (payload: { askId: string; optionId: string; text?: string }) => Promise<void>
-  /** 用户主动取消某个 ask_user（修 AskUserCard 取消按钮无反应的 bug） */
+  /** 用户主动取消某个 ask_user：等价于终止整轮 Agent（用户想自己输入） */
   cancelAskUser: (askId: string) => Promise<void>
-  /** 终止当前轮 Agent（推理中调后端 abort；ask_user 等待中等同于 cancelAskUser） */
+  /** 统一终止当前轮 Agent（推理中走后端 abort；等 ask_user 时复用 cancelAskUser） */
   abort: () => Promise<void>
   /** 手动触发上下文压缩（后端调 SDK session.compact；事件流自动回推 compaction_start/end） */
   compact: () => Promise<void>
@@ -610,15 +610,32 @@ export const createNotebookSessionRuntime = async (
     })
   }
 
+  /**
+   * 把指定 ask_user 卡片的状态置为 cancelled。
+   *
+   * 走 abortNotebookAgentSession 后后端只推 session.status:'cancelled'，
+   * 不再推 tool.end isError（原 cancelAskUser 靠它驱动卡片状态），
+   * 故这里主动改 block.data.status，保持 UI 渲染一致。
+   */
+  const markAskUserBlockCancelled = (askId: string) => {
+    for (const message of state.session.messages) {
+      if (message.role !== 'assistant') continue
+      for (const block of message.blocks) {
+        if (block.kind === 'ask_user' && block.data.id === askId) {
+          block.data.status = 'cancelled'
+        }
+      }
+    }
+  }
+
   const cancelAskUser = async (askId: string) => {
-    // 取消本地等待的 promise，避免 30s 超时；并把 isError 结果推给后端，
-    // notebookEventMapper 在收到 tool.end isError 时会自动把 AskUserBlock.status 置为 'cancelled'
+    // 取消 Ask = 取消整轮 Agent（用户想自己输入，Agent 不能自行续跑）。
+    // 1. 立即 reject 本地挂起的 ask_user promise，让 toolDispatcher 尽快结束
     askUserQueue.cancel(askId, '用户取消')
-    await resolveNotebookAgentToolResult(sessionId, askId, {
-      isError: true,
-      content: [{ type: 'text', text: '用户已取消该问题' }],
-      details: {},
-    }).catch(() => undefined)
+    // 2. 立即把 AskUserCard 置 cancelled（后端走 abort 后不再推 tool.end isError）
+    markAskUserBlockCancelled(askId)
+    // 3. 终止整轮 Agent：clearQueue + cancelPendingRequests + session.abort + 广播 cancelled
+    await abortNotebookAgentSession(currentSessionId).catch(() => undefined)
   }
 
   const stopStreamingAssistant = () => {
@@ -631,18 +648,19 @@ export const createNotebookSessionRuntime = async (
   }
 
   const abort = async () => {
-    // 1. 若正在等待 ask_user：等同于取消该 Ask 卡片，不调后端 abort（Agent 此刻阻塞在等回答）
-    const pendingAsk = askUserQueue.peek()
-    if (pendingAsk) {
+    // 统一终止入口：等 ask_user 中 / 推理中都走同一条后端 abort 链路。
+    // 1. 若正在等待 ask_user：复用 cancelAskUser（内含队列取消 + 卡片置 cancelled + abort 后端）
+    if (askUserQueue.peek()) {
+      const pendingAsk = askUserQueue.peek()!
       await cancelAskUser(pendingAsk.toolCallId)
       return
     }
-    // 2. 否则（正在跑推理）：先乐观更新 UI，避免等 RTT 期间还显示"正在落笔"
+    // 2. 推理中：先乐观更新 UI，避免等 RTT 期间还显示"正在落笔"
     stopStreamingAssistant()
     // 同时中断 Python worker：abort 只停 LLM 推理，Python exec 可能仍在跑，
     // 不打断会导致 workerHost.isBusy() 仍为 true，用户终止后离开页面还会弹 beforeunload 确认框
     workerHost.interrupt()
-    await abortNotebookAgentSession(sessionId).catch(() => undefined)
+    await abortNotebookAgentSession(currentSessionId).catch(() => undefined)
   }
 
   /**
