@@ -9,7 +9,7 @@
  */
 
 import { computed } from 'vue'
-import type { AssistantMessage } from '../types/messageStream'
+import type { AssistantMessage, GenericToolCall } from '../types/messageStream'
 import type { OpfsDirectoryHandle } from '../shared/opfsAccess'
 import ThinkingCard from './cards/ThinkingCard.vue'
 import PythonExecCard from './cards/PythonExecCard.vue'
@@ -18,6 +18,7 @@ import FsReadCard from './cards/FsReadCard.vue'
 import FsGrepCard from './cards/FsGrepCard.vue'
 import TodoWriteCard from './cards/TodoWriteCard.vue'
 import AskUserCard from './cards/AskUserCard.vue'
+import GenericToolCard from './cards/GenericToolCard.vue'
 import AssistantTextBlock from './AssistantTextBlock.vue'
 
 const props = defineProps<{ message: AssistantMessage; opfsRoot?: OpfsDirectoryHandle }>()
@@ -84,6 +85,11 @@ const onAskSubmit = (askId: string, payload: { optionId: string; text?: string }
         <TodoWriteCard
           v-else-if="b.kind === 'tool' && b.data.kind === 'todo_write'"
           :tool="b.data"
+        />
+        <!-- 通用兜底：未提供专用卡片的工具都走这里（含 python_packages 及未来新增工具） -->
+        <GenericToolCard
+          v-else-if="b.kind === 'tool'"
+          :tool="(b.data as GenericToolCall)"
         />
         <AskUserCard
           v-else-if="b.kind === 'ask_user'"

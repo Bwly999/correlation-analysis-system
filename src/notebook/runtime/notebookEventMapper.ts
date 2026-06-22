@@ -323,6 +323,20 @@ const applyToolExecute = (
       session.agent = 'awaiting_user'
       session.runtime.isRunning = false
       break
+    default:
+      // 未提供专用卡片的工具走通用兜底：参数原样存，等 tool.end 填 result。
+      // 这样未来新增工具前端零改动（仅需要更好 UX 时再补专用 case）。
+      assistant.blocks.push({
+        kind: 'tool',
+        data: {
+          id: event.toolCallId,
+          kind: 'generic_tool',
+          toolName: event.toolName,
+          params,
+          status: 'running',
+        },
+      })
+      break
   }
 }
 
@@ -404,6 +418,12 @@ const applyToolEnd = (
             block.data.items = items
             session.todos = items
           }
+          return
+        }
+
+        // 通用兜底：直接落原始 result 字符串，卡片层自行 parse 展示
+        if (block.data.kind === 'generic_tool') {
+          block.data.result = event.result
           return
         }
       }
@@ -692,7 +712,19 @@ const buildHistoryToolBlock = (tc: NotebookHistoryToolItem): AssistantBlock | nu
       }
     }
     default:
-      return null
+      // 未知工具回放也走通用兜底，避免历史工具调用被静默吞掉
+      return {
+        kind: 'tool',
+        data: {
+          id: tc.id,
+          kind: 'generic_tool',
+          toolName: tc.toolName,
+          params,
+          result: tc.result,
+          status,
+          durationMs,
+        },
+      }
   }
 }
 

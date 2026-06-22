@@ -212,4 +212,99 @@ describe('notebookEventMapper', () => {
     expect(state.session.todos).toHaveLength(2)
     expect(state.session.todos[0]?.text).toBe('梳理字段')
   })
+
+  it('python_packages（未知工具）走通用兜底卡片：tool.execute→tool.end 产生 generic_tool block', () => {
+    const state = createNotebookRuntimeState('sess-1')
+    applyNotebookEvent(state, {
+      type: 'message.start',
+      sessionId: 'sess-1',
+      messageId: 'm-1',
+      role: 'assistant',
+      visibility: 'assistant_visible',
+    })
+
+    // tool.execute 时还没 result，状态 running
+    applyNotebookEvent(state, {
+      type: 'tool.execute',
+      sessionId: 'sess-1',
+      toolCallId: 'tool-pkg',
+      toolName: 'python_packages',
+      params: { action: 'list' },
+    })
+
+    let assistant = state.session.messages[0]
+    let toolBlock =
+      assistant && 'blocks' in assistant
+        ? assistant.blocks.find((b) => b.kind === 'tool')
+        : null
+    expect(toolBlock?.kind).toBe('tool')
+    if (toolBlock?.kind === 'tool' && toolBlock.data.kind === 'generic_tool') {
+      expect(toolBlock.data.toolName).toBe('python_packages')
+      expect(toolBlock.data.params.action).toBe('list')
+      expect(toolBlock.data.status).toBe('running')
+      expect(toolBlock.data.result).toBeUndefined()
+    }
+
+    // tool.end 后 result 落库、状态转 success
+    applyNotebookEvent(state, {
+      type: 'tool.end',
+      sessionId: 'sess-1',
+      toolCallId: 'tool-pkg',
+      result: JSON.stringify({
+        action: 'list',
+        loaded: ['numpy', 'pandas'],
+        loadedCount: 2,
+        notLoadedCount: 312,
+      }),
+      isError: false,
+    })
+
+    assistant = state.session.messages[0]
+    toolBlock =
+      assistant && 'blocks' in assistant
+        ? assistant.blocks.find((b) => b.kind === 'tool')
+        : null
+    if (toolBlock?.kind === 'tool' && toolBlock.data.kind === 'generic_tool') {
+      expect(toolBlock.data.status).toBe('success')
+      expect(toolBlock.data.result).toContain('numpy')
+      expect(toolBlock.data.result).toContain('312')
+    }
+  })
+
+  it('未知工具 tool.end 失败时 generic block 落 errorMessage', () => {
+    const state = createNotebookRuntimeState('sess-1')
+    applyNotebookEvent(state, {
+      type: 'message.start',
+      sessionId: 'sess-1',
+      messageId: 'm-1',
+      role: 'assistant',
+      visibility: 'assistant_visible',
+    })
+    applyNotebookEvent(state, {
+      type: 'tool.execute',
+      sessionId: 'sess-1',
+      toolCallId: 'tool-x',
+      toolName: 'some_future_tool',
+      params: { foo: 'bar' },
+    })
+    applyNotebookEvent(state, {
+      type: 'tool.end',
+      sessionId: 'sess-1',
+      toolCallId: 'tool-x',
+      result: 'boom',
+      isError: true,
+    })
+
+    const assistant = state.session.messages[0]
+    const toolBlock =
+      assistant && 'blocks' in assistant
+        ? assistant.blocks.find((b) => b.kind === 'tool')
+        : null
+    if (toolBlock?.kind === 'tool' && toolBlock.data.kind === 'generic_tool') {
+      expect(toolBlock.data.status).toBe('failed')
+      expect(toolBlock.data.errorMessage).toBe('boom')
+      // 失败时也落 result，卡片可同时展示原始错误体
+      expect(toolBlock.data.result).toBe('boom')
+    }
+  })
 })

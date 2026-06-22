@@ -103,6 +103,21 @@ export interface TodoWriteToolCall extends ToolCallBase {
   items: TodoItem[]
 }
 
+/**
+ * 通用兜底工具调用：未提供专用卡片的工具都走这里，保证总有展示。
+ *
+ * 事件层（tool.execute / tool.end）本就是通用契约（toolName + params + result），
+ * 展示层无需为每个工具特化——只有需要差异化 UX（如流式 stdout / 同步 todos）
+ * 才补专用 ToolCall 类型；其余工具（含未来新增）一律走本兜底，前端零改动。
+ */
+export interface GenericToolCall extends ToolCallBase {
+  kind: 'generic_tool'
+  toolName: string
+  params: Record<string, unknown>
+  /** tool.end 回来的原始 result 字符串（多为 JSON 串，渲染时按需 parse） */
+  result?: string
+}
+
 export type AnyToolCall =
   | PythonExecToolCall
   | FsWriteToolCall
@@ -110,6 +125,7 @@ export type AnyToolCall =
   | FsReadToolCall
   | FsGrepToolCall
   | TodoWriteToolCall
+  | GenericToolCall
 
 /** Agent 思考块（SDK 既有 thinking content） */
 export interface ThinkingBlock {
