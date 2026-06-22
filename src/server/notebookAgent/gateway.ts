@@ -82,6 +82,8 @@ const emitRuntimeEvent = (runtime: NotebookAgentRuntime, event: NotebookAgentSse
 
 const tryStartNotebookBootstrap = (runtime: NotebookAgentRuntime) => {
   if (runtime.bootstrapStarted || !runtime.streamSubscribed) return
+  // 空白笔记本（未导入数据）不主动触发 bootstrap：没有上下文可澄清需求。
+  if (!runtime.record.initialDataMeta) return
   if (!runtime.record.dataReady || runtime.record.messages.length > 0) return
   if (runtime.record.bootstrapPromptedAt) return
   runtime.bootstrapStarted = true

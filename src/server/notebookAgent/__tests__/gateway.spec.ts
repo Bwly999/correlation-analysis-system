@@ -194,6 +194,20 @@ describe('notebookAgent gateway', () => {
     expect(sessionPromptMock).toHaveBeenCalledTimes(1)
   })
 
+  it('空白笔记本（未导入数据）即便收到 session ready 也不触发 bootstrap prompt', async () => {
+    const created = await createNotebookAgentSession({
+      userId: 'u-1',
+      origin: 'http://localhost:5173',
+    })
+
+    subscribeNotebookAgentEvents(created.sessionId, () => undefined)
+    expect(markNotebookAgentSessionReady(created.sessionId)).toBe(true)
+
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(sessionPromptMock).not.toHaveBeenCalled()
+  })
+
   it('发送消息时把用户消息入库并调用 SDK prompt', async () => {
     const created = await createNotebookAgentSession({
       userId: 'u-1',
