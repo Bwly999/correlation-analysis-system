@@ -24,6 +24,7 @@ import {
   SlidersHorizontal,
   MessageSquare,
   Trash2,
+  Pencil,
 } from 'lucide-vue-next'
 import type { NotebookConversation } from '../types/messageStream'
 
@@ -42,6 +43,7 @@ const emit = defineEmits<{
   toggleCollapsed: []
   newSession: []
   selectConversation: [id: string]
+  renameConversation: [id: string]
   deleteConversation: [id: string, skipConfirm: boolean]
   openWorkspaceMenu: []
 }>()
@@ -54,6 +56,16 @@ const onDeleteClick = (event: MouseEvent, id: string) => {
   event.stopPropagation()
   event.preventDefault()
   emit('deleteConversation', id, event.ctrlKey || event.metaKey)
+}
+
+/**
+ * 重命名按钮：点击后弹出重命名弹窗（由父组件提供）。
+ * 同样 stopPropagation / preventDefault 避免触发 selectConversation。
+ */
+const onRenameClick = (event: MouseEvent, id: string) => {
+  event.stopPropagation()
+  event.preventDefault()
+  emit('renameConversation', id)
 }
 
 const sortedConversations = computed(() =>
@@ -216,7 +228,7 @@ const formatRelativeTime = (ts: number): string => {
               >
                 {{ conv.title }}
               </span>
-              <span class="relative flex shrink-0 items-center justify-end" style="min-width: 36px;">
+              <span class="relative flex shrink-0 items-center justify-end gap-0.5" style="min-width: 52px;">
                 <!-- 默认：相对时间；group-hover 时淡出 -->
                 <span
                   class="nb-conv-time text-[10.5px] tabular-nums transition-opacity duration-150"
@@ -224,16 +236,29 @@ const formatRelativeTime = (ts: number): string => {
                 >
                   {{ formatRelativeTime(conv.updatedAt) }}
                 </span>
-                <!-- hover：删除按钮，绝对定位覆盖在时间位置 -->
-                <button
-                  class="nb-conv-delete nb-focus absolute right-0 inline-flex h-5 w-5 items-center justify-center rounded-[3px] opacity-0 transition-opacity duration-150 hover:bg-[color:var(--nb-clay-soft)]"
-                  style="color: var(--nb-ink-faint);"
-                  title="删除对话 (Ctrl+点击 跳过确认)"
-                  aria-label="删除对话"
-                  @click="onDeleteClick($event, conv.id)"
+                <!-- hover：重命名 + 删除按钮，绝对定位覆盖在时间位置 -->
+                <span
+                  class="nb-conv-actions absolute right-0 flex items-center gap-0.5 opacity-0 transition-opacity duration-150"
                 >
-                  <Trash2 :size="11" :stroke-width="1.7" />
-                </button>
+                  <button
+                    class="nb-conv-rename nb-focus inline-flex h-5 w-5 items-center justify-center rounded-[3px] transition hover:bg-[color:var(--nb-overlay)]"
+                    style="color: var(--nb-ink-faint);"
+                    title="重命名对话"
+                    aria-label="重命名对话"
+                    @click="onRenameClick($event, conv.id)"
+                  >
+                    <Pencil :size="11" :stroke-width="1.7" />
+                  </button>
+                  <button
+                    class="nb-conv-delete nb-focus inline-flex h-5 w-5 items-center justify-center rounded-[3px] transition hover:bg-[color:var(--nb-clay-soft)]"
+                    style="color: var(--nb-ink-faint);"
+                    title="删除对话 (Ctrl+点击 跳过确认)"
+                    aria-label="删除对话"
+                    @click="onDeleteClick($event, conv.id)"
+                  >
+                    <Trash2 :size="11" :stroke-width="1.7" />
+                  </button>
+                </span>
               </span>
             </span>
           </button>
@@ -350,15 +375,18 @@ const formatRelativeTime = (ts: number): string => {
   transform: translateY(-50%) scaleY(1);
 }
 
-/* 列表项 hover：右侧时间淡出、删除按钮淡入 */
+/* 列表项 hover：右侧时间淡出、重命名+删除按钮淡入 */
 .nb-conv-item:hover .nb-conv-time {
   opacity: 0;
 }
-.nb-conv-item:hover .nb-conv-delete {
+.nb-conv-item:hover .nb-conv-actions {
   opacity: 1;
 }
 .nb-conv-delete:hover {
   color: var(--nb-clay) !important;
+}
+.nb-conv-rename:hover {
+  color: var(--nb-ink) !important;
 }
 
 /* 收起态：移除内边距、收紧 hover 区 */

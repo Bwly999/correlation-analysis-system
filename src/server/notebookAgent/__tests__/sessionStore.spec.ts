@@ -49,7 +49,7 @@ describe('notebookAgent sessionStore', () => {
     expect(rec.status).toBe('idle')
     expect(rec.dataReady).toBe(false)
     expect(rec.initialDataMeta?.rowCount).toBe(100)
-    expect(rec.title).toContain('分析笔记本')
+    expect(rec.title).toContain('数据分析')
   })
 
   it('getNotebookSession 通过 id 拿回同一对象', () => {

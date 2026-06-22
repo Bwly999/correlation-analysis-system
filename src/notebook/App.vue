@@ -297,6 +297,17 @@ const handleRename = (nextTitle: string) => {
   }
 }
 
+const handleRenameConversation = async (conversationId: string, nextTitle: string) => {
+  if (!runtime.value) return
+  await runtime.value.renameConversationById(conversationId, nextTitle)
+  // 改的是当前激活会话时，同步顶部 session 视图
+  if (conversationId === activeConversationId.value) {
+    session.value = runtime.value.state.session
+  }
+  await loadConversationList()
+  syncActiveConversation()
+}
+
 const handleSelectConversation = async (conversationId: string) => {
   if (!runtime.value || conversationId === activeConversationId.value) {
     activeConversationId.value = conversationId
@@ -378,6 +389,7 @@ const isPoc = computed(() => mode === 'poc')
     @rename="handleRename"
     @new-conversation="handleNewConversation"
     @select-conversation="handleSelectConversation"
+    @rename-conversation="handleRenameConversation"
     @delete-conversation="handleDeleteConversation"
     @customize="() => undefined"
     @open-workspace-menu="() => undefined"

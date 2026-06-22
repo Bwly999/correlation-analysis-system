@@ -44,6 +44,7 @@ const buildRuntime = () => ({
     runtime.state.session.title = sessionId === 'sess-2' ? '更早分析' : '新分析'
   }),
   renameSession: vi.fn().mockResolvedValue(undefined),
+  renameConversationById: vi.fn().mockResolvedValue(undefined),
   sendUserMessage: vi.fn().mockResolvedValue(undefined),
   answerAskUser: vi.fn().mockResolvedValue(undefined),
   cancelAskUser: vi.fn().mockResolvedValue(undefined),

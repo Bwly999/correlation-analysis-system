@@ -6,6 +6,11 @@ export type NotebookAgentEvent =
   | { type: 'stream.heartbeat' }
   | { type: 'session.status'; sessionId: string; status: string }
   | {
+      type: 'session.title_updated'
+      sessionId: string
+      title: string
+    }
+  | {
       type: 'session.context_usage'
       sessionId: string
       tokens: number | null

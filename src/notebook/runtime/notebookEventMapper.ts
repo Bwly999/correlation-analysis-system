@@ -48,7 +48,7 @@ const normalizeTodoItems = (items: unknown): TodoItem[] => {
 
 const createBaseSession = (sessionId: string): NotebookSessionVm => ({
   sessionId,
-  title: '分析笔记本',
+  title: '数据分析',
   phase: { kind: 'ready' },
   agent: 'idle',
   runtime: {
@@ -463,7 +463,7 @@ export const createNotebookRuntimeState = (sessionId: string): NotebookRuntimeSt
   conversations: [
     {
       id: sessionId,
-      title: '分析笔记本',
+      title: '数据分析',
       updatedAt: Date.now(),
     },
   ],
@@ -800,6 +800,21 @@ export const applyNotebookEvent = (
       } else {
         session.agent = 'idle'
         session.runtime.isRunning = false
+      }
+      return
+    }
+    case 'session.title_updated': {
+      const title = String(event.title ?? '').trim()
+      if (!title) return
+      // 事件来自哪个会话：默认视为当前会话；若与当前会话不符，仅更新对应 conversation
+      const sessionId = event.sessionId
+      if (session.sessionId === sessionId) {
+        session.title = title
+      }
+      const conversation = state.conversations.find((item) => item.id === sessionId)
+      if (conversation) {
+        conversation.title = title
+        conversation.updatedAt = Date.now()
       }
       return
     }

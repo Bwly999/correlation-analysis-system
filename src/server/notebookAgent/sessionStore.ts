@@ -65,7 +65,12 @@ export interface NotebookSessionRecord {
 }
 
 const sessions = new Map<string, NotebookSessionRecord>()
-const buildDefaultTitle = (sessionId: string): string => `分析笔记本 ${sessionId.slice(0, 8)}`
+const formatTimestamp = (ts: number): string => {
+  const d = new Date(ts)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+}
+const buildDefaultTitle = (ts: number = Date.now()): string => `数据分析_${formatTimestamp(ts)}`
 
 /** 单用户保留的会话上限（LRU：超过则删掉最旧的已归档会话） */
 const MAX_SESSIONS_PER_USER = 20
@@ -79,7 +84,7 @@ export const createNotebookSession = (
     sessionId,
     userId: init.userId,
     origin: init.origin,
-    title: buildDefaultTitle(sessionId),
+    title: buildDefaultTitle(now),
     bootstrapPromptedAt: undefined,
     initialDataMeta: init.initialDataMeta,
     status: 'idle',

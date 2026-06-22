@@ -42,6 +42,7 @@ import TodoPanel from './TodoPanel.vue'
 import ConnectionBanner from './ConnectionBanner.vue'
 import NotebookToast from './NotebookToast.vue'
 import ConfirmDialog from './ConfirmDialog.vue'
+import RenameDialog from './RenameDialog.vue'
 import NotebookConversationSidebar from './NotebookConversationSidebar.vue'
 import type { NotebookConversation } from '../types/messageStream'
 
@@ -71,6 +72,7 @@ const emit = defineEmits<{
   stopExec: []
   newConversation: []
   selectConversation: [id: string]
+  renameConversation: [id: string, next: string]
   deleteConversation: [id: string]
   openWorkspaceMenu: []
 }>()
@@ -82,7 +84,7 @@ const session = computed<NotebookSessionVm>(() => {
   if (props.session) return props.session
   return {
     sessionId: 'local',
-    title: '分析笔记本',
+    title: '数据分析',
     phase: { kind: 'ready' },
     agent: 'idle',
     runtime: { memoryMb: 0, cellCount: 0, agentSeconds: 0, isRunning: false },
@@ -299,6 +301,20 @@ const confirmDelete = () => {
   deleteConfirmId.value = null
 }
 
+// 重命名对话：侧栏 Pencil 点击后弹出 RenameDialog
+const renameTargetId = ref<string | null>(null)
+const renameTarget = computed<NotebookConversation | undefined>(() =>
+  (props.conversations ?? []).find((item) => item.id === renameTargetId.value),
+)
+const onRenameConversation = (id: string) => {
+  renameTargetId.value = id
+}
+const onConfirmRename = (value: string) => {
+  const id = renameTargetId.value
+  renameTargetId.value = null
+  if (id) emit('renameConversation', id, value)
+}
+
 const tryClose = () => {
   if (session.value.runtime.isRunning || session.value.agent === 'running') {
     closeConfirmOpen.value = true
@@ -375,6 +391,7 @@ const onSend = (text: string) => emit('send', text)
         @toggle-collapsed="onToggleConvCollapsed"
         @new-session="emit('newConversation')"
         @select-conversation="(id) => emit('selectConversation', id)"
+        @rename-conversation="onRenameConversation"
         @delete-conversation="onDeleteConversation"
         @open-workspace-menu="emit('openWorkspaceMenu')"
       />
@@ -523,6 +540,13 @@ const onSend = (text: string) => emit('send', text)
       tone="danger"
       @confirm="confirmDelete"
       @cancel="deleteConfirmId = null"
+    />
+
+    <RenameDialog
+      :open="renameTargetId !== null"
+      :initial-value="renameTarget?.title ?? ''"
+      @confirm="onConfirmRename"
+      @cancel="renameTargetId = null"
     />
   </div>
 </template>

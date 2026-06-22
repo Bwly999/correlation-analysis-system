@@ -49,6 +49,11 @@ export interface NotebookSessionRuntime {
    */
   switchSession: (newSessionId: string) => Promise<void>
   renameSession: (title: string) => Promise<void>
+  /**
+   * 按 id 重命名任意会话（不必是当前激活会话）。用于侧栏 hover 改名入口。
+   * 改的是当前激活会话时，同步更新 state.session.title。
+   */
+  renameConversationById: (sessionId: string, title: string) => Promise<void>
   sendUserMessage: (text: string) => Promise<void>
   answerAskUser: (payload: { askId: string; optionId: string; text?: string }) => Promise<void>
   /** 用户主动取消某个 ask_user：等价于终止整轮 Agent（用户想自己输入） */
@@ -82,7 +87,14 @@ const BOOT_STAGE_TO_UI: Record<string, { stage: LoadingStage; percent: number }>
   ready: { stage: 'lock_sandbox', percent: 95 },
 }
 
-const createSessionTitle = (sessionId: string) => `分析笔记本 ${sessionId.slice(0, 8)}`
+const formatTimestamp = (ts: number): string => {
+  const d = new Date(ts)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+}
+
+const createSessionTitle = (_sessionId: string, ts: number = Date.now()) =>
+  `数据分析_${formatTimestamp(ts)}`
 
 const isAbortLikeError = (error: unknown): boolean => {
   if (error instanceof DOMException) {
@@ -696,6 +708,22 @@ export const createNotebookSessionRuntime = async (
     }
   }
 
+  const renameConversationById = async (sessionId: string, title: string) => {
+    const nextTitle = title.trim()
+    if (!nextTitle) return
+    await renameNotebookSession(sessionId, nextTitle)
+    const conversation = state.conversations.find((item) => item.id === sessionId)
+    if (conversation) {
+      conversation.title = nextTitle
+      conversation.updatedAt = Date.now()
+    }
+    // 改的是当前激活会话时同步顶部 session 标题
+    const activeId = state.activeConversationId ?? currentSessionId
+    if (activeId === sessionId) {
+      state.session.title = nextTitle
+    }
+  }
+
   const answerAskUser = async (payload: { askId: string; optionId: string; text?: string }) => {
     const askItem = askUserQueue.list().find((item) => item.toolCallId === payload.askId)
     const optionMatch = askItem?.options?.find((_option, index) => (
@@ -816,6 +844,7 @@ export const createNotebookSessionRuntime = async (
     connect,
     switchSession,
     renameSession,
+    renameConversationById,
     sendUserMessage: sendUserMessageAndTrack,
     answerAskUser,
     cancelAskUser,
