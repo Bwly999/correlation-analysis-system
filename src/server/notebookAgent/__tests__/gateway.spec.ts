@@ -8,9 +8,18 @@ const {
   sessionDisposeMock,
   loaderReloadMock,
   sessionManagerCreateMock,
+  sessionManagerOpenMock,
   buildModelFromProfileMock,
   createModelRegistryFromProfileMock,
   createPiAgentResourceLoaderMock,
+  persistNotebookSessionMetaMock,
+  persistNotebookSessionMessageMock,
+  persistNotebookSessionToolCallMock,
+  persistNotebookSessionTitleMock,
+  ensureNotebookSessionsRehydratedMock,
+  loadNotebookSessionRecordMock,
+  listPersistedNotebookSessionsByUserMock,
+  getPersistedNotebookSessionOwnerMock,
 } = vi.hoisted(() => ({
   createAgentSessionMock: vi.fn(),
   sessionPromptMock: vi.fn(),
@@ -18,15 +27,25 @@ const {
   sessionDisposeMock: vi.fn(),
   loaderReloadMock: vi.fn(),
   sessionManagerCreateMock: vi.fn(),
+  sessionManagerOpenMock: vi.fn(),
   buildModelFromProfileMock: vi.fn(),
   createModelRegistryFromProfileMock: vi.fn(),
   createPiAgentResourceLoaderMock: vi.fn(),
+  persistNotebookSessionMetaMock: vi.fn(),
+  persistNotebookSessionMessageMock: vi.fn(),
+  persistNotebookSessionToolCallMock: vi.fn(),
+  persistNotebookSessionTitleMock: vi.fn(),
+  ensureNotebookSessionsRehydratedMock: vi.fn(),
+  loadNotebookSessionRecordMock: vi.fn(),
+  listPersistedNotebookSessionsByUserMock: vi.fn(),
+  getPersistedNotebookSessionOwnerMock: vi.fn(),
 }))
 
 vi.mock('@earendil-works/pi-coding-agent', () => ({
   createAgentSession: createAgentSessionMock,
   SessionManager: {
     create: sessionManagerCreateMock,
+    open: sessionManagerOpenMock,
   },
   defineTool: vi.fn((config) => config),
 }))
@@ -35,6 +54,22 @@ vi.mock('../../piAgent/runtimeFactory.js', () => ({
   buildModelFromProfile: buildModelFromProfileMock,
   createModelRegistryFromProfile: createModelRegistryFromProfileMock,
   createPiAgentResourceLoader: createPiAgentResourceLoaderMock,
+}))
+
+vi.mock('../sessionPersistence.js', () => ({
+  ensureNotebookSessionsRehydrated: ensureNotebookSessionsRehydratedMock,
+  ensureNotebookSessionDir: vi.fn(() => '/tmp/notebook-agent-sessions'),
+  persistNotebookSessionMeta: persistNotebookSessionMetaMock,
+  persistNotebookSessionMessage: persistNotebookSessionMessageMock,
+  persistNotebookSessionToolCall: persistNotebookSessionToolCallMock,
+  persistNotebookSessionTitle: persistNotebookSessionTitleMock,
+  resolveNotebookSessionDir: vi.fn(() => '/tmp/notebook-agent-sessions'),
+  getPersistedNotebookSessionOwner: getPersistedNotebookSessionOwnerMock,
+  listPersistedNotebookSessionsByUser: listPersistedNotebookSessionsByUserMock,
+  loadNotebookSessionRecord: loadNotebookSessionRecordMock,
+  syncNotebookSessionFileToS3: vi.fn(),
+  deleteNotebookSessionFileFromPersistence: vi.fn(),
+  deletePersistedNotebookSession: vi.fn().mockReturnValue(true),
 }))
 
 import {
@@ -50,14 +85,23 @@ import {
 } from '../gateway.js'
 import { __resetNotebookSessionsForTest } from '../sessionStore.js'
 
+let testSessionManager: {
+  type: string
+  getSessionFile: () => string
+  getSessionName: () => string | undefined
+}
+
 describe('notebookAgent gateway', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     __resetNotebookSessionsForTest()
-    sessionManagerCreateMock.mockReturnValue({
+    testSessionManager = {
       type: 'persistent-session-manager',
       getSessionFile: () => '/tmp/test-session.jsonl',
-    })
+      getSessionName: () => undefined,
+    }
+    sessionManagerCreateMock.mockReturnValue(testSessionManager)
+    sessionManagerOpenMock.mockReturnValue(testSessionManager)
     buildModelFromProfileMock.mockReturnValue({
       id: 'glm-4.7',
       provider: 'openai',
@@ -69,12 +113,17 @@ describe('notebookAgent gateway', () => {
     createPiAgentResourceLoaderMock.mockReturnValue({
       reload: loaderReloadMock,
     })
+    ensureNotebookSessionsRehydratedMock.mockResolvedValue(undefined)
+    listPersistedNotebookSessionsByUserMock.mockImplementation(() => [])
+    getPersistedNotebookSessionOwnerMock.mockImplementation(() => 'notebook-route-user')
+    loadNotebookSessionRecordMock.mockResolvedValue(null)
     loaderReloadMock.mockResolvedValue(undefined)
     createAgentSessionMock.mockResolvedValue({
       session: {
         prompt: sessionPromptMock,
         subscribe: sessionSubscribeMock,
         dispose: sessionDisposeMock,
+        sessionManager: testSessionManager,
       },
     })
     sessionSubscribeMock.mockReturnValue(() => {})
@@ -96,6 +145,8 @@ describe('notebookAgent gateway', () => {
     expect(result.systemPrompt).toContain('工作循环')
     expect(createAgentSessionMock).toHaveBeenCalledOnce()
     expect(loaderReloadMock).toHaveBeenCalledOnce()
+    expect(persistNotebookSessionMetaMock).toHaveBeenCalled()
+    expect(persistNotebookSessionTitleMock).toHaveBeenCalled()
   })
 
   it('仅订阅事件流时不会自动触发首轮 bootstrap prompt', async () => {
@@ -229,6 +280,14 @@ describe('notebookAgent gateway', () => {
     await vi.waitFor(() => {
       expect(sessionPromptMock).toHaveBeenCalledWith('先看一下缺失值分布')
     })
+    expect(persistNotebookSessionMessageMock).toHaveBeenCalledWith(
+      testSessionManager,
+      expect.objectContaining({
+        id: 'msg-1',
+        role: 'user',
+        content: '先看一下缺失值分布',
+      }),
+    )
     const view = getNotebookAgentSessionView(created.sessionId)
     expect(view?.messages).toEqual(
       expect.arrayContaining([
@@ -305,7 +364,7 @@ describe('notebookAgent gateway', () => {
     // agent_end 正常完成时必须广播 completed（而非 running），
     // 否则前端 isRunning 永远不落 false，发送按钮停留在停止态、退出仍提示"还在工作"。
     const statusEvents = events.filter((e) => e.type === 'session.status')
-    expect(statusEvents.at(-1)).toEqual(
+    expect(statusEvents[statusEvents.length - 1]).toEqual(
       expect.objectContaining({ type: 'session.status', status: 'completed' }),
     )
     expect(getNotebookAgentSessionView(created.sessionId)?.status).toBe('completed')
@@ -327,6 +386,7 @@ describe('notebookAgent gateway', () => {
 
     expect(ok).toBe(true)
     expect(sessionDisposeMock).toHaveBeenCalled()
+    expect(persistNotebookSessionMetaMock).toHaveBeenCalled()
     // 软关闭：释放 runtime 但保留 record（status 不变，供 resume 回放历史）
     expect(getNotebookAgentSessionView(created.sessionId)).toBeDefined()
   })
@@ -345,10 +405,32 @@ describe('notebookAgent gateway', () => {
 
     const ok = updateNotebookAgentSessionTitle(created.sessionId, '销量分析')
     expect(ok).toBe(true)
+    expect(persistNotebookSessionTitleMock).toHaveBeenCalledWith(
+      expect.objectContaining({ getSessionFile: expect.any(Function) }),
+      '销量分析',
+    )
 
     const detail = getNotebookAgentSessionView(created.sessionId)
+    expect(detail).toBeDefined()
     expect(detail?.title).toBe('销量分析')
 
+    listPersistedNotebookSessionsByUserMock.mockReturnValueOnce([
+      {
+        sessionId: created.sessionId,
+        title: '销量分析',
+        initialDataMeta: {
+          sourceKind: 'canvas-node',
+          sourceLabel: '清洗-Q2',
+          rowCount: 123,
+          columnCount: 4,
+        },
+        status: 'idle',
+        createdAt: detail!.createdAt,
+        updatedAt: detail!.updatedAt,
+        messageCount: 0,
+        lastUserMessagePreview: undefined,
+      },
+    ])
     const list = listNotebookAgentSessionsByUser('u-1')
     expect(list[0]?.title).toBe('销量分析')
   })
@@ -375,9 +457,41 @@ describe('notebookAgent gateway', () => {
 
     closeNotebookAgentSession(created.sessionId)
     sessionPromptMock.mockClear()
+    loadNotebookSessionRecordMock.mockResolvedValueOnce({
+      sessionId: created.sessionId,
+      userId: 'u-1',
+      origin: 'http://localhost:5173',
+      title: '数据分析_2026-06-22 16:53:05',
+      sessionFile: '/tmp/test-session.jsonl',
+      bootstrapPromptedAt: undefined,
+      initialDataMeta: {
+        sourceKind: 'canvas-node',
+        sourceLabel: '清洗-Q2',
+        rowCount: 123,
+        columnCount: 4,
+      },
+      status: 'completed',
+      dataReady: false,
+      messages: [
+        {
+          id: 'msg-1',
+          role: 'user',
+          content: '先看一下缺失值分布',
+          rawContent: '先看一下缺失值分布',
+          status: 'completed',
+          createdAt: Date.now(),
+        },
+      ],
+      toolCalls: [],
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      archivedAt: Date.now(),
+    })
 
     const resumed = await ensureNotebookAgentRuntime(created.sessionId)
     expect(resumed).toBe(true)
+    expect(ensureNotebookSessionsRehydratedMock).toHaveBeenCalled()
+    expect(sessionManagerOpenMock).toHaveBeenCalled()
 
     const unsubscribe = subscribeNotebookAgentEvents(created.sessionId, () => undefined)
     expect(unsubscribe).toBeTypeOf('function')

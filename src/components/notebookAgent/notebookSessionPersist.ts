@@ -4,8 +4,9 @@
  * 目的：让「继续上次分析」在刷新页面 / 重进工作流后仍能找到上次的 sessionId，
  * 从而走 resume 路径（秒开 + 历史回放），而非每次都新建 session 重启 Pyodide。
  *
- * 作用域：同一次浏览器会话内（服务端 sessionStore 为内存态，服务重启即失效）。
- * 前端在 resume 前会先探测后端 session 是否仍存活，失效则降级为新建。
+ * 作用域：同一次浏览器会话内。
+ * 前端在 resume 前会先探测后端 session 是否仍可恢复；服务端重启后若 JSONL 会话仍在，
+ * 会继续走 resume + 历史回放，只有服务端确实不存在该 session 时才降级为新建。
  *
  * 按 userId 隔离 key，避免多用户串扰（与 workflowRequestContext 的 user 解析一致）。
  */

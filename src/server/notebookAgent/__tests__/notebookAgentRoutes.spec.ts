@@ -16,6 +16,8 @@ const {
   finishNotebookAgentToolCallMock,
   destroyNotebookAgentSessionMock,
   ensureNotebookAgentRuntimeMock,
+  ensureNotebookAgentSessionRecordMock,
+  ensureNotebookSessionsRehydratedMock,
   startNdjsonStreamMock,
 } = vi.hoisted(() => ({
   createNotebookAgentSessionMock: vi.fn(),
@@ -31,6 +33,8 @@ const {
   finishNotebookAgentToolCallMock: vi.fn(),
   destroyNotebookAgentSessionMock: vi.fn(),
   ensureNotebookAgentRuntimeMock: vi.fn().mockResolvedValue(true),
+  ensureNotebookAgentSessionRecordMock: vi.fn().mockResolvedValue(null),
+  ensureNotebookSessionsRehydratedMock: vi.fn().mockResolvedValue(undefined),
   startNdjsonStreamMock: vi.fn(),
 }))
 
@@ -48,10 +52,15 @@ vi.mock('../gateway.js', () => ({
   finishNotebookAgentToolCall: finishNotebookAgentToolCallMock,
   destroyNotebookAgentSession: destroyNotebookAgentSessionMock,
   ensureNotebookAgentRuntime: ensureNotebookAgentRuntimeMock,
+  ensureNotebookAgentSessionRecord: ensureNotebookAgentSessionRecordMock,
 }))
 
 vi.mock('../../http/ndjson.js', () => ({
   startNdjsonStream: startNdjsonStreamMock,
+}))
+
+vi.mock('../sessionPersistence.js', () => ({
+  ensureNotebookSessionsRehydrated: ensureNotebookSessionsRehydratedMock,
 }))
 
 import '../../http/fastify.js'
@@ -92,6 +101,8 @@ afterEach(async () => {
   subscribeNotebookAgentEventsMock.mockReset()
   getNotebookAgentSessionViewMock.mockReset()
   ensureNotebookAgentRuntimeMock.mockReset().mockResolvedValue(true)
+  ensureNotebookAgentSessionRecordMock.mockReset().mockResolvedValue(null)
+  ensureNotebookSessionsRehydratedMock.mockReset().mockResolvedValue(undefined)
   getNotebookAgentSessionOwnerMock.mockReset()
   updateNotebookAgentSessionTitleMock.mockReset()
   finishNotebookAgentToolCallMock.mockReset()
@@ -266,6 +277,9 @@ describe('GET /api/notebook-agent/sessions', () => {
     })
 
     expect(res.statusCode).toBe(200)
+    expect(ensureNotebookSessionsRehydratedMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'notebook-route-user' }),
+    )
     expect(res.json()).toEqual({
       sessions: [
         expect.objectContaining({
@@ -280,6 +294,9 @@ describe('GET /api/notebook-agent/sessions', () => {
 
 describe('GET /api/notebook-agent/sessions/:id/events', () => {
   it('调用 ndjson stream 并订阅 notebook 事件', async () => {
+    ensureNotebookAgentSessionRecordMock.mockResolvedValueOnce({
+      sessionId: 'notebook-session-1',
+    })
     getNotebookAgentSessionViewMock.mockReturnValueOnce({
       sessionId: 'notebook-session-1',
       status: 'idle',
@@ -306,6 +323,7 @@ describe('GET /api/notebook-agent/sessions/:id/events', () => {
 
     expect(response.statusCode).toBe(200)
     expect(startNdjsonStreamMock).toHaveBeenCalledOnce()
+    expect(ensureNotebookAgentSessionRecordMock).toHaveBeenCalledWith('notebook-session-1')
     expect(subscribeNotebookAgentEventsMock).toHaveBeenCalledWith(
       'notebook-session-1',
       expect.any(Function),

@@ -5,8 +5,7 @@
  * 与画布 Pi Agent 主链平级、零耦合。
  */
 
-import { existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, unlinkSync } from 'node:fs'
 import type { AgentSession } from '@earendil-works/pi-coding-agent'
 import {
   createAgentSession,
@@ -19,7 +18,6 @@ import {
   createNotebookSession,
   deleteNotebookSession,
   getNotebookSession,
-  listNotebookSessionsByUser,
   markNotebookSessionBootstrapPrompted,
   updateNotebookSessionRecord,
   updateNotebookSessionTitle,
@@ -42,14 +40,25 @@ import {
   isDefaultNotebookTitle,
 } from './titleGenerator.js'
 import {
-  createNotebookSessionObjectStorage,
-  isNotebookSessionS3Enabled,
-} from './sessionStorage.js'
+  deleteNotebookSessionFileFromPersistence,
+  deletePersistedNotebookSession,
+  ensureNotebookSessionDir,
+  ensureNotebookSessionsRehydrated,
+  getPersistedNotebookSessionOwner,
+  listPersistedNotebookSessionsByUser,
+  loadNotebookSessionRecord,
+  persistNotebookSessionMessage,
+  persistNotebookSessionMeta,
+  persistNotebookSessionTitle,
+  resolveNotebookSessionDir,
+  syncNotebookSessionFileToS3,
+} from './sessionPersistence.js'
 
 interface NotebookAgentRuntime {
   sessionId: string
   record: NotebookSessionRecord
   session: AgentSession
+  sessionManager: SessionManager
   sessionFile: string
   bridge: FrontendBridge
   eventListeners: Set<(event: NotebookAgentSseEvent) => void>
@@ -92,6 +101,7 @@ const tryStartNotebookBootstrap = (runtime: NotebookAgentRuntime) => {
   if (runtime.record.bootstrapPromptedAt) return
   runtime.bootstrapStarted = true
   markNotebookSessionBootstrapPrompted(runtime.sessionId)
+  persistNotebookSessionMeta(runtime.sessionManager, runtime.record)
   void Promise.resolve()
     .then(() => runtime.session.prompt(NOTEBOOK_BOOTSTRAP_PROMPT))
     .catch((error) => {
@@ -109,117 +119,10 @@ const getDefaultNotebookProfile = () => {
   return profiles[0]!
 }
 
-/** notebook agent JSONL 会话文件存放目录（相对于 cwd） */
-const resolveNotebookSessionDir = () =>
-  process.env.NOTEBOOK_SESSION_DIR?.trim() || join(process.cwd(), '.workflow-storage', 'notebook-agent-sessions')
-
-// --- S3 远端同步（可选，未配置 S3 环境变量时自动跳过） ---
-
-const S3_KEY_PREFIX = 'notebook-agent/sessions/'
-
-let _s3Storage: ReturnType<typeof createNotebookSessionObjectStorage> | null = null
-let _s3StorageChecked = false
-
-const getS3Storage = () => {
-  if (!_s3StorageChecked) {
-    _s3StorageChecked = true
-    if (isNotebookSessionS3Enabled()) {
-      _s3Storage = createNotebookSessionObjectStorage()
-    }
-  }
-  return _s3Storage
-}
-
-/** 确保本地 session 目录存在 */
-const ensureSessionDir = (): string => {
-  const dir = resolveNotebookSessionDir()
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true })
-  }
-  return dir
-}
-
-/** 将本地 session 目录中所有 JSONL 文件同步到 S3 */
-const syncSessionFilesToS3 = async (): Promise<void> => {
-  const s3 = getS3Storage()
-  if (!s3) return
-  const dir = resolveNotebookSessionDir()
-  if (!existsSync(dir)) return
-  try {
-    const files = readdirSync(dir).filter((f) => f.endsWith('.jsonl'))
-    for (const file of files) {
-      const content = readFileSync(join(dir, file), 'utf-8')
-      await s3.putObject(`${S3_KEY_PREFIX}${file}`, content)
-    }
-  } catch {
-    // S3 sync failure is non-fatal
-  }
-}
-
-/** 从 S3 下载 session 文件到本地（仅下载本地不存在的文件） */
-const syncSessionFilesFromS3 = async (): Promise<void> => {
-  const s3 = getS3Storage()
-  if (!s3) return
-  const dir = ensureSessionDir()
-  try {
-    const keys = await s3.listObjectKeys(S3_KEY_PREFIX)
-    for (const key of keys) {
-      const filename = key.split('/').pop()
-      if (!filename || !filename.endsWith('.jsonl')) continue
-      const localPath = join(dir, filename)
-      if (existsSync(localPath)) continue
-      const content = await s3.getObject(key)
-      if (content) {
-        writeFileSync(localPath, content, 'utf-8')
-      }
-    }
-  } catch {
-    // S3 sync failure is non-fatal
-  }
-}
-
-/** 将单个 session JSONL 文件上传到 S3 */
-const syncSessionFileToS3 = async (sessionFile: string): Promise<void> => {
-  const s3 = getS3Storage()
-  if (!s3) return
-  if (!sessionFile || !existsSync(sessionFile)) return
-  try {
-    const filename = sessionFile.split(/[\\/]/).pop()
-    if (!filename) return
-    const content = readFileSync(sessionFile, 'utf-8')
-    await s3.putObject(`${S3_KEY_PREFIX}${filename}`, content)
-  } catch {
-    // S3 sync failure is non-fatal
-  }
-}
-
-/** 删除本地 session JSONL 文件及其 S3 远端副本 */
-const deleteSessionFile = async (sessionFile: string): Promise<void> => {
-  // 删除本地文件
-  if (sessionFile) {
-    try {
-      if (existsSync(sessionFile)) {
-        unlinkSync(sessionFile)
-      }
-    } catch {
-      // ignore
-    }
-  }
-  // 删除 S3 远端副本
-  const s3 = getS3Storage()
-  if (!s3) return
-  try {
-    const filename = sessionFile.split(/[\\/]/).pop()
-    if (!filename) return
-    await s3.deleteObject(`${S3_KEY_PREFIX}${filename}`)
-  } catch {
-    // S3 delete failure is non-fatal
-  }
-}
-
 export const createNotebookAgentSession = async (
   input: CreateNotebookSessionInput,
 ): Promise<CreateNotebookSessionResult> => {
+  await ensureNotebookSessionsRehydrated()
   const record = createNotebookSession({
     userId: input.userId,
     initialDataMeta: input.initialDataMeta,
@@ -238,6 +141,7 @@ export const createNotebookAgentSession = async (
 const buildAndRegisterRuntime = async (
   record: NotebookSessionRecord,
   systemPrompt: string,
+  sessionManager = SessionManager.create(process.cwd(), ensureNotebookSessionDir()),
 ): Promise<NotebookAgentRuntime> => {
   const profile = getDefaultNotebookProfile()
   const eventListeners = new Set<(event: NotebookAgentSseEvent) => void>()
@@ -257,7 +161,6 @@ const buildAndRegisterRuntime = async (
   const model = buildModelFromProfile(profile)
   const resourceLoader = createPiAgentResourceLoader(() => systemPrompt)
   await resourceLoader.reload()
-  const sessionManager = SessionManager.create(process.cwd(), ensureSessionDir())
   const { session } = await createAgentSession({
     sessionManager,
     authStorage,
@@ -274,19 +177,26 @@ const buildAndRegisterRuntime = async (
     sessionId: record.sessionId,
     record,
     session,
-    sessionFile: sessionManager.getSessionFile(),
+    sessionManager,
+    sessionFile: sessionManager.getSessionFile() ?? '',
     bridge,
     eventListeners,
     currentMessageId: { value: '' },
     bootstrapStarted: false,
     streamSubscribed: false,
   }
+  record.sessionFile = runtime.sessionFile
+  persistNotebookSessionTitle(sessionManager, record.title)
+  persistNotebookSessionMeta(sessionManager, record)
   runtime.bootstrapStarted = Boolean(record.bootstrapPromptedAt)
 
   const unsubscribe = session.subscribe((event) => {
     const sseEvents = bridgeNotebookEvent(event, record, runtime.currentMessageId)
     for (const sseEvent of sseEvents) {
       emitRuntimeEvent(runtime, sseEvent)
+    }
+    if (sseEvents.length > 0) {
+      persistNotebookSessionMeta(runtime.sessionManager, runtime.record)
     }
     // 一轮结束后上报上下文窗口使用情况（SDK 同步方法，数据此时最新）
     if (event.type === 'agent_end') {
@@ -309,6 +219,8 @@ const buildAndRegisterRuntime = async (
             if (!title || title === record.title) return
             if (!isDefaultNotebookTitle(record.title)) return
             updateNotebookSessionTitle(runtime.sessionId, title)
+            persistNotebookSessionTitle(runtime.sessionManager, title)
+            persistNotebookSessionMeta(runtime.sessionManager, runtime.record)
             emitRuntimeEvent(runtime, {
               type: 'session.title_updated',
               sessionId: runtime.sessionId,
@@ -349,20 +261,32 @@ export const ensureNotebookAgentRuntime = async (
   sessionId: string,
 ): Promise<boolean> => {
   if (runtimes.has(sessionId)) return true
-  const record = getNotebookSession(sessionId)
+  await ensureNotebookSessionsRehydrated()
+  const record = await loadNotebookSessionRecord(sessionId)
   if (!record) return false
   const systemPrompt = buildNotebookSystemPrompt({
     initialDataMeta: record.initialDataMeta,
   })
-  await buildAndRegisterRuntime(record, systemPrompt)
+  const sessionFile = record.sessionFile
+  const sessionManager = sessionFile
+    ? SessionManager.open(sessionFile, resolveNotebookSessionDir(), process.cwd())
+    : SessionManager.create(process.cwd(), ensureNotebookSessionDir())
+  await buildAndRegisterRuntime(record, systemPrompt, sessionManager)
   return true
 }
 
+export const ensureNotebookAgentSessionRecord = async (
+  sessionId: string,
+): Promise<NotebookSessionRecord | null> => {
+  await ensureNotebookSessionsRehydrated()
+  return loadNotebookSessionRecord(sessionId)
+}
+
 export const getNotebookAgentSessionOwner = (sessionId: string): string | null =>
-  getNotebookSession(sessionId)?.userId ?? null
+  getPersistedNotebookSessionOwner(sessionId)
 
 export const getNotebookAgentSessionView = (sessionId: string) => {
-  const r = getNotebookSession(sessionId)
+  const r = getNotebookSession(sessionId) ?? null
   if (!r) return undefined
   return summarize(r)
 }
@@ -383,31 +307,37 @@ export const listNotebookAgentSessionsByUser = (
   messageCount: number
   lastUserMessagePreview?: string
 }> => {
-  return listNotebookSessionsByUser(userId).map((r) => {
-    const lastUserMsg = [...r.messages]
-      .reverse()
-      .find((m) => m.role === 'user')
-    return {
-      sessionId: r.sessionId,
-      title: r.title,
-      initialDataMeta: r.initialDataMeta,
-      status: r.status,
-      archivedAt: r.archivedAt,
-      createdAt: r.createdAt,
-      updatedAt: r.updatedAt,
-      messageCount: r.messages.length,
-      lastUserMessagePreview: lastUserMsg
-        ? lastUserMsg.content.slice(0, 60)
-        : undefined,
-    }
-  })
+  return listPersistedNotebookSessionsByUser(userId).map((record) => ({
+    sessionId: record.sessionId,
+    title: record.title,
+    initialDataMeta: record.initialDataMeta,
+    status: record.status,
+    archivedAt: record.archivedAt,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+    messageCount: record.messageCount,
+    lastUserMessagePreview: record.lastUserMessagePreview,
+  }))
 }
 
 export const updateNotebookAgentSessionTitle = (
   sessionId: string,
   title: string,
 ): boolean => {
-  return updateNotebookSessionTitle(sessionId, title)
+  const ok = updateNotebookSessionTitle(sessionId, title)
+  if (!ok) return false
+  const record = getNotebookSession(sessionId)
+  if (!record) return false
+  const runtime = runtimes.get(sessionId)
+  const sessionManager = runtime?.sessionManager
+    ?? (record.sessionFile
+      ? SessionManager.open(record.sessionFile, resolveNotebookSessionDir(), process.cwd())
+      : null)
+  if (sessionManager) {
+    persistNotebookSessionTitle(sessionManager, title)
+    persistNotebookSessionMeta(sessionManager, record)
+  }
+  return true
 }
 
 /**
@@ -422,7 +352,8 @@ export const closeNotebookAgentSession = (sessionId: string): boolean => {
   const runtime = runtimes.get(sessionId)
   if (runtime) {
     // 软关闭前将 session JSONL 文件同步到 S3
-    void syncSessionFileToS3(runtime.sessionFile)
+    persistNotebookSessionMeta(runtime.sessionManager, r)
+    void syncNotebookSessionFileToS3(runtime.sessionFile)
     runtime.bridge.dispose()
     runtime.unsubscribe?.()
     runtime.session.dispose()
@@ -432,6 +363,10 @@ export const closeNotebookAgentSession = (sessionId: string): boolean => {
   // 软关闭：标记 archivedAt，record 保留（不改 status，不清审计——历史需要保留）。
   // 前端 resume 时若 runtime 已不在，拿到的 status 仍能反映最后状态。
   archiveNotebookSession(sessionId)
+  const updated = getNotebookSession(sessionId)
+  if (updated && runtime) {
+    persistNotebookSessionMeta(runtime.sessionManager, updated)
+  }
   return true
 }
 
@@ -442,15 +377,24 @@ export const closeNotebookAgentSession = (sessionId: string): boolean => {
  */
 export const destroyNotebookAgentSession = (sessionId: string): boolean => {
   const runtime = runtimes.get(sessionId)
+  const sessionFile = runtime?.sessionFile ?? getNotebookSession(sessionId)?.sessionFile
   if (runtime) {
     // 删除本地 + S3 远端 session JSONL 文件
-    void deleteSessionFile(runtime.sessionFile)
     runtime.bridge.dispose()
     runtime.unsubscribe?.()
     runtime.session.dispose()
     runtime.eventListeners.clear()
   }
   runtimes.delete(sessionId)
+  if (sessionFile && existsSync(sessionFile)) {
+    try {
+      unlinkSync(sessionFile)
+    } catch {
+      // ignore local delete failures
+    }
+  }
+  void deleteNotebookSessionFileFromPersistence(sessionFile)
+  deletePersistedNotebookSession(sessionId)
   clearNotebookAuditEntries(sessionId)
   return deleteNotebookSession(sessionId)
 }
@@ -469,10 +413,17 @@ export const sendNotebookAgentMessage = async (
     id: payload.id,
     role: 'user',
     content: payload.content,
+    rawContent: payload.content,
     status: 'completed',
     createdAt: Date.now(),
   })
   updateNotebookSessionRecord(sessionId, { status: 'running' })
+  const messages = getNotebookSession(sessionId)?.messages
+  const lastMessage = messages ? messages[messages.length - 1] : undefined
+  if (lastMessage) {
+    persistNotebookSessionMessage(runtime.sessionManager, lastMessage)
+  }
+  persistNotebookSessionMeta(runtime.sessionManager, runtime.record)
 
   void (async () => {
     try {
@@ -482,6 +433,7 @@ export const sendNotebookAgentMessage = async (
       if (runtime.record.status === 'idle') return
       const message = error instanceof Error ? error.message : String(error)
       updateNotebookSessionRecord(sessionId, { status: 'failed' })
+      persistNotebookSessionMeta(runtime.sessionManager, runtime.record)
       emitRuntimeEvent(runtime, { type: 'error', sessionId, message })
       if (error instanceof FrontendBridgeTimeoutError) {
         runtime.bridge.cancelPendingRequests('前端执行超时')
@@ -511,6 +463,7 @@ export const abortNotebookAgentSession = async (
   runtime.bridge.cancelPendingRequests('当前轮已取消')
   // 先标记 idle，防止 abort 期间到达的 agent_end 事件覆盖状态
   updateNotebookSessionRecord(sessionId, { status: 'idle' })
+  persistNotebookSessionMeta(runtime.sessionManager, runtime.record)
   await runtime.session.abort()
 
   emitRuntimeEvent(runtime, {
@@ -566,6 +519,10 @@ export const finishNotebookAgentToolCall = (
     isError: payload.isError,
     finishedAt: Date.now(),
   })
+  const record = getNotebookSession(sessionId)
+  if (record) {
+    persistNotebookSessionMeta(runtime.sessionManager, record)
+  }
 
   if (payload.isError) {
     return runtime.bridge.rejectResult(
@@ -615,6 +572,7 @@ export const markNotebookAgentSessionReady = (sessionId: string): boolean => {
   if (!runtime) return false
   runtime.record.dataReady = true
   updateNotebookSessionRecord(sessionId, { dataReady: true })
+  persistNotebookSessionMeta(runtime.sessionManager, runtime.record)
   tryStartNotebookBootstrap(runtime)
   return true
 }

@@ -15,7 +15,7 @@
  */
 
 import type { FastifyPluginAsync } from 'fastify'
-import { requireWorkflowUser } from '../http/workflowUser.js'
+import { requireWorkflowUser, type WorkflowRequestUser } from '../http/workflowUser.js'
 import { startNdjsonStream } from '../http/ndjson.js'
 import { assertSessionOwner } from '../piAgent/sessionAccess.js'
 import {
@@ -23,6 +23,7 @@ import {
   compactNotebookAgentSession,
   createNotebookAgentSession,
   destroyNotebookAgentSession,
+  ensureNotebookAgentSessionRecord,
   ensureNotebookAgentRuntime,
   finishNotebookAgentToolCall,
   getNotebookAgentSessionOwner,
@@ -36,6 +37,7 @@ import {
   updateNotebookAgentSessionTitle,
 } from '../notebookAgent/gateway.js'
 import type { ImportCsvMeta } from '../../notebook/shared/parentBridge.js'
+import { ensureNotebookSessionsRehydrated } from '../notebookAgent/sessionPersistence.js'
 
 const validateImportCsvMeta = (meta: unknown): meta is ImportCsvMeta => {
   if (!meta || typeof meta !== 'object') return false
@@ -49,7 +51,13 @@ const validateImportCsvMeta = (meta: unknown): meta is ImportCsvMeta => {
 }
 
 export const createNotebookAgentRoutes = (): FastifyPluginAsync => async (app) => {
-  const requireOwnedSession = (sessionId: string, userId: string) =>
+  const verifyOwnedSession = async (
+    sessionId: string,
+    userId: string,
+    workflowUser: WorkflowRequestUser,
+  ) => {
+    await ensureNotebookSessionsRehydrated(workflowUser)
+    await ensureNotebookAgentSessionRecord(sessionId)
     assertSessionOwner({
       sessionId,
       currentUserId: userId,
@@ -57,6 +65,7 @@ export const createNotebookAgentRoutes = (): FastifyPluginAsync => async (app) =
       missingMessage: '未找到 Notebook Agent 会话',
       forbiddenMessage: '无权访问该 Notebook Agent 会话',
     })
+  }
 
   app.post('/api/notebook-agent/sessions', async (request, reply) => {
     const user = requireWorkflowUser(request)
@@ -84,6 +93,7 @@ export const createNotebookAgentRoutes = (): FastifyPluginAsync => async (app) =
   // 列出当前用户最近的 notebook 会话（用于「继续上次分析」入口探测）
   app.get('/api/notebook-agent/sessions', async (request) => {
     const user = requireWorkflowUser(request)
+    await ensureNotebookSessionsRehydrated(user)
     const sessions = listNotebookAgentSessionsByUser(user.id)
     return { sessions }
   })
@@ -91,7 +101,7 @@ export const createNotebookAgentRoutes = (): FastifyPluginAsync => async (app) =
   app.get('/api/notebook-agent/sessions/:sessionId', async (request, reply) => {
     const user = requireWorkflowUser(request)
     const { sessionId } = request.params as { sessionId: string }
-    requireOwnedSession(sessionId, user.id)
+    await verifyOwnedSession(sessionId, user.id, user)
     const view = getNotebookAgentSessionView(sessionId)
     if (!view) {
       reply.code(404)
@@ -103,7 +113,7 @@ export const createNotebookAgentRoutes = (): FastifyPluginAsync => async (app) =
   app.get('/api/notebook-agent/sessions/:sessionId/events', async (request, reply) => {
     const user = requireWorkflowUser(request)
     const { sessionId } = request.params as { sessionId: string }
-    requireOwnedSession(sessionId, user.id)
+    await verifyOwnedSession(sessionId, user.id, user)
     const view = getNotebookAgentSessionView(sessionId)
     if (!view) {
       reply.code(404)
@@ -127,7 +137,7 @@ export const createNotebookAgentRoutes = (): FastifyPluginAsync => async (app) =
   app.post('/api/notebook-agent/sessions/:sessionId/resume', async (request, reply) => {
     const user = requireWorkflowUser(request)
     const { sessionId } = request.params as { sessionId: string }
-    requireOwnedSession(sessionId, user.id)
+    await verifyOwnedSession(sessionId, user.id, user)
     const ok = await ensureNotebookAgentRuntime(sessionId)
     if (!ok) {
       reply.code(404)
@@ -139,7 +149,7 @@ export const createNotebookAgentRoutes = (): FastifyPluginAsync => async (app) =
   app.post('/api/notebook-agent/sessions/:sessionId/messages', async (request, reply) => {
     const user = requireWorkflowUser(request)
     const { sessionId } = request.params as { sessionId: string }
-    requireOwnedSession(sessionId, user.id)
+    await verifyOwnedSession(sessionId, user.id, user)
     const body = request.body as { id?: string; content?: string }
     if (!body.id || !body.content) {
       reply.code(400)
@@ -159,7 +169,7 @@ export const createNotebookAgentRoutes = (): FastifyPluginAsync => async (app) =
   app.post('/api/notebook-agent/sessions/:sessionId/abort', async (request, reply) => {
     const user = requireWorkflowUser(request)
     const { sessionId } = request.params as { sessionId: string }
-    requireOwnedSession(sessionId, user.id)
+    await verifyOwnedSession(sessionId, user.id, user)
     const result = await abortNotebookAgentSession(sessionId)
     if (!result.ok) {
       reply.code(404)
@@ -173,7 +183,7 @@ export const createNotebookAgentRoutes = (): FastifyPluginAsync => async (app) =
   app.post('/api/notebook-agent/sessions/:sessionId/compact', async (request, reply) => {
     const user = requireWorkflowUser(request)
     const { sessionId } = request.params as { sessionId: string }
-    requireOwnedSession(sessionId, user.id)
+    await verifyOwnedSession(sessionId, user.id, user)
     const body = (request.body as { customInstructions?: string }) ?? {}
     const result = await compactNotebookAgentSession(
       sessionId,
@@ -189,7 +199,7 @@ export const createNotebookAgentRoutes = (): FastifyPluginAsync => async (app) =
   app.post('/api/notebook-agent/sessions/:sessionId/ready', async (request, reply) => {
     const user = requireWorkflowUser(request)
     const { sessionId } = request.params as { sessionId: string }
-    requireOwnedSession(sessionId, user.id)
+    await verifyOwnedSession(sessionId, user.id, user)
     const ok = markNotebookAgentSessionReady(sessionId)
     if (!ok) {
       reply.code(404)
@@ -201,7 +211,7 @@ export const createNotebookAgentRoutes = (): FastifyPluginAsync => async (app) =
   app.post('/api/notebook-agent/sessions/:sessionId/system-message', async (request, reply) => {
     const user = requireWorkflowUser(request)
     const { sessionId } = request.params as { sessionId: string }
-    requireOwnedSession(sessionId, user.id)
+    await verifyOwnedSession(sessionId, user.id, user)
     const body = request.body as { message?: string }
     if (!body.message || typeof body.message !== 'string') {
       reply.code(400)
@@ -218,7 +228,7 @@ export const createNotebookAgentRoutes = (): FastifyPluginAsync => async (app) =
   app.post('/api/notebook-agent/sessions/:sessionId/title', async (request, reply) => {
     const user = requireWorkflowUser(request)
     const { sessionId } = request.params as { sessionId: string }
-    requireOwnedSession(sessionId, user.id)
+    await verifyOwnedSession(sessionId, user.id, user)
     const body = request.body as { title?: string }
     const title = typeof body.title === 'string' ? body.title.trim() : ''
     if (!title) {
@@ -236,7 +246,7 @@ export const createNotebookAgentRoutes = (): FastifyPluginAsync => async (app) =
   app.post('/api/notebook-agent/sessions/:sessionId/audit', async (request, reply) => {
     const user = requireWorkflowUser(request)
     const { sessionId } = request.params as { sessionId: string }
-    requireOwnedSession(sessionId, user.id)
+    await verifyOwnedSession(sessionId, user.id, user)
     const body = request.body as { entries?: unknown[] }
     if (!Array.isArray(body.entries)) {
       reply.code(400)
@@ -249,7 +259,7 @@ export const createNotebookAgentRoutes = (): FastifyPluginAsync => async (app) =
   app.post('/api/notebook-agent/sessions/:sessionId/tool-result', async (request, reply) => {
     const user = requireWorkflowUser(request)
     const { sessionId } = request.params as { sessionId: string }
-    requireOwnedSession(sessionId, user.id)
+    await verifyOwnedSession(sessionId, user.id, user)
     const body = request.body as {
       toolCallId?: string
       result?: {
@@ -277,7 +287,7 @@ export const createNotebookAgentRoutes = (): FastifyPluginAsync => async (app) =
   app.delete('/api/notebook-agent/sessions/:sessionId', async (request, reply) => {
     const user = requireWorkflowUser(request)
     const { sessionId } = request.params as { sessionId: string }
-    requireOwnedSession(sessionId, user.id)
+    await verifyOwnedSession(sessionId, user.id, user)
     const ok = destroyNotebookAgentSession(sessionId)
     if (!ok) {
       reply.code(404)

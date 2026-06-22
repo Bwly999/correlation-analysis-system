@@ -48,6 +48,7 @@ export interface NotebookSessionRecord {
   userId: string
   origin: string
   title: string
+  sessionFile?: string
   bootstrapPromptedAt?: number
   initialDataMeta?: ImportCsvMeta
   status: NotebookSessionStatus
@@ -100,6 +101,8 @@ export const createNotebookSession = (
   return record
 }
 
+export const buildDefaultNotebookTitle = (ts: number = Date.now()): string => buildDefaultTitle(ts)
+
 /**
  * 清理某用户超限的已归档会话：只删 archivedAt 非空的，按 archivedAt 升序删除最旧的，
  * 直到该用户的会话总数 <= MAX_SESSIONS_PER_USER。存活的会话不受影响。
@@ -122,6 +125,18 @@ const pruneArchivedSessionsForUser = (userId: string): void => {
 export const getNotebookSession = (
   sessionId: string,
 ): NotebookSessionRecord | undefined => sessions.get(sessionId)
+
+export const upsertNotebookSession = (
+  record: NotebookSessionRecord,
+): NotebookSessionRecord => {
+  const existing = sessions.get(record.sessionId)
+  if (existing) {
+    Object.assign(existing, record)
+    return existing
+  }
+  sessions.set(record.sessionId, record)
+  return record
+}
 
 export const appendNotebookMessage = (
   sessionId: string,
@@ -167,7 +182,10 @@ export const endNotebookSession = (
 
 export const updateNotebookSessionRecord = (
   sessionId: string,
-  update: Partial<Pick<NotebookSessionRecord, 'status' | 'dataReady'>>,
+  update: Partial<Pick<
+    NotebookSessionRecord,
+    'status' | 'dataReady' | 'bootstrapPromptedAt' | 'archivedAt' | 'sessionFile'
+  >>,
 ): void => {
   const record = sessions.get(sessionId)
   if (!record) return
