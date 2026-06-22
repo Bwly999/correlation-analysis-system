@@ -17,21 +17,27 @@ const archivePath = join(runtimeRoot, `pyodide-${VERSION}.tar.bz2`)
 const extractDir = join(runtimeRoot, `pyodide-${VERSION}`)
 
 /**
- * 官方 Pyodide release 不构建的纯 Python 包，需从 PyPI 单独补进 runtime。
- * 每个条目最终会：
- *   1) 把 wheel 下载到 targetDir
- *   2) 往 pyodide-lock.json 的 packages 字典注入一条记录
- * 版本与 sha256 升级时同步修改此清单（sha256 由脚本运行时现算，无需手填）。
+ * 官方 Pyodide release 不构建的纯 Python 包清单。
+ *
+ * 这个清单**不由人工维护**——由 `scripts/add-pyodide-package.mjs` CLI 写入
+ * （`scripts/pyodide-extra-packages.json`，进 git）。本脚本在 CI/首次准备时读它，
+ * 把清单里的包补进 runtime（下载 wheel + 注入 lock），保证本地与 CI 一致。
+ *
+ * 新增/升级包请用 CLI，不要手动改源码：
+ *   node scripts/add-pyodide-package.mjs --name <pkg> [--version <ver>] [--boot]
  */
-const EXTRA_PYPI_PACKAGES = [
-  {
-    name: 'seaborn',
-    version: '0.13.2',
-    wheelFile: 'seaborn-0.13.2-py3-none-any.whl',
-    depends: ['numpy', 'pandas', 'matplotlib'],
-    imports: ['seaborn'],
-  },
-]
+const MANIFEST_PATH = join(__dirname, 'pyodide-extra-packages.json')
+
+const readManifest = async () => {
+  try {
+    const raw = await readFile(MANIFEST_PATH, 'utf8')
+    const manifest = JSON.parse(raw)
+    return Array.isArray(manifest.packages) ? manifest.packages : []
+  } catch {
+    // 清单不存在（首次准备、或尚未用 CLI 加过包）→ 空
+    return []
+  }
+}
 
 const download = async (url, dest) => {
   const response = await fetch(url)
@@ -93,12 +99,18 @@ const resolvePyPiWheel = async (name, version) => {
  * 幂等：若 wheel 文件与 lock 条目都已就位则跳过。
  */
 const ensureExtraPyPiPackages = async () => {
+  const manifest = await readManifest()
+  if (manifest.length === 0) {
+    console.log('[pyodide] extra-packages.json 为空或不存在，跳过纯 Python 包补齐')
+    return
+  }
+
   const lockPath = join(targetDir, 'pyodide-lock.json')
   const lockRaw = await readFile(lockPath, 'utf8')
   const lock = JSON.parse(lockRaw)
   let lockDirty = false
 
-  for (const pkg of EXTRA_PYPI_PACKAGES) {
+  for (const pkg of manifest) {
     const wheelPath = join(targetDir, pkg.wheelFile)
     let needDownload = true
     let sha256 = null

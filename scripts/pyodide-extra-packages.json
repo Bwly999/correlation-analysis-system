@@ -1,0 +1,17 @@
+{
+  "packages": [
+    {
+      "name": "seaborn",
+      "version": "0.13.2",
+      "wheelFile": "seaborn-0.13.2-py3-none-any.whl",
+      "depends": [
+        "numpy",
+        "pandas",
+        "matplotlib"
+      ],
+      "imports": [
+        "seaborn"
+      ]
+    }
+  ]
+}
