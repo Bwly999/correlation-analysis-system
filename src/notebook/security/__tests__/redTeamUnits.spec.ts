@@ -100,7 +100,7 @@ describe('Notebook Agent 红队 / 单测覆盖项', () => {
         '#12 OPFS 50MB 单写 / 500MB 总配额（待业务实现）',
         '#16 主站不暴露 setter',
         '#17/#18 Markdown sanitize（待 markdownRenderer 实现）',
-        '#19 micropip 阻断（fetch 已剥夺，需 Pyodide 真启）',
+        '#19 micropip 装外网包阻断（fetch 白名单 shim 仅放行同源 runtime，需 Pyodide 真启）',
         '#20 threading 协程化',
       ]
       expect(e2eOnly.length).toBeGreaterThan(0)

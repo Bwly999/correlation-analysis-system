@@ -11,17 +11,29 @@
  * 2) fullStdLib: false：
  *    不打开 socket、ssl 等模块。运行时按需 loadPackage。
  *
- * 3) 不暴露 fetch / XMLHttpRequest：
- *    Worker 内 `self.fetch` 和 `self.XMLHttpRequest` 在加载完 Pyodide 后立即 delete，
- *    防止 Python 通过 pyodide.runPythonAsync('await fetch(...)') 这种通过 micropip 等
- *    路径触达 fetch（保险锁，主防线仍是 jsglobals）。
+ * 3) fetch 白名单 shim（替代早期的 delete）：
+ *    早期实现是加载完 Pyodide 后立即 `delete self.fetch`，彻底切断网络。
+ *    但这使得 exec 阶段无法用 `pyodide.loadPackage()` 按需加载 runtime 内已有但未预装的包
+ *    （loadPackage 命中本地 wheel 时内部仍会走 fetch(localUrl) 取字节）。
+ *    现改为把 self.fetch 替换成**只允许 pyodideIndexUrl 同源前缀**的 shim：
+ *      - 本地 runtime wheel（/pyodide/v0.27/...）：放行，供按需加载使用
+ *      - 任何其他 URL（PyPI / jsdelivr / 外网）：抛 Error，micropip 装外部包仍被阻断
+ *    安全边界与早期 delete 一致：外部网络访问完全禁用，仅多放行同源 runtime 资源。
+ *    详见 docs/design-doc/notebook-agent/安全模型.md §6.2。
  */
 
 import type { PyodideInterface } from 'pyodide'
 
+export interface RuntimePackageMeta {
+  name: string
+  version: string
+}
+
 export interface BootResult {
   pyodide: PyodideInterface
   pyodideVersion: string
+  /** runtime lock 内全部包的 name+version，供 python_packages 工具查询加载状态 */
+  runtimePackages: RuntimePackageMeta[]
 }
 
 export interface BootOptions {
@@ -86,11 +98,45 @@ export const bootPyodide = async (opts: BootOptions): Promise<BootResult> => {
     // 默认 stdout/stderr 走 console；我们后续在 exec 入口替换
   })
 
-  // 2) 安全锁：删掉 Worker 全局上的 fetch / XMLHttpRequest（防 micropip 等模块绕过）
-  //    Pyodide 0.27 在 Worker 内部仍然能找到 self.fetch；删它不会影响 wheel 加载
-  //    （wheel 加载发生在 loadPyodide 内部，此时还没 delete）
+  // 2) 安全锁：fetch 改为白名单 shim，其余网络 API 直接 delete
+  //    fetch：只允许访问 pyodideIndexUrl 同源路径（本地 runtime wheel / 字体），
+  //           拒绝任何其他来源，使 micropip 装 PyPI 包仍被阻断。
+  //           保留而非 delete，是为了让 exec 阶段 loadPackage 能按需加载未预装包。
+  //    XMLHttpRequest / WebSocket / EventSource：Pyodide loadPackage 不依赖它们，直接 delete。
+  //
+  //    注意：Pyodide 内部 loadPackage 用 new URL(wheel, location) 解析出**绝对 URL**
+  //    （如 http://localhost:5173/pyodide/v0.27/numpy-*.whl），不能再用相对前缀字符串匹配。
+  //    改用 URL 解析后比 pathname：相对/绝对 URL 都能正确归一，跨源请求（外网）被 hostname 校验拦掉。
+  const nativeFetch = globalThis.fetch
+  if (typeof nativeFetch === 'function') {
+    // pyodideIndexUrl 形如 '/pyodide/v0.27/'，转成绝对 base 供 URL 解析比较
+    const allowedBase = new URL(opts.pyodideIndexUrl, globalThis.location?.href ?? 'http://self')
+    const allowedPathPrefix = allowedBase.pathname // '/pyodide/v0.27/'
+    const allowedHost = allowedBase.host
+    type FetchArgs = Parameters<typeof nativeFetch>
+    const shimmedFetch = (...args: FetchArgs) => {
+      const input = args[0]
+      const inputUrl =
+        typeof input === 'string'
+          ? new URL(input, globalThis.location?.href ?? 'http://self')
+          : input instanceof URL
+            ? input
+            : new URL((input as Request).url, globalThis.location?.href ?? 'http://self')
+      // 同源 + pathname 落在 runtime 前缀下才放行；外网（PyPI / jsdelivr 等）一律拒
+      const sameOrigin = inputUrl.host === allowedHost
+      const inRuntime = inputUrl.pathname.startsWith(allowedPathPrefix)
+      if (!sameOrigin || !inRuntime) {
+        return Promise.reject(
+          new Error(
+            `外部网络访问已禁用（仅允许 ${allowedBase.origin}${allowedPathPrefix}，得到 ${inputUrl.href}）`,
+          ),
+        )
+      }
+      return nativeFetch(...args)
+    }
+    ;(globalThis as Record<string, unknown>).fetch = shimmedFetch
+  }
   try {
-    delete (globalThis as Record<string, unknown>).fetch
     delete (globalThis as Record<string, unknown>).XMLHttpRequest
     delete (globalThis as Record<string, unknown>).WebSocket
     delete (globalThis as Record<string, unknown>).EventSource
@@ -112,6 +158,7 @@ export const bootPyodide = async (opts: BootOptions): Promise<BootResult> => {
     'scipy',
     'scikit-learn',
     'matplotlib',
+    'seaborn',
     'statsmodels',
   ]
   const PKG_PROGRESS_START = 60
@@ -124,9 +171,10 @@ export const bootPyodide = async (opts: BootOptions): Promise<BootResult> => {
 
   // 4.5) 注入中文字体
   //      matplotlib 默认只捆绑 DejaVu Sans，不含中文字形，画中文会出现「豆腐块」。
-  //      此处在删除 fetch 之前完成拉取，写入 MEMFS 并注册到 fontManager。
+  //      此处拉取字体写入 MEMFS 并注册到 fontManager。
   //      sys.modules 跨 exec 持久，注册一次后续所有 python_exec_* 都默认中文可用。
   //      字体缺失/加载失败不阻断 boot，仅退化原行为（中文显示为方块）。
+  //      字体 URL 为 /pyodide/v0.27/fonts/...，fetch 白名单 shim 会放行。
   await configureChineseFont(pyodide, opts.pyodideIndexUrl, opts.onProgress)
 
   // 5) 创建工作区固定目录骨架（MEMFS 内）。
@@ -152,10 +200,31 @@ export const bootPyodide = async (opts: BootOptions): Promise<BootResult> => {
   //    （这是对 host 端的保护，Python 侧仍能正常用）
   Object.freeze(safeJsGlobals)
 
+  // 7) 读 pyodide-lock.json，提取 runtime 内全部包的 name+version
+  //    供 python_packages 工具查询加载状态（action=list 时遍历判断 loaded/notLoaded）。
+  //    fetch 走 §6.2 白名单 shim（同源 /pyodide/v0.27/ 前缀放行）。失败降级为空数组。
+  let runtimePackages: RuntimePackageMeta[] = []
+  try {
+    const lockResp = await fetch(`${opts.pyodideIndexUrl}pyodide-lock.json`)
+    if (lockResp.ok) {
+      const lock = (await lockResp.json()) as {
+        packages?: Record<string, { name?: string; version?: string }>
+      }
+      runtimePackages = Object.values(lock.packages ?? {})
+        .filter((p) => p && typeof p.name === 'string' && typeof p.version === 'string')
+        .map((p) => ({ name: p.name as string, version: p.version as string }))
+        .sort((a, b) => a.name.localeCompare(b.name))
+    }
+  } catch {
+    // lock 读失败：python_packages 工具的 list 仍能报告 loadedPackages（来自 pyodide.loadedPackages），
+    // 只是 notLoaded 清单会缺失。降级不阻断 boot。
+  }
+
   opts.onProgress('ready')
   return {
     pyodide,
     pyodideVersion: pyodide.version,
+    runtimePackages,
   }
 }
 
@@ -233,10 +302,11 @@ const ZH_FONT_FAMILY = 'Noto Sans SC'
 /**
  * 拉取并注册中文字体到 matplotlib。
  *
- * 在 boot 阶段（loadPackage 之后、删除 fetch 之前）调用：
+ * 在 boot 阶段调用：
  *   1) fetch 字体字节 → 写入 MEMFS /fonts/
  *   2) matplotlib.fontManager.addfont + 设 rcParams，使后续 savefig 默认用中文字体
  *
+ * 字体 URL 为 /pyodide/v0.27/fonts/...，fetch 白名单 shim 放行。
  * 失败（字体缺失/网络错/Python 执行错）一律吞掉并打 progress，不阻断 boot。
  */
 const configureChineseFont = async (
