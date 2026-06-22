@@ -42,6 +42,14 @@ export type HostToWorkerRequest =
       requestId: string
       paths?: string[]
     }
+  | {
+      // 查询/加载 runtime 包。action=list 返回 loaded/notLoaded 清单；
+      // action=load 按 packages 数组调 pyodide.loadPackage。
+      kind: 'packages_query'
+      requestId: string
+      action: 'list' | 'load'
+      packages?: string[]
+    }
 
 // ──────────────────────────────────────────────
 // Worker → 主线程
@@ -124,6 +132,21 @@ export type WorkerToHostMessage =
     }
   | {
       kind: 'fs_snapshot_error'
+      requestId: string
+      message: string
+    }
+  | {
+      // packages_query(action=list) 的结果：runtime 内所有包按加载状态分组
+      kind: 'packages_query_done'
+      requestId: string
+      action: 'list' | 'load'
+      loaded: Array<{ name: string; version: string }>
+      notLoaded: Array<{ name: string; version: string }>
+      // action=load 时的加载结果（成功的包会出现在 loaded 里）
+      loadResults?: Array<{ name: string; ok: boolean; message?: string }>
+    }
+  | {
+      kind: 'packages_query_error'
       requestId: string
       message: string
     }

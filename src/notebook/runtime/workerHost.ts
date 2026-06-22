@@ -34,6 +34,13 @@ export interface ExecResult {
   durationMs: number
 }
 
+export interface PackagesQueryResult {
+  action: 'list' | 'load'
+  loaded: Array<{ name: string; version: string }>
+  notLoaded: Array<{ name: string; version: string }>
+  loadResults?: Array<{ name: string; ok: boolean; message?: string }>
+}
+
 export interface HostState {
   status: 'idle' | 'booting' | 'ready' | 'busy' | 'dead'
   bootStage: string
@@ -81,6 +88,11 @@ interface PendingFsSnapshot {
   reject: (err: Error) => void
 }
 
+interface PendingPackagesQuery {
+  resolve: (result: PackagesQueryResult) => void
+  reject: (err: Error) => void
+}
+
 export class WorkerHost {
   readonly state: HostState
   private worker: Worker | null = null
@@ -89,6 +101,7 @@ export class WorkerHost {
   private pendingExec: Map<string, PendingExec> = new Map()
   private pendingFsWrite: Map<string, PendingFsWrite> = new Map()
   private pendingFsSnapshot: Map<string, PendingFsSnapshot> = new Map()
+  private pendingPackagesQuery: Map<string, PendingPackagesQuery> = new Map()
   private nextId = 0
   private readonly workerFactory: WorkerFactory
   /**
@@ -261,6 +274,31 @@ export class WorkerHost {
     })
   }
 
+  /**
+   * 查询/加载 runtime 包（python_packages 工具的后端）。
+   * - action=list：返回 runtime 内所有包按加载状态分组（loaded/notLoaded）
+   * - action=load：按 packages 数组调 pyodide.loadPackage，返回加载结果 + 最新状态
+   */
+  async queryPackages(
+    action: 'list' | 'load',
+    packages?: string[],
+  ): Promise<PackagesQueryResult> {
+    if (!this.worker || this.state.status === 'dead' || this.state.status === 'booting') {
+      throw new Error('Worker 未就绪')
+    }
+    const requestId = this.genId()
+    return new Promise((resolve, reject) => {
+      this.pendingPackagesQuery.set(requestId, { resolve, reject })
+      const req: HostToWorkerRequest = {
+        kind: 'packages_query',
+        requestId,
+        action,
+        ...(packages && packages.length > 0 ? { packages } : {}),
+      }
+      this.worker!.postMessage(req)
+    })
+  }
+
   /** 硬中断：直接 terminate + 重建（PoC v0 暂不自动重建） */
   hardKill(): void {
     if (this.worker) {
@@ -387,6 +425,25 @@ export class WorkerHost {
         break
       }
 
+      case 'packages_query_done': {
+        const pending = this.pendingPackagesQuery.get(msg.requestId)
+        this.pendingPackagesQuery.delete(msg.requestId)
+        pending?.resolve({
+          action: msg.action,
+          loaded: msg.loaded,
+          notLoaded: msg.notLoaded,
+          ...(msg.loadResults ? { loadResults: msg.loadResults } : {}),
+        })
+        break
+      }
+
+      case 'packages_query_error': {
+        const pending = this.pendingPackagesQuery.get(msg.requestId)
+        this.pendingPackagesQuery.delete(msg.requestId)
+        pending?.reject(new Error(msg.message))
+        break
+      }
+
       case 'mem_report':
         // Worker 周期上报 JS 堆内存（UX §3.4 状态条）；换算 MB 写入 reactive state
         this.state.memoryMb = msg.usedBytes / 1024 / 1024
@@ -461,6 +518,8 @@ export class WorkerHost {
     this.pendingFsWrite.clear()
     this.pendingFsSnapshot.forEach(({ reject }) => reject(new Error(message)))
     this.pendingFsSnapshot.clear()
+    this.pendingPackagesQuery.forEach(({ reject }) => reject(new Error(message)))
+    this.pendingPackagesQuery.clear()
   }
 
   /** 自动重建：在硬超时分支后调用 */

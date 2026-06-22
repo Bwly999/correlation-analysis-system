@@ -15,6 +15,7 @@ import { Type, type Static } from 'typebox'
 export type NotebookToolName =
   | 'python_exec_inline'
   | 'python_exec_file'
+  | 'python_packages'
   | 'fs_read'
   | 'fs_write'
   | 'fs_edit'
@@ -37,6 +38,20 @@ const PythonExecInlineSchema = Type.Object({
 const PythonExecFileSchema = Type.Object({
   path: Type.String({ description: '相对 workspace 的 .py 路径，必须以 scripts/ 开头' }),
   timeoutMs: Type.Optional(Type.Number({ description: '超时毫秒，默认 60000，最大 300000' })),
+})
+
+const PythonPackagesSchema = Type.Object({
+  action: Type.Optional(
+    Type.Union([Type.Literal('list'), Type.Literal('load')], {
+      description:
+        "默认 'list'：返回 runtime 已有包及加载状态；'load'：按需加载未预装的包（仅限 runtime 内已有 wheel）",
+    }),
+  ),
+  packages: Type.Optional(
+    Type.Array(Type.String(), {
+      description: "action='load' 时必填，要加载的包名数组（必须在 runtime lock 中存在）",
+    }),
+  ),
 })
 
 const FsReadSchema = Type.Object({
@@ -122,6 +137,12 @@ export const NOTEBOOK_AGENT_TOOL_SPECS: readonly NotebookToolSpec[] = [
     inputSchema: PythonExecFileSchema,
   },
   {
+    name: 'python_packages',
+    description:
+      '查询/加载 Python 运行时包。action=list（默认）：返回 runtime 内所有包及加载状态（loaded=立即可用 / notLoaded=runtime 有 wheel 但尚未加载）。action=load：按需加载指定包（仅限 runtime lock 内已有的包；加载后即可 import）。boot 预装的包（numpy/pandas/scipy/scikit-learn/matplotlib/seaborn/statsmodels）已全部 loaded。遇到 import 报 ModuleNotFoundError 时，先用本工具查：查到 notLoaded 的包先 load 再 import；查不到的包（runtime 没有）就换方案（如某可视化库 → matplotlib 手写）。无法装 runtime 外的包。',
+    inputSchema: PythonPackagesSchema,
+  },
+  {
     name: 'fs_read',
     description:
       '读 workspace 文件。文本默认前 300 行，数据文件（csv/parquet 等）默认前 10 行；要看更多用 python_exec_inline 写代码。不要试图通过 offset/limit 翻完整张表。',
@@ -176,6 +197,7 @@ export const getNotebookAgentToolSpec = (
 
 export type PythonExecInlineParams = Static<typeof PythonExecInlineSchema>
 export type PythonExecFileParams = Static<typeof PythonExecFileSchema>
+export type PythonPackagesParams = Static<typeof PythonPackagesSchema>
 export type FsReadParams = Static<typeof FsReadSchema>
 export type FsWriteParams = Static<typeof FsWriteSchema>
 export type FsEditParams = Static<typeof FsEditSchema>

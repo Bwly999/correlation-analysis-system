@@ -11,7 +11,7 @@
  *  - 死了之后由主线程 terminate + 重建（不在 Worker 内自我恢复）
  */
 
-import { bootPyodide, execPython } from './pyodideBoot'
+import { bootPyodide, execPython, type RuntimePackageMeta } from './pyodideBoot'
 import {
   clearInterrupt,
   type HostToWorkerRequest,
@@ -23,6 +23,8 @@ import type { PyodideInterface } from 'pyodide'
 let pyodide: PyodideInterface | null = null
 let interruptBuffer: SharedArrayBuffer | null = null
 let booting = false
+/** boot 时从 lock 读出的 runtime 全量包清单（python_packages 工具查询用） */
+let runtimePackages: RuntimePackageMeta[] = []
 const WORKSPACE_ROOTS = ['inputs', 'scripts', 'artifacts', 'reports'] as const
 
 // 内存上报定时器（UX §3.4 状态条）：init 成功后每 2s 把 JS 堆占用推给主线程。
@@ -88,6 +90,7 @@ const handleInit = async (req: Extract<HostToWorkerRequest, { kind: 'init' }>) =
       },
     })
     pyodide = result.pyodide
+    runtimePackages = result.runtimePackages
 
     post({
       kind: 'init_done',
@@ -166,6 +169,9 @@ self.addEventListener('message', (event: MessageEvent<HostToWorkerRequest>) => {
       break
     case 'fs_snapshot':
       void handleFsSnapshot(req)
+      break
+    case 'packages_query':
+      void handlePackagesQuery(req)
       break
     case 'shutdown':
       stopMemReporting()
@@ -272,6 +278,74 @@ const collectSnapshotPaths = (
     } catch {
       return []
     }
+  })
+}
+
+const handlePackagesQuery = async (
+  req: Extract<HostToWorkerRequest, { kind: 'packages_query' }>,
+) => {
+  if (!pyodide) {
+    post({
+      kind: 'packages_query_error',
+      requestId: req.requestId,
+      message: 'Pyodide 尚未初始化',
+    })
+    return
+  }
+
+  // loadedPackages: { [name]: channel } —— pyodide 维护，记录已 loadPackage 过的包
+  const loadedMap = pyodide.loadedPackages as unknown as Record<string, string>
+  const isLoaded = (name: string) => !!loadedMap[name]
+
+  // action=load：先按需加载，再返回最新状态
+  let loadResults: Array<{ name: string; ok: boolean; message?: string }> | undefined
+  if (req.action === 'load' && Array.isArray(req.packages)) {
+    loadResults = []
+    for (const name of req.packages) {
+      if (isLoaded(name)) {
+        loadResults.push({ name, ok: true })
+        continue
+      }
+      const exists = runtimePackages.some((p) => p.name === name)
+      if (!exists) {
+        loadResults.push({
+          name,
+          ok: false,
+          message: `包 ${name} 不在 runtime lock 中，无法加载`,
+        })
+        continue
+      }
+      try {
+        // fetch 白名单 shim 放行同源 runtime wheel
+        await pyodide.loadPackage(name)
+        loadResults.push({ name, ok: isLoaded(name) })
+      } catch (err) {
+        loadResults.push({
+          name,
+          ok: false,
+          message: err instanceof Error ? err.message : String(err),
+        })
+      }
+    }
+  }
+
+  const loaded: Array<{ name: string; version: string }> = []
+  const notLoaded: Array<{ name: string; version: string }> = []
+  for (const p of runtimePackages) {
+    if (isLoaded(p.name)) {
+      loaded.push({ name: p.name, version: p.version })
+    } else {
+      notLoaded.push({ name: p.name, version: p.version })
+    }
+  }
+
+  post({
+    kind: 'packages_query_done',
+    requestId: req.requestId,
+    action: req.action,
+    loaded,
+    notLoaded,
+    loadResults,
   })
 }
 

@@ -103,6 +103,15 @@ export interface ExecutableWorkerHost extends BridgeWorkerHost {
     traceback?: string
     durationMs: number
   }>
+  queryPackages: (
+    action: 'list' | 'load',
+    packages?: string[],
+  ) => Promise<{
+    action: 'list' | 'load'
+    loaded: Array<{ name: string; version: string }>
+    notLoaded: Array<{ name: string; version: string }>
+    loadResults?: Array<{ name: string; ok: boolean; message?: string }>
+  }>
 }
 
 export interface ToolDispatcherDeps {
@@ -204,6 +213,33 @@ export const createToolDispatcher = (deps: ToolDispatcherDeps): ToolDispatcher =
               : undefined,
             ...(t.stdoutTruncation ? { stdoutTruncation: t.stdoutTruncation } : {}),
             ...(t.stderrTruncation ? { stderrTruncation: t.stderrTruncation } : {}),
+          })
+        }
+        case 'python_packages': {
+          const p = params as { action?: 'list' | 'load'; packages?: string[] }
+          const action = p?.action === 'load' ? 'load' : 'list'
+          if (action === 'load' && (!Array.isArray(p?.packages) || p.packages!.length === 0)) {
+            return errorResult('invalid_arguments', 'python_packages action=load 需要 packages 数组')
+          }
+          const result = await workerHost.queryPackages(action, action === 'load' ? p.packages : undefined)
+          if (action === 'list') {
+            // notLoaded 全量可达数百个，直接返回会撑爆 Agent 上下文。
+            // list 只返回 loaded 全量（boot 预装的几个）+ notLoaded 数量提示；
+            // Agent 想确认某包能否加载，用 action=load 试一次（不存在会在 loadResults 里报错）。
+            return okResult({
+              action,
+              loaded: result.loaded,
+              loadedCount: result.loaded.length,
+              notLoadedCount: result.notLoaded.length,
+              hint: `runtime 内另有 ${result.notLoaded.length} 个未加载的包；要加载某包用 action=load（不存在或加载失败会在 loadResults 里报错）`,
+            })
+          }
+          // action=load：返回加载结果 + 最新 loaded 清单
+          return okResult({
+            action,
+            loadResults: result.loadResults ?? [],
+            loaded: result.loaded,
+            loadedCount: result.loaded.length,
           })
         }
         case 'fs_read': {

@@ -3,6 +3,7 @@
  *
  * 路由表：
  *   python_exec_inline → workerHost.exec
+ *   python_packages → workerHost.queryPackages
  *   fs_read/write/edit/list/grep → fsTools
  *   todo_write → notebookTodoStore.setItems
  *   ask_user → askUserQueue.enqueue
@@ -39,6 +40,17 @@ const buildDeps = async (overrides?: Partial<ToolDispatcherDeps>) => {
         errorType: null,
         durationMs: 12,
       }),
+    queryPackages: vi.fn().mockResolvedValue({
+      action: 'list',
+      loaded: [
+        { name: 'numpy', version: '2.0.2' },
+        { name: 'seaborn', version: '0.13.2' },
+      ],
+      notLoaded: [
+        { name: 'networkx', version: '3.3' },
+        { name: 'sympy', version: '1.13.0' },
+      ],
+    }),
   }
   const todoStore = createNotebookTodoStore()
   const askQueue = createAskUserQueue()
@@ -256,6 +268,56 @@ describe('toolDispatcher', () => {
       const result = await promise
       const details = result.details as Record<string, unknown>
       expect((details.answers as { label: string }[])[0]?.label).toBe('A')
+    })
+  })
+
+  describe('python_packages', () => {
+    it('action=list：调 queryPackages("list")，返回 loaded 全量 + notLoaded 数量提示', async () => {
+      const dispatcher = createToolDispatcher(env.deps)
+      const result = await dispatcher.dispatch('python_packages', {}, 't')
+      expect(env.workerHost.queryPackages).toHaveBeenCalledWith('list', undefined)
+      expect(result.isError).toBeFalsy()
+      const details = result.details as Record<string, unknown>
+      expect(details.action).toBe('list')
+      expect(details.loadedCount).toBe(2)
+      expect(details.notLoadedCount).toBe(2)
+      // loaded 全量返回；notLoaded 只报数量（防上下文爆炸）
+      expect((details.loaded as unknown[]).length).toBe(2)
+      expect(details.notLoaded).toBeUndefined()
+      expect(details.hint).toMatch(/未加载/)
+    })
+
+    it('action=load：缺 packages → invalid_arguments', async () => {
+      const dispatcher = createToolDispatcher(env.deps)
+      const result = await dispatcher.dispatch('python_packages', { action: 'load' }, 't')
+      expect(result.isError).toBe(true)
+      const details = result.details as Record<string, { code?: string }>
+      expect(details.error?.code).toBe('invalid_arguments')
+    })
+
+    it('action=load：返回 loadResults + 最新 loaded 清单', async () => {
+      env.workerHost.queryPackages = vi.fn().mockResolvedValue({
+        action: 'load',
+        loaded: [
+          { name: 'numpy', version: '2.0.2' },
+          { name: 'networkx', version: '3.3' },
+        ],
+        notLoaded: [],
+        loadResults: [
+          { name: 'networkx', ok: true },
+        ],
+      }) as unknown as typeof env.workerHost.queryPackages
+      const dispatcher = createToolDispatcher(env.deps)
+      const result = await dispatcher.dispatch(
+        'python_packages',
+        { action: 'load', packages: ['networkx'] },
+        't',
+      )
+      expect(env.workerHost.queryPackages).toHaveBeenCalledWith('load', ['networkx'])
+      const details = result.details as Record<string, unknown>
+      expect(details.action).toBe('load')
+      expect((details.loadResults as Array<{ ok: boolean }>)[0]?.ok).toBe(true)
+      expect(details.loadedCount).toBe(2)
     })
   })
 
