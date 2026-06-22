@@ -16,7 +16,9 @@ createApp(App).mount('#notebook-root')
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker
-      .register('/notebook-sw.js', { scope: '/' })
+      // base 子路径部署下：SW 脚本与 scope 都随 base 走（/workflow/notebook-sw.js，scope=/workflow/）。
+      // SW 最大 scope 受限于脚本所在目录，scope 必须与 base 一致，否则无法接管 /workflow/notebook.html。
+      .register(`${import.meta.env.BASE_URL}notebook-sw.js`, { scope: import.meta.env.BASE_URL })
       .catch(() => {
         // SW 注册失败不阻塞笔记本主功能（只是少了缓存，每次重下 pyodide）
       })

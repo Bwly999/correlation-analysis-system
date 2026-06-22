@@ -69,7 +69,9 @@ export interface NotebookSessionRuntime {
   dispose: () => void
 }
 
-const DEFAULT_PYODIDE_INDEX_URL = '/pyodide/v0.27/'
+// base 子路径部署（如 /workflow/）下，pyodide 运行时随站点走 base 前缀；
+// 默认 base='/' 时等价于 '/pyodide/v0.27/'。版本锁定 v0.27 不变（安全模型 §10.1）。
+const DEFAULT_PYODIDE_INDEX_URL = `${import.meta.env.BASE_URL}pyodide/v0.27/`
 const FILE_TREE_POLL_MS = 2_000
 const WORKER_SYNC_DIRS = ['inputs', 'scripts'] as const
 

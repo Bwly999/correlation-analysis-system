@@ -87,8 +87,13 @@ const notebookCoiHeaders = (): Plugin => ({
   name: 'notebook-coi-headers',
   apply: 'serve',
   configureServer(server) {
+    // 直接在 configureServer 里 use 的中间件跑在 Vite baseMiddleware 之前，
+    // 此时 req.url 仍带 base 前缀（如 /workflow/notebook.html）。先按 server.config.base
+    // 归一化，再做 notebook 路径判断，使 base 子路径部署下 COI 头仍能正确注入。
+    const base = server.config.base
     server.middlewares.use((req, res, next) => {
-      const url = req.url ?? ''
+      const raw = req.url ?? ''
+      const url = base !== '/' && raw.startsWith(base) ? '/' + raw.slice(base.length) : raw
 
       // 给所有响应都�?CORP=same-origin（除非后续中间件改写�?
       // /pyodide/* �?pyodideStaticProxy 改为 cross-origin
@@ -165,8 +170,12 @@ const pyodideStaticProxy = (): Plugin => {
     name: 'pyodide-static-proxy',
     apply: 'serve',
     configureServer(server) {
+      // 与 notebookCoiHeaders 同理：此中间件先于 baseMiddleware，req.url 仍带 base 前缀。
+      // 先按 server.config.base 归一化，使 base 子路径部署下 /workflow/pyodide/... 仍能命中代理。
+      const base = server.config.base
       server.middlewares.use((req, res, next) => {
-        const url = req.url ?? ''
+        const raw = req.url ?? ''
+        const url = base !== '/' && raw.startsWith(base) ? '/' + raw.slice(base.length) : raw
         if (!url.startsWith(`/pyodide/${PYODIDE_VERSION}/`)) {
           next()
           return

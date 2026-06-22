@@ -22,19 +22,21 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 const PYODIDE_PREFIX = '/pyodide/v0.27/'
 
 const isCoiPage = (pathname: string): boolean => {
+  // 兼容 base 子路径部署（如 /workflow/notebook.html）：按路径后缀/包含判定，
+  // 不依赖服务端是否感知 Vite base。默认 base='/' 时与原前缀判定等价。
+  // pathname 已剥离 query（见 applyCoiHeaders），故不再匹配 '/notebook?'。
   return (
-    pathname === '/notebook.html' ||
-    pathname === '/notebook-iframe.html' ||
-    pathname === '/notebook' ||
-    pathname.startsWith('/notebook?') ||
-    pathname.startsWith('/notebook/') ||
+    pathname.endsWith('/notebook.html') ||
+    pathname.endsWith('/notebook-iframe.html') ||
+    pathname.endsWith('/notebook') ||
+    pathname.includes('/notebook/') ||
     // 生产 chunk / source map 等
-    pathname.startsWith('/src/notebook/') ||
-    pathname.startsWith('/assets/notebook')
+    pathname.includes('/src/notebook/') ||
+    pathname.includes('/assets/notebook')
   )
 }
 
-const isPyodideAsset = (pathname: string): boolean => pathname.startsWith(PYODIDE_PREFIX)
+const isPyodideAsset = (pathname: string): boolean => pathname.includes(PYODIDE_PREFIX)
 
 export const applyCoiHeaders = (request: FastifyRequest, reply: FastifyReply): void => {
   // request.url 含 query string；用 pathname 做前缀判断

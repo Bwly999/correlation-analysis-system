@@ -33,6 +33,10 @@ describe('notebook Service Worker 接管范围', () => {
     expect(shouldSwHandle('GET', '/pyodide/v0.27/whl/numpy-1.26.4-cp312.whl')).toBe(true)
   })
 
+  it('/workflow/pyodide/v0.27/* GET（base 子路径部署）→ 接管', () => {
+    expect(shouldSwHandle('GET', '/workflow/pyodide/v0.27/pyodide.asm.wasm')).toBe(true)
+  })
+
   it('/api/workflows GET → 不接管（避免缓存 API）', () => {
     expect(shouldSwHandle('GET', '/api/workflows')).toBe(false)
   })

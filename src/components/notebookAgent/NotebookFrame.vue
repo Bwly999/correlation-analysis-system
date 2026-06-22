@@ -55,7 +55,8 @@ const session = useNotebookSession({
   },
 })
 
-const iframeSrc = computed(() => `/notebook.html?session=${encodeURIComponent(iframeSessionId.value)}`)
+// base 子路径部署下随 base 走（如 /workflow/notebook.html）；默认 base='/' 时为 /notebook.html。
+const iframeSrc = computed(() => `${import.meta.env.BASE_URL}notebook.html?session=${encodeURIComponent(iframeSessionId.value)}`)
 
 // 关闭 = 隐藏（保留存活会话，可恢复）。不再 requestClose/dispose：
 // 隐藏时 Worker 仍在运行、OPFS 有轮询兜底，无数据丢失；本地 message bridge 改为卸载时释放。

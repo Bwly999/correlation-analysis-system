@@ -91,4 +91,28 @@ describe('registerNotebookHeaders', () => {
     expect(h['cross-origin-opener-policy']).toBeUndefined()
     await app.close()
   })
+
+  it('base 子路径 /workflow/notebook.html 仍注入 COOP + COEP', async () => {
+    const app = await buildApp()
+    const h = await headersOf(app, '/workflow/notebook.html?session=abc')
+    expect(h['cross-origin-opener-policy']).toBe('same-origin')
+    expect(h['cross-origin-embedder-policy']).toBe('require-corp')
+    await app.close()
+  })
+
+  it('base 子路径 /workflow/pyodide/v0.27/* 仍注入 CORP=cross-origin', async () => {
+    const app = await buildApp()
+    const h = await headersOf(app, '/workflow/pyodide/v0.27/pyodide.asm.wasm')
+    expect(h['cross-origin-resource-policy']).toBe('cross-origin')
+    expect(h['cross-origin-embedder-policy']).toBe('require-corp')
+    await app.close()
+  })
+
+  it('base 子路径 /workflow/assets/notebook-*.js（生产 chunk）仍命中 COI', async () => {
+    const app = await buildApp()
+    const h = await headersOf(app, '/workflow/assets/notebook-vendor-abc.js')
+    expect(h['cross-origin-opener-policy']).toBe('same-origin')
+    expect(h['cross-origin-embedder-policy']).toBe('require-corp')
+    await app.close()
+  })
 })
