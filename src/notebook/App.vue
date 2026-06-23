@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue'
 import NotebookView from './components/NotebookView.vue'
+import NotebookSessionsPicker from './components/NotebookSessionsPicker.vue'
 import { createMemOpfsRoot } from './shared/__tests__/memOpfs'
 import { ensureWorkspaceTree, writeFile, type OpfsDirectoryHandle } from './shared/opfsAccess'
 import { demoSession, demoLoading, demoLoadFailed } from './fixtures/demoSession'
@@ -16,8 +17,10 @@ import {
 } from './runtime/notebookAgentClient'
 
 const params = new URLSearchParams(window.location.search)
-const sessionId = params.get('session')
-const mode = params.get('demo') ?? (sessionId ? 'session' : 'ux')
+const initialSessionId = params.get('session')
+// mode 为响应式：列表页 → 进入会话在 SPA 内切换，不整页刷新、不重建 Vue app。
+// 优先级：?demo=xxx → 对应 demo；?session=xxx → session；都没有 → sessions（历史列表）。
+const mode = ref<'session' | 'sessions' | string>(params.get('demo') ?? (initialSessionId ? 'session' : 'sessions'))
 
 // demo 模式独立的 OPFS 根；session 模式直接复用 runtime.opfsRoot（响应式跟随 switchSession）
 const demoOpfsRoot = ref<OpfsDirectoryHandle | null>(null)
@@ -31,6 +34,11 @@ const activeConversationId = ref<string>('')
 const workspaceLabel = ref('相关性分析')
 const runtime = shallowRef<NotebookSessionRuntime | null>(null)
 
+// sessions 列表页（notebook.html 无参数直接访问）状态
+const pickerSessions = ref<NotebookSessionListItem[]>([])
+const pickerLoading = ref(false)
+const pickerError = ref<string | undefined>(undefined)
+
 const toConversation = (item: NotebookSessionListItem): NotebookConversation => ({
   id: item.sessionId,
   title: item.title,
@@ -41,9 +49,29 @@ const toConversation = (item: NotebookSessionListItem): NotebookConversation => 
 })
 
 const loadConversationList = async () => {
-  if (mode !== 'session') return
+  if (mode.value !== 'session') return
   const response = await listNotebookSessions()
   conversations.value = response.sessions.map(toConversation)
+}
+
+/** sessions 列表页：拉取历史会话列表 */
+const loadPickerSessions = async () => {
+  pickerLoading.value = true
+  pickerError.value = undefined
+  try {
+    const response = await listNotebookSessions()
+    pickerSessions.value = response.sessions
+  } catch (err) {
+    pickerError.value = err instanceof Error ? err.message : String(err)
+  } finally {
+    pickerLoading.value = false
+  }
+}
+
+/** sessions 列表页 → 进入具体会话（或新建空白会话） */
+const enterSession = async (targetSessionId: string) => {
+  mode.value = 'session'
+  await initSessionMode(targetSessionId)
 }
 
 const syncActiveConversation = () => {
@@ -164,8 +192,8 @@ service_q   float64
 const initDemoMode = async () => {
   const root = await seedDemoWorkspace()
   demoOpfsRoot.value = root
-  if (mode === 'loading') session.value = demoLoading
-  else if (mode === 'failed') session.value = demoLoadFailed
+  if (mode.value === 'loading') session.value = demoLoading
+  else if (mode.value === 'failed') session.value = demoLoadFailed
   else session.value = demoSession
 
   // 左侧对话栏 mock：第一条为当前 demo 会话（激活态），其余为历史对话
@@ -225,9 +253,13 @@ const initSessionMode = async (targetSessionId: string) => {
 }
 
 onMounted(async () => {
-  if (mode === 'poc') return
-  if (mode === 'session' && sessionId) {
-    await initSessionMode(sessionId)
+  if (mode.value === 'poc') return
+  if (mode.value === 'session' && initialSessionId) {
+    await initSessionMode(initialSessionId)
+    return
+  }
+  if (mode.value === 'sessions') {
+    await loadPickerSessions()
     return
   }
   await initDemoMode()
@@ -435,11 +467,26 @@ const handleClose = () => {
   }
 }
 
-const isPoc = computed(() => mode === 'poc')
+const isPoc = computed(() => mode.value === 'poc')
+
+/** sessions 列表页：新建空白会话 → 进入分析 */
+const handlePickerCreate = async () => {
+  const payload = await createNotebookSessionEntry({ origin: window.location.origin })
+  await enterSession(payload.sessionId)
+}
 </script>
 
 <template>
   <PocApp v-if="isPoc" />
+  <NotebookSessionsPicker
+    v-else-if="mode === 'sessions'"
+    :sessions="pickerSessions"
+    :loading="pickerLoading"
+    :error="pickerError"
+    @select="enterSession"
+    @create="handlePickerCreate"
+    @refresh="loadPickerSessions"
+  />
   <NotebookView
     v-else-if="opfsRoot"
     :opfs-root="opfsRoot"
