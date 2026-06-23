@@ -63,7 +63,11 @@ export type NotebookAgentEvent =
   | {
       type: 'tool.start'
       sessionId: string
-      toolCall: Record<string, unknown>
+      toolCall: {
+        id: string
+        toolName: string
+        args: Record<string, unknown>
+      }
     }
   | {
       type: 'tool.execute'

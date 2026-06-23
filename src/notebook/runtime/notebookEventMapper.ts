@@ -1,4 +1,6 @@
+import { diffLines } from 'diff'
 import type {
+  AnyToolCall,
   AssistantBlock,
   AssistantMessage,
   AskUserBlock,
@@ -165,14 +167,34 @@ const buildAskUserBlock = (
   }
 }
 
-const previewText = (value: unknown) => {
-  const text =
-    typeof value === 'string'
-      ? value
-      : value == null
-        ? ''
-        : JSON.stringify(value, null, 2)
-  return text.length > 200 ? `${text.slice(0, 200)}…` : text
+const textFromParam = (value: unknown): string => {
+  if (typeof value === 'string') return value
+  if (value == null) return ''
+  try {
+    return JSON.stringify(value, null, 2)
+  } catch {
+    return String(value)
+  }
+}
+
+/** 按换行计行数；空串为 0 行，"a\nb" 为 2 行 */
+const countLines = (text: string): number => (text.length === 0 ? 0 : text.split('\n').length)
+
+/**
+ * 用行级 diff 算 fs_edit 的新增 / 删减行数。
+ * added = change.added 的 count 之和；removed = change.removed 的 count 之和。
+ */
+const computeEditLineStats = (
+  oldStr: string,
+  newStr: string,
+): { addedLines: number; removedLines: number } => {
+  let addedLines = 0
+  let removedLines = 0
+  for (const change of diffLines(oldStr, newStr)) {
+    if (change.added) addedLines += change.count
+    else if (change.removed) removedLines += change.count
+  }
+  return { addedLines, removedLines }
 }
 
 const parseToolResultText = (value: unknown): string => {
@@ -224,10 +246,190 @@ const readTruncation = (
   }
 }
 
+/** 在 session 消息里按 toolCallId 查找已存在的 tool/ask_user block */
+const findBlockByCallId = (
+  session: NotebookSessionVm,
+  toolCallId: string,
+): Extract<AssistantBlock, { kind: 'tool' | 'ask_user' }> | undefined => {
+  for (const message of session.messages) {
+    if (message.role !== 'assistant') continue
+    for (const block of message.blocks) {
+      if (
+        (block.kind === 'tool' || block.kind === 'ask_user') &&
+        block.data.id === toolCallId
+      ) {
+        return block
+      }
+    }
+  }
+  return undefined
+}
+
+/**
+ * 根据工具参数构建（或更新）对应 tool block 的 data。
+ * tool.start（带完整 args）和 tool.execute 共用：start 先建卡让用户看到"正在写入"，
+ * execute 到达时若已存在则跳过，否则兜底建。行数/内容这类能从 args 算出的字段一次性填好，
+ * 让徽章立即拿到补间终值。
+ */
+const buildToolBlockData = (
+  toolName: string,
+  toolCallId: string,
+  params: Record<string, unknown>,
+):
+  | { kind: 'tool'; data: AnyToolCall }
+  | { kind: 'ask_user'; data: AskUserBlock } => {
+  switch (toolName) {
+    case 'python_exec_inline':
+    case 'python_exec_file':
+      return {
+        kind: 'tool',
+        data: {
+          id: toolCallId,
+          kind: 'python_exec',
+          variant: toolName === 'python_exec_file' ? 'file' : 'inline',
+          code:
+            toolName === 'python_exec_file'
+              ? String(params.path ?? '')
+              : String(params.code ?? ''),
+          stdout: '',
+          stderr: '',
+          status: 'running',
+        },
+      }
+    case 'fs_read':
+      return {
+        kind: 'tool',
+        data: {
+          id: toolCallId,
+          kind: 'fs_read',
+          path: String(params.path ?? ''),
+          linesShown: 0,
+          content: '',
+          truncated: false,
+          status: 'running',
+        },
+      }
+    case 'fs_write': {
+      const content = textFromParam(params.content)
+      return {
+        kind: 'tool',
+        data: {
+          id: toolCallId,
+          kind: 'fs_write',
+          path: String(params.path ?? ''),
+          bytes: 0,
+          content,
+          addedLines: countLines(content),
+          status: 'running',
+        },
+      }
+    }
+    case 'fs_edit': {
+      const oldStr = textFromParam(params.oldStr)
+      const newStr = textFromParam(params.newStr)
+      const { addedLines, removedLines } = computeEditLineStats(oldStr, newStr)
+      return {
+        kind: 'tool',
+        data: {
+          id: toolCallId,
+          kind: 'fs_edit',
+          path: String(params.path ?? ''),
+          oldStr,
+          newStr,
+          addedLines,
+          removedLines,
+          status: 'running',
+        },
+      }
+    }
+    case 'fs_grep':
+      return {
+        kind: 'tool',
+        data: {
+          id: toolCallId,
+          kind: 'fs_grep',
+          pattern: String(params.pattern ?? ''),
+          scope: typeof params.path === 'string' && params.path.length > 0 ? params.path : 'workspace',
+          matches: [],
+          status: 'running',
+        },
+      }
+    case 'todo_write':
+      return {
+        kind: 'tool',
+        data: {
+          id: toolCallId,
+          kind: 'todo_write',
+          items: normalizeTodoItems(params.items),
+          status: 'running',
+        },
+      }
+    case 'ask_user':
+      return { kind: 'ask_user', data: buildAskUserBlock(toolCallId, params) }
+    default:
+      // 未提供专用卡片的工具走通用兜底：参数原样存，等 tool.end 填 result。
+      return {
+        kind: 'tool',
+        data: {
+          id: toolCallId,
+          kind: 'generic_tool',
+          toolName,
+          params,
+          status: 'running',
+        },
+      }
+  }
+}
+
+/**
+ * tool.start：后端在 LLM 生成完整参数后、实际执行前发出。
+ * 提前建卡让用户立刻看到"正在写入"并启动行数补间动画，而不必等 OPFS 写完。
+ * 幂等：若 toolCallId 已有 block（重复事件）则跳过。
+ */
+const applyToolStart = (
+  session: NotebookSessionVm,
+  event: Extract<NotebookAgentEvent, { type: 'tool.start' }>,
+) => {
+  if (findBlockByCallId(session, event.toolCall.id)) return
+
+  const assistant = [...session.messages]
+      .reverse()
+      .find((message): message is AssistantMessage => message.role === 'assistant')
+  if (!assistant) return
+
+  const params =
+    event.toolCall.args && typeof event.toolCall.args === 'object'
+      ? (event.toolCall.args as Record<string, unknown>)
+      : {}
+
+  // ask_user 不在 start 阶段建卡（其副作用 await_user 由 execute 阶段处理），留给 execute。
+  if (event.toolCall.toolName === 'ask_user') return
+
+  if (event.toolCall.toolName !== 'ask_user') {
+    toolStartTimes.set(event.toolCall.id, now())
+  }
+
+  const built = buildToolBlockData(event.toolCall.toolName, event.toolCall.id, params)
+  if (built.kind === 'tool' && built.data.kind === 'todo_write') {
+    session.todos = built.data.items
+  }
+  assistant.blocks.push(built)
+}
+
 const applyToolExecute = (
   session: NotebookSessionVm,
   event: Extract<NotebookAgentEvent, { type: 'tool.execute' }>,
 ) => {
+  // tool.start 已建卡 → 复用，不重复创建（仅 ask_user 会在 execute 建卡）。
+  if (findBlockByCallId(session, event.toolCallId)) {
+    // ask_user 的副作用在 execute 阶段才落（start 阶段已跳过）
+    if (event.toolName === 'ask_user') {
+      session.agent = 'awaiting_user'
+      session.runtime.isRunning = false
+    }
+    return
+  }
+
   const assistant = [...session.messages]
     .reverse()
     .find((message): message is AssistantMessage => message.role === 'assistant')
@@ -243,114 +445,14 @@ const applyToolExecute = (
       ? (event.params as Record<string, unknown>)
       : {}
 
-  switch (event.toolName) {
-    case 'python_exec_inline':
-    case 'python_exec_file':
-      assistant.blocks.push({
-        kind: 'tool',
-        data: {
-          id: event.toolCallId,
-          kind: 'python_exec',
-          variant: event.toolName === 'python_exec_file' ? 'file' : 'inline',
-          code:
-            event.toolName === 'python_exec_file'
-              ? String(params.path ?? '')
-              : String(params.code ?? ''),
-          stdout: '',
-          stderr: '',
-          status: 'running',
-        },
-      })
-      break
-    case 'fs_read':
-      assistant.blocks.push({
-        kind: 'tool',
-        data: {
-          id: event.toolCallId,
-          kind: 'fs_read',
-          path: String(params.path ?? ''),
-          linesShown: 0,
-          content: '',
-          truncated: false,
-          status: 'running',
-        },
-      })
-      break
-    case 'fs_write':
-      assistant.blocks.push({
-        kind: 'tool',
-        data: {
-          id: event.toolCallId,
-          kind: 'fs_write',
-          path: String(params.path ?? ''),
-          bytes: 0,
-          preview: previewText(params.content),
-          status: 'running',
-        },
-      })
-      break
-    case 'fs_edit':
-      assistant.blocks.push({
-        kind: 'tool',
-        data: {
-          id: event.toolCallId,
-          kind: 'fs_edit',
-          path: String(params.path ?? ''),
-          preview: previewText(params.newStr),
-          status: 'running',
-        },
-      })
-      break
-    case 'fs_grep':
-      assistant.blocks.push({
-        kind: 'tool',
-        data: {
-          id: event.toolCallId,
-          kind: 'fs_grep',
-          pattern: String(params.pattern ?? ''),
-          scope: typeof params.path === 'string' && params.path.length > 0 ? params.path : 'workspace',
-          matches: [],
-          status: 'running',
-        },
-      })
-      break
-    case 'todo_write':
-      {
-        const todoItems = normalizeTodoItems(params.items)
-        assistant.blocks.push({
-          kind: 'tool',
-          data: {
-            id: event.toolCallId,
-            kind: 'todo_write',
-            items: todoItems,
-            status: 'running',
-          },
-        })
-        session.todos = todoItems
-      }
-      break
-    case 'ask_user':
-      assistant.blocks.push({
-        kind: 'ask_user',
-        data: buildAskUserBlock(event.toolCallId, params),
-      })
-      session.agent = 'awaiting_user'
-      session.runtime.isRunning = false
-      break
-    default:
-      // 未提供专用卡片的工具走通用兜底：参数原样存，等 tool.end 填 result。
-      // 这样未来新增工具前端零改动（仅需要更好 UX 时再补专用 case）。
-      assistant.blocks.push({
-        kind: 'tool',
-        data: {
-          id: event.toolCallId,
-          kind: 'generic_tool',
-          toolName: event.toolName,
-          params,
-          status: 'running',
-        },
-      })
-      break
+  const built = buildToolBlockData(event.toolName, event.toolCallId, params)
+  if (built.kind === 'tool' && built.data.kind === 'todo_write') {
+    session.todos = built.data.items
+  }
+  assistant.blocks.push(built)
+  if (built.kind === 'ask_user') {
+    session.agent = 'awaiting_user'
+    session.runtime.isRunning = false
   }
 }
 
@@ -690,7 +792,8 @@ const buildHistoryToolBlock = (tc: NotebookHistoryToolItem): AssistantBlock | nu
           durationMs,
         },
       }
-    case 'fs_write':
+    case 'fs_write': {
+      const content = textFromParam(params.content)
       return {
         kind: 'tool',
         data: {
@@ -698,23 +801,32 @@ const buildHistoryToolBlock = (tc: NotebookHistoryToolItem): AssistantBlock | nu
           kind: 'fs_write',
           path: String(params.path ?? ''),
           bytes: typeof details?.bytes === 'number' ? details.bytes : 0,
-          preview: previewText(params.content),
+          content,
+          addedLines: countLines(content),
           status,
           durationMs,
         },
       }
-    case 'fs_edit':
+    }
+    case 'fs_edit': {
+      const oldStr = textFromParam(params.oldStr)
+      const newStr = textFromParam(params.newStr)
+      const { addedLines, removedLines } = computeEditLineStats(oldStr, newStr)
       return {
         kind: 'tool',
         data: {
           id: tc.id,
           kind: 'fs_edit',
           path: String(params.path ?? ''),
-          preview: previewText(params.newStr),
+          oldStr,
+          newStr,
+          addedLines,
+          removedLines,
           status,
           durationMs,
         },
       }
+    }
     case 'fs_grep':
       return {
         kind: 'tool',
@@ -881,6 +993,9 @@ export const applyNotebookEvent = (
       }
       return
     }
+    case 'tool.start':
+      applyToolStart(session, event as Extract<NotebookAgentEvent, { type: 'tool.start' }>)
+      return
     case 'tool.execute':
       applyToolExecute(session, event as Extract<NotebookAgentEvent, { type: 'tool.execute' }>)
       return

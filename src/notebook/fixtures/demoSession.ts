@@ -167,8 +167,9 @@ const messages: NotebookMessage[] = [
           durationMs: 12,
           path: 'scripts/02_corr.py',
           bytes: 2412,
-          preview:
+          content:
             "# 相关性矩阵\nimport pandas as pd\nfrom scipy.stats import pointbiserialr\n\ndf = pd.read_csv('inputs/upstream.csv')\nnum_cols = df.select_dtypes('number').columns",
+          addedLines: 5,
         },
       },
       {
@@ -232,8 +233,9 @@ const messages: NotebookMessage[] = [
           durationMs: 8,
           path: 'reports/main.md',
           bytes: 4318,
-          preview:
+          content:
             '# 用户流失因子探索分析\n\n> 数据来源：画布节点「数据清洗-2025Q2」\n> 行列：12,488 × 24\n\n## 1. 数据概览\n\n目标变量 churn 为二分类，0/1 分布约 95:5，存在显著不平衡...',
+          addedLines: 11,
         },
       },
       {

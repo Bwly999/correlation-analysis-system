@@ -84,6 +84,7 @@ const canCollapse = computed(() => props.collapsible)
           </span>
         </div>
       </div>
+      <slot name="headerExtra" />
       <ToolStatusBadge :status="status" :duration-ms="durationMs" />
       <ChevronRight
         v-if="canCollapse"

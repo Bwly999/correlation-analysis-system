@@ -14,6 +14,7 @@ import type { OpfsDirectoryHandle } from '../shared/opfsAccess'
 import ThinkingCard from './cards/ThinkingCard.vue'
 import PythonExecCard from './cards/PythonExecCard.vue'
 import FsWriteCard from './cards/FsWriteCard.vue'
+import FsEditCard from './cards/FsEditCard.vue'
 import FsReadCard from './cards/FsReadCard.vue'
 import FsGrepCard from './cards/FsGrepCard.vue'
 import TodoWriteCard from './cards/TodoWriteCard.vue'
@@ -70,9 +71,13 @@ const onAskSubmit = (askId: string, payload: { optionIds: string[]; text?: strin
           :tool="b.data"
         />
         <FsWriteCard
-          v-else-if="b.kind === 'tool' && (b.data.kind === 'fs_write' || b.data.kind === 'fs_edit')"
+          v-else-if="b.kind === 'tool' && b.data.kind === 'fs_write'"
           :tool="b.data"
           @open-in-tree="(p) => emit('openInTree', p)"
+        />
+        <FsEditCard
+          v-else-if="b.kind === 'tool' && b.data.kind === 'fs_edit'"
+          :tool="b.data"
         />
         <FsReadCard
           v-else-if="b.kind === 'tool' && b.data.kind === 'fs_read'"

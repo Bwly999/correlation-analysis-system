@@ -56,15 +56,21 @@ export interface FsWriteToolCall extends ToolCallBase {
   kind: 'fs_write'
   path: string
   bytes: number
-  /** 前 200 字符预览 */
-  preview: string
+  /** 完整写入内容（展开视图渲染用） */
+  content: string
+  /** 新增行数（content 换行数），徽章补间动画终值 */
+  addedLines: number
 }
 
 export interface FsEditToolCall extends ToolCallBase {
   kind: 'fs_edit'
   path: string
-  /** 编辑后预览 */
-  preview: string
+  /** 原始替换对（diff 并排视图渲染用） */
+  oldStr: string
+  newStr: string
+  /** 按行级 diff 算的新增 / 删减行数，徽章双数字终值 */
+  addedLines: number
+  removedLines: number
 }
 
 export interface FsReadToolCall extends ToolCallBase {
