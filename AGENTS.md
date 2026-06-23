@@ -36,8 +36,8 @@ pnpm lint:fix       # ESLint 自动修复
 ### 运行单个测试
 
 ```bash
-pnpm test:unit -- <test-pattern>
-# 例如: pnpm test:unit -- workflowStore
+pnpm test:unit <test-pattern>
+# 例如: pnpm test:unit workflowStore
 ```
 
 ## 项目架构
