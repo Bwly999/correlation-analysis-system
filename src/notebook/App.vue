@@ -298,7 +298,11 @@ const handleAttach = async (files: File[]): Promise<UserAttachment[]> => {
   return runtime.value.importAttachments(files)
 }
 
-const handleAskUserSubmit = async (payload: { askId: string; optionId: string; text?: string }) => {
+const handleAskUserSubmit = async (payload: {
+  askId: string
+  optionIds: string[]
+  text?: string
+}) => {
   if (runtime.value) {
     await runtime.value.answerAskUser(payload)
     return
@@ -318,7 +322,7 @@ const handleAskUserSubmit = async (payload: { askId: string; optionId: string; t
                 data: {
                   ...block.data,
                   status: 'answered' as const,
-                  answeredOptionId: payload.optionId,
+                  answeredOptionIds: payload.optionIds,
                   answeredText: payload.text,
                 },
               }

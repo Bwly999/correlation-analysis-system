@@ -24,14 +24,14 @@ import AssistantTextBlock from './AssistantTextBlock.vue'
 const props = defineProps<{ message: AssistantMessage; opfsRoot?: OpfsDirectoryHandle }>()
 
 const emit = defineEmits<{
-  askUserSubmit: [payload: { askId: string; optionId: string; text?: string }]
+  askUserSubmit: [payload: { askId: string; optionIds: string[]; text?: string }]
   askUserCancel: [askId: string]
   openInTree: [path: string]
 }>()
 
 const isStreaming = computed(() => props.message.streaming)
 
-const onAskSubmit = (askId: string, payload: { optionId: string; text?: string }) => {
+const onAskSubmit = (askId: string, payload: { optionIds: string[]; text?: string }) => {
   emit('askUserSubmit', { askId, ...payload })
 }
 </script>

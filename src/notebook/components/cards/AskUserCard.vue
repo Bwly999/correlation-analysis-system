@@ -10,30 +10,50 @@
 import { computed, ref } from 'vue'
 import { HelpCircle, Sparkles, Check } from 'lucide-vue-next'
 import type { AskUserBlock } from '../../types/messageStream'
+import { renderMarkdownSafe } from '../../preview/markdownRenderer'
 
 const props = defineProps<{ block: AskUserBlock }>()
 
 const emit = defineEmits<{
-  submit: [payload: { optionId: string; text?: string }]
+  submit: [payload: { optionIds: string[]; text?: string }]
   cancel: []
 }>()
 
-const selectedId = ref<string | null>(null)
-const customText = ref('')
+/** 自由输入选项的虚拟 id（与 options 同为字符串 id 命名空间） */
+const FREE_TEXT_ID = '__free_text__'
 
-const selectedOption = computed(() =>
-  props.block.options.find((o) => o.id === selectedId.value) ?? null,
-)
-
+const isMultiSelect = computed(() => Boolean(props.block.multiSelect))
 const isPending = computed(() => props.block.status === 'pending')
 
-const canSubmit = computed(() => {
-  if (!selectedId.value) return false
-  const opt = selectedOption.value
-  if (opt && (opt.id.includes('let-agent') === false) && opt.label.includes('自己定')) {
-    return customText.value.trim().length > 0
+/** 选中集合：单选语义下点击会覆盖为单元素数组 */
+const selectedIds = ref<string[]>([])
+const customText = ref('')
+
+const isSelected = (id: string) => selectedIds.value.includes(id)
+
+/** 点击选项：单选=覆盖，多选=增删；自由文本项独立（不可与普通选项同选） */
+const toggleOption = (id: string) => {
+  if (!isPending.value) return
+  if (id === FREE_TEXT_ID) {
+    selectedIds.value = [FREE_TEXT_ID]
+    return
   }
-  if (props.block.allowFreeText && selectedId.value === '__free_text__') {
+  if (isMultiSelect.value) {
+    selectedIds.value = selectedIds.value.filter((s) => s !== FREE_TEXT_ID)
+    selectedIds.value = isSelected(id)
+      ? selectedIds.value.filter((s) => s !== id)
+      : [...selectedIds.value, id]
+  } else {
+    selectedIds.value = [id]
+  }
+}
+
+/** 自由文本框：选中了自由文本项，或单选+自定义文案时显示 */
+const showFreeTextInput = computed(() => isSelected(FREE_TEXT_ID))
+
+const canSubmit = computed(() => {
+  if (selectedIds.value.length === 0) return false
+  if (isSelected(FREE_TEXT_ID)) {
     return customText.value.trim().length > 0
   }
   return true
@@ -42,26 +62,21 @@ const canSubmit = computed(() => {
 const onSubmit = () => {
   if (!canSubmit.value) return
   emit('submit', {
-    optionId: selectedId.value!,
-    text:
-      selectedId.value === '__free_text__' || customText.value
-        ? customText.value
-        : undefined,
+    optionIds: [...selectedIds.value],
+    text: isSelected(FREE_TEXT_ID) ? customText.value : undefined,
   })
 }
 
-const showFreeTextInput = computed(() => {
-  if (selectedId.value === '__free_text__') return true
-  const opt = selectedOption.value
-  return !!opt?.label.includes('自己定')
-})
+/** 问题正文 markdown：约束内联元素样式，不引入大标题块级样式 */
+const renderedQuestion = computed(() => renderMarkdownSafe(props.block.question))
 
 const answeredOptionLabel = computed(() => {
   if (props.block.status !== 'answered') return ''
-  if (props.block.answeredOptionId === '__free_text__') return '自由输入'
-  return (
-    props.block.options.find((o) => o.id === props.block.answeredOptionId)?.label ?? '已选择'
-  )
+  const ids = props.block.answeredOptionIds ?? []
+  if (ids.includes(FREE_TEXT_ID)) return '自由输入'
+  if (ids.length === 0) return '已选择'
+  const labels = ids.map((id) => props.block.options.find((o) => o.id === id)?.label).filter(Boolean)
+  return labels.length > 0 ? labels.join('、') : '已选择'
 })
 </script>
 
@@ -120,12 +135,11 @@ const answeredOptionLabel = computed(() => {
             </span>
           </span>
         </div>
-        <p
-          class="nb-display mt-1.5 text-[15px] font-medium leading-[1.55]"
+        <div
+          class="nb-display mt-1.5 text-[15px] font-medium leading-[1.55] [&_a]:text-[var(--nb-copper-deep)] [&_a]:underline [&_code]:rounded [&_code]:bg-[var(--nb-paper-tint)] [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[0.86em] [&_li]:my-0 [&_ol]:my-1 [&_ol]:pl-4 [&_p]:my-0 [&_strong]:font-semibold [&_ul]:my-1 [&_ul]:pl-4"
           style="color: var(--nb-ink); letter-spacing: -0.005em;"
-        >
-          {{ block.question }}
-        </p>
+          v-html="renderedQuestion"
+        />
       </div>
     </header>
 
@@ -141,7 +155,7 @@ const answeredOptionLabel = computed(() => {
                   borderColor: 'var(--nb-rule)',
                   opacity: 0.7,
                 }
-              : selectedId === opt.id
+              : isSelected(opt.id)
               ? {
                   borderColor: 'var(--nb-copper)',
                   backgroundColor: 'var(--nb-copper-soft)',
@@ -150,15 +164,15 @@ const answeredOptionLabel = computed(() => {
               : { borderColor: 'var(--nb-rule)' }
           "
           :disabled="!isPending"
-          @click="isPending && (selectedId = opt.id)"
+          @click="toggleOption(opt.id)"
           @mouseenter="(e) => {
-            if (isPending && selectedId !== opt.id) {
+            if (isPending && !isSelected(opt.id)) {
               (e.currentTarget as HTMLElement).style.borderColor = 'rgba(199, 107, 74, 0.4)';
               (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--nb-paper-tint)'
             }
           }"
           @mouseleave="(e) => {
-            if (isPending && selectedId !== opt.id) {
+            if (isPending && !isSelected(opt.id)) {
               (e.currentTarget as HTMLElement).style.borderColor = 'var(--nb-rule)';
               (e.currentTarget as HTMLElement).style.backgroundColor = 'white'
             }
@@ -168,7 +182,7 @@ const answeredOptionLabel = computed(() => {
           <span
             class="nb-mono mt-0.5 w-5 shrink-0 text-[11px]"
             :style="
-              selectedId === opt.id
+              isSelected(opt.id)
                 ? { color: 'var(--nb-copper-deep)', fontWeight: 700 }
                 : { color: 'var(--nb-ink-faint)', fontWeight: 700 }
             "
@@ -177,17 +191,24 @@ const answeredOptionLabel = computed(() => {
             {{ String.fromCharCode(65 + idx) }}.
           </span>
 
-          <!-- 单选圆 -->
+          <!-- 选中标记：单选=圆点 radio，多选=方框 checkbox -->
           <span
-            class="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 transition"
+            class="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center border-2 transition"
+            :class="isMultiSelect ? 'rounded-[3px]' : 'rounded-full'"
             :style="
-              selectedId === opt.id
+              isSelected(opt.id)
                 ? { borderColor: 'var(--nb-copper)', backgroundColor: 'var(--nb-copper)' }
                 : { borderColor: 'var(--nb-rule-strong)', backgroundColor: 'white' }
             "
           >
+            <Check
+              v-if="isSelected(opt.id) && isMultiSelect"
+              :size="11"
+              :stroke-width="3"
+              class="text-white"
+            />
             <span
-              v-if="selectedId === opt.id"
+              v-else-if="isSelected(opt.id)"
               class="h-1.5 w-1.5 rounded-full bg-white"
             />
           </span>
@@ -226,16 +247,16 @@ const answeredOptionLabel = computed(() => {
         <button
           class="flex w-full items-center gap-3 rounded-[var(--nb-radius-sm)] border-[1.5px] border-dashed bg-white/60 px-3.5 py-2.5 text-left transition"
           :style="
-            selectedId === '__free_text__'
+            isSelected(FREE_TEXT_ID)
               ? { borderColor: 'var(--nb-copper)', backgroundColor: 'var(--nb-copper-soft)' }
               : { borderColor: 'var(--nb-rule-strong)' }
           "
-          @click="selectedId = '__free_text__'"
+          @click="toggleOption(FREE_TEXT_ID)"
         >
           <span
             class="nb-mono mt-0.5 w-5 shrink-0 text-[11px]"
             :style="
-              selectedId === '__free_text__'
+              isSelected(FREE_TEXT_ID)
                 ? { color: 'var(--nb-copper-deep)', fontWeight: 700 }
                 : { color: 'var(--nb-ink-faint)', fontWeight: 700 }
             "
@@ -246,13 +267,13 @@ const answeredOptionLabel = computed(() => {
           <span
             class="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 transition"
             :style="
-              selectedId === '__free_text__'
+              isSelected(FREE_TEXT_ID)
                 ? { borderColor: 'var(--nb-copper)', backgroundColor: 'var(--nb-copper)' }
                 : { borderColor: 'var(--nb-rule-strong)', backgroundColor: 'white' }
             "
           >
             <span
-              v-if="selectedId === '__free_text__'"
+              v-if="isSelected(FREE_TEXT_ID)"
               class="h-1.5 w-1.5 rounded-full bg-white"
             />
           </span>

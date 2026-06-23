@@ -89,6 +89,38 @@ const truncateExecOutput = (
   return result
 }
 
+/**
+ * 检测 python_exec_inline 是否被误用于"应落盘"场景（分析/建模/绘图/长代码）。
+ * 命中时返回提示文案（会挂到 details.hint），不阻断执行——作为持续教育模型的安全网。
+ *
+ * 判定信号（命中任一即触发）：
+ *   - 行数 > 25（按 \n 计数）
+ *   - 含 def / class（函数/类定义，暗示多步骤）
+ *   - 含 plt.savefig / plt.subplots / fig, ax（绘图）
+ *   - 含 .to_csv( / .to_parquet( / .to_excel(（数据落盘型分析）
+ */
+export const detectInlineAntiPattern = (code: string): string | null => {
+  const reasons: string[] = []
+  const lineCount = code.split('\n').length
+  if (lineCount > 25) {
+    reasons.push(`代码较长（${lineCount} 行）`)
+  }
+  if (/\bdef\s+\w+/.test(code)) {
+    reasons.push('含函数定义 def')
+  }
+  if (/\bclass\s+\w+/.test(code)) {
+    reasons.push('含类定义 class')
+  }
+  if (/plt\.savefig|plt\.subplots|fig,\s*ax/.test(code)) {
+    reasons.push('含绘图代码')
+  }
+  if (/\.(to_csv|to_parquet|to_excel)\s*\(/.test(code)) {
+    reasons.push('含数据落盘操作')
+  }
+  if (reasons.length === 0) return null
+  return `⚠️ 这段代码触发了"应落盘"信号（${reasons.join('、')}）。按规范，这类代码应先 fs_write 到 scripts/<名称>.py 再用 python_exec_file 执行，便于后续 fs_edit 增量修改、避免每次重写整段。本次已为你执行，但下次请走落盘流程。`
+}
+
 // ──────────────────────────────────────────────
 // 依赖注入
 // ──────────────────────────────────────────────
@@ -155,13 +187,17 @@ export const createToolDispatcher = (deps: ToolDispatcherDeps): ToolDispatcher =
           const timeout = Math.min(Math.max(p.timeoutMs ?? DEFAULT_EXEC_TIMEOUT, 1_000), 300_000)
           const out = await workerHost.exec(p.code, timeout)
           const t = truncateExecOutput(out.stdout, out.stderr)
+          // 软提示：检测 inline 是否被误用于"应落盘"场景（分析/建模/绘图/长代码）。
+          // 不阻断执行，只在成功结果里挂 hint 持续教育模型。
+          const antiPatternHint = detectInlineAntiPattern(p.code)
           if (out.ok) {
             return okResult({
               execId: toolCallId,
               status: 'ok',
-              stdout: t.stdout,
+              stdout: antiPatternHint ? `${t.stdout}\n\n${antiPatternHint}` : t.stdout,
               stderr: t.stderr,
               elapsedMs: out.durationMs,
+              ...(antiPatternHint ? { hint: antiPatternHint } : {}),
               ...(t.stdoutTruncation ? { stdoutTruncation: t.stdoutTruncation } : {}),
               ...(t.stderrTruncation ? { stderrTruncation: t.stderrTruncation } : {}),
             })
@@ -288,6 +324,7 @@ export const createToolDispatcher = (deps: ToolDispatcherDeps): ToolDispatcher =
             header: p.header,
             options: p.options,
             multiSelect: p.multiSelect,
+            allowFreeText: p.allowFreeText,
             recommendedIndex: p.recommendedIndex,
           })
           return okResult({ answers: result.answers })

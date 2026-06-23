@@ -70,7 +70,7 @@ const emit = defineEmits<{
   download: []
   rename: [next: string]
   send: [text: string, attachments: import('../types/messageStream').UserAttachment[]]
-  askUserSubmit: [payload: { askId: string; optionId: string; text?: string }]
+  askUserSubmit: [payload: { askId: string; optionIds: string[]; text?: string }]
   askUserCancel: [askId: string]
   abort: []
   compact: []

@@ -61,7 +61,11 @@ export interface NotebookSessionRuntime {
    * 发送时注入消息文本提示 Agent 用 fs_read 读取。文件名冲突直接覆盖（与 upstream.csv 一致）。
    */
   importAttachments: (files: File[]) => Promise<UserAttachment[]>
-  answerAskUser: (payload: { askId: string; optionId: string; text?: string }) => Promise<void>
+  answerAskUser: (payload: {
+    askId: string
+    optionIds: string[]
+    text?: string
+  }) => Promise<void>
   /** 用户主动取消某个 ask_user：等价于终止整轮 Agent（用户想自己输入） */
   cancelAskUser: (askId: string) => Promise<void>
   /** 统一终止当前轮 Agent（推理中走后端 abort；等 ask_user 时复用 cancelAskUser） */
@@ -853,18 +857,31 @@ export const createNotebookSessionRuntime = async (
     }
   }
 
-  const answerAskUser = async (payload: { askId: string; optionId: string; text?: string }) => {
+  const answerAskUser = async (payload: {
+    askId: string
+    optionIds: string[]
+    text?: string
+  }) => {
     const askItem = askUserQueue.list().find((item) => item.toolCallId === payload.askId)
-    const optionMatch = askItem?.options?.find((_option, index) => (
-      `${payload.askId}-option-${index + 1}` === payload.optionId
-    ))
+    const trimmedText = payload.text?.trim()
+    // 把每个选中的 optionId 映射回 label（id 由 mapper 生成：`${toolCallId}-option-${n}`）
+    const optionAnswers = payload.optionIds
+      .filter((id) => id !== '__free_text__')
+      .map((id) => {
+        const matched = askItem?.options?.find((_option, index) => (
+          `${payload.askId}-option-${index + 1}` === id
+        ))
+        return {
+          label: matched?.label ?? id,
+          isCustom: false,
+        }
+      })
+    // 自由文本：作为最后一个答案项（isCustom=true）
+    const customAnswer = trimmedText
+      ? [{ label: trimmedText, isCustom: true }]
+      : []
     askUserQueue.resolve(payload.askId, {
-      answers: [
-        {
-          label: payload.text?.trim() || optionMatch?.label || payload.optionId,
-          isCustom: Boolean(payload.text?.trim()),
-        },
-      ],
+      answers: [...optionAnswers, ...customAnswer],
     })
   }
 

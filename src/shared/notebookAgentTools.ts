@@ -119,7 +119,14 @@ const AskUserSchema = Type.Object({
   question: Type.String({ description: '问题文本（中文 1-300 字符）' }),
   header: Type.String({ description: '短标签（≤12 字符），UI 显示为 chip' }),
   options: Type.Optional(Type.Array(AskUserOptionSchema)),
-  multiSelect: Type.Optional(Type.Boolean()),
+  multiSelect: Type.Optional(
+    Type.Boolean({ description: '是否多选；默认 false 单选。仅控制单/多选交互，与 allowFreeText 独立' }),
+  ),
+  allowFreeText: Type.Optional(
+    Type.Boolean({
+      description: '是否允许自由文本输入（即使有 options 也可附"自由输入"项，类似 Claude Code 的 Other）',
+    }),
+  ),
   recommendedIndex: Type.Optional(Type.Number({ description: '推荐项索引' })),
 })
 
@@ -127,13 +134,13 @@ export const NOTEBOOK_AGENT_TOOL_SPECS: readonly NotebookToolSpec[] = [
   {
     name: 'python_exec_inline',
     description:
-      '执行一段 Python 代码（等价 python -c）。无状态：每次都要重新 import 与读数据；想跨步骤复用就把中间结果落盘。落盘路径强制约束：所有写文件操作（plt.savefig / df.to_csv / df.to_parquet / df.to_excel / open(path,"w") 等）必须以 artifacts/（中间产物）或 reports/（最终报告）开头，禁止写到工作区根或使用无前缀相对路径（如 "out.csv"）——否则文件不会同步到文件树，worker 重启后也会丢失。出图后 plt.close() 释放内存。',
+      '执行一段一次性 Python 代码（等价 python -c）。无状态：每次都要重新 import 与读数据；想跨步骤复用就把中间结果落盘。【仅用于探查】shape / dtypes / describe / head / info / columns / 简短表达式 ≤20 行。【禁止】用于：数据分析、统计建模、绘图（plt.savefig/subplots）、含 def/class 的代码、多步骤代码、任何后续可能修改的代码 —— 这些必须先 fs_write 到 scripts/ 再用 python_exec_file，否则每次都要重写整段，浪费 token 且易出错。落盘路径强制约束：所有写文件操作（plt.savefig / df.to_csv / df.to_parquet / df.to_excel / open(path,"w") 等）必须以 artifacts/（中间产物）或 reports/（最终报告）开头，禁止写到工作区根或使用无前缀相对路径（如 "out.csv"）——否则文件不会同步到文件树，worker 重启后也会丢失。出图后 plt.close() 释放内存。',
     inputSchema: PythonExecInlineSchema,
   },
   {
     name: 'python_exec_file',
     description:
-      '执行 workspace 里某 .py 脚本。当代码较长 / 后续可能复用 / 用户可能下载时，先 fs_write 到 scripts/，再用本工具跑。脚本内的所有写文件操作同样必须以 artifacts/ 或 reports/ 开头（见 python_exec_inline 的路径约束）。',
+      '执行 workspace 里某 .py 脚本（等价 python myscript.py）。【这是分析/建模/绘图的默认执行方式】先 fs_write 到 scripts/<语义化名称>.py 再用本工具跑。命名建议：scripts/eda_<step>.py（探查）/ scripts/plot_<topic>.py（绘图）/ scripts/model_<name>.py（建模），便于后续定位修改。修改已有脚本时优先 fs_edit 局部替换（改列名/调参数/换算法）——先 fs_read 看当前内容再改，只有大重构才 fs_write 整文件覆盖。脚本内的所有写文件操作同样必须以 artifacts/ 或 reports/ 开头（见 python_exec_inline 的路径约束）。',
     inputSchema: PythonExecFileSchema,
   },
   {

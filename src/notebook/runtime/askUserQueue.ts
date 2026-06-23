@@ -21,6 +21,7 @@ export interface AskUserItem {
   header: string
   options?: AskUserOption[]
   multiSelect?: boolean
+  allowFreeText?: boolean
   recommendedIndex?: number
 }
 

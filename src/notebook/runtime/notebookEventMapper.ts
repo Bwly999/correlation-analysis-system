@@ -152,12 +152,14 @@ const buildAskUserBlock = (
     }
   })
 
-  const allowFreeText = options.length === 0 || Boolean(params.multiSelect)
+  const allowFreeText = options.length === 0 || Boolean(params.allowFreeText)
+  const multiSelect = Boolean(params.multiSelect)
 
   return {
     id: toolCallId,
     question: typeof params.question === 'string' ? params.question : '请补充你的分析目标',
     options,
+    multiSelect,
     allowFreeText,
     status: 'pending',
   }
@@ -451,14 +453,28 @@ const applyToolEnd = (
           session.agent = 'failed'
         } else {
           const details = parseToolResultDetails(event.result)
-          const answer = Array.isArray(details?.answers) ? details.answers[0] : null
+          const answerList = Array.isArray(details?.answers) ? details.answers : []
           block.data.status = 'answered'
-          if (answer && typeof answer === 'object') {
+          const answeredOptionIds: string[] = []
+          let customText: string | undefined
+          for (const answer of answerList) {
+            if (!answer || typeof answer !== 'object') continue
             const label = 'label' in answer && typeof answer.label === 'string' ? answer.label : ''
-            const matched = block.data.options.find((option) => option.label === label)
-            block.data.answeredOptionId = matched?.id ?? '__free_text__'
-            block.data.answeredText =
-              'isCustom' in answer && answer.isCustom ? label : undefined
+            const isCustom = 'isCustom' in answer && answer.isCustom === true
+            if (isCustom) {
+              // 自由文本：归入 __free_text__ 项 + answeredText 回显原文
+              answeredOptionIds.push('__free_text__')
+              customText = label
+            } else {
+              const matched = block.data.options.find((option) => option.label === label)
+              if (matched) answeredOptionIds.push(matched.id)
+            }
+          }
+          if (answeredOptionIds.length > 0) {
+            block.data.answeredOptionIds = answeredOptionIds
+          }
+          if (customText !== undefined) {
+            block.data.answeredText = customText
           }
           session.agent = 'running'
           session.runtime.isRunning = true

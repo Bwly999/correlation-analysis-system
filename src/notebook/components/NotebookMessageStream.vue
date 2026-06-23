@@ -24,7 +24,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  askUserSubmit: [payload: { askId: string; optionId: string; text?: string }]
+  askUserSubmit: [payload: { askId: string; optionIds: string[]; text?: string }]
   askUserCancel: [askId: string]
   openInTree: [path: string]
 }>()

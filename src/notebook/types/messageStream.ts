@@ -149,11 +149,13 @@ export interface AskUserBlock {
   id: string
   question: string
   options: AskUserOption[]
-  /** 是否允许自由文本（"你自己定" 选项） */
+  /** 是否多选（默认 false 单选） */
+  multiSelect?: boolean
+  /** 是否允许自由文本（独立于 multiSelect；无 options 时默认允许） */
   allowFreeText?: boolean
   status: AskUserStatus
-  /** 用户最终选择 */
-  answeredOptionId?: string
+  /** 用户最终选择（单选时长度为 1） */
+  answeredOptionIds?: string[]
   /** 用户提交的自由文本 */
   answeredText?: string
 }
