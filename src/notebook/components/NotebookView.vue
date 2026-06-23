@@ -220,6 +220,7 @@ watch(leftRatio, (v) => {
 
 // ── WorkspaceTree / FilePreview 垂直分隔：useLocalStorage 持久化
 const wsTreeRatio = useLocalStorage('notebook:layout:wsTreeRatio', 0.42)
+const wsTreeCollapsed = ref(false)
 
 // 对话侧栏折叠：localStorage 记忆 + ⌘/Ctrl + . 快捷键
 const convCollapseKey = 'notebook:layout:convCollapsed'
@@ -490,7 +491,11 @@ const onSend = (text: string) => emit('send', text)
         <div data-ws-split-root class="flex min-h-0 flex-1 flex-col">
           <div
             class="flex min-h-0 flex-col border-b"
-            :style="{ flexBasis: wsTreeRatio * 100 + '%', borderColor: 'var(--nb-rule)' }"
+            :style="{
+              flexBasis: wsTreeCollapsed ? 'auto' : wsTreeRatio * 100 + '%',
+              flexShrink: wsTreeCollapsed ? '0' : undefined,
+              borderColor: 'var(--nb-rule)',
+            }"
           >
             <WorkspaceTree
               :tree="ws.tree.value"
@@ -499,11 +504,13 @@ const onSend = (text: string) => emit('send', text)
               @select="onSelect"
               @download="onDownload"
               @copy-path="onCopyPath"
+              @collapse="wsTreeCollapsed = $event"
             />
           </div>
 
           <!-- 垂直分隔条：WorkspaceTree / FilePreview -->
           <button
+            v-show="!wsTreeCollapsed"
             class="group relative h-1 shrink-0 cursor-row-resize transition-colors"
             style="background-color: transparent;"
             aria-label="拖动调整高度"

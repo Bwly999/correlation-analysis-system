@@ -12,7 +12,7 @@
  * 视觉风格 ▸ 编辑稿目录：纯 SVG 图标（无 emoji），每个分组一个章节眉签。
  */
 
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import {
   Download,
   Eye,
@@ -20,7 +20,8 @@ import {
   Star,
   ArrowDownToLine,
   Folder,
-  ChevronDown,
+  PanelBottomOpen,
+  PanelBottomClose,
 } from 'lucide-vue-next'
 import type { TreeNode } from '../shared/opfsAccess'
 import { WORKSPACE_TOP_DIRS } from '../shared/opfsAccess'
@@ -37,6 +38,7 @@ const emit = defineEmits<{
   select: [path: string]
   download: [path: string]
   copyPath: [path: string]
+  collapse: [collapsed: boolean]
 }>()
 
 interface DirGroup {
@@ -81,6 +83,8 @@ const groups = computed<DirGroup[]>(() => {
 const totalFiles = computed(() => groups.value.reduce((acc, g) => acc + g.files.length, 0))
 
 const collapsed = ref(false)
+
+watch(collapsed, (v) => emit('collapse', v))
 
 const sizeLabel = (bytes: number) => {
   if (!bytes) return ''
@@ -160,11 +164,15 @@ const groupMeta = (name: string): { label: string } => {
             (e.currentTarget as HTMLElement).style.color = 'var(--nb-ink-mute)'
           }"
         >
-          <ChevronDown
+          <PanelBottomOpen
+            v-if="!collapsed"
             :size="12"
             :stroke-width="1.8"
-            class="transition-transform"
-            :style="{ transform: collapsed ? 'rotate(180deg)' : 'rotate(0deg)' }"
+          />
+          <PanelBottomClose
+            v-else
+            :size="12"
+            :stroke-width="1.8"
           />
         </button>
       </div>
