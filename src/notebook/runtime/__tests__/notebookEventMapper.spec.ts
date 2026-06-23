@@ -307,4 +307,44 @@ describe('notebookEventMapper', () => {
       expect(toolBlock.data.result).toBe('boom')
     }
   })
+
+  it('实时流式 tool.execute→tool.end 的 durationMs 反映实际耗时（不再恒为 0）', () => {
+    const state = createNotebookRuntimeState('sess-1')
+    applyNotebookEvent(state, {
+      type: 'message.start',
+      sessionId: 'sess-1',
+      messageId: 'm-1',
+      role: 'assistant',
+      visibility: 'assistant_visible',
+    })
+    applyNotebookEvent(state, {
+      type: 'tool.execute',
+      sessionId: 'sess-1',
+      toolCallId: 'tool-dur',
+      toolName: 'python_exec_inline',
+      params: { code: 'import time; time.sleep(0.05)' },
+    })
+
+    vi.useFakeTimers()
+    vi.advanceTimersByTime(50)
+    applyNotebookEvent(state, {
+      type: 'tool.end',
+      sessionId: 'sess-1',
+      toolCallId: 'tool-dur',
+      result: JSON.stringify({ status: 'ok', stdout: '', stderr: '' }),
+      isError: false,
+    })
+    vi.useRealTimers()
+
+    const assistant = state.session.messages[0]
+    const toolBlock =
+      assistant && 'blocks' in assistant
+        ? assistant.blocks.find((b) => b.kind === 'tool')
+        : null
+    if (toolBlock?.kind === 'tool' && toolBlock.data.kind === 'python_exec') {
+      // 两次 now() 调用跨越了 advanceTimersByTime，会有 1ms 抖动；用范围断言避免脆弱
+      expect(toolBlock.data.durationMs).toBeGreaterThanOrEqual(50)
+      expect(toolBlock.data.durationMs).toBeLessThanOrEqual(51)
+    }
+  })
 })

@@ -12,6 +12,13 @@ import type { NotebookAgentEvent } from './notebookAgentClient'
 
 const now = () => Date.now()
 
+/**
+ * 实时流式场景下 tool.execute / tool.end 事件本身不携带时间戳，
+ * 这里在前端侧记录每个 toolCallId 的开始时刻，tool.end 到达时计算耗时。
+ * key 为 toolCallId（全局唯一），tool.end 处理完即删除，正常时序无泄漏。
+ */
+const toolStartTimes = new Map<string, number>()
+
 const normalizeTodoItems = (items: unknown): TodoItem[] => {
   if (!Array.isArray(items)) return []
   return items.map((item, index) => {
@@ -224,6 +231,11 @@ const applyToolExecute = (
     .find((message): message is AssistantMessage => message.role === 'assistant')
   if (!assistant) return
 
+  // 记录工具开始时刻（ask_user 这种等用户的工具不计入正常耗时，下面跳过记录）
+  if (event.toolName !== 'ask_user') {
+    toolStartTimes.set(event.toolCallId, now())
+  }
+
   const params =
     event.params && typeof event.params === 'object'
       ? (event.params as Record<string, unknown>)
@@ -349,7 +361,12 @@ const applyToolEnd = (
     for (const block of message.blocks) {
       if (block.kind === 'tool' && block.data.id === event.toolCallId) {
         block.data.status = event.isError ? 'failed' : 'success'
-        block.data.durationMs = block.data.durationMs ?? 0
+        // 用前端记录的开始时刻计算耗时；缺失（如历史回放/异常）时保持 undefined，由 UI 自行隐藏
+        const startedAt = toolStartTimes.get(event.toolCallId)
+        if (startedAt != null) {
+          block.data.durationMs = Math.max(0, now() - startedAt)
+          toolStartTimes.delete(event.toolCallId)
+        }
         if (event.isError) {
           block.data.errorMessage = event.result
         }
