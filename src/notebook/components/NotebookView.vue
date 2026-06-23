@@ -23,6 +23,7 @@
  */
 
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { useLocalStorage } from '@vueuse/core'
 import { useWorkspaceTree } from '../composables/useWorkspaceTree'
 import { useFreshFileTracker } from '../composables/useFreshFileTracker'
 import { useNotebookShortcuts } from '../composables/useNotebookShortcuts'
@@ -217,6 +218,9 @@ watch(leftRatio, (v) => {
   if (typeof localStorage !== 'undefined') localStorage.setItem(splitKey, String(v))
 })
 
+// ── WorkspaceTree / FilePreview 垂直分隔：useLocalStorage 持久化
+const wsTreeRatio = useLocalStorage('notebook:layout:wsTreeRatio', 0.42)
+
 // 对话侧栏折叠：localStorage 记忆 + ⌘/Ctrl + . 快捷键
 const convCollapseKey = 'notebook:layout:convCollapsed'
 const convCollapsed = ref<boolean>(
@@ -254,6 +258,22 @@ const onSplitDrag = (e: PointerEvent) => {
   const move = (ev: PointerEvent) => {
     const ratio = (ev.clientX - rect.left) / rect.width
     leftRatio.value = Math.max(0.32, Math.min(0.78, ratio))
+  }
+  const up = () => {
+    window.removeEventListener('pointermove', move)
+    window.removeEventListener('pointerup', up)
+  }
+  window.addEventListener('pointermove', move)
+  window.addEventListener('pointerup', up)
+}
+
+const onWsTreeDrag = (e: PointerEvent) => {
+  const root = (e.currentTarget as HTMLElement).closest('[data-ws-split-root]') as HTMLElement | null
+  if (!root) return
+  const rect = root.getBoundingClientRect()
+  const move = (ev: PointerEvent) => {
+    const ratio = (ev.clientY - rect.top) / rect.height
+    wsTreeRatio.value = Math.max(0.2, Math.min(0.8, ratio))
   }
   const up = () => {
     window.removeEventListener('pointermove', move)
@@ -467,10 +487,10 @@ const onSend = (text: string) => emit('send', text)
         style="background-color: var(--nb-sidebar);"
         aria-label="Workspace"
       >
-        <div class="flex min-h-0 flex-1 flex-col">
+        <div data-ws-split-root class="flex min-h-0 flex-1 flex-col">
           <div
-            class="flex min-h-0 basis-[42%] flex-col border-b"
-            style="border-color: var(--nb-rule);"
+            class="flex min-h-0 flex-col border-b"
+            :style="{ flexBasis: wsTreeRatio * 100 + '%', borderColor: 'var(--nb-rule)' }"
           >
             <WorkspaceTree
               :tree="ws.tree.value"
@@ -481,7 +501,25 @@ const onSend = (text: string) => emit('send', text)
               @copy-path="onCopyPath"
             />
           </div>
-          <div class="flex min-h-0 basis-[58%] flex-col" aria-label="预览">
+
+          <!-- 垂直分隔条：WorkspaceTree / FilePreview -->
+          <button
+            class="group relative h-1 shrink-0 cursor-row-resize transition-colors"
+            style="background-color: transparent;"
+            aria-label="拖动调整高度"
+            @pointerdown.prevent="onWsTreeDrag"
+          >
+            <span
+              class="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 transition"
+              style="background-color: var(--nb-rule);"
+            />
+            <span
+              class="absolute left-1/2 top-1/2 h-[3px] w-10 -translate-x-1/2 -translate-y-1/2 rounded-full transition group-hover:opacity-100"
+              style="background-color: var(--nb-copper); opacity: 0;"
+            />
+          </button>
+
+          <div class="flex min-h-0 flex-1 flex-col" aria-label="预览">
             <FilePreview
               :opfs-root="props.opfsRoot"
               :selected-path="selectedPath"
