@@ -121,7 +121,7 @@ const endDrag = (e: PointerEvent) => {
 
 <template>
   <div
-    class="flex flex-1 items-center justify-center p-6"
+    class="flex min-h-0 flex-1 items-center justify-center overflow-hidden p-6"
     style="
       background-image:
         radial-gradient(circle at center, transparent 0%, var(--nb-overlay) 100%);
