@@ -2,7 +2,7 @@
  * notebookAgentTools spec 一致性测试。
  *
  * 验收点：
- *   - 全部 9 个工具齐
+ *   - 全部 10 个工具齐
  *   - name 与 dispatcher 路由表一一对应（强约束：spec 改了 dispatcher 也得跟）
  *   - 关键描述短语命中（防止 prompt 漂移）：
  *       python_exec_* 描述含"无状态"
@@ -21,6 +21,7 @@ import {
 const EXPECTED_TOOLS = [
   'python_exec_inline',
   'python_exec_file',
+  'python_packages',
   'fs_read',
   'fs_write',
   'fs_edit',
@@ -31,7 +32,7 @@ const EXPECTED_TOOLS = [
 ] as const
 
 describe('notebookAgentTools spec', () => {
-  it('包含全部 9 个工具，无重复', () => {
+  it('包含全部 10 个工具，无重复', () => {
     const names = NOTEBOOK_AGENT_TOOL_SPECS.map((s) => s.name)
     expect(names.sort()).toEqual([...EXPECTED_TOOLS].sort())
     expect(new Set(names).size).toBe(names.length)

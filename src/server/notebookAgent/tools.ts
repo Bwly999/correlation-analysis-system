@@ -12,6 +12,7 @@ const ASK_USER_TIMEOUT_MS = 24 * 60 * 60 * 1000
 const TOOL_TIMEOUTS: Record<NotebookToolName, number> = {
   python_exec_inline: PYTHON_TIMEOUT_MS,
   python_exec_file: PYTHON_TIMEOUT_MS,
+  python_packages: DEFAULT_TIMEOUT_MS,
   fs_read: DEFAULT_TIMEOUT_MS,
   fs_write: DEFAULT_TIMEOUT_MS,
   fs_edit: DEFAULT_TIMEOUT_MS,
@@ -24,6 +25,7 @@ const TOOL_TIMEOUTS: Record<NotebookToolName, number> = {
 const TOOL_LABELS: Record<NotebookToolName, string> = {
   python_exec_inline: '执行 Python 代码',
   python_exec_file: '执行 Python 脚本',
+  python_packages: '管理 Python 包',
   fs_read: '读取文件',
   fs_write: '写入文件',
   fs_edit: '编辑文件',
@@ -36,6 +38,7 @@ const TOOL_LABELS: Record<NotebookToolName, string> = {
 const TOOL_PROMPT_SNIPPETS: Record<NotebookToolName, string> = {
   python_exec_inline: '执行一段独立的 Python 代码来检查、分析或出图',
   python_exec_file: '执行 scripts/ 下已经落盘的 Python 脚本',
+  python_packages: '查询或加载 Python 运行时包',
   fs_read: '读取工作区里的文件内容',
   fs_write: '写入工作区文件',
   fs_edit: '精确替换文件中的文本片段',
@@ -48,6 +51,7 @@ const TOOL_PROMPT_SNIPPETS: Record<NotebookToolName, string> = {
 const WAITING_MESSAGES: Record<NotebookToolName, string> = {
   python_exec_inline: '正在等待前端执行 Python 代码...',
   python_exec_file: '正在等待前端执行 Python 脚本...',
+  python_packages: '正在等待前端查询 Python 包...',
   fs_read: '正在等待前端读取文件...',
   fs_write: '正在等待前端写入文件...',
   fs_edit: '正在等待前端编辑文件...',
