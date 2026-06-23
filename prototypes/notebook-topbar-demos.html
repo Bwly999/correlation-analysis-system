@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>NotebookTopBar · 右侧三元素设计原型</title>
+
+<!-- Notebook 设计系统字体（与 notebook.css 保持一致） -->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,300..600&family=Plus+Jakarta+Sans:ital,wght@0,400..700;1,400..600&family=JetBrains+Mono:ital,wght@0,400..600;1,400..500&display=swap" rel="stylesheet" />
+
+<style>
+  /* ============ 复用 notebook.css 设计令牌 ============ */
+  :root {
+    --nb-paper:        #fffdfd;
+    --nb-paper-tint:   #faf7f2;
+    --nb-card:         #FFFFFFFE;
+    --nb-overlay:      rgba(60, 50, 40, 0.06);
+    --nb-overlay-strong: rgba(60, 50, 40, 0.10);
+
+    --nb-ink:          #2A2722;
+    --nb-ink-soft:     #46423C;
+    --nb-ink-mute:     #7A7368;
+    --nb-ink-faint:    #ABA496;
+
+    --nb-rule:         rgba(60, 50, 40, 0.09);
+    --nb-rule-strong:  rgba(60, 50, 40, 0.16);
+
+    --nb-copper:       #C76B4A;
+    --nb-copper-deep:  #A85534;
+    --nb-copper-soft:  #F6E7DE;
+    --nb-copper-glow:  rgba(199, 107, 74, 0.12);
+    --nb-sage:         #6E8A66;
+    --nb-sage-soft:    #E2EAD9;
+    --nb-clay:         #B0524E;
+    --nb-clay-soft:    #F1D9D5;
+    --nb-amber:        #BE8536;
+    --nb-amber-soft:   #F4E4C6;
+
+    --nb-radius-xs:    3px;
+    --nb-radius-sm:    6px;
+    --nb-radius-md:    10px;
+    --nb-radius-full:  999px;
+
+    --nb-shadow-sm:    0 1px 2px -1px rgba(60, 50, 40, 0.10), 0 1px 3px -2px rgba(60, 50, 40, 0.06);
+    --nb-shadow-copper: 0 12px 32px -12px rgba(199, 107, 74, 0.30), 0 2px 6px -2px rgba(199, 107, 74, 0.15);
+
+    --nb-font-display: 'Fraunces', 'Source Han Serif SC', 'Songti SC', serif;
+    --nb-font-sans:    'Plus Jakarta Sans', -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    --nb-font-mono:    'JetBrains Mono', 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: var(--nb-font-sans);
+    background: #f3eee6;
+    color: var(--nb-ink-soft);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    padding: 48px 32px 96px;
+    min-height: 100vh;
+  }
+
+  .page-head { max-width: 1280px; margin: 0 auto 40px; }
+  .page-title {
+    font-family: var(--nb-font-display);
+    font-weight: 500;
+    font-size: 34px;
+    letter-spacing: -0.02em;
+    color: var(--nb-ink);
+    line-height: 1.1;
+  }
+  .page-title em { font-style: italic; color: var(--nb-copper-deep); font-weight: 500; }
+  .page-sub {
+    margin-top: 10px;
+    font-size: 14px;
+    color: var(--nb-ink-mute);
+    max-width: 640px;
+    line-height: 1.6;
+  }
+
+  /* 每个 demo 卡片 */
+  .demo-block {
+    max-width: 1280px;
+    margin: 0 auto 36px;
+    background: var(--nb-paper);
+    border: 1px solid var(--nb-rule);
+    border-radius: var(--nb-radius-md);
+    overflow: hidden;
+    box-shadow: 0 1px 3px -2px rgba(60, 50, 40, 0.08);
+  }
+  .demo-label {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--nb-rule);
+    background: linear-gradient(180deg, var(--nb-paper) 0%, var(--nb-paper-tint) 100%);
+  }
+  .demo-label .title {
+    font-family: var(--nb-font-display);
+    font-weight: 500;
+    font-size: 19px;
+    color: var(--nb-ink);
+    letter-spacing: -0.01em;
+  }
+  .demo-label .title .idx {
+    font-family: var(--nb-font-mono);
+    font-size: 11px;
+    color: var(--nb-copper-deep);
+    letter-spacing: 0.16em;
+    margin-right: 10px;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .demo-label .desc {
+    font-size: 12.5px;
+    color: var(--nb-ink-mute);
+    line-height: 1.5;
+    text-align: right;
+    max-width: 520px;
+  }
+
+  /* 模拟顶栏容器（高 56px = h-14，与真实一致） */
+  .topbar {
+    display: flex;
+    align-items: center;
+    height: 56px;
+    padding: 0 24px;
+    gap: 16px;
+    background: linear-gradient(180deg, var(--nb-paper) 0%, var(--nb-paper) 70%, var(--nb-paper-tint) 100%);
+    border-bottom: 1px solid var(--nb-rule);
+  }
+  /* 占位的左侧元素，让顶栏看起来完整 */
+  .topbar-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .topbar-title {
+    font-family: var(--nb-font-display);
+    font-weight: 500;
+    font-size: 18px;
+    color: var(--nb-ink);
+    letter-spacing: -0.01em;
+    margin-right: auto;
+  }
+  .topbar-title .sid {
+    font-family: var(--nb-font-mono);
+    font-size: 10.5px;
+    color: var(--nb-ink-faint);
+    letter-spacing: 0.06em;
+    margin-left: 8px;
+    font-weight: 400;
+  }
+  .arrow-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 32px;
+    padding: 0 10px;
+    border: 1px solid var(--nb-rule);
+    border-radius: var(--nb-radius-sm);
+    background: var(--nb-card);
+    color: var(--nb-ink-mute);
+    font-size: 12px;
+    font-weight: 500;
+  }
+
+  /* 右侧 cluster 包装 */
+  .right-cluster {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-left: auto;
+  }
+
+  .nb-mono { font-family: var(--nb-font-mono); }
+
+  /* ============ Demo A：印模印章（Editorial Stamp）============ */
+  /* 思路：状态做"印章感"，双线框 + 大写衬线 tracking；
+     操作按钮做纯文字链接，hover 出铜色下划线，最克制。 */
+  .demoA .stamp {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 12px 5px;
+    border: 1.5px solid var(--nb-rule-strong);
+    border-radius: 2px;
+    background: transparent;
+    font-family: var(--nb-font-display);
+    font-weight: 500;
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--nb-ink-soft);
+  }
+  .demoA .stamp::before {
+    content: '';
+    position: absolute;
+    inset: 2px;
+    border: 1px solid var(--nb-rule);
+    border-radius: 1px;
+    pointer-events: none;
+  }
+  .demoA .stamp .dot {
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: var(--nb-ink-faint);
+    position: relative;
+    z-index: 1;
+  }
+  .demoA .stamp[data-state='running'] { color: #74521F; border-color: rgba(190,133,54,0.45); }
+  .demoA .stamp[data-state='running'] .dot { background: var(--nb-amber); }
+  .demoA .stamp[data-state='running']::before { border-color: rgba(190,133,54,0.22); }
+  .demoA .stamp[data-state='completed'] { color: #45603E; border-color: rgba(110,138,102,0.45); }
+  .demoA .stamp[data-state='completed'] .dot { background: var(--nb-sage); }
+  .demoA .stamp[data-state='completed']::before { border-color: rgba(110,138,102,0.22); }
+  .demoA .stamp[data-state='failed'] { color: #823331; border-color: rgba(176,82,78,0.45); }
+  .demoA .stamp[data-state='failed'] .dot { background: var(--nb-clay); }
+  .demoA .stamp[data-state='failed']::before { border-color: rgba(176,82,78,0.22); }
+
+  .demoA .actions { display: flex; align-items: center; gap: 18px; }
+  .demoA .link-btn {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-family: var(--nb-font-sans);
+    font-size: 12.5px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--nb-ink-mute);
+    padding: 4px 0;
+    position: relative;
+    transition: color 180ms ease;
+  }
+  .demoA .link-btn .icon { transform: translateY(2px); }
+  .demoA .link-btn::after {
+    content: '';
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 1px;
+    background: var(--nb-copper);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 220ms cubic-bezier(0.22,0.61,0.36,1);
+  }
+  .demoA .link-btn:hover { color: var(--nb-copper-deep); }
+  .demoA .link-btn:hover::after { transform: scaleX(1); }
+  .demoA .vrule { width: 1px; height: 14px; background: var(--nb-rule); }
+
+  /* ============ Demo B：铜质工坊（Copper Workshop）============ */
+  /* 思路：三元素收进统一的胶囊容器，状态点带光环，
+     重启为 ghost、下载为实心铜（建立主次层级）。 */
+  .demoB .cluster {
+    display: inline-flex;
+    align-items: center;
+    height: 36px;
+    padding: 0 6px 0 14px;
+    border-radius: var(--nb-radius-full);
+    background: var(--nb-card);
+    border: 1px solid var(--nb-rule);
+    box-shadow: var(--nb-shadow-sm);
+    gap: 4px;
+  }
+  .demoB .status {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding-right: 12px;
+    border-right: 1px solid var(--nb-rule);
+    margin-right: 4px;
+  }
+  .demoB .status .dot-wrap {
+    position: relative;
+    width: 10px; height: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .demoB .status .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--nb-ink-faint);
+    position: relative;
+    z-index: 1;
+  }
+  .demoB .status .dot-wrap::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    opacity: 0.18;
+    background: currentColor;
+  }
+  .demoB .status[data-state='running'] .dot { background: var(--nb-amber); }
+  .demoB .status[data-state='running'] { color: var(--nb-amber); }
+  .demoB .status[data-state='completed'] .dot { background: var(--nb-sage); }
+  .demoB .status[data-state='completed'] { color: var(--nb-sage); }
+  .demoB .status[data-state='failed'] .dot { background: var(--nb-clay); }
+  .demoB .status[data-state='failed'] { color: var(--nb-clay); }
+  .demoB .status .label {
+    font-family: var(--nb-font-mono);
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    color: var(--nb-ink-soft);
+    text-transform: uppercase;
+  }
+  .demoB .status[data-state='running'] .label { color: #74521F; }
+  .demoB .status[data-state='completed'] .label { color: #45603E; }
+  .demoB .status[data-state='failed'] .label { color: #823331; }
+
+  .demoB .ghost-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    height: 28px;
+    padding: 0 12px;
+    border-radius: var(--nb-radius-full);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-family: var(--nb-font-sans);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--nb-ink-mute);
+    transition: background 160ms ease, color 160ms ease;
+  }
+  .demoB .ghost-btn:hover { background: var(--nb-overlay); color: var(--nb-ink); }
+
+  .demoB .primary-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    height: 28px;
+    padding: 0 14px;
+    border-radius: var(--nb-radius-full);
+    background: var(--nb-copper);
+    border: none;
+    cursor: pointer;
+    font-family: var(--nb-font-sans);
+    font-size: 12px;
+    font-weight: 600;
+    color: #fff;
+    box-shadow: var(--nb-shadow-copper);
+    transition: background 160ms ease, transform 160ms ease;
+  }
+  .demoB .primary-btn:hover { background: var(--nb-copper-deep); transform: translateY(-1px); }
+
+  /* ============ Demo C：极简衬线（Minimal Serif）============ */
+  /* 思路：完全去框，状态只用点 + 衬线斜体词；
+     操作按钮用衬线小写词 + 小图标，hover 铜色淡背景方块。 */
+  .demoC .status {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    padding: 6px 2px;
+  }
+  .demoC .status .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--nb-ink-faint);
+    box-shadow: 0 0 0 3px rgba(171,164,150,0.16);
+  }
+  .demoC .status[data-state='running'] .dot { background: var(--nb-amber); box-shadow: 0 0 0 3px rgba(190,133,54,0.16); }
+  .demoC .status[data-state='completed'] .dot { background: var(--nb-sage); box-shadow: 0 0 0 3px rgba(110,138,102,0.16); }
+  .demoC .status[data-state='failed'] .dot { background: var(--nb-clay); box-shadow: 0 0 0 3px rgba(176,82,78,0.16); }
+  .demoC .status .label {
+    font-family: var(--nb-font-display);
+    font-style: italic;
+    font-weight: 400;
+    font-size: 14px;
+    color: var(--nb-ink-soft);
+    letter-spacing: 0.01em;
+  }
+  .demoC .status .sub {
+    font-family: var(--nb-font-mono);
+    font-size: 9.5px;
+    color: var(--nb-ink-faint);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    margin-left: 2px;
+  }
+
+  .demoC .actions { display: flex; align-items: center; gap: 6px; }
+  .demoC .serif-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 30px;
+    padding: 0 11px;
+    border-radius: var(--nb-radius-sm);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-family: var(--nb-font-display);
+    font-style: italic;
+    font-weight: 400;
+    font-size: 14px;
+    color: var(--nb-ink-mute);
+    transition: background 180ms ease, color 180ms ease;
+  }
+  .demoC .serif-btn .icon { transform: translateY(1px); }
+  .demoC .serif-btn:hover {
+    background: var(--nb-copper-soft);
+    color: var(--nb-copper-deep);
+  }
+  .demoC .divider { width: 1px; height: 18px; background: var(--nb-rule); margin: 0 4px; }
+
+  /* 状态行：展示每个 demo 的三种状态 */
+  .states-row {
+    display: flex;
+    align-items: center;
+    gap: 28px;
+    padding: 18px 24px 22px;
+    background: var(--nb-paper-tint);
+    border-top: 1px dashed var(--nb-rule);
+  }
+  .state-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .state-cell .name {
+    font-family: var(--nb-font-mono);
+    font-size: 9.5px;
+    color: var(--nb-ink-faint);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+  .state-cell .render {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  /* SVG icon 通用 */
+  svg.icon { display: block; }
+
+  @keyframes nb-ping {
+    75%, 100% { transform: scale(2.2); opacity: 0; }
+  }
+  .ping { position: absolute; inset: 0; border-radius: 50%; animation: nb-ping 1.4s cubic-bezier(0,0,0.2,1) infinite; }
+</style>
+</head>
+<body>
+
+<div class="page-head">
+  <h1 class="page-title">顶栏右侧三元素 · <em>设计原型</em></h1>
+  <p class="page-sub">
+    基于 Notebook 现有设计令牌（Fraunces 衬线 + Plus Jakarta Sans + 铜橙暖纸），
+    对「状态徽章 / 重启 / 下载」三元素的视觉与字体做 3 种方向探索。
+    每个方向下方附三态预览（运行中 · 已完成 · 失败）。
+  </p>
+</div>
+
+<!-- ============ Demo A ============ -->
+<section class="demo-block demoA">
+  <div class="demo-label">
+    <div class="title"><span class="idx">A · Editorial</span>印模印章</div>
+    <div class="desc">状态做成印刷印章（双线框 + 大写衬线 tracking），按钮退为纯文字链接，hover 出铜色下划线。最克制、最 Claude。</div>
+  </div>
+
+  <div class="topbar">
+    <div class="topbar-left">
+      <span class="arrow-back">← 返回</span>
+    </div>
+    <h1 class="topbar-title">沪深300 · 因子相关性排查<span class="sid">/ sess_a1b2c3d4e5f6</span></h1>
+
+    <div class="right-cluster">
+      <span class="stamp" data-state="running">
+        <span class="dot"></span>
+        Running
+      </span>
+      <div class="actions">
+        <button class="link-btn">
+          <svg class="icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+          Restart
+        </button>
+        <span class="vrule"></span>
+        <button class="link-btn">
+          <svg class="icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Download
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="states-row">
+    <div class="state-cell">
+      <span class="name">Running</span>
+      <span class="render"><span class="stamp" data-state="running"><span class="dot"></span>Running</span></span>
+    </div>
+    <div class="state-cell">
+      <span class="name">Completed</span>
+      <span class="render"><span class="stamp" data-state="completed"><span class="dot"></span>Done</span></span>
+    </div>
+    <div class="state-cell">
+      <span class="name">Failed</span>
+      <span class="render"><span class="stamp" data-state="failed"><span class="dot"></span>Failed</span></span>
+    </div>
+  </div>
+</section>
+
+<!-- ============ Demo B ============ -->
+<section class="demo-block demoB">
+  <div class="demo-label">
+    <div class="title"><span class="idx">B · Workshop</span>铜质工坊</div>
+    <div class="desc">三元素收进统一胶囊容器；重启 ghost、下载实心铜，建立明确主次。状态点带柔光环。最"产品感"。</div>
+  </div>
+
+  <div class="topbar">
+    <div class="topbar-left">
+      <span class="arrow-back">← 返回</span>
+    </div>
+    <h1 class="topbar-title">沪深300 · 因子相关性排查<span class="sid">/ sess_a1b2c3d4e5f6</span></h1>
+
+    <div class="right-cluster">
+      <div class="cluster">
+        <div class="status" data-state="running">
+          <span class="dot-wrap"><span class="dot"></span></span>
+          <span class="label">Running</span>
+        </div>
+        <button class="ghost-btn" title="重启 Python 环境 (⌘/Ctrl + R)">
+          <svg class="icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+          重启
+        </button>
+        <button class="primary-btn" title="下载工作区 (⌘/Ctrl + S)">
+          <svg class="icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          下载
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="states-row">
+    <div class="state-cell">
+      <span class="name">Running</span>
+      <span class="render">
+        <div class="cluster">
+          <div class="status" data-state="running">
+            <span class="dot-wrap"><span class="dot"></span></span>
+            <span class="label">Running</span>
+          </div>
+        </div>
+      </span>
+    </div>
+    <div class="state-cell">
+      <span class="name">Completed</span>
+      <span class="render">
+        <div class="cluster">
+          <div class="status" data-state="completed">
+            <span class="dot-wrap"><span class="dot"></span></span>
+            <span class="label">Done</span>
+          </div>
+        </div>
+      </span>
+    </div>
+    <div class="state-cell">
+      <span class="name">Failed</span>
+      <span class="render">
+        <div class="cluster">
+          <div class="status" data-state="failed">
+            <span class="dot-wrap"><span class="dot"></span></span>
+            <span class="label">Failed</span>
+          </div>
+        </div>
+      </span>
+    </div>
+  </div>
+</section>
+
+<!-- ============ Demo C ============ -->
+<section class="demo-block demoC">
+  <div class="demo-label">
+    <div class="title"><span class="idx">C · Minimal</span>极简衬线</div>
+    <div class="desc">完全去框：状态只用点 + 衬线斜体词（Running / Done / Failed），按钮同款斜体衬线 + 小图标，hover 铜色淡底。呼吸感最强。</div>
+  </div>
+
+  <div class="topbar">
+    <div class="topbar-left">
+      <span class="arrow-back">← 返回</span>
+    </div>
+    <h1 class="topbar-title">沪深300 · 因子相关性排查<span class="sid">/ sess_a1b2c3d4e5f6</span></h1>
+
+    <div class="right-cluster">
+      <div class="status" data-state="running">
+        <span class="dot"></span>
+        <span class="label">Running</span>
+        <span class="sub">· live</span>
+      </div>
+      <div class="actions">
+        <button class="serif-btn">
+          <svg class="icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+          重启
+        </button>
+        <span class="divider"></span>
+        <button class="serif-btn">
+          <svg class="icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          下载
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="states-row">
+    <div class="state-cell">
+      <span class="name">Running</span>
+      <span class="render">
+        <div class="status" data-state="running"><span class="dot"></span><span class="label">Running</span><span class="sub">· live</span></div>
+      </span>
+    </div>
+    <div class="state-cell">
+      <span class="name">Completed</span>
+      <span class="render">
+        <div class="status" data-state="completed"><span class="dot"></span><span class="label">Done</span><span class="sub">· 2.3s</span></div>
+      </span>
+    </div>
+    <div class="state-cell">
+      <span class="name">Failed</span>
+      <span class="render">
+        <div class="status" data-state="failed"><span class="dot"></span><span class="label">Failed</span><span class="sub">· retry</span></div>
+      </span>
+    </div>
+  </div>
+</section>
+
+</body>
+</html>
