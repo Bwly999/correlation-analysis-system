@@ -42,3 +42,17 @@ export const resolvePreviewKind = (path: string): PreviewKind => {
   const ext = extOf(path)
   return EXT_MAP[ext] ?? 'meta'
 }
+
+/** 扩展名 → highlight.js language 名（未识别 / 纯文本返回空串，表示不高亮）。 */
+const CODE_LANG_MAP: Record<string, string> = {
+  '.py': 'python',
+  '.js': 'javascript',
+  '.ts': 'typescript',
+  '.json': 'json',
+  '.yml': 'yaml',
+  '.yaml': 'yaml',
+  '.toml': 'toml',
+}
+
+export const resolveCodeLanguage = (path: string): string =>
+  CODE_LANG_MAP[extOf(path)] ?? ''

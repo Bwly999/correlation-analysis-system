@@ -14,7 +14,7 @@
 
 import { computed } from 'vue'
 import { CircleSlash, Sparkle } from 'lucide-vue-next'
-import { resolvePreviewKind } from '../preview/previewRouter'
+import { resolvePreviewKind, resolveCodeLanguage } from '../preview/previewRouter'
 import type { PreviewKind } from '../preview/previewRouter'
 import type { OpfsDirectoryHandle } from '../shared/opfsAccess'
 import FileIcon from './FileIcon.vue'
@@ -39,6 +39,10 @@ const props = defineProps<{
 
 const previewKind = computed<PreviewKind>(() =>
   props.selectedPath ? resolvePreviewKind(props.selectedPath) : 'meta',
+)
+
+const codeLanguage = computed(() =>
+  props.selectedPath ? resolveCodeLanguage(props.selectedPath) : '',
 )
 </script>
 
@@ -143,6 +147,7 @@ const previewKind = computed<PreviewKind>(() =>
     <CodePreview
       v-else-if="previewKind === 'code'"
       :content="content"
+      :language="codeLanguage"
     />
     <TablePreview
       v-else-if="previewKind === 'table'"
