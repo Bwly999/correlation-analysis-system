@@ -12,7 +12,7 @@
  * 视觉风格 ▸ 编辑稿目录：纯 SVG 图标（无 emoji），每个分组一个章节眉签。
  */
 
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import {
   Download,
   Eye,
@@ -20,6 +20,7 @@ import {
   Star,
   ArrowDownToLine,
   Folder,
+  ChevronDown,
 } from 'lucide-vue-next'
 import type { TreeNode } from '../shared/opfsAccess'
 import { WORKSPACE_TOP_DIRS } from '../shared/opfsAccess'
@@ -79,6 +80,8 @@ const groups = computed<DirGroup[]>(() => {
 
 const totalFiles = computed(() => groups.value.reduce((acc, g) => acc + g.files.length, 0))
 
+const collapsed = ref(false)
+
 const sizeLabel = (bytes: number) => {
   if (!bytes) return ''
   if (bytes < 1024) return `${bytes} B`
@@ -136,19 +139,43 @@ const groupMeta = (name: string): { label: string } => {
           Workspace
         </span>
       </div>
-      <span
-        class="nb-chip"
-        style="padding: 1px 7px; font-size: 10px; letter-spacing: 0.06em;"
-      >
-        {{ totalFiles }} files
-      </span>
+      <div class="flex items-center gap-1.5">
+        <span
+          class="nb-chip"
+          style="padding: 1px 7px; font-size: 10px; letter-spacing: 0.06em;"
+        >
+          {{ totalFiles }} files
+        </span>
+        <button
+          class="flex h-5 w-5 items-center justify-center rounded-[var(--nb-radius-xs)] transition"
+          style="color: var(--nb-ink-mute);"
+          :title="collapsed ? '展开文件树' : '收起文件树'"
+          @click="collapsed = !collapsed"
+          @mouseenter="(e) => {
+            (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--nb-copper-soft)';
+            (e.currentTarget as HTMLElement).style.color = 'var(--nb-copper-deep)'
+          }"
+          @mouseleave="(e) => {
+            (e.currentTarget as HTMLElement).style.backgroundColor = '';
+            (e.currentTarget as HTMLElement).style.color = 'var(--nb-ink-mute)'
+          }"
+        >
+          <ChevronDown
+            :size="12"
+            :stroke-width="1.8"
+            class="transition-transform"
+            :style="{ transform: collapsed ? 'rotate(180deg)' : 'rotate(0deg)' }"
+          />
+        </button>
+      </div>
     </header>
     <div
+      v-show="!collapsed"
       class="mx-4 nb-rule"
       style="opacity: 0.7;"
     />
 
-    <div class="nb-scroll flex-1 overflow-y-auto">
+    <div v-show="!collapsed" class="nb-scroll flex-1 overflow-y-auto">
       <section
         v-for="group in groups"
         :key="group.name"
