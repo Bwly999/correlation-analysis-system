@@ -93,6 +93,33 @@ const seedDemoWorkspace = async () => {
     'artifacts/corr_matrix.csv',
     'feature,r,p\ncomplaint_count,0.421,0.0001\nservice_q,-0.387,0.0002\ntenure,-0.342,0.0003\n',
   )
+  // 图片预览 mock：complaint_count → churn 概率散点图（与报告主题呼应，验证 image viewer 链路）
+  await writeFile(
+    root,
+    'artifacts/churn_scatter.svg',
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 240" font-family="ui-sans-serif,system-ui,sans-serif">
+  <rect width="360" height="240" fill="#fbfaf6"/>
+  <text x="180" y="26" text-anchor="middle" font-size="13" font-weight="600" fill="#3b3530">complaint_count → churn 概率（正相关）</text>
+  <line x1="60" y1="200" x2="330" y2="200" stroke="#8a8378" stroke-width="1"/>
+  <line x1="60" y1="40" x2="60" y2="200" stroke="#8a8378" stroke-width="1"/>
+  <line x1="60" y1="190" x2="330" y2="80" stroke="#c76b4a" stroke-width="1.4" stroke-dasharray="4 3" opacity="0.7"/>
+  <g fill="#c76b4a" fill-opacity="0.55">
+    <circle cx="60" cy="196.8" r="3.4"/><circle cx="87" cy="193.6" r="3.4"/><circle cx="114" cy="188.8" r="3.4"/>
+    <circle cx="114" cy="192" r="3.4"/><circle cx="141" cy="179.2" r="3.4"/><circle cx="168" cy="168" r="3.4"/>
+    <circle cx="195" cy="158.4" r="3.4"/><circle cx="222" cy="140.8" r="3.4"/><circle cx="249" cy="120" r="3.4"/>
+    <circle cx="276" cy="105.6" r="3.4"/><circle cx="303" cy="88" r="3.4"/><circle cx="330" cy="75.2" r="3.4"/>
+  </g>
+  <g font-size="9" fill="#6b645c" text-anchor="middle">
+    <text x="60" y="214">0</text><text x="114" y="214">2</text><text x="168" y="214">4</text>
+    <text x="222" y="214">6</text><text x="276" y="214">8</text><text x="330" y="214">10</text>
+  </g>
+  <g font-size="9" fill="#6b645c" text-anchor="end">
+    <text x="54" y="203">0</text><text x="54" y="163">0.25</text><text x="54" y="123">0.5</text>
+    <text x="54" y="83">0.75</text><text x="54" y="44">1.0</text>
+  </g>
+  <text x="195" y="232" text-anchor="middle" font-size="10" fill="#6b645c">complaint_count</text>
+</svg>\n`,
+  )
   await writeFile(
     root,
     'reports/main.md',
@@ -140,6 +167,37 @@ const initDemoMode = async () => {
   if (mode === 'loading') session.value = demoLoading
   else if (mode === 'failed') session.value = demoLoadFailed
   else session.value = demoSession
+
+  // 左侧对话栏 mock：第一条为当前 demo 会话（激活态），其余为历史对话
+  const now = Date.now()
+  const min = 60_000
+  activeConversationId.value = demoSession.sessionId
+  conversations.value = [
+    {
+      id: demoSession.sessionId,
+      title: demoSession.title,
+      updatedAt: now - 5 * min,
+      preview: '帮我看看这份用户流失数据，找几个最相关的因子',
+    },
+    {
+      id: 'demo-hist-2',
+      title: '营销活动 ROI 归因',
+      updatedAt: now - 3 * 60 * min,
+      preview: '对比三个渠道的转化漏斗，找出边际收益最高的',
+    },
+    {
+      id: 'demo-hist-3',
+      title: '风控特征筛选',
+      updatedAt: now - 26 * 60 * min,
+      preview: '从 120 个变量里筛出对欺诈识别最稳的子集',
+    },
+    {
+      id: 'demo-hist-4',
+      title: 'Q1 看板波动解释',
+      updatedAt: now - 3 * 24 * 60 * min,
+      preview: 'DAU 为什么在三月初突然下跌',
+    },
+  ]
 }
 
 const initSessionMode = async (targetSessionId: string) => {
