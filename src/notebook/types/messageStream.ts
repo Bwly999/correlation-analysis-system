@@ -158,6 +158,18 @@ export interface AskUserBlock {
   answeredText?: string
 }
 
+/** 用户在输入框上传、写入 workspace 的附件元数据（仅 UI 展示用） */
+export interface UserAttachment {
+  id: string
+  /** 原始文件名（可能含中文/空格，保留展示） */
+  name: string
+  /** workspace 内相对路径，如 inputs/data.csv（agent fs_read 用此路径） */
+  path: string
+  /** 字节数 */
+  size: number
+  mimeType?: string
+}
+
 /** 用户消息 */
 export interface UserMessage {
   id: string
@@ -165,6 +177,8 @@ export interface UserMessage {
   text: string
   /** 发送时间 */
   at: number
+  /** 随消息上传的附件（路径已注入 text，此处仅 UI 展示用；resume 不回放） */
+  attachments?: UserAttachment[]
 }
 
 /** Agent 文本段（普通自然语言段） */

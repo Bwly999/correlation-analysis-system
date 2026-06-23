@@ -58,6 +58,10 @@ const props = defineProps<{
   activeConversationId?: string | null
   /** 工作区标签（左栏底栏） */
   workspaceLabel?: string
+  /** 是否允许上传附件（demo 模式禁用） */
+  canAttach?: boolean
+  /** 写入 workspace 并返回附件元数据 */
+  onAttach?: (files: File[]) => Promise<import('../types/messageStream').UserAttachment[]>
 }>()
 
 const emit = defineEmits<{
@@ -65,7 +69,7 @@ const emit = defineEmits<{
   restart: []
   download: []
   rename: [next: string]
-  send: [text: string]
+  send: [text: string, attachments: import('../types/messageStream').UserAttachment[]]
   askUserSubmit: [payload: { askId: string; optionId: string; text?: string }]
   askUserCancel: [askId: string]
   abort: []
@@ -378,7 +382,14 @@ defineExpose({
   notifyTree: ws.notify,
 })
 
-const onSend = (text: string) => emit('send', text)
+const onSend = (
+  text: string,
+  attachments: import('../types/messageStream').UserAttachment[],
+) => emit('send', text, attachments)
+
+const onAttachError = (message: string) => {
+  toasts.push({ kind: 'warning', title: '附件上传失败', message })
+}
 </script>
 
 <template>
@@ -457,9 +468,12 @@ const onSend = (text: string) => emit('send', text)
               :context-usage="session.runtime.contextUsage"
               :compaction-in-progress="session.runtime.compactionInProgress"
               :compaction-history="session.runtime.compactionHistory"
+              :can-attach="props.canAttach"
+              :on-attach="props.onAttach"
               @send="onSend"
               @abort="emit('abort')"
               @compact="emit('compact')"
+              @attach-error="onAttachError"
             />
           </div>
         </div>

@@ -139,7 +139,11 @@ const todayLabel = computed(() => {
         class="nb-fade-up"
         :style="{ animationDelay: Math.min(idx, 6) * 40 + 'ms' }"
       >
-        <UserMessageBlock v-if="m.role === 'user'" :message="m" />
+        <UserMessageBlock
+          v-if="m.role === 'user'"
+          :message="m"
+          @open-in-tree="(p) => emit('openInTree', p)"
+        />
         <AssistantMessageBlock
           v-else-if="m.role === 'assistant'"
           :message="m"

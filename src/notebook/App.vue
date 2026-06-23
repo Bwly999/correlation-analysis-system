@@ -4,7 +4,7 @@ import NotebookView from './components/NotebookView.vue'
 import { createMemOpfsRoot } from './shared/__tests__/memOpfs'
 import { ensureWorkspaceTree, writeFile, type OpfsDirectoryHandle } from './shared/opfsAccess'
 import { demoSession, demoLoading, demoLoadFailed } from './fixtures/demoSession'
-import type { NotebookConversation, NotebookSessionVm } from './types/messageStream'
+import type { NotebookConversation, NotebookSessionVm, UserAttachment } from './types/messageStream'
 import PocApp from './PocApp.vue'
 import { createNotebookSessionRuntime, type NotebookSessionRuntime } from './runtime/notebookSessionRuntime'
 import { exportWorkspaceZip } from './runtime/workspaceExporter'
@@ -237,9 +237,9 @@ onBeforeUnmount(() => {
   runtime.value?.dispose()
 })
 
-const handleSend = async (text: string) => {
+const handleSend = async (text: string, attachments: UserAttachment[] = []) => {
   if (runtime.value) {
-    await runtime.value.sendUserMessage(text)
+    await runtime.value.sendUserMessage(text, attachments)
     await loadConversationList()
     syncActiveConversation()
     return
@@ -249,9 +249,21 @@ const handleSend = async (text: string) => {
     ...session.value,
     messages: [
       ...session.value.messages,
-      { id: 'u-' + Date.now(), role: 'user', text, at: Date.now() },
+      {
+        id: 'u-' + Date.now(),
+        role: 'user',
+        text,
+        at: Date.now(),
+        attachments: attachments.length > 0 ? attachments : undefined,
+      },
     ],
   }
+}
+
+/** MessageInput 通过此函数把文件写入 workspace inputs/，返回附件元数据 */
+const handleAttach = async (files: File[]): Promise<UserAttachment[]> => {
+  if (!runtime.value) return []
+  return runtime.value.importAttachments(files)
 }
 
 const handleAskUserSubmit = async (payload: { askId: string; optionId: string; text?: string }) => {
@@ -435,6 +447,8 @@ const isPoc = computed(() => mode === 'poc')
     :conversations="conversations"
     :active-conversation-id="activeConversationId"
     :workspace-label="workspaceLabel"
+    :can-attach="true"
+    :on-attach="runtime ? handleAttach : undefined"
     @close="handleClose"
     @restart="handleRestart"
     @download="handleDownload"

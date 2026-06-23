@@ -46,6 +46,7 @@ const buildRuntime = () => ({
   renameSession: vi.fn().mockResolvedValue(undefined),
   renameConversationById: vi.fn().mockResolvedValue(undefined),
   sendUserMessage: vi.fn().mockResolvedValue(undefined),
+  importAttachments: vi.fn().mockResolvedValue([]),
   answerAskUser: vi.fn().mockResolvedValue(undefined),
   cancelAskUser: vi.fn().mockResolvedValue(undefined),
   abort: vi.fn().mockResolvedValue(undefined),

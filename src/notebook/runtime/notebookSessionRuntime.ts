@@ -30,7 +30,7 @@ import {
   hydrateFromHistory,
   type NotebookRuntimeState,
 } from './notebookEventMapper'
-import type { LoadingStage } from '../types/messageStream'
+import type { LoadingStage, UserAttachment } from '../types/messageStream'
 
 export interface NotebookSessionRuntime {
   state: NotebookRuntimeState
@@ -54,7 +54,13 @@ export interface NotebookSessionRuntime {
    * 改的是当前激活会话时，同步更新 state.session.title。
    */
   renameConversationById: (sessionId: string, title: string) => Promise<void>
-  sendUserMessage: (text: string) => Promise<void>
+  sendUserMessage: (text: string, attachments?: UserAttachment[]) => Promise<void>
+  /**
+   * 把用户选择/拖拽/粘贴的文件写入 workspace 的 inputs/ 目录（OPFS + Pyodide MEMFS），
+   * 返回每个文件的附件元数据（含 workspace 内相对路径），供输入框展示 chip +
+   * 发送时注入消息文本提示 Agent 用 fs_read 读取。文件名冲突直接覆盖（与 upstream.csv 一致）。
+   */
+  importAttachments: (files: File[]) => Promise<UserAttachment[]>
   answerAskUser: (payload: { askId: string; optionId: string; text?: string }) => Promise<void>
   /** 用户主动取消某个 ask_user：等价于终止整轮 Agent（用户想自己输入） */
   cancelAskUser: (askId: string) => Promise<void>
@@ -108,6 +114,13 @@ const isAbortLikeError = (error: unknown): boolean => {
 const toTransferableArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
   const out = new ArrayBuffer(bytes.byteLength)
   new Uint8Array(out).set(bytes)
+  return out
+}
+
+/** 复制一份独立的 ArrayBuffer（OPFS / Worker 双写各自需要独立副本，transfer 不会污染另一份） */
+const cloneArrayBuffer = (buf: ArrayBuffer): ArrayBuffer => {
+  const out = new ArrayBuffer(buf.byteLength)
+  new Uint8Array(out).set(new Uint8Array(buf))
   return out
 }
 
@@ -281,12 +294,19 @@ export const createNotebookSessionRuntime = async (
             )
           ).flat()
 
+    // 启动期批量同步：单个文件失败（读 OPFS 出错 / writeFs 超时或 worker 暂未就绪）
+    // 不应让整个 mount_fs 卡死或失败 —— 记录后跳过，保证流程能推进到 ready。
+    // Agent 侧的单文件 fs_write/fs_edit 走 syncSinglePathToWorker，那里保持严格语义。
     for (const path of targetPaths) {
-      const bytes = await readBytes(opfsRootRef.value, path)
-      await workerHost.writeFs(
-        path,
-        toTransferableArrayBuffer(bytes),
-      )
+      try {
+        const bytes = await readBytes(opfsRootRef.value, path)
+        await workerHost.writeFs(
+          path,
+          toTransferableArrayBuffer(bytes),
+        )
+      } catch (err) {
+        console.warn(`[notebook] 同步工作区文件失败，已跳过：${path}`, err)
+      }
     }
 
     return targetPaths
@@ -604,42 +624,63 @@ export const createNotebookSessionRuntime = async (
         progress: { stage: 'mount_fs', percent: 60, detail: '正在切换工作区' },
       }
 
-      // 2. 重置 Python 状态（复用 Worker；失败时内部 hardKill + await init 降级重建）
-      await resetPythonState()
+      try {
+        // 2. 重置 Python 状态（复用 Worker；失败时内部 hardKill + await init 降级重建）
+        await resetPythonState()
 
-      // resetPythonState 降级重建后，把 phase 拉回 load_runtime 起点，
-      // 让 bootProgressStop 能正确反映 bootPyodide 的真实进度（而非一直停在 mount_fs 60%）。
-      if (workerHost.state.status === 'booting') {
-        state.session.phase = {
-          kind: 'loading',
-          progress: { stage: 'load_runtime', percent: 12, detail: '正在重建 Python 运行时' },
+        // resetPythonState 降级重建后，把 phase 拉回 load_runtime 起点，
+        // 让 bootProgressStop 能正确反映 bootPyodide 的真实进度（而非一直停在 mount_fs 60%）。
+        if (workerHost.state.status === 'booting') {
+          state.session.phase = {
+            kind: 'loading',
+            progress: { stage: 'load_runtime', percent: 12, detail: '正在重建 Python 运行时' },
+          }
+          await waitForWorkerReady()
         }
-        await waitForWorkerReady()
+
+        // 3. 切 OPFS 目录 + 重建 toolDispatcher（其闭包捕获 opfsRoot 快照）
+        opfsRootRef.value = await createNotebookOpfsRoot(newSessionId)
+        rebuildToolDispatcher()
+
+        // 4. 把新 session 的 inputs/scripts 灌入 Worker MEMFS（单文件失败不致命，见 syncOpfsFilesToWorker）
+        await syncOpfsFilesToWorker()
+
+        // 5. 重置 VM 状态为新 session
+        currentSessionId = newSessionId
+        const freshState = createNotebookRuntimeState(newSessionId)
+        freshState.session.title = createSessionTitle(newSessionId)
+        state.session = freshState.session
+        state.conversations = freshState.conversations
+        state.activeConversationId = freshState.activeConversationId
+        state.session.runtime.recentlyRestarted = true
+        state.session.phase = { kind: 'ready' }
+
+        // 6. 建立新 session 的实时绑定 + 回放历史
+        await setupSessionStream(newSessionId, { withHistory: true })
+      } catch (err) {
+        // 错误边界：任何步骤失败（worker 卡死 / writeFs 超时 / OPFS 错 / SSE 建立失败）
+        // 都必须把 phase 置为 failed，绝不能永久停在 mount_fs 让用户卡死在 Loading。
+        // 清理可能半建好的实时绑定，避免残留 SSE / bridge 干扰下一次重试。
+        teardownSessionBindings()
+        state.session.phase = {
+          kind: 'failed',
+          failure: {
+            reason: '切换工作区失败',
+            detail: err instanceof Error ? err.message : String(err),
+          },
+        }
+        auditLog.push({
+          ts: new Date().toISOString(),
+          kind: 'tool_error',
+          tool: 'switch_session',
+          code: 'switch_session_failed',
+        })
       }
-
-      // 3. 切 OPFS 目录 + 重建 toolDispatcher（其闭包捕获 opfsRoot 快照）
-      opfsRootRef.value = await createNotebookOpfsRoot(newSessionId)
-      rebuildToolDispatcher()
-
-      // 4. 把新 session 的 inputs/scripts 灌入 Worker MEMFS
-      await syncOpfsFilesToWorker()
-
-      // 5. 重置 VM 状态为新 session
-      currentSessionId = newSessionId
-      const freshState = createNotebookRuntimeState(newSessionId)
-      freshState.session.title = createSessionTitle(newSessionId)
-      state.session = freshState.session
-      state.conversations = freshState.conversations
-      state.activeConversationId = freshState.activeConversationId
-      state.session.runtime.recentlyRestarted = true
-      state.session.phase = { kind: 'ready' }
-
-      // 6. 建立新 session 的实时绑定 + 回放历史
-      await setupSessionStream(newSessionId, { withHistory: true })
     }
     // 链式串行：下一次 switchSession 会 await 这次的 run() 完成。
-    // 错误不阻断链（catch 后继续），保证后续 switchSession 不会被永久挂起。
-    sessionOpChain = sessionOpChain.then(run, () => run())
+    // run() 内部已 try/catch 并置 failed，永不 reject，故链不会被挂起；
+    // 第二参数兜底历史链上的 reject（不会再发生），同样走 run 重新尝试。
+    sessionOpChain = sessionOpChain.then(run, run)
     await sessionOpChain
   }
 
@@ -678,15 +719,32 @@ export const createNotebookSessionRuntime = async (
     await setupSessionStream(currentSessionId, { withHistory: true })
   }
 
-  const sendUserMessageAndTrack = async (text: string) => {
-    const content = text.trim()
-    if (!content) return
+  const sendUserMessageAndTrack = async (
+    text: string,
+    attachments?: UserAttachment[],
+  ) => {
+    const trimmed = text.trim()
+    const validAttachments = attachments?.filter((a) => a && a.path) ?? []
+    // 文本或附件至少有一个才能发送
+    if (!trimmed && validAttachments.length === 0) return
+
+    // 附件非空时把路径提示注入 content —— 后端消息接口仍是纯文本，
+    // Agent 读到这段提示会主动 fs_read 对应文件分析。后端零改动。
+    const content = validAttachments.length > 0
+      ? [
+          trimmed,
+          '',
+          '[已上传文件]',
+          ...validAttachments.map((a) => `- ${a.path}`),
+        ].filter(Boolean).join('\n')
+      : trimmed
 
     state.session.messages.push({
       id: `user-${Date.now()}`,
       role: 'user',
-      text: content,
+      text: trimmed,
       at: Date.now(),
+      attachments: validAttachments.length > 0 ? validAttachments : undefined,
     })
     state.session.agent = 'running'
     state.session.runtime.isRunning = true
@@ -695,6 +753,35 @@ export const createNotebookSessionRuntime = async (
       id: messageId,
       content,
     })
+  }
+
+  /**
+   * 把用户上传的文件写入 workspace inputs/ 目录（OPFS + Pyodide MEMFS 双写）。
+   *
+   * 与 parentBridgeClient 的 import_csv 走同一写入路径：OPFS 一份、Worker MEMFS 一份，
+   * 两份各持独立 ArrayBuffer（writeFs 会 transfer 给 worker，主线程副本必须独立）。
+   * 文件树由 useWorkspaceTree 2s 轮询 OPFS 自动刷新，无需手动通知。
+   */
+  const importAttachments = async (files: File[]): Promise<UserAttachment[]> => {
+    const results: UserAttachment[] = []
+    for (const file of files) {
+      const buffer = await file.arrayBuffer()
+      const targetPath = `inputs/${file.name}`
+      // OPFS 写入用一份独立副本（writeFile 内部 toUint8 不消费 ArrayBuffer）
+      const opfsCopy = cloneArrayBuffer(buffer)
+      await writeFile(opfsRootRef.value, targetPath, opfsCopy)
+      // Worker MEMFS 写入用另一份：workerHost.writeFs 会 transfer 走 buffer
+      const workerCopy = cloneArrayBuffer(buffer)
+      await workerHost.writeFs(targetPath, workerCopy)
+      results.push({
+        id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        name: file.name,
+        path: targetPath,
+        size: file.size,
+        mimeType: file.type || undefined,
+      })
+    }
+    return results
   }
 
   const renameSession = async (title: string) => {
@@ -848,6 +935,7 @@ export const createNotebookSessionRuntime = async (
     renameSession,
     renameConversationById,
     sendUserMessage: sendUserMessageAndTrack,
+    importAttachments,
     answerAskUser,
     cancelAskUser,
     abort,

@@ -4,12 +4,16 @@
  *
  * 消息输入：悬浮卡片样式（参考 Codex），Enter 发送、Shift/Ctrl+Enter 换行，遇到 ask_user 暂停时禁用。
  *
+ * 文件上传（按钮 / 拖拽 / 粘贴）：选中的文件立即经 onAttach 写入 workspace inputs/，
+ * 输入框上方以附件 chip 展示；发送时把附件与文本一同 emit 给父级，由 runtime 注入路径提示。
+ *
  * 视觉风格 ▸ 圆角白卡 + 柔和阴影；放在消息流底部上方浮起。
  */
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { ArrowUp, Gauge, Lock, Square } from 'lucide-vue-next'
+import { ArrowUp, Gauge, Lock, Paperclip, Square, X } from 'lucide-vue-next'
 import ContextUsagePopover from './ContextUsagePopover.vue'
-import type { CompactionRecord } from '../types/messageStream'
+import FileIcon from './FileIcon.vue'
+import type { CompactionRecord, UserAttachment } from '../types/messageStream'
 
 const props = defineProps<{
   /** 当 Agent 在 ask_user 等待回答时禁用 */
@@ -26,16 +30,37 @@ const props = defineProps<{
   compactionInProgress?: boolean
   /** 压缩历史记录（透传给 popover 面板） */
   compactionHistory?: CompactionRecord[]
+  /** 是否允许上传附件（demo 模式禁用） */
+  canAttach?: boolean
+  /** 写入 workspace 并返回附件元数据；若提供且 canAttach 则启用上传 */
+  onAttach?: (files: File[]) => Promise<UserAttachment[]>
 }>()
 
 const emit = defineEmits<{
-  send: [text: string]
+  send: [text: string, attachments: UserAttachment[]]
   abort: []
   compact: []
+  /** 附件校验/写入失败时通知父级弹 toast */
+  attachError: [message: string]
 }>()
 
 const text = ref('')
 const inputRef = ref<HTMLTextAreaElement | null>(null)
+
+// ── 附件上传 ──────────────────────────────────────────────
+// 允许的数据/文本文件扩展名白名单（与 fileImport 节点 + workspace 常见类型对齐）
+const ALLOWED_EXTS = ['csv', 'json', 'xlsx', 'xls', 'tsv', 'txt', 'md', 'parquet', 'jsonl']
+// 单文件大小上限（与 opfsAccess SINGLE_WRITE_LIMIT_BYTES 一致）
+const SINGLE_FILE_LIMIT_BYTES = 50 * 1024 * 1024
+
+const attachments = ref<UserAttachment[]>([])
+const isImporting = ref(false)
+const isDragOver = ref(false)
+const fileInputRef = ref<HTMLInputElement | null>(null)
+
+// 上传 UI 是否开启：仅看 canAttach。未提供 onAttach（demo 模式）时走纯 UI 分支，
+// 选中的文件直接生成本地附件元数据展示 chip，不写 workspace。
+const attachEnabled = computed(() => props.canAttach !== false)
 
 const placeholder = computed(() => {
   if (props.awaitingUser) return '先回答上面的问题，再继续…'
@@ -51,11 +76,16 @@ const onKeydown = (e: KeyboardEvent) => {
   }
 }
 
+const canSend = computed(() => {
+  if (props.awaitingUser) return false
+  return text.value.trim().length > 0 || attachments.value.length > 0
+})
+
 const onSend = () => {
-  const v = text.value.trim()
-  if (!v || props.awaitingUser) return
-  emit('send', v)
+  if (!canSend.value) return
+  emit('send', text.value.trim(), attachments.value.slice())
   text.value = ''
+  attachments.value = []
 }
 
 // running 或 awaiting_user 时都展示终止按钮：
@@ -121,25 +151,208 @@ const ctxTitle = computed(() => {
   const win = formatK(u.contextWindow)
   return `上下文 ${u.percent}% · ${used} / ${win} tokens`
 })
+
+// ── 附件上传：校验 + 写入 ──────────────────────────────────────────────
+const sizeLabel = (bytes: number) => {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}
+
+const getExt = (name: string): string => {
+  const i = name.lastIndexOf('.')
+  return i >= 0 ? name.slice(i + 1).toLowerCase() : ''
+}
+
+/** 校验单个文件：扩展名白名单 + 单文件大小。返回错误信息或 null。 */
+const validateFile = (file: File): string | null => {
+  const ext = getExt(file.name)
+  if (!ALLOWED_EXTS.includes(ext)) {
+    return `不支持的文件类型：${file.name}（仅支持 ${ALLOWED_EXTS.join(' / ')}）`
+  }
+  if (file.size > SINGLE_FILE_LIMIT_BYTES) {
+    return `文件过大：${file.name}（${sizeLabel(file.size)}，上限 ${sizeLabel(SINGLE_FILE_LIMIT_BYTES)}）`
+  }
+  if (file.size === 0) {
+    return `文件为空：${file.name}`
+  }
+  return null
+}
+
+const ingestFiles = async (fileList: File[] | FileList | null) => {
+  if (!fileList || !attachEnabled.value) return
+  const files = Array.from(fileList)
+  if (files.length === 0) return
+
+  // 先做本地校验，过滤掉非法文件；首个错误推 toast
+  const valid: File[] = []
+  for (const file of files) {
+    const err = validateFile(file)
+    if (err) {
+      emit('attachError', err)
+      continue
+    }
+    valid.push(file)
+  }
+  if (valid.length === 0) return
+
+  isImporting.value = true
+  try {
+    if (props.onAttach) {
+      // 真实模式：写 workspace inputs/，返回带真实路径的元数据
+      const result = await props.onAttach(valid)
+      attachments.value = [...attachments.value, ...result]
+    } else {
+      // demo 模式：纯 UI，不写文件，直接用 File 信息生成本地附件元数据
+      attachments.value = [
+        ...attachments.value,
+        ...valid.map((file) => ({
+          id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          name: file.name,
+          path: `inputs/${file.name}`,
+          size: file.size,
+          mimeType: file.type || undefined,
+        })),
+      ]
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    emit('attachError', `文件写入失败：${message}`)
+  } finally {
+    isImporting.value = false
+  }
+}
+
+const openFilePicker = () => {
+  if (!attachEnabled.value || isImporting.value) return
+  fileInputRef.value?.click()
+}
+
+const onFileInputChange = (e: Event) => {
+  const target = e.target as HTMLInputElement
+  void ingestFiles(target.files)
+  // 清空 input，使相同文件可重复选择
+  target.value = ''
+}
+
+const onPaste = (e: ClipboardEvent) => {
+  if (!attachEnabled.value) return
+  const files = e.clipboardData?.files
+  if (files && files.length > 0) {
+    e.preventDefault()
+    void ingestFiles(files)
+  }
+}
+
+const onDragOver = (e: DragEvent) => {
+  if (!attachEnabled.value || isImporting.value) return
+  // 仅当拖入的是文件时才高亮
+  if (!e.dataTransfer?.types?.includes('Files')) return
+  e.preventDefault()
+}
+
+const onDrop = (e: DragEvent) => {
+  if (!attachEnabled.value) return
+  e.preventDefault()
+  isDragOver.value = false
+  dragCounter.value = 0
+  void ingestFiles(e.dataTransfer?.files ?? null)
+}
+
+const removeAttachment = (id: string) => {
+  attachments.value = attachments.value.filter((a) => a.id !== id)
+}
+
+// 拖入计数：dragenter/dragleave 在经过子元素时会成对触发，
+// 用计数器避免移入子元素时误判为"离开"导致高亮闪烁。
+const dragCounter = ref(0)
+const onDragEnterCounted = (e: DragEvent) => {
+  if (!attachEnabled.value || isImporting.value) return
+  if (!e.dataTransfer?.types?.includes('Files')) return
+  e.preventDefault()
+  dragCounter.value += 1
+  isDragOver.value = true
+}
+const onDragLeaveCounted = (e: DragEvent) => {
+  if (!attachEnabled.value) return
+  e.preventDefault()
+  dragCounter.value = Math.max(0, dragCounter.value - 1)
+  if (dragCounter.value === 0) isDragOver.value = false
+}
 </script>
 
 <template>
   <div
-    class="rounded-[var(--nb-radius-lg)] border transition-colors"
+    class="relative rounded-[var(--nb-radius-lg)] border transition-colors"
     :style="
-      awaitingUser
+      isDragOver
         ? {
-            borderColor: 'rgba(199, 107, 74, 0.45)',
-            backgroundColor: 'var(--nb-card)',
-            boxShadow: 'var(--nb-shadow-lg), 0 0 0 1px var(--nb-copper-glow)',
+            borderColor: 'var(--nb-copper)',
+            backgroundColor: 'var(--nb-copper-soft)',
+            boxShadow: 'var(--nb-shadow-lg), 0 0 0 2px var(--nb-copper-glow)',
           }
-        : {
-            borderColor: 'var(--nb-rule-strong)',
-            backgroundColor: 'var(--nb-card)',
-            boxShadow: 'var(--nb-shadow-lg)',
-          }
+        : awaitingUser
+          ? {
+              borderColor: 'rgba(199, 107, 74, 0.45)',
+              backgroundColor: 'var(--nb-card)',
+              boxShadow: 'var(--nb-shadow-lg), 0 0 0 1px var(--nb-copper-glow)',
+            }
+          : {
+              borderColor: 'var(--nb-rule-strong)',
+              backgroundColor: 'var(--nb-card)',
+              boxShadow: 'var(--nb-shadow-lg)',
+            }
     "
+    @dragenter="onDragEnterCounted"
+    @dragover="onDragOver"
+    @dragleave="onDragLeaveCounted"
+    @drop="onDrop"
   >
+    <!-- 附件 chip 列表 -->
+    <div
+      v-if="attachments.length > 0"
+      class="flex flex-wrap gap-1.5 px-3 pt-3"
+    >
+      <span
+        v-for="att in attachments"
+        :key="att.id"
+        class="group inline-flex items-center gap-1.5 rounded-[var(--nb-radius-xs)] border py-1 pl-1.5 pr-1"
+        style="border-color: var(--nb-rule-strong); background-color: var(--nb-overlay);"
+      >
+        <FileIcon :name="att.name" :size="13" />
+        <span
+          class="max-w-[180px] truncate text-[11.5px]"
+          style="color: var(--nb-ink);"
+          :title="att.path"
+        >
+          {{ att.name }}
+        </span>
+        <span
+          class="nb-mono text-[10px] tabular-nums"
+          style="color: var(--nb-ink-faint);"
+        >
+          {{ sizeLabel(att.size) }}
+        </span>
+        <button
+          class="flex h-4 w-4 items-center justify-center rounded-[var(--nb-radius-xs)] transition"
+          style="color: var(--nb-ink-mute);"
+          title="移除附件"
+          :disabled="isImporting"
+          @click="removeAttachment(att.id)"
+          @mouseenter="(e) => {
+            (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--nb-copper-soft)';
+            (e.currentTarget as HTMLElement).style.color = 'var(--nb-copper-deep)'
+          }"
+          @mouseleave="(e) => {
+            (e.currentTarget as HTMLElement).style.backgroundColor = '';
+            (e.currentTarget as HTMLElement).style.color = 'var(--nb-ink-mute)'
+          }"
+        >
+          <X :size="11" :stroke-width="2" />
+        </button>
+      </span>
+    </div>
+
     <textarea
       ref="inputRef"
       v-model="text"
@@ -147,12 +360,29 @@ const ctxTitle = computed(() => {
       :disabled="awaitingUser"
       :placeholder="placeholder"
       class="nb-focus block w-full resize-none rounded-t-[var(--nb-radius-lg)] bg-transparent px-4 pt-3 pb-2 text-[14px] leading-[1.7] outline-none disabled:cursor-not-allowed"
-      style="
-        color: var(--nb-ink);
-        font-family: var(--nb-font-sans);
-      "
+      :class="attachments.length > 0 ? 'rounded-t-none border-t' : ''"
+      :style="[
+        { color: 'var(--nb-ink)', fontFamily: 'var(--nb-font-sans)' },
+        attachments.length > 0
+          ? { borderColor: 'var(--nb-rule)' }
+          : {},
+      ]"
       @keydown="onKeydown"
+      @paste="onPaste"
     />
+    <!-- 拖拽提示遮罩 -->
+    <div
+      v-if="isDragOver"
+      class="pointer-events-none absolute inset-0 flex items-center justify-center rounded-[var(--nb-radius-lg)]"
+      style="background-color: rgba(15, 23, 42, 0.04);"
+    >
+      <span
+        class="nb-eyebrow"
+        style="color: var(--nb-copper-deep); font-size: 12px; letter-spacing: 0.1em;"
+      >
+        松开以导入到 inputs/
+      </span>
+    </div>
     <div
       class="flex items-center justify-between gap-3 px-3 py-2"
     >
@@ -167,11 +397,42 @@ const ctxTitle = computed(() => {
         <span v-else-if="agentRunning">
           Agent 工作中 · <span style="color: var(--nb-clay);">ESC 终止</span>
         </span>
+        <span v-else-if="isImporting">正在写入文件…</span>
         <span v-else>Enter 发送 · Shift/Ctrl + Enter 换行 · ⌘ + K 聚焦</span>
         <span v-if="charCount > 0" style="color: var(--nb-rule-strong);">·</span>
         <span v-if="charCount > 0" class="tabular-nums">{{ charCount }} 字</span>
       </div>
       <div class="flex items-center gap-1.5">
+        <!-- 隐藏文件选择 input -->
+        <input
+          ref="fileInputRef"
+          type="file"
+          multiple
+          class="hidden"
+          :accept="ALLOWED_EXTS.map((e) => '.' + e).join(',')"
+          @change="onFileInputChange"
+        >
+        <!-- 上传按钮 -->
+        <button
+          v-if="attachEnabled"
+          class="nb-focus inline-flex h-8 w-8 items-center justify-center rounded-full transition disabled:cursor-not-allowed disabled:opacity-40"
+          style="color: var(--nb-ink-mute);"
+          :title="isImporting ? '正在写入…' : '上传文件到 inputs/'"
+          :disabled="isImporting"
+          @click="openFilePicker"
+          @mouseenter="(e) => {
+            if (!isImporting) {
+              (e.currentTarget as HTMLElement).style.color = 'var(--nb-copper-deep)';
+              (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--nb-copper-soft)'
+            }
+          }"
+          @mouseleave="(e) => {
+            (e.currentTarget as HTMLElement).style.color = 'var(--nb-ink-mute)';
+            (e.currentTarget as HTMLElement).style.backgroundColor = ''
+          }"
+        >
+          <Paperclip :size="14" :stroke-width="1.8" />
+        </button>
         <!-- 上下文窗口使用情况：圆环 Icon + hover 弹出详情面板 -->
         <div class="group relative">
           <span
@@ -244,7 +505,7 @@ const ctxTitle = computed(() => {
           v-else
           class="nb-focus inline-flex h-8 w-8 items-center justify-center rounded-full transition disabled:cursor-not-allowed"
           :style="
-            !text.trim() || awaitingUser
+            !canSend
               ? {
                   backgroundColor: 'var(--nb-paper-tint)',
                   color: 'var(--nb-ink-faint)',
@@ -256,7 +517,7 @@ const ctxTitle = computed(() => {
                   border: '1px solid var(--nb-ink)',
                 }
           "
-          :disabled="!text.trim() || awaitingUser"
+          :disabled="!canSend"
           :title="awaitingUser ? '等待回答' : '发送 (Enter)'"
           @click="onSend"
         >
