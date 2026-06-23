@@ -46,7 +46,7 @@ const workflowServerDevMiddleware = (): Plugin => {
           .then(({ createServerApp }) => createServerApp()),
       )
 
-      server.watcher.on('all', (_event, file) => {
+      server.watcher?.on('all', (_event, file) => {
         if (!isServerSourceFile(file)) {
           return
         }

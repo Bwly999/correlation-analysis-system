@@ -132,6 +132,10 @@ describe('server dev middleware', () => {
         }),
       })
     const next = vi.fn()
+    // watcher：复用 dev server 的文件监听契约。apiHandler 只在 dispose 后才重新 ssrLoadModule，
+    // 而 dispose 由 watcher 检测到 server 源码变更触发。这里提供一个 watcher，
+    // 在两次请求之间 emit 一次 server 文件变更，模拟「源码改了」以触发重载。
+    const watcher = new EventEmitter()
 
     plugin?.configureServer?.({
       middlewares: {
@@ -140,6 +144,7 @@ describe('server dev middleware', () => {
         },
       },
       ssrLoadModule,
+      watcher,
     } as any)
 
     expect(middleware).toBeTypeOf('function')
@@ -147,6 +152,12 @@ describe('server dev middleware', () => {
     middleware!({ url: '/api/analysis/lasso' }, new EventEmitter(), next)
     await Promise.resolve()
     await Promise.resolve()
+
+    // 触发一次 server 源码变更 → apiHandler.dispose() → 下次请求重新 ssrLoadModule。
+    // dispose 是异步的（内部 await appTask 后才置 appTask=null 并 close），
+    // 用 setTimeout(0) 确保整个 dispose 异步链跑完，否则第二次 handle 会复用未释放的 appTask。
+    watcher.emit('all', 'change', '/src/server/modules/analysisRoutes.ts')
+    await new Promise((resolve) => setTimeout(resolve, 0))
 
     middleware!({ url: '/api/analysis/logistic-regression-classification' }, new EventEmitter(), next)
     await Promise.resolve()
