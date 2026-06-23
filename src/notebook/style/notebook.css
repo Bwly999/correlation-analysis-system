@@ -157,6 +157,144 @@
   color: #74521F;
 }
 
+/* —— Topbar 右侧操作区：胶囊容器（B）+ 衬线斜体状态词（C）———— */
+.nb-topbar-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 36px;
+  padding: 0 6px 0 14px;
+  border-radius: var(--nb-radius-full);
+  background-color: var(--nb-card);
+  border: 1px solid var(--nb-rule);
+  box-shadow: var(--nb-shadow-sm);
+}
+
+/* 状态：光环点 + Fraunces 斜体词 */
+.nb-topbar-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding-right: 16px;
+  margin-right: 4px;
+  border-right: 1px solid var(--nb-rule);
+  color: var(--nb-ink-faint);
+}
+.nb-topbar-status__dot-wrap {
+  position: relative;
+  width: 8px;
+  height: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.nb-topbar-status__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--nb-ink-faint);
+  box-shadow: 0 0 0 3px rgba(171, 164, 150, 0.16);
+}
+.nb-topbar-status__ping {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background-color: var(--nb-ink-faint);
+  animation: nb-status-ping 1.4s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+.nb-topbar-status__label {
+  font-family: var(--nb-font-display);
+  font-style: italic;
+  font-weight: 500;
+  font-size: 14px;
+  letter-spacing: 0.005em;
+  color: var(--nb-ink-soft);
+}
+
+/* 状态变体：点色 + halo + 词色 */
+.nb-topbar-status[data-tone='loading'],
+.nb-topbar-status[data-tone='running'] { color: var(--nb-amber); }
+.nb-topbar-status[data-tone='loading'] .nb-topbar-status__dot,
+.nb-topbar-status[data-tone='running'] .nb-topbar-status__dot {
+  background-color: var(--nb-amber);
+  box-shadow: 0 0 0 3px rgba(190, 133, 54, 0.16);
+}
+.nb-topbar-status[data-tone='loading'] .nb-topbar-status__ping,
+.nb-topbar-status[data-tone='running'] .nb-topbar-status__ping { background-color: var(--nb-amber); }
+.nb-topbar-status[data-tone='loading'] .nb-topbar-status__label,
+.nb-topbar-status[data-tone='running'] .nb-topbar-status__label { color: #74521F; }
+
+.nb-topbar-status[data-tone='awaiting_user'] { color: var(--nb-copper); }
+.nb-topbar-status[data-tone='awaiting_user'] .nb-topbar-status__dot {
+  background-color: var(--nb-copper);
+  box-shadow: 0 0 0 3px var(--nb-copper-glow);
+}
+.nb-topbar-status[data-tone='awaiting_user'] .nb-topbar-status__label { color: var(--nb-copper-deep); }
+
+.nb-topbar-status[data-tone='completed'] { color: var(--nb-sage); }
+.nb-topbar-status[data-tone='completed'] .nb-topbar-status__dot {
+  background-color: var(--nb-sage);
+  box-shadow: 0 0 0 3px rgba(110, 138, 102, 0.16);
+}
+.nb-topbar-status[data-tone='completed'] .nb-topbar-status__label { color: #45603E; }
+
+.nb-topbar-status[data-tone='failed'] { color: var(--nb-clay); }
+.nb-topbar-status[data-tone='failed'] .nb-topbar-status__dot {
+  background-color: var(--nb-clay);
+  box-shadow: 0 0 0 3px rgba(176, 82, 78, 0.16);
+}
+.nb-topbar-status[data-tone='failed'] .nb-topbar-status__label { color: #823331; }
+
+@keyframes nb-status-ping {
+  0%        { transform: scale(1);   opacity: 0.5; }
+  75%, 100% { transform: scale(2.4); opacity: 0; }
+}
+
+/* ghost 按钮（重启） */
+.nb-topbar-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: var(--nb-radius-full);
+  background: transparent;
+  cursor: pointer;
+  font-family: var(--nb-font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--nb-ink-mute);
+  transition: background-color 160ms ease, color 160ms ease;
+}
+.nb-topbar-ghost:hover {
+  background-color: var(--nb-overlay);
+  color: var(--nb-ink);
+}
+
+/* primary 实心铜按钮（下载） */
+.nb-topbar-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 28px;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: var(--nb-radius-full);
+  background-color: var(--nb-copper);
+  cursor: pointer;
+  font-family: var(--nb-font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  box-shadow: var(--nb-shadow-copper);
+  transition: background-color 160ms ease, transform 160ms ease;
+}
+.nb-topbar-primary:hover {
+  background-color: var(--nb-copper-deep);
+  transform: translateY(-1px);
+}
+
 /* —— Card ———————————————————————————————————————————————— */
 .nb-card {
   background-color: var(--nb-card);

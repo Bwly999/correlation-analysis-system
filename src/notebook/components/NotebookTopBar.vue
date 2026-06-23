@@ -42,37 +42,6 @@ const cancel = () => {
   editing.value = false
 }
 
-const badgeTone = computed(() => {
-  switch (props.badgeTone) {
-    case 'loading':
-    case 'running':
-    case 'awaiting_user':
-      return 'amber'
-    case 'failed':
-      return 'clay'
-    case 'completed':
-      return 'sage'
-    default:
-      return 'default'
-  }
-})
-
-const dotColor = computed(() => {
-  switch (props.badgeTone) {
-    case 'loading':
-    case 'running':
-      return 'bg-[color:var(--nb-amber)]'
-    case 'awaiting_user':
-      return 'bg-[color:var(--nb-copper)]'
-    case 'failed':
-      return 'bg-[color:var(--nb-clay)]'
-    case 'completed':
-      return 'bg-[color:var(--nb-sage)]'
-    default:
-      return 'bg-[color:var(--nb-ink-faint)]'
-  }
-})
-
 const isLive = computed(() =>
   props.badgeTone === 'running' || props.badgeTone === 'loading',
 )
@@ -171,43 +140,36 @@ const isLive = computed(() =>
       </button>
     </div>
 
-    <!-- 状态徽章 -->
-    <div
-      class="nb-chip"
-      :data-tone="badgeTone"
-    >
-      <span
-        class="relative inline-flex h-1.5 w-1.5 items-center justify-center rounded-full"
-        :class="dotColor"
+    <!-- 右侧操作区：状态 + 重启 + 下载 收进统一胶囊容器 -->
+    <div class="nb-topbar-actions">
+      <div
+        class="nb-topbar-status"
+        :data-tone="props.badgeTone"
       >
-        <span
-          v-if="isLive"
-          class="absolute inset-0 animate-ping rounded-full"
-          :class="dotColor"
-          style="opacity: 0.5;"
-        />
-      </span>
-      <span class="nb-mono text-[10px]" style="letter-spacing: 0.1em;">{{ badgeText }}</span>
-    </div>
+        <span class="nb-topbar-status__dot-wrap">
+          <span class="nb-topbar-status__dot" />
+          <span
+            v-if="isLive"
+            class="nb-topbar-status__ping"
+          />
+        </span>
+        <span class="nb-topbar-status__label">{{ badgeText }}</span>
+      </div>
 
-    <!-- 操作 -->
-    <div class="flex items-center gap-1">
       <button
-        class="nb-focus inline-flex h-8 items-center gap-1.5 rounded-[var(--nb-radius-sm)] px-2.5 text-[12px] font-medium transition hover:bg-[color:var(--nb-overlay)]"
-        style="color: var(--nb-ink-mute);"
+        class="nb-topbar-ghost nb-focus"
         title="重启 Python 环境 (⌘/Ctrl + R)"
         @click="emit('restart')"
       >
-        <RotateCcw :size="13" :stroke-width="1.6" />
+        <RotateCcw :size="13" :stroke-width="1.8" />
         <span>重启</span>
       </button>
       <button
-        class="nb-focus inline-flex h-8 items-center gap-1.5 rounded-[var(--nb-radius-sm)] px-2.5 text-[12px] font-medium transition hover:bg-[color:var(--nb-overlay)]"
-        style="color: var(--nb-ink-mute);"
+        class="nb-topbar-primary nb-focus"
         title="下载工作区 (⌘/Ctrl + S)"
         @click="emit('download')"
       >
-        <Download :size="13" :stroke-width="1.6" />
+        <Download :size="13" :stroke-width="2" />
         <span>下载</span>
       </button>
     </div>
