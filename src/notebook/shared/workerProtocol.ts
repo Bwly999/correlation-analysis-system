@@ -150,9 +150,11 @@ export type WorkerToHostMessage =
       requestId: string
       message: string
     }
-  | {
-      // Worker 内 performance.memory.usedJSHeapSize 周期上报（UX §3.4 状态条内存）。
-      // 非 Chromium 内核无 performance.memory 时不上报。
+    | {
+      // Worker 内周期上报的内存占用（UX §3.4 状态条内存）。
+      // 主源：Pyodide WASM linear memory（pyodide._module.wasmMemory），
+      // 含 pandas/numpy/DataFrame 等大头；Chromium 系再叠加 performance.memory 的 V8 JS heap。
+      // 非 Chromium / WASM heap 不可读时 usedBytes 仍可能为 0。
       kind: 'mem_report'
       usedBytes: number
     }

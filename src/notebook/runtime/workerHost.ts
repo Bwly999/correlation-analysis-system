@@ -55,7 +55,7 @@ export interface HostState {
   softInterruptedAt: number
   /** Worker 累计自动重启次数（含硬超时 / 崩溃自愈） */
   autoRestartCount: number
-  /** Worker 上报的内存使用（MB），由 mem_report 事件更新（UX §3.4 状态条）*/
+  /** Worker 上报的内存使用（MB），由 mem_report 事件更新（UX §3.4 状态条；主源为 Pyodide WASM heap）*/
   memoryMb: number
 }
 
@@ -445,7 +445,7 @@ export class WorkerHost {
       }
 
       case 'mem_report':
-        // Worker 周期上报 JS 堆内存（UX §3.4 状态条）；换算 MB 写入 reactive state
+        // Worker 周期上报内存占用（UX §3.4 状态条）；主源为 Pyodide WASM heap，换算 MB 写入 reactive state
         this.state.memoryMb = msg.usedBytes / 1024 / 1024
         break
 

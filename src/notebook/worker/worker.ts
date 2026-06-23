@@ -27,20 +27,46 @@ let booting = false
 let runtimePackages: RuntimePackageMeta[] = []
 const WORKSPACE_ROOTS = ['inputs', 'scripts', 'artifacts', 'reports'] as const
 
-// 内存上报定时器（UX §3.4 状态条）：init 成功后每 2s 把 JS 堆占用推给主线程。
-// 仅 Chromium 系内核有 performance.memory；无该字段时不启动（状态条 mem 显示 0）。
+// 内存上报定时器（UX §3.4 状态条）：init 成功后每 2s 把内存占用推给主线程。
+//
+// 数据源选择：performance.memory（usedJSHeapSize）是 Chromium 非标准 API，
+// 且长期仅在主线程暴露——Web Worker 里几乎拿不到（老 Chrome / Firefox / Safari
+// 全部为 undefined），导致旧实现里 mem 恒为 0。更关键的是它只统计 V8 JS heap，
+// 不含 Pyodide 的 WASM linear memory（pandas/numpy/DataFrame 这些大头全在里面）。
+//
+// 故改以 Pyodide 的 WASM heap 为主：pyodide._module.wasmMemory.buffer.byteLength
+// 是当前 WASM 线性内存大小（随 sbrk 增长，跨浏览器可得）；performance.memory
+// 支持时（Chrome ≥128 Worker）叠加 V8 JS heap，使数值更完整。两者都拿不到
+// 才不启动定时器（此时状态条 mem 显示 0）。
 let memReportTimer: ReturnType<typeof setInterval> | null = null
 const MEM_REPORT_INTERVAL_MS = 2000
 
-const startMemReporting = () => {
+/** 读 performance.memory.usedJSHeapSize（仅 Chromium 主线程 / 新版 Worker 支持） */
+const readJsHeapBytes = (): number => {
+  const used = (
+    performance as Performance & { memory?: { usedJSHeapSize?: number } }
+  ).memory?.usedJSHeapSize
+  return typeof used === 'number' ? used : 0
+}
+
+/**
+ * 读 Pyodide WASM linear memory 当前大小（字节）。
+ * `_module` 是 Pyodide 挂在实例上的私有字段（pyodide.asm.js 内 `_module=` 赋值），
+ * wasmMemory 是 Emscripten Module 暴露的 WebAssembly.Memory。字段缺失返回 0。
+ */
+const readWasmHeapBytes = (pyodide: PyodideInterface): number => {
+  const mod = (pyodide as PyodideInterface & {
+    _module?: { wasmMemory?: WebAssembly.Memory; HEAPU8?: Uint8Array }
+  })._module
+  const mem = mod?.wasmMemory ?? mod?.HEAPU8?.buffer
+  return mem && 'byteLength' in mem ? mem.byteLength : 0
+}
+
+const startMemReporting = (pyodide: PyodideInterface) => {
   if (memReportTimer) return
-  // performance.memory 是非标准 API，仅基于 Chromium 的浏览器可用。
-  const perfMemory = (performance as Performance & { memory?: { usedJSHeapSize?: number } }).memory
-  if (!perfMemory || typeof perfMemory.usedJSHeapSize !== 'number') return
   const report = () => {
-    const used = (performance as Performance & { memory?: { usedJSHeapSize?: number } }).memory
-      ?.usedJSHeapSize
-    if (typeof used === 'number') {
+    const used = readWasmHeapBytes(pyodide) + readJsHeapBytes()
+    if (used > 0) {
       post({ kind: 'mem_report', usedBytes: used })
     }
   }
@@ -99,7 +125,7 @@ const handleInit = async (req: Extract<HostToWorkerRequest, { kind: 'init' }>) =
       crossOriginIsolated: typeof crossOriginIsolated !== 'undefined' && crossOriginIsolated,
       sabSupported: typeof SharedArrayBuffer !== 'undefined' && interruptBuffer !== null,
     })
-    startMemReporting()
+    startMemReporting(pyodide)
   } catch (err) {
     booting = false
     const message = err instanceof Error ? err.message : String(err)
