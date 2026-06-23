@@ -20,6 +20,7 @@ import {
   Info,
   Hash,
   CircleSlash,
+  Sparkle
 } from 'lucide-vue-next'
 import { renderMarkdownSafe } from '../preview/markdownRenderer'
 import { resolvePreviewKind } from '../preview/previewRouter'
@@ -144,7 +145,7 @@ const onTocClick = (id: string) => {
               ? Sheet
               : previewKind === 'code'
               ? FileCode2
-              : Info
+              : Sparkle
           "
           :size="13"
           :stroke-width="1.6"

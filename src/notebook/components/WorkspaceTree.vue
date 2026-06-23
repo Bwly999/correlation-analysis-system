@@ -18,7 +18,7 @@ import {
   Eye,
   Clipboard,
   Star,
-  ArrowDownToLine,
+  FolderTree,
   Folder,
   PanelBottomOpen,
   PanelBottomClose,
@@ -130,7 +130,7 @@ const groupMeta = (name: string): { label: string } => {
           class="flex h-5 w-5 items-center justify-center rounded-[var(--nb-radius-xs)]"
           style="background-color: var(--nb-copper-soft);"
         >
-          <ArrowDownToLine
+          <FolderTree
             :size="12"
             :stroke-width="1.8"
             style="color: var(--nb-copper-deep);"
