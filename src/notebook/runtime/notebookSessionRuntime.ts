@@ -554,9 +554,11 @@ export const createNotebookSessionRuntime = async (
     const deadline = Date.now() + timeoutMs
     while (Date.now() < deadline) {
       const s = workerHost.state.status
-      if (s === 'ready' || s === 'dead') return
+      if (s === 'ready') return
+      if (s === 'dead') throw new Error('Worker 已死亡，无法等待就绪')
       await new Promise((r) => setTimeout(r, 200))
     }
+    throw new Error(`等待 Worker 就绪超时（${timeoutMs / 1000}s）`)
   }
 
   /**
@@ -575,7 +577,9 @@ export const createNotebookSessionRuntime = async (
     // 若 Worker 正忙（如上一会话 bootstrap 触发的 python_exec 还在跑），
     // 先软中断让占用中的 exec 尽快结束，否则下面的 reset exec 会排在消息队列后面
     // 被无限阻塞 → switchSession 永久卡在 loading（bug1 死锁根因）。
+    console.log('[DEBUG] resetPythonState: 入口, status=', workerHost.state.status, 'busy=', workerHost.isBusy())
     if (workerHost.isBusy()) {
+      console.log('[DEBUG] resetPythonState: Worker 正忙，发送中断')
       workerHost.interrupt()
     }
     // 关闭 matplotlib 图窗 + 清理用户 globals（保留 builtins / __main__ 框架）
@@ -593,14 +597,20 @@ export const createNotebookSessionRuntime = async (
       "        except Exception: pass",
       'import gc; gc.collect()',
     ].join('\n')
+    console.log('[DEBUG] resetPythonState: 准备 exec, codeLength=', resetCode.length)
     const result = await workerHost.exec(resetCode, 15_000)
+    console.log('[DEBUG] resetPythonState: exec 返回, ok=', result.ok, 'errorType=', result.errorType, 'errorMessage=', result.errorMessage)
     if (!result.ok) {
       // 降级：重置失败则重建 Worker（慢一次但保证状态干净）
       // 注意：exec timeout 时 workerHost 内部已 terminate + fire-and-forget autoRestart，
       //       这里 hardKill 兜住 race，再 await init 等真正 ready。
+      console.log('[DEBUG] resetPythonState: exec 失败，执行 hardKill + init')
       workerHost.hardKill()
+      console.log('[DEBUG] resetPythonState: hardKill 完成, status=', workerHost.state.status)
       await workerHost.init(DEFAULT_PYODIDE_INDEX_URL)
+      console.log('[DEBUG] resetPythonState: init 完成, status=', workerHost.state.status)
     }
+    console.log('[DEBUG] resetPythonState: 完成')
   }
 
   /**
@@ -613,54 +623,73 @@ export const createNotebookSessionRuntime = async (
     // 状态彻底错乱（"取消后再点继续上次分析也进不去"的直接成因）。
     // 同时抢占正在进行的 connect：abort 它，避免 ghost connect 继续写 phase / 抢 SSE。
     const run = async () => {
+      console.log('[DEBUG] switchSession.run: 开始, newSessionId=', newSessionId)
       connectAbort?.abort()
       connectAbort = null
 
       // 1. 断开旧 session 的实时绑定（SSE / bridge / poll），保留 Worker
       teardownSessionBindings()
+      console.log('[DEBUG] switchSession.run: teardown 完成, workerStatus=', workerHost.state.status)
 
       state.session.phase = {
         kind: 'loading',
-        progress: { stage: 'mount_fs', percent: 60, detail: '正在切换工作区' },
+        progress: { stage: 'mount_fs', percent: 60, detail: '正在重置 Python 环境' },
       }
 
       try {
         // 2. 重置 Python 状态（复用 Worker；失败时内部 hardKill + await init 降级重建）
+        console.log('[DEBUG] switchSession.run: 调用 resetPythonState')
         await resetPythonState()
+        console.log('[DEBUG] switchSession.run: resetPythonState 完成, workerStatus=', workerHost.state.status)
 
         // resetPythonState 降级重建后，把 phase 拉回 load_runtime 起点，
         // 让 bootProgressStop 能正确反映 bootPyodide 的真实进度（而非一直停在 mount_fs 60%）。
+        console.log('[DEBUG] switchSession.run: 检查 booting, status=', workerHost.state.status)
         if (workerHost.state.status === 'booting') {
           state.session.phase = {
             kind: 'loading',
             progress: { stage: 'load_runtime', percent: 12, detail: '正在重建 Python 运行时' },
           }
           await waitForWorkerReady()
+          console.log('[DEBUG] switchSession.run: waitForWorkerReady 完成')
         }
 
         // 3. 切 OPFS 目录 + 重建 toolDispatcher（其闭包捕获 opfsRoot 快照）
+        console.log('[DEBUG] switchSession.run: 开始 createNotebookOpfsRoot')
         opfsRootRef.value = await createNotebookOpfsRoot(newSessionId)
+        console.log('[DEBUG] switchSession.run: createNotebookOpfsRoot 完成')
         rebuildToolDispatcher()
+        console.log('[DEBUG] switchSession.run: rebuildToolDispatcher 完成')
 
         // 4. 把新 session 的 inputs/scripts 灌入 Worker MEMFS（单文件失败不致命，见 syncOpfsFilesToWorker）
+        console.log('[DEBUG] switchSession.run: 开始 syncOpfsFilesToWorker')
         await syncOpfsFilesToWorker()
+        console.log('[DEBUG] switchSession.run: syncOpfsFilesToWorker 完成')
 
         // 5. 重置 VM 状态为新 session
+        console.log('[DEBUG] switchSession.run: 重置 VM 状态')
         currentSessionId = newSessionId
         const freshState = createNotebookRuntimeState(newSessionId)
         freshState.session.title = createSessionTitle(newSessionId)
-        state.session = freshState.session
+        // 关键修复：不能替换 state.session 对象本身 —— App.vue 的 session ref
+        // 持有 state.session 的旧引用，替换会导致 UI 永远读旧对象的 phase（一直 loading）。
+        // 改用 Object.assign 原地修改属性，保持引用不变。
+        Object.assign(state.session, freshState.session)
         state.conversations = freshState.conversations
         state.activeConversationId = freshState.activeConversationId
         state.session.runtime.recentlyRestarted = true
         state.session.phase = { kind: 'ready' }
+        console.log('[DEBUG] switchSession.run: phase 置为 ready')
 
         // 6. 建立新 session 的实时绑定 + 回放历史
+        console.log('[DEBUG] switchSession.run: 开始 setupSessionStream')
         await setupSessionStream(newSessionId, { withHistory: true })
+        console.log('[DEBUG] switchSession.run: setupSessionStream 完成')
       } catch (err) {
         // 错误边界：任何步骤失败（worker 卡死 / writeFs 超时 / OPFS 错 / SSE 建立失败）
         // 都必须把 phase 置为 failed，绝不能永久停在 mount_fs 让用户卡死在 Loading。
         // 清理可能半建好的实时绑定，避免残留 SSE / bridge 干扰下一次重试。
+        console.error('[DEBUG] switchSession.run: catch 捕获错误', err)
         teardownSessionBindings()
         state.session.phase = {
           kind: 'failed',
@@ -691,32 +720,43 @@ export const createNotebookSessionRuntime = async (
     connectAbort = new AbortController()
     const signal = connectAbort.signal
 
-    state.session.phase = {
-      kind: 'loading',
-      progress: {
-        stage: 'load_runtime',
-        percent: 10,
-        detail: '正在加载 Python 运行时',
-      },
-    }
-    state.session.connection = 'reconnecting'
+    try {
+      state.session.phase = {
+        kind: 'loading',
+        progress: {
+          stage: 'load_runtime',
+          percent: 10,
+          detail: '正在加载 Python 运行时',
+        },
+      }
+      state.session.connection = 'reconnecting'
 
-    await workerHost.init(DEFAULT_PYODIDE_INDEX_URL)
-    if (signal.aborted) return
-    state.session.phase = {
-      kind: 'loading',
-      progress: {
-        stage: 'mount_fs',
-        percent: 70,
-        detail: '正在同步工作区文件',
-      },
-    }
-    await syncOpfsFilesToWorker()
-    if (signal.aborted) return
-    state.session.phase = { kind: 'ready' }
+      await workerHost.init(DEFAULT_PYODIDE_INDEX_URL)
+      if (signal.aborted) return
+      state.session.phase = {
+        kind: 'loading',
+        progress: {
+          stage: 'mount_fs',
+          percent: 70,
+          detail: '正在同步工作区文件',
+        },
+      }
+      await syncOpfsFilesToWorker()
+      if (signal.aborted) return
+      state.session.phase = { kind: 'ready' }
 
-    // 建立实时绑定（parentBridge + SSE）+ 回放历史（首启通常无历史，resume 场景有）
-    await setupSessionStream(currentSessionId, { withHistory: true })
+      // 建立实时绑定（parentBridge + SSE）+ 回放历史（首启通常无历史，resume 场景有）
+      await setupSessionStream(currentSessionId, { withHistory: true })
+    } catch (err) {
+      teardownSessionBindings()
+      state.session.phase = {
+        kind: 'failed',
+        failure: {
+          reason: '连接 Notebook Agent 失败',
+          detail: err instanceof Error ? err.message : String(err),
+        },
+      }
+    }
   }
 
   const sendUserMessageAndTrack = async (
@@ -902,21 +942,37 @@ export const createNotebookSessionRuntime = async (
         detail: '正在重启 Python 运行时',
       },
     }
-    workerHost.hardKill()
-    await workerHost.init(DEFAULT_PYODIDE_INDEX_URL)
-    state.session.phase = {
-      kind: 'loading',
-      progress: {
-        stage: 'mount_fs',
-        percent: 75,
-        detail: '正在恢复工作区文件',
-      },
-    }
-    await syncOpfsFilesToWorker()
-    state.session.runtime.recentlyRestarted = true
-    state.session.runtime.memoryMb = 0
-    state.session.phase = {
-      kind: 'ready',
+    try {
+      workerHost.hardKill()
+      await workerHost.init(DEFAULT_PYODIDE_INDEX_URL)
+      state.session.phase = {
+        kind: 'loading',
+        progress: {
+          stage: 'mount_fs',
+          percent: 75,
+          detail: '正在恢复工作区文件',
+        },
+      }
+      await syncOpfsFilesToWorker()
+      state.session.runtime.recentlyRestarted = true
+      state.session.runtime.memoryMb = 0
+      state.session.phase = { kind: 'ready' }
+
+      // 重启后实时绑定可能已被前一次 failed 的 teardown 清掉（switchSession catch 调过
+      // teardownSessionBindings）。这里幂等重建当前 session 的 SSE / bridge，
+      // 保证 retry 后 Agent 事件能正常回流，而不是静默卡住。
+      if (!bridgeDispose) {
+        await setupSessionStream(currentSessionId, { withHistory: true })
+      }
+    } catch (err) {
+      teardownSessionBindings()
+      state.session.phase = {
+        kind: 'failed',
+        failure: {
+          reason: '重启 Python 运行时失败',
+          detail: err instanceof Error ? err.message : String(err),
+        },
+      }
     }
   }
 

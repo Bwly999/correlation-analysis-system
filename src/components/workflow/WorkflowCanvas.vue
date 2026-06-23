@@ -192,6 +192,8 @@ const handleStartNotebook = async (source: NotebookDataSource | null) => {
       ...(initialData ? { initialDataMeta: initialData.meta } : {}),
       savedAt: Date.now(),
     })
+    // 同步探测态：让「继续上次分析」按钮在当前页立即可用，无需刷新
+    liveSessionId.value = sessionId
     // 软关闭上一个后端会话（释放 runtime，保留历史 record 以便 resume）
     if (previousSessionId && previousSessionId !== sessionId) {
       httpClient.delete(`/notebook-agent/sessions/${previousSessionId}`).catch(() => undefined)

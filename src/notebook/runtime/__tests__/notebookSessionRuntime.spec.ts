@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { listDirectoryEntries } from '../../shared/opfsAccess'
 
 const {
   workerHostInitMock,
@@ -206,6 +207,96 @@ describe('notebookSessionRuntime', () => {
     expect(runtime.state.session.sessionId).toBe('sess-resume')
     expect(runtime.state.session.phase.kind).toBe('ready')
 
+    runtime.dispose()
+  })
+
+  it('Bug mount_fs 回归：writeFs 抛错时单文件被跳过，switchSession 仍能推进到 ready', async () => {
+    // 复现：退出后再次「开新分析」走 switchSession，workerHost.writeFs 抛错（worker 卡死 / 未就绪）。
+    // 修复前：错误冒泡到 sessionOpChain，phase 永远停在 mount_fs 60%，UI 卡死在 Loading。
+    // 修复后（Fix A 超时 + Fix C 单文件跳过）：syncOpfsFilesToWorker 内 try/catch 吞掉单文件错误，
+    //   流程继续推进到 ready —— 用户不再卡在 mount_fs。
+    const runtime = await createNotebookSessionRuntime('sess-1')
+    await runtime.connect()
+
+    // 让 syncOpfsFilesToWorker 至少有一个文件可走 writeFs
+    vi.mocked(listDirectoryEntries).mockResolvedValueOnce([
+      { name: 'upstream.csv', kind: 'file', size: 10, modifiedAt: 1 },
+    ])
+    workerHostWriteFsMock.mockRejectedValueOnce(new Error('Worker 未就绪'))
+
+    await runtime.switchSession('sess-2')
+
+    // 关键：不再卡在 loading/mount_fs，而是正常 ready
+    expect(runtime.state.session.phase.kind).toBe('ready')
+    expect(runtime.state.session.sessionId).toBe('sess-2')
+    // writeFs 确实被调用过（错误被 Fix C 吞掉而非阻断）
+    expect(workerHostWriteFsMock).toHaveBeenCalled()
+    runtime.dispose()
+  })
+
+  it('Bug mount_fs 回归：连续两次 switchSession，第一次失败不拖死第二次', async () => {
+    // 复现：sessionOpChain 旧实现里第一次 run() 抛错会 () => run() 重试或挂起，
+    // 导致后续 switchSession 也进不去。修复后 run() 永不 reject（内部 try/catch），
+    // 链不被拖死，第二次 switchSession 正常推进到 ready。
+    const runtime = await createNotebookSessionRuntime('sess-1')
+    await runtime.connect()
+
+    // 第一次：writeFs 抛错 → 单文件跳过 → 仍 ready
+    vi.mocked(listDirectoryEntries).mockResolvedValueOnce([
+      { name: 'a.csv', kind: 'file', size: 1, modifiedAt: 1 },
+    ])
+    workerHostWriteFsMock.mockRejectedValueOnce(new Error('Worker 未就绪'))
+    await runtime.switchSession('sess-fail')
+    expect(runtime.state.session.phase.kind).toBe('ready')
+
+    // 第二次：正常 → 应能推进到 ready，sessionId 更新，不被前一次拖死
+    workerHostWriteFsMock.mockResolvedValue(undefined)
+    await runtime.switchSession('sess-ok')
+    expect(runtime.state.session.phase.kind).toBe('ready')
+    expect(runtime.state.session.sessionId).toBe('sess-ok')
+    runtime.dispose()
+  })
+
+  it('connect 中 workerHost.init 失败时 phase 置为 failed 而非永久 loading', async () => {
+    workerHostInitMock.mockRejectedValueOnce(new Error('Pyodide 初始化超时（120s）'))
+
+    const runtime = await createNotebookSessionRuntime('sess-1')
+    await runtime.connect()
+
+    expect(runtime.state.session.phase.kind).toBe('failed')
+    const phase = runtime.state.session.phase as {
+      kind: 'failed'
+      failure: { reason: string; detail: string }
+    }
+    expect(phase.failure.reason).toContain('连接')
+    expect(phase.failure.detail).toContain('初始化超时')
+    runtime.dispose()
+  })
+
+  it('resetPythonState 降级重建后 worker 一直不 ready 时 phase 置 failed', async () => {
+    const runtime = await createNotebookSessionRuntime('sess-1')
+    await runtime.connect()
+
+    // 模拟 resetPythonState 的 exec 失败 → hardKill + init 降级路径
+    workerHostExecMock.mockResolvedValue({ ok: false, errorType: 'timeout' })
+    // 让 workerHost 状态停留在 booting（模拟 init 后 worker 不回 init_done）
+    workerHostStateHolder.value.status = 'booting'
+
+    vi.useFakeTimers()
+    const switchPromise = runtime.switchSession('sess-2')
+
+    // 推进超过 120s 超时阈值
+    await vi.advanceTimersByTimeAsync(130_000)
+    await switchPromise
+
+    expect(runtime.state.session.phase.kind).toBe('failed')
+    const phase = runtime.state.session.phase as {
+      kind: 'failed'
+      failure: { reason: string }
+    }
+    expect(phase.failure.reason).toContain('切换工作区失败')
+
+    vi.useRealTimers()
     runtime.dispose()
   })
 

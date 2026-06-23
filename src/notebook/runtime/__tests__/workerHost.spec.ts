@@ -10,7 +10,7 @@
  * 不依赖真实 Pyodide / vite ?worker 加载。
  */
 
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { WorkerHost } from '../workerHost'
 import type {
   HostToWorkerRequest,
@@ -111,6 +111,37 @@ describe('WorkerHost', () => {
     it('Worker 已存在时再次 init → 抛错', async () => {
       void host.init('/pyodide/v0.27/').catch(() => undefined)
       await expect(host.init('/pyodide/v0.27/')).rejects.toThrow(/已存在/)
+    })
+
+    it('Worker 不回包时 120s 超时 reject（init 卡死兜底）', async () => {
+      vi.useFakeTimers()
+      try {
+        const initPromise = host.init('/pyodide/v0.27/')
+        // Worker 收到 init 请求但永不回包
+        expect(fake.posted).toHaveLength(1)
+        expect(fake.posted[0]!.kind).toBe('init')
+
+        // 预挂 catch 避免 unhandled rejection（timer 会在 advance 时同步 fire）
+        void initPromise.catch(() => undefined)
+        // 推进 120s + epsilon
+        await vi.advanceTimersByTimeAsync(120_010)
+
+        // init 应超时 reject
+        await expect(initPromise).rejects.toThrow(/初始化超时/)
+        // 超时后状态应置 dead
+        expect(host.state.status).toBe('dead')
+        expect(host.state.lastError).toContain('初始化超时')
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('Worker 崩溃（onerror）时 pending init 被 reject', async () => {
+      const initPromise = host.init('/pyodide/v0.27/')
+      // Worker 报错（模拟 onerror 事件）
+      fake.emitError('Worker 线程崩溃')
+      await expect(initPromise).rejects.toThrow(/线程崩溃/)
+      expect(host.state.status).toBe('dead')
     })
   })
 
@@ -254,6 +285,29 @@ describe('WorkerHost', () => {
       const writePromise = host.writeFs('inputs/x.csv', new ArrayBuffer(4))
       host.hardKill()
       await expect(writePromise).rejects.toThrow(/终止/)
+    })
+
+    it('Worker 不回包时 15s 超时 reject（mount_fs 卡死兜底）', async () => {
+      vi.useFakeTimers()
+      try {
+        await ready()
+        // Worker 收到 fs_write_inline 但永不回包（模拟真实卡死场景）
+        const writePromise = host.writeFs('inputs/x.csv', new ArrayBuffer(4))
+        // 推进过 15s 阈值，触发超时 reject（挂在 promise 上，避免 unhandled rejection）
+        const timeout = vi.advanceTimersByTimeAsync(15_010)
+        await expect(writePromise).rejects.toThrow(/writeFs 超时/)
+        await timeout
+
+        // 超时后 pendingFsWrite 已清掉，state 仍 ready（超时不致命于 host 本身）
+        expect(host.state.status).toBe('ready')
+        // 后续正常 writeFs 不受影响（不再被旧的 pending 拖死）
+        const again = host.writeFs('inputs/y.csv', new ArrayBuffer(4))
+        const sentReq = fake.posted[2]! // init(0) + x(1) + y(2)
+        fake.emit({ kind: 'fs_write_done', requestId: sentReq.requestId, path: 'inputs/y.csv', bytes: 4 })
+        await expect(again).resolves.toEqual({ path: 'inputs/y.csv', bytes: 4 })
+      } finally {
+        vi.useRealTimers()
+      }
     })
   })
 

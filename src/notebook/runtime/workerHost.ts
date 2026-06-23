@@ -76,22 +76,37 @@ interface PendingExec {
 interface PendingInit {
   resolve: (info: InitDoneInfo) => void
   reject: (err: Error) => void
+  /** 超时定时器（默认 120s）；init_done/init_error 或崩溃时清掉，避免泄漏 */
+  timer: ReturnType<typeof setTimeout> | null
 }
 
 interface PendingFsWrite {
   resolve: (info: { path: string; bytes: number }) => void
   reject: (err: Error) => void
+  /** 超时定时器（默认 15s）；回包或失败时清掉，避免泄漏 */
+  timer: ReturnType<typeof setTimeout> | null
 }
 
 interface PendingFsSnapshot {
   resolve: (files: Array<{ path: string; bytes: ArrayBuffer }>) => void
   reject: (err: Error) => void
+  /** 超时定时器（默认 30s） */
+  timer: ReturnType<typeof setTimeout> | null
 }
 
 interface PendingPackagesQuery {
   resolve: (result: PackagesQueryResult) => void
   reject: (err: Error) => void
+  /** 超时定时器（默认 30s） */
+  timer: ReturnType<typeof setTimeout> | null
 }
+
+/** FS 写入超时（ms）：mount_fs 逐文件 sync 的兜底，避免 worker 不回包时永久卡死 */
+const FS_WRITE_TIMEOUT_MS = 15_000
+/** FS 快照 / 包查询超时（ms） */
+const FS_QUERY_TIMEOUT_MS = 30_000
+/** Init 超时（ms）：Worker 下载 WASM + 启动 Pyodide 的硬兜底，避免 worker 不回 init_done 时永久卡死 */
+const INIT_TIMEOUT_MS = 120_000
 
 export class WorkerHost {
   readonly state: HostState
@@ -159,7 +174,22 @@ export class WorkerHost {
     this.state.bootStage = 'starting'
 
     return new Promise<InitDoneInfo>((resolve, reject) => {
-      this.pendingInit = { resolve, reject }
+      const timer = setTimeout(() => {
+        const pending = this.pendingInit
+        if (pending) {
+          this.pendingInit = null
+          if (pending.timer) clearTimeout(pending.timer)
+          pending.reject(new Error(`Pyodide 初始化超时（${INIT_TIMEOUT_MS / 1000}s）`))
+          this.state.status = 'dead'
+          this.state.lastError = `Pyodide 初始化超时（${INIT_TIMEOUT_MS / 1000}s）`
+          this.failAllPendingDueTo(`Pyodide 初始化超时（${INIT_TIMEOUT_MS / 1000}s）`)
+          if (this.worker) {
+            this.worker.terminate()
+            this.worker = null
+          }
+        }
+      }, INIT_TIMEOUT_MS)
+      this.pendingInit = { resolve, reject, timer }
       const req: HostToWorkerRequest = {
         kind: 'init',
         requestId: this.genId(),
@@ -171,7 +201,9 @@ export class WorkerHost {
   }
 
   async exec(code: string, timeoutMs = 60_000): Promise<ExecResult> {
+    console.log('[DEBUG] exec: 入口, worker=', !!this.worker, 'status=', this.state.status, 'busy=', this.isBusy())
     if (!this.worker || this.state.status === 'dead') {
+      console.log('[DEBUG] exec: Worker 未就绪，直接返回 kernel_dead')
       return {
         ok: false,
         stdout: '',
@@ -186,6 +218,7 @@ export class WorkerHost {
     const softTimeoutMs = Math.max(1, timeoutMs)
     // 硬超时按 1.5x 软超时（设计文档为 60s/90s 即 1.5x）
     const hardTimeoutMs = Math.round(softTimeoutMs * 1.5)
+    console.log('[DEBUG] exec: requestId=', requestId, 'softTimeoutMs=', softTimeoutMs, 'hardTimeoutMs=', hardTimeoutMs)
     const req: HostToWorkerRequest = {
       kind: 'exec_inline',
       requestId,
@@ -198,11 +231,13 @@ export class WorkerHost {
     return new Promise<ExecResult>((resolve) => {
       const startedAt = Date.now()
       const softTimer = setTimeout(() => {
+        console.log('[DEBUG] exec: 软超时触发, requestId=', requestId)
         // 软中断：写 interruptBuffer
         if (this.interruptBuffer) requestInterrupt(this.interruptBuffer)
         this.state.softInterruptedAt = Date.now()
       }, softTimeoutMs)
       const hardTimer = setTimeout(() => {
+        console.log('[DEBUG] exec: 硬超时触发, requestId=', requestId)
         // 硬中断：terminate + 自动重建
         this.handleHardTimeout(requestId)
       }, hardTimeoutMs)
@@ -215,6 +250,7 @@ export class WorkerHost {
         code,
         timeoutMs: softTimeoutMs,
       })
+      console.log('[DEBUG] exec: postMessage 发送, requestId=', requestId)
       this.worker!.postMessage(req)
     })
   }
@@ -246,7 +282,12 @@ export class WorkerHost {
     }
     const requestId = this.genId()
     return new Promise((resolve, reject) => {
-      this.pendingFsWrite.set(requestId, { resolve, reject })
+      const timer = setTimeout(() => {
+        if (this.pendingFsWrite.delete(requestId)) {
+          reject(new Error(`writeFs 超时（${FS_WRITE_TIMEOUT_MS}ms）：${path}`))
+        }
+      }, FS_WRITE_TIMEOUT_MS)
+      this.pendingFsWrite.set(requestId, { resolve, reject, timer })
       const req: HostToWorkerRequest = {
         kind: 'fs_write_inline',
         requestId,
@@ -264,7 +305,12 @@ export class WorkerHost {
     }
     const requestId = this.genId()
     return new Promise((resolve, reject) => {
-      this.pendingFsSnapshot.set(requestId, { resolve, reject })
+      const timer = setTimeout(() => {
+        if (this.pendingFsSnapshot.delete(requestId)) {
+          reject(new Error(`snapshotFs 超时（${FS_QUERY_TIMEOUT_MS}ms）`))
+        }
+      }, FS_QUERY_TIMEOUT_MS)
+      this.pendingFsSnapshot.set(requestId, { resolve, reject, timer })
       const req: HostToWorkerRequest = {
         kind: 'fs_snapshot',
         requestId,
@@ -288,7 +334,12 @@ export class WorkerHost {
     }
     const requestId = this.genId()
     return new Promise((resolve, reject) => {
-      this.pendingPackagesQuery.set(requestId, { resolve, reject })
+      const timer = setTimeout(() => {
+        if (this.pendingPackagesQuery.delete(requestId)) {
+          reject(new Error(`packages_query 超时（${FS_QUERY_TIMEOUT_MS}ms）`))
+        }
+      }, FS_QUERY_TIMEOUT_MS)
+      this.pendingPackagesQuery.set(requestId, { resolve, reject, timer })
       const req: HostToWorkerRequest = {
         kind: 'packages_query',
         requestId,
@@ -312,7 +363,8 @@ export class WorkerHost {
 
   private handleMessage = (event: MessageEvent<WorkerToHostMessage>) => {
     const msg = event.data
-    if (!msg) return
+    if (!msg) { console.log('[DEBUG] handleMessage: 空消息'); return }
+    console.log('[DEBUG] handleMessage: 收到消息 kind=', msg.kind, 'requestId=', (msg as any).requestId)
 
     switch (msg.kind) {
       case 'init_progress':
@@ -322,6 +374,7 @@ export class WorkerHost {
         break
 
       case 'init_done':
+        if (this.pendingInit?.timer) clearTimeout(this.pendingInit.timer)
         this.state.status = 'ready'
         this.state.pyodideVersion = msg.pyodideVersion
         this.state.crossOriginIsolated = msg.crossOriginIsolated
@@ -347,6 +400,7 @@ export class WorkerHost {
         break
 
       case 'init_error':
+        if (this.pendingInit?.timer) clearTimeout(this.pendingInit.timer)
         this.state.status = 'dead'
         this.state.lastError = msg.message
         this.pendingInit?.reject(new Error(msg.message))
@@ -354,6 +408,7 @@ export class WorkerHost {
         break
 
       case 'exec_done': {
+        console.log('[DEBUG] handleMessage: exec_done, requestId=', msg.requestId, 'found=', this.pendingExec.has(msg.requestId))
         const pending = this.pendingExec.get(msg.requestId)
         this.pendingExec.delete(msg.requestId)
         if (pending) {
@@ -373,6 +428,7 @@ export class WorkerHost {
       }
 
       case 'exec_error': {
+        console.log('[DEBUG] handleMessage: exec_error, requestId=', msg.requestId, 'found=', this.pendingExec.has(msg.requestId), 'errorType=', msg.errorType)
         const pending = this.pendingExec.get(msg.requestId)
         this.pendingExec.delete(msg.requestId)
         if (pending) {
@@ -400,6 +456,7 @@ export class WorkerHost {
       case 'fs_write_done': {
         const pending = this.pendingFsWrite.get(msg.requestId)
         this.pendingFsWrite.delete(msg.requestId)
+        if (pending?.timer) clearTimeout(pending.timer)
         pending?.resolve({ path: msg.path, bytes: msg.bytes })
         break
       }
@@ -407,6 +464,7 @@ export class WorkerHost {
       case 'fs_write_error': {
         const pending = this.pendingFsWrite.get(msg.requestId)
         this.pendingFsWrite.delete(msg.requestId)
+        if (pending?.timer) clearTimeout(pending.timer)
         pending?.reject(new Error(msg.message))
         break
       }
@@ -414,6 +472,7 @@ export class WorkerHost {
       case 'fs_snapshot_done': {
         const pending = this.pendingFsSnapshot.get(msg.requestId)
         this.pendingFsSnapshot.delete(msg.requestId)
+        if (pending?.timer) clearTimeout(pending.timer)
         pending?.resolve(msg.files)
         break
       }
@@ -421,6 +480,7 @@ export class WorkerHost {
       case 'fs_snapshot_error': {
         const pending = this.pendingFsSnapshot.get(msg.requestId)
         this.pendingFsSnapshot.delete(msg.requestId)
+        if (pending?.timer) clearTimeout(pending.timer)
         pending?.reject(new Error(msg.message))
         break
       }
@@ -428,6 +488,7 @@ export class WorkerHost {
       case 'packages_query_done': {
         const pending = this.pendingPackagesQuery.get(msg.requestId)
         this.pendingPackagesQuery.delete(msg.requestId)
+        if (pending?.timer) clearTimeout(pending.timer)
         pending?.resolve({
           action: msg.action,
           loaded: msg.loaded,
@@ -440,6 +501,7 @@ export class WorkerHost {
       case 'packages_query_error': {
         const pending = this.pendingPackagesQuery.get(msg.requestId)
         this.pendingPackagesQuery.delete(msg.requestId)
+        if (pending?.timer) clearTimeout(pending.timer)
         pending?.reject(new Error(msg.message))
         break
       }
@@ -467,8 +529,9 @@ export class WorkerHost {
    * - 异步自动重建（重建失败容忍：状态变 dead）
    */
   private handleHardTimeout = (timedOutRequestId: string) => {
+    console.log('[DEBUG] handleHardTimeout: 触发, requestId=', timedOutRequestId, 'found=', this.pendingExec.has(timedOutRequestId))
     const pending = this.pendingExec.get(timedOutRequestId)
-    if (!pending) return
+    if (!pending) { console.log('[DEBUG] handleHardTimeout: pending 已不存在，跳过'); return }
     this.pendingExec.delete(timedOutRequestId)
     if (pending.softTimer) clearTimeout(pending.softTimer)
     if (pending.hardTimer) clearTimeout(pending.hardTimer)
@@ -501,6 +564,12 @@ export class WorkerHost {
   }
 
   private failAllPendingDueTo = (message: string) => {
+    const init = this.pendingInit
+    if (init) {
+      this.pendingInit = null
+      if (init.timer) clearTimeout(init.timer)
+      init.reject(new Error(message))
+    }
     this.pendingExec.forEach((pending) => {
       if (pending.softTimer) clearTimeout(pending.softTimer)
       if (pending.hardTimer) clearTimeout(pending.hardTimer)
@@ -514,11 +583,20 @@ export class WorkerHost {
       })
     })
     this.pendingExec.clear()
-    this.pendingFsWrite.forEach(({ reject }) => reject(new Error(message)))
+    this.pendingFsWrite.forEach((pending) => {
+      if (pending.timer) clearTimeout(pending.timer)
+      pending.reject(new Error(message))
+    })
     this.pendingFsWrite.clear()
-    this.pendingFsSnapshot.forEach(({ reject }) => reject(new Error(message)))
+    this.pendingFsSnapshot.forEach((pending) => {
+      if (pending.timer) clearTimeout(pending.timer)
+      pending.reject(new Error(message))
+    })
     this.pendingFsSnapshot.clear()
-    this.pendingPackagesQuery.forEach(({ reject }) => reject(new Error(message)))
+    this.pendingPackagesQuery.forEach((pending) => {
+      if (pending.timer) clearTimeout(pending.timer)
+      pending.reject(new Error(message))
+    })
     this.pendingPackagesQuery.clear()
   }
 
