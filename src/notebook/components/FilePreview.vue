@@ -12,21 +12,13 @@
  */
 
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import {
-  FileText,
-  FileCode2,
-  Image as ImageIcon,
-  Sheet,
-  Info,
-  Hash,
-  CircleSlash,
-  Sparkle
-} from 'lucide-vue-next'
+import { Info, Hash, CircleSlash, Sparkle } from 'lucide-vue-next'
 import { renderMarkdownSafe } from '../preview/markdownRenderer'
 import { resolvePreviewKind } from '../preview/previewRouter'
 import type { PreviewKind } from '../preview/previewRouter'
 import type { OpfsDirectoryHandle } from '../shared/opfsAccess'
 import { createArtifactImageReplacer } from '../preview/markdownArtifacts'
+import FileIcon from './FileIcon.vue'
 
 interface MetaInfo {
   size?: number
@@ -135,18 +127,14 @@ const onTocClick = (id: string) => {
       style="border-color: var(--nb-rule); background-color: var(--nb-sidebar);"
     >
       <div class="flex min-w-0 items-center gap-2.5">
-        <component
-          :is="
-            previewKind === 'markdown'
-              ? FileText
-              : previewKind === 'image'
-              ? ImageIcon
-              : previewKind === 'table'
-              ? Sheet
-              : previewKind === 'code'
-              ? FileCode2
-              : Sparkle
-          "
+        <FileIcon
+          v-if="selectedPath"
+          :name="selectedPath"
+          :size="14"
+          class="shrink-0"
+        />
+        <Sparkle
+          v-else
           :size="13"
           :stroke-width="1.6"
           class="shrink-0"
