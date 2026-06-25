@@ -139,6 +139,9 @@ const buildNotebookSw = (): Plugin => ({
       configFile: false,
       build: {
         lib: {
+          // Vite 7 起 iife/umd 格式必须提供 name（仅作为 UMD/IIFE 全局变量名占位，
+          // Service Worker 通过 self.addEventListener 自注册，不会引用此全局变量）
+          name: 'NotebookServiceWorker',
           entry: resolve(__dirname, 'src/notebook/sw.ts'),
           formats: ['iife'],
           fileName: () => 'notebook-sw.js',
