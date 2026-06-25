@@ -234,5 +234,110 @@ describe('notebook sessionPersistence', () => {
         userId: 'u-1',
       }),
     )
+    // meta payload 只存轻量业务元数据：不得再内嵌全量 messages / toolCalls
+    // （它们已由 SDK 原生 entry 增量持久化，内嵌会导致每行重复序列化 → 文件 O(N²) 膨胀）。
+    const payload = appendCustomEntry.mock.calls[0]![1] as Record<string, unknown>
+    expect(payload).not.toHaveProperty('messages')
+    expect(payload).not.toHaveProperty('toolCalls')
+  })
+
+  it('rehydrate 时从 SDK 原生 message entry 重建 messages 与 toolCalls（含工具结果）', async () => {
+    sessionManagerListMock.mockResolvedValueOnce([
+      {
+        path: '/tmp/sess-native.jsonl',
+        id: 'sdk-native',
+        cwd: process.cwd(),
+        created: new Date('2026-06-22T10:00:00.000Z'),
+        modified: new Date('2026-06-22T10:30:00.000Z'),
+        messageCount: 3,
+        firstMessage: '读一下数据',
+        allMessagesText: '读一下数据',
+      },
+    ])
+    sessionManagerOpenMock.mockReturnValueOnce(
+      buildManager({
+        sessionFile: '/tmp/sess-native.jsonl',
+        sessionName: '原生回放',
+        entries: [
+          {
+            type: 'custom',
+            id: 'entry-meta',
+            parentId: null,
+            timestamp: '2026-06-22T10:00:00.000Z',
+            customType: 'notebook-session-meta',
+            data: {
+              kind: 'notebook-agent-session',
+              sessionId: 'native-session-1',
+              userId: 'u-1',
+              origin: 'http://localhost:5173',
+              status: 'completed',
+              dataReady: true,
+            },
+          },
+          {
+            type: 'message',
+            id: 'msg-user',
+            parentId: 'entry-meta',
+            timestamp: '2026-06-22T10:00:05.000Z',
+            message: {
+              role: 'user',
+              content: [{ type: 'text', text: '读一下数据' }],
+            } as never,
+          },
+          {
+            type: 'message',
+            id: 'msg-assistant',
+            parentId: 'msg-user',
+            timestamp: '2026-06-22T10:00:10.000Z',
+            message: {
+              role: 'assistant',
+              content: [
+                { type: 'text', text: '我来读取文件。' },
+                {
+                  type: 'toolCall',
+                  id: 'call_00_abc',
+                  name: 'fs_read',
+                  arguments: { path: 'inputs/upstream.csv' },
+                },
+              ],
+            } as never,
+          },
+          {
+            type: 'message',
+            id: 'msg-toolresult',
+            parentId: 'msg-assistant',
+            timestamp: '2026-06-22T10:00:11.000Z',
+            message: {
+              role: 'toolResult',
+              toolCallId: 'call_00_abc',
+              toolName: 'fs_read',
+              content: [{ type: 'text', text: 'col1,col2\n1,2' }],
+              isError: false,
+            } as never,
+          },
+        ],
+      }),
+    )
+
+    await ensureNotebookSessionsRehydrated()
+    const record = await loadNotebookSessionRecord('native-session-1')
+
+    expect(record).not.toBeNull()
+    expect(record!.messages.map((m) => ({ role: m.role, content: m.content }))).toEqual([
+      { role: 'user', content: '读一下数据' },
+      { role: 'assistant', content: '我来读取文件。' },
+    ])
+    expect(record!.toolCalls).toHaveLength(1)
+    const toolCall = record!.toolCalls[0]!
+    expect(toolCall).toEqual(
+      expect.objectContaining({
+        id: 'call_00_abc',
+        toolName: 'fs_read',
+        args: { path: 'inputs/upstream.csv' },
+        status: 'success',
+        isError: false,
+        result: 'col1,col2\n1,2',
+      }),
+    )
   })
 })

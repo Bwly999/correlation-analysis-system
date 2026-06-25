@@ -33,8 +33,6 @@ export interface NotebookPersistedMeta {
   title?: string
   status: NotebookSessionStatus
   dataReady: boolean
-  messages?: NotebookMessage[]
-  toolCalls?: NotebookToolCall[]
   bootstrapPromptedAt?: number
   archivedAt?: number
   initialDataMeta?: ImportCsvMeta
@@ -125,106 +123,97 @@ const extractNotebookMeta = (entries: SessionEntry[]): NotebookPersistedMeta | n
   return null
 }
 
+type SessionMessage = {
+  role?: string
+  content?: string | Array<Record<string, unknown>>
+  timestamp?: number
+  toolCallId?: string
+  toolName?: string
+  isError?: boolean
+  details?: unknown
+}
+
+// SDK 原生 message entry 的 content 块里，文本内容统一为 {type:'text', text}。
+const extractTextBlocks = (content: SessionMessage['content']): string =>
+  Array.isArray(content)
+    ? content
+      .filter((part) => part?.type === 'text')
+      .map((part) => part?.text ?? '')
+      .join('')
+    : typeof content === 'string'
+      ? content
+      : ''
+
+const resolveCreatedAt = (message: SessionMessage, fallbackTimestamp: string): number =>
+  typeof message.timestamp === 'number'
+    ? message.timestamp
+    : new Date(fallbackTimestamp).getTime()
+
+// 从 SDK 原生 entry 重建 notebook 视图下的 messages + toolCalls。
+//
+// 关键：工具结果在 SDK 里以 message(role:'toolResult') 落盘（非 custom_message），
+// 工具调用本身则内嵌在 assistant message 的 content 里的 {type:'toolCall'} 块。
+// 二者靠 toolCallId 关联。这里严格按该结构解析。
 const extractHistory = (entries: SessionEntry[]): {
   messages: NotebookMessage[]
   toolCalls: NotebookToolCall[]
 } => {
   const messages: NotebookMessage[] = []
   const toolCalls: NotebookToolCall[] = []
-  let currentAssistantId = ''
-  let currentAssistantText = ''
 
   for (const entry of entries) {
-    if (entry.type === 'message') {
-      const message = entry.message as {
-        role?: string
-        content?: string | Array<{ type?: string; text?: string }>
-        timestamp?: number
-      }
-      if (message.role === 'user') {
-        const content = typeof message.content === 'string'
-          ? message.content
-          : Array.isArray(message.content)
-            ? message.content
-              .filter((part) => part?.type === 'text')
-              .map((part) => part?.text ?? '')
-              .join('')
-            : ''
-        messages.push({
-          id: entry.id,
-          role: 'user',
-          content,
-          rawContent: content,
-          status: 'completed',
-          createdAt: typeof message.timestamp === 'number'
-            ? message.timestamp
-            : new Date(entry.timestamp).getTime(),
-        })
-        continue
-      }
-      if (message.role === 'assistant') {
-        currentAssistantId = entry.id
-        currentAssistantText = typeof message.content === 'string'
-          ? message.content
-          : Array.isArray(message.content)
-            ? message.content
-              .filter((part) => part?.type === 'text')
-              .map((part) => part?.text ?? '')
-              .join('')
-            : ''
-        messages.push({
-          id: currentAssistantId,
-          role: 'assistant',
-          content: currentAssistantText,
-          rawContent: currentAssistantText,
-          status: 'completed',
-          createdAt: typeof message.timestamp === 'number'
-            ? message.timestamp
-            : new Date(entry.timestamp).getTime(),
-        })
-        continue
-      }
-    }
-    if (entry.type !== 'custom_message') continue
-    if (entry.customType === 'tool_call' && entry.details && typeof entry.details === 'object') {
-      const details = entry.details as Record<string, unknown>
-      toolCalls.push({
-        id: typeof details.toolCallId === 'string' ? details.toolCallId : entry.id,
-        toolName: typeof details.toolName === 'string' ? details.toolName : 'unknown',
-        args: details.args,
-        status: 'running',
-        startedAt: new Date(entry.timestamp).getTime(),
+    if (entry.type !== 'message') continue
+    const message = entry.message as SessionMessage
+
+    if (message.role === 'user') {
+      const content = extractTextBlocks(message.content)
+      messages.push({
+        id: entry.id,
+        role: 'user',
+        content,
+        rawContent: content,
+        status: 'completed',
+        createdAt: resolveCreatedAt(message, entry.timestamp),
       })
       continue
     }
-    if (entry.customType === 'tool_result' && entry.details && typeof entry.details === 'object') {
-      const details = entry.details as Record<string, unknown>
-      const toolCallId = typeof details.toolCallId === 'string' ? details.toolCallId : ''
-      const toolCall = toolCalls.find((item) => item.id === toolCallId)
-      if (!toolCall) continue
-      toolCall.status = details.isError ? 'failed' : 'success'
-      toolCall.isError = Boolean(details.isError)
-      toolCall.finishedAt = new Date(entry.timestamp).getTime()
-      toolCall.result = typeof details.result === 'string'
-        ? details.result
-        : typeof entry.content === 'string'
-          ? entry.content
-          : JSON.stringify(details.result ?? details, null, 2)
+
+    if (message.role === 'assistant') {
+      const content = extractTextBlocks(message.content)
+      messages.push({
+        id: entry.id,
+        role: 'assistant',
+        content,
+        rawContent: content,
+        status: 'completed',
+        createdAt: resolveCreatedAt(message, entry.timestamp),
+      })
+      // assistant content 内嵌的 toolCall 块（id/name/arguments）建立 toolCall 记录，
+      // 等待后续 toolResult message 填充结果。
+      if (Array.isArray(message.content)) {
+        for (const block of message.content) {
+          if (block?.type !== 'toolCall') continue
+          toolCalls.push({
+            id: typeof block.id === 'string' ? block.id : entry.id,
+            toolName: typeof block.name === 'string' ? block.name : 'unknown',
+            args: block.arguments,
+            status: 'running',
+            startedAt: resolveCreatedAt(message, entry.timestamp),
+          })
+        }
+      }
       continue
     }
-    if (entry.customType === 'assistant_message' && currentAssistantId) {
-      const message = messages.find((item) => item.id === currentAssistantId && item.role === 'assistant')
-      if (!message) continue
-      const content = typeof entry.content === 'string'
-        ? entry.content
-        : Array.isArray(entry.content)
-          ? entry.content
-            .filter((part) => part?.type === 'text')
-            .map((part) => part?.text ?? '')
-            .join('')
-          : currentAssistantText
-      message.content = content
-      message.rawContent = content
+
+    if (message.role === 'toolResult') {
+      const toolCallId = typeof message.toolCallId === 'string' ? message.toolCallId : ''
+      const toolCall = toolCalls.find((item) => item.id === toolCallId)
+      if (!toolCall) continue
+      toolCall.status = message.isError ? 'failed' : 'success'
+      toolCall.isError = Boolean(message.isError)
+      toolCall.finishedAt = resolveCreatedAt(message, entry.timestamp)
+      toolCall.result = extractTextBlocks(message.content)
+      continue
     }
   }
 
@@ -259,8 +248,6 @@ const buildRecordFromSession = (
   if (!userId) return null
 
   const { messages, toolCalls } = extractHistory(entries)
-  const restoredMessages = Array.isArray(meta.messages) ? meta.messages : messages
-  const restoredToolCalls = Array.isArray(meta.toolCalls) ? meta.toolCalls : toolCalls
   const createdAt = meta.createdAt ?? sessionInfo.created.getTime()
   const updatedAt = meta.updatedAt ?? sessionInfo.modified.getTime()
   return {
@@ -273,8 +260,8 @@ const buildRecordFromSession = (
     initialDataMeta: meta.initialDataMeta,
     status: normalizeStatus(meta.status),
     dataReady: Boolean(meta.dataReady),
-    messages: restoredMessages,
-    toolCalls: restoredToolCalls,
+    messages,
+    toolCalls,
     createdAt,
     updatedAt,
     archivedAt: meta.archivedAt,
@@ -299,8 +286,6 @@ export const persistNotebookSessionMeta = (
     title: record.title,
     status: record.status,
     dataReady: record.dataReady,
-    messages: record.messages,
-    toolCalls: record.toolCalls,
     bootstrapPromptedAt: record.bootstrapPromptedAt,
     archivedAt: record.archivedAt,
     initialDataMeta: record.initialDataMeta,

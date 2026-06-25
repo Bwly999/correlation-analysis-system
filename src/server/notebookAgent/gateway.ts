@@ -195,11 +195,11 @@ const buildAndRegisterRuntime = async (
     for (const sseEvent of sseEvents) {
       emitRuntimeEvent(runtime, sseEvent)
     }
-    if (sseEvents.length > 0) {
-      persistNotebookSessionMeta(runtime.sessionManager, runtime.record)
-    }
     // 一轮结束后上报上下文窗口使用情况（SDK 同步方法，数据此时最新）
     if (event.type === 'agent_end') {
+      // 消息/工具调用内容已由 SDK 原生 entry 增量持久化，这里只在每轮结束时
+      // 把 status 等轻量业务元数据落盘一次（不再每个流式事件都写一行全量 meta）。
+      persistNotebookSessionMeta(runtime.sessionManager, runtime.record)
       const usage = runtime.session.getContextUsage?.()
       if (usage) {
         emitRuntimeEvent(runtime, {
