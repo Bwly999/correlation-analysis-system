@@ -5,8 +5,36 @@ server {
     root /data/apps/correlation-analysis-system/dist;
     index index.html;
 
-    location / {
-        try_files $uri $uri/ /index.html;
+    # ───────────────────────────────────────────────────────────────
+    # notebook 入口页：必须进 COI(COOP + COEP)，否则拿不到 SharedArrayBuffer，
+    # pyodide 中断 buffer 失效，notebook 起不来。
+    # 逻辑与 src/server/notebookHeadersPlugin.ts 一一对应(Node 侧参考实现)。
+    # always 必须加：否则 4xx 时不带头，SW 安装行为不一致。
+    # ───────────────────────────────────────────────────────────────
+    location ~ ^/(notebook\.html|notebook-iframe\.html)$ {
+        add_header Cross-Origin-Opener-Policy   "same-origin"  always;
+        add_header Cross-Origin-Embedder-Policy "require-corp" always;
+        add_header Cross-Origin-Resource-Policy "same-origin"  always;
+        try_files $uri =404;
+    }
+
+    # ───────────────────────────────────────────────────────────────
+    # pyodide 资源(几百个 wasm/wheel/字体)
+    #   - CORP 必须 cross-origin(反直觉)：COEP=require-corp 模式下，同源资源
+    #     反而要显式 cross-origin 才放行。写成 same-origin 会被 COEP 拦截。
+    #   - wasm 必须是 application/wasm，否则 pyodide 加载报错。
+    #   - .mjs 走 ES module import() 加载，Content-Type 必须是 text/javascript，
+    #     否则 Chromium 在 COEP 模式下拒绝（默认 fallback 到 octet-stream 会被拦）。
+    #     nginx 默认 mime.types 不含 wasm/.mjs，这里内联 types 兜住。
+    # ───────────────────────────────────────────────────────────────
+    location /pyodide/ {
+        add_header Cross-Origin-Resource-Policy "cross-origin" always;
+        add_header Cross-Origin-Embedder-Policy "require-corp"  always;
+        types {
+            application/wasm  wasm;
+            text/javascript   mjs js;
+        }
+        try_files $uri =404;
     }
 
     location /api/ {
@@ -16,5 +44,36 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+
+        # notebook Agent 事件流(SSE)必需：关 buffer + 拉长超时。
+        # 不关 buffering 会导致事件积压、长任务超时断开。
+        proxy_buffering    off;
+        proxy_cache        off;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
     }
+
+    # ───────────────────────────────────────────────────────────────
+    # 主站静态资源兜底
+    # CORP + COEP 都是命门：notebook.html 处于 COEP=require-corp 模式，
+    # 它加载的每个子资源（含 /assets/worker-*.js pyodide worker、vendor-*.js 等）
+    # 必须同时带 CORP + COEP 头，否则 module worker 被 Chromium 拦
+    # (ERR_BLOCKED_BY_RESPONSE)。光加 CORP 不够，COEP 文档内加载 module worker
+    # 时还要求 worker 脚本自身带 COEP。对齐 vite.config.ts notebookCoiHeaders
+    # 的 dev 实现(给所有响应同时注入 CORP+COEP)。
+    # 主站 index.html 不带 COEP，不校验资源头，故这些头对主站零影响
+    # (iframe 隔离价值完整保留：主站调第三方 API 不受 CORP 限制)。
+    # 项目无 vue-router，理论上不需要 /index.html fallback；
+    # 但保留原有 try_files 行为，避免影响现有主站部署。
+    # 若确认主站不需要 SPA fallback，可改为 try_files $uri $uri/ =404。
+    # ───────────────────────────────────────────────────────────────
+    location / {
+        add_header Cross-Origin-Resource-Policy "same-origin"  always;
+        add_header Cross-Origin-Embedder-Policy "require-corp" always;
+        try_files $uri $uri/ /index.html;
+    }
+
+    gzip on;
+    gzip_types text/plain text/css application/javascript application/json application/wasm;
+    gzip_min_length 1024;
 }

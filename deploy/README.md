@@ -314,6 +314,40 @@ systemctl reload nginx
 
 ---
 
+## 10.1 Notebook（pyodide）部署要点
+
+Notebook 是后引入的独立入口（`/notebook.html`），在浏览器内用 pyodide 跑 Python。它对 nginx 有额外要求，**如果沿用上面第 10 节的老配置，notebook 一定起不来**。请使用 `deploy/templates/nginx.conf.example` 的最新版本，它已包含以下三处关键配置：
+
+### 1. pyodide 资源位置（无需额外操作）
+
+pyodide 不需要单独部署。执行 `pnpm build` 时，`build:pyodide` 脚本会自动把 `ops/pyodide-runtime/v0.27.x/` 拷贝到 `dist/pyodide/v0.27/`，随前端构建产物一起走。部署时 `dist/` 整个拷到 nginx root 即可，pyodide 已在内。
+
+> 不要把 `ops/` 单独拷到部署机。`ops/` 不进 git，只是开发机的源材料。
+
+### 2. COI 头（命门）
+
+notebook 用 `SharedArrayBuffer`（pyodide 中断 buffer 依赖），浏览器只在 `crossOriginIsolated === true` 时才提供。nginx 必须配：
+
+- `/notebook.html`：带 `COOP: same-origin` + `COEP: require-corp`
+- `/pyodide/*`：带 `CORP: cross-origin`（反直觉，但 COEP 模式下的硬规则，见 `src/server/notebookHeadersPlugin.ts` 注释）+ 正确的 `Content-Type: application/wasm`（pyodide 加载硬要求）
+
+模板里的三个 `add_header` 一处都不能漏或改值。每行末尾的 `always` 必须保留，否则 4xx 时不带头。
+
+### 3. SSE 流式配置
+
+notebook Agent 事件流走 SSE，nginx 反代 `/api/` 时必须 `proxy_buffering off`，否则事件积压、长任务超时断开。模板已含此项。
+
+### 4. 验证
+
+部署后浏览器开 `/notebook.html`，F12 检查：
+
+- Console：`crossOriginIsolated` 必须为 `true`
+- Network：`GET /pyodide/v0.27/pyodide.asm.wasm` 状态 200，Response Headers 含 `Cross-Origin-Resource-Policy: cross-origin` 和 `Content-Type: application/wasm`
+
+若 `crossOriginIsolated` 为 `false`，99% 是 `/notebook.html` 漏带 COOP/COEP，或某个 `/pyodide/*` 响应漏带 CORP。Console 通常会有 `NotSameOriginAfterDefaultedToSameOriginByCoep` 类报错。
+
+---
+
 ## 11. systemd 配置
 
 参考模板：
