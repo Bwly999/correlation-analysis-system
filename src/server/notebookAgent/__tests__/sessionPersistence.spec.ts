@@ -5,10 +5,12 @@ import type { SessionEntry } from '@earendil-works/pi-coding-agent'
 const {
   sessionManagerListMock,
   sessionManagerOpenMock,
+  existsSyncMock,
   syncSessionFilesFromS3Mock,
 } = vi.hoisted(() => ({
   sessionManagerListMock: vi.fn(),
   sessionManagerOpenMock: vi.fn(),
+  existsSyncMock: vi.fn(),
   syncSessionFilesFromS3Mock: vi.fn(),
 }))
 
@@ -26,6 +28,14 @@ vi.mock('@earendil-works/pi-coding-agent', async () => {
   }
 })
 
+vi.mock('node:fs', async (importActual) => {
+  const actual = await importActual<typeof import('node:fs')>()
+  return {
+    ...actual,
+    existsSync: existsSyncMock,
+  }
+})
+
 vi.mock('../gateway.js', () => ({
   syncNotebookSessionFilesFromS3: syncSessionFilesFromS3Mock,
 }))
@@ -37,7 +47,7 @@ import {
   persistNotebookSessionMeta,
   resetNotebookSessionPersistenceForTest,
 } from '../sessionPersistence.js'
-import { __resetNotebookSessionsForTest } from '../sessionStore.js'
+import { __resetNotebookSessionsForTest, getNotebookSession } from '../sessionStore.js'
 
 const buildManager = (options: {
   sessionFile: string
@@ -55,6 +65,8 @@ describe('notebook sessionPersistence', () => {
     __resetNotebookSessionsForTest()
     resetNotebookSessionPersistenceForTest()
     syncSessionFilesFromS3Mock.mockResolvedValue(undefined)
+    // 默认认为 session 文件存在；按需重建路径需要文件可访问。
+    existsSyncMock.mockReturnValue(true)
   })
 
   it('rehydrate 后按用户列出 notebook 会话并保留标题/归档态', async () => {
@@ -171,29 +183,29 @@ describe('notebook sessionPersistence', () => {
         allMessagesText: '继续分析',
       },
     ])
-    sessionManagerOpenMock.mockReturnValueOnce(
-      buildManager({
-        sessionFile: '/tmp/sess-2.jsonl',
-        sessionName: '继续分析',
-        entries: [
-          {
-            type: 'custom',
-            id: 'entry-2',
-            parentId: null,
-            timestamp: '2026-06-22T10:00:00.000Z',
-            customType: 'notebook-session-meta',
-            data: {
-              kind: 'notebook-agent-session',
-              sessionId: 'notebook-session-2',
-              userId: 'u-2',
-              origin: 'http://localhost:5173',
-              status: 'idle',
-              dataReady: false,
-            },
+    const manager = buildManager({
+      sessionFile: '/tmp/sess-2.jsonl',
+      sessionName: '继续分析',
+      entries: [
+        {
+          type: 'custom',
+          id: 'entry-2',
+          parentId: null,
+          timestamp: '2026-06-22T10:00:00.000Z',
+          customType: 'notebook-session-meta',
+          data: {
+            kind: 'notebook-agent-session',
+            sessionId: 'notebook-session-2',
+            userId: 'u-2',
+            origin: 'http://localhost:5173',
+            status: 'idle',
+            dataReady: false,
           },
-        ],
-      }),
-    )
+        },
+      ],
+    })
+    // rehydrate（读 summary）与 load（按需重建全量）都会 open 同一文件
+    sessionManagerOpenMock.mockReturnValue(manager)
 
     await ensureNotebookSessionsRehydrated()
     const record = await loadNotebookSessionRecord('notebook-session-2')
@@ -241,7 +253,7 @@ describe('notebook sessionPersistence', () => {
     expect(payload).not.toHaveProperty('toolCalls')
   })
 
-  it('rehydrate 时从 SDK 原生 message entry 重建 messages 与 toolCalls（含工具结果）', async () => {
+  it('load 时按需从 SDK 原生 message entry 重建 messages 与 toolCalls（含工具结果）', async () => {
     sessionManagerListMock.mockResolvedValueOnce([
       {
         path: '/tmp/sess-native.jsonl',
@@ -254,7 +266,8 @@ describe('notebook sessionPersistence', () => {
         allMessagesText: '读一下数据',
       },
     ])
-    sessionManagerOpenMock.mockReturnValueOnce(
+    // rehydrate（只读 summary）与 load（按需重建全量 history）都会 open 同一文件
+    sessionManagerOpenMock.mockReturnValue(
       buildManager({
         sessionFile: '/tmp/sess-native.jsonl',
         sessionName: '原生回放',
@@ -339,5 +352,103 @@ describe('notebook sessionPersistence', () => {
         result: 'col1,col2\n1,2',
       }),
     )
+  })
+
+  it('rehydrate 只读概要：会话不进入活跃内存镜像，load 时才按需重建', async () => {
+    sessionManagerListMock.mockResolvedValueOnce([
+      {
+        path: '/tmp/sess-lazy.jsonl',
+        id: 'sdk-lazy',
+        cwd: process.cwd(),
+        created: new Date('2026-06-22T10:00:00.000Z'),
+        modified: new Date('2026-06-22T10:30:00.000Z'),
+        messageCount: 1,
+        firstMessage: '懒加载',
+        allMessagesText: '懒加载',
+      },
+    ])
+    const getEntries = vi.fn(() => [
+      {
+        type: 'custom',
+        id: 'entry-lazy',
+        parentId: null,
+        timestamp: '2026-06-22T10:00:00.000Z',
+        customType: 'notebook-session-meta',
+        data: {
+          kind: 'notebook-agent-session',
+          sessionId: 'lazy-session-1',
+          userId: 'u-1',
+          origin: 'http://localhost:5173',
+          status: 'completed',
+          dataReady: true,
+          messageCount: 5,
+        },
+      },
+    ])
+    sessionManagerOpenMock.mockReturnValue({
+      getSessionFile: () => '/tmp/sess-lazy.jsonl',
+      getSessionName: () => '懒加载',
+      getEntries,
+    })
+
+    await ensureNotebookSessionsRehydrated()
+    // rehydrate 后：会话不在活跃内存镜像（全量 history 未加载）
+    expect(getNotebookSession('lazy-session-1')).toBeUndefined()
+    // 列表概要可读（messageCount 来自 meta，非解析 history）
+    const list = listPersistedNotebookSessionsByUser('u-1')
+    expect(list[0]?.messageCount).toBe(5)
+
+    // load 时才按需 open + 解析全量 history（第二次 open 调用）
+    const beforeOpenCalls = sessionManagerOpenMock.mock.calls.length
+    const record = await loadNotebookSessionRecord('lazy-session-1')
+    expect(sessionManagerOpenMock.mock.calls.length).toBeGreaterThan(beforeOpenCalls)
+    expect(record?.sessionId).toBe('lazy-session-1')
+    // load 后进入活跃内存镜像
+    expect(getNotebookSession('lazy-session-1')).toBeDefined()
+  })
+
+  it('旧 JSONL 的 meta 缺 messageCount 时列表概要兜底为 0', async () => {
+    sessionManagerListMock.mockResolvedValueOnce([
+      {
+        path: '/tmp/sess-old.jsonl',
+        id: 'sdk-old',
+        cwd: process.cwd(),
+        created: new Date('2026-06-22T10:00:00.000Z'),
+        modified: new Date('2026-06-22T10:30:00.000Z'),
+        messageCount: 1,
+        firstMessage: '旧文件',
+        allMessagesText: '旧文件',
+      },
+    ])
+    sessionManagerOpenMock.mockReturnValue(
+      buildManager({
+        sessionFile: '/tmp/sess-old.jsonl',
+        sessionName: '旧文件',
+        entries: [
+          {
+            // 旧 meta：无 messageCount / lastUserMessagePreview 字段
+            type: 'custom',
+            id: 'entry-old',
+            parentId: null,
+            timestamp: '2026-06-22T10:00:00.000Z',
+            customType: 'notebook-session-meta',
+            data: {
+              kind: 'notebook-agent-session',
+              sessionId: 'old-session-1',
+              userId: 'u-1',
+              origin: 'http://localhost:5173',
+              status: 'idle',
+              dataReady: false,
+            },
+          },
+        ],
+      }),
+    )
+
+    await ensureNotebookSessionsRehydrated()
+    const list = listPersistedNotebookSessionsByUser('u-1')
+    expect(list).toHaveLength(1)
+    expect(list[0]?.messageCount).toBe(0)
+    expect(list[0]?.lastUserMessagePreview).toBeUndefined()
   })
 })

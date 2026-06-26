@@ -39,10 +39,14 @@ export interface NotebookPersistedMeta {
   createdAt?: number
   updatedAt?: number
   sessionFile?: string
+  /** 会话历史概要（用于列表展示，rehydrate 时只读这部分即可，无需解析全量 history） */
+  messageCount?: number
+  lastUserMessagePreview?: string
 }
 
 type NotebookSessionSummary = {
   sessionId: string
+  userId?: string
   title: string
   initialDataMeta?: ImportCsvMeta
   status: NotebookSessionStatus
@@ -51,9 +55,12 @@ type NotebookSessionSummary = {
   updatedAt: number
   messageCount: number
   lastUserMessagePreview?: string
+  /** 已落盘的 session 文件路径，按需重建全量 record 时复用 */
+  sessionFile?: string
 }
 
-const persistedSessions = new Map<string, NotebookSessionRecord>()
+// 只缓存会话概要（列表/owner 校验够用）；全量 messages/toolCalls 不常驻，
+// 需要时由 loadNotebookSessionRecord 按需从磁盘重建。
 const persistedSummaries = new Map<string, NotebookSessionSummary>()
 let rehydrated = false
 let s3Storage:
@@ -224,6 +231,7 @@ const summarizeRecord = (record: NotebookSessionRecord): NotebookSessionSummary 
   const lastUserMsg = [...record.messages].reverse().find((item) => item.role === 'user')
   return {
     sessionId: record.sessionId,
+    userId: record.userId,
     title: record.title,
     initialDataMeta: record.initialDataMeta,
     status: record.status,
@@ -232,11 +240,17 @@ const summarizeRecord = (record: NotebookSessionRecord): NotebookSessionSummary 
     updatedAt: record.updatedAt,
     messageCount: record.messages.length,
     lastUserMessagePreview: lastUserMsg?.content.slice(0, 60),
+    sessionFile: record.sessionFile,
   }
 }
 
+/**
+ * 从磁盘重建会话全量 record（按需调用：仅「打开单个会话」时触发）。
+ *
+ * 这是全量 messages/toolCalls 唯一进入内存的路径。重建结果交给活跃 sessions
+ * Map 管理，会话归档即丢弃，下次打开再重建（用完即弃，无 LRU）。
+ */
 const buildRecordFromSession = (
-  sessionInfo: SessionInfo,
   sessionManager: Pick<SessionManager, 'getEntries' | 'getSessionName' | 'getSessionFile'>,
   fallbackUser?: ServerStorageUser,
 ): NotebookSessionRecord | null => {
@@ -248,8 +262,8 @@ const buildRecordFromSession = (
   if (!userId) return null
 
   const { messages, toolCalls } = extractHistory(entries)
-  const createdAt = meta.createdAt ?? sessionInfo.created.getTime()
-  const updatedAt = meta.updatedAt ?? sessionInfo.modified.getTime()
+  const createdAt = meta.createdAt ?? Date.now()
+  const updatedAt = meta.updatedAt ?? createdAt
   return {
     sessionId: meta.sessionId,
     userId,
@@ -269,15 +283,55 @@ const buildRecordFromSession = (
 }
 
 const cacheRecord = (record: NotebookSessionRecord) => {
-  persistedSessions.set(record.sessionId, record)
   persistedSummaries.set(record.sessionId, summarizeRecord(record))
   upsertNotebookSession(record)
+}
+
+const cacheSummary = (summary: NotebookSessionSummary) => {
+  persistedSummaries.set(summary.sessionId, summary)
+}
+
+/**
+ * 从 session 文件构造概要（rehydrate 用）。
+ *
+ * 只读最后一条 notebook-session-meta（含业务元数据 + messageCount/preview），
+ * 不解析全量 message/toolCall history —— 这是 rehydrate 内存优化的关键：
+ * 历史内容只在「打开单个会话」时由 loadNotebookSessionRecord 按需重建。
+ */
+const buildSummaryFromSession = (
+  sessionInfo: SessionInfo,
+  sessionManager: Pick<SessionManager, 'getEntries' | 'getSessionName' | 'getSessionFile'>,
+  fallbackUser?: ServerStorageUser,
+): NotebookSessionSummary | null => {
+  const meta = extractNotebookMeta(sessionManager.getEntries())
+  if (!meta) return null
+
+  const userId = meta.userId ?? fallbackUser?.id
+  if (!userId) return null
+
+  const createdAt = meta.createdAt ?? sessionInfo.created.getTime()
+  const updatedAt = meta.updatedAt ?? sessionInfo.modified.getTime()
+  return {
+    sessionId: meta.sessionId,
+    userId,
+    title: resolveSessionName(sessionManager, meta, createdAt),
+    initialDataMeta: meta.initialDataMeta,
+    status: normalizeStatus(meta.status),
+    archivedAt: meta.archivedAt,
+    createdAt,
+    updatedAt,
+    // 旧文件 meta 无此字段时兜底为 0/undefined，列表显示「0 条」，点进去仍能正常回放
+    messageCount: typeof meta.messageCount === 'number' ? meta.messageCount : 0,
+    lastUserMessagePreview: meta.lastUserMessagePreview,
+    sessionFile: meta.sessionFile ?? sessionManager.getSessionFile?.(),
+  }
 }
 
 export const persistNotebookSessionMeta = (
   sessionManager: Pick<SessionManager, 'appendCustomEntry' | 'getSessionFile'>,
   record: NotebookSessionRecord,
 ): void => {
+  const summary = summarizeRecord(record)
   const payload: NotebookPersistedMeta = {
     kind: NOTEBOOK_SESSION_KIND,
     sessionId: record.sessionId,
@@ -292,6 +346,8 @@ export const persistNotebookSessionMeta = (
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
     sessionFile: record.sessionFile ?? sessionManager.getSessionFile?.(),
+    messageCount: summary.messageCount,
+    lastUserMessagePreview: summary.lastUserMessagePreview,
   }
   sessionManager.appendCustomEntry(NOTEBOOK_SESSION_META_TYPE, payload)
   cacheRecord({
@@ -326,16 +382,15 @@ export const ensureNotebookSessionsRehydrated = async (
 ): Promise<void> => {
   if (rehydrated) return
   rehydrated = true
-  persistedSessions.clear()
   persistedSummaries.clear()
 
   await syncNotebookSessionFilesFromS3()
   const sessions = await PiSessionManager.list(process.cwd(), resolveNotebookSessionDir())
   for (const sessionInfo of sessions) {
     const manager = PiSessionManager.open(sessionInfo.path, resolveNotebookSessionDir(), process.cwd())
-    const record = buildRecordFromSession(sessionInfo, manager, fallbackUser)
-    if (!record) continue
-    cacheRecord(record)
+    // 只读概要：不跑 extractHistory，历史内容不进内存。
+    const summary = buildSummaryFromSession(sessionInfo, manager, fallbackUser)
+    if (summary) cacheSummary(summary)
   }
 }
 
@@ -345,7 +400,7 @@ export const listPersistedNotebookSessionsByUser = (
   const live = listNotebookSessionsByUser(userId).map(summarizeRecord)
   const merged = new Map<string, NotebookSessionSummary>()
   for (const item of persistedSummaries.values()) {
-    if (persistedSessions.get(item.sessionId)?.userId !== userId) continue
+    if (item.userId !== userId) continue
     merged.set(item.sessionId, item)
   }
   for (const item of live) {
@@ -359,22 +414,29 @@ export const loadNotebookSessionRecord = async (
 ): Promise<NotebookSessionRecord | null> => {
   const live = getNotebookSession(sessionId)
   if (live) return live
-  const persisted = persistedSessions.get(sessionId)
-  if (!persisted) return null
-  return upsertNotebookSession({ ...persisted })
+  // 已归档会话：按需从磁盘重建全量 record（跑 extractHistory），
+  // 交给活跃 sessions Map 管理，归档时自然释放 —— 用完即弃。
+  const summary = persistedSummaries.get(sessionId)
+  if (!summary?.sessionFile || !existsSync(summary.sessionFile)) return null
+  const manager = PiSessionManager.open(
+    summary.sessionFile,
+    resolveNotebookSessionDir(),
+    process.cwd(),
+  )
+  const record = buildRecordFromSession(manager)
+  if (!record) return null
+  return upsertNotebookSession(record)
 }
 
 export const getPersistedNotebookSessionOwner = (sessionId: string): string | null =>
-  persistedSessions.get(sessionId)?.userId ?? getNotebookSession(sessionId)?.userId ?? null
+  persistedSummaries.get(sessionId)?.userId ?? getNotebookSession(sessionId)?.userId ?? null
 
 export const deletePersistedNotebookSession = (sessionId: string): boolean => {
-  persistedSessions.delete(sessionId)
   persistedSummaries.delete(sessionId)
   return true
 }
 
 export const resetNotebookSessionPersistenceForTest = (): void => {
-  persistedSessions.clear()
   persistedSummaries.clear()
   rehydrated = false
 }
