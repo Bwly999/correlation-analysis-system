@@ -18,6 +18,15 @@ export type NotebookAgentEvent =
       percent: number | null
     }
   | {
+      type: 'session.model_changed'
+      sessionId: string
+      profileId: string
+      modelName: string
+      contextWindow: number
+      maxTokens: number
+      thinkingLevel: 'low' | 'medium' | 'high' | 'off'
+    }
+  | {
       type: 'session.compaction_start'
       sessionId: string
       reason: 'manual' | 'threshold' | 'overflow'
@@ -354,6 +363,153 @@ export const reportNotebookAuditEntries = async (
 }
 
 // ──────────────────────────────────────────────
+// 模型配置（多模型选择 / 用户自定义）
+// ──────────────────────────────────────────────
+
+export type NotebookThinkingLevel = 'low' | 'medium' | 'high' | 'off'
+
+export interface NotebookModelProfile {
+  id: string
+  name: string
+  baseUrl: string
+  model: string
+  enabled: boolean
+  isDefault?: boolean
+  source: 'system' | 'custom'
+  contextWindow?: number
+  maxTokens?: number
+  thinkingLevel?: NotebookThinkingLevel
+}
+
+export interface NotebookModelProfileInput {
+  name: string
+  baseUrl: string
+  model: string
+  apiKey: string
+  contextWindow?: number
+  maxTokens?: number
+  thinkingLevel?: NotebookThinkingLevel
+}
+
+export interface NotebookModelProfileTestResult {
+  success: boolean
+  message: string
+  latencyMs?: number
+}
+
+export interface NotebookModelProfilesResponse {
+  profiles: NotebookModelProfile[]
+}
+
+/** 列出当前用户可用模型（后台 env + 用户自定义，apiKey 已抹除） */
+export const fetchNotebookModelProfiles = async (): Promise<NotebookModelProfile[]> => {
+  const response = await httpClient.request({
+    url: '/notebook-agent/model-profiles',
+    method: 'GET',
+  })
+  if (!isSuccessStatus(response.status)) {
+    throw new Error('读取模型配置列表失败')
+  }
+  return (response.data as NotebookModelProfilesResponse).profiles
+}
+
+/** 新增用户自定义模型配置 */
+export const createNotebookModelProfile = async (
+  input: NotebookModelProfileInput,
+): Promise<NotebookModelProfile> => {
+  const response = await httpClient.request({
+    url: '/notebook-agent/model-profiles',
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    data: input,
+  })
+  if (!isSuccessStatus(response.status)) {
+    const message =
+      typeof response.data === 'object' && response.data && 'message' in response.data
+        ? String((response.data as { message: string }).message)
+        : '新增模型配置失败'
+    throw new Error(message)
+  }
+  return (response.data as { profile: NotebookModelProfile }).profile
+}
+
+/** 更新用户自定义模型配置 */
+export const updateNotebookModelProfile = async (
+  profileId: string,
+  input: NotebookModelProfileInput,
+): Promise<NotebookModelProfile> => {
+  const response = await httpClient.request({
+    url: `/notebook-agent/model-profiles/${profileId}`,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    data: input,
+  })
+  if (!isSuccessStatus(response.status)) {
+    const message =
+      typeof response.data === 'object' && response.data && 'message' in response.data
+        ? String((response.data as { message: string }).message)
+        : '更新模型配置失败'
+    throw new Error(message)
+  }
+  return (response.data as { profile: NotebookModelProfile }).profile
+}
+
+/** 删除用户自定义模型配置 */
+export const deleteNotebookModelProfile = async (
+  profileId: string,
+): Promise<{ ok: boolean }> => {
+  const response = await httpClient.request({
+    url: `/notebook-agent/model-profiles/${profileId}`,
+    method: 'DELETE',
+  })
+  if (!isSuccessStatus(response.status)) {
+    throw new Error('删除模型配置失败')
+  }
+  return response.data as { ok: boolean }
+}
+
+/** 测试模型连通性（需完整 profile 含 apiKey） */
+export const testNotebookModelProfile = async (
+  profile: NotebookModelProfileInput,
+): Promise<NotebookModelProfileTestResult> => {
+  const response = await httpClient.request({
+    url: '/notebook-agent/model-profiles/test',
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    data: { profile: { ...profile, id: 'test', enabled: true, source: 'custom' as const } },
+  })
+  if (!isSuccessStatus(response.status)) {
+    const message =
+      typeof response.data === 'object' && response.data && 'message' in response.data
+        ? String((response.data as { message: string }).message)
+        : '测试连通性失败'
+    throw new Error(message)
+  }
+  return response.data as NotebookModelProfileTestResult
+}
+
+/** 对话中切换会话模型（热切换，无需重建会话） */
+export const switchNotebookAgentModel = async (
+  sessionId: string,
+  profileId: string,
+): Promise<{ ok: boolean }> => {
+  const response = await httpClient.request({
+    url: `/notebook-agent/sessions/${sessionId}/switch-model`,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    data: { profileId },
+  })
+  if (!isSuccessStatus(response.status)) {
+    const message =
+      typeof response.data === 'object' && response.data && 'message' in response.data
+        ? String((response.data as { message: string }).message)
+        : '切换模型失败'
+    throw new Error(message)
+  }
+  return response.data as { ok: boolean }
+}
+
+// ──────────────────────────────────────────────
 // 历史回放 & resume（「继续上次分析」）
 // ──────────────────────────────────────────────
 
@@ -388,6 +544,7 @@ export interface NotebookSessionHistory {
   toolCalls: NotebookHistoryToolCall[]
   createdAt: number
   updatedAt: number
+  currentModelId?: string
 }
 
 export interface NotebookSessionListItem {

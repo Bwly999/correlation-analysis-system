@@ -38,6 +38,15 @@ export type NotebookAgentSseEvent =
       summary: string | null
     }
   | {
+      type: 'session.model_changed'
+      sessionId: string
+      profileId: string
+      modelName: string
+      contextWindow: number
+      maxTokens: number
+      thinkingLevel: 'low' | 'medium' | 'high' | 'off'
+    }
+  | {
       type: 'message.start'
       sessionId: string
       messageId: string

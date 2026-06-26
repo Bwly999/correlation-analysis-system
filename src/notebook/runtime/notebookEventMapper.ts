@@ -890,6 +890,18 @@ export const applyNotebookEvent = (
       }
       return
     }
+    case 'session.model_changed': {
+      // 切换模型后重置 contextUsage：旧模型的 token 数对新模型无意义，
+      // 置为 null 让 UI 回到"待统计"灰态，待下一轮 agent_end 重新上报。
+      session.runtime.currentModelId = event.profileId
+      session.runtime.currentModelName = event.modelName
+      session.runtime.contextUsage = {
+        tokens: null,
+        contextWindow: event.contextWindow,
+        percent: null,
+      }
+      return
+    }
     case 'session.compaction_start': {
       session.runtime.compactionInProgress = true
       return

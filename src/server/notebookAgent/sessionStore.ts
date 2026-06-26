@@ -58,6 +58,11 @@ export interface NotebookSessionRecord {
   createdAt: number
   updatedAt: number
   /**
+   * 当前会话使用的模型 profileId（用于 resume 时恢复 + 前端展示当前模型）。
+   * undefined = 使用默认模型（会话创建时取的第一个可用 profile）。
+   */
+  currentModelId?: string
+  /**
    * 软关闭时间戳：关闭笔记本时只释放 runtime（Pi SDK AgentSession），
    * 但 record 保留以便 resume 回放历史；真正删除走显式 DELETE。
    * undefined = 仍存活（runtime 可能在线）。
@@ -184,7 +189,7 @@ export const updateNotebookSessionRecord = (
   sessionId: string,
   update: Partial<Pick<
     NotebookSessionRecord,
-    'status' | 'dataReady' | 'bootstrapPromptedAt' | 'archivedAt' | 'sessionFile'
+    'status' | 'dataReady' | 'bootstrapPromptedAt' | 'archivedAt' | 'sessionFile' | 'currentModelId'
   >>,
 ): void => {
   const record = sessions.get(sessionId)

@@ -30,10 +30,13 @@ import { createNotebookTools } from './tools.js'
 import { FrontendBridge, FrontendBridgeTimeoutError } from '../piAgent/frontendBridge.js'
 import {
   buildModelFromProfile,
-  createModelRegistryFromProfile,
+  createModelRegistryFromProfiles,
   createPiAgentResourceLoader,
 } from '../piAgent/runtimeFactory.js'
 import { getSystemModelProfiles } from '../piAgent/modelProfiles.js'
+import {
+  listNotebookUserModelProfiles,
+} from './notebookUserModelProfilesStore.js'
 import { bridgeNotebookEvent, type NotebookAgentSseEvent } from './eventBridge.js'
 import {
   generateNotebookSessionTitle,
@@ -67,6 +70,10 @@ interface NotebookAgentRuntime {
   bootstrapStarted: boolean
   streamSubscribed: boolean
   unsubscribe?: () => void
+  /** 该会话所有可用模型：profileId → 预建的 Model 对象（供 session.setModel 切换） */
+  availableModels: Map<string, ReturnType<typeof buildModelFromProfile>>
+  /** 该会话所有可用 profile：profileId → profile（读取 contextWindow/thinkingLevel 等参数） */
+  availableProfiles: Map<string, import('../../ai/types.js').WorkflowAiModelProfile>
 }
 
 const runtimes = new Map<string, NotebookAgentRuntime>()
@@ -112,14 +119,6 @@ const tryStartNotebookBootstrap = (runtime: NotebookAgentRuntime) => {
     })
 }
 
-const getDefaultNotebookProfile = () => {
-  const profiles = getSystemModelProfiles()
-  if (profiles.length === 0) {
-    throw new Error('未找到可用的 Notebook Agent 模型配置')
-  }
-  return profiles[0]!
-}
-
 export const createNotebookAgentSession = async (
   input: CreateNotebookSessionInput,
 ): Promise<CreateNotebookSessionResult> => {
@@ -138,13 +137,31 @@ export const createNotebookAgentSession = async (
 
 /**
  * 构建 Pi SDK runtime 并注册到 runtimes Map。供 create / resume 复用。
+ *
+ * 会话创建时合并后台 env profiles + 当前用户自定义 profiles，
+ * 把所有模型的 apiKey 预注册到同一 authStorage，并预建 Model 对象，
+ * 以支持后续 session.setModel 热切换。
  */
 const buildAndRegisterRuntime = async (
   record: NotebookSessionRecord,
   systemPrompt: string,
   sessionManager = SessionManager.create(process.cwd(), ensureNotebookSessionDir()),
 ): Promise<NotebookAgentRuntime> => {
-  const profile = getDefaultNotebookProfile()
+  // 合并后台 env profiles + 当前用户自定义 profiles
+  const systemProfiles = getSystemModelProfiles()
+  const userProfiles = await listNotebookUserModelProfiles(record.userId)
+  // 同 id 时用户自定义优先级低（后台 env 不可被用户覆盖 id），但二者 id 空间应独立
+  const allProfiles = [...systemProfiles, ...userProfiles]
+  if (allProfiles.length === 0) {
+    throw new Error('未找到可用的 Notebook Agent 模型配置')
+  }
+
+  // 解析当前应使用的 profile：优先 record.currentModelId（resume 场景），否则取默认
+  const initialProfile = (record.currentModelId
+    && allProfiles.find((p) => p.id === record.currentModelId))
+    || allProfiles.find((p) => p.isDefault)
+    || allProfiles[0]!
+
   const eventListeners = new Set<(event: NotebookAgentSseEvent) => void>()
   const bridge = new FrontendBridge((event) => {
     const runtime = runtimes.get(record.sessionId)
@@ -158,8 +175,9 @@ const buildAndRegisterRuntime = async (
     })
   })
   const tools = createNotebookTools(bridge)
-  const { authStorage, modelRegistry } = createModelRegistryFromProfile(profile)
-  const model = buildModelFromProfile(profile)
+  const { authStorage, modelRegistry, models, profileMap } =
+    createModelRegistryFromProfiles(allProfiles)
+  const model = models.get(initialProfile.id) ?? buildModelFromProfile(initialProfile)
   const resourceLoader = createPiAgentResourceLoader(() => systemPrompt)
   await resourceLoader.reload()
   const { session } = await createAgentSession({
@@ -167,7 +185,7 @@ const buildAndRegisterRuntime = async (
     authStorage,
     modelRegistry,
     model: model as never,
-    thinkingLevel: 'low',
+    thinkingLevel: initialProfile.thinkingLevel ?? 'high',
     cwd: process.cwd(),
     customTools: tools,
     resourceLoader,
@@ -185,8 +203,11 @@ const buildAndRegisterRuntime = async (
     currentMessageId: { value: '' },
     bootstrapStarted: false,
     streamSubscribed: false,
+    availableModels: models,
+    availableProfiles: profileMap,
   }
   record.sessionFile = runtime.sessionFile
+  record.currentModelId = initialProfile.id
   persistNotebookSessionTitle(sessionManager, record.title)
   persistNotebookSessionMeta(sessionManager, record)
   runtime.bootstrapStarted = Boolean(record.bootstrapPromptedAt)
@@ -503,6 +524,55 @@ export const compactNotebookAgentSession = async (
   }
 }
 
+/**
+ * 对话中热切换模型。
+ *
+ * 走 Pi SDK 的 session.setModel(targetModel)：SDK 内部完成模型切换并持久化到
+ * session 记录，无需销毁重建会话、不丢工具历史。切换后同步设置 thinkingLevel。
+ *
+ * 前提：目标模型的 apiKey 在会话创建时已预注册到 authStorage（见 buildAndRegisterRuntime），
+ * 且其 Model 对象已缓存在 runtime.availableModels。否则 SDK 抛 "no auth configured"。
+ *
+ * @returns ok=true=已切换并广播；ok=false + error=会话/模型不存在或切换失败
+ */
+export const switchNotebookAgentModel = async (
+  sessionId: string,
+  profileId: string,
+): Promise<{ ok: boolean; error?: string }> => {
+  const runtime = runtimes.get(sessionId)
+  if (!runtime) return { ok: false, error: '会话不存在' }
+
+  const targetModel = runtime.availableModels.get(profileId)
+  const targetProfile = runtime.availableProfiles.get(profileId)
+  if (!targetModel || !targetProfile) {
+    return { ok: false, error: '该模型在当前会话不可用（可能 apiKey 缺失或已删除）' }
+  }
+
+  try {
+    await runtime.session.setModel(targetModel as never)
+    const thinkingLevel = targetProfile.thinkingLevel ?? 'high'
+    runtime.session.setThinkingLevel(thinkingLevel)
+
+    // 记录当前模型，resume 时据此恢复
+    updateNotebookSessionRecord(sessionId, { currentModelId: profileId })
+    persistNotebookSessionMeta(runtime.sessionManager, runtime.record)
+
+    emitRuntimeEvent(runtime, {
+      type: 'session.model_changed',
+      sessionId,
+      profileId,
+      modelName: targetProfile.name || targetProfile.model,
+      contextWindow: targetModel.contextWindow,
+      maxTokens: targetModel.maxTokens,
+      thinkingLevel,
+    })
+    return { ok: true }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return { ok: false, error: message }
+  }
+}
+
 export const finishNotebookAgentToolCall = (
   sessionId: string,
   toolCallId: string,
@@ -554,6 +624,7 @@ const summarize = (r: NotebookSessionRecord) => ({
   toolCalls: r.toolCalls,
   createdAt: r.createdAt,
   updatedAt: r.updatedAt,
+  currentModelId: r.currentModelId,
 })
 
 export const subscribeNotebookAgentEvents = (

@@ -37,9 +37,21 @@ import {
   sendNotebookAgentMessage,
   abortNotebookAgentSession,
   subscribeNotebookAgentEvents,
+  switchNotebookAgentModel,
   updateNotebookAgentSessionTitle,
 } from '../notebookAgent/gateway.js'
 import type { ImportCsvMeta } from '../../notebook/shared/parentBridge.js'
+import type { WorkflowAiModelProfile, WorkflowAiThinkingLevel } from '../../ai/types.js'
+import { getSystemModelProfiles, toPublicModelProfile } from '../piAgent/modelProfiles.js'
+import { testPiAgentRuntimeProfile } from '../piAgent/runtimeFactory.js'
+import { buildNotebookSystemPrompt } from '../notebookAgent/systemPrompt.js'
+import {
+  createNotebookUserModelProfile,
+  deleteNotebookUserModelProfile,
+  listNotebookUserModelProfiles,
+  updateNotebookUserModelProfile,
+  type NotebookUserModelProfileInput,
+} from '../notebookAgent/notebookUserModelProfilesStore.js'
 import { ensureNotebookSessionsRehydrated } from '../notebookAgent/sessionPersistence.js'
 import {
   WORKSPACE_SNAPSHOT_LIMIT_BYTES,
@@ -75,6 +87,92 @@ export const createNotebookAgentRoutes = (): FastifyPluginAsync => async (app) =
       forbiddenMessage: '无权访问该 Notebook Agent 会话',
     })
   }
+
+  // 校验用户自定义模型配置输入（创建/更新共用）
+  const validateProfileInput = (body: unknown): NotebookUserModelProfileInput | { message: string } => {
+    if (!body || typeof body !== 'object') return { message: '请求体非法' }
+    const b = body as Record<string, unknown>
+    const name = typeof b.name === 'string' ? b.name.trim() : ''
+    const baseUrl = typeof b.baseUrl === 'string' ? b.baseUrl.trim() : ''
+    const model = typeof b.model === 'string' ? b.model.trim() : ''
+    const apiKey = typeof b.apiKey === 'string' ? b.apiKey.trim() : ''
+    if (!name || !baseUrl || !model || !apiKey) {
+      return { message: 'name / baseUrl / model / apiKey 不能为空' }
+    }
+    const thinkingLevelRaw = typeof b.thinkingLevel === 'string' ? b.thinkingLevel : undefined
+    const thinkingLevel: WorkflowAiThinkingLevel | undefined =
+      thinkingLevelRaw === 'low' || thinkingLevelRaw === 'medium' || thinkingLevelRaw === 'high' || thinkingLevelRaw === 'off'
+        ? thinkingLevelRaw
+        : undefined
+    return {
+      name,
+      baseUrl,
+      model,
+      apiKey,
+      contextWindow: typeof b.contextWindow === 'number' ? b.contextWindow : undefined,
+      maxTokens: typeof b.maxTokens === 'number' ? b.maxTokens : undefined,
+      thinkingLevel,
+    }
+  }
+
+  // ── 模型配置：列出 / 增 / 改 / 删 / 测试 ──────────────────────────
+  // 列出当前用户可用模型（后台 env + 用户自定义，apiKey 抹除）
+  app.get('/api/notebook-agent/model-profiles', async (request) => {
+    const user = requireWorkflowUser(request)
+    const system = getSystemModelProfiles().map(toPublicModelProfile)
+    const custom = (await listNotebookUserModelProfiles(user.id)).map(toPublicModelProfile)
+    return { profiles: [...system, ...custom] }
+  })
+
+  app.post('/api/notebook-agent/model-profiles', async (request, reply) => {
+    const user = requireWorkflowUser(request)
+    const validated = validateProfileInput(request.body)
+    if ('message' in validated) {
+      reply.code(400)
+      return { message: validated.message }
+    }
+    const profile = await createNotebookUserModelProfile(user.id, validated)
+    return { profile: toPublicModelProfile(profile) }
+  })
+
+  app.put('/api/notebook-agent/model-profiles/:profileId', async (request, reply) => {
+    const user = requireWorkflowUser(request)
+    const { profileId } = request.params as { profileId: string }
+    const validated = validateProfileInput(request.body)
+    if ('message' in validated) {
+      reply.code(400)
+      return { message: validated.message }
+    }
+    const profile = await updateNotebookUserModelProfile(user.id, profileId, validated)
+    if (!profile) {
+      reply.code(404)
+      return { message: '模型配置不存在或无权修改' }
+    }
+    return { profile: toPublicModelProfile(profile) }
+  })
+
+  app.delete('/api/notebook-agent/model-profiles/:profileId', async (request, reply) => {
+    const user = requireWorkflowUser(request)
+    const { profileId } = request.params as { profileId: string }
+    const ok = await deleteNotebookUserModelProfile(user.id, profileId)
+    if (!ok) {
+      reply.code(404)
+      return { message: '模型配置不存在或无权删除' }
+    }
+    return { ok: true }
+  })
+
+  // 测试连通性（复用 testPiAgentRuntimeProfile，需完整 profile 含 apiKey）
+  app.post('/api/notebook-agent/model-profiles/test', async (request, reply) => {
+    requireWorkflowUser(request)
+    const body = request.body as { profile?: Partial<WorkflowAiModelProfile> }
+    if (!body.profile) {
+      reply.code(400)
+      return { message: '缺少模型配置' }
+    }
+    const profile = body.profile as WorkflowAiModelProfile
+    return testPiAgentRuntimeProfile(profile, () => buildNotebookSystemPrompt({}))
+  })
 
   app.post('/api/notebook-agent/sessions', async (request, reply) => {
     const user = requireWorkflowUser(request)
@@ -201,6 +299,24 @@ export const createNotebookAgentRoutes = (): FastifyPluginAsync => async (app) =
     if (!result.ok) {
       reply.code(404)
       return { message: result.error ?? '会话不存在' }
+    }
+    return { ok: true }
+  })
+
+  // 对话中切换模型（SDK session.setModel 热切换，无需重建会话）。
+  app.post('/api/notebook-agent/sessions/:sessionId/switch-model', async (request, reply) => {
+    const user = requireWorkflowUser(request)
+    const { sessionId } = request.params as { sessionId: string }
+    await verifyOwnedSession(sessionId, user.id, user)
+    const body = request.body as { profileId?: string }
+    if (!body.profileId) {
+      reply.code(400)
+      return { message: '缺少 profileId' }
+    }
+    const result = await switchNotebookAgentModel(sessionId, body.profileId)
+    if (!result.ok) {
+      reply.code(400)
+      return { message: result.error ?? '切换模型失败' }
     }
     return { ok: true }
   })

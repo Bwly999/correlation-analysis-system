@@ -280,6 +280,10 @@ export interface RuntimeStats {
   compactionInProgress?: boolean
   /** 历史压缩记录（仅保留最近若干条，用于 hover 面板展示） */
   compactionHistory?: CompactionRecord[]
+  /** 当前会话使用的模型 id（切换后由 session.model_changed 事件更新） */
+  currentModelId?: string
+  /** 当前会话使用的模型显示名 */
+  currentModelName?: string
 }
 
 /** 一次上下文压缩的元数据记录（不存 summary 全文，仅元数据） */

@@ -329,6 +329,8 @@ export interface WorkflowAiEditableSnapshot {
   edges: unknown[]
 }
 
+export type WorkflowAiThinkingLevel = 'low' | 'medium' | 'high' | 'off'
+
 export interface WorkflowAiModelProfile {
   id: string
   name: string
@@ -342,6 +344,12 @@ export interface WorkflowAiModelProfile {
     create?: boolean
     edit?: boolean
   }
+  /** 上下文窗口大小（tokens），未配置时由 runtime 默认值兜底 */
+  contextWindow?: number
+  /** 单轮最大输出 tokens，未配置时由 runtime 默认值兜底 */
+  maxTokens?: number
+  /** 思考等级，未配置时由 runtime 默认值兜底（notebook 默认 high） */
+  thinkingLevel?: WorkflowAiThinkingLevel
 }
 
 export interface WorkflowAiModelTestResult {

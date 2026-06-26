@@ -19,6 +19,14 @@ const {
   ensureNotebookAgentSessionRecordMock,
   ensureNotebookSessionsRehydratedMock,
   startNdjsonStreamMock,
+  switchNotebookAgentModelMock,
+  getSystemModelProfilesMock,
+  toPublicModelProfileMock,
+  testPiAgentRuntimeProfileMock,
+  listNotebookUserModelProfilesMock,
+  createNotebookUserModelProfileMock,
+  updateNotebookUserModelProfileMock,
+  deleteNotebookUserModelProfileMock,
 } = vi.hoisted(() => ({
   createNotebookAgentSessionMock: vi.fn(),
   listNotebookAgentSessionsByUserMock: vi.fn(),
@@ -36,6 +44,14 @@ const {
   ensureNotebookAgentSessionRecordMock: vi.fn().mockResolvedValue(null),
   ensureNotebookSessionsRehydratedMock: vi.fn().mockResolvedValue(undefined),
   startNdjsonStreamMock: vi.fn(),
+  switchNotebookAgentModelMock: vi.fn(),
+  getSystemModelProfilesMock: vi.fn(),
+  toPublicModelProfileMock: vi.fn((p: unknown) => p),
+  testPiAgentRuntimeProfileMock: vi.fn(),
+  listNotebookUserModelProfilesMock: vi.fn().mockResolvedValue([]),
+  createNotebookUserModelProfileMock: vi.fn(),
+  updateNotebookUserModelProfileMock: vi.fn(),
+  deleteNotebookUserModelProfileMock: vi.fn(),
 }))
 
 vi.mock('../gateway.js', () => ({
@@ -53,6 +69,7 @@ vi.mock('../gateway.js', () => ({
   destroyNotebookAgentSession: destroyNotebookAgentSessionMock,
   ensureNotebookAgentRuntime: ensureNotebookAgentRuntimeMock,
   ensureNotebookAgentSessionRecord: ensureNotebookAgentSessionRecordMock,
+  switchNotebookAgentModel: switchNotebookAgentModelMock,
 }))
 
 vi.mock('../../http/ndjson.js', () => ({
@@ -61,6 +78,26 @@ vi.mock('../../http/ndjson.js', () => ({
 
 vi.mock('../sessionPersistence.js', () => ({
   ensureNotebookSessionsRehydrated: ensureNotebookSessionsRehydratedMock,
+}))
+
+vi.mock('../../piAgent/modelProfiles.js', () => ({
+  getSystemModelProfiles: getSystemModelProfilesMock,
+  toPublicModelProfile: toPublicModelProfileMock,
+}))
+
+vi.mock('../../piAgent/runtimeFactory.js', () => ({
+  testPiAgentRuntimeProfile: testPiAgentRuntimeProfileMock,
+}))
+
+vi.mock('../systemPrompt.js', () => ({
+  buildNotebookSystemPrompt: vi.fn(() => 'sys'),
+}))
+
+vi.mock('../notebookUserModelProfilesStore.js', () => ({
+  listNotebookUserModelProfiles: listNotebookUserModelProfilesMock,
+  createNotebookUserModelProfile: createNotebookUserModelProfileMock,
+  updateNotebookUserModelProfile: updateNotebookUserModelProfileMock,
+  deleteNotebookUserModelProfile: deleteNotebookUserModelProfileMock,
 }))
 
 import '../../http/fastify.js'
@@ -108,6 +145,13 @@ afterEach(async () => {
   finishNotebookAgentToolCallMock.mockReset()
   destroyNotebookAgentSessionMock.mockReset()
   startNdjsonStreamMock.mockReset()
+  switchNotebookAgentModelMock.mockReset()
+  getSystemModelProfilesMock.mockReset()
+  testPiAgentRuntimeProfileMock.mockReset()
+  createNotebookUserModelProfileMock.mockReset()
+  updateNotebookUserModelProfileMock.mockReset()
+  deleteNotebookUserModelProfileMock.mockReset()
+  listNotebookUserModelProfilesMock.mockReset().mockResolvedValue([])
 
   while (apps.length > 0) {
     await apps.pop()!.close()
@@ -551,5 +595,200 @@ describe('DELETE /api/notebook-agent/sessions/:id', () => {
 
     expect(res.statusCode).toBe(200)
     expect(destroyNotebookAgentSessionMock).toHaveBeenCalledWith('notebook-session-1')
+  })
+})
+
+// ── 模型配置端点 ──────────────────────────────────────────────
+const systemProfileFixture = {
+  id: 'sys-1',
+  name: '内置模型',
+  baseUrl: 'https://api.deepseek.com',
+  model: 'deepseek-chat',
+  apiKey: 'k',
+  enabled: true,
+  isDefault: true,
+  source: 'system' as const,
+}
+const customProfileFixture = {
+  id: 'custom-1',
+  name: '我的模型',
+  baseUrl: 'https://api.deepseek.com',
+  model: 'deepseek-chat',
+  apiKey: 'k2',
+  enabled: true,
+  source: 'custom' as const,
+}
+
+describe('GET /api/notebook-agent/model-profiles', () => {
+  it('合并后台 + 用户自定义模型并返回（apiKey 经 toPublicModelProfile 处理）', async () => {
+    getSystemModelProfilesMock.mockReturnValue([systemProfileFixture])
+    listNotebookUserModelProfilesMock.mockResolvedValue([customProfileFixture])
+
+    const app = await createTestApp()
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/notebook-agent/model-profiles',
+      headers: userHeaders(),
+    })
+
+    expect(res.statusCode).toBe(200)
+    const body = res.json() as { profiles: unknown[] }
+    expect(body.profiles).toHaveLength(2)
+    expect(getSystemModelProfilesMock).toHaveBeenCalledOnce()
+    expect(listNotebookUserModelProfilesMock).toHaveBeenCalledWith('notebook-route-user')
+  })
+})
+
+describe('POST /api/notebook-agent/model-profiles', () => {
+  it('校验通过 → 新增并返回 profile', async () => {
+    createNotebookUserModelProfileMock.mockResolvedValueOnce(customProfileFixture)
+
+    const app = await createTestApp()
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/notebook-agent/model-profiles',
+      headers: userHeaders(),
+      payload: {
+        name: '我的模型',
+        baseUrl: 'https://api.deepseek.com',
+        model: 'deepseek-chat',
+        apiKey: 'k2',
+      },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(createNotebookUserModelProfileMock).toHaveBeenCalledWith('notebook-route-user', expect.objectContaining({ name: '我的模型' }))
+  })
+
+  it('缺 apiKey → 400', async () => {
+    const app = await createTestApp()
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/notebook-agent/model-profiles',
+      headers: userHeaders(),
+      payload: { name: 'x', baseUrl: 'https://x', model: 'm', apiKey: '' },
+    })
+    expect(res.statusCode).toBe(400)
+  })
+})
+
+describe('PUT /api/notebook-agent/model-profiles/:id', () => {
+  it('更新成功返回 profile', async () => {
+    updateNotebookUserModelProfileMock.mockResolvedValueOnce(customProfileFixture)
+    const app = await createTestApp()
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/api/notebook-agent/model-profiles/custom-1',
+      headers: userHeaders(),
+      payload: {
+        name: '改名',
+        baseUrl: 'https://api.deepseek.com',
+        model: 'deepseek-chat',
+        apiKey: 'k2',
+      },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(updateNotebookUserModelProfileMock).toHaveBeenCalledWith('notebook-route-user', 'custom-1', expect.objectContaining({ name: '改名' }))
+  })
+
+  it('不存在 → 404', async () => {
+    updateNotebookUserModelProfileMock.mockResolvedValueOnce(null)
+    const app = await createTestApp()
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/api/notebook-agent/model-profiles/none',
+      headers: userHeaders(),
+      payload: { name: 'x', baseUrl: 'https://x', model: 'm', apiKey: 'k' },
+    })
+    expect(res.statusCode).toBe(404)
+  })
+})
+
+describe('DELETE /api/notebook-agent/model-profiles/:id', () => {
+  it('删除成功', async () => {
+    deleteNotebookUserModelProfileMock.mockResolvedValueOnce(true)
+    const app = await createTestApp()
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/api/notebook-agent/model-profiles/custom-1',
+      headers: userHeaders(),
+    })
+    expect(res.statusCode).toBe(200)
+    expect(deleteNotebookUserModelProfileMock).toHaveBeenCalledWith('notebook-route-user', 'custom-1')
+  })
+
+  it('不存在 → 404', async () => {
+    deleteNotebookUserModelProfileMock.mockResolvedValueOnce(false)
+    const app = await createTestApp()
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/api/notebook-agent/model-profiles/none',
+      headers: userHeaders(),
+    })
+    expect(res.statusCode).toBe(404)
+  })
+})
+
+describe('POST /api/notebook-agent/model-profiles/test', () => {
+  it('调用 testPiAgentRuntimeProfile 并返回结果', async () => {
+    testPiAgentRuntimeProfileMock.mockResolvedValueOnce({ success: true, message: 'ok', latencyMs: 12 })
+    const app = await createTestApp()
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/notebook-agent/model-profiles/test',
+      headers: userHeaders(),
+      payload: { profile: { baseUrl: 'https://x', model: 'm', apiKey: 'k' } },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(testPiAgentRuntimeProfileMock).toHaveBeenCalledOnce()
+  })
+
+  it('缺 profile → 400', async () => {
+    const app = await createTestApp()
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/notebook-agent/model-profiles/test',
+      headers: userHeaders(),
+      payload: {},
+    })
+    expect(res.statusCode).toBe(400)
+  })
+})
+
+describe('POST /api/notebook-agent/sessions/:id/switch-model', () => {
+  it('切换成功返回 ok', async () => {
+    switchNotebookAgentModelMock.mockResolvedValueOnce({ ok: true })
+    const app = await createTestApp()
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/notebook-agent/sessions/notebook-session-1/switch-model',
+      headers: userHeaders(),
+      payload: { profileId: 'sys-1' },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(switchNotebookAgentModelMock).toHaveBeenCalledWith('notebook-session-1', 'sys-1')
+  })
+
+  it('缺 profileId → 400', async () => {
+    const app = await createTestApp()
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/notebook-agent/sessions/notebook-session-1/switch-model',
+      headers: userHeaders(),
+      payload: {},
+    })
+    expect(res.statusCode).toBe(400)
+  })
+
+  it('切换失败 → 400', async () => {
+    switchNotebookAgentModelMock.mockResolvedValueOnce({ ok: false, error: '不可用' })
+    const app = await createTestApp()
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/notebook-agent/sessions/notebook-session-1/switch-model',
+      headers: userHeaders(),
+      payload: { profileId: 'gone' },
+    })
+    expect(res.statusCode).toBe(400)
   })
 })

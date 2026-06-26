@@ -67,9 +67,27 @@ export const apiCallLogsTable = mysqlTable('api_call_logs', {
   index('idx_acl_status_code_start').on(table.statusCode, table.startTimeMs),
 ])
 
+export const notebookUserModelProfilesTable = mysqlTable('notebook_user_model_profiles', {
+  profileId: varchar('profile_id', { length: 191 }).notNull(),
+  userId: varchar('user_id', { length: 191 }).notNull(),
+  name: varchar('name', { length: 255 }).notNull(),
+  baseUrl: varchar('base_url', { length: 512 }).notNull(),
+  model: varchar('model', { length: 191 }).notNull(),
+  apiKey: varchar('api_key', { length: 512 }).notNull(),
+  contextWindow: int('context_window'),
+  maxTokens: int('max_tokens'),
+  thinkingLevel: varchar('thinking_level', { length: 16 }),
+  createdAtMs: bigint('created_at_ms', { mode: 'number' }).notNull(),
+  updatedAtMs: bigint('updated_at_ms', { mode: 'number' }).notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.profileId] }),
+  index('idx_nump_user').on(table.userId),
+])
+
 export const mysqlStorageSchema = {
   workflowCurrentTable,
   workflowVersionsTable,
   executionHistoryTable,
   apiCallLogsTable,
+  notebookUserModelProfilesTable,
 }

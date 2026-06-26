@@ -12,8 +12,10 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ArrowUp, Gauge, Lock, Paperclip, Square, X } from 'lucide-vue-next'
 import ContextUsagePopover from './ContextUsagePopover.vue'
+import ModelSelector from './ModelSelector.vue'
 import FileIcon from './FileIcon.vue'
 import type { CompactionRecord, UserAttachment } from '../types/messageStream'
+import type { NotebookModelProfile } from '../runtime/notebookAgentClient'
 
 const props = defineProps<{
   /** 当 Agent 在 ask_user 等待回答时禁用 */
@@ -34,6 +36,14 @@ const props = defineProps<{
   canAttach?: boolean
   /** 写入 workspace 并返回附件元数据；若提供且 canAttach 则启用上传 */
   onAttach?: (files: File[]) => Promise<UserAttachment[]>
+  /** 可用模型列表（后台 + 用户自定义） */
+  availableModels?: NotebookModelProfile[]
+  /** 当前会话使用的模型 id */
+  currentModelId?: string
+  /** 当前会话使用的模型显示名 */
+  currentModelName?: string
+  /** 模型切换进行中 */
+  modelSwitching?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -42,6 +52,14 @@ const emit = defineEmits<{
   compact: []
   /** 附件校验/写入失败时通知父级弹 toast */
   attachError: [message: string]
+  /** 切换会话模型 */
+  switchModel: [profileId: string]
+  /** 新增自定义模型（弹 Dialog） */
+  addModel: []
+  /** 编辑自定义模型（弹 Dialog） */
+  editModel: [profile: NotebookModelProfile]
+  /** 删除自定义模型 */
+  removeModel: [profile: NotebookModelProfile]
 }>()
 
 const text = ref('')
@@ -386,21 +404,35 @@ const onDragLeaveCounted = (e: DragEvent) => {
     <div
       class="flex items-center justify-between gap-3 px-3 py-2"
     >
-      <div
-        class="flex items-center gap-2 nb-mono text-[10.5px]"
-        style="color: var(--nb-ink-faint); letter-spacing: 0.06em;"
-      >
-        <Lock v-if="awaitingUser" :size="10" :stroke-width="1.8" />
-        <span v-if="awaitingUser" style="color: var(--nb-copper-deep);">
-          等待回答
-        </span>
-        <span v-else-if="agentRunning">
-          Agent 工作中 · <span style="color: var(--nb-clay);">ESC 终止</span>
-        </span>
-        <span v-else-if="isImporting">正在写入文件…</span>
-        <span v-else>Enter 发送 · Shift/Ctrl + Enter 换行 · ⌘ + K 聚焦</span>
-        <span v-if="charCount > 0" style="color: var(--nb-rule-strong);">·</span>
-        <span v-if="charCount > 0" class="tabular-nums">{{ charCount }} 字</span>
+      <div class="flex items-center gap-2.5">
+        <!-- 模型选择器 -->
+        <ModelSelector
+          v-if="availableModels && availableModels.length > 0"
+          :available-models="availableModels"
+          :current-model-id="currentModelId"
+          :current-model-name="currentModelName"
+          :switching="modelSwitching"
+          @switch="emit('switchModel', $event)"
+          @add="emit('addModel')"
+          @edit="emit('editModel', $event)"
+          @remove="emit('removeModel', $event)"
+        />
+        <div
+          class="flex items-center gap-2 nb-mono text-[10.5px]"
+          style="color: var(--nb-ink-faint); letter-spacing: 0.06em;"
+        >
+          <Lock v-if="awaitingUser" :size="10" :stroke-width="1.8" />
+          <span v-if="awaitingUser" style="color: var(--nb-copper-deep);">
+            等待回答
+          </span>
+          <span v-else-if="agentRunning">
+            Agent 工作中 · <span style="color: var(--nb-clay);">ESC 终止</span>
+          </span>
+          <span v-else-if="isImporting">正在写入文件…</span>
+          <span v-else>Enter 发送 · Shift/Ctrl + Enter 换行 · ⌘ + K 聚焦</span>
+          <span v-if="charCount > 0" style="color: var(--nb-rule-strong);">·</span>
+          <span v-if="charCount > 0" class="tabular-nums">{{ charCount }} 字</span>
+        </div>
       </div>
       <div class="flex items-center gap-1.5">
         <!-- 隐藏文件选择 input -->

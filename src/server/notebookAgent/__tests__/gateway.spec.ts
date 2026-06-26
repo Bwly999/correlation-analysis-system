@@ -11,6 +11,7 @@ const {
   sessionManagerOpenMock,
   buildModelFromProfileMock,
   createModelRegistryFromProfileMock,
+  createModelRegistryFromProfilesMock,
   createPiAgentResourceLoaderMock,
   persistNotebookSessionMetaMock,
   persistNotebookSessionMessageMock,
@@ -20,6 +21,7 @@ const {
   loadNotebookSessionRecordMock,
   listPersistedNotebookSessionsByUserMock,
   getPersistedNotebookSessionOwnerMock,
+  listNotebookUserModelProfilesMock,
 } = vi.hoisted(() => ({
   createAgentSessionMock: vi.fn(),
   sessionPromptMock: vi.fn(),
@@ -30,6 +32,7 @@ const {
   sessionManagerOpenMock: vi.fn(),
   buildModelFromProfileMock: vi.fn(),
   createModelRegistryFromProfileMock: vi.fn(),
+  createModelRegistryFromProfilesMock: vi.fn(),
   createPiAgentResourceLoaderMock: vi.fn(),
   persistNotebookSessionMetaMock: vi.fn(),
   persistNotebookSessionMessageMock: vi.fn(),
@@ -39,6 +42,7 @@ const {
   loadNotebookSessionRecordMock: vi.fn(),
   listPersistedNotebookSessionsByUserMock: vi.fn(),
   getPersistedNotebookSessionOwnerMock: vi.fn(),
+  listNotebookUserModelProfilesMock: vi.fn(),
 }))
 
 vi.mock('@earendil-works/pi-coding-agent', () => ({
@@ -53,7 +57,12 @@ vi.mock('@earendil-works/pi-coding-agent', () => ({
 vi.mock('../../piAgent/runtimeFactory.js', () => ({
   buildModelFromProfile: buildModelFromProfileMock,
   createModelRegistryFromProfile: createModelRegistryFromProfileMock,
+  createModelRegistryFromProfiles: createModelRegistryFromProfilesMock,
   createPiAgentResourceLoader: createPiAgentResourceLoaderMock,
+}))
+
+vi.mock('../notebookUserModelProfilesStore.js', () => ({
+  listNotebookUserModelProfiles: listNotebookUserModelProfilesMock,
 }))
 
 vi.mock('../sessionPersistence.js', () => ({
@@ -105,11 +114,33 @@ describe('notebookAgent gateway', () => {
     buildModelFromProfileMock.mockReturnValue({
       id: 'glm-4.7',
       provider: 'openai',
+      contextWindow: 128000,
+      maxTokens: 15000,
     })
     createModelRegistryFromProfileMock.mockReturnValue({
       authStorage: { kind: 'auth' },
       modelRegistry: { kind: 'registry' },
     })
+    // createModelRegistryFromProfiles：返回带 models Map + profileMap 的结构，
+    // Map 内含一个默认模型（与 getSystemModelProfiles 的兜底 id 对齐）。
+    const defaultModel = { id: 'glm-4.7', provider: 'openai', contextWindow: 128000, maxTokens: 15000 }
+    const defaultProfile = {
+      id: 'system-default-zhipu-glm-4-7',
+      name: '默认智谱 GLM-4.7',
+      baseUrl: 'https://open.bigmodel.cn/api/coding/paas/v4',
+      model: 'glm-4.7',
+      apiKey: 'k',
+      enabled: true,
+      isDefault: true,
+      source: 'system' as const,
+    }
+    createModelRegistryFromProfilesMock.mockReturnValue({
+      authStorage: { kind: 'auth' },
+      modelRegistry: { kind: 'registry' },
+      models: new Map([['system-default-zhipu-glm-4-7', defaultModel]]),
+      profileMap: new Map([['system-default-zhipu-glm-4-7', defaultProfile]]),
+    })
+    listNotebookUserModelProfilesMock.mockResolvedValue([])
     createPiAgentResourceLoaderMock.mockReturnValue({
       reload: loaderReloadMock,
     })

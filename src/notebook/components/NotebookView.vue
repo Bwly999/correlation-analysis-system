@@ -62,6 +62,14 @@ const props = defineProps<{
   canAttach?: boolean
   /** 写入 workspace 并返回附件元数据 */
   onAttach?: (files: File[]) => Promise<import('../types/messageStream').UserAttachment[]>
+  /** 可用模型列表（后台 + 用户自定义） */
+  availableModels?: import('../runtime/notebookAgentClient').NotebookModelProfile[]
+  /** 当前会话使用的模型 id */
+  currentModelId?: string
+  /** 当前会话使用的模型显示名 */
+  currentModelName?: string
+  /** 模型切换进行中 */
+  modelSwitching?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -80,6 +88,10 @@ const emit = defineEmits<{
   renameConversation: [id: string, next: string]
   deleteConversation: [id: string]
   openWorkspaceMenu: []
+  switchModel: [profileId: string]
+  addModel: []
+  editModel: [profile: import('../runtime/notebookAgentClient').NotebookModelProfile]
+  removeModel: [profile: import('../runtime/notebookAgentClient').NotebookModelProfile]
 }>()
 
 // ──────────────────────────────────────────────
@@ -470,10 +482,18 @@ const onAttachError = (message: string) => {
               :compaction-history="session.runtime.compactionHistory"
               :can-attach="props.canAttach"
               :on-attach="props.onAttach"
+              :available-models="props.availableModels"
+              :current-model-id="props.currentModelId ?? session.runtime.currentModelId"
+              :current-model-name="props.currentModelName ?? session.runtime.currentModelName"
+              :model-switching="props.modelSwitching"
               @send="onSend"
               @abort="emit('abort')"
               @compact="emit('compact')"
               @attach-error="onAttachError"
+              @switch-model="emit('switchModel', $event)"
+              @add-model="emit('addModel')"
+              @edit-model="emit('editModel', $event)"
+              @remove-model="emit('removeModel', $event)"
             />
           </div>
         </div>

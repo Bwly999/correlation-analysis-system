@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue'
 import NotebookView from './components/NotebookView.vue'
 import NotebookSessionsPicker from './components/NotebookSessionsPicker.vue'
+import ModelProfileDialog from './components/ModelProfileDialog.vue'
 import { createMemOpfsRoot } from './shared/__tests__/memOpfs'
 import { ensureWorkspaceTree, writeFile, type OpfsDirectoryHandle } from './shared/opfsAccess'
 import { demoSession, demoLoading, demoLoadFailed } from './fixtures/demoSession'
@@ -14,6 +15,13 @@ import {
   deleteNotebookSession,
   listNotebookSessions,
   type NotebookSessionListItem,
+  fetchNotebookModelProfiles,
+  createNotebookModelProfile,
+  updateNotebookModelProfile,
+  deleteNotebookModelProfile,
+  switchNotebookAgentModel,
+  type NotebookModelProfile,
+  type NotebookModelProfileInput,
 } from './runtime/notebookAgentClient'
 
 const params = new URLSearchParams(window.location.search)
@@ -238,6 +246,7 @@ const initSessionMode = async (targetSessionId: string) => {
   try {
     await loadConversationList()
     await notebookRuntime.connect()
+    void loadModelProfiles()
     syncActiveConversation()
   } catch (error) {
     session.value.phase = {
@@ -465,6 +474,77 @@ const handleCompact = async () => {
   await runtime.value?.compact()
 }
 
+// ── 模型选择 / 用户自定义模型管理 ──────────────────────────
+const availableModels = ref<NotebookModelProfile[]>([])
+const modelSwitching = ref(false)
+// ModelProfileDialog 状态：editingProfile 非 null = 编辑模式（含初始值），null = 新增模式
+const modelDialogOpen = ref(false)
+const editingProfile = ref<NotebookModelProfile | null>(null)
+
+const loadModelProfiles = async () => {
+  try {
+    availableModels.value = await fetchNotebookModelProfiles()
+  } catch {
+    // 加载失败不阻塞：模型选择器仅在有数据时显示
+    availableModels.value = []
+  }
+}
+
+const currentModelId = computed(() => session.value?.runtime.currentModelId)
+const currentModelName = computed(() => session.value?.runtime.currentModelName)
+
+const handleSwitchModel = async (profileId: string) => {
+  if (!runtime.value) return
+  modelSwitching.value = true
+  try {
+    await switchNotebookAgentModel(runtime.value.state.session.sessionId, profileId)
+  } catch {
+    // 切换失败静默：session.model_changed 事件不会到达，UI 保持原模型
+  } finally {
+    modelSwitching.value = false
+  }
+}
+
+const handleAddModel = () => {
+  editingProfile.value = null
+  modelDialogOpen.value = true
+}
+
+const handleEditModel = (profile: NotebookModelProfile) => {
+  editingProfile.value = profile
+  modelDialogOpen.value = true
+}
+
+const handleRemoveModel = async (profile: NotebookModelProfile) => {
+  try {
+    await deleteNotebookModelProfile(profile.id)
+    await loadModelProfiles()
+  } catch {
+    // 删除失败静默
+  }
+}
+
+const handleModelSubmit = async (input: NotebookModelProfileInput) => {
+  try {
+    if (editingProfile.value) {
+      await updateNotebookModelProfile(editingProfile.value.id, input)
+    } else {
+      await createNotebookModelProfile(input)
+    }
+    modelDialogOpen.value = false
+    editingProfile.value = null
+    await loadModelProfiles()
+  } catch (error) {
+    // 提交失败：保持 Dialog 开着让用户改。错误信息已由 API 抛出。
+    console.error('保存模型配置失败', error)
+  }
+}
+
+const handleModelCancel = () => {
+  modelDialogOpen.value = false
+  editingProfile.value = null
+}
+
 const handleClose = () => {
   if (runtime.value) {
     runtime.value.requestParentClose()
@@ -500,6 +580,10 @@ const handlePickerCreate = async () => {
     :workspace-label="workspaceLabel"
     :can-attach="true"
     :on-attach="runtime ? handleAttach : undefined"
+    :available-models="availableModels"
+    :current-model-id="currentModelId"
+    :current-model-name="currentModelName"
+    :model-switching="modelSwitching"
     @close="handleClose"
     @restart="handleRestart"
     @download="handleDownload"
@@ -514,7 +598,18 @@ const handlePickerCreate = async () => {
     @select-conversation="handleSelectConversation"
     @rename-conversation="handleRenameConversation"
     @delete-conversation="handleDeleteConversation"
+    @switch-model="handleSwitchModel"
+    @add-model="handleAddModel"
+    @edit-model="handleEditModel"
+    @remove-model="handleRemoveModel"
     @customize="() => undefined"
     @open-workspace-menu="() => undefined"
+  />
+  <!-- 用户自定义模型配置 Dialog（新增 / 编辑共用） -->
+  <ModelProfileDialog
+    :open="modelDialogOpen"
+    :initial="editingProfile ?? undefined"
+    @submit="handleModelSubmit"
+    @cancel="handleModelCancel"
   />
 </template>
