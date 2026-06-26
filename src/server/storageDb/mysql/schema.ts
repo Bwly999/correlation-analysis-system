@@ -1,5 +1,6 @@
 import {
   bigint,
+  int,
   index,
   json,
   mysqlTable,
@@ -47,8 +48,28 @@ export const executionHistoryTable = mysqlTable('execution_history', {
   index('idx_execution_history_user_workflow_start').on(table.userId, table.workflowId, table.startTimeMs),
 ])
 
+export const apiCallLogsTable = mysqlTable('api_call_logs', {
+  requestId: varchar('request_id', { length: 191 }).notNull(),
+  userId: varchar('user_id', { length: 191 }),
+  method: varchar('method', { length: 16 }).notNull(),
+  route: varchar('route', { length: 255 }).notNull(),
+  fullPath: varchar('full_path', { length: 2048 }).notNull(),
+  paramsJson: json('params_json'),
+  status: varchar('status', { length: 32 }).notNull(),
+  statusCode: int('status_code'),
+  durationMs: bigint('duration_ms', { mode: 'number' }),
+  startTimeMs: bigint('start_time_ms', { mode: 'number' }).notNull(),
+  clientIp: varchar('client_ip', { length: 64 }),
+}, (table) => [
+  primaryKey({ columns: [table.requestId] }),
+  index('idx_acl_user_start').on(table.userId, table.startTimeMs),
+  index('idx_acl_route_start').on(table.route, table.startTimeMs),
+  index('idx_acl_status_code_start').on(table.statusCode, table.startTimeMs),
+])
+
 export const mysqlStorageSchema = {
   workflowCurrentTable,
   workflowVersionsTable,
   executionHistoryTable,
+  apiCallLogsTable,
 }

@@ -12,6 +12,8 @@ import { createStorageRoutes } from './modules/storageRoutes.js'
 import { createPiAgentRoutes } from './modules/piAgentRoutes.js'
 import { createNotebookAgentRoutes } from './modules/notebookAgentRoutes.js'
 import { registerNotebookHeaders } from './notebookHeadersPlugin.js'
+import { registerApiCallTracking } from './http/apiCallTrackingPlugin.js'
+import { createApiCallTracker, type ApiCallTracker } from './apiCallTracking/apiCallTracker.js'
 import { WORKFLOW_USER_ID_HEADER, WORKFLOW_USER_NAME_HEADER } from './http/workflowHeaders.js'
 import { disposeAllPiAgentSessions } from './piAgent/gateway.js'
 import { disposeAllJsTransformAgentSessions } from './piAgent/jsTransformAgentGateway.js'
@@ -21,6 +23,7 @@ export { createServerDependencies } from './bootstrap/serverDependencies.js'
 
 export interface CreateServerAppOptions extends CreateServerDependenciesOptions {
   authGuard?: JwtAuthGuard
+  apiCallTracker?: ApiCallTracker
 }
 
 const resolveErrorStatusCode = (error: unknown): number =>
@@ -39,9 +42,10 @@ const CORS_ALLOWED_METHODS = 'GET,POST,OPTIONS'
 export const createServerApp = (
   options: CreateServerAppOptions = {},
 ) => {
-  const { authGuard, ...dependencyOptions } = options
+  const { authGuard, apiCallTracker, ...dependencyOptions } = options
   const dependencies = createServerDependencies(dependencyOptions)
   const guard = authGuard ?? createJwtAuthGuard()
+  const apiTracking = apiCallTracker ?? createApiCallTracker()
   const app = Fastify({
     logger: false,
     bodyLimit: 20 * 1024 * 1024,
@@ -116,6 +120,7 @@ export const createServerApp = (
   app.addHook('onClose', async () => {
     disposeAllPiAgentSessions()
     disposeAllJsTransformAgentSessions()
+    await apiTracking.close()
   })
 
   void app.register(createJsTransformAgentRoutes())
@@ -123,6 +128,9 @@ export const createServerApp = (
   void app.register(createNotebookAgentRoutes())
   void app.register(createStorageRoutes())
   void app.register(createAnalysisRoutes())
+
+  // API 调用打点：根级 preHandler + onResponse hook，全局生效
+  void registerApiCallTracking(app, apiTracking)
 
   // 生产 COI 头（Notebook SharedArrayBuffer 前提）
   // 直接 addHook 到根实例，覆盖所有路由与静态资源响应

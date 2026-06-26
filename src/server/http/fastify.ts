@@ -9,6 +9,7 @@ declare module 'fastify' {
 
   interface FastifyRequest {
     workflowUser?: WorkflowRequestUser
+    apiCallStartTime?: number
   }
 }
 
