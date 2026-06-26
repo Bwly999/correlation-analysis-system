@@ -36,11 +36,22 @@ export type IframeBridgeKind = (typeof IFRAME_BRIDGE_KINDS)[number]
 
 export type ImportCsvSourceKind = 'canvas-node' | 'data-source'
 
+/**
+ * 单列的描述信息（对齐设计文档 notebook-agent/数据接入.md §6.2）。
+ * 用于让 Agent 在不读 CSV 的情况下就掌握列名与推断类型。
+ */
+export interface ImportCsvColumnMeta {
+  name: string
+  inferredType: string
+}
+
 export interface ImportCsvMeta {
   sourceKind: ImportCsvSourceKind
   sourceLabel: string
   rowCount: number
   columnCount: number
+  /** 全量列描述（行 key 的并集 + 推断类型）。可选，保证协议向后兼容。 */
+  columns?: ImportCsvColumnMeta[]
 }
 
 export type CloseReason = 'user_clicked_close' | 'session_completed' | 'tab_unload'

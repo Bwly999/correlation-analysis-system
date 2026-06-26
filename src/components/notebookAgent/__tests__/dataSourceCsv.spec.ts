@@ -138,4 +138,51 @@ describe('nodeResultToCsv', () => {
     // 第一行空字段
     expect(csv).toMatch(/1,,/)
   })
+
+  // 回归：稀疏数据（各行 key 不一致）时，Papa.unparse 默认只用 rows[0]
+  // 的 key 当列头，会把 rows[0] 没有的列整列丢弃。必须显式传入全量列。
+  it('稀疏行（rows[0] 缺列）→ 保留全量列，不丢列', () => {
+    const result: NodeResult = {
+      kind: 'table',
+      // rows[0] 只有 2 列，rows[1] 有 5 列 —— 旧行为会丢掉 c/d/e
+      payload: [
+        { a: 1, b: 2 },
+        { a: 3, b: 4, c: 5, d: 6, e: 7 },
+      ],
+    }
+    const { buffer, meta } = nodeResultToCsv(result, ctx())
+    const csv = decode(buffer)
+    const header = csv.split(/\r?\n/)[0]!
+    const headers = header.split(',')
+    // 全量 5 列都必须出现在表头
+    expect(headers).toEqual(expect.arrayContaining(['a', 'b', 'c', 'd', 'e']))
+    expect(headers).toHaveLength(5)
+    // columnCount 应为全量列数，而非 rows[0] 的列数
+    expect(meta.columnCount).toBe(5)
+    // rows[1] 的 c/d/e 值必须落到 CSV 里（旧行为会整行只剩 a,b）
+    const dataRows = csv.split(/\r?\n/).slice(1).filter((l) => l.trim() !== '')
+    const secondRow = dataRows[1]!
+    expect(secondRow).toMatch(/5/)
+    expect(secondRow).toMatch(/6/)
+    expect(secondRow).toMatch(/7/)
+  })
+
+  it('meta.columns 提供全量列名 + 推断类型', () => {
+    const result: NodeResult = {
+      kind: 'table',
+      payload: [
+        { a: 1, b: 'x' },
+        { a: 2, b: 'y', c: 3 },
+      ],
+    }
+    const { meta } = nodeResultToCsv(result, ctx())
+    expect(meta.columns).toBeDefined()
+    const names = meta.columns!.map((col) => col.name)
+    expect(names).toEqual(expect.arrayContaining(['a', 'b', 'c']))
+    expect(names).toHaveLength(3)
+    const byName = Object.fromEntries(meta.columns!.map((col) => [col.name, col.inferredType]))
+    expect(byName.a).toBe('number')
+    expect(byName.b).toBe('string')
+    expect(byName.c).toBe('number')
+  })
 })

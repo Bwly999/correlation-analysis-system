@@ -7,7 +7,7 @@
  */
 
 import Papa from 'papaparse'
-import type { NodeResult } from '../../nodes/result'
+import { inferSchemaFromRows, type NodeResult } from '../../nodes/result'
 import type { ImportCsvMeta, ImportCsvSourceKind } from '../../notebook/shared/parentBridge'
 
 export interface ImportSourceContext {
@@ -72,7 +72,14 @@ export const nodeResultToCsv = (
       `数据行数 ${rows.length} 超过上限 ${IMPORT_LIMITS.maxRows}（row_too_many），请先采样`,
     )
   }
-  const columnCount = Object.keys(rows[0] ?? {}).length
+  // 收集全量列名并集（行 key 的并集）+ 推断类型。
+  // 关键：Papa.unparse 默认只用第一个对象的 key 作为 CSV 列头，
+  // 当各行 key 不一致（稀疏数据）时，rows[0] 没有的列会被静默丢弃，
+  // 因此必须显式传入全量 columns 才能保证列不丢失。
+  const schema = inferSchemaFromRows(rows)
+  const fields = schema.fields ?? []
+  const columnNames = fields.map((field) => field.name)
+  const columnCount = columnNames.length
   if (columnCount > IMPORT_LIMITS.maxColumns) {
     throw new Error(
       `数据列数 ${columnCount} 超过上限 ${IMPORT_LIMITS.maxColumns}（col_too_many）`,
@@ -82,6 +89,7 @@ export const nodeResultToCsv = (
   const csv = Papa.unparse(rows, {
     header: true,
     skipEmptyLines: false,
+    columns: columnNames,
   })
   const buffer = new TextEncoder().encode(csv).buffer as ArrayBuffer
   if (buffer.byteLength > IMPORT_LIMITS.maxBytes) {
@@ -97,6 +105,10 @@ export const nodeResultToCsv = (
       sourceLabel: ctx.sourceLabel,
       rowCount: rows.length,
       columnCount,
+      columns: fields.map((field) => ({
+        name: field.name,
+        inferredType: field.type,
+      })),
     },
   }
 }
