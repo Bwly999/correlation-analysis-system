@@ -22,7 +22,7 @@ import {
 const NOTEBOOK_SESSION_META_TYPE = 'notebook-session-meta'
 const NOTEBOOK_SESSION_KIND = 'notebook-agent-session'
 const NOTEBOOK_SESSION_DIR = process.env.NOTEBOOK_SESSION_DIR?.trim()
-  || join(process.cwd(), '.workflow-storage', 'notebook-agent-sessions')
+  || join(process.cwd(), 'workflow', 'sessions')
 const S3_KEY_PREFIX = 'notebook-agent/sessions/'
 
 export interface NotebookPersistedMeta {

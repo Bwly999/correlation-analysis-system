@@ -11,7 +11,10 @@
  *   POST   /api/notebook-agent/sessions/:sessionId/abort    终止当前轮 Agent 推理
  *   POST   /api/notebook-agent/sessions/:sessionId/compact  手动触发上下文压缩
  *   POST   /api/notebook-agent/sessions/:sessionId/tool-result
- *   DELETE /api/notebook-agent/sessions/:sessionId       彻底删除会话（runtime + record + 审计）
+ *   PUT    /api/notebook-agent/sessions/:sessionId/workspace-snapshot  上传 workspace zip 快照（≤50MB）
+ *   GET    /api/notebook-agent/sessions/:sessionId/workspace-snapshot  下载 workspace zip 快照
+ *   HEAD   /api/notebook-agent/sessions/:sessionId/workspace-snapshot  探测快照是否存在
+ *   DELETE /api/notebook-agent/sessions/:sessionId       彻底删除会话（runtime + record + 审计 + 文件快照）
  */
 
 import type { FastifyPluginAsync } from 'fastify'
@@ -38,6 +41,12 @@ import {
 } from '../notebookAgent/gateway.js'
 import type { ImportCsvMeta } from '../../notebook/shared/parentBridge.js'
 import { ensureNotebookSessionsRehydrated } from '../notebookAgent/sessionPersistence.js'
+import {
+  WORKSPACE_SNAPSHOT_LIMIT_BYTES,
+  loadWorkspaceSnapshot,
+  saveWorkspaceSnapshot,
+  workspaceSnapshotExists,
+} from '../notebookAgent/workspaceFileStorage.js'
 
 const validateImportCsvMeta = (meta: unknown): meta is ImportCsvMeta => {
   if (!meta || typeof meta !== 'object') return false
@@ -295,4 +304,71 @@ export const createNotebookAgentRoutes = (): FastifyPluginAsync => async (app) =
     }
     return { ok }
   })
+
+  // ── workspace 文件快照（浏览器优先 + 服务端降级兜底）──────────────────
+  // 包进独立子插件：addContentTypeParser + bodyLimit 的作用域被封装在此处，
+  // 不污染主 app 的其它 application/zip 请求（fastify encapsulation）。
+  // bodyLimit 单独提到 50MB（全局是 20MB），与前端 SINGLE_WRITE_LIMIT_BYTES 对齐。
+  void app.register(
+    async (subApp) => {
+      subApp.addContentTypeParser(
+        'application/zip',
+        { parseAs: 'buffer' },
+        (_req, body, done) => done(null, body),
+      )
+
+      subApp.put(
+        '/api/notebook-agent/sessions/:sessionId/workspace-snapshot',
+        async (request, reply) => {
+          const user = requireWorkflowUser(request)
+          const { sessionId } = request.params as { sessionId: string }
+          await verifyOwnedSession(sessionId, user.id, user)
+          const buffer = request.body
+          if (!Buffer.isBuffer(buffer)) {
+            reply.code(400)
+            return { message: '请求体必须是 application/zip 二进制' }
+          }
+          if (buffer.byteLength > WORKSPACE_SNAPSHOT_LIMIT_BYTES) {
+            reply.code(413)
+            return { message: `workspace 快照超过 ${WORKSPACE_SNAPSHOT_LIMIT_BYTES} 字节上限` }
+          }
+          await saveWorkspaceSnapshot(sessionId, buffer)
+          return { ok: true, bytes: buffer.byteLength }
+        },
+      )
+
+      // exposeHeadRoute: false —— 关掉 fastify 给 GET 自动生成 HEAD 的默认行为，
+      // 改用下面显式注册的轻量 HEAD（只探测存在性，不读/返回快照字节）。
+      subApp.get(
+        '/api/notebook-agent/sessions/:sessionId/workspace-snapshot',
+        { exposeHeadRoute: false },
+        async (request, reply) => {
+          const user = requireWorkflowUser(request)
+          const { sessionId } = request.params as { sessionId: string }
+          await verifyOwnedSession(sessionId, user.id, user)
+          const snapshot = await loadWorkspaceSnapshot(sessionId)
+          if (!snapshot) {
+            reply.code(404)
+            return { message: '该会话暂无 workspace 快照' }
+          }
+          reply.header('Content-Type', 'application/zip')
+          reply.header('Content-Length', String(snapshot.buffer.byteLength))
+          return reply.send(snapshot.buffer)
+        },
+      )
+
+      subApp.head(
+        '/api/notebook-agent/sessions/:sessionId/workspace-snapshot',
+        async (request, reply) => {
+          const user = requireWorkflowUser(request)
+          const { sessionId } = request.params as { sessionId: string }
+          await verifyOwnedSession(sessionId, user.id, user)
+          const exists = await workspaceSnapshotExists(sessionId)
+          reply.code(exists ? 200 : 404)
+          return reply
+        },
+      )
+    },
+    { bodyLimit: WORKSPACE_SNAPSHOT_LIMIT_BYTES },
+  )
 }

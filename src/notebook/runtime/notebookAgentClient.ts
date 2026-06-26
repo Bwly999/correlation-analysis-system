@@ -549,3 +549,69 @@ export const resumeNotebookSession = async (
     return false
   }
 }
+
+// ──────────────────────────────────────────────
+// workspace 文件快照同步（浏览器优先 + 服务端降级兜底）
+//
+// 全部失败静默（返回 null/false，不抛）——与 syncNotebookSessionFileToS3 的失败语义一致，
+// 文件同步绝不能阻塞 Agent 推理或会话恢复主流程。
+// ──────────────────────────────────────────────
+
+/**
+ * 上传 workspace 全量 zip 快照到服务端（checkpoint 时机调用）。
+ * @returns true=成功；false=失败/超限（静默，调用方应 void）
+ */
+export const uploadWorkspaceSnapshot = async (
+  sessionId: string,
+  zipBytes: Uint8Array,
+): Promise<boolean> => {
+  try {
+    const response = await httpClient.request({
+      url: `/notebook-agent/sessions/${sessionId}/workspace-snapshot`,
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/zip' },
+      data: zipBytes,
+    })
+    return isSuccessStatus(response.status)
+  } catch {
+    return false
+  }
+}
+
+/**
+ * 下载 workspace zip 快照（OPFS 为空时恢复用）。
+ * @returns Uint8Array=快照字节；null=不存在或下载失败（静默）
+ */
+export const downloadWorkspaceSnapshot = async (
+  sessionId: string,
+): Promise<Uint8Array | null> => {
+  try {
+    const response = await httpClient.request<ArrayBuffer>({
+      url: `/notebook-agent/sessions/${sessionId}/workspace-snapshot`,
+      method: 'GET',
+      responseType: 'arraybuffer',
+    })
+    if (!isSuccessStatus(response.status)) return null
+    return new Uint8Array(response.data)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * 探测服务端是否存在快照（HEAD，避免为探测拉大文件）。
+ * @returns true=存在；false=不存在/请求失败（静默）
+ */
+export const checkWorkspaceSnapshot = async (
+  sessionId: string,
+): Promise<boolean> => {
+  try {
+    const response = await httpClient.request({
+      url: `/notebook-agent/sessions/${sessionId}/workspace-snapshot`,
+      method: 'HEAD',
+    })
+    return isSuccessStatus(response.status)
+  } catch {
+    return false
+  }
+}

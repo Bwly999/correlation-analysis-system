@@ -53,6 +53,7 @@ import {
   resolveNotebookSessionDir,
   syncNotebookSessionFileToS3,
 } from './sessionPersistence.js'
+import { deleteWorkspaceSnapshot } from './workspaceFileStorage.js'
 
 interface NotebookAgentRuntime {
   sessionId: string
@@ -396,6 +397,8 @@ export const destroyNotebookAgentSession = (sessionId: string): boolean => {
   void deleteNotebookSessionFileFromPersistence(sessionFile)
   deletePersistedNotebookSession(sessionId)
   clearNotebookAuditEntries(sessionId)
+  // 联动清理 workspace 快照文件（本地 + S3，失败静默幂等）
+  void deleteWorkspaceSnapshot(sessionId)
   return deleteNotebookSession(sessionId)
 }
 

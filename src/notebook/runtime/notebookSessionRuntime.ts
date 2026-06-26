@@ -21,8 +21,13 @@ import {
   compactNotebookAgentSession,
   fetchNotebookSessionHistory,
   renameNotebookSession,
+  uploadWorkspaceSnapshot,
+  downloadWorkspaceSnapshot,
+  checkWorkspaceSnapshot,
   type NotebookAgentEvent,
 } from './notebookAgentClient'
+import { exportWorkspaceZip, unzipWorkspace } from './workspaceExporter'
+import { SINGLE_WRITE_LIMIT_BYTES } from '../shared/opfsAccess'
 import { AuditLog, computeCodeHash } from './auditLogger'
 import {
   applyNotebookEvent,
@@ -75,7 +80,8 @@ export interface NotebookSessionRuntime {
   restart: () => Promise<void>
   stop: () => boolean
   exportWorkspaceFiles: (paths?: string[]) => Promise<string[]>
-  requestParentClose: () => void
+  /** 关闭笔记本前会推一次 workspace 快照，故可能返回 Promise */
+  requestParentClose: () => void | Promise<void>
   dispose: () => void
 }
 
@@ -324,6 +330,59 @@ export const createNotebookSessionRuntime = async (
     )
   }
 
+  // ── workspace 文件快照：浏览器优先 + 服务端降级兜底 ──────────────
+  //
+  // pushWorkspaceSnapshot：把当前 OPFS workspace 全量打成 zip 推到服务端。
+  //   触发点：exec 轮落盘后 / 关闭笔记本前（见 handleToolExecute / requestParentClose）。
+  //   失败静默（与 S3 同步语义一致），绝不阻塞 Agent 推理。
+  //
+  // restoreWorkspaceIfEmpty：恢复时探测 OPFS 是否完全为空，
+  //   空则从服务端拉快照写回 OPFS；非空零开销跳过。
+  //   在 connect / switchSession 的 syncOpfsFilesToWorker 之前调用。
+  const pushWorkspaceSnapshot = async (): Promise<void> => {
+    try {
+      const result = await exportWorkspaceZip(opfsRootRef.value, currentSessionId)
+      if (result.bytes.byteLength > SINGLE_WRITE_LIMIT_BYTES) {
+        console.warn(
+          `[notebook] workspace 快照 ${result.bytes.byteLength} 字节超过 ${SINGLE_WRITE_LIMIT_BYTES} 上限，已跳过上传`,
+        )
+        return
+      }
+      await uploadWorkspaceSnapshot(currentSessionId, result.bytes)
+    } catch {
+      // 静默：快照同步是 best-effort，失败不阻塞
+    }
+  }
+
+  const restoreWorkspaceIfEmpty = async (): Promise<void> => {
+    try {
+      // 探测 OPFS 是否完全为空：检查 inputs/scripts（用户/Agent 主动管理的目录）
+      const allPaths = await Promise.all(
+        WORKER_SYNC_DIRS.map((dir) => collectOpfsPaths(dir)),
+      )
+      const inputsAndScripts = allPaths.flat()
+      // inputs/scripts 是用户/Agent 主动管理的；artifacts/reports 是产物。
+      // 只要 inputs/scripts 有文件就视为 OPFS 完好，不触发恢复（避免冗余 IO）。
+      if (inputsAndScripts.length > 0) return
+
+      const exists = await checkWorkspaceSnapshot(currentSessionId)
+      if (!exists) return
+      const zipBytes = await downloadWorkspaceSnapshot(currentSessionId)
+      if (!zipBytes) return
+
+      const files = unzipWorkspace(zipBytes)
+      for (const file of files) {
+        try {
+          await writeFile(opfsRootRef.value, file.path, file.bytes)
+        } catch {
+          // 单文件写失败不阻断整体恢复（与 syncOpfsFilesToWorker 容错策略一致）
+        }
+      }
+    } catch {
+      // 静默：恢复失败不阻塞，用户仍可继续（OPFS 空 + 无快照 = 真的新会话）
+    }
+  }
+
   // Worker 自动重启（硬超时 / 崩溃自愈）后的闭环：重灌 OPFS → MEMFS + 通知 Agent + 审计
   workerHost.onAutoRestarted = (info) => {
     state.session.runtime.recentlyRestarted = true
@@ -401,6 +460,9 @@ export const createNotebookSessionRuntime = async (
               })
             }
           }
+          // exec 落盘后做一次 workspace 快照 checkpoint（OPFS 已同步完毕）。
+          // 失败静默，不阻塞下一轮 Agent 动作。
+          return pushWorkspaceSnapshot()
         })
         .catch(() => undefined)
     }
@@ -666,7 +728,9 @@ export const createNotebookSessionRuntime = async (
         console.log('[DEBUG] switchSession.run: rebuildToolDispatcher 完成')
 
         // 4. 把新 session 的 inputs/scripts 灌入 Worker MEMFS（单文件失败不致命，见 syncOpfsFilesToWorker）
-        console.log('[DEBUG] switchSession.run: 开始 syncOpfsFilesToWorker')
+        //    灌入前先恢复探测：OPFS 为空（换设备/清缓存）则从服务端拉快照写回。
+        console.log('[DEBUG] switchSession.run: restoreWorkspaceIfEmpty + syncOpfsFilesToWorker')
+        await restoreWorkspaceIfEmpty()
         await syncOpfsFilesToWorker()
         console.log('[DEBUG] switchSession.run: syncOpfsFilesToWorker 完成')
 
@@ -745,6 +809,9 @@ export const createNotebookSessionRuntime = async (
           detail: '正在同步工作区文件',
         },
       }
+      // 恢复探测：OPFS 为空（刷新页面后浏览器清了缓存 / 换设备）则从服务端拉快照写回，
+      // 再走 OPFS → Worker MEMFS 灌入。OPFS 完好时零开销。
+      await restoreWorkspaceIfEmpty()
       await syncOpfsFilesToWorker()
       if (signal.aborted) return
       state.session.phase = { kind: 'ready' }
@@ -1016,7 +1083,12 @@ export const createNotebookSessionRuntime = async (
     restart,
     stop,
     exportWorkspaceFiles,
-    requestParentClose: () => requestParentClose(),
+    // 关闭笔记本前推一次 workspace 快照 checkpoint（确保用户离开时产物已落服务端）。
+    // 失败静默；推完（或失败）再走原 close 流程，不阻塞。
+    requestParentClose: async () => {
+      await pushWorkspaceSnapshot().catch(() => undefined)
+      requestParentClose()
+    },
     dispose: () => {
       // 中断任何仍在进行的 connect，避免卸载后 ghost connect 继续写 phase / 抢 SSE
       connectAbort?.abort()

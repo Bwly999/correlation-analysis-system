@@ -206,6 +206,60 @@ export const exportWorkspaceZip = async (
   }
 }
 
+// ──────────────────────────────────────────────
+// 解压（与 buildZip 的 STORE 格式严格对称）
+//
+// 只解析 Local File Header（0x04034b50）即可还原全部条目，无需读 Central Directory。
+// 约束：仅支持 compression=0（store），这正是 buildZip 的产物；
+// 收到第三方压缩 zip（deflate）会跳过该条目并 warn。
+// ──────────────────────────────────────────────
+
+const LOCAL_FILE_HEADER_SIG = 0x04034b50
+
+export interface UnzippedFile {
+  path: string
+  bytes: Uint8Array
+}
+
+export const unzipWorkspace = (data: Uint8Array): UnzippedFile[] => {
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength)
+  const decoder = new TextDecoder()
+  const out: UnzippedFile[] = []
+  let offset = 0
+
+  while (offset + 30 <= data.byteLength) {
+    // 遇到非签名即结束（Central Directory / EOCD 签名不同，自然 break）
+    if (view.getUint32(offset, true) !== LOCAL_FILE_HEADER_SIG) break
+
+    const compression = view.getUint16(offset + 8, true)
+    const compressedSize = view.getUint32(offset + 18, true)
+    const uncompressedSize = view.getUint32(offset + 22, true)
+    const nameLen = view.getUint16(offset + 26, true)
+    const extraLen = view.getUint16(offset + 28, true)
+
+    const nameStart = offset + 30
+    const dataStart = nameStart + nameLen + extraLen
+    const nextOffset = dataStart + compressedSize
+
+    if (compression !== 0) {
+      // 非 store 条目：buildZip 不会产出，第三方 zip 才可能遇到 —— 跳过此条
+      console.warn(`[notebook] unzipWorkspace: 跳过非 store 压缩条目 (compression=${compression})`)
+      offset = nextOffset
+      continue
+    }
+    if (nextOffset > data.byteLength) break
+
+    const path = decoder.decode(data.subarray(nameStart, nameStart + nameLen))
+    // 目录条目（path 以 / 结尾、size=0）跳过
+    if (path && !path.endsWith('/') && uncompressedSize > 0) {
+      out.push({ path, bytes: data.subarray(dataStart, nextOffset) })
+    }
+    offset = nextOffset
+  }
+
+  return out
+}
+
 export const exportMainReportMarkdown = async (
   root: OpfsDirectoryHandle,
 ): Promise<string | null> => {

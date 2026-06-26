@@ -218,8 +218,10 @@ describe('notebookSessionRuntime', () => {
     const runtime = await createNotebookSessionRuntime('sess-1')
     await runtime.connect()
 
-    // 让 syncOpfsFilesToWorker 至少有一个文件可走 writeFs
-    vi.mocked(listDirectoryEntries).mockResolvedValueOnce([
+    // 让 syncOpfsFilesToWorker 至少有一个文件可走 writeFs。
+    // 用 mockResolvedValue（持久）：restoreWorkspaceIfEmpty 会先探测 inputs/scripts 目录，
+    // 探测到非空即提前 return；随后 syncOpfsFilesToWorker 再读一次拿到同一文件调 writeFs。
+    vi.mocked(listDirectoryEntries).mockResolvedValue([
       { name: 'upstream.csv', kind: 'file', size: 10, modifiedAt: 1 },
     ])
     workerHostWriteFsMock.mockRejectedValueOnce(new Error('Worker 未就绪'))
