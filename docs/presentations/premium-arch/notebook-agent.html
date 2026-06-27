@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notebook Agent 架构 | Specialized Architecture Blueprint</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-page: #fcfdfe; --text-main: #0f172a; --text-dim: #64748b; --border: #e2e8f0; --radius-lg: 24px;
+            --c-agent: #7c3aed; --c-agent-bg: #f5f3ff; --c-pyodide: #2563eb; --c-pyodide-bg: #eff6ff;
+            --c-storage: #0d9488; --c-storage-bg: #f0fdfa; --c-isolate: #d97706; --c-isolate-bg: #fffbeb;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+        body { background-color: var(--bg-page); font-family: 'Plus Jakarta Sans', sans-serif; color: var(--text-main); padding: 60px 40px; display: flex; justify-content: center; }
+        .blueprint-wrapper { width: 100%; max-width: 1240px; display: flex; flex-direction: column; gap: 32px; }
+        .blueprint-header { display: flex; justify-content: space-between; align-items: flex-end; padding-bottom: 24px; border-bottom: 2px solid var(--text-main); }
+        .title-group h1 { font-size: 42px; font-weight: 800; letter-spacing: -0.05em; line-height: 1; margin-bottom: 8px; }
+        .title-group p { font-family: 'JetBrains Mono', monospace; font-size: 14px; color: var(--c-agent); text-transform: uppercase; letter-spacing: 0.2em; font-weight: 700; }
+        .meta-group { text-align: right; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-dim); line-height: 1.5; }
+        
+        /* 架构堆栈：紧凑连接设计 */
+        .arch-stack { 
+            display: flex; flex-direction: column; gap: 0; 
+            border: 1px solid var(--border); border-radius: var(--radius-lg); 
+            overflow: hidden; box-shadow: 0 20px 50px -12px rgba(0,0,0,0.08); 
+        }
+
+        .layer { display: grid; grid-template-columns: 200px 1fr; background: white; transition: background 0.3s ease; border-bottom: 1px solid var(--border); }
+        .layer:last-child { border-bottom: none; }
+        .layer:hover { background: #fafafa; }
+
+        .layer-side { padding: 32px; display: flex; flex-direction: column; justify-content: space-between; border-right: 1px solid var(--border); position: relative; }
+        
+        /* 精致分割线装饰 */
+        .layer-side::after {
+            content: ""; position: absolute; bottom: -1px; left: 20px; right: 20px; height: 1px;
+            background: linear-gradient(90deg, transparent, var(--border), transparent);
+            z-index: 10;
+        }
+        .layer:last-child .layer-side::after { display: none; }
+
+        .layer-side .num { font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 700; opacity: 0.8; }
+        .layer-side h2 { font-size: 24px; font-weight: 800; line-height: 1.1; margin-top: 8px; }
+        .layer-side .tagline { font-size: 10px; font-weight: 700; text-transform: uppercase; margin-top: 12px; letter-spacing: 0.05em; }
+
+        .layer-main { padding: 32px; display: grid; gap: 20px; }
+
+        /* 1. Agent 推理层 */
+        .layer-agent .layer-side { background: var(--c-agent-bg); color: var(--c-agent); }
+        .agent-main-grid { display: grid; grid-template-columns: 1fr 180px; gap: 24px; }
+        .agent-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .agent-card { background: #fff; border: 1px solid var(--border); padding: 20px; border-radius: 12px; }
+        .agent-card h4 { font-size: 15px; margin-bottom: 6px; color: var(--text-main); font-weight: 700; }
+        .agent-card p { font-size: 12px; color: var(--text-dim); line-height: 1.5; margin-bottom: 10px; }
+        .agent-pills { display: flex; flex-wrap: wrap; gap: 4px; }
+        .agent-pill { background: var(--c-agent-bg); color: var(--c-agent); font-family: 'JetBrains Mono', monospace; font-size: 9px; padding: 2px 6px; border-radius: 4px; font-weight: 700; border: 1px solid rgba(124, 58, 237, 0.1); }
+
+        .agent-tech-stack { border-left: 1px dashed var(--border); padding-left: 20px; display: flex; flex-direction: column; gap: 16px; justify-content: center; }
+        .agent-brand { display: flex; align-items: center; gap: 12px; }
+        .agent-brand svg { width: 32px; height: 32px; flex-shrink: 0; }
+        .agent-brand span { font-size: 11px; font-weight: 700; color: var(--text-main); font-family: 'JetBrains Mono', monospace; }
+
+        /* 2. Pyodide 执行核心 */
+        .layer-pyodide .layer-side { background: var(--c-pyodide-bg); color: var(--c-pyodide); }
+        .pyodide-main-grid { display: grid; grid-template-columns: 1fr 180px; gap: 24px; }
+        .pyodide-visual-grid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 20px; }
+
+        .kernel-visual { background: var(--bg-page); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 8px; border: 1px solid var(--border); }
+        .kernel-step { display: flex; align-items: center; gap: 10px; background: white; padding: 8px 12px; border-radius: 6px; font-size: 11px; font-weight: 700; color: var(--c-pyodide); border: 1px solid var(--border); }
+        .kernel-step b { width: 18px; height: 18px; background: var(--c-pyodide); color: white; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 9px; }
+
+        .stateless-mock { background: var(--bg-page); border-radius: 12px; padding: 14px; border: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; min-height: 180px; }
+        .stateless-head { font-size: 11px; font-weight: 800; color: var(--text-main); display: flex; align-items: center; gap: 6px; }
+        .stateless-head span { width: 8px; height: 8px; border-radius: 2px; background: var(--c-pyodide); }
+        .cell-block { background: white; border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--text-dim); line-height: 1.4; }
+        .cell-block b { color: var(--c-pyodide); font-weight: 700; }
+        .cell-block em { color: #ef4444; font-style: normal; font-weight: 700; }
+
+        .pyodide-tech-stack { border-left: 1px dashed var(--border); padding-left: 20px; display: flex; flex-direction: column; gap: 16px; justify-content: center; }
+        .pyodide-brand { display: flex; align-items: center; gap: 12px; }
+        .pyodide-brand svg { width: 28px; height: 28px; flex-shrink: 0; }
+        .pyodide-brand span { font-size: 11px; font-weight: 700; color: var(--text-main); font-family: 'JetBrains Mono', monospace; }
+
+        /* 3. 数据与存储层 */
+        .layer-storage .layer-side { background: var(--c-storage-bg); color: var(--c-storage); }
+        .storage-main-grid { display: grid; grid-template-columns: 1fr 180px; gap: 24px; }
+        .storage-visual-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 20px; }
+
+        .opfs-tree { background: var(--bg-page); border-radius: 12px; padding: 14px; border: 1px solid var(--border); font-family: 'JetBrains Mono', monospace; font-size: 11px; line-height: 1.7; color: var(--text-main); }
+        .opfs-tree .dir { font-weight: 800; color: var(--c-storage); }
+        .opfs-tree .file { color: var(--text-dim); font-weight: 500; }
+        .opfs-tree .root { font-size: 12px; color: var(--text-main); font-weight: 700; }
+        .opfs-tree .indent { padding-left: 18px; }
+        .opfs-tree .indent2 { padding-left: 36px; }
+
+        .tools-matrix { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .tool-chip { background: white; border: 1px solid var(--border); padding: 10px 12px; border-radius: 8px; border-left: 3px solid var(--c-storage); }
+        .tool-chip b { font-size: 11px; font-weight: 800; color: var(--text-main); font-family: 'JetBrains Mono', monospace; display: block; margin-bottom: 2px; }
+        .tool-chip span { font-size: 9px; color: var(--text-dim); }
+
+        .storage-tech-stack { border-left: 1px dashed var(--border); padding-left: 20px; display: flex; flex-direction: column; gap: 16px; justify-content: center; }
+        .storage-brand { display: flex; align-items: center; gap: 12px; }
+        .storage-brand svg { width: 28px; height: 28px; flex-shrink: 0; }
+        .storage-brand span { font-size: 11px; font-weight: 700; color: var(--text-main); font-family: 'JetBrains Mono', monospace; }
+
+        /* 4. 隔离与通信层 */
+        .layer-isolate .layer-side { background: var(--c-isolate-bg); color: var(--c-isolate); }
+        .isolate-main-grid { display: grid; grid-template-columns: 1fr 180px; gap: 24px; }
+        .isolate-visual-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+
+        .process-box { background: white; border: 1px solid var(--border); padding: 14px; border-radius: 12px; display: flex; flex-direction: column; gap: 8px; position: relative; }
+        .process-box h4 { font-size: 13px; font-weight: 800; color: var(--text-main); display: flex; align-items: center; gap: 6px; }
+        .process-box h4 i { width: 10px; height: 10px; border-radius: 2px; background: var(--c-isolate); display: inline-block; }
+        .process-box p { font-size: 10px; color: var(--text-dim); line-height: 1.5; }
+        .process-cap { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+        .cap-pill { font-family: 'JetBrains Mono', monospace; font-size: 8px; padding: 2px 5px; border-radius: 3px; font-weight: 700; background: var(--c-isolate-bg); color: var(--c-isolate); border: 1px solid rgba(217, 119, 6, 0.15); }
+        .cap-pill.deny { background: #fef2f2; color: #dc2626; border-color: rgba(220, 38, 38, 0.15); text-decoration: line-through; }
+
+        .rpc-flow { background: var(--bg-page); border-radius: 8px; padding: 10px; margin-top: auto; font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--text-dim); border: 1px dashed var(--border); line-height: 1.6; }
+        .rpc-flow b { color: var(--c-isolate); }
+
+        .isolate-tech-stack { border-left: 1px dashed var(--border); padding-left: 20px; display: flex; flex-direction: column; gap: 16px; justify-content: center; }
+        .isolate-brand { display: flex; align-items: center; gap: 12px; }
+        .isolate-brand svg { width: 28px; height: 28px; flex-shrink: 0; }
+        .isolate-brand span { font-size: 11px; font-weight: 700; color: var(--text-main); font-family: 'JetBrains Mono', monospace; }
+
+        .blueprint-footer { margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-dim); }
+        svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+        .svg-fill { fill: currentColor; stroke: none; }
+    </style>
+</head>
+<body>
+    <div class="blueprint-wrapper">
+        <header class="blueprint-header">
+            <div class="title-group"><h1>Notebook Agent 架构</h1><p>AI Data Analysis Notebook Spec v1.0</p></div>
+            <div class="meta-group">SYSTEM_ID: NBA_PREMIUM<br>AUTH: NOTEBOOK_TEAM<br>STATUS: M1 READY</div>
+        </header>
+        <main class="arch-stack">
+            <section class="layer layer-agent">
+                <div class="layer-side"><span class="num">01 / REASONING</span><h2>AI 推理层</h2><span class="tagline">Pi SDK Brain</span></div>
+                <div class="layer-main"><div class="agent-main-grid">
+                    <div class="agent-grid">
+                        <div class="agent-card"><h4>Notebook Gateway</h4><p>复用 Pi SDK 推理引擎，独立于画布主链构建 session。负责 LLM 调用、工具调度与事件流推送，与 Pi Agent 平级零耦合。</p><div class="agent-pills"><span class="agent-pill">PI_SDK</span><span class="agent-pill">ZERO_COUPLING</span></div></div>
+                        <div class="agent-card"><h4>系统提示词编排</h4><p>注入无状态 exec 心智、workspace 目录约定与工具使用边界。强制 Agent 像 Claude Code 那样 跑 → 看 → 改假设 → 再跑。</p><div class="agent-pills"><span class="agent-pill">STATELESS</span><span class="agent-pill">RUN_LOOK_LOOP</span></div></div>
+                        <div class="agent-card"><h4>Session 生命周期</h4><p>bootstrap 触发条件双信号锁定：events 订阅 + dataReady 同步成立才发首轮 prompt。规避 CSV 尚未落盘就推理的竞态。</p><div class="agent-pills"><span class="agent-pill">BOOTSTRAP_GUARD</span><span class="agent-pill">RACE_FIX</span></div></div>
+                        <div class="agent-card"><h4>SSE 事件流</h4><p>tool.execute 事件经 SSE 推到 iframe，前端执行后回传 tool-result。服务端不碰 Python，只做推理与编排。</p><div class="agent-pills"><span class="agent-pill">SSE_STREAM</span><span class="agent-pill">TOOL_DISPATCH</span></div></div>
+                    </div>
+                    <div class="agent-tech-stack">
+                        <div class="agent-brand"><svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" class="svg-fill" style="fill:#7c3aed;"/></svg><span>Pi Agent SDK</span></div>
+                        <div class="agent-brand"><svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" class="svg-fill" style="fill:#10a37f;"/></svg><span>LLM 推理</span></div>
+                        <div class="agent-brand"><svg viewBox="0 0 256 221"><path fill="#41b883" d="M204.8 0H256L128 220.8L0 0h97.92L128 51.2L157.44 0z"/><path fill="#41b883" d="m0 0l128 220.8L256 0h-51.2L128 132.48L50.56 0z"/><path fill="#35495e" d="M50.56 0L128 133.12L204.8 0h-47.36L128 51.2L97.92 0z"/></svg><span>Node Gateway</span></div>
+                    </div>
+                </div></div>
+            </section>
+            <section class="layer layer-pyodide">
+                <div class="layer-side"><span class="num">02 / EXECUTE</span><h2>Pyodide 执行核心</h2><span class="tagline">WASM Sandbox</span></div>
+                <div class="layer-main"><div class="pyodide-main-grid"><div class="pyodide-visual-grid">
+                    <div class="kernel-visual">
+                        <div class="kernel-step"><b>1</b> 创建独立 globals dict</div>
+                        <div class="kernel-step"><b>2</b> 重定向 stdout/stderr</div>
+                        <div class="kernel-step"><b>3</b> runPythonAsync(code)</div>
+                        <div class="kernel-step"><b>4</b> exec 后 snapshotFs 回写</div>
+                        <div class="kernel-step"><b>5</b> 丢弃 scratchGlobals</div>
+                    </div>
+                    <div class="stateless-mock">
+                        <div class="stateless-head"><span></span>无状态 exec = python -c</div>
+                        <div class="cell-block"><b># exec #1</b><br>df = pd.read_csv('inputs/upstream.csv')<br>print(df.shape)</div>
+                        <div class="cell-block"><b># exec #2 — 独立 globals</b><br>df = pd.read_csv('inputs/upstream.csv')<br><em>↑ 必须重新读取，#1 的 df 已丢弃</em></div>
+                        <div class="cell-block"><b>import 缓存共享</b><br>首次 pandas ~500ms · 后续 ~5ms</div>
+                    </div>
+                    <div style="display:flex; flex-direction:column; gap:16px;">
+                        <div>
+                            <h5 style="font-size:14px; font-weight:800; color:var(--c-pyodide); margin-bottom:4px;">资源治理三段式</h5>
+                            <p style="font-size:10px; color:var(--text-dim); line-height:1.5;">
+                                <b>60s 软超时：</b>Atomics 写 SAB → Pyodide 抛 KeyboardInterrupt，优雅收尾。<br>
+                                <b>90s 硬超时：</b>worker.terminate() 强杀，自动重建 Worker 并在 Agent 上下文追加 system message。<br>
+                                <b>120s bridge 兜底：</b>服务端 FrontendBridge 防止前端失联导致工具挂死。
+                            </p>
+                        </div>
+                        <div>
+                            <h5 style="font-size:14px; font-weight:800; color:var(--c-pyodide); margin-bottom:4px;">崩溃自愈</h5>
+                            <p style="font-size:10px; color:var(--text-dim); line-height:1.4;">Worker OOM / 崩溃 → iframe 30s 内 new Worker 重启 + 追加 "Python 环境已重启" 提示。Workspace 文件不受影响。</p>
+                            <div style="font-size:10px; font-weight:700; color:var(--c-pyodide); border-top:1px dashed var(--border); padding-top:10px; margin-top:8px;">✓ 无状态可重跑 &nbsp; ✓ import 缓存共享</div>
+                        </div>
+                    </div>
+                </div>
+                    <div class="pyodide-tech-stack">
+                        <div class="pyodide-brand"><svg viewBox="0 0 256 255"><path fill="#3776ab" d="M126.916.072c-64.832 0-60.784 28.115-60.784 28.115l.072 29.128h61.868v8.745H41.631S.145 61.355.145 126.77c0 65.417 36.21 63.097 36.21 63.097h21.61v-30.356s-1.165-36.21 35.632-36.21h61.362s34.475.557 34.475-33.319V33.97S194.67.072 126.916.072M92.802 19.66a11.12 11.12 0 0 1 11.13 11.13a11.12 11.12 0 0 1-11.13 11.13a11.12 11.12 0 0 1-11.13-11.13a11.12 11.12 0 0 1 11.13-11.13"/><path fill="#ffd141" d="M128.757 254.126c64.832 0 60.784-28.115 60.784-28.115l-.072-29.127H127.6v-8.745h86.441s41.486 4.705 41.486-60.712c0-65.416-36.21-63.096-36.21-63.096h-21.61v30.355s1.165 36.21-35.632 36.21h-61.362s-34.475-.557-34.475 33.32v56.013s-5.235 33.897 62.518 33.897m34.114-19.586a11.12 11.12 0 0 1-11.13-11.13a11.12 11.12 0 0 1 11.13-11.131a11.12 11.12 0 0 1 11.13 11.13a11.12 11.12 0 0 1-11.13 11.13"/></svg><span>Pyodide WASM</span></div>
+                        <div class="pyodide-brand"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z" class="svg-fill" style="fill:#3776ab;"/></svg><span>Web Worker</span></div>
+                        <div class="pyodide-brand"><svg viewBox="0 0 128 128"><path fill="#4dabcf" d="m55.012 26.006l-21.38-10.789L10.154 26.93l21.969 11.027Zm9.808 4.951L87.241 42.28L63.982 53.955l-22-11.043Zm29.948-15.581l23.037 11.552L97.2 37.272L74.735 25.938ZM84.853 10.4L64.113 0L43.598 10.24L64.97 21.014ZM68.64 99.702V128l25.122-12.537l-.023-28.31ZM93.727 77.27l-.028-28.012l-25.06 12.458V89.74Z" class="svg-fill"/><path fill="#4c75cf" d="m59.77 61.716l-16.918-8.512V89.97s-20.7-44.033-22.612-47.99c-.246-.513-1.263-1.07-1.522-1.209c-3.731-1.947-14.603-7.45-14.603-7.45v64.977l15.04 8.063V72.382s20.478 39.346 20.689 39.78c.214.429 2.257 4.57 4.459 6.028c2.92 1.939 15.458 9.477 15.458 9.477z" class="svg-fill"/></svg><span>NumPy / Pandas</span></div>
+                    </div></div></div>
+            </section>
+            <section class="layer layer-storage">
+                <div class="layer-side"><span class="num">03 / WORKSPACE</span><h2>数据与存储层</h2><span class="tagline">OPFS Vault</span></div>
+                <div class="layer-main"><div class="storage-main-grid"><div class="storage-visual-grid">
+                    <div class="opfs-tree">
+                        <div class="root">📁 opfs:/notebook/<span style="color:var(--c-storage)">{sessionId}/</span></div>
+                        <div class="indent dir">├─ inputs/</div>
+                        <div class="indent2 file">└─ upstream.csv &nbsp;<span style="color:#94a3b8; font-size:9px;">启动时灌入</span></div>
+                        <div class="indent dir">├─ scripts/</div>
+                        <div class="indent2 file">├─ 01_explore.py</div>
+                        <div class="indent2 file">└─ 02_corr.py</div>
+                        <div class="indent dir">├─ artifacts/</div>
+                        <div class="indent2 file">├─ fig_dist.png</div>
+                        <div class="indent2 file">└─ corr_matrix.csv</div>
+                        <div class="indent dir">└─ reports/</div>
+                        <div class="indent2 file" style="color:var(--c-storage); font-weight:700;">└─ main.md &nbsp;<span style="color:#94a3b8; font-size:9px; font-weight:500;">唯一报告</span></div>
+                    </div>
+                    <div style="display:flex; flex-direction:column; gap:14px;">
+                        <div>
+                            <h5 style="font-size:13px; font-weight:800; color:var(--c-storage); margin-bottom:8px;">Agent 工具集（M1）</h5>
+                            <div class="tools-matrix">
+                                <div class="tool-chip"><b>python_exec_*</b><span>无状态 Python 执行</span></div>
+                                <div class="tool-chip"><b>python_packages</b><span>查询/加载运行时包</span></div>
+                                <div class="tool-chip"><b>fs_read / write</b><span>工作区文件读写</span></div>
+                                <div class="tool-chip"><b>fs_edit</b><span>精确文本替换</span></div>
+                                <div class="tool-chip"><b>fs_list / grep</b><span>列目录 / 搜索</span></div>
+                                <div class="tool-chip"><b>todo_write</b><span>同步分析计划</span></div>
+                                <div class="tool-chip"><b>ask_user</b><span>关键决策提问</span></div>
+                                <div class="tool-chip" style="border-left-color:#dc2626;"><b style="color:#dc2626;">画布工具</b><span style="text-decoration:line-through;">严格隔离禁止</span></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div style="grid-column: 1 / -1;">
+                        <h5 style="font-size:13px; font-weight:800; color:var(--c-storage); margin-bottom:6px;">双文件系统协作（关键设计）</h5>
+                        <p style="font-size:10px; color:var(--text-dim); line-height:1.5;">
+                            <b>持久层 = OPFS：</b>iframe 主线程异步读写，按 <code style="font-family:'JetBrains Mono'; color:var(--c-storage);">notebook-{sessionId}/</code> 隔离，主站只读展示。<br>
+                            <b>Pyodide 可见层 = MEMFS：</b>Worker 内虚拟 FS，仅 mkdirTree 四个顶级目录，<b>不挂 OPFS</b>。<br>
+                            <b>双向 sync：</b>入向（import_csv / 启动同步）OPFS→MEMFS；出向（exec 后 runtime 主动 snapshotFs 拉回 MEMFS 变更写回 OPFS + 2s 兜底轮询）。<br>
+                            <b>配额：</b>单 session 500MB，每次 fs_write 前 navigator.storage.estimate() 检查，超限返回 quota_exceeded。
+                        </p>
+                    </div>
+                </div>
+                    <div class="storage-tech-stack">
+                        <div class="storage-brand"><svg viewBox="0 0 24 24"><path d="M4 6c0-1.1.9-2 2-2h12c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H6c-1.1 0-2-.9-2-2V6zm2 0v3h12V6H6zm0 5v7h12v-7H6z" class="svg-fill" style="fill:#0d9488;"/></svg><span>OPFS</span></div>
+                        <div class="storage-brand"><svg viewBox="0 0 24 24"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" class="svg-fill" style="fill:#0d9488;"/></svg><span>MEMFS</span></div>
+                        <div class="storage-brand"><svg viewBox="0 0 24 24"><path d="M5 4v3h5.5v12h3V7H19V4z" class="svg-fill" style="fill:#0d9488;"/></svg><span>SharedArrayBuffer</span></div>
+                        <div class="storage-brand"><svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" class="svg-fill" style="fill:#0d9488;"/></svg><span>Markdown Report</span></div>
+                    </div></div></div>
+            </section>
+            <section class="layer layer-isolate">
+                <div class="layer-side"><span class="num">04 / ISOLATE</span><h2>隔离与通信层</h2><span class="tagline">Cross-Origin Sandbox</span></div>
+                <div class="layer-main"><div class="isolate-main-grid"><div class="isolate-visual-grid">
+                    <div class="process-box">
+                        <h4><i></i>主站窗口</h4>
+                        <p>画布 SPA。托管 NotebookLauncher 与 iframe 容器。统一 axios 请求层与服务端通信。</p>
+                        <div class="process-cap">
+                            <span class="cap-pill">axios → /api</span>
+                            <span class="cap-pill">iframe 容器</span>
+                            <span class="cap-pill">OPFS 只读</span>
+                        </div>
+                        <div class="rpc-flow"><b>↓ postMessage</b><br>handshake / import_csv<br>close_request</div>
+                    </div>
+                    <div class="process-box">
+                        <h4><i></i>iframe 窗口</h4>
+                        <p>独立 HTML 入口 notebook.html，COI 启用。消息流 + 文件树 + 文件预览 + Worker 宿主。</p>
+                        <div class="process-cap">
+                            <span class="cap-pill">COOP+COEP</span>
+                            <span class="cap-pill">OPFS 读写</span>
+                            <span class="cap-pill">Worker 宿主</span>
+                        </div>
+                        <div class="rpc-flow"><b>↑↓ postMessage</b><br>↔ 主站：workspace_changed<br>↔ Worker：exec / fs_snapshot</div>
+                    </div>
+                    <div class="process-box">
+                        <h4><i></i>Pyodide Worker</h4>
+                        <p>WASM 沙箱。能力被严格剥夺，无任何出站网络通道，仅通过 MEMFS 与主线程交换字节。</p>
+                        <div class="process-cap">
+                            <span class="cap-pill deny">fetch</span>
+                            <span class="cap-pill deny">XHR</span>
+                            <span class="cap-pill deny">WebSocket</span>
+                            <span class="cap-pill deny">IndexedDB</span>
+                            <span class="cap-pill deny">globalThis</span>
+                        </div>
+                        <div class="rpc-flow"><b>↑ postMessage</b><br>exec_done / stdout 流<br>fs_snapshot_done</div>
+                    </div>
+                </div>
+                    <div class="isolate-tech-stack">
+                        <div class="isolate-brand"><svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z" class="svg-fill" style="fill:#d97706;"/></svg><span>COI / COEP</span></div>
+                        <div class="isolate-brand"><svg viewBox="0 0 24 24"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z" class="svg-fill" style="fill:#d97706;"/></svg><span>postMessage RPC</span></div>
+                        <div class="isolate-brand"><svg viewBox="0 0 24 24"><path d="M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14z" class="svg-fill" style="fill:#d97706;"/></svg><span>iframe 沙箱</span></div>
+                        <div class="isolate-brand"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93z" class="svg-fill" style="fill:#d97706;"/></svg><span>跨平台一致</span></div>
+                    </div></div></div>
+            </section>
+        </main>
+        <footer class="blueprint-footer"><span>© 2026 Notebook Agent 架构组</span><span>PROPRIETARY & CONFIDENTIAL</span><span>SPEC_REF: NBA-V1-TECH-FINAL</span></footer>
+    </div>
+</body>
+</html>
