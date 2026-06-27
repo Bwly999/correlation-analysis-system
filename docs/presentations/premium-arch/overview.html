@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>相关性分析系统 · 总体方案 | Correlation Analysis Blueprint</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+    /* ===== 固定 1280×720 (16:9) 画布 + 等比缩放适配视口 ===== */
+    html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #e9edf3; }
+    body { display: flex; align-items: center; justify-content: center; font-family: 'Plus Jakarta Sans', sans-serif; }
+    .stage { width: 1280px; height: 720px; position: relative; transform-origin: center center; flex-shrink: 0; }
+
+    :root {
+        --bg: #fcfdfe; --panel: #ffffff; --panel-soft: #f7f9fc;
+        --text: #0f172a; --text-dim: #64748b; --text-faint: #9aa6bd;
+        --border: #e4e9f1; --border-soft: #eef2f8;
+        --c-accent: #1d4ed8;
+        --c-workflow: #d97706; --c-workflow-bg: #fffaf0;
+        --c-notebook: #7c3aed; --c-notebook-bg: #f7f4ff;
+        --c-algo: #db2777; --c-algo-bg: #fdf3f9;
+        --c-process: #059669; --c-process-bg: #edfdf5;
+        --c-source: #0891b2; --c-source-bg: #ecfcff;
+        --shadow-sm: 0 1px 2px rgba(15,23,42,0.04);
+        --shadow-md: 0 1px 3px rgba(15,23,42,0.05), 0 10px 28px -12px rgba(15,23,42,0.10);
+        --shadow-lg: 0 2px 6px rgba(15,23,42,0.05), 0 24px 60px -24px rgba(15,23,42,0.16);
+    }
+    * { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+    .stage {
+        background:
+            radial-gradient(ellipse 820px 420px at 12% -10%, rgba(79,70,229,0.06), transparent 60%),
+            radial-gradient(ellipse 820px 420px at 88% 110%, rgba(124,58,237,0.06), transparent 60%),
+            var(--bg);
+        color: var(--text);
+        padding: 26px 42px 20px;
+        display: flex; flex-direction: column; gap: 10px;
+        overflow: hidden;
+    }
+
+    /* ===== 顶部标题栏 ===== */
+    .topbar { display: flex; justify-content: space-between; align-items: flex-end; padding-bottom: 10px; border-bottom: 1.5px solid var(--text); position: relative; z-index: 3; }
+    .topbar h1 { font-size: 28px; font-weight: 800; letter-spacing: -0.03em; line-height: 1; }
+    .topbar h1 b { color: var(--c-accent); }
+    .topbar .sub { font-family: 'JetBrains Mono', monospace; font-size: 9.5px; color: var(--c-accent); text-transform: uppercase; letter-spacing: 0.25em; font-weight: 700; margin-top: 6px; }
+    .meta { text-align: right; font-family: 'JetBrains Mono', monospace; font-size: 9.5px; color: var(--text-dim); line-height: 1.6; }
+    .meta b { color: var(--text-faint); }
+
+    /* ===== 应用场景层 L0（深色精致容器） ===== */
+    .scenarios { display: grid; grid-template-columns: 124px 1fr 1fr; gap: 13px; align-items: stretch; position: relative; z-index: 2; }
+    .scene-card { position: relative; background: linear-gradient(135deg, #111a35 0%, #0b1224 100%); border: 1px solid rgba(255,255,255,0.06); border-radius: 13px; padding: 13px 16px 13px 18px; display: grid; grid-template-columns: 42px 1fr auto; gap: 12px; align-items: center; overflow: hidden; box-shadow: 0 1px 3px rgba(15,23,42,0.18), 0 14px 36px -16px rgba(15,23,42,0.45); transition: transform .18s ease, box-shadow .18s ease; }
+    .scene-card:hover { transform: translateY(-2px); box-shadow: 0 2px 6px rgba(15,23,42,0.2), 0 22px 48px -18px rgba(15,23,42,0.55); }
+    /* 场景主色发光斑 */
+    .scene-card::before { content: ""; position: absolute; top: -30px; right: -20px; width: 110px; height: 110px; border-radius: 50%; filter: blur(34px); opacity: 0.42; z-index: 0; }
+    /* 网格纹理 */
+    .scene-card::after { content: ""; position: absolute; inset: 0; background-image: linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px); background-size: 14px 14px; pointer-events: none; z-index: 0; }
+    .scene-card > * { position: relative; z-index: 1; }
+    .scene-card .sico { width: 42px; height: 42px; border-radius: 11px; display: flex; align-items: center; justify-content: center; border: 1px solid rgba(255,255,255,0.12); }
+    .scene-card .sico svg { width: 21px; height: 21px; }
+    .scene-card .sbody h4 { font-size: 14px; font-weight: 800; line-height: 1.1; }
+    .scene-card .sbody p { font-size: 10px; color: #aeb8d4; line-height: 1.4; margin-top: 3px; }
+    .scene-card .stag { font-family: 'JetBrains Mono', monospace; font-size: 8.5px; padding: 4px 8px; border-radius: 5px; font-weight: 700; white-space: nowrap; border: 1px solid; }
+
+    /* 光影：金 */
+    .scene-light::before { background: #f59e0b; }
+    .scene-light .sico { background: rgba(245,158,11,0.16); color: #fbbf24; }
+    .scene-light .sbody h4 { color: #fbbf24; }
+    .scene-light .stag { background: rgba(245,158,11,0.14); color: #fcd34d; border-color: rgba(245,158,11,0.32); }
+
+    /* 异响：青 */
+    .scene-sound::before { background: #14b8a6; }
+    .scene-sound .sico { background: rgba(20,184,166,0.16); color: #2dd4bf; }
+    .scene-sound .sbody h4 { color: #2dd4bf; }
+    .scene-sound .stag { background: rgba(20,184,166,0.14); color: #5eead4; border-color: rgba(20,184,166,0.32); }
+
+    .layer-tag { display: flex; flex-direction: column; justify-content: center; gap: 3px; }
+    .layer-tag .num { font-family: 'JetBrains Mono', monospace; font-size: 9.5px; font-weight: 700; color: var(--text-faint); letter-spacing: 0.1em; }
+    .layer-tag .name { font-size: 16px; font-weight: 800; line-height: 1.1; letter-spacing: -0.01em; }
+    .layer-tag .en { font-family: 'JetBrains Mono', monospace; font-size: 8.5px; text-transform: uppercase; letter-spacing: 0.15em; font-weight: 700; opacity: 0.75; }
+
+    /* ===== L1 大容器：包裹 L2/L3/L4 ===== */
+    .l1-wrap { flex: 1; display: flex; flex-direction: column; min-height: 0; position: relative; z-index: 2; }
+    .l1-box { flex: 1; background: linear-gradient(180deg, #fbfcfe 0%, #f5f8fc 100%); border: 1.5px solid var(--border); border-radius: 16px; box-shadow: var(--shadow-lg); padding: 14px 16px 12px; display: flex; flex-direction: column; gap: 8px; position: relative; overflow: hidden; }
+    /* L1 标签 tab：跨在容器顶边 */
+    .l1-tab { position: absolute; top: -1px; left: 22px; background: var(--text); color: #fff; font-family: 'JetBrains Mono', monospace; font-size: 9.5px; font-weight: 700; letter-spacing: 0.12em; padding: 4px 11px; border-radius: 0 0 7px 7px; display: flex; align-items: center; gap: 7px; }
+    .l1-tab i { width: 5px; height: 5px; border-radius: 50%; background: var(--c-scene); }
+    /* L1 右上角提示 */
+    .l1-hint { position: absolute; top: 10px; right: 16px; font-family: 'JetBrains Mono', monospace; font-size: 8.5px; color: var(--text-faint); letter-spacing: 0.08em; }
+
+    /* L1 内：两个产品（左内容 + 右 16:9 截图贴图区） */
+    .apps { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+    .app-card { border-radius: 12px; padding: 11px 13px; display: grid; grid-template-columns: 1fr 152px; gap: 12px; align-items: center; border: 1px solid; position: relative; overflow: hidden; box-shadow: var(--shadow-sm); }
+    .app-info { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+    .app-head { display: grid; grid-template-columns: 32px 1fr auto; gap: 10px; align-items: center; }
+    .app-card .ico { width: 32px; height: 32px; border-radius: 9px; display: flex; align-items: center; justify-content: center; }
+    .app-card .ico svg { width: 18px; height: 18px; }
+    .app-card .body h3 { font-size: 14px; font-weight: 800; line-height: 1.1; }
+    .app-desc { font-size: 10.5px; color: var(--text-dim); line-height: 1.4; }
+    .app-card .tags { display: flex; gap: 5px; align-items: center; }
+    .app-card .tag { font-family: 'JetBrains Mono', monospace; font-size: 8px; font-weight: 700; padding: 3px 6px; border-radius: 4px; white-space: nowrap; }
+    /* 16:9 截图贴图区（纯白背景，方便直接覆盖贴图） */
+    .app-shot { width: 152px; aspect-ratio: 16/9; background: #ffffff; border: 1px solid var(--border); border-radius: 8px; display: flex; flex-direction: column; gap: 3px; align-items: center; justify-content: center; color: var(--text-faint); box-shadow: var(--shadow-sm); }
+    .app-shot svg { width: 16px; height: 16px; opacity: 0.4; }
+    .app-shot span { font-family: 'JetBrains Mono', monospace; font-size: 8px; letter-spacing: 0.1em; font-weight: 700; opacity: 0.65; }
+
+    .app-workflow { background: var(--c-workflow-bg); border-color: rgba(217,119,6,0.28); }
+    .app-workflow .ico { background: rgba(217,119,6,0.14); color: var(--c-workflow); }
+    .app-workflow .tag { background: rgba(217,119,6,0.14); color: var(--c-workflow); }
+
+    .app-notebook { background: var(--c-notebook-bg); border-color: rgba(124,58,237,0.28); }
+    .app-notebook .ico { background: rgba(124,58,237,0.14); color: var(--c-notebook); }
+    .app-notebook .tag { background: rgba(124,58,237,0.14); color: var(--c-notebook); }
+
+    /* 嵌套层分隔提示 */
+    .nest-divider { display: flex; align-items: center; gap: 10px; margin: 2px 2px 0; }
+    .nest-divider .line { flex: 1; height: 1px; background: linear-gradient(90deg, transparent, var(--border), transparent); }
+    .nest-divider .lbl { font-family: 'JetBrains Mono', monospace; font-size: 8.5px; color: var(--text-faint); letter-spacing: 0.16em; font-weight: 700; }
+
+    /* 嵌套子层行 */
+    .nest-row { display: grid; grid-template-columns: 108px 1fr; gap: 14px; align-items: stretch; }
+
+    /* L2 算法：8 卡片 4×2 */
+    .algo-grid { display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: 1fr 1fr; gap: 7px; background: var(--panel); border: 1px solid var(--border-soft); border-radius: 11px; padding: 8px; box-shadow: var(--shadow-sm); }
+    .acard { background: var(--panel-soft); border: 1px solid var(--border-soft); border-left: 3px solid var(--c-algo); border-radius: 8px; padding: 6px 9px; display: flex; gap: 7px; align-items: center; min-height: 0; transition: transform .15s ease, box-shadow .15s ease; }
+    .acard:hover { transform: translateY(-1px); box-shadow: var(--shadow-md); }
+    .acard .anum { font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 800; color: #fff; background: var(--c-algo); width: 18px; height: 18px; border-radius: 5px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .acard .aname { font-size: 10.5px; font-weight: 700; color: var(--text); line-height: 1.25; }
+
+    /* L3 数据处理：4 卡片 + 箭头 */
+    .proc-grid { display: grid; grid-template-columns: 1fr 20px 1fr 20px 1fr 20px 1fr; gap: 0; align-items: stretch; background: var(--panel); border: 1px solid var(--border-soft); border-radius: 11px; padding: 8px; box-shadow: var(--shadow-sm); }
+    .pcard { background: var(--panel-soft); border: 1px solid var(--border-soft); border-left: 3px solid var(--c-process); border-radius: 8px; padding: 7px 10px; display: flex; gap: 7px; align-items: center; }
+    .pcard .pnum { font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 800; color: #fff; background: var(--c-process); width: 18px; height: 18px; border-radius: 5px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .pcard .pname { font-size: 11px; font-weight: 700; color: var(--text); line-height: 1.2; }
+    .parrow { display: flex; align-items: center; justify-content: center; color: var(--text-faint); }
+    .parrow svg { width: 18px; height: 18px; }
+
+    /* L4 数据源：2 源 */
+    .sources { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .source { background: var(--c-source-bg); border: 1px solid rgba(8,145,178,0.24); border-left: 3px solid var(--c-source); border-radius: 9px; padding: 7px 12px; display: grid; grid-template-columns: 30px 1fr auto; gap: 10px; align-items: center; box-shadow: var(--shadow-sm); }
+    .source .sico { width: 30px; height: 30px; border-radius: 8px; background: rgba(8,145,178,0.14); color: var(--c-source); display: flex; align-items: center; justify-content: center; }
+    .source .sico svg { width: 16px; height: 16px; }
+    .source .sbody h4 { font-size: 12.5px; font-weight: 800; line-height: 1.1; color: var(--text); }
+    .source .sbody p { font-size: 9.5px; color: var(--text-dim); line-height: 1.3; margin-top: 2px; }
+    .source .smeta { font-family: 'JetBrains Mono', monospace; font-size: 8.5px; color: var(--c-source); background: rgba(8,145,178,0.12); padding: 4px 7px; border-radius: 4px; font-weight: 700; white-space: nowrap; }
+
+    /* ===== 底部 ===== */
+    .footbar { display: flex; justify-content: space-between; align-items: center; padding-top: 8px; border-top: 1px solid var(--border); font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--text-dim); position: relative; z-index: 2; }
+    .footbar .legend { display: flex; gap: 14px; }
+    .footbar .legend span { display: flex; align-items: center; gap: 5px; }
+    .footbar .legend i { width: 8px; height: 8px; border-radius: 2px; }
+    .footbar .legend .duo { width: 8px; height: 8px; border-radius: 2px; background: linear-gradient(135deg, #fbbf24 0%, #fbbf24 50%, #2dd4bf 50%, #2dd4bf 100%); }
+
+    svg.shape { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    svg.fill { fill: currentColor; stroke: none; }
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+
+    <!-- 顶部标题 -->
+    <div class="topbar">
+        <div>
+            <h1>相关性分析系统 · 总体<b>方案</b></h1>
+            <div class="sub">Correlation Analysis System · End-to-End Blueprint</div>
+        </div>
+        <div class="meta">
+            <b>SYSTEM_ID</b> · CAS_OVERVIEW<br>
+            <b>VERSION</b> · V3.1 · 16:9<br>
+            <b>SCOPE</b> · 场景驱动 · 双系统承载
+        </div>
+    </div>
+
+    <!-- 应用场景层 -->
+    <div class="scenarios">
+        <div class="layer-tag">
+            <span class="num">L0 / SCENE</span>
+            <span class="name" style="color:var(--text)">应用场景</span>
+            <span class="en" style="color:var(--text-dim)">Use Cases</span>
+        </div>
+        <div class="scene-card scene-light">
+            <div class="sico"><svg class="shape" viewBox="0 0 24 24"><rect x="6" y="2.5" width="12" height="19" rx="2.2"/><path d="M12 3v18"/><path d="M8 7h2.4M13.6 7h2M8 11h2.4M13.6 11h2M8 15h2.4M13.6 15h2"/></svg></div>
+            <div class="sbody"><h4>光影分析</h4><p>手机折痕光影相关性挖掘，定位影响折痕可视性的显著性因子</p></div>
+            <div class="stag">光影 · LIGHT</div>
+        </div>
+        <div class="scene-card scene-sound">
+            <div class="sico"><svg class="shape" viewBox="0 0 24 24"><path d="M3 12h2l2-7 4 14 3-9 2 6h5"/></svg></div>
+            <div class="sbody"><h4>异响分析</h4><p>异常声响特征因子相关性排查，识别引发异响的关键成因组合</p></div>
+            <div class="stag">异响 · SOUND</div>
+        </div>
+    </div>
+
+    <!-- L1 大容器：包含 L2/L3/L4 -->
+    <div class="l1-wrap">
+        <div class="l1-box">
+            <div class="l1-tab"><i></i>L1 · 应用层 / APPLICATION LAYER</div>
+            <div class="l1-hint">↓ 内置算法 · 数据处理 · 数据源 全栈能力</div>
+
+            <!-- 两个产品 -->
+            <div class="apps">
+                <div class="app-card app-workflow">
+                    <div class="app-info">
+                        <div class="app-head">
+                            <div class="ico"><svg class="shape" viewBox="0 0 24 24"><circle cx="5" cy="5" r="2.5"/><rect x="14" y="2.5" width="7" height="5" rx="1"/><rect x="2.5" y="16.5" width="7" height="5" rx="1"/><rect x="14" y="16.5" width="7" height="5" rx="1"/><path d="M7.2 6 L14.5 4.5 M7 18.5 L14.5 19.5 M18 8 L18 16 M18 16 L9.5 18"/></svg></div>
+                            <div class="body"><h3>分析工作流</h3></div>
+                            <div class="tags"><span class="tag">Vue Flow</span><span class="tag">DAG</span></div>
+                        </div>
+                        <p class="app-desc">n8n 风格画布，拖拽节点构建分析流程；显式编排、过程可见、可复用</p>
+                    </div>
+                    <div class="app-shot">
+                        <svg class="shape" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5L5 21"/></svg>
+                        <span>贴演示截图</span>
+                    </div>
+                </div>
+                <div class="app-card app-notebook">
+                    <div class="app-info">
+                        <div class="app-head">
+                            <div class="ico"><svg class="shape" viewBox="0 0 24 24"><circle cx="12" cy="5" r="2.2"/><circle cx="5" cy="12" r="2.2"/><circle cx="19" cy="12" r="2.2"/><circle cx="12" cy="19" r="2.2"/><circle cx="12" cy="12" r="2.4"/><path d="M12 7.2v2.4M9.4 11l-2 1M14.6 11l2 1M9.4 13l-2-1M14.6 13l2-1M12 14.6v2.2"/></svg></div>
+                            <div class="body"><h3>AI 数据分析</h3></div>
+                            <div class="tags"><span class="tag">Pyodide</span><span class="tag">Pi Agent</span></div>
+                        </div>
+                        <p class="app-desc">独立于画布的 AI 数据科学家；前端 Pyodide 沙箱，跑→看→改→再跑</p>
+                    </div>
+                    <div class="app-shot">
+                        <svg class="shape" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5L5 21"/></svg>
+                        <span>贴演示截图</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 嵌套分隔 -->
+            <div class="nest-divider"><span class="lbl">内置能力 · NESTED CAPABILITIES</span><span class="line"></span></div>
+
+            <!-- L2 算法层 -->
+            <div class="nest-row">
+                <div class="layer-tag">
+                    <span class="num">L2 / ALGO</span>
+                    <span class="name" style="color:var(--c-algo)">算法层</span>
+                    <span class="en" style="color:var(--c-algo)">8 Algorithms</span>
+                </div>
+                <div class="algo-grid">
+                    <div class="acard"><span class="anum">1</span><span class="aname">Spearman/Pearson单因子单调性算法</span></div>
+                    <div class="acard"><span class="anum">2</span><span class="aname">XGboost+SHAP多因子相关性计算算法</span></div>
+                    <div class="acard"><span class="anum">3</span><span class="aname">随机森林多因子重要性评估算法</span></div>
+                    <div class="acard"><span class="anum">4</span><span class="aname">PCA主成分分析算法</span></div>
+                    <div class="acard"><span class="anum">5</span><span class="aname">VIF因子共线性检查算法</span></div>
+                    <div class="acard"><span class="anum">6</span><span class="aname">多元线性回归拟合算法</span></div>
+                    <div class="acard"><span class="anum">7</span><span class="aname">逻辑回归分析分析算法</span></div>
+                    <div class="acard"><span class="anum">8</span><span class="aname">方差分析算法</span></div>
+                </div>
+            </div>
+
+            <!-- L3 数据处理层 -->
+            <div class="nest-row">
+                <div class="layer-tag">
+                    <span class="num">L3 / PROCESS</span>
+                    <span class="name" style="color:var(--c-process)">数据处理</span>
+                    <span class="en" style="color:var(--c-process)">ETL Pipeline</span>
+                </div>
+                <div class="proc-grid">
+                    <div class="pcard"><span class="pnum">1</span><span class="pname">数据去重</span></div>
+                    <div class="parrow"><svg class="shape" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+                    <div class="pcard"><span class="pnum">2</span><span class="pname">数据转换</span></div>
+                    <div class="parrow"><svg class="shape" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+                    <div class="pcard"><span class="pnum">3</span><span class="pname">数据异常值处理(IQR/孤立森林)</span></div>
+                    <div class="parrow"><svg class="shape" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+                    <div class="pcard"><span class="pnum">4</span><span class="pname">数据量纲归一化</span></div>
+                </div>
+            </div>
+
+            <!-- L4 数据源层 -->
+            <div class="nest-row">
+                <div class="layer-tag">
+                    <span class="num">L4 / SOURCE</span>
+                    <span class="name" style="color:var(--c-source)">数据源</span>
+                    <span class="en" style="color:var(--c-source)">Ingestion</span>
+                </div>
+                <div class="sources">
+                    <div class="source">
+                        <div class="sico"><svg class="shape" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/><circle cx="7" cy="14" r="1" class="fill"/><circle cx="14" cy="10" r="1" class="fill"/></svg></div>
+                        <div class="sbody"><h4>kfisher 看板数据</h4><p>在线实时数据源 · 对接 kfisher 看板，按维度拉取业务指标时序</p></div>
+                        <div class="smeta">ONLINE · 实时</div>
+                    </div>
+                    <div class="source">
+                        <div class="sico"><svg class="shape" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg></div>
+                        <div class="sbody"><h4>离线 Excel / CSV</h4><p>本地批量数据源 · 支持拖拽上传，自动编码探测与列类型推断</p></div>
+                        <div class="smeta">OFFLINE · 批量</div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- 底部图例 -->
+    <div class="footbar">
+        <div class="legend">
+            <span><i class="duo"></i>应用场景</span>
+            <span><i style="background:var(--c-workflow)"></i>工作流</span>
+            <span><i style="background:var(--c-notebook)"></i>AI 数据分析</span>
+            <span><i style="background:var(--c-algo)"></i>算法</span>
+            <span><i style="background:var(--c-process)"></i>数据处理</span>
+            <span><i style="background:var(--c-source)"></i>数据源</span>
+        </div>
+        <div>场景驱动 → 应用承载 → 算法/处理/数据源 内置</div>
+        <div>© 2026 CAS · OVERVIEW V3.1</div>
+    </div>
+
+</div>
+
+<script>
+    // 等比缩放：让 1280×720 画布完整适配任意视口
+    function fit() {
+        var s = document.getElementById('stage');
+        var scale = Math.min(window.innerWidth / 1280, window.innerHeight / 720);
+        s.style.transform = 'scale(' + scale + ')';
+    }
+    window.addEventListener('resize', fit);
+    fit();
+</script>
+</body>
+</html>
