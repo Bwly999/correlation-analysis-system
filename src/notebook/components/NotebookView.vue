@@ -126,8 +126,14 @@ const { isFresh } = useFreshFileTracker({ tree: ws.tree })
 const selectedPath = ref<string | null>(null)
 const previewLoading = ref(false)
 const previewContent = ref('')
+const previewBytes = ref<Uint8Array | null>(null)
 const previewBlobUrl = ref<string | null>(null)
 const previewMeta = ref<{ size?: number; modifiedAt?: number } | undefined>(undefined)
+
+const isExcelPath = (path: string): boolean => {
+  const lower = path.toLowerCase()
+  return lower.endsWith('.xlsx') || lower.endsWith('.xls')
+}
 
 const findNodeMeta = (path: string): { size?: number; modifiedAt?: number } | undefined => {
   const parts = path.split('/')
@@ -144,6 +150,7 @@ const findNodeMeta = (path: string): { size?: number; modifiedAt?: number } | un
 const onSelect = async (path: string) => {
   selectedPath.value = path
   previewLoading.value = true
+  previewBytes.value = null
 
   if (previewBlobUrl.value) {
     URL.revokeObjectURL(previewBlobUrl.value)
@@ -159,6 +166,10 @@ const onSelect = async (path: string) => {
       const blob = new Blob([bytes as unknown as ArrayBuffer], { type: inferImageMime(path) })
       previewBlobUrl.value = URL.createObjectURL(blob)
       previewContent.value = previewBlobUrl.value
+    } else if (kind === 'table' && isExcelPath(path)) {
+      // Excel 是二进制：按字节读取交由 TablePreview 用 SheetJS 解析（避免 UTF-8 文本乱码）
+      previewBytes.value = await readBytes(props.opfsRoot, path)
+      previewContent.value = ''
     } else if (kind === 'meta' || kind === 'parquet-meta') {
       previewContent.value = ''
     } else {
@@ -166,6 +177,7 @@ const onSelect = async (path: string) => {
     }
   } catch (err) {
     previewContent.value = ''
+    previewBytes.value = null
     toasts.push({
       kind: 'error',
       title: '文件读取失败',
@@ -425,7 +437,7 @@ const onAttachError = (message: string) => {
     <ConnectionBanner :state="session.connection" />
 
     <!-- 主区：对话栏 + 消息流 + Workspace -->
-    <div class="flex min-h-0 flex-1">
+    <div class="flex min-h-0 min-w-0 flex-1">
       <!-- 左侧对话选择栏（可收起） -->
       <NotebookConversationSidebar
         :conversations="props.conversations ?? []"
@@ -441,7 +453,7 @@ const onAttachError = (message: string) => {
       />
 
       <!-- 右侧：消息流 + Workspace（保留原拖拽分隔） -->
-      <div data-split-root class="relative flex min-h-0 flex-1">
+      <div data-split-root class="relative flex min-h-0 min-w-0 flex-1">
       <!-- 左栏：消息流 + 悬浮 TodoPanel + 悬浮 Input -->
       <section
         class="relative flex min-h-0 flex-col border-r"
@@ -518,7 +530,7 @@ const onAttachError = (message: string) => {
 
       <!-- 右栏：Workspace + Preview -->
       <section
-        class="flex min-h-0 flex-1 flex-col"
+        class="flex min-h-0 min-w-0 flex-1 flex-col"
         style="background-color: var(--nb-sidebar);"
         aria-label="Workspace"
       >
@@ -560,11 +572,12 @@ const onAttachError = (message: string) => {
             />
           </button>
 
-          <div class="flex min-h-0 flex-1 flex-col" aria-label="预览">
+          <div class="flex min-h-0 min-w-0 flex-1 flex-col" aria-label="预览">
             <FilePreview
               :opfs-root="props.opfsRoot"
               :selected-path="selectedPath"
               :content="previewContent"
+              :bytes="previewBytes"
               :loading="previewLoading"
               :meta="previewMeta"
             />

@@ -33,6 +33,8 @@ const props = defineProps<{
   opfsRoot?: OpfsDirectoryHandle
   selectedPath: string | null
   content: string
+  /** 二进制原始字节（Excel 等）：交由对应 viewer 自行解析，避免文本乱码 */
+  bytes?: Uint8Array | null
   loading: boolean
   meta?: MetaInfo
 }>()
@@ -48,7 +50,7 @@ const codeLanguage = computed(() =>
 
 <template>
   <div
-    class="flex h-full flex-col"
+    class="flex h-full min-w-0 flex-col"
     style="background-color: var(--nb-paper);"
   >
     <header
@@ -152,6 +154,8 @@ const codeLanguage = computed(() =>
     <TablePreview
       v-else-if="previewKind === 'table'"
       :content="content"
+      :bytes="bytes"
+      :path="selectedPath ?? ''"
     />
     <ImagePreview
       v-else-if="previewKind === 'image'"

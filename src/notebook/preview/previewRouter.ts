@@ -27,6 +27,8 @@ const EXT_MAP: Record<string, PreviewKind> = {
 
   '.csv': 'table',
   '.tsv': 'table',
+  '.xlsx': 'table',
+  '.xls': 'table',
 
   '.parquet': 'parquet-meta',
   '.arrow': 'parquet-meta',

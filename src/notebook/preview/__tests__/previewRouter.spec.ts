@@ -6,6 +6,7 @@
  *   - .py / .js / .ts / .json / .yml / .yaml / .toml / .txt → 'code'
  *   - .png / .jpg / .jpeg / .svg / .gif / .webp → 'image'
  *   - .csv / .tsv → 'table'
+ *   - .xlsx / .xls → 'table'
  *   - .parquet / .arrow / .feather → 'parquet-meta'  // M1 仅显示文件信息
  *   - 未知 → 'meta'
  */
@@ -49,6 +50,8 @@ describe('resolvePreviewKind', () => {
   it('表格', () => {
     expect(resolvePreviewKind('inputs/upstream.csv')).toBe('table')
     expect(resolvePreviewKind('artifacts/x.tsv')).toBe('table')
+    expect(resolvePreviewKind('inputs/data.xlsx')).toBe('table')
+    expect(resolvePreviewKind('inputs/legacy.xls')).toBe('table')
   })
 
   it('Parquet 等数据 → parquet-meta', () => {
