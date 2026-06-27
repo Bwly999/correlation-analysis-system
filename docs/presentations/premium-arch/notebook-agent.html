@@ -72,7 +72,7 @@
         .kernel-step { display: flex; align-items: center; gap: 10px; background: white; padding: 8px 12px; border-radius: 6px; font-size: 11px; font-weight: 700; color: var(--c-pyodide); border: 1px solid var(--border); }
         .kernel-step b { width: 18px; height: 18px; background: var(--c-pyodide); color: white; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 9px; }
 
-        .stateless-mock { background: var(--bg-page); border-radius: 12px; padding: 14px; border: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; min-height: 180px; }
+        .stateless-mock { background: var(--bg-page); border-radius: 12px; padding: 14px; border: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; min-height: 168px; }
         .stateless-head { font-size: 11px; font-weight: 800; color: var(--text-main); display: flex; align-items: center; gap: 6px; }
         .stateless-head span { width: 8px; height: 8px; border-radius: 2px; background: var(--c-pyodide); }
         .cell-block { background: white; border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--text-dim); line-height: 1.4; }
@@ -162,28 +162,25 @@
                         <div class="kernel-step"><b>1</b> 创建独立 globals dict</div>
                         <div class="kernel-step"><b>2</b> 重定向 stdout/stderr</div>
                         <div class="kernel-step"><b>3</b> runPythonAsync(code)</div>
-                        <div class="kernel-step"><b>4</b> exec 后 snapshotFs 回写</div>
+                        <div class="kernel-step"><b>4</b> snapshotFs 回写 OPFS</div>
                         <div class="kernel-step"><b>5</b> 丢弃 scratchGlobals</div>
                     </div>
                     <div class="stateless-mock">
                         <div class="stateless-head"><span></span>无状态 exec = python -c</div>
                         <div class="cell-block"><b># exec #1</b><br>df = pd.read_csv('inputs/upstream.csv')<br>print(df.shape)</div>
-                        <div class="cell-block"><b># exec #2 — 独立 globals</b><br>df = pd.read_csv('inputs/upstream.csv')<br><em>↑ 必须重新读取，#1 的 df 已丢弃</em></div>
-                        <div class="cell-block"><b>import 缓存共享</b><br>首次 pandas ~500ms · 后续 ~5ms</div>
+                        <div class="cell-block"><b># exec #2 — 独立 globals</b><br><em>↑ #1 的 df 已丢弃，必须重读</em><br>import 缓存共享：首次 ~500ms · 后续 ~5ms</div>
                     </div>
-                    <div style="display:flex; flex-direction:column; gap:16px;">
-                        <div>
-                            <h5 style="font-size:14px; font-weight:800; color:var(--c-pyodide); margin-bottom:4px;">资源治理三段式</h5>
-                            <p style="font-size:10px; color:var(--text-dim); line-height:1.5;">
-                                <b>60s 软超时：</b>Atomics 写 SAB → Pyodide 抛 KeyboardInterrupt，优雅收尾。<br>
-                                <b>90s 硬超时：</b>worker.terminate() 强杀，自动重建 Worker 并在 Agent 上下文追加 system message。<br>
-                                <b>120s bridge 兜底：</b>服务端 FrontendBridge 防止前端失联导致工具挂死。
-                            </p>
+                    <div style="grid-column: 1 / -1; display: grid; grid-template-columns: 1.4fr 1fr 0.8fr; gap: 12px;">
+                        <div style="background:white; border:1px solid var(--border); border-left:3px solid var(--c-pyodide); padding:10px 12px; border-radius:8px;">
+                            <b style="font-size:11px; color:var(--c-pyodide); font-weight:800; display:block; margin-bottom:3px;">资源治理三段式</b>
+                            <span style="font-size:10px; color:var(--text-dim); line-height:1.45;"><b>60s</b> SIGINT 软中断 · <b>90s</b> terminate 强杀 · <b>120s</b> bridge 兜底</span>
                         </div>
-                        <div>
-                            <h5 style="font-size:14px; font-weight:800; color:var(--c-pyodide); margin-bottom:4px;">崩溃自愈</h5>
-                            <p style="font-size:10px; color:var(--text-dim); line-height:1.4;">Worker OOM / 崩溃 → iframe 30s 内 new Worker 重启 + 追加 "Python 环境已重启" 提示。Workspace 文件不受影响。</p>
-                            <div style="font-size:10px; font-weight:700; color:var(--c-pyodide); border-top:1px dashed var(--border); padding-top:10px; margin-top:8px;">✓ 无状态可重跑 &nbsp; ✓ import 缓存共享</div>
+                        <div style="background:white; border:1px solid var(--border); border-left:3px solid var(--c-pyodide); padding:10px 12px; border-radius:8px;">
+                            <b style="font-size:11px; color:var(--c-pyodide); font-weight:800; display:block; margin-bottom:3px;">崩溃自愈</b>
+                            <span style="font-size:10px; color:var(--text-dim); line-height:1.45;">OOM → 30s 重建 Worker + 追加 system message</span>
+                        </div>
+                        <div style="background:var(--c-pyodide-bg); border:1px solid rgba(37,99,235,0.15); padding:10px 12px; border-radius:8px; display:flex; align-items:center;">
+                            <span style="font-size:10px; font-weight:700; color:var(--c-pyodide); line-height:1.45;">✓ 无状态可重跑<br>✓ import 缓存共享</span>
                         </div>
                     </div>
                 </div>
