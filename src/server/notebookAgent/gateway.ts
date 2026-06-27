@@ -39,7 +39,7 @@ import {
 } from './notebookUserModelProfilesStore.js'
 import { bridgeNotebookEvent, type NotebookAgentSseEvent } from './eventBridge.js'
 import {
-  generateNotebookSessionTitle,
+  deriveNotebookTitle,
   isDefaultNotebookTitle,
 } from './titleGenerator.js'
 import {
@@ -232,26 +232,22 @@ const buildAndRegisterRuntime = async (
           percent: usage.percent,
         })
       }
-      // 首轮对话且标题仍是默认占位名：异步让 LLM 生成短标题，写回并推送。
-      // 不 await、不阻塞主流程；失败/为空静默忽略。用户手动改过名后不再覆盖。
+      // 首轮对话且标题仍是默认占位名：直接用用户首条发言作为标题，
+      // 不再依赖 LLM 生成（避免 key/网络/超时导致标题始终是占位名）。
+      // 用户手动改过名后（标题不再是默认占位名）不再覆盖。
       const userMsgCount = record.messages.filter((m) => m.role === 'user').length
       if (userMsgCount === 1 && isDefaultNotebookTitle(record.title)) {
-        void generateNotebookSessionTitle(record)
-          .then((title) => {
-            if (!title || title === record.title) return
-            if (!isDefaultNotebookTitle(record.title)) return
-            updateNotebookSessionTitle(runtime.sessionId, title)
-            persistNotebookSessionTitle(runtime.sessionManager, title)
-            persistNotebookSessionMeta(runtime.sessionManager, runtime.record)
-            emitRuntimeEvent(runtime, {
-              type: 'session.title_updated',
-              sessionId: runtime.sessionId,
-              title,
-            })
+        const title = deriveNotebookTitle(record)
+        if (title && title !== record.title && isDefaultNotebookTitle(record.title)) {
+          updateNotebookSessionTitle(runtime.sessionId, title)
+          persistNotebookSessionTitle(runtime.sessionManager, title)
+          persistNotebookSessionMeta(runtime.sessionManager, runtime.record)
+          emitRuntimeEvent(runtime, {
+            type: 'session.title_updated',
+            sessionId: runtime.sessionId,
+            title,
           })
-          .catch(() => {
-            // 标题生成失败不影响主流程
-          })
+        }
       }
     }
     // 压缩结束后 SDK 内部上下文已变（早期消息被摘要替代），
