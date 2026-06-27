@@ -4,6 +4,8 @@ import { encodeWorkflowHeaderValue } from '@/shared/workflowHeaderEncoding'
 const WORKFLOW_USER_ID_STORAGE_KEY = 'workflow-storage-user-id'
 const WORKFLOW_USER_NAME_STORAGE_KEY = 'workflow-storage-user-name'
 const FALLBACK_WORKFLOW_USER_NAME = '默认用户'
+// dev 模式下使用固定用户标识，避免 localStorage 丢失导致按 user 隔离的历史会话找不到
+const DEV_WORKFLOW_USER_ID = 'dev-workflow-user'
 
 export type WorkflowRequestUser = {
   id: string
@@ -19,6 +21,14 @@ const resolveBrowserStorage = () => {
 }
 
 const getOrCreateFallbackWorkflowUser = (): WorkflowRequestUser => {
+  // dev 模式固定用户，保证 x-workflow-user-id/name 稳定，历史会话可复现
+  if (import.meta.env.MODE === 'development') {
+    return {
+      id: DEV_WORKFLOW_USER_ID,
+      name: FALLBACK_WORKFLOW_USER_NAME,
+    }
+  }
+
   const storage = resolveBrowserStorage()
   const generatedId = `local-workflow-user-${Math.random().toString(36).slice(2, 10)}`
   if (!storage) {

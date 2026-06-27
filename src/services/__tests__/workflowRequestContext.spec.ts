@@ -68,6 +68,20 @@ describe('workflowRequestContext', () => {
     expect(storage.getItem('workflow-storage-user-name')).toBe('默认用户')
   })
 
+  it('uses a fixed dev workflow user in development mode regardless of storage', () => {
+    vi.stubEnv('MODE', 'development')
+    const storage = createMemoryStorage()
+    vi.stubGlobal('localStorage', storage)
+
+    const first = resolveWorkflowRequestUser()
+    const second = resolveWorkflowRequestUser()
+
+    expect(first).toEqual({ id: 'dev-workflow-user', name: '默认用户' })
+    expect(second).toEqual(first)
+    // dev 模式固定用户，不应写入随机 id
+    expect(storage.getItem('workflow-storage-user-id')).toBeNull()
+  })
+
   it('merges caller-provided headers when creating workflow request headers', () => {
     vi.stubEnv('VITE_WORKFLOW_USER_ID', 'user_fetch')
     vi.stubEnv('VITE_WORKFLOW_USER_NAME', '抓取用户')
