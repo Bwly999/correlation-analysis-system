@@ -100,6 +100,23 @@ export type NotebookAgentEvent =
 
 const isSuccessStatus = (status: number) => status >= 200 && status < 300
 
+const WORKSPACE_SNAPSHOT_REQUEST_TIMEOUT_MS = 5_000
+
+const withAbortTimeout = async <T>(
+  run: (signal: AbortSignal) => Promise<T>,
+  timeoutMs = WORKSPACE_SNAPSHOT_REQUEST_TIMEOUT_MS,
+): Promise<T> => {
+  const controller = new AbortController()
+  const timer = setTimeout(() => {
+    controller.abort()
+  }, timeoutMs)
+  try {
+    return await run(controller.signal)
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 const decodeStreamChunk = (decoder: TextDecoder, value: unknown) => {
   if (value instanceof ArrayBuffer) {
     return decoder.decode(new Uint8Array(value), { stream: true })
@@ -723,12 +740,15 @@ export const uploadWorkspaceSnapshot = async (
   zipBytes: Uint8Array,
 ): Promise<boolean> => {
   try {
-    const response = await httpClient.request({
-      url: `/notebook-agent/sessions/${sessionId}/workspace-snapshot`,
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/zip' },
-      data: zipBytes,
-    })
+    const response = await withAbortTimeout((signal) =>
+      httpClient.request({
+        url: `/notebook-agent/sessions/${sessionId}/workspace-snapshot`,
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/zip' },
+        data: zipBytes,
+        signal,
+      }),
+    )
     return isSuccessStatus(response.status)
   } catch {
     return false
@@ -743,11 +763,14 @@ export const downloadWorkspaceSnapshot = async (
   sessionId: string,
 ): Promise<Uint8Array | null> => {
   try {
-    const response = await httpClient.request<ArrayBuffer>({
-      url: `/notebook-agent/sessions/${sessionId}/workspace-snapshot`,
-      method: 'GET',
-      responseType: 'arraybuffer',
-    })
+    const response = await withAbortTimeout((signal) =>
+      httpClient.request<ArrayBuffer>({
+        url: `/notebook-agent/sessions/${sessionId}/workspace-snapshot`,
+        method: 'GET',
+        responseType: 'arraybuffer',
+        signal,
+      }),
+    )
     if (!isSuccessStatus(response.status)) return null
     return new Uint8Array(response.data)
   } catch {
@@ -763,10 +786,13 @@ export const checkWorkspaceSnapshot = async (
   sessionId: string,
 ): Promise<boolean> => {
   try {
-    const response = await httpClient.request({
-      url: `/notebook-agent/sessions/${sessionId}/workspace-snapshot`,
-      method: 'HEAD',
-    })
+    const response = await withAbortTimeout((signal) =>
+      httpClient.request({
+        url: `/notebook-agent/sessions/${sessionId}/workspace-snapshot`,
+        method: 'HEAD',
+        signal,
+      }),
+    )
     return isSuccessStatus(response.status)
   } catch {
     return false

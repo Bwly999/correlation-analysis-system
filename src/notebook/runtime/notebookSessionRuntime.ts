@@ -365,6 +365,8 @@ export const createNotebookSessionRuntime = async (
       // 只要 inputs/scripts 有文件就视为 OPFS 完好，不触发恢复（避免冗余 IO）。
       if (inputsAndScripts.length > 0) return
 
+      // 服务端快照恢复是 best-effort：HEAD/GET 内部自带 5s 硬超时，
+      // 任一请求卡住/失败都直接降级跳过，绝不阻塞 connect/switchSession 进入 ready。
       const exists = await checkWorkspaceSnapshot(currentSessionId)
       if (!exists) return
       const zipBytes = await downloadWorkspaceSnapshot(currentSessionId)

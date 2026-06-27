@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { listDirectoryEntries } from '../../shared/opfsAccess'
 
 const {
@@ -11,6 +11,8 @@ const {
   streamNotebookAgentEventsMock,
   fetchNotebookSessionHistoryMock,
   workerHostStateHolder,
+  requestMock,
+  requestStreamMock,
 } = vi.hoisted(() => ({
   workerHostInitMock: vi.fn(),
   workerHostSnapshotFsMock: vi.fn(),
@@ -23,6 +25,8 @@ const {
   // vi.hoisted 内不能引用 reactive（提升阶段 vue import 尚未初始化），
   // 故先用裸容器占位；vi.mock 工厂内 importActual('vue') 后填入真正的 reactive 对象。
   workerHostStateHolder: {} as { value: Record<string, unknown> },
+  requestMock: vi.fn(),
+  requestStreamMock: vi.fn(),
 }))
 
 vi.mock('../../shared/opfsAccess', async () => {
@@ -65,6 +69,16 @@ vi.mock('../parentBridgeClient', () => ({
   createParentBridgeClient: createParentBridgeClientMock,
 }))
 
+// notebookAgentClient 的 workspace 快照 helper（checkWorkspaceSnapshot /
+// downloadWorkspaceSnapshot）走真实实现，内部依赖 httpClient.request。
+// mock 掉 httpClient，让用例可控制 HEAD/GET 的返回（含永不 resolve 的 pending 场景）。
+vi.mock('@/services/httpClient', () => ({
+  httpClient: {
+    request: requestMock,
+  },
+  requestStream: requestStreamMock,
+}))
+
 vi.mock('../notebookAgentClient', async () => {
   const actual = await vi.importActual<typeof import('../notebookAgentClient')>('../notebookAgentClient')
   return {
@@ -84,10 +98,24 @@ vi.mock('../notebookAgentClient', async () => {
 import { createNotebookSessionRuntime } from '../notebookSessionRuntime'
 
 describe('notebookSessionRuntime', () => {
+  // 部分用例用 vi.useFakeTimers() 包住 connect/switchSession，若某个用例在
+  // finally 之前抛错或被断言中断，fake timer 会泄漏到后续用例（表现为下一个
+  // 依赖真实/伪造定时器的用例永久 pending）。这里兜底确保每个用例结束后都
+  // 回到真实定时器，避免测试间相互污染。
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   beforeEach(() => {
     vi.clearAllMocks()
-    // 每个 case 起点重置 workerHost state（含 memoryMb）
+    // 每个 case 起点重置 workerHost state（含 memoryMb / status）
+    workerHostStateHolder.value.status = 'ready'
+    workerHostStateHolder.value.bootStage = ''
+    workerHostStateHolder.value.bootStageDetail = ''
     workerHostStateHolder.value.memoryMb = 0
+    // workspace 快照探测默认返回 404（无快照）——用例需要 pending/200 时自行 mockImplementationOnce
+    requestMock.mockResolvedValue({ status: 404, data: { message: 'not found' } })
+    requestStreamMock.mockReset()
     vi.stubGlobal('navigator', {
       storage: {
         getDirectory: vi.fn().mockResolvedValue({
@@ -299,6 +327,40 @@ describe('notebookSessionRuntime', () => {
     expect(phase.failure.reason).toContain('切换工作区失败')
 
     vi.useRealTimers()
+    runtime.dispose()
+  })
+
+  // workspace 快照恢复是 best-effort：HEAD/GET 超时（5s 硬超时在 notebookAgentClient
+  // 层单测覆盖）或失败时，restoreWorkspaceIfEmpty 必须直接降级跳过，绝不阻塞
+  // connect/switchSession 进入 ready。这里验证 runtime 层降级契约：
+  // 让 requestMock 模拟快照请求失败（404 / 返回非法数据），断言 connect/switchSession 仍达 ready。
+  it('workspace snapshot HEAD 失败时，connect 仍会降级到 ready', async () => {
+    // 默认 beforeEach 已让 requestMock 返回 404（无快照），connect 内 restoreWorkspaceIfEmpty
+    // 命中 checkWorkspaceSnapshot=false 直接跳过。这里验证整条 connect 不被快照探测阻塞。
+    const runtime = await createNotebookSessionRuntime('sess-1')
+    await runtime.connect()
+
+    expect(runtime.state.session.phase.kind).toBe('ready')
+    runtime.dispose()
+  })
+
+  it('workspace snapshot GET 返回空时，switchSession 仍会跳过恢复并进入 ready', async () => {
+    const runtime = await createNotebookSessionRuntime('sess-1')
+    await runtime.connect()
+
+    // OPFS 空 + HEAD 命中(200) + GET 返回空 buffer → unzip 得不到文件 → 跳过恢复
+    const opfsEmptyTwice = [[], []]
+    vi.mocked(listDirectoryEntries).mockImplementation(async () =>
+      opfsEmptyTwice.shift() ?? []
+    )
+    requestMock
+      .mockResolvedValueOnce({ status: 200, data: null })
+      .mockResolvedValueOnce({ status: 200, data: new ArrayBuffer(0) })
+
+    await runtime.switchSession('sess-2')
+
+    expect(runtime.state.session.phase.kind).toBe('ready')
+    expect(runtime.state.session.sessionId).toBe('sess-2')
     runtime.dispose()
   })
 

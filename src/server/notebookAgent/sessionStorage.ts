@@ -75,42 +75,103 @@ const readAllBytes = async (body: unknown): Promise<Buffer | null> => {
   return Buffer.concat(chunks)
 }
 
+/**
+ * S3 单次操作兜底超时（毫秒）。
+ *
+ * AWS SDK v3 自身没有默认超时：端点不可达（TCP 停滞）或 GetObject 响应头已返回
+ * 但 body 流永不 end 时，client.send / readAllBytes 会无限挂起，导致 workspace-snapshot
+ * 等接口卡死（httpClient 也无超时，浏览器侧一并永久 pending）。这里用 Promise.race
+ * 强制快速失败，交由上层 try/catch 兜底返回 404/null，而非无限等待。
+ */
+const S3_OP_TIMEOUT_MS = 5_000
+
+const withTimeout = <T>(promise: Promise<T>, label: string): Promise<T> =>
+  new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(`${label} 超时（${S3_OP_TIMEOUT_MS}ms）`)),
+      S3_OP_TIMEOUT_MS,
+    )
+    promise.then(
+      (v) => {
+        clearTimeout(timer)
+        resolve(v)
+      },
+      (e) => {
+        clearTimeout(timer)
+        reject(e)
+      },
+    )
+  })
+
+/**
+ * 读 body 流时附加超时：超时后主动销毁流，避免 for-await 永久挂在一个
+ * 永不 end 的流上、泄漏底层 socket。readAllBytes 的 for-await 在流被 destroy
+ * 后会抛错，从而真正回收该读取 Promise。
+ */
+const readBodyWithTimeout = (body: unknown, label: string): Promise<Buffer | null> =>
+  new Promise<Buffer | null>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      ;(body as { destroy?: (err?: unknown) => void } | null)?.destroy?.(
+        new Error(`${label} 超时（${S3_OP_TIMEOUT_MS}ms）`),
+      )
+      reject(new Error(`${label} 超时（${S3_OP_TIMEOUT_MS}ms）`))
+    }, S3_OP_TIMEOUT_MS)
+    readAllBytes(body).then(
+      (v) => {
+        clearTimeout(timer)
+        resolve(v)
+      },
+      (e) => {
+        clearTimeout(timer)
+        reject(e)
+      },
+    )
+  })
+
 export const createNotebookSessionObjectStorage = (
   client = createNotebookSessionStorageClient(),
   bucket = readNotebookSessionStorageConfigFromEnv().bucket,
 ): NotebookSessionObjectStorage => ({
   async putObject(key, body) {
-    await client.send(
-      new PutObjectCommand({
-        Bucket: bucket,
-        Key: key,
-        Body: body,
-        ContentType: 'application/x-ndjson; charset=utf-8',
-      }),
+    await withTimeout(
+      client.send(
+        new PutObjectCommand({
+          Bucket: bucket,
+          Key: key,
+          Body: body,
+          ContentType: 'application/x-ndjson; charset=utf-8',
+        }),
+      ),
+      `S3 putObject ${key}`,
     )
   },
   async getObject(key) {
-    const response = await client.send(
-      new GetObjectCommand({ Bucket: bucket, Key: key }),
+    const response = await withTimeout(
+      client.send(new GetObjectCommand({ Bucket: bucket, Key: key })),
+      `S3 getObject ${key}`,
     )
-    const buf = await readAllBytes(response.Body)
+    const buf = await readBodyWithTimeout(response.Body, `S3 getObject:body ${key}`)
     return buf ? buf.toString('utf-8') : null
   },
   async putObjectBytes(key, body, contentType) {
-    await client.send(
-      new PutObjectCommand({
-        Bucket: bucket,
-        Key: key,
-        Body: body,
-        ContentType: contentType ?? 'application/octet-stream',
-      }),
+    await withTimeout(
+      client.send(
+        new PutObjectCommand({
+          Bucket: bucket,
+          Key: key,
+          Body: body,
+          ContentType: contentType ?? 'application/octet-stream',
+        }),
+      ),
+      `S3 putObjectBytes ${key}`,
     )
   },
   async getObjectBytes(key) {
-    const response = await client.send(
-      new GetObjectCommand({ Bucket: bucket, Key: key }),
+    const response = await withTimeout(
+      client.send(new GetObjectCommand({ Bucket: bucket, Key: key })),
+      `S3 getObjectBytes ${key}`,
     )
-    return readAllBytes(response.Body)
+    return readBodyWithTimeout(response.Body, `S3 getObjectBytes:body ${key}`)
   },
   async deleteObject(key) {
     await client.send(
@@ -121,12 +182,15 @@ export const createNotebookSessionObjectStorage = (
     const keys: string[] = []
     let continuationToken: string | undefined
     do {
-      const response = await client.send(
-        new ListObjectsV2Command({
-          Bucket: bucket,
-          Prefix: prefix,
-          ContinuationToken: continuationToken,
-        }),
+      const response = await withTimeout(
+        client.send(
+          new ListObjectsV2Command({
+            Bucket: bucket,
+            Prefix: prefix,
+            ContinuationToken: continuationToken,
+          }),
+        ),
+        `S3 listObjectKeys ${prefix}`,
       )
       for (const obj of response.Contents ?? []) {
         if (obj.Key) keys.push(obj.Key)

@@ -27,6 +27,9 @@ const {
   createNotebookUserModelProfileMock,
   updateNotebookUserModelProfileMock,
   deleteNotebookUserModelProfileMock,
+  loadWorkspaceSnapshotMock,
+  saveWorkspaceSnapshotMock,
+  workspaceSnapshotExistsMock,
 } = vi.hoisted(() => ({
   createNotebookAgentSessionMock: vi.fn(),
   listNotebookAgentSessionsByUserMock: vi.fn(),
@@ -52,6 +55,9 @@ const {
   createNotebookUserModelProfileMock: vi.fn(),
   updateNotebookUserModelProfileMock: vi.fn(),
   deleteNotebookUserModelProfileMock: vi.fn(),
+  loadWorkspaceSnapshotMock: vi.fn(),
+  saveWorkspaceSnapshotMock: vi.fn(),
+  workspaceSnapshotExistsMock: vi.fn(),
 }))
 
 vi.mock('../gateway.js', () => ({
@@ -98,6 +104,13 @@ vi.mock('../notebookUserModelProfilesStore.js', () => ({
   createNotebookUserModelProfile: createNotebookUserModelProfileMock,
   updateNotebookUserModelProfile: updateNotebookUserModelProfileMock,
   deleteNotebookUserModelProfile: deleteNotebookUserModelProfileMock,
+}))
+
+vi.mock('../workspaceFileStorage.js', () => ({
+  WORKSPACE_SNAPSHOT_LIMIT_BYTES: 50 * 1024 * 1024,
+  loadWorkspaceSnapshot: loadWorkspaceSnapshotMock,
+  saveWorkspaceSnapshot: saveWorkspaceSnapshotMock,
+  workspaceSnapshotExists: workspaceSnapshotExistsMock,
 }))
 
 import '../../http/fastify.js'
@@ -152,6 +165,9 @@ afterEach(async () => {
   updateNotebookUserModelProfileMock.mockReset()
   deleteNotebookUserModelProfileMock.mockReset()
   listNotebookUserModelProfilesMock.mockReset().mockResolvedValue([])
+  loadWorkspaceSnapshotMock.mockReset()
+  saveWorkspaceSnapshotMock.mockReset()
+  workspaceSnapshotExistsMock.mockReset()
 
   while (apps.length > 0) {
     await apps.pop()!.close()
@@ -160,6 +176,9 @@ afterEach(async () => {
 
 beforeEach(() => {
   getNotebookAgentSessionOwnerMock.mockReturnValue('notebook-route-user')
+  loadWorkspaceSnapshotMock.mockResolvedValue(null)
+  saveWorkspaceSnapshotMock.mockResolvedValue(undefined)
+  workspaceSnapshotExistsMock.mockResolvedValue(false)
 })
 
 describe('POST /api/notebook-agent/sessions', () => {
@@ -595,6 +614,66 @@ describe('DELETE /api/notebook-agent/sessions/:id', () => {
 
     expect(res.statusCode).toBe(200)
     expect(destroyNotebookAgentSessionMock).toHaveBeenCalledWith('notebook-session-1')
+  })
+})
+
+describe('workspace snapshot routes', () => {
+  it('活跃会话 owner 已知时，GET 不触发 rehydrate 并返回 zip 字节', async () => {
+    loadWorkspaceSnapshotMock.mockResolvedValueOnce({
+      buffer: Buffer.from([0x50, 0x4b, 0x03, 0x04]),
+      source: 'local',
+    })
+
+    const app = await createTestApp()
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/notebook-agent/sessions/notebook-session-1/workspace-snapshot',
+      headers: userHeaders(),
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(ensureNotebookSessionsRehydratedMock).not.toHaveBeenCalled()
+    expect(loadWorkspaceSnapshotMock).toHaveBeenCalledWith('notebook-session-1')
+    expect(res.headers['content-type']).toContain('application/zip')
+    expect(Buffer.from(res.rawPayload)).toEqual(Buffer.from([0x50, 0x4b, 0x03, 0x04]))
+  })
+
+  it('owner 初次未命中时，HEAD 会回退到 rehydrate 再做存在性探测', async () => {
+    getNotebookAgentSessionOwnerMock
+      .mockReturnValueOnce(null)
+      .mockReturnValueOnce('notebook-route-user')
+    workspaceSnapshotExistsMock.mockResolvedValueOnce(true)
+
+    const app = await createTestApp()
+    const res = await app.inject({
+      method: 'HEAD',
+      url: '/api/notebook-agent/sessions/notebook-session-1/workspace-snapshot',
+      headers: userHeaders(),
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(ensureNotebookSessionsRehydratedMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'notebook-route-user' }),
+    )
+    expect(workspaceSnapshotExistsMock).toHaveBeenCalledWith('notebook-session-1')
+  })
+
+  it('PUT 上传快照时 owner 已知则跳过 rehydrate 并写入存储', async () => {
+    const app = await createTestApp()
+    const payload = Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x14])
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/api/notebook-agent/sessions/notebook-session-1/workspace-snapshot',
+      headers: {
+        ...userHeaders(),
+        'content-type': 'application/zip',
+      },
+      payload,
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(ensureNotebookSessionsRehydratedMock).not.toHaveBeenCalled()
+    expect(saveWorkspaceSnapshotMock).toHaveBeenCalledWith('notebook-session-1', payload)
   })
 })
 

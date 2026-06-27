@@ -76,13 +76,22 @@ export const createNotebookAgentRoutes = (): FastifyPluginAsync => async (app) =
     sessionId: string,
     userId: string,
     workflowUser: WorkflowRequestUser,
+    options: { ensureRecord?: boolean } = {},
   ) => {
-    await ensureNotebookSessionsRehydrated(workflowUser)
-    await ensureNotebookAgentSessionRecord(sessionId)
+    let ownerId = getNotebookAgentSessionOwner(sessionId)
+    if (!ownerId) {
+      await ensureNotebookSessionsRehydrated(workflowUser)
+      ownerId = getNotebookAgentSessionOwner(sessionId)
+    }
+    // workspace 文件快照接口只需校验归属（owner 在 rehydrate 概要或活跃 record 中即可查到），
+    // 无需 ensureNotebookAgentSessionRecord 全量解析历史——避免对大会话每次请求都重放历史。
+    if (options.ensureRecord !== false) {
+      await ensureNotebookAgentSessionRecord(sessionId)
+    }
     assertSessionOwner({
       sessionId,
       currentUserId: userId,
-      resolveOwnerId: getNotebookAgentSessionOwner,
+      resolveOwnerId: () => ownerId,
       missingMessage: '未找到 Notebook Agent 会话',
       forbiddenMessage: '无权访问该 Notebook Agent 会话',
     })
@@ -438,7 +447,7 @@ export const createNotebookAgentRoutes = (): FastifyPluginAsync => async (app) =
         async (request, reply) => {
           const user = requireWorkflowUser(request)
           const { sessionId } = request.params as { sessionId: string }
-          await verifyOwnedSession(sessionId, user.id, user)
+          await verifyOwnedSession(sessionId, user.id, user, { ensureRecord: false })
           const buffer = request.body
           if (!Buffer.isBuffer(buffer)) {
             reply.code(400)
@@ -461,7 +470,7 @@ export const createNotebookAgentRoutes = (): FastifyPluginAsync => async (app) =
         async (request, reply) => {
           const user = requireWorkflowUser(request)
           const { sessionId } = request.params as { sessionId: string }
-          await verifyOwnedSession(sessionId, user.id, user)
+          await verifyOwnedSession(sessionId, user.id, user, { ensureRecord: false })
           const snapshot = await loadWorkspaceSnapshot(sessionId)
           if (!snapshot) {
             reply.code(404)
@@ -478,10 +487,9 @@ export const createNotebookAgentRoutes = (): FastifyPluginAsync => async (app) =
         async (request, reply) => {
           const user = requireWorkflowUser(request)
           const { sessionId } = request.params as { sessionId: string }
-          await verifyOwnedSession(sessionId, user.id, user)
+          await verifyOwnedSession(sessionId, user.id, user, { ensureRecord: false })
           const exists = await workspaceSnapshotExists(sessionId)
-          reply.code(exists ? 200 : 404)
-          return reply
+          return reply.code(exists ? 200 : 404).send()
         },
       )
     },

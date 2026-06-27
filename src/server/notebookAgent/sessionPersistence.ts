@@ -1,6 +1,6 @@
-import type { SessionEntry, SessionInfo, SessionManager } from '@earendil-works/pi-coding-agent'
+import type { SessionEntry, SessionManager } from '@earendil-works/pi-coding-agent'
 import { SessionManager as PiSessionManager } from '@earendil-works/pi-coding-agent'
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { ServerStorageUser } from '../storageService.js'
 import type { ImportCsvMeta } from '../../notebook/shared/parentBridge.js'
@@ -63,6 +63,9 @@ type NotebookSessionSummary = {
 // 需要时由 loadNotebookSessionRecord 按需从磁盘重建。
 const persistedSummaries = new Map<string, NotebookSessionSummary>()
 let rehydrated = false
+// rehydrate 的 in-flight 句柄：并发请求共用同一个 Promise，避免 rehydrated
+// 提前置位导致并发调用在 summaries 尚未回填时读到空 Map（表现为 404「未找到会话」）。
+let rehydratePromise: Promise<void> | null = null
 let s3Storage:
   | ReturnType<typeof createNotebookSessionObjectStorage>
   | null = null
@@ -291,30 +294,93 @@ const cacheSummary = (summary: NotebookSessionSummary) => {
   persistedSummaries.set(summary.sessionId, summary)
 }
 
+/** jsonl 行中 notebook-session-meta 自定义条目的定位标记 */
+const NOTEBOOK_SESSION_META_MARKER = '"customType":"notebook-session-meta"'
+
 /**
- * 从 session 文件构造概要（rehydrate 用）。
+ * 从 session jsonl 文件读取最后一条 notebook-session-meta（rehydrate 用）。
+ *
+ * 关键优化：只读文件、用 lastIndexOf 定位最后一条 meta 行并仅解析该行，
+ * 不对全量历史条目逐行 JSON.parse。notebook 会话历史可达数十大 MB，
+ * 全量解析会长时间阻塞 event loop（导致并发请求卡死）。
+ * meta 行由 persistNotebookSessionMeta 在每轮结束时追加，故末尾附近必有一条。
+ */
+const readLastNotebookSessionMeta = (
+  filePath: string,
+): NotebookPersistedMeta | null => {
+  let content: string
+  try {
+    content = readFileSync(filePath, 'utf8')
+  } catch {
+    return null
+  }
+  // 从末尾向前找最后一条 meta 行；marker 极少出现在 data 内，
+  // 即便误命中也会被下面的 type/customType 校验挡掉，继续向前重试。
+  let searchFrom = content.length
+  while (searchFrom > 0) {
+    const idx = content.lastIndexOf(NOTEBOOK_SESSION_META_MARKER, searchFrom - 1)
+    if (idx === -1) break
+    const lineStart = content.lastIndexOf('\n', idx - 1) + 1
+    let lineEnd = content.indexOf('\n', idx)
+    if (lineEnd === -1) lineEnd = content.length
+    try {
+      const entry = JSON.parse(content.slice(lineStart, lineEnd)) as {
+        type?: string
+        customType?: string
+        data?: unknown
+      }
+      if (
+        entry?.type === 'custom'
+        && entry.customType === NOTEBOOK_SESSION_META_TYPE
+        && isNotebookSessionMeta(entry.data)
+      ) {
+        return entry.data as NotebookPersistedMeta
+      }
+    } catch {
+      // 该行解析失败或非合法 meta，继续向前找下一条
+    }
+    searchFrom = lineStart
+  }
+  return null
+}
+
+/**
+ * 从 session jsonl 文件构造概要（rehydrate 用）。
  *
  * 只读最后一条 notebook-session-meta（含业务元数据 + messageCount/preview），
  * 不解析全量 message/toolCall history —— 这是 rehydrate 内存优化的关键：
  * 历史内容只在「打开单个会话」时由 loadNotebookSessionRecord 按需重建。
  */
-const buildSummaryFromSession = (
-  sessionInfo: SessionInfo,
-  sessionManager: Pick<SessionManager, 'getEntries' | 'getSessionName' | 'getSessionFile'>,
+const buildSummaryFromJsonlFile = (
+  filePath: string,
   fallbackUser?: ServerStorageUser,
 ): NotebookSessionSummary | null => {
-  const meta = extractNotebookMeta(sessionManager.getEntries())
+  const meta = readLastNotebookSessionMeta(filePath)
   if (!meta) return null
 
   const userId = meta.userId ?? fallbackUser?.id
   if (!userId) return null
 
-  const createdAt = meta.createdAt ?? sessionInfo.created.getTime()
-  const updatedAt = meta.updatedAt ?? sessionInfo.modified.getTime()
+  let createdAt = meta.createdAt
+  let updatedAt = meta.updatedAt
+  if (typeof createdAt !== 'number' || typeof updatedAt !== 'number') {
+    try {
+      const st = statSync(filePath)
+      if (typeof createdAt !== 'number') createdAt = st.birthtimeMs || st.mtimeMs
+      if (typeof updatedAt !== 'number') updatedAt = st.mtimeMs
+    } catch {
+      // ignore
+    }
+  }
+  if (typeof createdAt !== 'number') createdAt = Date.now()
+  if (typeof updatedAt !== 'number') updatedAt = createdAt
+
+  // meta.title 与 SDK session_info 名（persistNotebookSessionTitle）始终成对写入，
+  // 故这里直接用 meta.title，无需再 open 文件读 session_info。
   return {
     sessionId: meta.sessionId,
     userId,
-    title: resolveSessionName(sessionManager, meta, createdAt),
+    title: meta.title || buildDefaultNotebookTitle(createdAt),
     initialDataMeta: meta.initialDataMeta,
     status: normalizeStatus(meta.status),
     archivedAt: meta.archivedAt,
@@ -323,7 +389,7 @@ const buildSummaryFromSession = (
     // 旧文件 meta 无此字段时兜底为 0/undefined，列表显示「0 条」，点进去仍能正常回放
     messageCount: typeof meta.messageCount === 'number' ? meta.messageCount : 0,
     lastUserMessagePreview: meta.lastUserMessagePreview,
-    sessionFile: meta.sessionFile ?? sessionManager.getSessionFile?.(),
+    sessionFile: meta.sessionFile ?? filePath,
   }
 }
 
@@ -377,21 +443,40 @@ export const persistNotebookSessionToolCall = (
   // 工具结果是否可完整恢复取决于 SDK/扩展事件写入方式；当前先复用内存回放逻辑。
 }
 
-export const ensureNotebookSessionsRehydrated = async (
+export const ensureNotebookSessionsRehydrated = (
   fallbackUser?: ServerStorageUser,
 ): Promise<void> => {
-  if (rehydrated) return
-  rehydrated = true
-  persistedSummaries.clear()
-
-  await syncNotebookSessionFilesFromS3()
-  const sessions = await PiSessionManager.list(process.cwd(), resolveNotebookSessionDir())
-  for (const sessionInfo of sessions) {
-    const manager = PiSessionManager.open(sessionInfo.path, resolveNotebookSessionDir(), process.cwd())
-    // 只读概要：不跑 extractHistory，历史内容不进内存。
-    const summary = buildSummaryFromSession(sessionInfo, manager, fallbackUser)
-    if (summary) cacheSummary(summary)
+  if (rehydrated) return Promise.resolve()
+  if (!rehydratePromise) {
+    rehydratePromise = rehydrateNotebookSessions(fallbackUser).finally(() => {
+      // 失败时清掉 in-flight 句柄，rehydrated 仍为 false，下次调用可重试；
+      // 成功时 rehydrated 已置 true，后续调用走开头的 fast-path。
+      rehydratePromise = null
+    })
   }
+  return rehydratePromise
+}
+
+const rehydrateNotebookSessions = async (
+  fallbackUser?: ServerStorageUser,
+): Promise<void> => {
+  persistedSummaries.clear()
+  await syncNotebookSessionFilesFromS3()
+
+  const dir = resolveNotebookSessionDir()
+  if (!existsSync(dir)) {
+    rehydrated = true
+    return
+  }
+  const files = readdirSync(dir).filter((file) => file.endsWith('.jsonl'))
+  for (const file of files) {
+    const summary = buildSummaryFromJsonlFile(join(dir, file), fallbackUser)
+    if (summary) cacheSummary(summary)
+    // 每个文件让出一次事件循环，避免连续读盘 + 解析大量历史文件
+    // 长时间阻塞并发请求（单个大文件解析仍是有界阻塞）。
+    await new Promise((resolve) => setImmediate(resolve))
+  }
+  rehydrated = true
 }
 
 export const listPersistedNotebookSessionsByUser = (
@@ -439,6 +524,7 @@ export const deletePersistedNotebookSession = (sessionId: string): boolean => {
 export const resetNotebookSessionPersistenceForTest = (): void => {
   persistedSummaries.clear()
   rehydrated = false
+  rehydratePromise = null
 }
 
 export const syncNotebookSessionFilesFromS3 = async (): Promise<void> => {
