@@ -148,7 +148,7 @@ describe('jsTransformAgentRoutes', () => {
     )
   })
 
-  it('streams ndjson events from the js transform namespace', async () => {
+  it('streams sse events from the js transform namespace', async () => {
     getJsTransformAgentSessionOwnerMock.mockReturnValueOnce('js-transform-route-user')
     getJsTransformAgentSessionMock.mockReturnValueOnce({ sessionId: 'js_session_1' })
     subscribeJsTransformAgentEventsMock.mockImplementationOnce((_sessionId, write) => {
@@ -167,9 +167,9 @@ describe('jsTransformAgentRoutes', () => {
     })
 
     expect(response.statusCode).toBe(200)
-    expect(response.headers['content-type']).toContain('application/x-ndjson')
+    expect(response.headers['content-type']).toContain('text/event-stream')
     expect(response.headers['x-accel-buffering']).toBe('no')
-    expect(response.body).toBe('{"type":"stream.ready"}\n{"type":"message","content":"hello"}\n')
+    expect(response.body).toBe('data: {"type":"stream.ready"}\n\ndata: {"type":"message","content":"hello"}\n\n')
   })
 
   it('aborts a js transform run through the dedicated namespace', async () => {

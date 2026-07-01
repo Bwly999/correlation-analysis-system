@@ -4,6 +4,7 @@ import type {
   WorkflowAiPlanRequest,
 } from '@/ai/types'
 import { httpClient, requestStream } from '@/services/httpClient'
+import { parseSseStream } from '@/services/parseSseStream'
 
 type ResponseLike = {
   status: number
@@ -201,42 +202,7 @@ export const streamPiAgentEvents = async (
   options.onOpen?.()
   console.log(`[piAgentClient] stream opened after ${Date.now() - startTime}ms, reader type=${response.data.constructor?.name}`)
 
-  const reader = response.data.getReader()
-  const decoder = new TextDecoder()
-  let buffer = ''
-  let chunkCount = 0
-
-  while (true) {
-    let result: ReadableStreamReadResult<unknown>
-    try {
-      result = await reader.read()
-    } catch (err: any) {
-      console.error(`[piAgentClient] stream read error after ${Date.now() - startTime}ms:`, err.message)
-      throw err
-    }
-    const { value, done } = result
-    if (done) {
-      console.log(`[piAgentClient] stream reader done after ${Date.now() - startTime}ms, totalChunks=${chunkCount}`)
-      break
-    }
-
-    chunkCount++
-    buffer += decodeStreamChunk(decoder, value)
-    const lines = buffer.split('\n')
-    buffer = lines.pop() ?? ''
-
-    for (const line of lines) {
-      const trimmed = line.trim()
-      if (!trimmed) continue
-      options.onEvent?.(JSON.parse(trimmed))
-    }
-  }
-
-  buffer += decoder.decode()
-  const trailing = buffer.trim()
-  if (trailing) {
-    options.onEvent?.(JSON.parse(trailing))
-  }
+  await parseSseStream(response.data, (event) => options.onEvent?.(event))
   console.log(`[piAgentClient] streamPiAgentEvents complete session=${sessionId} duration=${Date.now() - startTime}ms`)
 }
 

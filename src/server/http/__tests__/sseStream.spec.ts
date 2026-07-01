@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { startNdjsonStream } from '../ndjson.js'
+import { startSseStream } from '../sseStream.js'
 
 const createResponse = () => {
   const emitter = new EventEmitter()
@@ -40,24 +40,24 @@ const createResponse = () => {
   })
 }
 
-describe('startNdjsonStream', () => {
+describe('startSseStream', () => {
   afterEach(() => {
     vi.useRealTimers()
   })
 
-  it('writes ndjson events and cleans up when the response closes', () => {
+  it('writes sse events and cleans up when the response closes', () => {
     const response = createResponse()
     const unsubscribe = vi.fn()
 
-    startNdjsonStream(response as any, (write) => {
+    startSseStream(response as any, (write) => {
       write({ type: 'message', content: 'hello' })
       return unsubscribe
     })
 
-    expect(response.getHeader('Content-Type')).toBe('application/x-ndjson; charset=utf-8')
+    expect(response.getHeader('Content-Type')).toBe('text/event-stream; charset=utf-8')
     expect(response.getHeader('Cache-Control')).toBe('no-cache, no-transform')
     expect(response.getBody()).toBe(
-      '{"type":"stream.ready"}\n{"type":"message","content":"hello"}\n',
+      'data: {"type":"stream.ready"}\n\ndata: {"type":"message","content":"hello"}\n\n',
     )
 
     response.emit('close')
@@ -69,7 +69,7 @@ describe('startNdjsonStream', () => {
   it('flushes headers immediately after the stream is set up', () => {
     const response = createResponse()
 
-    startNdjsonStream(response as any, () => vi.fn())
+    startSseStream(response as any, () => vi.fn())
 
     expect(response.flushHeadersSpy).toHaveBeenCalledTimes(1)
   })
@@ -77,21 +77,21 @@ describe('startNdjsonStream', () => {
   it('writes a ready event immediately when the stream opens', () => {
     const response = createResponse()
 
-    startNdjsonStream(response as any, () => vi.fn())
+    startSseStream(response as any, () => vi.fn())
 
-    expect(response.getBody()).toBe('{"type":"stream.ready"}\n')
+    expect(response.getBody()).toBe('data: {"type":"stream.ready"}\n\n')
   })
 
   it('writes heartbeat events while the stream stays idle', () => {
     vi.useFakeTimers()
     const response = createResponse()
 
-    startNdjsonStream(response as any, () => vi.fn())
+    startSseStream(response as any, () => vi.fn())
 
     vi.advanceTimersByTime(15000)
 
     expect(response.getBody()).toBe(
-      '{"type":"stream.ready"}\n{"type":"stream.heartbeat"}\n',
+      'data: {"type":"stream.ready"}\n\ndata: {"type":"stream.heartbeat"}\n\n',
     )
   })
 
@@ -106,7 +106,7 @@ describe('startNdjsonStream', () => {
       getLogFilePath: vi.fn(),
     }
 
-    startNdjsonStream(
+    startSseStream(
       response as any,
       (write) => {
         write({ type: 'message', content: 'hello' })
@@ -124,7 +124,7 @@ describe('startNdjsonStream', () => {
     response.emit('close')
 
     expect(logger.info).toHaveBeenCalledWith(
-      'NDJSON 流已建立',
+      'SSE 流已建立',
       expect.objectContaining({
         sessionId: 'session_1',
         requestId: 'req_1',
@@ -132,35 +132,35 @@ describe('startNdjsonStream', () => {
       }),
     )
     expect(logger.info).toHaveBeenCalledWith(
-      'NDJSON 流已发送事件',
+      'SSE 流已发送事件',
       expect.objectContaining({
         eventType: 'stream.ready',
         eventCount: 1,
       }),
     )
     expect(logger.info).toHaveBeenCalledWith(
-      'NDJSON 流已发送事件',
+      'SSE 流已发送事件',
       expect.objectContaining({
         eventType: 'message',
         eventCount: 2,
       }),
     )
     expect(logger.info).toHaveBeenCalledWith(
-      'NDJSON 流已发送事件',
+      'SSE 流已发送事件',
       expect.objectContaining({
         eventType: 'stream.heartbeat',
         eventCount: 3,
       }),
     )
     expect(logger.info).toHaveBeenCalledWith(
-      'NDJSON 流连接关闭',
+      'SSE 流连接关闭',
       expect.objectContaining({
         durationMs: 15000,
         eventCount: 3,
       }),
     )
     expect(logger.info).toHaveBeenCalledWith(
-      'NDJSON 流已结束',
+      'SSE 流已结束',
       expect.objectContaining({
         durationMs: 15000,
         eventCount: 3,

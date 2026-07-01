@@ -86,11 +86,11 @@ describe('workflowRequestContext', () => {
     vi.stubEnv('VITE_WORKFLOW_USER_ID', 'user_fetch')
     vi.stubEnv('VITE_WORKFLOW_USER_NAME', '抓取用户')
     expect(createWorkflowRequestHeaders({
-      Accept: 'application/x-ndjson',
+      Accept: 'text/event-stream',
     })).toEqual({
       'x-workflow-user-id': 'user_fetch',
       'x-workflow-user-name': encodeURIComponent('抓取用户'),
-      Accept: 'application/x-ndjson',
+      Accept: 'text/event-stream',
     })
   })
 })

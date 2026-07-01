@@ -1,9 +1,9 @@
 import type { ServerResponse } from 'node:http'
 import type { ServerLogContext, ServerLogger } from '../logging/serverLogger.js'
 
-const DEFAULT_NDJSON_HEARTBEAT_MS = 15_000
+const DEFAULT_SSE_HEARTBEAT_MS = 15_000
 
-interface NdjsonStreamOptions {
+interface SseStreamOptions {
   logger?: ServerLogger
   streamLabel?: string
   streamContext?: ServerLogContext & {
@@ -19,40 +19,40 @@ interface NdjsonStreamOptions {
   heartbeatIntervalMs?: number
 }
 
-export const writeNdjsonEvent = (response: ServerResponse, event: unknown) => {
+export const writeSseEvent = (response: ServerResponse, event: unknown) => {
   try {
-    response.write(`${JSON.stringify(event)}\n`)
+    response.write(`data: ${JSON.stringify(event)}\n\n`)
   } catch (err) {
-    console.error('[ndjson] write error:', err)
+    console.error('[sse] write error:', err)
   }
 }
 
-export const startNdjsonStream = (
+export const startSseStream = (
   response: ServerResponse,
   subscribe: (write: (event: unknown) => void) => (() => void) | null | undefined,
   statusCode = 200,
-  options: NdjsonStreamOptions = {},
+  options: SseStreamOptions = {},
 ) => {
   const startTime = Date.now()
-  const heartbeatIntervalMs = options.heartbeatIntervalMs ?? DEFAULT_NDJSON_HEARTBEAT_MS
+  const heartbeatIntervalMs = options.heartbeatIntervalMs ?? DEFAULT_SSE_HEARTBEAT_MS
   response.statusCode = statusCode
-  response.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8')
+  response.setHeader('Content-Type', 'text/event-stream; charset=utf-8')
   response.setHeader('Cache-Control', 'no-cache, no-transform')
   response.setHeader('X-Accel-Buffering', 'no')
   response.setHeader('Access-Control-Allow-Origin', '*')
 
-  console.log(`[ndjson] stream starting at ${new Date().toISOString()}`)
+  console.log(`[sse] stream starting at ${new Date().toISOString()}`)
 
   const logContextBase = {
     ...options.streamContext,
-    streamLabel: options.streamLabel ?? options.streamContext?.streamLabel ?? 'ndjson',
+    streamLabel: options.streamLabel ?? options.streamContext?.streamLabel ?? 'sse',
     statusCode,
     heartbeatIntervalMs,
   }
   let eventCount = 0
   const logEvent = (eventType: string) => {
     eventCount += 1
-    options.logger?.info('NDJSON 流已发送事件', {
+    options.logger?.info('SSE 流已发送事件', {
       ...logContextBase,
       eventType,
       eventCount,
@@ -62,12 +62,12 @@ export const startNdjsonStream = (
   let cleanedUp = false
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null
   response.flushHeaders?.()
-  writeNdjsonEvent(response, { type: 'stream.ready' })
+  writeSseEvent(response, { type: 'stream.ready' })
   logEvent('stream.ready')
-  options.logger?.info('NDJSON 流已建立', logContextBase)
+  options.logger?.info('SSE 流已建立', logContextBase)
 
   const unsubscribe = subscribe((event) => {
-    writeNdjsonEvent(response, event)
+    writeSseEvent(response, event)
     const eventType =
       typeof event === 'object' && event && 'type' in event && typeof event.type === 'string'
         ? event.type
@@ -79,7 +79,7 @@ export const startNdjsonStream = (
     if (response.writableEnded || response.destroyed) {
       return
     }
-    writeNdjsonEvent(response, { type: 'stream.heartbeat' })
+    writeSseEvent(response, { type: 'stream.heartbeat' })
     logEvent('stream.heartbeat')
   }, heartbeatIntervalMs)
 
@@ -91,8 +91,8 @@ export const startNdjsonStream = (
       heartbeatTimer = null
     }
     const duration = Date.now() - startTime
-    console.log(`[ndjson] stream ended after ${duration}ms, writableEnded=${response.writableEnded}, destroyed=${response.destroyed}`)
-    options.logger?.info('NDJSON 流已结束', {
+    console.log(`[sse] stream ended after ${duration}ms, writableEnded=${response.writableEnded}, destroyed=${response.destroyed}`)
+    options.logger?.info('SSE 流已结束', {
       ...logContextBase,
       durationMs: duration,
       eventCount,
@@ -111,8 +111,8 @@ export const startNdjsonStream = (
   }
 
   response.once('close', () => {
-    console.log(`[ndjson] connection closed after ${Date.now() - startTime}ms`)
-    options.logger?.info('NDJSON 流连接关闭', {
+    console.log(`[sse] connection closed after ${Date.now() - startTime}ms`)
+    options.logger?.info('SSE 流连接关闭', {
       ...logContextBase,
       durationMs: Date.now() - startTime,
       eventCount,
@@ -122,8 +122,8 @@ export const startNdjsonStream = (
     cleanup()
   })
   response.once('error', (err) => {
-    console.error(`[ndjson] connection error after ${Date.now() - startTime}ms:`, err.message)
-    options.logger?.error('NDJSON 流连接异常', {
+    console.error(`[sse] connection error after ${Date.now() - startTime}ms:`, err.message)
+    options.logger?.error('SSE 流连接异常', {
       ...logContextBase,
       durationMs: Date.now() - startTime,
       eventCount,

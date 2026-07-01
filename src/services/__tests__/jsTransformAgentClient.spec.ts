@@ -137,7 +137,7 @@ describe('jsTransformAgentClient', () => {
       status: 200,
       data: new ReadableStream<Uint8Array>({
         start(controller) {
-          controller.enqueue(new TextEncoder().encode('{"type":"message","content":"ready"}\n'))
+          controller.enqueue(new TextEncoder().encode('data: {"type":"message","content":"ready"}\n\n'))
           controller.close()
         },
       }),

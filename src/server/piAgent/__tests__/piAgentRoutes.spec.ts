@@ -215,7 +215,7 @@ describe('piAgentRoutes', () => {
     expect(createPiAgentSessionMock).not.toHaveBeenCalled()
   })
 
-  it('streams ndjson events from the pi agent namespace', async () => {
+  it('streams sse events from the pi agent namespace', async () => {
     getPiAgentSessionOwnerMock.mockReturnValueOnce('pi-agent-route-user')
     getPiAgentSessionMock.mockReturnValueOnce({ sessionId: 'session_1' })
     subscribePiAgentEventsMock.mockImplementationOnce((_sessionId, write) => {
@@ -234,9 +234,9 @@ describe('piAgentRoutes', () => {
     })
 
     expect(response.statusCode).toBe(200)
-    expect(response.headers['content-type']).toContain('application/x-ndjson')
+    expect(response.headers['content-type']).toContain('text/event-stream')
     expect(response.headers['x-accel-buffering']).toBe('no')
-    expect(response.body).toBe('{"type":"stream.ready"}\n{"type":"message","content":"hello"}\n')
+    expect(response.body).toBe('data: {"type":"stream.ready"}\n\ndata: {"type":"message","content":"hello"}\n\n')
   })
 
   it('rejects cross-user pi-agent session access across session-scoped routes', async () => {

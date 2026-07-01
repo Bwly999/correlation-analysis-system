@@ -3,7 +3,7 @@ import type {
   JsTransformAgentSessionRequest,
 } from '../../ai/types.js'
 import type { FastifyPluginAsync } from 'fastify'
-import { startNdjsonStream } from '../http/ndjson.js'
+import { startSseStream } from '../http/sseStream.js'
 import { requireWorkflowUser } from '../http/workflowUser.js'
 import { createServerLogger } from '../logging/serverLogger.js'
 import {
@@ -93,7 +93,7 @@ export const createJsTransformAgentRoutes = (): FastifyPluginAsync => async (app
 
     reply.hijack()
     logger.info('开始建立 JS Transform Agent 事件流', { sessionId, userId: user.id })
-    startNdjsonStream(
+    startSseStream(
       reply.raw,
       (write) => subscribeJsTransformAgentEvents(sessionId, write),
       200,

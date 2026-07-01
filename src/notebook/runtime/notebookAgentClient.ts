@@ -1,4 +1,5 @@
 import { httpClient, requestStream } from '@/services/httpClient'
+import { parseSseStream } from '@/services/parseSseStream'
 import type { AuditEntry } from './auditLogger'
 
 export type NotebookAgentEvent =
@@ -183,30 +184,7 @@ export const streamNotebookAgentEvents = async (
   }
 
   options.onOpen?.()
-  const reader = response.data.getReader()
-  const decoder = new TextDecoder()
-  let buffer = ''
-
-  while (true) {
-    const { value, done } = await reader.read()
-    if (done) break
-
-    buffer += decodeStreamChunk(decoder, value)
-    const lines = buffer.split('\n')
-    buffer = lines.pop() ?? ''
-
-    for (const line of lines) {
-      const trimmed = line.trim()
-      if (!trimmed) continue
-      options.onEvent?.(JSON.parse(trimmed) as NotebookAgentEvent)
-    }
-  }
-
-  buffer += decoder.decode()
-  const trailing = buffer.trim()
-  if (trailing) {
-    options.onEvent?.(JSON.parse(trailing) as NotebookAgentEvent)
-  }
+  await parseSseStream(response.data, (event) => options.onEvent?.(event as NotebookAgentEvent))
 }
 
 export const sendNotebookAgentMessage = async (

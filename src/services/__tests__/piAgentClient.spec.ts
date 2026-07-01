@@ -19,11 +19,11 @@ describe('piAgentClient streams', () => {
     requestStreamMock.mockReset()
   })
 
-  it('parses NDJSON events through the unified stream request helper', async () => {
+  it('parses SSE events through the unified stream request helper', async () => {
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
-        controller.enqueue(new TextEncoder().encode('{"type":"message","content":"第一条"}\n'))
-        controller.enqueue(new TextEncoder().encode('{"type":"done","content":"第二条"}\n'))
+        controller.enqueue(new TextEncoder().encode('data: {"type":"message","content":"第一条"}\n\n'))
+        controller.enqueue(new TextEncoder().encode('data: {"type":"done","content":"第二条"}\n\n'))
         controller.close()
       },
     })
@@ -74,10 +74,10 @@ describe('piAgentClient streams', () => {
     )
   })
 
-  it('marks the stream as opened before consuming NDJSON events', async () => {
+  it('marks the stream as opened before consuming SSE events', async () => {
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
-        controller.enqueue(new TextEncoder().encode('{"type":"message","content":"ready"}\n'))
+        controller.enqueue(new TextEncoder().encode('data: {"type":"message","content":"ready"}\n\n'))
         controller.close()
       },
     })

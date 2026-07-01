@@ -6,7 +6,7 @@
  *
  * 工作原理：
  * 1. 后端 tool.execute() 调用 bridge.request(toolCallId, toolName, params)
- * 2. bridge 通过 sendToFrontend 回调将事件发送到前端（SSE/NDJSON）
+ * 2. bridge 通过 sendToFrontend 回调将事件发送到前端（SSE 事件流）
  * 3. 前端执行对应的 WorkflowApi 操作
  * 4. 前端通过 HTTP POST 将结果发送回后端
  * 5. 后端调用 bridge.resolveResult(toolCallId, result)

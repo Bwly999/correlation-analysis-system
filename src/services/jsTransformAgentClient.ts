@@ -3,6 +3,7 @@ import type {
   JsTransformAgentSessionRequest,
 } from '@/ai/types'
 import { httpClient, requestStream } from '@/services/httpClient'
+import { parseSseStream } from '@/services/parseSseStream'
 
 type ResponseLike = {
   status: number
@@ -166,30 +167,7 @@ export const streamJsTransformAgentEvents = async (
 
   options.onOpen?.()
 
-  const reader = response.data.getReader()
-  const decoder = new TextDecoder()
-  let buffer = ''
-
-  while (true) {
-    const { value, done } = await reader.read()
-    if (done) break
-
-    buffer += decodeStreamChunk(decoder, value)
-    const lines = buffer.split('\n')
-    buffer = lines.pop() ?? ''
-
-    for (const line of lines) {
-      const trimmed = line.trim()
-      if (!trimmed) continue
-      options.onEvent?.(JSON.parse(trimmed))
-    }
-  }
-
-  buffer += decoder.decode()
-  const trailing = buffer.trim()
-  if (trailing) {
-    options.onEvent?.(JSON.parse(trailing))
-  }
+  await parseSseStream(response.data, (event) => options.onEvent?.(event))
 }
 
 export const reportJsTransformAgentToolProgress = async (

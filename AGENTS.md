@@ -21,7 +21,7 @@ This file provides guidance to LLM when working with code in this repository.
 - **数据库**: MySQL (production via Drizzle ORM), LowDB (dev)；运行历史大对象走 S3
 - **存储抽象**: `WorkflowStorageRepository` 统一接口 + 组合根注入，env 切换 lowdb/mysql
 - **AI Agent 核心**: @earendil-works/pi-coding-agent (Pi Agent SDK)，统一走工具调用 Agent 模式
-- **流式协议**: 自研 NDJSON (newline-delimited JSON) 事件流，非 SSE/EventSource
+- **流式协议**: 标准 SSE（`text/event-stream`），fetch + 手写解析（非原生 EventSource，因 EventSource 不支持自定义 header 走统一 axios JWT 注入）
 - **Python 沙箱 (Notebook Agent)**: Pyodide (WASM) + Web Worker + OPFS + Cross-Origin Isolation
 - **前端请求层**: axios 统一实例（`src/services/httpClient.ts`），禁止业务模块裸 fetch
 
@@ -69,7 +69,7 @@ pnpm test:unit <test-pattern>
 │   │   └── ...
 │   ├── server/                   # 服务端源码 (前后端同仓)
 │   │   ├── app.ts                # 服务端入口 (createServerApp, Fastify)
-│   │   ├── http/                 # HTTP 基础设施 (Fastify 插件、ndjson 流、JWT、CORS)
+│   │   ├── http/                 # HTTP 基础设施 (Fastify 插件、SSE 流、JWT、CORS)
 │   │   ├── modules/              # 路由模块
 │   │   │   ├── storageRoutes.ts          # 工作流 CRUD
 │   │   │   ├── piAgentRoutes.ts          # Pi Agent 主链 (/api/pi-agent/*)

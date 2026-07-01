@@ -5,7 +5,7 @@
  *   POST   /api/notebook-agent/sessions                  创建 session + 返回 systemPrompt
  *   GET    /api/notebook-agent/sessions                  列出当前用户最近会话（用于「继续上次分析」）
  *   GET    /api/notebook-agent/sessions/:sessionId       拿 session 概览（含 messages/toolCalls，供历史回放）
- *   GET    /api/notebook-agent/sessions/:sessionId/events NDJSON 事件流
+ *   GET    /api/notebook-agent/sessions/:sessionId/events SSE 事件流
  *   POST   /api/notebook-agent/sessions/:sessionId/resume 恢复已归档会话（重建 runtime）
  *   POST   /api/notebook-agent/sessions/:sessionId/messages
  *   POST   /api/notebook-agent/sessions/:sessionId/abort    终止当前轮 Agent 推理
@@ -19,7 +19,7 @@
 
 import type { FastifyPluginAsync } from 'fastify'
 import { requireWorkflowUser, type WorkflowRequestUser } from '../http/workflowUser.js'
-import { startNdjsonStream } from '../http/ndjson.js'
+import { startSseStream } from '../http/sseStream.js'
 import { assertSessionOwner } from '../piAgent/sessionAccess.js'
 import {
   appendNotebookAuditEntries,
@@ -241,7 +241,7 @@ export const createNotebookAgentRoutes = (): FastifyPluginAsync => async (app) =
     await ensureNotebookAgentRuntime(sessionId)
 
     reply.hijack()
-    startNdjsonStream(reply.raw, (write) => {
+    startSseStream(reply.raw, (write) => {
       const unsubscribe = subscribeNotebookAgentEvents(sessionId, write)
       return () => unsubscribe?.()
     })

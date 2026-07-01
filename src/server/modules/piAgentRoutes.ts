@@ -7,7 +7,7 @@ import type {
 } from '../../ai/types.js'
 import type { FastifyPluginAsync } from 'fastify'
 import { requireWorkflowUser } from '../http/workflowUser.js'
-import { startNdjsonStream } from '../http/ndjson.js'
+import { startSseStream } from '../http/sseStream.js'
 import { createServerLogger } from '../logging/serverLogger.js'
 import {
   createPiAgentSession,
@@ -110,7 +110,7 @@ export const createPiAgentRoutes = (): FastifyPluginAsync => async (app) => {
 
     reply.hijack()
     logger.info('订阅 Pi Agent 事件流', { sessionId })
-    startNdjsonStream(
+    startSseStream(
       reply.raw,
       (write) => subscribePiAgentEvents(sessionId, write),
       200,

@@ -18,7 +18,7 @@ const {
   ensureNotebookAgentRuntimeMock,
   ensureNotebookAgentSessionRecordMock,
   ensureNotebookSessionsRehydratedMock,
-  startNdjsonStreamMock,
+  startSseStreamMock,
   switchNotebookAgentModelMock,
   getSystemModelProfilesMock,
   toPublicModelProfileMock,
@@ -46,7 +46,7 @@ const {
   ensureNotebookAgentRuntimeMock: vi.fn().mockResolvedValue(true),
   ensureNotebookAgentSessionRecordMock: vi.fn().mockResolvedValue(null),
   ensureNotebookSessionsRehydratedMock: vi.fn().mockResolvedValue(undefined),
-  startNdjsonStreamMock: vi.fn(),
+  startSseStreamMock: vi.fn(),
   switchNotebookAgentModelMock: vi.fn(),
   getSystemModelProfilesMock: vi.fn(),
   toPublicModelProfileMock: vi.fn((p: unknown) => p),
@@ -78,8 +78,8 @@ vi.mock('../gateway.js', () => ({
   switchNotebookAgentModel: switchNotebookAgentModelMock,
 }))
 
-vi.mock('../../http/ndjson.js', () => ({
-  startNdjsonStream: startNdjsonStreamMock,
+vi.mock('../../http/sseStream.js', () => ({
+  startSseStream: startSseStreamMock,
 }))
 
 vi.mock('../sessionPersistence.js', () => ({
@@ -157,7 +157,7 @@ afterEach(async () => {
   updateNotebookAgentSessionTitleMock.mockReset()
   finishNotebookAgentToolCallMock.mockReset()
   destroyNotebookAgentSessionMock.mockReset()
-  startNdjsonStreamMock.mockReset()
+  startSseStreamMock.mockReset()
   switchNotebookAgentModelMock.mockReset()
   getSystemModelProfilesMock.mockReset()
   testPiAgentRuntimeProfileMock.mockReset()
@@ -356,7 +356,7 @@ describe('GET /api/notebook-agent/sessions', () => {
 })
 
 describe('GET /api/notebook-agent/sessions/:id/events', () => {
-  it('调用 ndjson stream 并订阅 notebook 事件', async () => {
+  it('调用 sse stream 并订阅 notebook 事件', async () => {
     ensureNotebookAgentSessionRecordMock.mockResolvedValueOnce({
       sessionId: 'notebook-session-1',
     })
@@ -368,7 +368,7 @@ describe('GET /api/notebook-agent/sessions/:id/events', () => {
       write({ type: 'message', content: 'hello' })
       return () => undefined
     })
-    startNdjsonStreamMock.mockImplementationOnce((raw, subscribe) => {
+    startSseStreamMock.mockImplementationOnce((raw, subscribe) => {
       const writes: unknown[] = []
       const unsubscribe = subscribe((event: unknown) => {
         writes.push(event)
@@ -385,7 +385,7 @@ describe('GET /api/notebook-agent/sessions/:id/events', () => {
     })
 
     expect(response.statusCode).toBe(200)
-    expect(startNdjsonStreamMock).toHaveBeenCalledOnce()
+    expect(startSseStreamMock).toHaveBeenCalledOnce()
     expect(ensureNotebookAgentSessionRecordMock).toHaveBeenCalledWith('notebook-session-1')
     expect(subscribeNotebookAgentEventsMock).toHaveBeenCalledWith(
       'notebook-session-1',
