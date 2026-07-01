@@ -17,11 +17,13 @@ This file provides guidance to LLM when working with code in this repository.
 - **构建工具**: Vite
 - **测试**: Vitest + jsdom + @vue/test-utils
 - **代码质量**: ESLint + Prettier
-- **服务端**: 纯 Node HTTP server (无 Express), esbuild 打包, tsx 开发
-- **数据库**: MySQL (production via Drizzle ORM), LowDB/localStorage (dev)
-- **AI Agent 核心**: @earendil-works/pi-coding-agent (Pi Agent SDK)
-- **工作流 AI 辅助**: @ai-sdk/openai-compatible + ai (Vercel AI SDK)
-- **前端请求层**: axios 统一实例（`src/services/httpClient.ts`）
+- **服务端**: Fastify (HTTP/CORS/JWT/路由), esbuild 打包, tsx 开发热更
+- **数据库**: MySQL (production via Drizzle ORM), LowDB (dev)；运行历史大对象走 S3
+- **存储抽象**: `WorkflowStorageRepository` 统一接口 + 组合根注入，env 切换 lowdb/mysql
+- **AI Agent 核心**: @earendil-works/pi-coding-agent (Pi Agent SDK)，统一走工具调用 Agent 模式
+- **流式协议**: 自研 NDJSON (newline-delimited JSON) 事件流，非 SSE/EventSource
+- **Python 沙箱 (Notebook Agent)**: Pyodide (WASM) + Web Worker + OPFS + Cross-Origin Isolation
+- **前端请求层**: axios 统一实例（`src/services/httpClient.ts`），禁止业务模块裸 fetch
 
 ## 常用命令
 
@@ -58,25 +60,30 @@ pnpm test:unit <test-pattern>
 │   │   │   ├── config/           # 节点配置面板
 │   │   │   ├── viewers/          # 结果预览 viewer 组件
 │   │   │   └── composables/      # 拖拽缩放等组合式函数
-│   │   ├── agent/                # Agent 可观测性面板
-│   │   └── piAgent/              # Pi Agent (AI 编码助手) 面板
+│   │   ├── piAgent/              # Pi Agent (工作流编排助手) 面板
+│   │   └── notebookAgent/        # Notebook Agent (Pyodide 笔记本) 主站侧组件
+│   ├── notebook/                 # Notebook Agent iframe 内运行时 (独立 Vue 应用)
 │   ├── stores/                   # Pinia 状态管理
-│   │   ├── workflowStore.ts      # 工作流核心 store (~76KB)
-│   │   ├── piAgentStore.ts
+│   │   ├── workflowStore.ts      # 工作流核心 store
+│   │   ├── piAgentStore.ts       # Pi Agent 会话状态 + tool.execute 执行
 │   │   └── ...
 │   ├── server/                   # 服务端源码 (前后端同仓)
-│   │   ├── app.ts                # 服务端入口 (createServerHandler)
-│   │   ├── http/                 # HTTP 基础设施 (router, handler, CORS, auth)
+│   │   ├── app.ts                # 服务端入口 (createServerApp, Fastify)
+│   │   ├── http/                 # HTTP 基础设施 (Fastify 插件、ndjson 流、JWT、CORS)
 │   │   ├── modules/              # 路由模块
-│   │   │   ├── storageRoutes.ts      # 工作流 CRUD
-│   │   │   ├── workflowAiRoutes.ts   # 工作流 AI 辅助
-│   │   │   ├── piAgentRoutes.ts      # Pi Agent (AI Agent)
-│   │   │   └── analysisRoutes.ts     # 分析代理
+│   │   │   ├── storageRoutes.ts          # 工作流 CRUD
+│   │   │   ├── piAgentRoutes.ts          # Pi Agent 主链 (/api/pi-agent/*)
+│   │   │   ├── jsTransformAgentRoutes.ts # JS Transform 子域 (/api/js-transform-agent/*)
+│   │   │   ├── notebookAgentRoutes.ts    # Notebook Agent (/api/notebook-agent/*)
+│   │   │   └── analysisRoutes.ts         # 分析代理 (Python 算法 HTTP 转发)
 │   │   ├── storageDb/            # MySQL 存储实现 (Drizzle)
-│   │   ├── workflowAi/           # 工作流 AI 编排 (LLM 辅助建工作流)
 │   │   ├── piAgent/              # Pi Agent 服务端 (AI Agent 核心)
-│   │   │   └── tools/            # 原子工作流工具集
-│   │   ├── opencode/             # OpenCode/MCP 基础设施 (Pi Agent 复用)
+│   │   │   ├── gateway.ts            # Session 编排
+│   │   │   ├── frontendBridge.ts     # 前端工具执行桥接 (请求-响应配对)
+│   │   │   ├── runtimeFactory.ts     # 模型/资源加载器共用构建逻辑
+│   │   │   ├── jsTransformAgentGateway.ts # JS Transform Agent 子域
+│   │   │   └── tools/                # 工具定义 (画布/只读/session context)
+│   │   ├── notebookAgent/        # Notebook Agent 服务端 (复用 piAgent 运行时)
 │   │   └── bootstrap/            # 依赖注入组合根
 │   ├── workflow/                 # 工作流模板 & 连接规则
 │   │   ├── templates.ts           # 模板定义 (相关性排查/因子筛选/变量解释/看板对比)
@@ -101,10 +108,17 @@ pnpm test:unit <test-pattern>
 ### 节点系统
 包含节点清单、创建规则、实现规范、属性设计，必要时查阅 `docs/design-doc/workflow-nodes/`
 
-### Pi Agent (AI Agent 主系统)
+### AI Agent 子系统
 
-系统的 AI Agent 核心，基于 `@earendil-works/pi-coding-agent` SDK 构建：
-必要时查阅 `docs/design-doc/Agent系统.md`
+系统当前包含三个相互独立、零耦合的 AI Agent 子系统，均基于 `@earendil-works/pi-coding-agent` SDK，统一走「工具调用 Agent」模式（前端执行 + 后端调度，工具调用经 `FrontendBridge` 桥接）：
+
+- **Pi Agent 主链** (`/api/pi-agent/*`)：工作流画布的自然语言编排助手
+- **JS Transform Agent** (`/api/js-transform-agent/*`)：`js-transform` 节点的代码编程助手（双模式 ask/agent）
+- **Notebook Agent** (`/api/notebook-agent/*`)：浏览器 Pyodide 沙箱内的自由分析笔记本
+
+> 已废弃并保留 404 回归测试的历史路径：`/api/workflow-ai/*`、`/api/opencode/*`、旧 `/api/pi-agent/js-transform/*`。
+
+完整架构边界、协议约束与实现位置见 `docs/design-doc/Agent系统.md`、`docs/design-doc/notebook-agent/`。
 
 ## 关键约束
 
