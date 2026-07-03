@@ -148,6 +148,7 @@ onBeforeUnmount(() => {
       :suppress-cell-focus="true"
       :enable-cell-text-selection="true"
       :ensure-dom-order="true"
+      :suppress-field-dot-notation="true"
       @column-resized="emit('columnResized', $event)"
       @column-moved="emit('columnMoved', $event)"
       @grid-ready="handleGridReady"

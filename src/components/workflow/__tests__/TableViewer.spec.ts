@@ -189,6 +189,7 @@ vi.mock('ag-grid-vue3', () => ({
       'tooltipShowDelay',
       'enableCellTextSelection',
       'ensureDomOrder',
+      'suppressFieldDotNotation',
     ],
     emits: ['columnResized', 'columnMoved', 'gridReady', 'sortChanged', 'filterChanged'],
     setup(props, { emit }) {
@@ -224,6 +225,7 @@ vi.mock('ag-grid-vue3', () => ({
               'data-tooltip-show-delay': String(props.tooltipShowDelay ?? ''),
               'data-enable-cell-text-selection': String(Boolean(props.enableCellTextSelection)),
               'data-ensure-dom-order': String(Boolean(props.ensureDomOrder)),
+              'data-suppress-field-dot-notation': String(Boolean(props.suppressFieldDotNotation)),
               onCustomColumnMove: () =>
                 emit('columnMoved', {
                   finished: true,
@@ -317,6 +319,31 @@ describe('TableViewer', () => {
     const grid = wrapper.get('[data-test="ag-grid-stub"]')
     expect(grid.attributes('data-row-count')).toBe('120')
     expect(wrapper.find('[data-test="table-export-trigger"]').exists()).toBe(true)
+  })
+
+  it('列名包含 "." 时按普通字段处理，不会被拆解为嵌套路径', () => {
+    const rows = [
+      { 'factor.code': 'A.1', 'metric.value': 0.5 },
+      { 'factor.code': 'B.2', 'metric.value': 0.8 },
+    ]
+
+    const wrapper = mount(TableViewer, {
+      props: {
+        data: createResult(rows),
+      },
+    })
+
+    const grid = wrapper.get('[data-test="ag-grid-stub"]')
+    // 关键：关闭 dot notation，使 AG-Grid 把 "factor.code" 当作普通 key 访问
+    expect(grid.attributes('data-suppress-field-dot-notation')).toBe('true')
+
+    const gridVm = wrapper.getComponent({ name: 'AgGridVueStub' }).vm as {
+      columnDefs: Array<{ field?: string }>
+    }
+    expect(gridVm.columnDefs.map((column) => column.field)).toEqual([
+      'factor.code',
+      'metric.value',
+    ])
   })
 
   it('点击导出按钮后可在弹窗中设置参数并直接触发下载', async () => {
