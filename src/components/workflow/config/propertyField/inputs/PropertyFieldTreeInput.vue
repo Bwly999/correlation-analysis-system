@@ -693,7 +693,7 @@ onBeforeUnmount(() => {
       </div>
       <div
         v-else
-        class="tree-host"
+        class="tree-host select-none"
         @wheel.capture="handleTreeBoundaryWheel"
         @mousemove="handleTreeBoundaryMouseMove"
       >
