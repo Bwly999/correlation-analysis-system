@@ -54,6 +54,7 @@
     "fastify": "^5.8.5",
     "highlight.js": "^10.7.3",
     "jose": "^6.2.2",
+    "jszip": "^3.10.1",
     "lowdb": "^7.0.1",
     "lucide-vue-next": "^0.577.0",
     "marked": "^15.0.12",

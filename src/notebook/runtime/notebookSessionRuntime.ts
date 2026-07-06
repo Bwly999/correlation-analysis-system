@@ -372,7 +372,7 @@ export const createNotebookSessionRuntime = async (
       const zipBytes = await downloadWorkspaceSnapshot(currentSessionId)
       if (!zipBytes) return
 
-      const files = unzipWorkspace(zipBytes)
+      const files = await unzipWorkspace(zipBytes)
       for (const file of files) {
         try {
           await writeFile(opfsRootRef.value, file.path, file.bytes)
