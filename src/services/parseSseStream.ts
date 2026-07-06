@@ -9,14 +9,20 @@
  * 且不希望 SSE 的自动重连，故仍用 fetch 手写。
  */
 
+// SSE 规范允许 CR / LF / CR+LF 三种行终止符，统一归一为 LF，
+// 使后续按 \n\n 分帧、按 \n 分行无需逐处兼容 CRLF（防御链路中代理改写行尾）。
+const normalizeLineEndings = (text: string) => text.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+
 const decodeChunk = (decoder: TextDecoder, value: unknown) => {
+  let text: string
   if (value instanceof ArrayBuffer) {
-    return decoder.decode(new Uint8Array(value), { stream: true })
+    text = decoder.decode(new Uint8Array(value), { stream: true })
+  } else if (ArrayBuffer.isView(value)) {
+    text = decoder.decode(value, { stream: true })
+  } else {
+    text = String(value)
   }
-  if (ArrayBuffer.isView(value)) {
-    return decoder.decode(value, { stream: true })
-  }
-  return String(value)
+  return normalizeLineEndings(text)
 }
 
 export const parseSseStream = async (

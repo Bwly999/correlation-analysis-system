@@ -559,6 +559,11 @@ export const usePiAgentStore = defineStore('piAgent', () => {
         errorMessage.value = event.message
         break
       }
+
+      // stream.ready / stream.heartbeat 等传输层事件由 SSE 通道本身保证，
+      // 业务层无需处理；显式 default 避免未来事件类型扩散时被静默吞掉。
+      default:
+        break
     }
   }
 

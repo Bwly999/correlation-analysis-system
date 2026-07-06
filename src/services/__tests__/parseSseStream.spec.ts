@@ -71,4 +71,16 @@ describe('parseSseStream', () => {
     await parseSseStream(null, (event) => events.push(event))
     expect(events).toEqual([])
   })
+
+  it('兼容 CRLF 行尾（防御链路中代理改写行终止符）', async () => {
+    const events = await collect([
+      encode('data: {"type":"a"}\r\n\r\ndata: {"type":"b"}\r\n\r\n'),
+    ])
+    expect(events).toEqual([{ type: 'a' }, { type: 'b' }])
+  })
+
+  it('兼容单 CR 行尾', async () => {
+    const events = await collect([encode('data: {"type":"c"}\r\r')])
+    expect(events).toEqual([{ type: 'c' }])
+  })
 })

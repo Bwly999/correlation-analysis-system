@@ -21,6 +21,9 @@ interface SseStreamOptions {
 
 export const writeSseEvent = (response: ServerResponse, event: unknown) => {
   try {
+    // 单行 data 安全性的关键依赖：JSON.stringify 会把字符串值内的真实换行
+    // 转义为字面量 \n，故序列化结果不含真实换行，不会破坏 SSE 帧边界。
+    // 若改为手拼字符串（不经 JSON.stringify），必须自行拆分为多行 data。
     response.write(`data: ${JSON.stringify(event)}\n\n`)
   } catch (err) {
     console.error('[sse] write error:', err)
