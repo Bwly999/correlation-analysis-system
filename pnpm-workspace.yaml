@@ -5,3 +5,5 @@ allowBuilds:
   koffi: true
   protobufjs: true
   vue-demi: true
+overrides:
+  '@primevue/core': ^4.5.5
