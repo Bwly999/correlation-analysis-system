@@ -2066,9 +2066,51 @@ describe('Workflow Store', () => {
     await store.runGlobal()
 
     expect(triggerNode.data.status).toBe('success')
-    expect(store.logs.some((l) => l.message.includes('未找到分析模型'))).toBe(false)
-    expect(store.logs.some((l) => l.message.includes('末端节点执行模式'))).toBe(true)
     expect(store.executionHistory[0]!.status).toBe('success')
+  })
+
+  it('should execute both terminal and non-terminal leaf branches when a node fans out to multiple downstreams', async () => {
+    // 回归测试: 一个节点有多条出边时，所有下游分支都应被执行
+    // 历史缺陷: runGlobal 曾用「terminal 优先 ? terminal : 叶子」二选一，
+    // 导致同时存在 terminal 和非 terminal 叶子时，非 terminal 叶子分支被整体跳过。
+    const store = useWorkflowStore()
+    const triggerNode = store.addAndConnectNode('manual-json-import', '数据源', {
+      x: 0,
+      y: 0,
+    })!
+    triggerNode.data.config.jsonData = JSON.stringify([{ a: 1, b: 2 }])
+    // terminal 分支终点（data-export，category=terminal）
+    const exportNode = store.addAndConnectNode('data-export', '导出', { x: 400, y: -100 })!
+    // 非 terminal 叶子分支终点（js-transform，category=action，无出边即叶子）
+    const transformNode = store.addAndConnectNode('js-transform', 'JS转换', { x: 400, y: 100 })!
+
+    store.edges.push(
+      {
+        id: 'e_trigger_export',
+        source: triggerNode.id,
+        target: exportNode.id,
+        type: 'n8n',
+        animated: true,
+      },
+      {
+        id: 'e_trigger_transform',
+        source: triggerNode.id,
+        target: transformNode.id,
+        type: 'n8n',
+        animated: true,
+      },
+    )
+
+    await store.runGlobal()
+
+    // 共享上游 trigger 应执行一次
+    expect(triggerNode.data.status).toBe('success')
+    // terminal 分支应执行
+    expect(exportNode.data.status).toBe('success')
+    expect(store.getNodeOutput(exportNode.id)).not.toBeNull()
+    // 非 terminal 叶子分支也应执行（修复前的 bug 现象: 此分支被跳过）
+    expect(transformNode.data.status).toBe('success')
+    expect(store.getNodeOutput(transformNode.id)).not.toBeNull()
   })
 
   it('should skip execution and return cached output when node is pinned', async () => {

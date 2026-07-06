@@ -2389,18 +2389,15 @@ export const useWorkflowStore = defineStore('workflow', () => {
     const currentNodes = getCurrentNodes()
     const currentEdges = getCurrentEdges()
     const terminalNodes = currentNodes.filter((n) => n.data.category === 'terminal')
-    const fallbackLeafNodes = currentNodes.filter(
+    const leafNodes = currentNodes.filter(
       (node) => !currentEdges.some((edge) => edge.source === node.id),
     )
-    const executionTargets = terminalNodes.length > 0 ? terminalNodes : fallbackLeafNodes
+    const executionTargets = leafNodes
 
     if (executionTargets.length === 0) {
       addLog('运行失败: 工作流中没有可执行节点', 'error')
       isRunning.value = false
       return
-    }
-    if (terminalNodes.length === 0) {
-      addLog('未检测到分析模型，已切换为末端节点执行模式', 'warn')
     }
 
     currentNodes.forEach((node) => {
@@ -2421,7 +2418,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
         .filter((node) => shouldPromptForRuntimeInput(node))
         .map((node) => node.id)
 
-      let lastResultId = null
+      let lastTerminalResultId = null
       for (const node of executionTargets) {
         if (isStopping.value) {
           finalStatus = 'stopped'
@@ -2446,9 +2443,11 @@ export const useWorkflowStore = defineStore('workflow', () => {
           finalStatus = 'stopped'
           break
         }
-        lastResultId = node.id
+        if (node.data.category === 'terminal') {
+          lastTerminalResultId = node.id
+        }
       }
-      lastExecutedTerminalNodeId.value = terminalNodes.length > 0 ? lastResultId : null
+      lastExecutedTerminalNodeId.value = lastTerminalResultId
     } catch (err) {
       finalStatus = 'error'
       addLog(`全局运行中断: ${err}`, 'error')
