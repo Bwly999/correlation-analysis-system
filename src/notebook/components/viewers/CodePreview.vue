@@ -115,7 +115,8 @@ const lineCount = computed(() => props.content.split('\n').length)
   padding: 0;
   color: inherit;
 }
-:deep(.shiki .line) {
-  display: block;
-}
+/*
+ * .line 保持 inline（默认）。容器继承到 white-space: pre，shiki 在每行 .line
+ * 之间输出的 \n 已负责换行；若再叠加 display:block 会导致每行多出一个空行。
+ */
 </style>
