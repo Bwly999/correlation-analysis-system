@@ -12,8 +12,8 @@
  * 壳自身只负责：header（图标/路径/kind chip）、骨架屏、空态、按 kind 分发。
  */
 
-import { computed } from 'vue'
-import { CircleSlash, Sparkle } from 'lucide-vue-next'
+import { computed, ref } from 'vue'
+import { CircleSlash, Maximize, Sparkle } from 'lucide-vue-next'
 import { resolvePreviewKind, resolveCodeLanguage } from '../preview/previewRouter'
 import type { PreviewKind } from '../preview/previewRouter'
 import type { OpfsDirectoryHandle } from '../shared/opfsAccess'
@@ -23,6 +23,7 @@ import CodePreview from './viewers/CodePreview.vue'
 import TablePreview from './viewers/TablePreview.vue'
 import ImagePreview from './viewers/ImagePreview.vue'
 import FileMetaCard from './viewers/FileMetaCard.vue'
+import FullScreenPreview from './viewers/FullScreenPreview.vue'
 
 interface MetaInfo {
   size?: number
@@ -46,6 +47,13 @@ const previewKind = computed<PreviewKind>(() =>
 const codeLanguage = computed(() =>
   props.selectedPath ? resolveCodeLanguage(props.selectedPath) : '',
 )
+
+// 大屏预览：meta（含 parquet-meta）不显示展开按钮
+const canFullScreen = computed(
+  () => !!props.selectedPath && previewKind.value !== 'meta' && previewKind.value !== 'parquet-meta',
+)
+
+const fullScreenOpen = ref(false)
 </script>
 
 <template>
@@ -85,14 +93,25 @@ const codeLanguage = computed(() =>
           {{ selectedPath }}
         </span>
       </div>
-      <span
-        v-if="selectedPath"
-        class="nb-chip"
-        data-tone="default"
-        style="padding: 1px 7px; font-size: 9px; letter-spacing: 0.16em; font-weight: 700;"
-      >
-        {{ previewKind }}
-      </span>
+      <div class="flex shrink-0 items-center gap-2">
+        <span
+          v-if="selectedPath"
+          class="nb-chip"
+          data-tone="default"
+          style="padding: 1px 7px; font-size: 9px; letter-spacing: 0.16em; font-weight: 700;"
+        >
+          {{ previewKind }}
+        </span>
+        <button
+          v-if="canFullScreen"
+          class="nb-focus flex h-6 w-6 items-center justify-center rounded-full border transition hover:opacity-80"
+          style="border-color: var(--nb-rule-strong); color: var(--nb-ink);"
+          title="大屏预览"
+          @click="fullScreenOpen = true"
+        >
+          <Maximize :size="12" :stroke-width="1.8" />
+        </button>
+      </div>
     </header>
 
     <!-- 骨架屏 -->
@@ -167,6 +186,19 @@ const codeLanguage = computed(() =>
       :path="selectedPath ?? ''"
       :meta="meta"
       :kind="previewKind === 'parquet-meta' ? 'parquet-meta' : 'meta'"
+    />
+
+    <!-- 大屏预览弹窗（除 meta 外） -->
+    <FullScreenPreview
+      v-if="canFullScreen"
+      v-model:open="fullScreenOpen"
+      :preview-kind="previewKind"
+      :selected-path="selectedPath ?? ''"
+      :content="content"
+      :bytes="bytes"
+      :opfs-root="opfsRoot"
+      :meta="meta"
+      :code-language="codeLanguage"
     />
   </div>
 </template>
