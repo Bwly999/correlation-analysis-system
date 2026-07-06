@@ -3,16 +3,17 @@
  * MarkdownPreview.vue
  *
  * §7.1 Markdown viewer：印刷感版式 + 左侧目录锚点。
- *   - renderMarkdownSafe 做 sanitize
+ *   - renderMarkdownWithMath 做 sanitize，并支持 $...$ 行内 / $$...$$ 块级 LaTeX 公式（KaTeX）
  *   - artifact 图片相对路径 → OPFS blob URL（createArtifactImageReplacer）
  *   - 提取 H1/H2/H3 作为目录条目，点击锚点滚动定位
  */
 
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { FileDown, Hash } from 'lucide-vue-next'
-import { renderMarkdownSafe } from '../../preview/markdownRenderer'
+import { renderMarkdownWithMath } from '../../preview/markdownRenderer'
 import { createArtifactImageReplacer } from '../../preview/markdownArtifacts'
 import type { OpfsDirectoryHandle } from '../../shared/opfsAccess'
+import 'katex/dist/katex.min.css'
 
 interface TocEntry {
   level: number
@@ -42,7 +43,7 @@ const artifactReplacer = createArtifactImageReplacer({
 watch(
   () => props.content,
   async (raw) => {
-    let html = renderMarkdownSafe(raw)
+    let html = renderMarkdownWithMath(raw)
     tocEntries.value = []
     html = html.replace(/<h([123])>([\s\S]*?)<\/h\1>/g, (_match, lvl, text) => {
       const plain = String(text).replace(/<[^>]*>/g, '').trim()
