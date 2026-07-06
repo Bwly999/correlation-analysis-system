@@ -77,7 +77,7 @@ type SidebarShortcutSection = {
 const categoryFilters: SidebarCategoryMeta[] = [
   { value: 'all', label: '全部' },
   { value: 'trigger', label: '数据接入' },
-  { value: 'action', label: '数据准备' },
+  { value: 'action', label: '数据处理' },
   { value: 'terminal', label: '分析输出' },
 ]
 

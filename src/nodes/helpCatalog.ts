@@ -162,7 +162,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
     {
       useCases: ['处理重复记录', '处理缺失值', '做异常值清理', '标准化特征', '编码类别字段'],
       keywords: ['数据清洗', '去重', '缺失值', '异常值', '标准化', '编码'],
-      workflowRoles: ['数据准备'],
+      workflowRoles: ['数据处理'],
       inputKinds: ['table'],
       outputKinds: ['table'],
       recommendedPrevNodes: ['file-import', 'manual-json-import', 'neighbor-system'],
@@ -198,7 +198,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
     {
       useCases: ['去除重复记录', '按业务键保留首条记录', '按业务键保留末条记录'],
       keywords: ['去重', '重复记录', '重复样本', '保留首条', '保留末条'],
-      workflowRoles: ['数据准备'],
+      workflowRoles: ['数据处理'],
       inputKinds: ['table'],
       outputKinds: ['table'],
       recommendedPrevNodes: ['file-import', 'manual-json-import', 'neighbor-system'],
@@ -239,7 +239,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
     {
       useCases: ['删除缺失样本', '缺失值填充', '异常值剔除', '按字段区间过滤'],
       keywords: ['缺失值', '空值', '异常值', 'IQR', '百分位剔除', '上下限', '区间过滤'],
-      workflowRoles: ['数据准备'],
+      workflowRoles: ['数据处理'],
       inputKinds: ['table'],
       outputKinds: ['table'],
       recommendedPrevNodes: ['data-dedup', 'file-import', 'manual-json-import'],
@@ -275,7 +275,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
     {
       useCases: ['标签编码', '特征标准化', '归一化'],
       keywords: ['编码', '缩放', '标准化', '归一化', 'Z-Score'],
-      workflowRoles: ['数据准备'],
+      workflowRoles: ['数据处理'],
       inputKinds: ['table'],
       outputKinds: ['table'],
       recommendedPrevNodes: ['data-missing-outlier', 'data-dedup', 'data-filter'],
@@ -306,7 +306,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
     {
       useCases: ['筛选指定城市数据', '筛选高分样本', '过滤空值'],
       keywords: ['筛选', '过滤', '条件', '包含', '为空'],
-      workflowRoles: ['数据准备'],
+      workflowRoles: ['数据处理'],
       inputKinds: ['table'],
       outputKinds: ['table'],
       recommendedPrevNodes: ['data-cleaning', 'file-import'],
@@ -347,7 +347,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
     {
       useCases: ['字段重命名', '派生新字段', '行级格式转换', '复杂表格映射'],
       keywords: ['JS', 'JavaScript', '代码执行', '数据转换', '字段映射'],
-      workflowRoles: ['数据准备'],
+      workflowRoles: ['数据处理'],
       inputKinds: ['table'],
       outputKinds: ['table'],
       requiredConfig: ['code'],
@@ -390,7 +390,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
     {
       useCases: ['构造综合特征', '按分组做统计汇总', '生成滚动窗口特征', '按时间窗口汇总新表'],
       keywords: ['聚合', '汇总', '分组统计', '滚动窗口', '时间窗口', '时间分桶'],
-      workflowRoles: ['数据准备'],
+      workflowRoles: ['数据处理'],
       inputKinds: ['table'],
       outputKinds: ['table'],
       recommendedPrevNodes: ['data-cleaning', 'data-filter'],
@@ -431,7 +431,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
     {
       useCases: ['多表追加', '不同键名的宽表合并', '构造分组对比输入'],
       keywords: ['数据合并', 'join', 'append', '多输入', '分组集合', '字段合并'],
-      workflowRoles: ['数据准备'],
+      workflowRoles: ['数据处理'],
       inputKinds: ['table'],
       outputKinds: ['table', 'tableCollection'],
       recommendedPrevNodes: ['file-import', 'neighbor-system', 'data-cleaning'],
@@ -462,7 +462,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
     {
       useCases: ['为算法保留关键字段', '图表前裁剪字段', '按字段名做列级筛选'],
       keywords: ['字段选择', '列筛选', '字段裁剪', '正则搜索'],
-      workflowRoles: ['数据准备'],
+      workflowRoles: ['数据处理'],
       inputKinds: ['table'],
       outputKinds: ['table'],
       recommendedPrevNodes: ['file-import', 'data-cleaning', 'data-filter'],
@@ -493,7 +493,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
     {
       useCases: ['按分数排序', '按多字段优先级排序', '结果展示前整理顺序'],
       keywords: ['排序', '升序', '倒序', '多字段排序'],
-      workflowRoles: ['数据准备'],
+      workflowRoles: ['数据处理'],
       inputKinds: ['table'],
       outputKinds: ['table'],
       recommendedPrevNodes: ['data-filter', 'field-selection'],
@@ -524,7 +524,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
     {
       useCases: ['截断大表', '保留头部样本', '保留尾部样本'],
       keywords: ['限制数据量', '截断', '前 n 条', '后 n 条'],
-      workflowRoles: ['数据准备'],
+      workflowRoles: ['数据处理'],
       inputKinds: ['table'],
       outputKinds: ['table'],
       recommendedPrevNodes: ['sort', 'data-filter'],
@@ -548,7 +548,7 @@ export const nodeHelpCatalog: Record<string, NodeHelpCatalogEntry> = {
     {
       useCases: ['做数据体检', '检查字段风险', '判断目标字段是否可用'],
       keywords: ['数据体检', '字段画像', '风险', '缺失率'],
-      workflowRoles: ['数据准备'],
+      workflowRoles: ['数据处理'],
       inputKinds: ['table'],
       outputKinds: ['report'],
       recommendedPrevNodes: ['file-import', 'neighbor-system', 'data-merge'],

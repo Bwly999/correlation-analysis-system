@@ -32,7 +32,7 @@ describe('NodeSidebar', () => {
     const groupTitles = wrapper.findAll('[data-testid="library-group-title"]').map((node) => node.text())
     const filterLabels = wrapper.findAll('[data-testid="category-filter"]').map((node) => node.text())
 
-    expect(filterLabels).toEqual(['全部', '数据接入', '数据准备', '分析输出'])
+    expect(filterLabels).toEqual(['全部', '数据接入', '数据处理', '分析输出'])
     expect(groupTitles).toContain('导入数据')
     expect(groupTitles).toContain('统计分析')
     expect(wrapper.text()).toContain('单调性分析')

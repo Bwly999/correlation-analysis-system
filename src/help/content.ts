@@ -82,7 +82,7 @@ export const helpCenterContent: HelpCenterContent = {
     },
     {
       id: 'action',
-      title: '数据准备 / Actions',
+      title: '数据处理 / Actions',
       description: '负责清洗、筛选、聚合、合并和转换，为算法提供干净、规整的输入。',
     },
     {
