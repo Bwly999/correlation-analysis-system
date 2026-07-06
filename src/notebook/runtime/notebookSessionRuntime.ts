@@ -354,7 +354,9 @@ export const createNotebookSessionRuntime = async (
     }
   }
 
-  const restoreWorkspaceIfEmpty = async (): Promise<void> => {
+  const restoreWorkspaceIfEmpty = async (
+    sessionId: string = currentSessionId,
+  ): Promise<void> => {
     try {
       // 探测 OPFS 是否完全为空：检查 inputs/scripts（用户/Agent 主动管理的目录）
       const allPaths = await Promise.all(
@@ -367,9 +369,13 @@ export const createNotebookSessionRuntime = async (
 
       // 服务端快照恢复是 best-effort：HEAD/GET 内部自带 5s 硬超时，
       // 任一请求卡住/失败都直接降级跳过，绝不阻塞 connect/switchSession 进入 ready。
-      const exists = await checkWorkspaceSnapshot(currentSessionId)
+      //
+      // 注意：sessionId 必须显式传入。switchSession 调用本函数时 currentSessionId
+      // 仍是旧会话 id（OPFS 目录已切到新会话但 VM 状态尚未更新），若用闭包里的
+      // currentSessionId 会把旧会话的服务端快照写进新会话的 OPFS → 跨会话数据泄露。
+      const exists = await checkWorkspaceSnapshot(sessionId)
       if (!exists) return
-      const zipBytes = await downloadWorkspaceSnapshot(currentSessionId)
+      const zipBytes = await downloadWorkspaceSnapshot(sessionId)
       if (!zipBytes) return
 
       const files = await unzipWorkspace(zipBytes)
@@ -651,6 +657,10 @@ export const createNotebookSessionRuntime = async (
       workerHost.interrupt()
     }
     // 关闭 matplotlib 图窗 + 清理用户 globals（保留 builtins / __main__ 框架）
+    // + 清空 MEMFS 工作区目录（Worker 在会话间复用，残留上一会话文件会导致
+    //   新会话 Python 代码 pd.read_csv 等读到上一对话的数据）。
+    //   OPFS 才是持久事实层，MEMFS 的 inputs/scripts/artifacts/reports
+    //   会由后续 syncOpfsFilesToWorker 从新会话 OPFS 重新灌入。
     const resetCode = [
       'import sys',
       "try:",
@@ -663,7 +673,16 @@ export const createNotebookSessionRuntime = async (
       "    if _k not in _keep and not _k.startswith('__'):",
       "        try: del globals()[_k]",
       "        except Exception: pass",
-      'import gc; gc.collect()',
+      "try:",
+      "    import shutil, os",
+      "    for _root in ('inputs', 'scripts', 'artifacts', 'reports'):",
+      "        try: shutil.rmtree(_root)",
+      "        except FileNotFoundError: pass",
+      "        except Exception: pass",
+      "        os.makedirs(_root, exist_ok=True)",
+      "except ImportError:",
+      "    pass",
+      "import gc; gc.collect()",
     ].join('\n')
     console.log('[DEBUG] resetPythonState: 准备 exec, codeLength=', resetCode.length)
     const result = await workerHost.exec(resetCode, 15_000)
@@ -731,8 +750,10 @@ export const createNotebookSessionRuntime = async (
 
         // 4. 把新 session 的 inputs/scripts 灌入 Worker MEMFS（单文件失败不致命，见 syncOpfsFilesToWorker）
         //    灌入前先恢复探测：OPFS 为空（换设备/清缓存）则从服务端拉快照写回。
+        //    关键：必须显式传 newSessionId —— currentSessionId 此时仍是旧会话 id，
+        //    用它去查快照会把旧会话的服务端快照写进新会话的 OPFS（跨会话数据泄露）。
         console.log('[DEBUG] switchSession.run: restoreWorkspaceIfEmpty + syncOpfsFilesToWorker')
-        await restoreWorkspaceIfEmpty()
+        await restoreWorkspaceIfEmpty(newSessionId)
         await syncOpfsFilesToWorker()
         console.log('[DEBUG] switchSession.run: syncOpfsFilesToWorker 完成')
 

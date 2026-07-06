@@ -420,4 +420,72 @@ describe('notebookSessionRuntime', () => {
       runtime.dispose()
     })
   })
+
+  describe('新建对话时禁止跨会话数据泄露', () => {
+    // 复现用户报告的 bug：对话 A 进行过后，新建对话 B 时，
+    // A 的 OPFS 文件（含服务端快照里的 inputs/upstream.csv 等）会被复制进 B。
+    //
+    // 主因：switchSession 在 currentSessionId 仍是旧会话 id 时调用
+    //   restoreWorkspaceIfEmpty()，函数用旧 id 命中旧会话的服务端快照，
+    //   把旧会话文件写进新会话（此时已切到新会话 OPFS 目录）。
+    // 修复：restoreWorkspaceIfEmpty 显式接收 sessionId 参数，switchSession 传 newSessionId。
+    it('switchSession 不会用旧会话的服务端快照污染新会话 OPFS', async () => {
+      // OPFS 探测：每次 listDirectoryEntries 返回空（新会话 OPFS 确实为空）
+      vi.mocked(listDirectoryEntries).mockResolvedValue([])
+      // 关键：模拟服务端「旧会话 sess-1 有快照」。
+      // 修复前：switchSession('sess-2') 会用 currentSessionId=sess-1 查 → 命中 → 写进 sess-2。
+      // 修复后：用 sess-2 查 → 404 → 不写。
+      requestMock.mockImplementation(async (cfg: { url?: string; method?: string }) => {
+        const url = cfg?.url ?? ''
+        // 仅旧会话 sess-1 的快照存在
+        if (url.includes('/workspace-snapshots/sess-1') && cfg?.method === 'HEAD') {
+          return { status: 200 }
+        }
+        return { status: 404, data: { message: 'not found' } }
+      })
+
+      const runtime = await createNotebookSessionRuntime('sess-1')
+      await runtime.connect()
+      // connect 完成后清空已发生的 writeFile 调用记录
+      const { writeFile } = await import('../../shared/opfsAccess')
+      vi.mocked(writeFile).mockClear()
+
+      await runtime.switchSession('sess-2')
+
+      // 核心断言：切换到新会话时，绝不能从服务端快照向新会话 OPFS 写任何文件。
+      // （若用旧 id 查快照，这里会因命中 sess-1 快照而触发 writeFile。）
+      const restoreWriteCount = vi.mocked(writeFile).mock.calls.length
+      expect(restoreWriteCount).toBe(0)
+
+      expect(runtime.state.session.sessionId).toBe('sess-2')
+      expect(runtime.state.session.phase.kind).toBe('ready')
+      runtime.dispose()
+    })
+
+    // 次因：Worker MEMFS 在会话切换时不清理，残留上一会话的 artifacts/scripts，
+    // 导致新会话 Python 代码 pd.read_csv('inputs/x') 仍能读到旧数据。
+    // 修复：resetPythonState 的 exec 代码新增清空 4 个工作区目录的逻辑。
+    it('switchSession 的 resetPythonState 会清空 MEMFS 工作区目录', async () => {
+      const runtime = await createNotebookSessionRuntime('sess-1')
+      await runtime.connect()
+
+      // 捕获 resetPythonState 实际执行的重置代码
+      workerHostExecMock.mockClear()
+      await runtime.switchSession('sess-2')
+
+      const resetCall = workerHostExecMock.mock.calls.find(
+        ([code]) => typeof code === 'string' && code.includes('shutil.rmtree'),
+      )
+      expect(resetCall).toBeTruthy()
+      const code = resetCall![0] as string
+      // 必须遍历清空全部 4 个工作区目录，并重建空目录骨架（供新会话 Python 写入）
+      expect(code).toContain('shutil.rmtree(_root)')
+      expect(code).toContain("'inputs'")
+      expect(code).toContain("'scripts'")
+      expect(code).toContain("'artifacts'")
+      expect(code).toContain("'reports'")
+      expect(code).toMatch(/os\.makedirs\(_root/)
+      runtime.dispose()
+    })
+  })
 })
