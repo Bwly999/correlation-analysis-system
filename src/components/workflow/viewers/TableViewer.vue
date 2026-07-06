@@ -101,7 +101,7 @@ const exportFormatOptions: Array<{ label: string; value: TableExportFormat }> = 
   { label: 'Excel (.xlsx)', value: 'xlsx' },
   { label: 'JSON', value: 'json' },
 ]
-const exportFormat = ref<TableExportFormat>('csv')
+const exportFormat = ref<TableExportFormat>('xlsx')
 const exportFilename = ref('export_data')
 const isExporting = ref(false)
 

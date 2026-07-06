@@ -11,13 +11,13 @@ import {
   type GridReadyEvent,
   type SortChangedEvent,
 } from 'ag-grid-community'
-import { nextTick, onBeforeUnmount, onMounted, onUpdated, useTemplateRef } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, onUpdated, useTemplateRef } from 'vue'
 
 type TableRow = Record<string, unknown>
 
 ModuleRegistry.registerModules([AllCommunityModule])
 
-const _props = defineProps<{
+const props = defineProps<{
   rowData: TableRow[]
   columnDefs: ColDef<TableRow>[]
   defaultColDef: ColDef<TableRow>
@@ -126,6 +126,28 @@ onBeforeUnmount(() => {
   headerObserver?.disconnect()
   headerObserver = null
 })
+
+// 行号列：跟随排序/筛选后的显示顺序（1-based），钉在最左侧且不可排序/筛选/拖动
+const rowNumberColDef: ColDef<TableRow> = {
+  colId: '__row_number__',
+  headerName: '#',
+  valueGetter: (params) => (params.node?.rowIndex ?? -1) + 1,
+  width: 56,
+  maxWidth: 80,
+  pinned: 'left',
+  sortable: false,
+  filter: false,
+  resizable: true,
+  suppressMovable: true,
+  suppressHeaderMenuButton: true,
+  headerClass: 'table-row-number-header',
+  cellClass: 'table-row-number-cell',
+}
+
+const columnDefsWithRowNumber = computed<ColDef<TableRow>[]>(() => [
+  rowNumberColDef,
+  ...props.columnDefs,
+])
 </script>
 
 <template>
@@ -134,7 +156,7 @@ onBeforeUnmount(() => {
       class="h-full w-full"
       :theme="themeQuartz"
       :row-data="rowData"
-      :column-defs="columnDefs"
+      :column-defs="columnDefsWithRowNumber"
       :default-col-def="defaultColDef"
       :components="{ ...components, AgGridCommunitySetFilter }"
       :quick-filter-text="quickFilterText"
@@ -249,5 +271,16 @@ onBeforeUnmount(() => {
   height: 3px;
   border-radius: 999px;
   background: currentColor;
+}
+
+.table-grid-shell :deep(.table-row-number-header) {
+  font-weight: 700;
+  text-align: center;
+}
+
+.table-grid-shell :deep(.table-row-number-cell) {
+  color: #64748b;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 </style>
