@@ -18,7 +18,7 @@ import {
   truncateOutputTail,
   type TruncationMeta,
 } from './outputTruncate'
-import type { OpfsDirectoryHandle } from '../shared/opfsAccess'
+import type { OpfsDirectoryHandle, QuotaTracker } from '../shared/opfsAccess'
 import type { BridgeWorkerHost } from './parentBridgeClient'
 import type { NotebookTodoStore, TodoItem } from './notebookTodoStore'
 import type { AskUserQueue, AskUserItem } from './askUserQueue'
@@ -151,6 +151,7 @@ export interface ToolDispatcherDeps {
   workerHost: ExecutableWorkerHost
   todoStore: NotebookTodoStore
   askUserQueue: AskUserQueue
+  quotaTracker?: QuotaTracker
 }
 
 export interface ToolDispatcher {
@@ -166,7 +167,7 @@ const KNOWN_TOOLS = new Set<string>(NOTEBOOK_AGENT_TOOL_SPECS.map((s) => s.name)
 const DEFAULT_EXEC_TIMEOUT = 60_000
 
 export const createToolDispatcher = (deps: ToolDispatcherDeps): ToolDispatcher => {
-  const { opfsRoot, workerHost, todoStore, askUserQueue } = deps
+  const { opfsRoot, workerHost, todoStore, askUserQueue, quotaTracker } = deps
 
   const dispatch = async (
     name: string,
@@ -283,11 +284,11 @@ export const createToolDispatcher = (deps: ToolDispatcherDeps): ToolDispatcher =
           return okResult({ ...r })
         }
         case 'fs_write': {
-          const r = await fsWrite(opfsRoot, params as Parameters<typeof fsWrite>[1])
+          const r = await fsWrite(opfsRoot, params as Parameters<typeof fsWrite>[1], quotaTracker)
           return okResult({ ...r })
         }
         case 'fs_edit': {
-          const r = await fsEdit(opfsRoot, params as Parameters<typeof fsEdit>[1])
+          const r = await fsEdit(opfsRoot, params as Parameters<typeof fsEdit>[1], quotaTracker)
           return okResult({ ...r })
         }
         case 'fs_list': {

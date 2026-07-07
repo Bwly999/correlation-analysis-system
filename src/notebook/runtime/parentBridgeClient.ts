@@ -15,7 +15,7 @@
  */
 
 import { writeFile } from '../shared/opfsAccess'
-import type { OpfsDirectoryHandle } from '../shared/opfsAccess'
+import type { OpfsDirectoryHandle, QuotaTracker } from '../shared/opfsAccess'
 import {
   isParentBridgeRequest,
   type ParentBridgeRequest,
@@ -35,6 +35,8 @@ export interface ParentBridgeClientOptions {
   parentWindow: Window
   opfsRoot: OpfsDirectoryHandle
   workerHost: BridgeWorkerHost
+  /** session 级写入配额追踪器；import_csv 写入前会校验，超限回 quota_exceeded */
+  quotaTracker?: QuotaTracker
   /**
    * 注入消息源订阅器。生产环境传 (l) => { window.addEventListener('message', l); ... }
    * 测试环境传一个收集 listener 的桩。
@@ -83,6 +85,7 @@ export const createParentBridgeClient = (
     parentTargetOrigin = '*',
     onWorkspaceChanged,
     onSwitchSession,
+    quotaTracker,
   } = options
 
   const send = (msg: IframeBridgeRequest | ParentBridgeResponse) => {
@@ -115,8 +118,8 @@ export const createParentBridgeClient = (
       // 给 worker / OPFS 各保留一份独立 ArrayBuffer：postMessage transferable
       // 会让 buffer 失效，主线程内的两次写入需要分别拥有自己的副本。
       const opfsCopy = cloneArrayBuffer(req.buffer)
-      await writeFile(opfsRoot, targetPath, opfsCopy)
-      await writeFile(opfsRoot, metaPath, JSON.stringify(req.meta, null, 2))
+      await writeFile(opfsRoot, targetPath, opfsCopy, quotaTracker)
+      await writeFile(opfsRoot, metaPath, JSON.stringify(req.meta, null, 2), quotaTracker)
       // 给 worker 的 buffer 不再克隆 —— 由 workerHost.writeFs 内部 transfer 给 worker
       const workerCopy = cloneArrayBuffer(req.buffer)
       await workerHost.writeFs(targetPath, workerCopy)
@@ -127,7 +130,7 @@ export const createParentBridgeClient = (
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       respond(req.requestId, false, undefined, {
-        code: classifyImportError(message),
+        code: classifyImportError(err),
         message,
       })
     }
@@ -199,7 +202,16 @@ export const createParentBridgeClient = (
   }
 }
 
-const classifyImportError = (message: string): string => {
+/**
+ * 错误分类：优先读 err.code（如 tracker 抛出的 quota_exceeded），
+ * 否则回落到 message 文本匹配（兜底浏览器原生 quota / OPFS 错误）。
+ */
+const classifyImportError = (err: unknown): string => {
+  if (err && typeof err === 'object' && 'code' in err) {
+    const code = (err as { code?: unknown }).code
+    if (typeof code === 'string' && code) return code
+  }
+  const message = err instanceof Error ? err.message : String(err)
   if (/quota/i.test(message)) return 'quota_exceeded'
   if (/越界|workspace|顶级|out_of_workspace/i.test(message)) return 'path_out_of_workspace'
   if (/buffer/i.test(message)) return 'invalid_buffer'

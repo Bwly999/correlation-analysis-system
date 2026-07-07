@@ -13,6 +13,7 @@ import {
   resolveSafePath,
   listDirectoryEntries,
   type OpfsDirectoryHandle,
+  type QuotaTracker,
   type TreeNode,
 } from '../shared/opfsAccess'
 
@@ -39,7 +40,24 @@ const fsError = (code: FsErrorCode, message: string): FsToolError => {
   return err
 }
 
+const FS_ERROR_CODES: ReadonlySet<FsErrorCode> = new Set<FsErrorCode>([
+  'path_out_of_workspace',
+  'file_not_found',
+  'binary_file_not_supported',
+  'invalid_arguments',
+  'string_not_found',
+  'string_not_unique',
+  'quota_exceeded',
+])
+
 const wrapPathError = (err: unknown): FsToolError => {
+  // 已带合法 code 的错误（如 quota_exceeded）原样透传，不被改写
+  if (err && typeof err === 'object' && 'code' in err) {
+    const code = (err as { code?: unknown }).code
+    if (typeof code === 'string' && FS_ERROR_CODES.has(code as FsErrorCode)) {
+      return err as FsToolError
+    }
+  }
   const message = err instanceof Error ? err.message : String(err)
   if (/绝对路径|越界|顶级|workspace|out_of_workspace/i.test(message)) {
     return fsError('path_out_of_workspace', message)
@@ -174,12 +192,13 @@ export interface FsWriteResult {
 export const fsWrite = async (
   root: OpfsDirectoryHandle,
   params: FsWriteParams,
+  tracker?: QuotaTracker,
 ): Promise<FsWriteResult> => {
   if (typeof params.content !== 'string') {
     throw fsError('invalid_arguments', 'fs_write 仅支持文本（content 必须是 string）')
   }
   try {
-    return await writeFile(root, params.path, params.content)
+    return await writeFile(root, params.path, params.content, tracker)
   } catch (err) {
     throw wrapPathError(err)
   }
@@ -215,6 +234,7 @@ const countOccurrences = (haystack: string, needle: string): number => {
 export const fsEdit = async (
   root: OpfsDirectoryHandle,
   params: FsEditParams,
+  tracker?: QuotaTracker,
 ): Promise<FsEditResult> => {
   if (typeof params.oldStr !== 'string' || params.oldStr === '') {
     throw fsError('invalid_arguments', 'fs_edit 的 oldStr 必须是非空字符串')
@@ -236,7 +256,7 @@ export const fsEdit = async (
   const replaced = params.replaceAll
     ? original.split(params.oldStr).join(params.newStr)
     : original.replace(params.oldStr, params.newStr)
-  await writeFile(root, params.path, replaced)
+  await writeFile(root, params.path, replaced, tracker)
   return {
     path: params.path,
     replacements: params.replaceAll ? occ : 1,

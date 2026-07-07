@@ -129,14 +129,16 @@ export const writeFile = async (
   root: OpfsDirectoryHandle,
   relPath: string,
   data: ArrayBuffer | Uint8Array | string,
+  tracker?: QuotaTracker,
 ): Promise<{ path: string; bytes: number }> => {
   const segments = resolveSafePath(relPath)
+  const bytes = toUint8(data)
+  if (tracker) tracker.reserveOrThrow(bytes.byteLength)
   const parentDir = await navigateToParent(root, segments, /* create */ true)
   const fileHandle = await parentDir.getFileHandle(segments[segments.length - 1]!, {
     create: true,
   })
   const writable = await fileHandle.createWritable()
-  const bytes = toUint8(data)
   await writable.write(bytes)
   await writable.close()
   return { path: segments.join('/'), bytes: bytes.byteLength }
