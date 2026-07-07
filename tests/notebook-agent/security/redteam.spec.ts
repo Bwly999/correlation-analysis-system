@@ -45,8 +45,10 @@ describe('安全红队清单 §9 — M1 gate（20 项）', () => {
   })
 
   describe('#2 from js import fetch → 剥夺', () => {
-    it('Worker 启动后 delete fetch/XHR/WS/EventSource', () => {
-      expect(pyodideBootSrc).toMatch(/delete.*globalThis.*fetch/)
+    it('Worker 启动后 fetch 改为白名单 shim，XHR/WS/EventSource 直接 delete', () => {
+      // fetch 保留为白名单 shim（loadPackage 需加载 runtime wheel），外网请求被拒
+      expect(pyodideBootSrc).toMatch(/shimmedFetch/)
+      expect(pyodideBootSrc).toMatch(/外部网络访问已禁用/)
       expect(pyodideBootSrc).toMatch(/delete.*globalThis.*XMLHttpRequest/)
       expect(pyodideBootSrc).toMatch(/delete.*globalThis.*WebSocket/)
       expect(pyodideBootSrc).toMatch(/delete.*globalThis.*EventSource/)
@@ -194,8 +196,10 @@ describe('安全红队清单 §9 — M1 gate（20 项）', () => {
   })
 
   describe('#19 micropip.install("bad") → 无 fetch 抛错', () => {
-    it('防御在位：Worker 剥夺 fetch（micropip 装包依赖 fetch，必然失败）', () => {
-      expect(pyodideBootSrc).toMatch(/delete.*globalThis.*fetch/)
+    it('防御在位：fetch 是白名单 shim，micropip 装 PyPI 包必被拒（依赖外网 fetch）', () => {
+      // fetch 保留但仅放行 runtime 同源路径，PyPI 等外网请求一律 reject
+      expect(pyodideBootSrc).toMatch(/shimmedFetch/)
+      expect(pyodideBootSrc).toMatch(/外部网络访问已禁用/)
     })
     it('system prompt 明示可用包集合（暗示包固定，无需网络安装）', () => {
       const promptSrc = readFileSync('src/server/notebookAgent/systemPrompt.ts', 'utf8')

@@ -338,12 +338,14 @@ describe('TableViewer', () => {
     expect(grid.attributes('data-suppress-field-dot-notation')).toBe('true')
 
     const gridVm = wrapper.getComponent({ name: 'AgGridVueStub' }).vm as {
-      columnDefs: Array<{ field?: string }>
+      columnDefs: Array<{ colId?: string; field?: string }>
     }
-    expect(gridVm.columnDefs.map((column) => column.field)).toEqual([
-      'factor.code',
-      'metric.value',
-    ])
+    // 过滤掉行号列（AgGridTablePreview 在用户列前插入 colId='__row_number__' 的固定列）
+    expect(
+      gridVm.columnDefs
+        .filter((column) => column.colId !== '__row_number__')
+        .map((column) => column.field),
+    ).toEqual(['factor.code', 'metric.value'])
   })
 
   it('点击导出按钮后可在弹窗中设置参数并直接触发下载', async () => {
@@ -553,10 +555,16 @@ describe('TableViewer', () => {
     await nextTick()
 
     const gridVm = wrapper.getComponent({ name: 'AgGridVueStub' }).vm as {
-      columnDefs: Array<{ field?: string }>
+      columnDefs: Array<{ colId?: string; field?: string }>
     }
 
-    expect(gridVm.columnDefs.slice(0, 2).map((column) => column.field)).toEqual(['name', 'id'])
+    // 过滤掉行号列后再校验用户列顺序
+    expect(
+      gridVm.columnDefs
+        .filter((column) => column.colId !== '__row_number__')
+        .slice(0, 2)
+        .map((column) => column.field),
+    ).toEqual(['name', 'id'])
   })
 
   it('默认开启排序、筛选、列拖动和高性能配置', () => {
@@ -573,16 +581,22 @@ describe('TableViewer', () => {
     const grid = wrapper.get('[data-test="ag-grid-stub"]')
     const defaultColDef = JSON.parse(grid.attributes('data-default-col-def') ?? '{}')
     const gridVm = wrapper.getComponent({ name: 'AgGridVueStub' }).vm as {
-      columnDefs: Array<{ field?: string; filter?: unknown; suppressMovable?: boolean }>
+      columnDefs: Array<{ colId?: string; field?: string; filter?: unknown; suppressMovable?: boolean }>
     }
 
     expect(defaultColDef.resizable).toBe(true)
     expect(defaultColDef.sortable).toBe(true)
     expect(defaultColDef.filter).toBe(true)
     expect(defaultColDef.floatingFilter).toBe(false)
-    expect(gridVm.columnDefs.every((column) => column.suppressMovable !== true)).toBe(true)
+    // 行号列 suppressMovable=true 是预期的（固定列），只校验用户列可拖动
+    expect(
+      gridVm.columnDefs
+        .filter((column) => column.colId !== '__row_number__')
+        .every((column) => column.suppressMovable !== true),
+    ).toBe(true)
     expect(gridVm.columnDefs.find((column) => column.field === 'id')?.filter).toBe('agNumberColumnFilter')
-    expect(grid.attributes('data-theme')).toBe('legacy')
+    // ag-grid v33 起 theme 改为传入主题对象（themeQuartz），不再用字符串 'legacy'，
+    // 这里仅断言高性能相关配置
     expect(grid.attributes('data-animate-rows')).toBe('false')
     expect(grid.attributes('data-row-buffer')).toBe('4')
     expect(grid.attributes('data-enable-cell-text-selection')).toBe('true')

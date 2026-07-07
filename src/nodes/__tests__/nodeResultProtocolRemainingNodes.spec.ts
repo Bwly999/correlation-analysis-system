@@ -1,5 +1,17 @@
 ﻿import { describe, expect, it, vi } from 'vitest'
 
+/**
+ * axios 1.16 fetch adapter 会把 url+options 合并成单个 Request 对象再传给底层 fetch，
+ * 因此断言 fetch 调用参数时需从 Request.url 读取实际请求地址。
+ */
+const expectFetchedUrl = (url: string) => {
+  const calls = (global.fetch as ReturnType<typeof vi.fn>).mock.calls
+  expect(calls.length).toBeGreaterThan(0)
+  const firstArg = calls[calls.length - 1]![0]
+  expect(firstArg).toBeInstanceOf(Request)
+  expect((firstArg as Request).url).toBe(url)
+}
+
 const {
   mockFetchKanbanData,
   mockGetKanbanAuthToken,
@@ -320,38 +332,40 @@ describe('remaining nodes standardized result protocol', () => {
   })
 
   it('xgboost-shap should return a report result with metrics in meta', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        results: {
-          summary: {
-            targetField: 'target',
-            sampleCount: 2,
-            featureCount: 2,
-            r2: 0.88,
-            mae: 0.12,
+    global.fetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          results: {
+            summary: {
+              targetField: 'target',
+              sampleCount: 2,
+              featureCount: 2,
+              r2: 0.88,
+              mae: 0.12,
+            },
+            importance: [
+              { name: 'f1', value: 0.6, rank: 1 },
+              { name: 'f2', value: 0.4, rank: 2 },
+            ],
+            dependence: [
+              { feature: 'f1', x: [1, 2], shap: [0.1, 0.2] },
+              { feature: 'f2', x: [2, 3], shap: [0.2, 0.3] },
+            ],
+            assets: {
+              fullReportImage: 'base64_full',
+            },
           },
-          importance: [
-            { name: 'f1', value: 0.6, rank: 1 },
-            { name: 'f2', value: 0.4, rank: 2 },
-          ],
-          dependence: [
-            { feature: 'f1', x: [1, 2], shap: [0.1, 0.2] },
-            { feature: 'f2', x: [2, 3], shap: [0.2, 0.3] },
-          ],
-          assets: {
-            fullReportImage: 'base64_full',
-          },
-        },
-      }),
-    }) as any
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    ) as any
 
     const result = await xgboostShapNode.execute(
       createTableResult([
         { target: 1, f1: 2, f2: 3 },
         { target: 2, f1: 3, f2: 4 },
       ]),
-      { targetField: 'target' },
+      { targetField: 'target', factorNames: ['f1', 'f2'] },
     )
 
     expect(result.kind).toBe('report')
@@ -362,50 +376,52 @@ describe('remaining nodes standardized result protocol', () => {
       featureCount: 2,
     })
     expect(result.preview?.viewer).toBe('report-viewer')
-    expect(global.fetch).toHaveBeenCalledWith('/api/analysis/xgboost-shap', expect.any(Object))
+    expectFetchedUrl('http://localhost/api/analysis/xgboost-shap')
   })
 
   it('lasso should return a real report result from backend payload', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        results: {
-          summary: {
-            targetField: 'target',
-            sampleCount: 24,
-            featureCount: 2,
-            selectedFeatureCount: 1,
-            alpha: 0.0312,
-            r2: 0.9123,
-            mae: 0.2876,
-          },
-          coefficients: [
-            {
-              name: 'f1',
-              coefficient: 1.23,
-              absCoefficient: 1.23,
-              selected: true,
-              rank: 1,
+    global.fetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          results: {
+            summary: {
+              targetField: 'target',
+              sampleCount: 24,
+              featureCount: 2,
+              selectedFeatureCount: 1,
+              alpha: 0.0312,
+              r2: 0.9123,
+              mae: 0.2876,
             },
-            {
-              name: 'f2',
-              coefficient: 0,
-              absCoefficient: 0,
-              selected: false,
-              rank: 2,
-            },
-          ],
-          selectedFeatures: ['f1'],
-          path: {
-            alphas: [1, 0.1, 0.01],
-            series: [
-              { feature: 'f1', coefficients: [0, 0.8, 1.23] },
-              { feature: 'f2', coefficients: [0, 0.02, 0] },
+            coefficients: [
+              {
+                name: 'f1',
+                coefficient: 1.23,
+                absCoefficient: 1.23,
+                selected: true,
+                rank: 1,
+              },
+              {
+                name: 'f2',
+                coefficient: 0,
+                absCoefficient: 0,
+                selected: false,
+                rank: 2,
+              },
             ],
+            selectedFeatures: ['f1'],
+            path: {
+              alphas: [1, 0.1, 0.01],
+              series: [
+                { feature: 'f1', coefficients: [0, 0.8, 1.23] },
+                { feature: 'f2', coefficients: [0, 0.02, 0] },
+              ],
+            },
           },
-        },
-      }),
-    }) as any
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    ) as any
 
     const result = await lassoNode.execute(
       createTableResult([
@@ -428,38 +444,40 @@ describe('remaining nodes standardized result protocol', () => {
     expect(result.payload.sections[0].type).toBe('summary')
     expect(result.payload.sections[1].option.series[0].type).toBe('bar')
     expect(result.payload.sections[2].option.series[0].type).toBe('line')
-    expect(global.fetch).toHaveBeenCalledWith('/api/analysis/lasso', expect.any(Object))
+    expectFetchedUrl('http://localhost/api/analysis/lasso')
   })
 
   it('multiple-linear-regression should return a standardized report result from backend payload', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        results: {
-          summary: {
-            targetField: 'target',
-            sampleCount: 48,
-            featureCount: 2,
-            r2: 0.9561,
-            adjustedR2: 0.9524,
-            mae: 0.4182,
-            intercept: 0.9321,
+    global.fetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          results: {
+            summary: {
+              targetField: 'target',
+              sampleCount: 48,
+              featureCount: 2,
+              r2: 0.9561,
+              adjustedR2: 0.9524,
+              mae: 0.4182,
+              intercept: 0.9321,
+            },
+            coefficients: [
+              { name: 'f1', coefficient: 2.3, absCoefficient: 2.3, pValue: 0.0001, rank: 1 },
+              { name: 'f2', coefficient: 0.8, absCoefficient: 0.8, pValue: 0.0215, rank: 2 },
+            ],
+            predictions: {
+              actual: [10, 12, 14],
+              predicted: [10.1, 11.9, 13.8],
+            },
+            residuals: {
+              fitted: [10.1, 11.9, 13.8],
+              residuals: [-0.1, 0.1, 0.2],
+            },
           },
-          coefficients: [
-            { name: 'f1', coefficient: 2.3, absCoefficient: 2.3, pValue: 0.0001, rank: 1 },
-            { name: 'f2', coefficient: 0.8, absCoefficient: 0.8, pValue: 0.0215, rank: 2 },
-          ],
-          predictions: {
-            actual: [10, 12, 14],
-            predicted: [10.1, 11.9, 13.8],
-          },
-          residuals: {
-            fitted: [10.1, 11.9, 13.8],
-            residuals: [-0.1, 0.1, 0.2],
-          },
-        },
-      }),
-    }) as any
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    ) as any
 
     const result = await multipleLinearRegressionNode.execute(
       createTableResult([
@@ -484,51 +502,50 @@ describe('remaining nodes standardized result protocol', () => {
     expect(result.payload.sections[2].option.series[0].type).toBe('scatter')
     expect(result.payload.sections[3].option.series[0].type).toBe('scatter')
     expect(result.preview?.viewer).toBe('report-viewer')
-    expect(global.fetch).toHaveBeenCalledWith(
-      '/api/analysis/multiple-linear-regression',
-      expect.any(Object),
-    )
+    expectFetchedUrl('http://localhost/api/analysis/multiple-linear-regression')
   })
 
   it('random-forest-feature-importance should return a standardized report result from backend payload', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        results: {
-          summary: {
-            targetField: 'target',
-            sampleCount: 60,
-            featureCount: 3,
-            r2: 0.9321,
-            mae: 0.5124,
-            nEstimators: 200,
-            maxDepth: 8,
-          },
-          importance: [
-            { name: 'f1', value: 0.61, rank: 1 },
-            { name: 'f2', value: 0.27, rank: 2 },
-            { name: 'f3', value: 0.12, rank: 3 },
-          ],
-          cumulativeImportance: [
-            { name: 'f1', cumulativeValue: 0.61, rank: 1 },
-            { name: 'f2', cumulativeValue: 0.88, rank: 2 },
-            { name: 'f3', cumulativeValue: 1, rank: 3 },
-          ],
-          predictions: {
-            actual: [10, 12, 14],
-            predicted: [10.4, 11.7, 14.2],
-          },
-          risks: [
-            {
-              code: 'flat_importance_distribution',
-              level: 'medium',
-              title: '重要性分布较平',
-              message: '多个因子重要性接近，建议结合业务理解进一步筛选。',
+    global.fetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          results: {
+            summary: {
+              targetField: 'target',
+              sampleCount: 60,
+              featureCount: 3,
+              r2: 0.9321,
+              mae: 0.5124,
+              nEstimators: 200,
+              maxDepth: 8,
             },
-          ],
-        },
-      }),
-    }) as any
+            importance: [
+              { name: 'f1', value: 0.61, rank: 1 },
+              { name: 'f2', value: 0.27, rank: 2 },
+              { name: 'f3', value: 0.12, rank: 3 },
+            ],
+            cumulativeImportance: [
+              { name: 'f1', cumulativeValue: 0.61, rank: 1 },
+              { name: 'f2', cumulativeValue: 0.88, rank: 2 },
+              { name: 'f3', cumulativeValue: 1, rank: 3 },
+            ],
+            predictions: {
+              actual: [10, 12, 14],
+              predicted: [10.4, 11.7, 14.2],
+            },
+            risks: [
+              {
+                code: 'flat_importance_distribution',
+                level: 'medium',
+                title: '重要性分布较平',
+                message: '多个因子重要性接近，建议结合业务理解进一步筛选。',
+              },
+            ],
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    ) as any
 
     const result = await randomForestFeatureImportanceNode.execute(
       createTableResult([
@@ -554,10 +571,7 @@ describe('remaining nodes standardized result protocol', () => {
     expect(result.payload.sections[3].option.series[0].type).toBe('scatter')
     expect(result.payload.sections[4].type).toBe('risk-list')
     expect(result.preview?.viewer).toBe('report-viewer')
-    expect(global.fetch).toHaveBeenCalledWith(
-      '/api/analysis/random-forest-feature-importance',
-      expect.any(Object),
-    )
+    expectFetchedUrl('http://localhost/api/analysis/random-forest-feature-importance')
   })
 
   it('anova should return a standardized report result with significance metrics and group charts', async () => {

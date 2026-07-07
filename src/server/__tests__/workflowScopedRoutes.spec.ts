@@ -5,6 +5,10 @@ import { mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createServerApp } from '../app.js'
+import { noopApiCallTracker } from '../apiCallTracking/apiCallTracker.js'
+
+// 单元测试统一注入 no-op tracker，避免默认工厂在 onClose 时连接 MySQL 抛错
+const createTestApp = () => createServerApp({ apiCallTracker: noopApiCallTracker })
 
 describe('workflow-scoped route contract', () => {
   beforeEach(() => {
@@ -18,7 +22,7 @@ describe('workflow-scoped route contract', () => {
   })
 
   it('returns the same missing-user error across workflow-scoped routes', async () => {
-    const app = createServerApp()
+    const app = createTestApp()
     const expectedMessage = '缺少用户标识，请通过 x-workflow-user-id 请求头或 defaultUser 依赖注入提供用户'
     const workflowRequests = [
       {
@@ -66,7 +70,7 @@ describe('workflow-scoped route contract', () => {
       headers: { 'Content-Type': 'application/json' },
     }))
     vi.stubGlobal('fetch', fetchMock)
-    const app = createServerApp()
+    const app = createTestApp()
     const response = await app.inject({
       method: 'POST',
       url: '/api/analysis/lasso',
@@ -86,7 +90,7 @@ describe('workflow-scoped route contract', () => {
   })
 
   it('returns the full workflow request header allowlist for CORS preflight', async () => {
-    const app = createServerApp()
+    const app = createTestApp()
     const response = await app.inject({
       method: 'OPTIONS',
       url: '/api/pi-agent/sessions/session_1/messages',

@@ -95,7 +95,7 @@ describe('NotebookMessageStream', () => {
     expect(wrapper.emitted('askUserSubmit')).toBeTruthy()
     expect(wrapper.emitted('askUserSubmit')![0]![0]).toMatchObject({
       askId: 'q1',
-      optionId: 'yes',
+      optionIds: ['yes'],
     })
   })
 })

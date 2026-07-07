@@ -13,44 +13,46 @@ describe('random forest feature importance node', () => {
   })
 
   it('should return a standardized report result with importance ranking and risks', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        results: {
-          summary: {
-            targetField: 'target',
-            sampleCount: 72,
-            featureCount: 3,
-            r2: 0.9182,
-            mae: 0.4861,
-            nEstimators: 200,
-            maxDepth: 8,
-          },
-          importance: [
-            { name: 'f1', value: 0.63, rank: 1 },
-            { name: 'f2', value: 0.24, rank: 2 },
-            { name: 'f3', value: 0.13, rank: 3 },
-          ],
-          cumulativeImportance: [
-            { name: 'f1', cumulativeValue: 0.63, rank: 1 },
-            { name: 'f2', cumulativeValue: 0.87, rank: 2 },
-            { name: 'f3', cumulativeValue: 1, rank: 3 },
-          ],
-          predictions: {
-            actual: [10, 14, 18],
-            predicted: [10.5, 13.6, 18.4],
-          },
-          risks: [
-            {
-              code: 'top_feature_dominance',
-              level: 'low',
-              title: '头部因子贡献集中',
-              message: '前 1 个因子已覆盖主要解释度。',
+    global.fetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          results: {
+            summary: {
+              targetField: 'target',
+              sampleCount: 72,
+              featureCount: 3,
+              r2: 0.9182,
+              mae: 0.4861,
+              nEstimators: 200,
+              maxDepth: 8,
             },
-          ],
-        },
-      }),
-    }) as any
+            importance: [
+              { name: 'f1', value: 0.63, rank: 1 },
+              { name: 'f2', value: 0.24, rank: 2 },
+              { name: 'f3', value: 0.13, rank: 3 },
+            ],
+            cumulativeImportance: [
+              { name: 'f1', cumulativeValue: 0.63, rank: 1 },
+              { name: 'f2', cumulativeValue: 0.87, rank: 2 },
+              { name: 'f3', cumulativeValue: 1, rank: 3 },
+            ],
+            predictions: {
+              actual: [10, 14, 18],
+              predicted: [10.5, 13.6, 18.4],
+            },
+            risks: [
+              {
+                code: 'top_feature_dominance',
+                level: 'low',
+                title: '头部因子贡献集中',
+                message: '前 1 个因子已覆盖主要解释度。',
+              },
+            ],
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    ) as any
 
     const result = await randomForestFeatureImportanceNode.execute(
       createTableResult([

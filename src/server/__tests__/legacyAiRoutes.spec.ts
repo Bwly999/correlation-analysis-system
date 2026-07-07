@@ -3,6 +3,10 @@ import { mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createServerApp } from '../app.js'
+import { noopApiCallTracker } from '../apiCallTracking/apiCallTracker.js'
+
+// 单元测试统一注入 no-op tracker，避免默认工厂在 onClose 时连接 MySQL 抛错
+const createTestApp = () => createServerApp({ apiCallTracker: noopApiCallTracker })
 
 describe('legacy ai routes', () => {
   beforeEach(() => {
@@ -15,7 +19,7 @@ describe('legacy ai routes', () => {
   })
 
   it('returns 404 for removed workflow-ai routes', async () => {
-    const app = createServerApp()
+    const app = createTestApp()
     const response = await app.inject({
       method: 'GET',
       url: '/api/workflow-ai/model-profiles',
@@ -31,7 +35,7 @@ describe('legacy ai routes', () => {
   })
 
   it('returns 404 for removed workflow mcp routes', async () => {
-    const app = createServerApp()
+    const app = createTestApp()
     const response = await app.inject({
       method: 'GET',
       url: '/api/opencode/workflow-mcp/health',
@@ -47,7 +51,7 @@ describe('legacy ai routes', () => {
   })
 
   it('returns 404 for removed pi-agent js-transform routes', async () => {
-    const app = createServerApp()
+    const app = createTestApp()
     const response = await app.inject({
       method: 'POST',
       url: '/api/pi-agent/js-transform/sessions',

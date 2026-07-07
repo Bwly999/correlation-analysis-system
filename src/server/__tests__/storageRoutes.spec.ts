@@ -7,12 +7,15 @@ import { mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createServerApp } from '../app.js'
+import { noopApiCallTracker } from '../apiCallTracking/apiCallTracker.js'
 import { createStorageCompositionRoot } from '../bootstrap/storageCompositionRoot.js'
 
 const apps: FastifyInstance[] = []
 
 const createTestApp = (options?: Parameters<typeof createServerApp>[0]) => {
-  const app = createServerApp(options)
+  // 单元测试默认注入 no-op tracker，避免默认工厂意外建立 MySQL 连接池
+  // （onClose 时 pool.end() 在无 MySQL 环境会抛错，与路由逻辑无关）
+  const app = createServerApp({ apiCallTracker: noopApiCallTracker, ...options })
   apps.push(app)
   return app
 }
@@ -43,7 +46,8 @@ const createJwtToken = (payload: Record<string, unknown>, secret = 'route-secret
 const loadAppFresh = async () => {
   vi.resetModules()
   const appModule = await import('../app.js')
-  const app = appModule.createServerApp()
+  const trackerModule = await import('../apiCallTracking/apiCallTracker.js')
+  const app = appModule.createServerApp({ apiCallTracker: trackerModule.noopApiCallTracker })
   apps.push(app)
   return app
 }

@@ -242,6 +242,7 @@ describe('parentBridgeClient', () => {
   describe('来源校验', () => {
     it('event.source !== parentWindow → 忽略', () => {
       buildClient()
+      postedToParent.length = 0 // 清掉构造时主动发的 iframe.ready
       const otherWindow = { postMessage: vi.fn() } as unknown as Window
       deliver(
         {
@@ -257,6 +258,7 @@ describe('parentBridgeClient', () => {
 
     it('非协议消息 → 忽略，不抛错', () => {
       buildClient()
+      postedToParent.length = 0 // 清掉构造时主动发的 iframe.ready
       deliver({ kind: 'parent.unknown', foo: 'bar' })
       deliver(null)
       deliver(42)

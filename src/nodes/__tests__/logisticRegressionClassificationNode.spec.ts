@@ -13,67 +13,69 @@ describe('logistic regression classification node', () => {
   })
 
   it('should return a standardized report result with classification metrics and coefficients', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        results: {
-          summary: {
-            targetField: 'label',
-            sampleCount: 80,
-            featureCount: 3,
-            classCount: 2,
-            accuracy: 0.91,
-            macroF1: 0.9,
-            auc: 0.95,
-          },
-          metrics: {
-            accuracy: 0.91,
-            precision: 0.9,
-            recall: 0.91,
-            f1: 0.9,
-            macroPrecision: 0.9,
-            macroRecall: 0.91,
-            macroF1: 0.9,
-            auc: 0.95,
-          },
-          confusionMatrix: {
-            labels: ['A', 'B'],
-            matrix: [
-              [18, 2],
-              [1, 19],
+    global.fetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          results: {
+            summary: {
+              targetField: 'label',
+              sampleCount: 80,
+              featureCount: 3,
+              classCount: 2,
+              accuracy: 0.91,
+              macroF1: 0.9,
+              auc: 0.95,
+            },
+            metrics: {
+              accuracy: 0.91,
+              precision: 0.9,
+              recall: 0.91,
+              f1: 0.9,
+              macroPrecision: 0.9,
+              macroRecall: 0.91,
+              macroF1: 0.9,
+              auc: 0.95,
+            },
+            confusionMatrix: {
+              labels: ['A', 'B'],
+              matrix: [
+                [18, 2],
+                [1, 19],
+              ],
+            },
+            rocCurve: {
+              fpr: [0, 0.1, 1],
+              tpr: [0, 0.92, 1],
+            },
+            coefficients: [
+              {
+                feature: 'temp',
+                className: 'B',
+                coefficient: 1.2,
+                oddsRatio: 3.32,
+                rank: 1,
+              },
+              {
+                feature: 'pressure',
+                className: 'B',
+                coefficient: 0.8,
+                oddsRatio: 2.23,
+                rank: 2,
+              },
+            ],
+            risks: [
+              {
+                code: 'class_imbalance',
+                level: 'medium',
+                title: '类别分布不均衡',
+                message: '建议结合混淆矩阵审阅少数类表现。',
+              },
             ],
           },
-          rocCurve: {
-            fpr: [0, 0.1, 1],
-            tpr: [0, 0.92, 1],
-          },
-          coefficients: [
-            {
-              feature: 'temp',
-              className: 'B',
-              coefficient: 1.2,
-              oddsRatio: 3.32,
-              rank: 1,
-            },
-            {
-              feature: 'pressure',
-              className: 'B',
-              coefficient: 0.8,
-              oddsRatio: 2.23,
-              rank: 2,
-            },
-          ],
-          risks: [
-            {
-              code: 'class_imbalance',
-              level: 'medium',
-              title: '类别分布不均衡',
-              message: '建议结合混淆矩阵审阅少数类表现。',
-            },
-          ],
-        },
-      }),
-    }) as any
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    ) as any
 
     const result = await logisticRegressionClassificationNode.execute(
       createTableResult([
