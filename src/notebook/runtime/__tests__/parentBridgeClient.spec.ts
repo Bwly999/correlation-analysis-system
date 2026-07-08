@@ -11,7 +11,7 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { createMemOpfsRoot, type MemDirectoryHandle } from '../../shared/__tests__/memOpfs'
-import { ensureWorkspaceTree, readFile } from '../../shared/opfsAccess'
+import { createQuotaTracker, ensureWorkspaceTree, readFile } from '../../shared/opfsAccess'
 import {
   createParentBridgeClient,
   type BridgeWorkerHost,
@@ -201,6 +201,48 @@ describe('parentBridgeClient', () => {
       ) as ParentBridgeResponse
       expect(response.ok).toBe(false)
       expect(response.error?.code).toBeDefined()
+      expect(fakeHost.writeFs).not.toHaveBeenCalled()
+    })
+
+    it('配额超限 → 回 ok=false 且 code=quota_exceeded（tracker 经 import_csv 透传）', async () => {
+      // 单次上限 8 字节，CSV 明显超限
+      const quotaTracker = createQuotaTracker(8, 8)
+      const fakeHost = makeFakeWorkerHost()
+      createParentBridgeClient({
+        sessionId: 'sess-1',
+        parentWindow,
+        opfsRoot,
+        workerHost: fakeHost,
+        quotaTracker,
+        addMessageListener: (l) => {
+          listeners.push(l)
+          return () => {}
+        },
+      })
+
+      const csv = 'a,b,c\n1,2,3\n4,5,6\n'
+      const buffer = new TextEncoder().encode(csv).buffer
+      deliver({
+        kind: 'parent.import_csv',
+        requestId: 'r-quota',
+        filename: 'upstream.csv',
+        buffer,
+        meta: {
+          sourceKind: 'canvas-node',
+          sourceLabel: '',
+          rowCount: 2,
+          columnCount: 3,
+        },
+      } satisfies ParentBridgeRequest)
+      await new Promise((r) => setTimeout(r, 0))
+
+      const response = postedToParent.find(
+        (m) => 'kind' in m && m.kind === 'response',
+      ) as ParentBridgeResponse
+      expect(response.ok).toBe(false)
+      // 关键：code 必须是 quota_exceeded（验证 err.code 透传，而非被 classifyImportError 吞成 import_failed）
+      expect(response.error?.code).toBe('quota_exceeded')
+      // 配额超限不应写 worker MEMFS
       expect(fakeHost.writeFs).not.toHaveBeenCalled()
     })
   })

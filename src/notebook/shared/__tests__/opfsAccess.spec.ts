@@ -131,6 +131,31 @@ describe('opfsAccess.writeFile / readFile', () => {
   it('read 不存在的文件 → 抛 file_not_found', async () => {
     await expect(readFile(root, 'reports/nope.md')).rejects.toThrow(/不存在|not.?found/i)
   })
+
+  it('传 tracker：单次超限 → 抛 quota_exceeded 且不写入', async () => {
+    const tracker = createQuotaTracker(1024, 8) // 单次上限 8 字节
+    await expect(writeFile(root, 'scripts/a.py', 'hello world', tracker)).rejects.toThrow(
+      /quota_exceeded/,
+    )
+    // 配额超限时不应实际落盘
+    await expect(readFile(root, 'scripts/a.py')).rejects.toThrow(/不存在|not.?found/i)
+  })
+
+  it('传 tracker：累计超限 → 抛 quota_exceeded', async () => {
+    const tracker = createQuotaTracker(10, 100) // 总量 10 字节、单次放宽
+    await writeFile(root, 'scripts/a.py', 'aaaaa', tracker) // 5 字节
+    await expect(writeFile(root, 'scripts/b.py', 'bbbbbb', tracker)).rejects.toThrow(
+      /quota_exceeded/,
+    )
+    // 第一份仍在
+    expect(await readFile(root, 'scripts/a.py')).toBe('aaaaa')
+  })
+
+  it('不传 tracker：不受配额约束（回归）', async () => {
+    // 即便有 tracker 实例存在，不传则写入不受影响
+    await writeFile(root, 'scripts/big.py', 'x'.repeat(1000))
+    expect((await readFile(root, 'scripts/big.py')).length).toBe(1000)
+  })
 })
 
 describe('opfsAccess.listTree', () => {

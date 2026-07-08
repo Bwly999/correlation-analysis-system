@@ -13,6 +13,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createMemOpfsRoot, type MemDirectoryHandle } from '../../../notebook/shared/__tests__/memOpfs'
 import {
+  createQuotaTracker,
   ensureWorkspaceTree,
   writeFile,
 } from '../../../notebook/shared/opfsAccess'
@@ -126,6 +127,13 @@ describe('Notebook fs_* 工具', () => {
         fsWrite(root, { path: 'reports/x.md', content: 123 as unknown as string }),
       ).rejects.toMatchObject({ code: 'invalid_arguments' })
     })
+
+    it('传 tracker：超限 → quota_exceeded（验证透传 + 不被 wrapPathError 吞）', async () => {
+      const tracker = createQuotaTracker(8, 8) // 单次/总量都 8 字节
+      await expect(
+        fsWrite(root, { path: 'reports/big.md', content: 'x'.repeat(100) }, tracker),
+      ).rejects.toMatchObject({ code: 'quota_exceeded' })
+    })
   })
 
   describe('fsEdit', () => {
@@ -162,6 +170,18 @@ describe('Notebook fs_* 工具', () => {
         replaceAll: true,
       })
       expect(r.replacements).toBe(3)
+    })
+
+    it('传 tracker：替换后超限 → quota_exceeded', async () => {
+      await writeFile(root, 'scripts/x.py', 'short')
+      const tracker = createQuotaTracker(8, 8) // 总量 8 字节，替换后内容更长会超
+      await expect(
+        fsEdit(
+          root,
+          { path: 'scripts/x.py', oldStr: 'short', newStr: 'a-much-longer-string' },
+          tracker,
+        ),
+      ).rejects.toMatchObject({ code: 'quota_exceeded' })
     })
   })
 

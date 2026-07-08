@@ -1,6 +1,7 @@
 import { reactive, shallowRef, watch, type ShallowRef } from 'vue'
 import type { OpfsDirectoryHandle } from '../shared/opfsAccess'
 import {
+  createQuotaTracker,
   ensureWorkspaceTree,
   listDirectoryEntries,
   readBytes,
@@ -160,6 +161,9 @@ export const createNotebookSessionRuntime = async (
   // opfsRoot 用 shallowRef 暴露给外部（App.vue / 文件树）响应式跟随 switchSession 切换；
   // 内部读取统一走 opfsRootRef.value，避免 return 快照导致切换后读写错配（bug3）。
   const opfsRootRef = shallowRef(await createNotebookOpfsRoot(sessionId))
+  // session 级写入配额追踪器：累计写满 500MB / 单次 50MB 抛 quota_exceeded。
+  // switchSession 切 OPFS 目录后 reset，保证每个 session 独立预算。
+  const quotaTracker = createQuotaTracker()
   // currentSessionId 可变：switchSession 切换会话时更新（闭包内引用此变量读取最新值）
   let currentSessionId = sessionId
   const state = reactive(createNotebookRuntimeState(sessionId))
@@ -180,6 +184,7 @@ export const createNotebookSessionRuntime = async (
     workerHost,
     todoStore,
     askUserQueue,
+    quotaTracker,
   })
   // switchSession 切 OPFS 目录后重建 dispatcher（其内部闭包捕获了 opfsRoot 快照）
   const rebuildToolDispatcher = () => {
@@ -188,6 +193,7 @@ export const createNotebookSessionRuntime = async (
       workerHost,
       todoStore,
       askUserQueue,
+      quotaTracker,
     })
   }
 
@@ -288,7 +294,7 @@ export const createNotebookSessionRuntime = async (
     const snapshot = await workerHost.snapshotFs(paths)
     const writtenPaths: string[] = []
     for (const file of snapshot) {
-      await writeFile(opfsRootRef.value, file.path, file.bytes)
+      await writeFile(opfsRootRef.value, file.path, file.bytes, quotaTracker)
       writtenPaths.push(file.path)
     }
     return writtenPaths
@@ -541,6 +547,7 @@ export const createNotebookSessionRuntime = async (
       parentWindow: window.parent,
       opfsRoot: opfsRootRef.value,
       workerHost,
+      quotaTracker,
       addMessageListener: (listener) => {
         window.addEventListener('message', listener)
         return () => window.removeEventListener('message', listener)
@@ -744,6 +751,8 @@ export const createNotebookSessionRuntime = async (
         // 3. 切 OPFS 目录 + 重建 toolDispatcher（其闭包捕获 opfsRoot 快照）
         console.log('[DEBUG] switchSession.run: 开始 createNotebookOpfsRoot')
         opfsRootRef.value = await createNotebookOpfsRoot(newSessionId)
+        // 切到新会话目录 → 重置配额累计（新 session 独立预算）
+        quotaTracker.reset()
         console.log('[DEBUG] switchSession.run: createNotebookOpfsRoot 完成')
         rebuildToolDispatcher()
         console.log('[DEBUG] switchSession.run: rebuildToolDispatcher 完成')
@@ -903,7 +912,7 @@ export const createNotebookSessionRuntime = async (
       const targetPath = `inputs/${file.name}`
       // OPFS 写入用一份独立副本（writeFile 内部 toUint8 不消费 ArrayBuffer）
       const opfsCopy = cloneArrayBuffer(buffer)
-      await writeFile(opfsRootRef.value, targetPath, opfsCopy)
+      await writeFile(opfsRootRef.value, targetPath, opfsCopy, quotaTracker)
       // Worker MEMFS 写入用另一份：workerHost.writeFs 会 transfer 走 buffer
       const workerCopy = cloneArrayBuffer(buffer)
       await workerHost.writeFs(targetPath, workerCopy)
