@@ -29,6 +29,7 @@ import {
   ensureNotebookAgentSessionRecord,
   ensureNotebookAgentRuntime,
   finishNotebookAgentToolCall,
+  getNotebookAgentRuntime,
   getNotebookAgentSessionOwner,
   getNotebookAgentSessionView,
   injectNotebookSystemMessage,
@@ -52,7 +53,7 @@ import {
   updateNotebookUserModelProfile,
   type NotebookUserModelProfileInput,
 } from '../notebookAgent/notebookUserModelProfilesStore.js'
-import { ensureNotebookSessionsRehydrated } from '../notebookAgent/sessionPersistence.js'
+import { buildReplayEvents, ensureNotebookSessionsRehydrated } from '../notebookAgent/sessionPersistence.js'
 import {
   WORKSPACE_SNAPSHOT_LIMIT_BYTES,
   loadWorkspaceSnapshot,
@@ -240,8 +241,23 @@ export const createNotebookAgentRoutes = (): FastifyPluginAsync => async (app) =
     // record 存在但 runtime 不在时重建（保留历史 messages）。
     await ensureNotebookAgentRuntime(sessionId)
 
+    const runtime = getNotebookAgentRuntime(sessionId)
+
     reply.hijack()
     startSseStream(reply.raw, (write) => {
+      // 1. 回放历史：把 JSONL entries 合成为 SSE 事件，前端用同一个 reducer 回放。
+      //    这样历史与实时流走同一条解析路径，避免 thinking/toolCall 归属等信息丢失。
+      if (runtime) {
+        const replayEvents = buildReplayEvents(sessionId, runtime.sessionManager.getEntries())
+        for (const evt of replayEvents) {
+          write(evt)
+        }
+        // 2. 推送终态 status，让 reducer 落到正确状态（idle/completed/failed）
+        write({ type: 'session.status', sessionId, status: runtime.record.status })
+      }
+      // 3. 回放结束标记
+      write({ type: 'stream.ready', sessionId })
+      // 4. 订阅实时事件
       const unsubscribe = subscribeNotebookAgentEvents(sessionId, write)
       return () => unsubscribe?.()
     })

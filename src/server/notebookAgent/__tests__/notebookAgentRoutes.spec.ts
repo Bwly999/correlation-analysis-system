@@ -11,6 +11,7 @@ const {
   appendNotebookAuditEntriesMock,
   subscribeNotebookAgentEventsMock,
   getNotebookAgentSessionViewMock,
+  getNotebookAgentRuntimeMock,
   getNotebookAgentSessionOwnerMock,
   updateNotebookAgentSessionTitleMock,
   finishNotebookAgentToolCallMock,
@@ -18,6 +19,7 @@ const {
   ensureNotebookAgentRuntimeMock,
   ensureNotebookAgentSessionRecordMock,
   ensureNotebookSessionsRehydratedMock,
+  buildReplayEventsMock,
   startSseStreamMock,
   switchNotebookAgentModelMock,
   getSystemModelProfilesMock,
@@ -39,6 +41,7 @@ const {
   appendNotebookAuditEntriesMock: vi.fn(),
   subscribeNotebookAgentEventsMock: vi.fn(),
   getNotebookAgentSessionViewMock: vi.fn(),
+  getNotebookAgentRuntimeMock: vi.fn(),
   getNotebookAgentSessionOwnerMock: vi.fn(),
   updateNotebookAgentSessionTitleMock: vi.fn(),
   finishNotebookAgentToolCallMock: vi.fn(),
@@ -46,6 +49,7 @@ const {
   ensureNotebookAgentRuntimeMock: vi.fn().mockResolvedValue(true),
   ensureNotebookAgentSessionRecordMock: vi.fn().mockResolvedValue(null),
   ensureNotebookSessionsRehydratedMock: vi.fn().mockResolvedValue(undefined),
+  buildReplayEventsMock: vi.fn().mockReturnValue([]),
   startSseStreamMock: vi.fn(),
   switchNotebookAgentModelMock: vi.fn(),
   getSystemModelProfilesMock: vi.fn(),
@@ -69,6 +73,7 @@ vi.mock('../gateway.js', () => ({
   appendNotebookAuditEntries: appendNotebookAuditEntriesMock,
   subscribeNotebookAgentEvents: subscribeNotebookAgentEventsMock,
   getNotebookAgentSessionView: getNotebookAgentSessionViewMock,
+  getNotebookAgentRuntime: getNotebookAgentRuntimeMock,
   getNotebookAgentSessionOwner: getNotebookAgentSessionOwnerMock,
   updateNotebookAgentSessionTitle: updateNotebookAgentSessionTitleMock,
   finishNotebookAgentToolCall: finishNotebookAgentToolCallMock,
@@ -84,6 +89,7 @@ vi.mock('../../http/sseStream.js', () => ({
 
 vi.mock('../sessionPersistence.js', () => ({
   ensureNotebookSessionsRehydrated: ensureNotebookSessionsRehydratedMock,
+  buildReplayEvents: buildReplayEventsMock,
 }))
 
 vi.mock('../../piAgent/modelProfiles.js', () => ({
@@ -150,9 +156,11 @@ afterEach(async () => {
   appendNotebookAuditEntriesMock.mockReset()
   subscribeNotebookAgentEventsMock.mockReset()
   getNotebookAgentSessionViewMock.mockReset()
+  getNotebookAgentRuntimeMock.mockReset()
   ensureNotebookAgentRuntimeMock.mockReset().mockResolvedValue(true)
   ensureNotebookAgentSessionRecordMock.mockReset().mockResolvedValue(null)
   ensureNotebookSessionsRehydratedMock.mockReset().mockResolvedValue(undefined)
+  buildReplayEventsMock.mockReset().mockReturnValue([])
   getNotebookAgentSessionOwnerMock.mockReset()
   updateNotebookAgentSessionTitleMock.mockReset()
   finishNotebookAgentToolCallMock.mockReset()

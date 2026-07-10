@@ -7,6 +7,13 @@ export type NotebookAgentEvent =
   | { type: 'stream.heartbeat' }
   | { type: 'session.status'; sessionId: string; status: string }
   | {
+      type: 'history.user_message'
+      sessionId: string
+      messageId: string
+      content: string
+      createdAt: number
+    }
+  | {
       type: 'session.title_updated'
       sessionId: string
       title: string
@@ -92,6 +99,7 @@ export type NotebookAgentEvent =
       toolCallId: string
       result: string
       isError: boolean
+      durationMs?: number
     }
   | {
       type: 'error'

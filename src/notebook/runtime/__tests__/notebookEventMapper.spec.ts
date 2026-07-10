@@ -347,4 +347,50 @@ describe('notebookEventMapper', () => {
       expect(toolBlock.data.durationMs).toBeLessThanOrEqual(51)
     }
   })
+
+  // 统一回放测试：把后端合成的 SSE 事件序列喂给 applyNotebookEvent，
+  // 验证历史与实时流走同一条路径（thinking 块保留、tool block 挂到 assistant、durationMs 来自事件）。
+  it('回放事件序列经 applyNotebookEvent 还原完整 VM（thinking + tool 挂在 assistant）', () => {
+    const state = createNotebookRuntimeState('sess-1')
+
+    // 模拟 buildReplayEvents 产出的事件序列
+    const replayEvents = [
+      { type: 'history.user_message', sessionId: 'sess-1', messageId: 'msg-user', content: '分析数据', createdAt: 1000 },
+      { type: 'message.start', sessionId: 'sess-1', messageId: 'msg-a', role: 'assistant' as const, visibility: 'assistant_visible' as const },
+      { type: 'message.thinking_delta', sessionId: 'sess-1', messageId: 'msg-a', delta: '先想想' },
+      { type: 'message.delta', sessionId: 'sess-1', messageId: 'msg-a', delta: '我来跑代码' },
+      { type: 'message.completed', sessionId: 'sess-1', messageId: 'msg-a', content: '我来跑代码', rawContent: '我来跑代码', visibility: 'assistant_visible' },
+      { type: 'tool.start', sessionId: 'sess-1', toolCall: { id: 'call-1', toolName: 'python_exec_inline', args: { code: 'print(1)' } } },
+      { type: 'tool.end', sessionId: 'sess-1', toolCallId: 'call-1', result: JSON.stringify({ status: 'ok', stdout: '1\n', stderr: '' }), isError: false, durationMs: 3000 },
+    ] as const
+
+    for (const evt of replayEvents) {
+      applyNotebookEvent(state, evt)
+    }
+
+    // 1. user message 还原
+    expect(state.session.messages[0]).toMatchObject({ role: 'user', text: '分析数据' })
+
+    // 2. assistant message：thinking + text + tool 都挂在同一个 blocks 数组里
+    const assistant = state.session.messages[1]
+    expect(assistant?.role).toBe('assistant')
+    if ('blocks' in (assistant as object)) {
+      const blocks = (assistant as { blocks: { kind: string }[] }).blocks
+      expect(blocks.map((b) => b.kind)).toEqual(['thinking', 'text', 'tool'])
+    }
+
+    // 3. tool block 的 durationMs 来自事件（3000），不依赖前端 toolStartTimes
+    const toolBlock =
+      assistant && 'blocks' in assistant
+        ? assistant.blocks.find((b) => b.kind === 'tool')
+        : null
+    if (toolBlock?.kind === 'tool' && toolBlock.data.kind === 'python_exec') {
+      expect(toolBlock.data.durationMs).toBe(3000)
+      expect(toolBlock.data.stdout).toBe('1\n')
+      expect(toolBlock.data.status).toBe('success')
+    }
+
+    // 4. cellCount 被正确重建（tool.end 的 python_exec 分支 += 1）
+    expect(state.session.runtime.cellCount).toBe(1)
+  })
 })

@@ -50,6 +50,7 @@ vi.mock('../gateway.js', () => ({
 }))
 
 import {
+  buildReplayEvents,
   ensureNotebookSessionsRehydrated,
   listPersistedNotebookSessionsByUser,
   loadNotebookSessionRecord,
@@ -445,5 +446,102 @@ describe('notebook sessionPersistence', () => {
     // 两个并发调用都等同一份 rehydrate 完成，summary 已回填
     expect(listPersistedNotebookSessionsByUser('u-1')).toHaveLength(1)
     expect(listPersistedNotebookSessionsByUser('u-1')[0]?.sessionId).toBe('concurrent-session-1')
+  })
+
+  it('buildReplayEvents 把 SDK entries 合成为 SSE 事件序列', () => {
+    const entries: SessionEntry[] = [
+      {
+        type: 'message',
+        id: 'msg-user',
+        parentId: null,
+        timestamp: '2026-06-22T10:00:05.000Z',
+        message: {
+          role: 'user',
+          content: [{ type: 'text', text: '分析一下' }],
+        } as never,
+      },
+      {
+        type: 'message',
+        id: 'msg-assistant',
+        parentId: 'msg-user',
+        timestamp: '2026-06-22T10:00:10.000Z',
+        message: {
+          role: 'assistant',
+          content: [
+            { type: 'thinking', text: '先看数据' },
+            { type: 'text', text: '我来分析。' },
+            { type: 'toolCall', id: 'call_1', name: 'python_exec_inline', arguments: { code: '1+1' } },
+          ],
+        } as never,
+      },
+      {
+        type: 'message',
+        id: 'msg-toolresult',
+        parentId: 'msg-assistant',
+        timestamp: '2026-06-22T10:00:12.000Z',
+        message: {
+          role: 'toolResult',
+          toolCallId: 'call_1',
+          content: [{ type: 'text', text: '{"status":"ok","stdout":"2\\n"}' }],
+        } as never,
+      },
+    ]
+
+    const events = buildReplayEvents('sess-1', entries)
+
+    // 1. user message → history.user_message
+    expect(events[0]).toMatchObject({ type: 'history.user_message', content: '分析一下' })
+
+    // 2. assistant → message.start + thinking_delta + delta + completed
+    expect(events[1]).toMatchObject({ type: 'message.start', messageId: 'msg-assistant' })
+    expect(events[2]).toMatchObject({ type: 'message.thinking_delta', delta: '先看数据' })
+    expect(events[3]).toMatchObject({ type: 'message.delta', delta: '我来分析。' })
+    expect(events[4]).toMatchObject({ type: 'message.completed', messageId: 'msg-assistant' })
+
+    // 3. toolCall 块 → tool.start
+    expect(events[5]).toMatchObject({
+      type: 'tool.start',
+      toolCall: { id: 'call_1', toolName: 'python_exec_inline' },
+    })
+
+    // 4. toolResult → tool.end（带 durationMs）
+    expect(events[6]).toMatchObject({
+      type: 'tool.end',
+      toolCallId: 'call_1',
+      isError: false,
+      // startedAt=10s, finishedAt=12s → durationMs=2000
+      durationMs: 2000,
+    })
+  })
+
+  it('buildReplayEvents 跳过 compaction 之前的原始消息，只还原 compaction_end 标记', () => {
+    const entries: SessionEntry[] = [
+      {
+        type: 'compaction',
+        id: 'compaction-1',
+        parentId: null,
+        timestamp: '2026-06-22T10:00:00.000Z',
+        summary: '之前聊了数据清洗',
+        firstKeptEntryId: 'msg-after',
+        tokensBefore: 50000,
+      } as never,
+      {
+        type: 'message',
+        id: 'msg-after',
+        parentId: 'compaction-1',
+        timestamp: '2026-06-22T10:00:20.000Z',
+        message: {
+          role: 'user',
+          content: [{ type: 'text', text: '压缩后继续' }],
+        } as never,
+      },
+    ]
+
+    const events = buildReplayEvents('sess-1', entries)
+
+    // compaction → session.compaction_end
+    expect(events[0]).toMatchObject({ type: 'session.compaction_end', tokensBefore: 50000 })
+    // user message after compaction
+    expect(events[1]).toMatchObject({ type: 'history.user_message', content: '压缩后继续' })
   })
 })

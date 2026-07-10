@@ -303,6 +303,9 @@ export const ensureNotebookAgentSessionRecord = async (
 export const getNotebookAgentSessionOwner = (sessionId: string): string | null =>
   getPersistedNotebookSessionOwner(sessionId)
 
+export const getNotebookAgentRuntime = (sessionId: string): NotebookAgentRuntime | null =>
+  runtimes.get(sessionId) ?? null
+
 export const getNotebookAgentSessionView = (sessionId: string) => {
   const r = getNotebookSession(sessionId) ?? null
   if (!r) return undefined

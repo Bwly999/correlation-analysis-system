@@ -14,6 +14,7 @@ import {
   getNotebookSession,
   listNotebookSessionsByUser,
 } from './sessionStore.js'
+import type { NotebookAgentSseEvent } from './eventBridge.js'
 import {
   createNotebookSessionObjectStorage,
   isNotebookSessionS3Enabled,
@@ -154,6 +155,15 @@ const extractTextBlocks = (content: SessionMessage['content']): string =>
       ? content
       : ''
 
+// 提取 assistant content 里的 {type:'thinking'} 块（与 extractTextBlocks 对称）。
+const extractThinkingBlocks = (content: SessionMessage['content']): string =>
+  Array.isArray(content)
+    ? content
+      .filter((part) => part?.type === 'thinking')
+      .map((part) => part?.text ?? '')
+      .join('')
+    : ''
+
 const resolveCreatedAt = (message: SessionMessage, fallbackTimestamp: string): number =>
   typeof message.timestamp === 'number'
     ? message.timestamp
@@ -228,6 +238,124 @@ const extractHistory = (entries: SessionEntry[]): {
   }
 
   return { messages, toolCalls }
+}
+
+// 把持久化的 SDK entries 合成为 SSE 事件序列，供前端用同一个 reducer 回放历史。
+// 设计要点：
+// - assistant message 的 thinking/text/toolCall 块按 content 数组顺序还原为对应 SSE 事件，
+//   保证前端 reducer 能复用实时流逻辑（thinking 块不丢、tool block 挂到 assistant）。
+// - toolResult 通过 toolCallId 关联回 toolCall，附带 durationMs（finishedAt - startedAt），
+//   前端无需依赖本地 toolStartTimes。
+// - user message 用专用 history.user_message 事件，前端直接落 UserMessage。
+export const buildReplayEvents = (
+  sessionId: string,
+  entries: SessionEntry[],
+): NotebookAgentSseEvent[] => {
+  const events: NotebookAgentSseEvent[] = []
+  // toolCallId → startedAt，供 tool.end 计算 durationMs
+  const toolCallStartedAt = new Map<string, number>()
+
+  for (const entry of entries) {
+    if (entry.type === 'compaction') {
+      const compaction = entry as { summary: string; firstKeptEntryId: string; tokensBefore: number }
+      events.push({
+        type: 'session.compaction_end',
+        sessionId,
+        reason: 'threshold',
+        aborted: false,
+        willRetry: false,
+        tokensBefore: compaction.tokensBefore ?? 0,
+        firstKeptEntryId: compaction.firstKeptEntryId ?? null,
+        summary: compaction.summary ?? null,
+      })
+      continue
+    }
+
+    if (entry.type !== 'message') continue
+    const message = entry.message as SessionMessage
+
+    if (message.role === 'user') {
+      events.push({
+        type: 'history.user_message',
+        sessionId,
+        messageId: entry.id,
+        content: extractTextBlocks(message.content),
+        createdAt: resolveCreatedAt(message, entry.timestamp),
+      })
+      continue
+    }
+
+    if (message.role === 'assistant') {
+      const messageId = entry.id
+      const createdAt = resolveCreatedAt(message, entry.timestamp)
+
+      // 1. 消息生命周期：start → thinking/text deltas → completed
+      events.push({
+        type: 'message.start',
+        sessionId,
+        messageId,
+        role: 'assistant',
+        visibility: 'assistant_visible',
+      })
+
+      const thinking = extractThinkingBlocks(message.content)
+      if (thinking) {
+        events.push({ type: 'message.thinking_delta', sessionId, messageId, delta: thinking })
+      }
+      const text = extractTextBlocks(message.content)
+      if (text) {
+        events.push({ type: 'message.delta', sessionId, messageId, delta: text })
+      }
+
+      events.push({
+        type: 'message.completed',
+        sessionId,
+        messageId,
+        content: text,
+        rawContent: text,
+        visibility: 'assistant_visible',
+      })
+
+      // 2. 内嵌的 toolCall 块生成 tool.start（记录 startedAt 供后续 tool.end 用）
+      if (Array.isArray(message.content)) {
+        for (const block of message.content) {
+          if (block?.type !== 'toolCall') continue
+          const toolCallId = typeof block.id === 'string' ? block.id : entry.id
+          toolCallStartedAt.set(toolCallId, createdAt)
+          events.push({
+            type: 'tool.start',
+            sessionId,
+            toolCall: {
+              id: toolCallId,
+              toolName: typeof block.name === 'string' ? block.name : 'unknown',
+              args: block.arguments,
+              status: 'running',
+              startedAt: createdAt,
+            },
+          })
+        }
+      }
+      continue
+    }
+
+    if (message.role === 'toolResult') {
+      const toolCallId = typeof message.toolCallId === 'string' ? message.toolCallId : ''
+      if (!toolCallId) continue
+      const startedAt = toolCallStartedAt.get(toolCallId)
+      const finishedAt = resolveCreatedAt(message, entry.timestamp)
+      events.push({
+        type: 'tool.end',
+        sessionId,
+        toolCallId,
+        result: extractTextBlocks(message.content),
+        isError: Boolean(message.isError),
+        durationMs: startedAt != null ? Math.max(0, finishedAt - startedAt) : undefined,
+      })
+      continue
+    }
+  }
+
+  return events
 }
 
 const summarizeRecord = (record: NotebookSessionRecord): NotebookSessionSummary => {

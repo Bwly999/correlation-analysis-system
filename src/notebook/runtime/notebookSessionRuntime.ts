@@ -20,7 +20,6 @@ import {
   streamNotebookAgentEvents,
   abortNotebookAgentSession,
   compactNotebookAgentSession,
-  fetchNotebookSessionHistory,
   renameNotebookSession,
   uploadWorkspaceSnapshot,
   downloadWorkspaceSnapshot,
@@ -33,7 +32,6 @@ import { AuditLog, computeCodeHash } from './auditLogger'
 import {
   applyNotebookEvent,
   createNotebookRuntimeState,
-  hydrateFromHistory,
   type NotebookRuntimeState,
 } from './notebookEventMapper'
 import type { LoadingStage, UserAttachment } from '../types/messageStream'
@@ -538,10 +536,10 @@ export const createNotebookSessionRuntime = async (
 
   /**
    * 为指定 session 建立实时绑定：parentBridge + SSE 事件流 + pollTimer。
-   * withHistory=true 时先拉取后端历史并回放（resume / 刷新页面后继续场景）。
+   * 历史回放由 SSE 流服务端在连接建立时推送合成事件完成（前端用同一个 reducer 处理）。
    * 由 connect（首启）和 switchSession（切会话）复用。
    */
-  const setupSessionStream = async (targetSessionId: string, opts: { withHistory: boolean }) => {
+  const setupSessionStream = async (targetSessionId: string) => {
     const parentBridge = createParentBridgeClient({
       sessionId: targetSessionId,
       parentWindow: window.parent,
@@ -593,7 +591,7 @@ export const createNotebookSessionRuntime = async (
           const isRunning = state.session.runtime.isRunning
           parentBridge.sendSessionState(isRunning ? 'agent_running' : 'agent_idle')
         },
-      }).catch((error) => {
+       }).catch((error) => {
         if (eventAbortController?.signal.aborted || isAbortLikeError(error)) {
           return
         }
@@ -611,18 +609,6 @@ export const createNotebookSessionRuntime = async (
         }
       })
     })
-
-    // 历史回放：resume / 刷新页面后继续，把后端已存的对话灌入 VM
-    if (opts.withHistory) {
-      try {
-        const history = await fetchNotebookSessionHistory(targetSessionId)
-        if (history) {
-          hydrateFromHistory(state, history)
-        }
-      } catch {
-        // 历史拉取失败不阻塞：用户看到空对话仍可继续
-      }
-    }
   }
 
   /**
@@ -783,7 +769,7 @@ export const createNotebookSessionRuntime = async (
 
         // 6. 建立新 session 的实时绑定 + 回放历史
         console.log('[DEBUG] switchSession.run: 开始 setupSessionStream')
-        await setupSessionStream(newSessionId, { withHistory: true })
+        await setupSessionStream(newSessionId)
         console.log('[DEBUG] switchSession.run: setupSessionStream 完成')
       } catch (err) {
         // 错误边界：任何步骤失败（worker 卡死 / writeFs 超时 / OPFS 错 / SSE 建立失败）
@@ -848,8 +834,8 @@ export const createNotebookSessionRuntime = async (
       if (signal.aborted) return
       state.session.phase = { kind: 'ready' }
 
-      // 建立实时绑定（parentBridge + SSE）+ 回放历史（首启通常无历史，resume 场景有）
-      await setupSessionStream(currentSessionId, { withHistory: true })
+      // 建立实时绑定（parentBridge + SSE）；历史回放由 SSE 流服务端推送合成事件完成
+      await setupSessionStream(currentSessionId)
     } catch (err) {
       teardownSessionBindings()
       state.session.phase = {
@@ -1078,7 +1064,7 @@ export const createNotebookSessionRuntime = async (
       // teardownSessionBindings）。这里幂等重建当前 session 的 SSE / bridge，
       // 保证 retry 后 Agent 事件能正常回流，而不是静默卡住。
       if (!bridgeDispose) {
-        await setupSessionStream(currentSessionId, { withHistory: true })
+        await setupSessionStream(currentSessionId)
       }
     } catch (err) {
       teardownSessionBindings()

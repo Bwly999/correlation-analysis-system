@@ -10,6 +10,13 @@ import {
 export type NotebookAgentSseEvent =
   | { type: 'session.status'; sessionId: string; status: string }
   | {
+      type: 'history.user_message'
+      sessionId: string
+      messageId: string
+      content: string
+      createdAt: number
+    }
+  | {
       type: 'session.title_updated'
       sessionId: string
       title: string
@@ -64,7 +71,14 @@ export type NotebookAgentSseEvent =
       visibility: 'assistant_visible'
     }
   | { type: 'tool.start'; sessionId: string; toolCall: NotebookToolCall }
-  | { type: 'tool.end'; sessionId: string; toolCallId: string; result: string; isError: boolean }
+  | {
+      type: 'tool.end'
+      sessionId: string
+      toolCallId: string
+      result: string
+      isError: boolean
+      durationMs?: number
+    }
   | { type: 'tool.execute'; sessionId: string; toolCallId: string; toolName: string; params: Record<string, unknown> }
   | { type: 'error'; sessionId: string; message: string }
 

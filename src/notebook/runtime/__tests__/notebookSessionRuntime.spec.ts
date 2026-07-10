@@ -9,7 +9,6 @@ const {
   workerHostHardKillMock,
   createParentBridgeClientMock,
   streamNotebookAgentEventsMock,
-  fetchNotebookSessionHistoryMock,
   workerHostStateHolder,
   requestMock,
   requestStreamMock,
@@ -21,7 +20,6 @@ const {
   workerHostHardKillMock: vi.fn(),
   createParentBridgeClientMock: vi.fn(),
   streamNotebookAgentEventsMock: vi.fn(),
-  fetchNotebookSessionHistoryMock: vi.fn(),
   // vi.hoisted 内不能引用 reactive（提升阶段 vue import 尚未初始化），
   // 故先用裸容器占位；vi.mock 工厂内 importActual('vue') 后填入真正的 reactive 对象。
   workerHostStateHolder: {} as { value: Record<string, unknown> },
@@ -84,7 +82,6 @@ vi.mock('../notebookAgentClient', async () => {
   return {
     ...actual,
     streamNotebookAgentEvents: streamNotebookAgentEventsMock,
-    fetchNotebookSessionHistory: fetchNotebookSessionHistoryMock,
     reportNotebookAuditEntries: vi.fn().mockResolvedValue(undefined),
     notifyNotebookEnvironmentChanged: vi.fn().mockResolvedValue(undefined),
     resolveNotebookAgentToolResult: vi.fn().mockResolvedValue({ ok: true }),
@@ -123,16 +120,6 @@ describe('notebookSessionRuntime', () => {
         }),
       },
     })
-
-    fetchNotebookSessionHistoryMock.mockImplementation(async (sessionId: string) => ({
-      sessionId,
-      title: sessionId === 'sess-2' ? '新分析' : '当前分析',
-      status: 'idle',
-      messages: [],
-      toolCalls: [],
-      createdAt: 1,
-      updatedAt: 1,
-    }))
 
     createParentBridgeClientMock.mockReturnValue({
       dispose: vi.fn(),
