@@ -275,6 +275,7 @@ if (typeof window !== 'undefined') {
   window.addEventListener('keydown', onConvShortcut)
 }
 onBeforeUnmount(() => {
+  ws.dispose()
   if (typeof window !== 'undefined') {
     window.removeEventListener('keydown', onConvShortcut)
   }

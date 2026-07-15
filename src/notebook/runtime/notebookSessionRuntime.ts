@@ -88,7 +88,8 @@ export interface NotebookSessionRuntime {
 // 默认 base='/' 时等价于 '/pyodide/v0.27/'。版本锁定 v0.27 不变（安全模型 §10.1）。
 const DEFAULT_PYODIDE_INDEX_URL = `${import.meta.env.BASE_URL}pyodide/v0.27/`
 const FILE_TREE_POLL_MS = 2_000
-const WORKER_SYNC_DIRS = ['inputs', 'scripts'] as const
+const WORKER_SYNC_DIRS = ['inputs', 'scripts', 'artifacts', 'reports'] as const
+const RESTORE_PROBE_DIRS = ['inputs', 'scripts'] as const
 
 /**
  * Worker bootStage（pyodideBoot.ts / worker 内发出）→ UI LoadingStage 映射。
@@ -288,14 +289,41 @@ export const createNotebookSessionRuntime = async (
     return files
   }
 
-  const syncWorkerFilesToOpfs = async (paths?: string[]) => {
-    const snapshot = await workerHost.snapshotFs(paths)
-    const writtenPaths: string[] = []
-    for (const file of snapshot) {
-      await writeFile(opfsRootRef.value, file.path, file.bytes, quotaTracker)
-      writtenPaths.push(file.path)
+  const bytesEqual = (left: Uint8Array, right: ArrayBuffer): boolean => {
+    if (left.byteLength !== right.byteLength) return false
+    const rightView = new Uint8Array(right)
+    for (let i = 0; i < left.byteLength; i += 1) {
+      if (left[i] !== rightView[i]) return false
     }
-    return writtenPaths
+    return true
+  }
+
+  let workerToOpfsChain: Promise<void> = Promise.resolve()
+  const syncWorkerFilesToOpfs = (paths?: string[]): Promise<string[]> => {
+    const targetRoot = opfsRootRef.value
+    const run = async (): Promise<string[]> => {
+      if (targetRoot !== opfsRootRef.value) return []
+      const snapshot = await workerHost.snapshotFs(paths)
+      if (targetRoot !== opfsRootRef.value) return []
+
+      const writtenPaths: string[] = []
+      for (const file of snapshot) {
+        let unchanged = false
+        try {
+          unchanged = bytesEqual(await readBytes(targetRoot, file.path), file.bytes)
+        } catch {
+          // 文件尚未落到 OPFS，继续执行首次写入。
+        }
+        if (unchanged) continue
+        await writeFile(targetRoot, file.path, file.bytes, quotaTracker)
+        writtenPaths.push(file.path)
+      }
+      return writtenPaths
+    }
+
+    const result = workerToOpfsChain.then(run, run)
+    workerToOpfsChain = result.then(() => undefined, () => undefined)
+    return result
   }
 
   const syncOpfsFilesToWorker = async (paths?: string[]) => {
@@ -364,7 +392,7 @@ export const createNotebookSessionRuntime = async (
     try {
       // 探测 OPFS 是否完全为空：检查 inputs/scripts（用户/Agent 主动管理的目录）
       const allPaths = await Promise.all(
-        WORKER_SYNC_DIRS.map((dir) => collectOpfsPaths(dir)),
+        RESTORE_PROBE_DIRS.map((dir) => collectOpfsPaths(dir)),
       )
       const inputsAndScripts = allPaths.flat()
       // inputs/scripts 是用户/Agent 主动管理的；artifacts/reports 是产物。
@@ -406,7 +434,7 @@ export const createNotebookSessionRuntime = async (
       reason: `auto_restart #${info.autoRestartCount}`,
     })
     void (async () => {
-      // 新 Worker 的 MEMFS 是空的，把 OPFS 里的 inputs/scripts 灌回去
+      // 新 Worker 的 MEMFS 是空的，把 OPFS 四个工作区目录灌回去
       await syncOpfsFilesToWorker().catch(() => undefined)
       // 告知 Agent 环境已重启，下一轮动作需重新 import / 重新加载数据
       await notifyNotebookEnvironmentChanged(
@@ -443,7 +471,7 @@ export const createNotebookSessionRuntime = async (
       })
     }
 
-    const result = await toolDispatcher.dispatch(
+    let result = await toolDispatcher.dispatch(
       event.toolName,
       event.params,
       event.toolCallId,
@@ -488,19 +516,41 @@ export const createNotebookSessionRuntime = async (
       })
     }
 
-    if (event.toolName === 'fs_write' || event.toolName === 'fs_edit') {
+    if ((event.toolName === 'fs_write' || event.toolName === 'fs_edit') && !result.isError) {
       const path =
         event.params && typeof event.params === 'object' && 'path' in event.params
           ? String((event.params as Record<string, unknown>).path ?? '')
           : ''
       if (path) {
-        await syncSinglePathToWorker(path)
-        auditLog.push({
-          ts: new Date().toISOString(),
-          kind: event.toolName === 'fs_write' ? 'fs_write' : 'fs_edit',
-          path,
-          replacements: event.toolName === 'fs_edit' ? 1 : 0,
-        } as never)
+        try {
+          await syncSinglePathToWorker(path)
+          auditLog.push({
+            ts: new Date().toISOString(),
+            kind: event.toolName === 'fs_write' ? 'fs_write' : 'fs_edit',
+            path,
+            replacements: event.toolName === 'fs_edit' ? 1 : 0,
+          } as never)
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err)
+          result = {
+            content: [{ type: 'text', text: JSON.stringify({
+              error: { code: 'worker_sync_failed', message: `文件已写入 OPFS，但同步到 Python 工作区失败：${message}` },
+            }, null, 2) }],
+            details: {
+              error: {
+                code: 'worker_sync_failed',
+                message: `文件已写入 OPFS，但同步到 Python 工作区失败：${message}`,
+              },
+            },
+            isError: true,
+          }
+          auditLog.push({
+            ts: new Date().toISOString(),
+            kind: 'tool_error',
+            tool: event.toolName,
+            code: 'worker_sync_failed',
+          })
+        }
       }
     }
 
@@ -581,7 +631,11 @@ export const createNotebookSessionRuntime = async (
           state.session.connection = 'online'
           if (!pollTimer) {
             pollTimer = setInterval(() => {
-              void syncWorkerFilesToOpfs(['artifacts', 'reports']).catch(() => undefined)
+              void syncWorkerFilesToOpfs(['artifacts', 'reports'])
+                .then((writtenPaths) => {
+                  if (writtenPaths.length > 0) bridgeNotifyWorkspaceChanged(writtenPaths)
+                })
+                .catch(() => undefined)
             }, FILE_TREE_POLL_MS)
           }
           resolve()
@@ -743,7 +797,7 @@ export const createNotebookSessionRuntime = async (
         rebuildToolDispatcher()
         console.log('[DEBUG] switchSession.run: rebuildToolDispatcher 完成')
 
-        // 4. 把新 session 的 inputs/scripts 灌入 Worker MEMFS（单文件失败不致命，见 syncOpfsFilesToWorker）
+        // 4. 把新 session 的四个工作区目录灌入 Worker MEMFS（单文件失败不致命，见 syncOpfsFilesToWorker）
         //    灌入前先恢复探测：OPFS 为空（换设备/清缓存）则从服务端拉快照写回。
         //    关键：必须显式传 newSessionId —— currentSessionId 此时仍是旧会话 id，
         //    用它去查快照会把旧会话的服务端快照写进新会话的 OPFS（跨会话数据泄露）。

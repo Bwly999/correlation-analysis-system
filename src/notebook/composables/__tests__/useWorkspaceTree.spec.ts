@@ -53,6 +53,46 @@ describe('useWorkspaceTree', () => {
     ws.dispose()
   })
 
+  it('文件数包含顶级目录下的嵌套文件', async () => {
+    const ws = useWorkspaceTree({ root: () => root, intervalMs: 2000 })
+    await ws.refresh()
+    await writeFile(root, 'artifacts/charts/plot.png', new Uint8Array([1, 2, 3]))
+    await writeFile(root, 'artifacts/charts/table.csv', 'a,b\n1,2')
+    await ws.refresh()
+
+    const artifacts = ws.tree.value?.children?.find((c) => c.name === 'artifacts')
+    expect(artifacts?.children?.find((c) => c.name === 'charts')?.children).toHaveLength(2)
+    ws.dispose()
+  })
+
+  it('较早完成的轮询结果不会覆盖较新的文件树', async () => {
+    let releaseFirst: (() => void) | undefined
+    let calls = 0
+    const delayedRoot = {
+      getDirectoryHandle: root.getDirectoryHandle.bind(root),
+      getFileHandle: root.getFileHandle.bind(root),
+      values: async function* () {
+        calls += 1
+        if (calls === 1) await new Promise<void>((resolve) => { releaseFirst = resolve })
+        yield* root.values()
+      },
+      name: root.name,
+      kind: 'directory' as const,
+    }
+    const ws = useWorkspaceTree({ root: () => delayedRoot, intervalMs: 2000 })
+    const first = ws.refresh()
+    await writeFile(root, 'reports/new.md', 'new')
+    const second = ws.refresh()
+    releaseFirst?.()
+    await first
+    await second
+
+    expect(ws.tree.value?.children?.find((c) => c.name === 'reports')?.children).toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: 'new.md' })]),
+    )
+    ws.dispose()
+  })
+
   it('notify() 立即 refresh，不等下一轮', async () => {
     const ws = useWorkspaceTree({ root: () => root, intervalMs: 2000 })
     await ws.refresh()

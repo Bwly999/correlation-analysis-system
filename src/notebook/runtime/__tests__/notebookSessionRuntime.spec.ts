@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { listDirectoryEntries } from '../../shared/opfsAccess'
+import { listDirectoryEntries, readBytes } from '../../shared/opfsAccess'
 
 const {
   workerHostInitMock,
@@ -12,6 +12,7 @@ const {
   workerHostStateHolder,
   requestMock,
   requestStreamMock,
+  resolveNotebookAgentToolResultMock,
 } = vi.hoisted(() => ({
   workerHostInitMock: vi.fn(),
   workerHostSnapshotFsMock: vi.fn(),
@@ -25,6 +26,7 @@ const {
   workerHostStateHolder: {} as { value: Record<string, unknown> },
   requestMock: vi.fn(),
   requestStreamMock: vi.fn(),
+  resolveNotebookAgentToolResultMock: vi.fn(),
 }))
 
 vi.mock('../../shared/opfsAccess', async () => {
@@ -84,7 +86,7 @@ vi.mock('../notebookAgentClient', async () => {
     streamNotebookAgentEvents: streamNotebookAgentEventsMock,
     reportNotebookAuditEntries: vi.fn().mockResolvedValue(undefined),
     notifyNotebookEnvironmentChanged: vi.fn().mockResolvedValue(undefined),
-    resolveNotebookAgentToolResult: vi.fn().mockResolvedValue({ ok: true }),
+    resolveNotebookAgentToolResult: resolveNotebookAgentToolResultMock.mockResolvedValue({ ok: true }),
     sendNotebookAgentMessage: vi.fn().mockResolvedValue({ ok: true }),
     abortNotebookAgentSession: vi.fn().mockResolvedValue({ ok: true }),
     compactNotebookAgentSession: vi.fn().mockResolvedValue({ ok: true }),
@@ -314,6 +316,59 @@ describe('notebookSessionRuntime', () => {
     expect(phase.failure.reason).toContain('切换工作区失败')
 
     vi.useRealTimers()
+    runtime.dispose()
+  })
+
+  it('会话恢复会把 artifacts/reports 下的嵌套文件完整灌入 MEMFS', async () => {
+    vi.mocked(listDirectoryEntries).mockImplementation(async (_root, path) => {
+      if (path === 'artifacts') return [{ name: 'charts', kind: 'directory' }]
+      if (path === 'artifacts/charts') return [{ name: 'plot.png', kind: 'file', size: 3, modifiedAt: 1 }]
+      if (path === 'reports') return [{ name: 'main.md', kind: 'file', size: 2, modifiedAt: 1 }]
+      return []
+    })
+    vi.mocked(readBytes).mockImplementation(async (_root, path) =>
+      new Uint8Array(path.endsWith('.png') ? [1, 2, 3] : [4, 5]),
+    )
+
+    const runtime = await createNotebookSessionRuntime('sess-1')
+    await runtime.connect()
+
+    const writtenPaths = workerHostWriteFsMock.mock.calls.map(([path]) => path)
+    expect(writtenPaths).toEqual(expect.arrayContaining(['artifacts/charts/plot.png', 'reports/main.md']))
+    runtime.dispose()
+  })
+
+  it('fs_write 的 MEMFS 同步失败时仍回传工具错误，不让桥接请求等到超时', async () => {
+    let resolveStream: (() => void) | undefined
+    vi.mocked(listDirectoryEntries).mockResolvedValue([])
+    vi.mocked(readBytes).mockResolvedValue(new Uint8Array())
+    streamNotebookAgentEventsMock.mockImplementationOnce(
+      async (_sessionId: string, options: { onOpen?: () => void; onEvent?: (event: unknown) => void; signal?: AbortSignal }) => {
+        options.onOpen?.()
+        options.onEvent?.({
+          type: 'tool.execute',
+          toolCallId: 'tool-fs-write',
+          toolName: 'fs_write',
+          params: { path: 'scripts/example.py', content: 'print(1)' },
+        })
+        await new Promise<void>((resolve) => {
+          resolveStream = resolve
+          options.signal?.addEventListener('abort', () => resolve())
+        })
+      },
+    )
+    workerHostWriteFsMock.mockRejectedValueOnce(new Error('Worker 未就绪'))
+
+    const runtime = await createNotebookSessionRuntime('sess-1')
+    await runtime.connect()
+    await vi.waitFor(() => {
+      expect(resolveNotebookAgentToolResultMock).toHaveBeenCalledWith(
+        'sess-1',
+        'tool-fs-write',
+        expect.objectContaining({ isError: true }),
+      )
+    })
+    resolveStream?.()
     runtime.dispose()
   })
 

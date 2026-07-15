@@ -62,6 +62,35 @@ describe('WorkspaceTree', () => {
     expect(reportsItems[1]!.attributes('data-path')).toBe('reports/old.md')
   })
 
+  it('文件数包含顶级目录下的嵌套文件', () => {
+    const wrapper = mount(WorkspaceTree, {
+      props: {
+        tree: {
+          ...buildTree(),
+          children: buildTree().children?.map((node) =>
+            node.name === 'reports'
+              ? {
+                  ...node,
+                  children: [
+                    {
+                      name: 'nested',
+                      kind: 'directory' as const,
+                      children: [{ name: 'main.md', kind: 'file' as const }],
+                    },
+                  ],
+                }
+              : node,
+          ),
+        },
+        selectedPath: null,
+        isFresh: () => false,
+      },
+    })
+
+    expect(wrapper.find('[data-path="reports/nested/main.md"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('2 files')
+  })
+
   it('点击文件 emit select', async () => {
     const wrapper = mount(WorkspaceTree, {
       props: { tree: buildTree(), selectedPath: null, isFresh: () => false },

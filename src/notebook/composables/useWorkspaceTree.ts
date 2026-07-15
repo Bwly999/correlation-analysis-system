@@ -34,14 +34,30 @@ export const useWorkspaceTree = (
 
   let timer: ReturnType<typeof setInterval> | null = null
   let disposed = false
+  let refreshInFlight: Promise<void> | null = null
+  let refreshRequested = false
 
   const refresh = async () => {
     if (disposed) return
-    try {
-      tree.value = await listTree(root())
-    } catch {
-      // 静默：文件树是软功能，挂了不该把整个 UI 拖死
+    refreshRequested = true
+    if (refreshInFlight) return refreshInFlight
+
+    const run = async () => {
+      while (refreshRequested && !disposed) {
+        refreshRequested = false
+        try {
+          tree.value = await listTree(root())
+        } catch {
+          // 静默：文件树是软功能，挂了不该把整个 UI 拖死
+        }
+      }
     }
+
+    const pending = run()
+    refreshInFlight = pending.finally(() => {
+      refreshInFlight = null
+    })
+    return refreshInFlight
   }
 
   const notify = async (_paths: string[]) => {
