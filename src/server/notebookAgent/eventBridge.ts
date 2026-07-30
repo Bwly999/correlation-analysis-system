@@ -81,6 +81,7 @@ export type NotebookAgentSseEvent =
     }
   | { type: 'tool.execute'; sessionId: string; toolCallId: string; toolName: string; params: Record<string, unknown> }
   | { type: 'error'; sessionId: string; message: string }
+  | { type: 'session.auto_model_error'; sessionId: string; message: string }
 
 export function bridgeNotebookEvent(
   piEvent: any,

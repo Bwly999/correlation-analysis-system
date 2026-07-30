@@ -34,6 +34,9 @@ const emit = defineEmits<{
   remove: [profile: NotebookModelProfile]
 }>()
 
+/** Auto 路由虚拟 profileId，与后端 gateway MODEL_AUTO_ID 保持一致 */
+const MODEL_AUTO_ID = 'auto'
+
 const open = ref(false)
 const rootRef = ref<HTMLElement | null>(null)
 
@@ -59,6 +62,15 @@ const onSelect = (profile: NotebookModelProfile) => {
     return
   }
   emit('switch', profile.id)
+  close()
+}
+
+const onSelectAuto = () => {
+  if (MODEL_AUTO_ID === props.currentModelId) {
+    close()
+    return
+  }
+  emit('switch', MODEL_AUTO_ID)
   close()
 }
 
@@ -130,6 +142,44 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onDocClick))
       >
         <!-- 模型列表 -->
         <div class="max-h-[280px] overflow-y-auto py-1">
+          <!-- Auto（自动）虚拟项：仅 Notebook Agent，会话不绑定具体模型，由后端 Auto 路由扩展动态选空闲模型 -->
+          <button
+            type="button"
+            class="group flex w-full items-start gap-2 px-3 py-2 text-left transition"
+            :style="MODEL_AUTO_ID === currentModelId
+              ? { backgroundColor: 'var(--nb-copper-soft)' }
+              : {}"
+            @click="onSelectAuto"
+            @mouseenter="(e) => {
+              if (MODEL_AUTO_ID !== currentModelId) (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--nb-overlay)'
+            }"
+            @mouseleave="(e) => {
+              if (MODEL_AUTO_ID !== currentModelId) (e.currentTarget as HTMLElement).style.backgroundColor = ''
+            }"
+          >
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-1.5">
+                <span
+                  class="truncate text-[12.5px] font-medium"
+                  :style="{ color: MODEL_AUTO_ID === currentModelId ? 'var(--nb-copper-deep)' : 'var(--nb-ink)' }"
+                >
+                  Auto（自动）
+                </span>
+                <span
+                  class="shrink-0 rounded-[2px] px-1 py-px text-[9px] font-medium"
+                  style="background-color: var(--nb-rule); color: var(--nb-ink-faint);"
+                >
+                  推荐
+                </span>
+              </div>
+              <div
+                class="mt-0.5 truncate text-[10.5px]"
+                style="color: var(--nb-ink-faint);"
+              >
+                自动选择当前空闲模型，避开繁忙
+              </div>
+            </div>
+          </button>
           <button
             v-for="model in availableModels"
             :key="model.id"

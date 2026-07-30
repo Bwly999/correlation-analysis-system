@@ -856,6 +856,19 @@ describe('POST /api/notebook-agent/sessions/:id/switch-model', () => {
     expect(switchNotebookAgentModelMock).toHaveBeenCalledWith('notebook-session-1', 'sys-1')
   })
 
+  it('profileId 为 auto 哨兵时透传给 gateway', async () => {
+    switchNotebookAgentModelMock.mockResolvedValueOnce({ ok: true })
+    const app = await createTestApp()
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/notebook-agent/sessions/notebook-session-1/switch-model',
+      headers: userHeaders(),
+      payload: { profileId: 'auto' },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(switchNotebookAgentModelMock).toHaveBeenCalledWith('notebook-session-1', 'auto')
+  })
+
   it('缺 profileId → 400', async () => {
     const app = await createTestApp()
     const res = await app.inject({

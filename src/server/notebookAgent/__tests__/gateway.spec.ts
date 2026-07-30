@@ -91,6 +91,7 @@ import {
   subscribeNotebookAgentEvents,
   updateNotebookAgentSessionTitle,
   ensureNotebookAgentRuntime,
+  switchNotebookAgentModel,
 } from '../gateway.js'
 import { __resetNotebookSessionsForTest } from '../sessionStore.js'
 
@@ -531,5 +532,92 @@ describe('notebookAgent gateway', () => {
     await Promise.resolve()
     await Promise.resolve()
     expect(sessionPromptMock).not.toHaveBeenCalled()
+  })
+
+  it('resume 到 currentModelId=auto 的会话时注入 Auto 路由扩展', async () => {
+    const created = await createNotebookAgentSession({
+      userId: 'u-1',
+      origin: 'http://localhost:5173',
+      initialDataMeta: {
+        sourceKind: 'canvas-node',
+        sourceLabel: '清洗-Q2',
+        rowCount: 123,
+        columnCount: 4,
+      },
+    })
+    closeNotebookAgentSession(created.sessionId)
+    createPiAgentResourceLoaderMock.mockClear()
+    loaderReloadMock.mockClear()
+
+    // resume 一个标记为 auto 的 record
+    loadNotebookSessionRecordMock.mockResolvedValueOnce({
+      sessionId: created.sessionId,
+      userId: 'u-1',
+      origin: 'http://localhost:5173',
+      title: '数据分析',
+      sessionFile: '/tmp/test-session.jsonl',
+      bootstrapPromptedAt: undefined,
+      initialDataMeta: undefined,
+      status: 'idle',
+      dataReady: false,
+      messages: [],
+      toolCalls: [],
+      currentModelId: 'auto',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      archivedAt: undefined,
+    })
+
+    const resumed = await ensureNotebookAgentRuntime(created.sessionId)
+    expect(resumed).toBe(true)
+    // Auto 模式：createPiAgentResourceLoader 第二参数应传入非空 extensionFactories 数组
+    expect(createPiAgentResourceLoaderMock).toHaveBeenCalledTimes(1)
+    const [, extensionFactories] = createPiAgentResourceLoaderMock.mock.calls[0]!
+    expect(Array.isArray(extensionFactories)).toBe(true)
+    expect(extensionFactories.length).toBe(1)
+  })
+
+  it('switchNotebookAgentModel 传入 auto 哨兵触发重建并返回 ok', async () => {
+    const created = await createNotebookAgentSession({
+      userId: 'u-1',
+      origin: 'http://localhost:5173',
+      initialDataMeta: {
+        sourceKind: 'canvas-node',
+        sourceLabel: '清洗-Q2',
+        rowCount: 123,
+        columnCount: 4,
+      },
+    })
+    // 订阅一个监听器（验证重建后迁移）
+    let lastEvent: unknown = undefined
+    subscribeNotebookAgentEvents(created.sessionId, (e) => {
+      lastEvent = e
+    })
+
+    createAgentSessionMock.mockClear()
+    // 重建会走 ensureNotebookAgentRuntime → loadNotebookSessionRecord，需返回 record
+    loadNotebookSessionRecordMock.mockResolvedValueOnce({
+      sessionId: created.sessionId,
+      userId: 'u-1',
+      origin: 'http://localhost:5173',
+      title: '数据分析',
+      sessionFile: '/tmp/test-session.jsonl',
+      bootstrapPromptedAt: undefined,
+      initialDataMeta: undefined,
+      status: 'idle',
+      dataReady: false,
+      messages: [],
+      toolCalls: [],
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      archivedAt: undefined,
+    })
+    const result = await switchNotebookAgentModel(created.sessionId, 'auto')
+
+    expect(result.ok).toBe(true)
+    // 重建会再次调用 createAgentSession
+    expect(createAgentSessionMock).toHaveBeenCalledTimes(1)
+    // 广播的 model_changed 事件 profileId 应为 'auto'
+    expect((lastEvent as { profileId?: string } | undefined)?.profileId).toBe('auto')
   })
 })

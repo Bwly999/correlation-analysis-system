@@ -777,5 +777,24 @@ export const applyNotebookEvent = (
       })
       return
     }
+    case 'session.auto_model_error': {
+      // Auto 路由排队超时：所有模型繁忙，本轮被跳过。会话仍可用，用户可重发。
+      // 不改 agent 状态（区别于 'error'），仅 push 一条轻量提示消息。
+      session.messages.push({
+        id: `auto-error-${now()}`,
+        role: 'assistant',
+        blocks: [
+          {
+            kind: 'text',
+            data: {
+              id: `auto-error-text-${now()}`,
+              text: `⚠️ ${String(event.message ?? '当前所有模型繁忙')}`,
+            },
+          },
+        ],
+        at: now(),
+      })
+      return
+    }
   }
 }

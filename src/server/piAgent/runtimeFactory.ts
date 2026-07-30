@@ -5,6 +5,7 @@ import {
   ModelRegistry,
   SessionManager,
 } from '@earendil-works/pi-coding-agent'
+import type { ExtensionFactory } from '@earendil-works/pi-coding-agent'
 import type { WorkflowAiModelProfile, WorkflowAiModelTestResult, WorkflowAiPlanRequest, WorkflowAiThinkingLevel } from '../../ai/types.js'
 
 const DEFAULT_TEST_PROMPT = '请只回复 ok'
@@ -88,11 +89,15 @@ export function createModelRegistryFromProfiles(profiles: WorkflowAiModelProfile
   return { authStorage, modelRegistry, models, profileMap }
 }
 
-export function createPiAgentResourceLoader(systemPromptOverride: () => string) {
+export function createPiAgentResourceLoader(
+  systemPromptOverride: () => string,
+  extensionFactories?: ExtensionFactory[],
+) {
   return new DefaultResourceLoader({
     cwd: process.cwd(),
     agentDir: process.cwd(),
     systemPromptOverride,
+    extensionFactories,
   })
 }
 

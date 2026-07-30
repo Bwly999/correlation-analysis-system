@@ -25,6 +25,9 @@ interface RawProfileEntry {
   thinkingLevel?: unknown
   isDefault?: unknown
   enabled?: unknown
+  maxConcurrency?: unknown
+  responseTimeoutMs?: unknown
+  priority?: unknown
 }
 
 const coerceProfileEntry = (entry: RawProfileEntry, index: number): WorkflowAiModelProfile | null => {
@@ -41,6 +44,9 @@ const coerceProfileEntry = (entry: RawProfileEntry, index: number): WorkflowAiMo
     thinkingLevelRaw === 'low' || thinkingLevelRaw === 'medium' || thinkingLevelRaw === 'high' || thinkingLevelRaw === 'off'
       ? thinkingLevelRaw
       : undefined
+  const maxConcurrency = typeof entry.maxConcurrency === 'number' ? entry.maxConcurrency : undefined
+  const responseTimeoutMs = typeof entry.responseTimeoutMs === 'number' ? entry.responseTimeoutMs : undefined
+  const priority = typeof entry.priority === 'number' ? entry.priority : undefined
 
   return {
     id: typeof entry.id === 'string' && entry.id.trim() ? entry.id.trim() : `system-env-${index}`,
@@ -55,6 +61,9 @@ const coerceProfileEntry = (entry: RawProfileEntry, index: number): WorkflowAiMo
     contextWindow,
     maxTokens,
     thinkingLevel,
+    maxConcurrency,
+    responseTimeoutMs,
+    priority,
   }
 }
 
@@ -137,6 +146,9 @@ export const toPublicModelProfile = (profile: WorkflowAiModelProfile): WorkflowA
   contextWindow: profile.contextWindow ?? DEFAULT_CONTEXT_WINDOW,
   maxTokens: profile.maxTokens ?? DEFAULT_MAX_TOKENS,
   thinkingLevel: profile.thinkingLevel ?? DEFAULT_THINKING_LEVEL,
+  maxConcurrency: profile.maxConcurrency,
+  responseTimeoutMs: profile.responseTimeoutMs,
+  priority: profile.priority,
 })
 
 /**

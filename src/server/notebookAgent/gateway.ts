@@ -38,6 +38,7 @@ import {
   listNotebookUserModelProfiles,
 } from './notebookUserModelProfilesStore.js'
 import { bridgeNotebookEvent, type NotebookAgentSseEvent } from './eventBridge.js'
+import { createAutoRouterController } from './autoModelRouterExtension.js'
 import {
   deriveNotebookTitle,
   isDefaultNotebookTitle,
@@ -99,6 +100,36 @@ const emitRuntimeEvent = (runtime: NotebookAgentRuntime, event: NotebookAgentSse
       // ignore listener errors
     }
   }
+}
+
+/**
+ * Auto 路由的虚拟 profileId 哨兵。用户在 ModelSelector 选 "Auto" 时，
+ * currentModelId 被置为该值；buildAndRegisterRuntime 据此注入 Auto 路由扩展。
+ * 扩展每轮实际 setModel 后会把 currentModelId 写回为真实 profile id。
+ */
+const MODEL_AUTO_ID = 'auto'
+
+/**
+ * 按 priority 升序排序 profile（缺省视作 Infinity，保持稳定）。
+ * 用于 Auto 路由确定降级顺序。
+ */
+const sortByPriority = (profiles: import('../../ai/types.js').WorkflowAiModelProfile[]) =>
+  [...profiles].sort((a, b) => (a.priority ?? Infinity) - (b.priority ?? Infinity))
+
+/**
+ * 释放 runtime 但不归档（保留 status / record）。
+ * 仅用于会话内需要重建 runtime 的场景（如切换到 Auto 路由模式）。
+ */
+const releaseRuntimeWithoutArchive = (sessionId: string) => {
+  const runtime = runtimes.get(sessionId)
+  if (!runtime) return
+  const record = getNotebookSession(sessionId)
+  if (record) persistNotebookSessionMeta(runtime.sessionManager, record)
+  runtime.bridge.dispose()
+  runtime.unsubscribe?.()
+  runtime.session.dispose()
+  runtime.eventListeners.clear()
+  runtimes.delete(sessionId)
 }
 
 const tryStartNotebookBootstrap = (runtime: NotebookAgentRuntime) => {
@@ -178,7 +209,50 @@ const buildAndRegisterRuntime = async (
   const { authStorage, modelRegistry, models, profileMap } =
     createModelRegistryFromProfiles(allProfiles)
   const model = models.get(initialProfile.id) ?? buildModelFromProfile(initialProfile)
-  const resourceLoader = createPiAgentResourceLoader(() => systemPrompt)
+
+  // Auto 路由：currentModelId 为 'auto' 哨兵时注入 Auto 路由扩展。
+  // createAgentSession 仍绑定一个真实初始模型（initialProfile），扩展在每轮
+  // before_agent_start 覆盖为当时空闲的模型，并通过回调写回 currentModelId。
+  const isAutoMode = record.currentModelId === MODEL_AUTO_ID
+  const autoController = isAutoMode
+    ? createAutoRouterController({
+        profiles: sortByPriority(allProfiles).filter((p) => models.has(p.id)),
+        availableModels: models,
+        onModelSwitched: (profileId) => {
+          updateNotebookSessionRecord(record.sessionId, { currentModelId: profileId })
+          const rt = runtimes.get(record.sessionId)
+          if (rt) persistNotebookSessionMeta(rt.sessionManager, rt.record)
+          const switchedProfile = allProfiles.find((p) => p.id === profileId)
+          const switchedModel = models.get(profileId)
+          if (rt && switchedProfile && switchedModel) {
+            emitRuntimeEvent(rt, {
+              type: 'session.model_changed',
+              sessionId: record.sessionId,
+              profileId,
+              modelName: switchedProfile.name || switchedProfile.model,
+              contextWindow: switchedModel.contextWindow ?? 0,
+              maxTokens: switchedModel.maxTokens ?? 0,
+              thinkingLevel: switchedProfile.thinkingLevel ?? 'high',
+            })
+          }
+        },
+        onModelError: ({ message }) => {
+          const rt = runtimes.get(record.sessionId)
+          if (rt) {
+            emitRuntimeEvent(rt, {
+              type: 'session.auto_model_error',
+              sessionId: record.sessionId,
+              message,
+            })
+          }
+        },
+      })
+    : null
+
+  const resourceLoader = createPiAgentResourceLoader(
+    () => systemPrompt,
+    autoController ? [autoController.extensionFactory] : undefined,
+  )
   await resourceLoader.reload()
   const { session } = await createAgentSession({
     sessionManager,
@@ -207,7 +281,9 @@ const buildAndRegisterRuntime = async (
     availableProfiles: profileMap,
   }
   record.sessionFile = runtime.sessionFile
-  record.currentModelId = initialProfile.id
+  // Auto 模式保持 'auto' 哨兵（扩展每轮会通过回调写回实际 id，但这里不覆盖）；
+  // 非 Auto 模式记录初始 profile id（resume 时据此恢复）。
+  record.currentModelId = isAutoMode ? MODEL_AUTO_ID : initialProfile.id
   persistNotebookSessionTitle(sessionManager, record.title)
   persistNotebookSessionMeta(sessionManager, record)
   runtime.bootstrapStarted = Boolean(record.bootstrapPromptedAt)
@@ -540,6 +616,34 @@ export const switchNotebookAgentModel = async (
 ): Promise<{ ok: boolean; error?: string }> => {
   const runtime = runtimes.get(sessionId)
   if (!runtime) return { ok: false, error: '会话不存在' }
+
+  // Auto 路由模式：记录 'auto' 哨兵，释放当前 runtime 并重建（注入 Auto 扩展）。
+  // 扩展在每轮对话前动态选空闲模型，并通过回调写回实际 profile id + 广播 model_changed。
+  if (profileId === MODEL_AUTO_ID) {
+    // 先复制旧监听器（release 会 clear 旧 Set），重建后迁移到新 runtime 以保活 SSE
+    const listeners = new Set(runtime.eventListeners)
+    const sessionManager = runtime.sessionManager
+    releaseRuntimeWithoutArchive(sessionId)
+    updateNotebookSessionRecord(sessionId, { currentModelId: MODEL_AUTO_ID })
+    const rebuilt = await ensureNotebookAgentRuntime(sessionId)
+    if (!rebuilt) return { ok: false, error: '会话重建失败' }
+    // 重建后 eventListeners 是新的；若调用前已订阅，把旧 listener 迁移过来以保活 SSE。
+    const newRuntime = runtimes.get(sessionId)
+    if (newRuntime) {
+      for (const listener of listeners) newRuntime.eventListeners.add(listener)
+      persistNotebookSessionMeta(sessionManager, newRuntime.record)
+      emitRuntimeEvent(newRuntime, {
+        type: 'session.model_changed',
+        sessionId,
+        profileId: MODEL_AUTO_ID,
+        modelName: 'Auto（自动）',
+        contextWindow: 0,
+        maxTokens: 0,
+        thinkingLevel: 'high',
+      })
+    }
+    return { ok: true }
+  }
 
   const targetModel = runtime.availableModels.get(profileId)
   const targetProfile = runtime.availableProfiles.get(profileId)

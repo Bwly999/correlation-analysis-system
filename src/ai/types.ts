@@ -350,6 +350,20 @@ export interface WorkflowAiModelProfile {
   maxTokens?: number
   /** 思考等级，未配置时由 runtime 默认值兜底（notebook 默认 high） */
   thinkingLevel?: WorkflowAiThinkingLevel
+  /**
+   * Auto 路由：并发计数上限（预防式）。仅 Notebook Agent 的 Auto 模式使用。
+   * 缺省 = 不限制。同一上游（baseUrl+model）跨会话/用户共享一个计数器。
+   */
+  maxConcurrency?: number
+  /**
+   * Auto 路由：首字节超时（ms）。请求发出到收到首字节（HTTP 响应头）超过该值则降级到下一模型。
+   * 缺省 = 不限制（不触发降级）。
+   */
+  responseTimeoutMs?: number
+  /**
+   * Auto 路由：降级优先级，小者优先；缺省视作 Infinity，保持原数组顺序。
+   */
+  priority?: number
 }
 
 export interface WorkflowAiModelTestResult {
