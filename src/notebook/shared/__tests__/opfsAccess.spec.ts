@@ -156,6 +156,67 @@ describe('opfsAccess.writeFile / readFile', () => {
     await writeFile(root, 'scripts/big.py', 'x'.repeat(1000))
     expect((await readFile(root, 'scripts/big.py')).length).toBe(1000)
   })
+
+  describe('writeFile 覆盖写按净增量计费（回归：MEMFS→OPFS 同步幽灵累计 bug）', () => {
+    // 复现场景：syncWorkerFilesToOpfs 每次 exec 后 / 每 2s 轮询都把 MEMFS 文件
+    // 覆盖写回 OPFS。修复前每次覆盖按全量累加配额，OPFS 实际只有几 MB 却把
+    // 500MB session 配额撑爆。修复后覆盖已存在文件只计 max(0, 新大小-旧大小)。
+
+    it('覆盖写、大小相同（内容不同）→ used 不增（delta=0）', async () => {
+      const tracker = createQuotaTracker(1000, 1000)
+      await writeFile(root, 'scripts/a.py', 'aaaaa', tracker)
+      expect(tracker.used()).toBe(5)
+      // 字节不同但大小相同（模拟 matplotlib 重 savefig：内容变、大小不变）
+      await writeFile(root, 'scripts/a.py', 'bbbbb', tracker)
+      expect(tracker.used()).toBe(5)
+    })
+
+    it('覆盖写、变大 → 只累加差值', async () => {
+      const tracker = createQuotaTracker(1000, 1000)
+      await writeFile(root, 'artifacts/x.bin', new Uint8Array(100), tracker)
+      expect(tracker.used()).toBe(100)
+      // 覆盖成 130 字节 → 净增 30
+      await writeFile(root, 'artifacts/x.bin', new Uint8Array(130), tracker)
+      expect(tracker.used()).toBe(130)
+    })
+
+    it('覆盖写、变小 → used 不增（delta 经 max 截断为 0）', async () => {
+      const tracker = createQuotaTracker(1000, 1000)
+      await writeFile(root, 'artifacts/y.bin', new Uint8Array(100), tracker)
+      expect(tracker.used()).toBe(100)
+      // 覆盖成 60 字节 → 净增量 max(0, 60-100)=0
+      await writeFile(root, 'artifacts/y.bin', new Uint8Array(60), tracker)
+      expect(tracker.used()).toBe(100)
+    })
+
+    it('新文件 → 仍计全量（向后兼容）', async () => {
+      const tracker = createQuotaTracker(1000, 1000)
+      await writeFile(root, 'reports/r.md', 'hello', tracker)
+      expect(tracker.used()).toBe(5)
+    })
+
+    it('反复覆盖同大小文件 100 次不撑爆配额（核心回归）', async () => {
+      // 模拟 2s 轮询同步：同一份 5KB 图被反复覆盖写
+      const tracker = createQuotaTracker(10_000, 100_000) // 单次 10KB，总量 100KB
+      const payload = () => new Uint8Array(5000).fill(Math.floor(Math.random() * 256))
+      // 首次写入（新文件）计 5000
+      await writeFile(root, 'artifacts/fig.png', payload(), tracker)
+      for (let i = 0; i < 100; i += 1) {
+        // 每次内容随机但大小不变 → delta=0，used 始终 = 5000
+        await writeFile(root, 'artifacts/fig.png', payload(), tracker)
+      }
+      expect(tracker.used()).toBe(5000)
+    })
+
+    it('单次上限仍按 writeBytes（物理写盘大小）判定', async () => {
+      // 即使覆盖一个已有 1000 字节的文件，单次写 2000 字节仍应被单次上限 1500 拦截
+      const tracker = createQuotaTracker(1500, 10_000)
+      await writeFile(root, 'artifacts/big.bin', new Uint8Array(1000), tracker)
+      await expect(
+        writeFile(root, 'artifacts/big.bin', new Uint8Array(2000), tracker),
+      ).rejects.toThrow(/quota_exceeded/)
+    })
+  })
 })
 
 describe('opfsAccess.listTree', () => {

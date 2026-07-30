@@ -125,6 +125,27 @@ const toUint8 = (data: ArrayBuffer | Uint8Array | string): Uint8Array => {
   return new Uint8Array(data)
 }
 
+/**
+ * 探测已存在文件的大小（字节），用于覆盖写的配额净增量计算。
+ *
+ * 不创建任何目录/文件：getDirectoryHandle/getFileHandle 均不传 create。
+ * 文件或任一父目录不存在时返回 0（视为新文件，全额计费）。
+ * 语义与 syncWorkerFilesToOpfs 内 readBytes + try/catch 探测一致，但只取 size 不读字节。
+ */
+const readExistingFileSize = async (
+  root: OpfsDirectoryHandle,
+  segments: string[],
+): Promise<number> => {
+  try {
+    const parentDir = await navigateToParent(root, segments, /* create */ false)
+    const fileHandle = await parentDir.getFileHandle(segments[segments.length - 1]!)
+    const file = await fileHandle.getFile()
+    return file.size
+  } catch {
+    return 0
+  }
+}
+
 export const writeFile = async (
   root: OpfsDirectoryHandle,
   relPath: string,
@@ -133,7 +154,10 @@ export const writeFile = async (
 ): Promise<{ path: string; bytes: number }> => {
   const segments = resolveSafePath(relPath)
   const bytes = toUint8(data)
-  if (tracker) tracker.reserveOrThrow(bytes.byteLength)
+  if (tracker) {
+    const previousBytes = await readExistingFileSize(root, segments)
+    tracker.reserveOrThrow(bytes.byteLength, previousBytes)
+  }
   const parentDir = await navigateToParent(root, segments, /* create */ true)
   const fileHandle = await parentDir.getFileHandle(segments[segments.length - 1]!, {
     create: true,
@@ -253,8 +277,19 @@ export const SINGLE_WRITE_LIMIT_BYTES = 50 * 1024 * 1024
 export interface QuotaTracker {
   /** 当前已写字节累计 */
   used: () => number
-  /** 写前调用；超过单次或总量上限抛 'quota_exceeded' 错误 */
-  reserveOrThrow: (incomingBytes: number) => void
+  /**
+   * 写前调用；超过单次或总量上限抛 'quota_exceeded' 错误。
+   *
+   * 两个维度分别约束：
+   *  - 单次上限按 writeBytes（这次写盘的物理大小）—— 保护 OPFS IO，防单次写超大文件
+   *  - 累计上限按净增量 max(0, writeBytes - previousBytes) —— 反映 OPFS 实际占用增长，
+   *    避免覆盖写已存在文件时反复累加全量，撑爆 500MB session 配额
+   *    （根因：MEMFS→OPFS 同步对每次覆盖重写的 artifacts/reports 都按全量计费，
+   *    而 OPFS 里只是覆盖旧文件，实际占用几乎不增）。
+   *
+   * previousBytes 缺省 0（新文件 = 全量计费），向后兼容旧调用。
+   */
+  reserveOrThrow: (writeBytes: number, previousBytes?: number) => void
   /** 重置（session 关闭时） */
   reset: () => void
 }
@@ -266,22 +301,23 @@ export const createQuotaTracker = (
   let used = 0
   return {
     used: () => used,
-    reserveOrThrow: (incoming) => {
-      if (incoming > singleLimitBytes) {
+    reserveOrThrow: (writeBytes, previousBytes = 0) => {
+      if (writeBytes > singleLimitBytes) {
         const err = new Error(
-          `单次写入 ${incoming} 字节超过单次上限 ${singleLimitBytes}（quota_exceeded）`,
+          `单次写入 ${writeBytes} 字节超过单次上限 ${singleLimitBytes}（quota_exceeded）`,
         )
         ;(err as Error & { code?: string }).code = 'quota_exceeded'
         throw err
       }
-      if (used + incoming > totalLimitBytes) {
+      const delta = Math.max(0, writeBytes - previousBytes)
+      if (used + delta > totalLimitBytes) {
         const err = new Error(
-          `累计写入 ${used + incoming} 字节超过 session 上限 ${totalLimitBytes}（quota_exceeded）`,
+          `累计写入 ${used + delta} 字节超过 session 上限 ${totalLimitBytes}（quota_exceeded）`,
         )
         ;(err as Error & { code?: string }).code = 'quota_exceeded'
         throw err
       }
-      used += incoming
+      used += delta
     },
     reset: () => {
       used = 0
