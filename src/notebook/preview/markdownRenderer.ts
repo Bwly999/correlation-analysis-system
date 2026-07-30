@@ -9,14 +9,17 @@
  * 不引入 DOMPurify，是为了减少 M1 依赖；sanitize 由 marked walkTokens + 字符串后处理双层完成。
  * 渲染图片相对路径（../artifacts/xxx.png）由调用方进一步把 src 替换成 OPFS blob URL。
  *
- * 两个渲染入口：
+ * 两个渲染入口均用独立 Marked 实例（不共用全局 marked 单例），避免与 piAgentMarkdown.ts
+ * 的 renderer / tokenizer 配置相互污染：
  *   - renderMarkdownSafe       基础渲染，对话流（AssistantTextBlock/AskUserCard）共用，不支持公式
- *   - renderMarkdownWithMath   仅 MarkdownPreview 使用，在独立 Marked 实例上挂 KaTeX 扩展，
+ *   - renderMarkdownWithMath   仅 MarkdownPreview 使用，挂 KaTeX 扩展，
  *                              支持 $...$ 行内 / $$...$$ 块级 LaTeX 公式。
- *                              用独立实例而非全局 marked.use，避免污染 piAgentMarkdown.ts 等共用单例处。
+ *
+ * 两个实例共用一个自定义 del tokenizer：禁用 GFM 单波浪号删除线（仅保留 `~~`），
+ * 见下方 tildeTokenizer。
  */
 
-import { Marked, marked } from 'marked'
+import { Marked, type TokenizerObject } from 'marked'
 import markedKatex from 'marked-katex-extension'
 
 const FORBIDDEN_TAGS = [
@@ -58,8 +61,39 @@ const sanitizeUrlAttrs = (html: string): string => {
   )
 }
 
+/**
+ * 禁用 GFM 单波浪号删除线。
+ *
+ * marked 默认 del 内联规则为 `/^(~~?)(?=[^\s~])((?:\\.|[^\\])*?(?:\\.|[^\s~\\]))\1(?=[^~]|$)/`，
+ * 其中 `~~?` 同时匹配单个 `~` 与两个 `~~`。在数据分析 notebook 场景，单个 `~` 是
+ * 极常见的合法字符（数值范围 `1~10`、约等于号、按位取反等），紧贴文字成对出现时会被
+ * 误判为删除线（如 `~结果~是~这样~` → `<del>结果</del>是<del>这样</del>`）。
+ *
+ * 这里重写 del tokenizer，仅保留 `~~`（GFM 标准删除线）：正则取自默认规则，把 `~~?`
+ * 收紧为 `~~`，其余逐字符一致，保证 `~~text~~` 行为与默认完全相同；单 `~` 不命中则
+ * 返回 undefined，回退为普通文本。inline 出 tokens，渲染时才走得进默认 renderer。
+ */
+const tildeTokenizer: TokenizerObject = {
+  del(src) {
+    const m = /^(~~)(?=[^\s~])((?:\\.|[^\\])*?(?:\\.|[^\s~\\]))\1(?=[^~]|$)/.exec(src)
+    if (!m) return undefined
+    const text = m[2]!
+    return {
+      type: 'del',
+      raw: m[0],
+      text,
+      tokens: this.lexer.inlineTokens(text),
+    }
+  },
+}
+
+// 两个渲染入口均用独立 Marked 实例，避免与 piAgentMarkdown.ts 共用全局 marked 单例
+// 造成的相互污染（renderer / tokenizer 串台）。实例在模块加载时一次性配置好。
+const safeMarked = new Marked({ gfm: true, breaks: false })
+safeMarked.use({ tokenizer: tildeTokenizer })
+
 export const renderMarkdownSafe = (md: string): string => {
-  const raw = marked.parse(md, { async: false, breaks: false, gfm: true }) as string
+  const raw = safeMarked.parse(md, { async: false }) as string
   return sanitizeUrlAttrs(stripInlineEvents(stripForbiddenTags(raw)))
 }
 
@@ -76,6 +110,7 @@ export const renderMarkdownSafe = (md: string): string => {
  */
 const mathMarked = new Marked({ gfm: true, breaks: false })
 mathMarked.use(markedKatex({ throwOnError: false }))
+mathMarked.use({ tokenizer: tildeTokenizer })
 
 export const renderMarkdownWithMath = (md: string): string => {
   const raw = mathMarked.parse(md, { async: false }) as string

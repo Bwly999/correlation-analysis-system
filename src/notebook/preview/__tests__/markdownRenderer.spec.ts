@@ -91,3 +91,54 @@ describe('renderMarkdownWithMath', () => {
     expect(html).not.toMatch(/class="katex"/)
   })
 })
+
+/**
+ * 删除线（strikethrough）渲染回归。
+ *
+ * 背景：marked 的 GFM del 规则同时匹配单个 `~` 与 `~~`，会把数值范围 `1~10`、
+ * 约等于号 `x ~ y` 等数据分析场景里常见的合法单 `~` 误判为删除线。
+ * 这里禁用单 `~` 删除线（仅保留 `~~`），消除误渲染。
+ */
+describe('删除线 / 波浪号渲染', () => {
+  it('单个 ~ 不被渲染为删除线（数值范围）', () => {
+    const html = renderMarkdownSafe('温度范围 1~10 度')
+    expect(html).not.toMatch(/<del>/i)
+    expect(html).toMatch(/1~10/)
+  })
+
+  it('单个 ~ 不被渲染为删除线（约等于号）', () => {
+    const html = renderMarkdownSafe('函数 f(x) ~ g(x) 近似相等')
+    expect(html).not.toMatch(/<del>/i)
+  })
+
+  it('成对单 ~ 紧贴文字也不被渲染为删除线', () => {
+    // 这是误判主因：默认规则会把 ~结果~...~这样~ 解析为多个 <del>
+    const html = renderMarkdownSafe('~结果~是~这样~')
+    expect(html).not.toMatch(/<del>/i)
+    expect(html).toMatch(/结果/)
+  })
+
+  it('双 ~~ 仍渲染为删除线（GFM 标准）', () => {
+    const html = renderMarkdownSafe('~~旧方案~~ 已废弃')
+    expect(html).toMatch(/<del>旧方案<\/del>/)
+  })
+
+  it('双 ~~ 紧贴数字也正常渲染删除线', () => {
+    const html = renderMarkdownSafe('1~~2~~3')
+    expect(html).toMatch(/<del>2<\/del>/)
+  })
+
+  it('其它 markdown 语法不受影响', () => {
+    const html = renderMarkdownSafe('# 标题\n\n**加粗** 与 *斜体* 和 [链接](https://example.com)')
+    expect(html).toMatch(/<h1>/)
+    expect(html).toMatch(/<strong>加粗<\/strong>/)
+    expect(html).toMatch(/<em>斜体<\/em>/)
+    expect(html).toMatch(/<a href="https:\/\/example\.com"/)
+  })
+
+  it('公式入口 renderMarkdownWithMath 同样不误判单 ~', () => {
+    const html = renderMarkdownWithMath('能量 $E=mc^2$ 在 1~10 范围内')
+    expect(html).not.toMatch(/<del>/i)
+    expect(html).toMatch(/class="katex"/)
+  })
+})
